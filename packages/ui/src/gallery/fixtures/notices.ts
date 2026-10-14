@@ -1,5 +1,5 @@
 import type { Scenario } from "../scenario";
-import { SAMPLE, sessionOf, snapshotState } from "./builders";
+import { SAMPLE, projectOf, sessionOf, snapshotState } from "./builders";
 
 const TRUST = "Trust prompts and toasts";
 
@@ -8,50 +8,26 @@ const { console: console_, web, api } = SAMPLE;
 const codexSession = sessionOf("s-api-codex", console_.id, api.id, "Review the retry logic", "working", {
   agent: "codex",
 });
-const grokSession = sessionOf("s-web-grok", console_.id, web.id, "Tidy the stylesheet", "working", { agent: "grok" });
+const grokProject = projectOf("p-grok-home", console_.id, "Home", { path: "/Users/dev" });
+const grokSession = sessionOf("s-web-grok", console_.id, grokProject.id, "Tidy the stylesheet", "working", { agent: "grok" });
 const sessions = [...SAMPLE.sessions, codexSession, grokSession];
 
 export const noticeScenarios: Scenario[] = [
   {
     id: "trust-prompt",
     group: TRUST,
-    title: "Trust prompt, a second one queued",
+    title: "Queued trust prompts for all agents",
     description:
-      "Claude Code asking, with the parent-folder option; the project's folder is shown, the second prompt waits behind it.",
+      "Claude Code and Codex offer their projects' parent folders; the Grok Build project is the home directory itself, whose parent is too broad to offer. Each agent has its own caution and Codex names its repository-root trust. Not now advances through the three queued prompts.",
     state: snapshotState({
       consoles: [console_],
-      projects: [web, api],
+      projects: [web, api, grokProject],
       sessions,
       trustPrompts: [
         { session: "s-web-1", agent: "claude", project: web.id, path: web.path, trustDir: "/Users/dev/code" },
-        { session: codexSession.id, agent: "codex", project: api.id, path: api.path, trustDir: null },
-      ],
-    }),
-  },
-  {
-    id: "trust-prompt-codex",
-    group: TRUST,
-    title: "Trust prompt, Codex asking",
-    description: "Codex's caution and the note that it records the trust for the repository root.",
-    state: snapshotState({
-      consoles: [console_],
-      projects: [web, api],
-      sessions,
-      trustPrompts: [
         { session: codexSession.id, agent: "codex", project: api.id, path: api.path, trustDir: "/Users/dev/code" },
+        { session: grokSession.id, agent: "grok", project: grokProject.id, path: grokProject.path, trustDir: null },
       ],
-    }),
-  },
-  {
-    id: "trust-prompt-grok",
-    group: TRUST,
-    title: "Trust prompt, Grok Build asking",
-    description: "Grok Build's caution, without the parent-folder option.",
-    state: snapshotState({
-      consoles: [console_],
-      projects: [web, api],
-      sessions,
-      trustPrompts: [{ session: grokSession.id, agent: "grok", project: web.id, path: web.path, trustDir: null }],
     }),
   },
   {
@@ -62,7 +38,7 @@ export const noticeScenarios: Scenario[] = [
       "A project session asking for a console session; a second request waits behind it.",
     state: snapshotState({
       consoles: [console_],
-      projects: [web, api],
+      projects: [web, api, grokProject],
       sessions,
       consoleRequests: [
         {
@@ -88,7 +64,7 @@ export const noticeScenarios: Scenario[] = [
     title: "Error toasts",
     description:
       "Daemon error codes worded from the catalog, two naming a session (one an approval given after the session stopped waiting), one with a code the catalog lacks.",
-    state: snapshotState({ consoles: [console_], projects: [web, api], sessions }),
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
       { kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "" },
       { kind: "error", code: "session_not_running", params: {}, message: "", session: "s-web-2" },
@@ -102,7 +78,7 @@ export const noticeScenarios: Scenario[] = [
     title: "Notice toasts",
     description:
       "Session notices: a setting Octoboard had to work around, a failed press of a trust confirmation, a trust entry that could not be carried over, and a long text.",
-    state: snapshotState({ consoles: [console_], projects: [web, api], sessions }),
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
       { kind: "notice", code: "claude_workspace_untrusted", params: {}, message: "", session: "s-web-1" },
       {

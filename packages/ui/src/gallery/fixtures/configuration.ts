@@ -265,30 +265,13 @@ const reviewing = (extra: Partial<ConfigurationFixture> = {}): ConfigurationFixt
 
 export const configurationScenarios: Scenario[] = [
   {
-    id: "configuration-settings",
-    group: GROUP,
-    title: "Settings, Configuration section",
-    description: "The two rows that start an export and an import.",
-    state,
-    steps: [openSettings, configurationSection],
-  },
-  {
     id: "configuration-settings-unavailable",
     group: GROUP,
     title: "Settings, Configuration section where files cannot be saved or opened",
-    description: "No row to press: the section only says it is not available here.",
+    description: "The section only says it is not available here. Close Settings and open the console menu: Export configuration is absent there too.",
     state,
     configuration: { unavailable: true },
     steps: [openSettings, configurationSection],
-  },
-  {
-    id: "configuration-console-menu-unavailable",
-    group: GROUP,
-    title: "Console menu where files cannot be saved or opened",
-    description: "The menu has no Export configuration item.",
-    state,
-    configuration: { unavailable: true },
-    steps: [openConsoleMenu],
   },
   {
     id: "configuration-welcome-unavailable",
@@ -302,7 +285,7 @@ export const configurationScenarios: Scenario[] = [
     id: "configuration-export-console",
     group: GROUP,
     title: "Export, from a console's menu",
-    description: "The scope is chosen between the console and everything, and the local-paths notice stands under it.",
+    description: "Choose the console or everything, with the local-paths notice beneath. Export closes the dialog and raises a toast naming the saved file.",
     state,
     steps: exportFromMenu,
   },
@@ -313,14 +296,6 @@ export const configurationScenarios: Scenario[] = [
     description: "Reached from Settings, since there is no console menu: only everything is offered.",
     state: noConsoleState,
     steps: [openSettings, configurationSection, (ui) => ui.press(ui.t("settings.configuration.export.button"))],
-  },
-  {
-    id: "configuration-export-saved",
-    group: GROUP,
-    title: "Export, saved",
-    description: "The desktop app's save dialog is the user's; the toast names the file it was saved as.",
-    state,
-    steps: [...exportFromMenu, (ui) => ui.press(ui.t("configuration.export.submit"))],
   },
   {
     id: "configuration-export-downloaded",
@@ -418,27 +393,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     title: "Import, review",
     description:
-      "A project is a name with its choice beside it, the path it was exported from with a sentence on whether it was found, and where it would land. Every state a project can be in: found at its recorded path (placed there, so one line says both and the sentence is left out), found under the default clone directory, to be cloned, and found nowhere (Notes, whose long path takes two lines). Account references that fall back stand on the console and on a project, a console with nothing in it says so, and the settings are offered and left off.",
-    state,
-    configuration: reviewing(),
-    steps: [...importFromSettings, chooseFile],
-  },
-  {
-    id: "configuration-import-review-all-default",
-    group: GROUP,
-    title: "Import, one choice applied to every project",
-    description:
-      "“Use default clone directory” pressed: Website leaves its exported path for it and Search API already had it, while the projects that do not offer it keep the choice they had. Website, no longer placed at its exported path, now says it was found there.",
-    state,
-    configuration: reviewing(),
-    steps: [...importFromSettings, chooseFile, (ui) => ui.press(ui.t("configuration.import.all.defaultCloneDir", { count: 2 }))],
-  },
-  {
-    id: "configuration-import-review-directory",
-    group: GROUP,
-    title: "Import, projects placed in directories of the user's own",
-    description:
-      "Another directory chosen for three projects and Import pressed: Notes has nothing typed and Search API a relative path, each marked on its row, while Website's typed path is accepted. Dotfiles is left out, which takes its landing line away and says nothing more. In a window too short for the dialog the body is scrolled to the first mistake and fades at both edges.",
+      "Projects found at their recorded path, under the default clone directory, to be cloned, and found nowhere are shown together, with account fallbacks and an empty console. Application settings are offered and left off. Press Use default clone directory to apply the choice to the projects that offer it; the other projects keep their choices. Another directory with an empty or relative path shows field errors when Import is pressed; a valid directory is accepted and Skip hides its landing line. Tick Application settings and Import for result rows with failures, fallbacks and applied settings; Phone folds the table, and Short then Tab focuses its scrolling body.",
     state,
     configuration: reviewing(),
     steps: [
@@ -451,6 +406,14 @@ export const configurationScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("configuration.import.project.choice", { project: "Dotfiles" })),
       (ui) => ui.press(ui.t("configuration.import.choice.skip")),
       importNow,
+      (ui) => ui.press(ui.t("common.cancel")),
+      ...importFromSettings,
+      chooseFile,
+      applySettings,
+      importNow,
+      (ui) => ui.press(ui.t("common.close")),
+      ...importFromSettings,
+      chooseFile,
     ],
   },
   {
@@ -458,10 +421,18 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     title: "Import, review of one console's document",
     description:
-      "No application settings, so there is no checkbox for them. The button for a choice no project offers is disabled, and the project found nowhere is left out.",
+      "No application settings, so there is no checkbox for them. The button for a choice no project offers is disabled, and the project found nowhere is left out. Choose Another directory for Releases, enter ~/work/releases, and Import for a result with nothing failed and each placement reported.",
     state,
     configuration: { file: FILE, inspection: SINGLE, imported: CLEAN_RESULT },
-    steps: [...importFromSettings, chooseFile],
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+      ...placeIn("Releases", "~/work/releases"),
+      importNow,
+      (ui) => ui.press(ui.t("common.close")),
+      ...importFromSettings,
+      chooseFile,
+    ],
   },
   {
     id: "configuration-import-review-setting-off",
@@ -489,36 +460,6 @@ export const configurationScenarios: Scenario[] = [
     state,
     configuration: reviewing({ imported: failure("icon_too_large", { limit_kib: "256" }, "the console avatar is larger than 256 KiB") }),
     steps: [...importFromSettings, chooseFile, importNow],
-  },
-  {
-    id: "configuration-import-result",
-    group: GROUP,
-    title: "Import, result with failures and fallbacks",
-    description:
-      "One row per project: how each created one was placed, one left out, one that failed with its reason (a long one, wrapping in its column), and a console that could not be created as a row of its own, with its project shown as not tried. A console created with nothing in it is a row too. A sentence above the table counts the outcomes, each count naming what it counts. The accounts that fell back are listed under the table, and the settings that were asked for are reported applied. At the Phone width the table folds into one labelled block per row.",
-    state,
-    configuration: reviewing(),
-    steps: [...importFromSettings, chooseFile, applySettings, importNow],
-  },
-  {
-    id: "configuration-import-result-short-window",
-    group: GROUP,
-    title: "Import, result in a window too short for it",
-    description:
-      "A page of text with no control in it but the Done button. Its body scrolls, fading at the edge it can still be scrolled towards, and is a region of its own that the keyboard reaches: it is focused here, its ring drawn round the whole body, as it is for a user who tabbed to it.",
-    height: 480,
-    state,
-    configuration: reviewing(),
-    steps: [...importFromSettings, chooseFile, applySettings, importNow, (ui) => ui.tabToRegion(ui.t("configuration.import.title"))],
-  },
-  {
-    id: "configuration-import-result-clean",
-    group: GROUP,
-    title: "Import, result with nothing to report",
-    description: "The summary says nothing failed, and each project's row says how it was placed: at its recorded path, cloned, in the directory the user gave.",
-    state,
-    configuration: { file: FILE, inspection: SINGLE, imported: CLEAN_RESULT },
-    steps: [...importFromSettings, chooseFile, ...placeIn("Releases", "~/work/releases"), importNow],
   },
   {
     id: "configuration-import-result-settings-failed",

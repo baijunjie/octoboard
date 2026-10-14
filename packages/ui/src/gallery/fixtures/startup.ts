@@ -40,34 +40,15 @@ export const startupScenarios: Scenario[] = [
     group: GROUP,
     title: "The daemon failed to start",
     description:
-      "The daemon's own report, as long as the daemon made it. The screen scrolls once the report and its Quit button do not fit the window: use the Short height to see the content fade at the bottom edge, and the window at its default height to see it whole, with no fade.",
+      "The daemon's own report. Use Short to reveal the bottom fade, then Tab into the scrolling column for its focus ring and keyboard scrolling; Fit shows the whole report without a fade.",
     startup: DAEMON_FAILED,
-  },
-  {
-    id: "startup-daemon-failed-focused",
-    group: GROUP,
-    title: "The daemon failed to start, the report focused",
-    description:
-      "The report too long for the window, tabbed to: the whole column takes the focus ring, drawn inside the window's edge above the fade, and scrolls by keyboard to the buttons at its end. At the default height it fits and takes no focus.",
-    height: 480,
-    startup: DAEMON_FAILED,
-    steps: [(ui) => ui.tabToRegion(ui.t("startup.message"))],
   },
   {
     id: "startup-crash",
     group: GROUP,
     title: "The UI crashed",
     description:
-      "The error boundary's fallback, with Try again. The stack is a block of its own, so a stack taller than the window scrolls inside it: use the Short height to see the block fade at its bottom edge, and the default height to see it whole, with no fade.",
+      "The error boundary's fallback, with Try again. The stack is a block of its own, so a stack taller than the window scrolls inside it: use Short to see its bottom fade, then Tab onto the stack for its frame-shaped focus ring and keyboard scrolling; Fit shows it whole without a fade.",
     startup: { kind: "crash", stack: stackOf(12) },
-  },
-  {
-    id: "startup-crash-focused",
-    group: GROUP,
-    title: "The UI crashed, a long stack focused",
-    description:
-      "A stack far taller than the block that holds it, tabbed to: the focus ring is the frame round the block, drawn whole above the fade at the block's bottom edge, and the stack scrolls by keyboard.",
-    startup: { kind: "crash", stack: stackOf(60) },
-    steps: [(ui) => ui.tabToRegion(ui.t("error.stack"))],
   },
 ];

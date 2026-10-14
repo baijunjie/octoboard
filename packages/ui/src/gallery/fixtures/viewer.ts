@@ -577,14 +577,6 @@ async function files(): Promise<ViewerSubject[]> {
   ];
 }
 
-/** A document and a file of code, both taller than the viewer. */
-async function focusable(): Promise<ViewerSubject[]> {
-  return [
-    file("docs/guide.md", text("docs/guide.md", GUIDE)),
-    file("src/generated/table.ts", text("src/generated/table.ts", nearBudget())),
-  ];
-}
-
 const LONG_COMPARISON = "release/2024-11-stabilisation-and-hotfix-candidates at 1234567 to feature/ranking-experiments-with-a-long-name at fedcba0";
 /** A one-hunk patch of a Markdown file, from `oldPath` to `newPath` (the same for a plain edit). */
 const markdownPatch = (oldPath: string, newPath: string) => `diff --git a/${oldPath} b/${newPath}
@@ -843,7 +835,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     title: "Files",
     description:
-      "Code in several languages (one file with lines wider than the viewer), Markdown that opens as a document (headings, lists, tables, fenced code, markup that must stay inert, and right-to-left text: in the guide, a list, quote and table that read from the right inside a left-to-right document; in the Arabic document, the same blocks in the other direction, with an English paragraph and an English-first list among them; the figures document has no letters, so with the ar language it reads from the right), every image format, an SVG and HTML whose scripts must not run, unsupported binary, a grammar that fails, files past the budgets, loading and failed reads. Previous / Next walks them in the same mounted viewer. In each header the path is followed by the size as a chip, and no subtitle row sits under the title. The copy button is the first of the controls at the end of the row, ahead of the Markdown view choice and the word wrap choice (a Markdown file switched to source shows all three), and it stays there when a long name pushes the size chip, or in a narrow window the path itself, down to a row of its own. Every reading surface (highlighted code, plain text, a rendered document) fades at the edge it hides more behind and not at an edge with nothing past it, and shows no fade at all when its content fits: compare docs/guide.md, src/generated/table.ts and logs/server.log (each taller than the viewer) with README.md, scripts/build.py and src/strange.brokengrammar (each in view). docs/releases.md (a rendered table wider than the viewer) and logs/server.log (plain text, a few lines wider than the viewer) scroll both ways, at the window's own minimum width as well as the default: look at their bottom edge, where the fade meets the horizontal scrollbar, with the system's scrollbars set to show always; the wrap choice, off until chosen, takes the sideways scroll from the log.",
+      "Code in several languages (one file with lines wider than the viewer), Markdown that opens as a document (headings, lists, tables, fenced code, markup that must stay inert, and right-to-left text: in the guide, a list, quote and table that read from the right inside a left-to-right document; in the Arabic document, the same blocks in the other direction, with an English paragraph and an English-first list among them; the figures document has no letters, so with the ar language it reads from the right), every image format, an SVG and HTML whose scripts must not run, unsupported binary, a grammar that fails, files past the budgets, loading and failed reads. Previous / Next walks them in the same mounted viewer. On docs/guide.md or src/generated/table.ts, Tab into the reading surface for its focus ring and keyboard scrolling. In each header the path is followed by the size as a chip, and no subtitle row sits under the title. The copy button is the first of the controls at the end of the row, ahead of the Markdown view choice and the word wrap choice (a Markdown file switched to source shows all three), and it stays there when a long name pushes the size chip, or in a narrow window the path itself, down to a row of its own. Every reading surface (highlighted code, plain text, a rendered document) fades at the edge it hides more behind and not at an edge with nothing past it, and shows no fade at all when its content fits: compare docs/guide.md, src/generated/table.ts and logs/server.log (each taller than the viewer) with README.md, scripts/build.py and src/strange.brokengrammar (each in view). docs/releases.md (a rendered table wider than the viewer) and logs/server.log (plain text, a few lines wider than the viewer) scroll both ways, at the window's own minimum width as well as the default: look at their bottom edge, where the fade meets the horizontal scrollbar, with the system's scrollbars set to show always; the wrap choice, off until chosen, takes the sideways scroll from the log.",
     viewer: { subjects: files },
   },
   {
@@ -852,15 +844,6 @@ export const viewerScenarios: Scenario[] = [
     title: "Files, each read taking a moment",
     description: "As Files, but each subject shows its loading state for 400 ms first, as a read from the daemon would.",
     viewer: { subjects: files, loadDelay: 400 },
-  },
-  {
-    id: "viewer-focused-surface",
-    group: GROUP,
-    title: "A reading surface with the keyboard on it",
-    description:
-      "A rendered document taller than the viewer, tabbed to: the focus ring is drawn on the frame round the document, whole, above the fade at its bottom edge. Next file shows highlighted code in the same frame; Tab onto it for the same ring.",
-    viewer: { subjects: focusable },
-    steps: [(ui) => ui.tabToRegion((name) => name.includes("guide.md"))],
   },
   {
     id: "viewer-document",

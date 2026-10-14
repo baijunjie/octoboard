@@ -1,12 +1,8 @@
 import { describing, type Matcher } from "../interact";
 import type { Scenario } from "../scenario";
-import { SAMPLE, consoleOf, pageOf, projectOf, sessionOf, snapshotState } from "./builders";
+import { consoleOf, pageOf, projectOf, sessionOf, snapshotState } from "./builders";
 
 const GROUP = "Window layout";
-
-const { console: console_, web, api, consoleSession, sessions } = SAMPLE;
-const pages = [pageOf("pg-1", consoleSession.id, "<h1>Report</h1><p>Nothing needs your attention.</p>", 5)];
-const state = snapshotState({ consoles: [console_], projects: [web, api], sessions, pages: { [consoleSession.id]: pages } });
 
 // `railState` has five consoles covering everything the rail shows per console: a raised hand (Main,
 // which has two waiting sessions there, and the one with the long name, which has one, so the waiting
@@ -64,9 +60,24 @@ export const layoutScenarios: Scenario[] = [
     group: GROUP,
     title: "Rail with five consoles",
     description:
-      "Console avatars on the left rail with their activity marker (a hand, a working dot, a speech bubble, none), the current one on a tile; New console under them. At the bottom: the waiting count, which adds up the raised hands of every console (two in Main, one in the console with the long name, so 3), and Settings. Right-click an avatar for its console's actions.",
+      "Back and Forward start enabled after visits to Hub, Fix the summary layout, Operations and Roll back the last deploy, then Back. Five avatars cover waiting, working, running and inactive consoles, including a long name. Hover them for full names and activity tooltips, or right-click for actions. Hide the docked sidebar, then hover avatars or the sidebar toggle for previews; keyboard focus still opens avatar tooltips. Select Hub, hide the report and hover the window's end edge for its preview. Drag either pane to its maximum. At Narrow, open the sessions drawer, select Hub, then open the report drawer.",
     state: railState,
-    steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
+    steps: [
+      (ui) => ui.press(ui.session("Hub")),
+      (ui) => ui.wait(500),
+      (ui) => ui.hoverTitledControl(avatar(lab.name)),
+      (ui) => ui.press(avatar(billing.name)),
+      (ui) => ui.wait(500),
+      (ui) => ui.hoverTitledControl(avatar(billing.name)),
+      (ui) => ui.press(avatar(main.name)),
+      (ui) => ui.press(ui.session("Hub")),
+      (ui) => ui.press(ui.session("Hub")),
+      (ui) => ui.press(ui.session("Fix the summary layout")),
+      (ui) => ui.press(avatar(operations.name)),
+      (ui) => ui.press(ui.session("Roll back the last deploy")),
+      (ui) => ui.press(ui.t("titleBar.back")),
+      (ui) => ui.wait(300),
+    ],
   },
   {
     id: "layout-rail-crowded",
@@ -75,24 +86,6 @@ export const layoutScenarios: Scenario[] = [
     description:
       "More consoles than the column holds, which scrolls with no scrollbar to say so: the avatars fade at the bottom edge, where more are waiting. Scroll it and both edges fade until the end, where that edge stops. Rail with five consoles shows the same column with everything in view, and no fade.",
     state: crowdState,
-  },
-  {
-    id: "layout-rail-avatar-long-name",
-    group: GROUP,
-    title: "Rail avatar of a console with a very long name",
-    description:
-      "A console avatar's tooltip where a session is waiting for you: the console's whole name, wrapping over two lines, then that a session is waiting for you. Rest the pointer on the other avatars to read, after their names, that a session is working or is running, and the bare name alone for Docs.",
-    state: railState,
-    steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500), (ui) => ui.hoverTitledControl(avatar(lab.name))],
-  },
-  {
-    id: "layout-rail-avatar-running",
-    group: GROUP,
-    title: "Rail avatar of a console that is merely running",
-    description:
-      "A console avatar's tooltip where a session is merely running: the console's name, then that a session is running. The avatar is the current console's, on its tile.",
-    state: railState,
-    steps: [(ui) => ui.press(avatar(billing.name)), (ui) => ui.wait(500), (ui) => ui.hoverTitledControl(avatar(billing.name))],
   },
   {
     id: "layout-waiting-overflow",
@@ -107,70 +100,5 @@ export const layoutScenarios: Scenario[] = [
         sessionOf(`s-${i}`, main.id, website.id, `Needs an answer ${i + 1}`, "waiting_user"),
       ),
     }),
-  },
-  {
-    id: "layout-history",
-    group: GROUP,
-    title: "Back and Forward available",
-    description: "Four locations visited, then Back: both buttons in the top bar are enabled.",
-    state: railState,
-    steps: [
-      (ui) => ui.press(ui.session("Hub")),
-      (ui) => ui.press(ui.session("Fix the summary layout")),
-      (ui) => ui.press(avatar(operations.name)),
-      (ui) => ui.press(ui.session("Roll back the last deploy")),
-      (ui) => ui.press(ui.t("titleBar.back")),
-      (ui) => ui.wait(300),
-    ],
-  },
-  {
-    id: "layout-rail-narrow",
-    group: GROUP,
-    title: "Narrow window, sessions drawer open",
-    description: "The rail and the top bar stay; the sidebar is a drawer over the terminal, starting right of the rail.",
-    width: 800,
-    state: railState,
-    steps: [(ui) => ui.press(ui.t("titleBar.sidebar.show")), (ui) => ui.wait(400)],
-  },
-  {
-    id: "layout-rail-narrow-report",
-    group: GROUP,
-    title: "Narrow window, report drawer open",
-    width: 800,
-    state: railState,
-    steps: [
-      (ui) => ui.press(ui.t("titleBar.sidebar.show")),
-      (ui) => ui.press(ui.session("Hub")),
-      (ui) => ui.press(ui.t("titleBar.report.show")),
-      (ui) => ui.wait(500),
-    ],
-  },
-  {
-    id: "layout-sidebar-hover-console",
-    group: GROUP,
-    title: "Docked sidebar hidden, five consoles",
-    description:
-      "The breadcrumb follows the buttons when the sidebar is not docked. Main is current. Rest the mouse on an avatar to float the sidebar in showing that console, current or not; move along the avatars to switch the preview, and press inside it to make that console current. Resting on the sidebar toggle at the top bar's start floats it in at once, showing the current console. Operations' avatar has keyboard focus, the one way left to read its tooltip, which says that a session is working; the pointer never opens it here.",
-    preferences: { sidebarVisible: false, sidebarConsole: main.id },
-    state: railState,
-    steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.focusControl(avatar(operations.name))],
-  },
-  {
-    id: "layout-report-hidden",
-    group: GROUP,
-    title: "Docked report panel hidden",
-    description:
-      "Rest the pointer on the window's end edge, or on the toggle at the top bar's end, to float the report panel in.",
-    preferences: { asideVisible: false },
-    state,
-    steps: [(ui) => ui.press(ui.session("Hub"))],
-  },
-  {
-    id: "layout-wide-panes",
-    group: GROUP,
-    title: "Widest panes",
-    preferences: { sidebarWidth: 480, asideWidth: 720 },
-    state,
-    steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
   },
 ];

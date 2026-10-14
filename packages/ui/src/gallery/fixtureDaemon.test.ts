@@ -44,3 +44,19 @@ describe("the fixture daemon's deletion of archived sessions", () => {
     expect(await remaining({ console_session: "hub" })).toEqual(["bound-live", "elsewhere", "hub", "live-lead", "loose", "under-live-lead"]);
   });
 });
+
+
+describe("the fixture daemon's settings and trusted folders", () => {
+  it("applies a settings request atomically, preserves accounts, and reaches an empty trust list by removal", async () => {
+    const accounts = [{ id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }];
+    const daemon = createFixtureDaemon({ id: "settings-contract", group: "Settings", title: "", state: snapshotState({ settings: { auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts }, trustedDirectories: ["/Users/dev/code"] }) });
+    await expect(daemon.request({ type: "update_settings", auto_sync_repositories: true, default_clone_dir: "relative" })).rejects.toThrow();
+    expect(daemon.store.getState().settings.auto_sync_repositories).toBe(false);
+    await daemon.request({ type: "update_settings", auto_sync_repositories: true, default_clone_dir: "~/work/../repos" });
+    expect(daemon.store.getState().settings).toEqual({ auto_sync_repositories: true, default_clone_dir: "/Users/dev/repos", accounts });
+    await daemon.request({ type: "update_settings", auto_sync_repositories: false, default_clone_dir: " " });
+    expect(daemon.store.getState().settings).toEqual({ auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts });
+    await daemon.request({ type: "remove_trusted_directory", path: "~/work/../code" });
+    expect(daemon.store.getState().trustedDirectories).toEqual([]);
+  });
+});

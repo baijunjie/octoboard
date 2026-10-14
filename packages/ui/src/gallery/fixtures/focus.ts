@@ -69,7 +69,7 @@ const longHub = sessionOf("s-long-hub", console_.id, undefined, "A console sessi
 const cjkHub = sessionOf("s-cjk-hub", console_.id, undefined, "负责网站改版的编排会话", "idle", { colour: "olive" });
 const cjkProject = projectOf("p-cjk", console_.id, "搜索接口服务");
 
-const state = snapshotState({ consoles: [console_], projects: [project, other, third], sessions, settings });
+
 
 // Many console sessions, some with long and CJK titles, so the strip has to scroll; started in the
 // order they are listed here, which is the strip's order.
@@ -83,125 +83,50 @@ const crowd = [
   sessionOf("o-7", console_.id, undefined, "Search tuning", "working", { colour: "teal" }),
 ].map((s, i) => ({ ...s, started_at: minutesAgo(700 - i * 10) }));
 
+// Empty and overflow cases belong to separate entities in the same workspace.
+const loneConsole = consoleOf("c-lone", "One console session");
+const projectlessConsole = consoleOf("c-projectless", "No projects");
+const crowdedConsole = consoleOf("c-crowded", "Many console sessions");
+const fittingConsole = consoleOf("c-fitting", "Two short hubs");
+const emptyProject = projectOf("p-empty", console_.id, "Archived only");
+const longProject = projectOf("p-long", console_.id, "A project whose name is far too long for one row");
+const state = snapshotState({
+  consoles: [{ ...console_, name: "A console with a rather long name indeed" }, loneConsole, projectlessConsole, crowdedConsole, fittingConsole],
+  projects: [project, other, third, cjkProject, longProject, emptyProject, projectOf("p-lone", loneConsole.id, "No bound sessions"), projectOf("p-fitting", fittingConsole.id, "Short strip")],
+  sessions: [
+    ...sessions, longHub, cjkHub,
+    sessionOf("s-long-latin", console_.id, longProject.id, "Check the build", "working", { bound_to: longHub.id }),
+    sessionOf("s-long-cjk", console_.id, cjkProject.id, "检查构建并更新依赖项", "idle", { bound_to: longHub.id }),
+    sessionOf("s-cjk-bound", console_.id, project.id, "检查构建", "idle", { bound_to: cjkHub.id }),
+    sessionOf("s-long-project-bound", console_.id, project.id, "Check long names", "idle", { bound_to: longHub.id }),
+    sessionOf("s-empty-old", console_.id, emptyProject.id, "Older investigation", "archived", { ended_at: minutesAgo(300) }),
+    sessionOf("s-lone", loneConsole.id, undefined, "Only hub", "idle"),
+    sessionOf("s-projectless", projectlessConsole.id, undefined, "Projectless hub", "idle"),
+    sessionOf("s-fitting-a", fittingConsole.id, undefined, "A", "idle"),
+    sessionOf("s-fitting-b", fittingConsole.id, undefined, "B", "working"),
+    ...crowd.map((session) => ({ ...session, console_id: crowdedConsole.id })),
+  ],
+  settings,
+});
+
 export const focusScenarios: Scenario[] = [
   {
     id: "focus-project",
     group: GROUP,
-    title: "Focus mode on a project",
+    title: "Project and console session focus",
     description:
-      "Only the project's unbound sessions are listed. A sentence says how many others are bound to console " +
-      "sessions, with a chip for each of those console sessions that leads to its focus mode; the lead session " +
-      "and the sessions under it are counted there and not listed. An unbound session's own sessions are inset " +
-      "under its card. The archive still holds bound sessions, and insets an archived session under its " +
-      "archived owner.",
+      "Only unbound sessions appear; bound-session chips enter their console session's focus mode, with nested cards and archives kept under their owners. Open New session for a dialog with no owner choice, even though the console has console sessions. Press Hub's bound-session chip for console session focus: its switch strip shows waiting, working and inactive sessions. Hover activity markers, then switch chips; the new-session menu picks a project and fixes Hub as owner. Long Latin and CJK owner chips share Search API; focus the long hub for its CJK and long project headings. Drag the sidebar to 200 to inspect clipping. Archived only has no live sessions. One console session has no switch strip or bound sessions; No projects disables New session. Many console sessions has an overflowing strip whose Docs chip can be scrolled into view. Two short hubs has two chips that fit together, with no edge fade.",
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    state,
-    steps: [(ui) => ui.press(ui.session("Write the migration"))],
-  },
-  {
-    id: "focus-project-new-session",
-    group: GROUP,
-    title: "New session from a project's focus mode",
-    description: "The dialog offers no owner choice although the console has console sessions: the session is unbound.",
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    state,
-    steps: [(ui) => ui.press(ui.t("sidebar.project.openSession"))],
-  },
-  {
-    id: "focus-project-no-sessions",
-    group: GROUP,
-    title: "Focus mode on a project with no live session",
-    description: "The Sessions section offers New session in place of the cards; what was archived is still listed below it.",
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    state: snapshotState({
-      consoles: [console_],
-      projects: [project],
-      sessions: [sessionOf("s-old", console_.id, project.id, "Older investigation", "archived", { ended_at: minutesAgo(60 * 5) })],
-      settings,
-    }),
-  },
-  {
-    id: "focus-console-session",
-    group: GROUP,
-    title: "Focus mode on a console session, with the switch strip",
-    description:
-      "Only the projects with a session bound to the console session, and within each only those sessions, as " +
-      "cards naming their agent and account; the lead session is one of them, with the sessions bound to it inset " +
-      "under it. Its own archived bound sessions follow the cards, grouped the same way (scroll the sidebar in a short window). Under the header, one chip per " +
-      "console session of the console that is not archived, in the order they started: Hub (in focus, outlined) " +
-      "is waiting through a bound session, Hub 2 is working, Hub 3 is working through a bound session, and " +
-      "Release notes has nothing going on, so shows nothing. The pointer rests on Hub 2's marker, whose tooltip " +
-      "reads A session is working; rest it on Hub's for A session is waiting for you. Pressing a chip enters that console session's focus mode and selects it; with " +
-      "`chrome=1` in the URL, ⌃Tab and ⌃⇧Tab do the same going round.",
-    preferences: { sidebarWidth: 440, sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
     state,
     steps: [
+      (ui) => ui.press(ui.session("Write the migration")),
+      (ui) => ui.press(ui.t("sidebar.focus.enterConsoleSession", { name: hub1.title, count: 5 })),
       (ui) => ui.press(ui.session("Add idempotency keys")),
       (ui) => ui.hoverActivityMarker(ui.t("sidebar.activity.working", { name: hub2.title })),
+      (ui) => ui.press(ui.t("sidebar.focus.exit")),
+      (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
+      (ui) => ui.press((name) => name.startsWith(ui.t("sidebar.focus.enter"))),
+      (ui) => ui.press(ui.session("Write the migration")),
     ],
-  },
-  {
-    id: "focus-console-session-strip-overflow",
-    group: GROUP,
-    title: "The switch strip with more console sessions than fit",
-    description:
-      "One row that scrolls sideways under an edge fade, with no scrollbar; the current chip, the sixth (Docs), is " +
-      "scrolled into view. A title too long for its chip fades out and is the chip's tooltip.",
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${crowd[5].id}` },
-    state: snapshotState({ consoles: [console_], projects: [project], sessions: crowd, settings }),
-  },
-  {
-    id: "focus-console-session-new-session",
-    group: GROUP,
-    title: "New session from a console session's focus mode",
-    description: "The header's menu picks the project; the dialog shows the owner as a fixed line, not a field.",
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    state,
-    steps: [(ui) => ui.press(ui.t("sidebar.focus.newSession")), (ui) => ui.press(third.name)],
-  },
-  {
-    id: "focus-console-session-empty",
-    group: GROUP,
-    title: "Focus mode on a console session with nothing bound",
-    description: "It is the console's only console session, so there is no switch strip.",
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub2.id}` },
-    state: snapshotState({ consoles: [console_], projects: [project], sessions: [hub2], settings }),
-  },
-  {
-    id: "focus-console-session-no-projects",
-    group: GROUP,
-    title: "Focus mode on a console session in a console with no projects",
-    description: "The header's new-session button is disabled, and the view says why and offers to add a project.",
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub2.id}` },
-    state: snapshotState({ consoles: [console_], sessions: [hub2], settings }),
-  },
-  {
-    id: "focus-project-long-names",
-    group: GROUP,
-    title: "A project's focus mode with long and CJK console session names, narrow",
-    description:
-      "The chips wrap onto further rows at the narrowest sidebar and cut a name longer than the row; the names " +
-      "are a long Latin one and a CJK one.",
-    preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    state: snapshotState({
-      consoles: [console_],
-      projects: [project],
-      sessions: [longHub, cjkHub, sessionOf("s-l1", console_.id, project.id, "Check the build", "idle", { bound_to: longHub.id }), sessionOf("s-l2", console_.id, project.id, "检查构建", "idle", { bound_to: cjkHub.id }), sessionOf("s-l3", console_.id, project.id, "Write the release notes", "idle")],
-      settings,
-    }),
-  },
-  {
-    id: "focus-console-session-long-names",
-    group: GROUP,
-    title: "A console session's focus mode with a long title and a CJK project, narrow",
-    description: "The pressable header name over the console name, the project group heading and the header's project menu.",
-    preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `consoleSession:${longHub.id}` },
-    state: snapshotState({
-      consoles: [consoleOf("c-1", "A console with a rather long name indeed")],
-      projects: [cjkProject, projectOf("p-long", console_.id, "A project whose name is far too long for one row")],
-      sessions: [longHub, sessionOf("s-l1", console_.id, cjkProject.id, "检查构建并更新依赖项", "idle", { bound_to: longHub.id }), sessionOf("s-l2", console_.id, "p-long", "Check the build", "working", { bound_to: longHub.id })],
-      settings,
-    }),
-    steps: [(ui) => ui.press(ui.t("sidebar.focus.newSession")), (ui) => ui.press(cjkProject.name)],
   },
 ];

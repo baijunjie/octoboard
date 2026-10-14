@@ -70,7 +70,6 @@ const boundSessions = [
   archivedLead,
   ...underArchivedLead,
 ];
-const boundState = snapshotState({ consoles: [console_], projects: [project], sessions: boundSessions });
 
 // The same sessions, the second of those under the archived lead session now a Codex session on an
 // account that has since been removed and recorded no directory: its agent icon falls back to the
@@ -83,73 +82,37 @@ const deleteState = snapshotState({
   ),
 });
 
+// A second project keeps the bound archive separate from the seventy-entry project archive.
+const boundProject = projectOf("p-bound", console_.id, "Bound archive");
+const archiveState = {
+  ...state,
+  projects: new Map([...state.projects!, [boundProject.id, boundProject]]),
+  sessions: new Map([
+    ...state.sessions!,
+    ...Array.from(deleteState.sessions!, ([id, session]) => [id, { ...session, project_id: session.project_id === undefined ? undefined : boundProject.id }] as const),
+  ]),
+};
+
 export const archiveScenarios: Scenario[] = [
   {
     id: "archive-many",
     group: GROUP,
-    title: "A project's archive, many entries",
-    description: "Seventy archived sessions, listed thirty at a time as the end scrolls into view.",
-    state,
+    title: "Project, console and bound archives",
+    description: "Search API has seventy archived sessions, loaded thirty at a time. Delete all reaches its empty view. Console sessions actions offers eight archived hubs. Focus live Hub, then View all, for bound sessions nested under an archived lead; deleting the lead lists its children, including a removed Codex account. Cancel preserves the data.",
+    state: archiveState,
     steps: [
-      (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
-      (ui) => ui.press(ui.t("sidebar.project.archive")),
-      (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: archived.length })),
-    ],
-  },
-  {
-    id: "archive-emptied",
-    group: GROUP,
-    title: "A project's archive, emptied while open",
-    description:
-      "Delete all, confirmed, removes the last archived sessions with the view open: the list gives way to the empty view and Delete all leaves the header.",
-    state: snapshotState({
-      consoles: [console_],
-      projects: [project],
-      sessions: [sessionOf("s-live", console_.id, project.id, "Live session", "idle"), ...archived.slice(0, 2)],
-    }),
-    steps: [
-      (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
-      (ui) => ui.press(ui.t("sidebar.project.archive")),
-      (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: 2 })),
-      (ui) => ui.press(ui.t("archive.deleteAll")),
-      (ui) => ui.confirm(),
-      (ui) => ui.wait(400),
-    ],
-  },
-  {
-    id: "archive-console-sessions",
-    group: GROUP,
-    title: "A console's archived console sessions",
-    state,
-    steps: [
-      (ui) => ui.press(ui.t("sidebar.consoleSessions.actions", { name: console_.name })),
-      (ui) => ui.press(ui.t("sidebar.archive.consoleSessions")),
-      (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: consoleSessions.length })),
-    ],
-  },
-  {
-    id: "archive-bound-sessions",
-    group: GROUP,
-    title: "A console session's archived bound sessions",
-    description:
-      "Reached from the console session's focus mode, one list: the sessions archived under the archived lead session are inset below it; the sessions bound to another console session and the unbound one are not listed.",
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
-    state: boundState,
-    steps: [(ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: boundArchived.length + 1 + underArchivedLead.length }))],
-  },
-  {
-    id: "archive-delete-bound-sessions",
-    group: GROUP,
-    title: "Deleting an archived lead session takes its archived sessions along",
-    description:
-      "The confirmation lists the two sessions archived under the lead session. The second is a Codex session on a removed account, whose agent icon's tooltip falls back to the agent's name. The pointer rests on the status glyph of the first, whose tooltip reads Archived.",
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
-    state: deleteState,
-    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: boundConsoleSession.title })),
+      (ui) => ui.press((name) => name.startsWith(ui.t("sidebar.focus.enter"))),
       (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: boundArchived.length + 1 + underArchivedLead.length })),
       (ui) => ui.press(ui.t("archive.delete", { title: archivedLead.title })),
       (ui) => ui.hoverCalloutAgent(underArchivedLead[1].title, "Codex"),
       (ui) => ui.hoverCalloutStatus(underArchivedLead[0].title),
+      (ui) => ui.press(ui.t("common.cancel")),
+      (ui) => ui.press(ui.t("common.close")),
+      (ui) => ui.press(ui.t("sidebar.focus.exit")),
+      (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
+      (ui) => ui.press(ui.t("sidebar.project.archive")),
+      (ui) => ui.press(ui.t("sidebar.archive.viewAll", { count: archived.length })),
     ],
   },
 ];

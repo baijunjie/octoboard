@@ -2,7 +2,6 @@
 // and the gallery's "Project Git" scenarios over it: the worktree selector, the change list in its
 // sections, a diff of each kind opened from it, and the states a source or a list can end in. Every
 // change here is built by the factory for its kind (`changeFixtures.ts`).
-import { SECTION_LABELS, type ChangeSection } from "../../browser/changes";
 import type { BranchInfo, ContentSource, FileContent, WorktreeInfo } from "../../protocol";
 import type { StatusKey } from "../../viewer/statusMarks";
 import { describing, type Matcher, type Ui } from "../interact";
@@ -310,34 +309,8 @@ const openGit = [
   (ui: Ui) => ui.press(ui.t("browser.mode.git")),
   (ui: Ui) => ui.wait(400),
 ];
-const openChange = (name: string, status: StatusKey) => [...openGit, (ui: Ui) => ui.press(ui.changeRow(name, status)), (ui: Ui) => ui.wait(800)];
-/** Opens Git mode in a narrow window, where the project pane is a drawer. */
-const openGitInDrawer = [
-  (ui: Ui) => ui.press(ui.t("titleBar.sidebar.show")),
-  (ui: Ui) => ui.press(ui.session(sessions[1].title)),
-  (ui: Ui) => ui.press(ui.t("titleBar.projectPane.show")),
-  (ui: Ui) => ui.wait(500),
-  (ui: Ui) => ui.press(ui.t("browser.mode.git")),
-  (ui: Ui) => ui.wait(400),
-];
-/** The heading of `section`, which is one button whose name is the section's name followed by its
- * count. */
-const sectionHeading =
-  (section: ChangeSection) =>
-  (ui: Ui): Matcher => {
-    const label = ui.t(SECTION_LABELS[section]);
-    return describing(`sectionHeading(${section})`, (name) => name.startsWith(label) && /^\p{N}[\p{N},.\s]*$/u.test(name.slice(label.length)));
-  };
 /** Puts the pointer on the status letter of the row of `file`, which is `status`. */
 const hoverStatus = (file: string, status: StatusKey) => (ui: Ui) => ui.hoverChangeStatus(ui.changeRow(file, status), status);
-
-/** Presses the heading of `section`, which folds it or unfolds it. */
-const foldSection = (section: ChangeSection) => (ui: Ui) => ui.press(sectionHeading(section)(ui));
-
-/** Opens the Git view's filter field from the tab row's toggle, where it takes focus. */
-const openFilter = [(ui: Ui) => ui.press(ui.t("git.filter.show")), (ui: Ui) => ui.wait(300)];
-/** Types `text` in the Git view's filter field, leaving focus in it. */
-const filterBy = (text: string) => [...openFilter, (ui: Ui) => ui.type(text), (ui: Ui) => ui.wait(300)];
 
 /** Matches a branch's option in a selector: its name followed by the 7 characters of its short
  * commit id. */
@@ -378,153 +351,23 @@ export const projectGitScenarios: Scenario[] = [
     group: GROUP,
     title: "A worktree's uncommitted changes",
     description:
-      "The Git mode: the worktree selector, then the changes in sections — conflicted first, then staged, unstaged, untracked. src/server.ts is in both Staged and Unstaged, as two changes. Press one to open its diff; Left and Right move through the list across sections.",
-    state,
-    steps: openGit,
-  },
-  {
-    id: "git-changes-status-tooltip",
-    group: GROUP,
-    title: "A change's status letter, in the list",
-    description:
-      "The pointer rests on the letter beside current, whose tooltip names the status in words; every row's letter does the same, in the list and in the tree.",
-    state,
-    steps: [...openGit, hoverStatus("current", "typeChanged")],
-  },
-  {
-    id: "git-changes-folded",
-    group: GROUP,
-    title: "A worktree's changes with sections folded",
-    description:
-      "Staged and Untracked are folded to their headings, which keep their count and point right, while Conflicted and Unstaged stay open and point down; each heading is one button across its band. The actions button of fixtures.bin's row is pressed, its menu open, offering Copy path: a change's row carries the same button as a file's in the Files tree.",
+      "Uncommitted and Compare share one repository. Compare main to feature/ranking-experiments for changed files, main to release/2.4 for the same commit, and release/2.4 to feature/ranking-experiments for changes outside the project. In the branch selectors hover rings for the selected, another and removed sessions; choose the long-named branch at Narrow for clipping. Conflicted, staged, unstaged and untracked changes share the Uncommitted view. Switch between list and tree, fold sections and folders, hover status letters, or open row actions. Open the filter: server matches both stages, notes leaves its folder chain in the tree, and no-such-file matches nothing. Select the worktree above the list to inspect its options. Press a change to open the viewer; Left and Right visit the visible changes. index.ts is renamed from outside the project, leaf.ts and nest2 are nested renames, same.ts has identical sides, and new-name.ts cannot be read. pipeline.ts and stages.ts have long and short collapsed gaps; huge.ts exceeds the render budget, limits.ts cannot be expanded, moved.ts has moved, and flaky.ts fails reads. wide.ts has very wide lines: narrow the window to 460 and switch unified/split layouts to inspect separator clipping. logo.png is an image, fixtures.bin exceeds the patch limit, and the untracked rows include text, a symlink and a repository. At Narrow, open the project pane drawer: Escape clears a typed filter before a second Escape closes the drawer.",
     state,
     steps: [
       ...openGit,
-      foldSection("staged"),
-      foldSection("untracked"),
-      (ui) => ui.press(ui.t("browser.row.actions", { name: "fixtures.bin" })),
-      (ui) => ui.wait(300),
+      hoverStatus("current", "typeChanged"),
+      (ui) => ui.pressChangeStatus(ui.changeRow("current", "typeChanged")),
+      (ui) => ui.wait(800),
+      (ui) => ui.key("Escape"),
+      ...openToSelector,
+      ringOf(LONG_BRANCH),
+      ringOf("chore/update-dependencies"),
+      ringOf("feature/ranking-experiments"),
+      (ui) => ui.press(branchOption("feature/ranking-experiments")),
+      (ui) => ui.wait(600),
+      (ui) => ui.press(ui.t("git.view.worktree")),
+      (ui) => ui.wait(400),
     ],
-  },
-  { id: "git-rename-outside", group: GROUP, title: "A rename from outside the project", state, steps: openChange("index.ts", "renamed") },
-  {
-    id: "git-type-change",
-    group: GROUP,
-    title: "A file that became a symbolic link",
-    description: "The viewer opens by pressing the hovered status letter with the pointer stationary. Its tooltip closes with the press, even without pointerleave.",
-    state,
-    steps: [...openGit, hoverStatus("current", "typeChanged"), (ui) => ui.pressChangeStatus(ui.changeRow("current", "typeChanged")), (ui) => ui.wait(800)],
-  },
-  { id: "git-nested-into", group: GROUP, title: "A file renamed into a path below itself", state, steps: openChange("leaf.ts", "renamed") },
-  { id: "git-nested-out", group: GROUP, title: "A file renamed out of a path below itself", state, steps: openChange("nest2", "renamed") },
-  {
-    id: "git-unchanged-content",
-    group: GROUP,
-    title: "A change whose two sides hold the same content",
-    description:
-      "src/same.ts has an empty patch, so there is no diff to draw; its content is read as a diff's collapsed lines are and shown whole, under a notice saying nothing changed.",
-    state,
-    steps: openChange("same.ts", "modified"),
-  },
-  {
-    id: "git-unchanged-unreadable",
-    group: GROUP,
-    title: "A rename with no change whose content cannot be read",
-    description: "The read of src/new-name.ts fails, so the viewer falls back to saying the rename changed nothing, with the reason above it.",
-    state,
-    steps: openChange("new-name.ts", "renamed"),
-  },
-  {
-    id: "git-expand",
-    group: GROUP,
-    title: "A staged change with collapsed lines to expand",
-    description:
-      "A staged change's diff as the Git mode opens it, the Staged tag in its header. src/pipeline.ts has three hunks with unmodified lines between them. Each expansion of a separator reveals 20 lines, the third reveals the rest of the gap, and Show whole file opens everything.",
-    state,
-    steps: openChange("pipeline.ts", "modified"),
-  },
-  {
-    id: "git-expand-short-gap",
-    group: GROUP,
-    title: "A change with a run short enough to reveal at once",
-    description:
-      "src/stages.ts has runs of unmodified lines of 6, 3, 9, 27 and 7 lines. The 27-line run between the third and fourth hunks offers the pair of controls; each of the others is no more than one expansion reveals, or lies before the first hunk or after the last, and offers one control, which shows all of it.",
-    state,
-    steps: openChange("stages.ts", "modified"),
-  },
-  {
-    id: "git-expand-over-budget",
-    group: GROUP,
-    title: "A change whose files are past the viewer's limit",
-    description:
-      "src/huge.ts holds more lines than the viewer renders, though its patch is small: expanding a separator keeps the lines collapsed and says the file is too large to show in full.",
-    state,
-    steps: openChange("huge.ts", "modified"),
-  },
-  {
-    id: "git-expand-wide",
-    group: GROUP,
-    title: "A change with collapsed lines wider than the window",
-    description:
-      "src/wide.ts, unwrapped, has lines far wider than the dialog. Show whole file stays in view at the end of the bar while the diff is at its left edge, as the label and the chevrons do. A last step switches to the split layout, where each side scrolls on its own and the control sits at the inner edge of the left half.",
-    width: 760,
-    state,
-    steps: [...openGitInDrawer, (ui: Ui) => ui.press(ui.changeRow("wide.ts", "modified")), (ui: Ui) => ui.wait(800), (ui: Ui) => ui.press(ui.t("viewer.layout.split")), (ui: Ui) => ui.wait(400)],
-  },
-  {
-    id: "git-expand-narrow",
-    group: GROUP,
-    title: "A change with collapsed lines in a narrow window",
-    description:
-      "src/wide.ts, unwrapped and unified, in a window too narrow for the longest separator label beside Show whole file: the label ends in an ellipsis before the control, which stays clear of it and reachable.",
-    width: 460,
-    state,
-    steps: [...openGitInDrawer, (ui: Ui) => ui.press(ui.changeRow("wide.ts", "modified")), (ui: Ui) => ui.wait(800)],
-  },
-  {
-    id: "git-expand-too-large",
-    group: GROUP,
-    title: "A change whose files are too large to expand",
-    description: "Expanding a separator finds the file past the limit: the lines stay collapsed, with a note saying the daemon does not provide the whole file.",
-    state,
-    steps: openChange("limits.ts", "modified"),
-  },
-  {
-    id: "git-expand-moved",
-    group: GROUP,
-    title: "A change that moved on before it was expanded",
-    description: "Expanding a separator finds the file changed since its patch was read: the patch stays as it is, with a note.",
-    state,
-    steps: openChange("moved.ts", "modified"),
-  },
-  {
-    id: "git-expand-failed",
-    group: GROUP,
-    title: "A change whose lines could not be read",
-    description: "Expanding a separator fails to read the file; the separator says so and can be tried again.",
-    state,
-    steps: openChange("flaky.ts", "modified"),
-  },
-  { id: "git-image", group: GROUP, title: "An image change", state, steps: openChange("logo.png", "modified") },
-  { id: "git-too-large", group: GROUP, title: "A change whose patch is too large", state, steps: openChange("fixtures.bin", "modified") },
-  { id: "git-untracked", group: GROUP, title: "An untracked file", state, steps: openChange("log.ts", "untracked") },
-  {
-    id: "git-untracked-symlink",
-    group: GROUP,
-    title: "An untracked symbolic link",
-    description: "Nothing to compare and no content to read: the viewer names what it is and says it has nothing to show.",
-   
-    state,
-    steps: openChange("config.local.ts", "untracked"),
-  },
-  { id: "git-untracked-repository", group: GROUP, title: "An untracked repository of its own", state, steps: openChange("search-client", "untracked") },
-  { id: "git-conflict", group: GROUP, title: "A file in conflict", state, steps: openChange("package.json", "conflicted") },
-  {
-    id: "git-worktrees",
-    group: GROUP,
-    title: "Choosing a worktree",
-    state,
-    steps: [...openGit, (ui) => ui.press((name) => name.startsWith("main")), (ui) => ui.wait(400)],
   },
   {
     id: "git-worktree-gone",
@@ -559,142 +402,14 @@ export const projectGitScenarios: Scenario[] = [
     steps: openGit,
   },
   {
-    id: "git-changes-tree",
-    group: GROUP,
-    title: "A worktree's changes as a tree",
-    description:
-      "The same sections with their changes grouped by folder; tools/release is a chain of single-child folders shown as one row. Staged is folded to its heading, and keyboard focus has stepped up from package.json onto the Conflicted heading, which draws its ring inside the band. Arrow keys move through the rows and the headings, Left and Right fold and unfold a folder, and the viewer's Left and Right skip the changes of a folded folder or section.",
-    state,
-    preferences: { changeLayout: "tree" },
-    steps: [
-      ...openGit,
-      foldSection("staged"),
-      (ui) => ui.focusControl(ui.changeRow("package.json", "conflicted")),
-      (ui) => ui.key("ArrowUp"),
-      (ui) => ui.wait(300),
-    ],
-  },
-  {
-    id: "git-changes-filter-open",
-    group: GROUP,
-    title: "The change filter field just opened",
-    description:
-      "The tab row's filter toggle has opened the field above the list, with keyboard focus in it and nothing typed yet; it goes away again once focus leaves it empty.",
-    state,
-    steps: [...openGit, ...openFilter],
-  },
-  {
-    id: "git-changes-filter",
-    group: GROUP,
-    title: "A worktree's changes filtered by file name",
-    description:
-      "\"server\" typed in the field the tab row's filter toggle opened: only the changes whose file name contains it remain, in their sections, and the sections' counts follow.",
-    state,
-    steps: [...openGit, ...filterBy("server")],
-  },
-  {
-    id: "git-changes-filter-tree",
-    group: GROUP,
-    title: "A worktree's changes as a tree, filtered by file name",
-    description: "\"notes\" typed in the field: the tree keeps only the folders that lead to a match.",
-    state,
-    preferences: { changeLayout: "tree" },
-    steps: [...openGit, ...filterBy("notes")],
-  },
-  {
-    id: "git-changes-filter-empty",
-    group: GROUP,
-    title: "A filter no file name matches",
-    description: "The list says no change matches; the field stays, so the text can be changed or cleared.",
-    state,
-    steps: [...openGit, ...filterBy("no-such-file")],
-  },
-  {
-    id: "git-compare",
-    group: GROUP,
-    title: "Comparing two branches",
-    description:
-      "The Git mode's Compare view: From main To feature/ranking-experiments, the commits compared, and the changed files. Press one to open its diff, read from the two commits.",
-    state,
-    steps: compare("main", "feature/ranking-experiments"),
-  },
-  {
     id: "git-compare-many-branches",
     group: GROUP,
     title: "More branches than the selector shows",
     description:
-      "The To selector open over a repository with more branches than its list holds: the list scrolls and its rows fade at the bottom edge, where more are waiting, while the popover around it keeps its edges. The selector in \"Branches marked with the session that created them\" shows the list with every branch in view, and no fade.",
+      "The To selector open over a repository with more branches than its list holds: the list scrolls and its rows fade at the bottom edge, where more are waiting, while the popover around it keeps its edges. The worktree scenario's Compare tab shows every branch in its selectors, with no fade.",
     state,
     git: { ...SAMPLE_GIT, branches: CROWDED_BRANCHES },
     steps: openToSelector,
-  },
-  {
-    id: "git-compare-origins",
-    group: GROUP,
-    title: "Branches marked with the session that created them",
-    description:
-      "The To selector open, the pointer on the ring of feature/ranking-experiments, whose tooltip says its session no longer exists, in the title the session had when the branch was attributed. Three branches carry a ring and main and release/2.4 none (nothing could name their creator). The long-named branch's is filled in the accent colour because the session selected in the sidebar created it; chore/update-dependencies's is the plain hollow one.",
-    state,
-    steps: [...openToSelector, ringOf("feature/ranking-experiments")],
-  },
-  {
-    id: "git-compare-origins-selected",
-    group: GROUP,
-    title: "The selected session's branch",
-    description:
-      "The To selector open, the pointer on the long-named branch's ring, which is filled in the accent colour because the session selected in the sidebar created it. The tooltip says so and names the session by the title the sidebar shows (\"Fix the summary layout\").",
-    state,
-    steps: [...openToSelector, ringOf(LONG_BRANCH)],
-  },
-  {
-    id: "git-compare-origins-other",
-    group: GROUP,
-    title: "A branch created by another session",
-    description: "The To selector open, the pointer on the hollow ring of chore/update-dependencies, created by a session that still exists and is not the selected one. The tooltip names that session by the title the sidebar shows (\"Update the dependencies\"), not the one it had when the branch was attributed.",
-    state,
-    steps: [...openToSelector, ringOf("chore/update-dependencies")],
-  },
-  {
-    id: "git-compare-tree",
-    group: GROUP,
-    title: "Comparing two branches, as a tree",
-    state,
-    preferences: { changeLayout: "tree" },
-    steps: compare("main", "feature/ranking-experiments"),
-  },
-  {
-    id: "git-compare-tree-status-tooltip",
-    group: GROUP,
-    title: "A compared file's status letter, in the tree",
-    description: "The pointer rests on the letter beside cache.ts, the one added file, whose tooltip names the status in words.",
-    state,
-    preferences: { changeLayout: "tree" },
-    steps: [...compare("main", "feature/ranking-experiments"), hoverStatus("cache.ts", "added")],
-  },
-  {
-    id: "git-compare-folded",
-    group: GROUP,
-    title: "A comparison's changed files folded",
-    description:
-      "The Changed files heading folded to its band, keeping its count, with the commits compared still above it; pressing the band unfolds the list again.",
-    state,
-    steps: [...compare("main", "feature/ranking-experiments"), foldSection("committed"), (ui) => ui.wait(300)],
-  },
-  {
-    id: "git-compare-type-change",
-    group: GROUP,
-    title: "A file that became a symbolic link, between two branches",
-    state,
-    steps: [...compare("main", "feature/ranking-experiments"), (ui) => ui.press(ui.changeRow("current", "typeChanged")), (ui) => ui.wait(800)],
-  },
-  {
-    id: "git-compare-expand",
-    group: GROUP,
-    title: "A change between two branches, expanded",
-    description:
-      "A change between two branches, the comparison named in the viewer's header. src/pipeline.ts between the two commits: its collapsed lines are read from the same two commits.",
-    state,
-    steps: [...compare("main", "feature/ranking-experiments"), (ui) => ui.press(ui.changeRow("pipeline.ts", "modified")), (ui) => ui.wait(800)],
   },
   {
     id: "git-compare-no-branches",
@@ -704,21 +419,6 @@ export const projectGitScenarios: Scenario[] = [
     state,
     git: FRESH_GIT,
     steps: [...openGit, (ui: Ui) => ui.press(ui.t("git.view.compare")), (ui: Ui) => ui.wait(400)],
-  },
-  {
-    id: "git-compare-same",
-    group: GROUP,
-    title: "Two branches at the same commit",
-    state,
-    steps: compare("main", "release/2.4"),
-  },
-  {
-    id: "git-compare-empty",
-    group: GROUP,
-    title: "Two branches that differ only outside the project's folder",
-    description: "The commits differ, so the view cannot say the branches are the same; it says nothing in this project's folder differs.",
-    state,
-    steps: compare("release/2.4", "feature/ranking-experiments"),
   },
   {
     id: "git-compare-moved",
@@ -736,47 +436,5 @@ export const projectGitScenarios: Scenario[] = [
     state,
     git: { ...SAMPLE_GIT, missing: ["release/2.4"] },
     steps: compare("main", "release/2.4"),
-  },
-  {
-    id: "git-compare-narrow",
-    group: GROUP,
-    title: "Narrow window, comparing a long-named branch",
-    width: 800,
-    state,
-    steps: [
-      ...openGitInDrawer,
-      (ui) => ui.press(ui.t("git.view.compare")),
-      (ui) => ui.press(ui.t("git.compare.choose")),
-      (ui) => ui.press(branchOption("main")),
-      (ui) => ui.press(ui.t("git.compare.choose")),
-      (ui) => ui.press(branchOption(LONG_BRANCH)),
-      (ui) => ui.wait(600),
-    ],
-  },
-  {
-    id: "git-narrow-filter-escape",
-    group: GROUP,
-    title: "Narrow window, Escape in the change filter",
-    description: "\"server\" typed in the filter field, then Escape: the field clears and the drawer stays open.",
-    width: 800,
-    state,
-    steps: [...openGitInDrawer, ...filterBy("server"), (ui) => ui.key("Escape")],
-  },
-  {
-    id: "git-narrow-filter-escape-twice",
-    group: GROUP,
-    title: "Narrow window, a second Escape in the emptied change filter",
-    description: "Escape clears the filter, and Escape again, the field being empty, closes the drawer.",
-    width: 800,
-    state,
-    steps: [...openGitInDrawer, ...filterBy("server"), (ui) => ui.key("Escape"), (ui) => ui.key("Escape")],
-  },
-  {
-    id: "git-narrow",
-    group: GROUP,
-    title: "Narrow window, Git mode in the drawer",
-    width: 800,
-    state,
-    steps: openGitInDrawer,
   },
 ];

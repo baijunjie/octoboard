@@ -45,12 +45,10 @@ it is not the app's WKWebView. A pointer interaction or a WebKit rendering quest
 page loaded in Playwright's `webkit`, a paint defect still in the real window, and behaviour that depends on the
 daemon, the shell or how the window starts up still in the real app.
 
-Whether every scenario still runs is checked by command, not by eye: run `pnpm gallery:sweep` from `packages/ui/`
-(`packages/ui/README.md`, section "Sweeping the gallery") rather than scripting a browser pass over the scenarios
-yourself. It is the only check that sees a step that no longer finds its control, a fixture that cannot be answered or
-an exit transition that never ends, since neither the type checker nor the unit tests load a scenario. What it reads is
-each page's failure banner, so it settles nothing about how a page looks, and it takes scenario ids, `--group`, `--lang`
-and `--theme`, so a question about one state or one group is asked of those rather than of the whole set.
+For batch checks that scenarios still run, follow `packages/ui/README.md`, section "Sweeping the gallery", for the
+scope and when a run is needed. A page with no errors does not establish that its mocks supply what the current
+components need: verify the fields, data conditions and contracts behind a new UI state against the code. Use the
+browser where the actual appearance or interaction needs checking, within the change's scope.
 
 How the bundle loads what it fetches at run time — lazy chunks, a worker, WebAssembly, assets — and anything a
 build-only Vite plugin changes are not settled there either: the gallery runs Vite's unbundled dev modules from
@@ -134,20 +132,15 @@ something special, which makes its presence look like the condition for answerin
 deletion, a binary change and a change past the patch budget with an `invalid_change` the real daemon never sends there.
 A factory parameter likewise carries the content a reply needs, not the right to ask for it.
 
-## A scenario shows only what its last step leaves on screen
+## A final capture does not verify earlier transient states
 
-Applies when adding a step to a gallery scenario, and when deciding how many scenarios a set of states needs. A
-scenario is captured once, after all of its steps have run (`packages/ui/README.md`, section "The UI state gallery"),
-so a step whose effect is transient shows in the capture only while it is the last such step — a hover above all,
-since only one tooltip in the window is ever open. Extending a scenario with a second hover therefore takes the
-tooltip the first one put up out of every capture, while both steps still pass and nothing in the type check or the
-tests says so: the earlier hover goes on asserting what its tooltip reads, which is worth keeping, but it is no
-longer seen.
+Applies when visually verifying gallery interactions. A capture taken after the scenario's steps shows only the state
+they leave on screen: a second hover displaces the first tooltip, even when both steps' text assertions pass. Keep those
+assertions, but do not count an earlier transient state as visually checked from the final capture.
 
-So where two such states both have to be seen, rest each on the scenario whose last step it is, and order the steps
-of the scenarios over the same list accordingly: the status glyph's tooltip and the agent icon's tooltip in one
-confirmation's session list are shown by ending one scenario on the glyph and another on the icon. Name in the
-scenario's description which mark the pointer ends on, so the next step appended to it can see what it would displace.
+Where several such states need visual inspection, reach and capture each on the retained page during verification.
+Scenario selection follows `packages/ui/README.md`, section "The UI state gallery"; needing several captures does not
+require several navigation entries.
 
 ## A scenario's steps run in every language, so no matcher spells out the catalog's own punctuation
 

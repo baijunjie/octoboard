@@ -59,6 +59,16 @@ A frame URL with `chrome=1` gives the page the desktop window's `windowChrome` c
 what only the desktop app offers, such as the window shortcuts, can be driven in a browser. Neither gallery page is part
 of the bundle `pnpm build` writes, but `src/gallery/` is still type-checked by it, so a broken fixture fails the build.
 
+UI areas keep confirmation easy to inspect; mock data determines the splits within each area. Build compatible cases
+into one reusable setup, supplying the data each UI state needs: different consoles, projects, sessions or viewer
+subjects can carry different cases together. Coverage includes states reached through its controls and interactions.
+Width, height, theme, language, focus, hover, filtering, layout, folding and switches do not earn separate navigation
+entries. Split only where one setup cannot reproduce required data, platform capabilities or starting conditions;
+different initial screens, routes or extra steps alone do not earn a page. Name a hard-to-discover route in the
+retained scenario's description. Mutually exclusive visual states need separate captures during verification, not
+separate pages: preserve the interactions and assertions on the retained setup, since an automatic capture shows only
+the state left by its last step.
+
 To add a scenario, add an entry to the file for its area in `src/gallery/fixtures/` (or a new file, listed in
 `index.ts`); its `group` is one of the titles in `GROUPS` (`groups.ts`), where a new group gets the icon its heading
 carries. Its `state` is built with `snapshotState` from the helpers in `builders.ts`, so a protocol change breaks it at
@@ -86,7 +96,8 @@ controls above the window reproduce any width a scenario's steps can run at, so 
 only by its width earns nothing. The same goes for a `height`: it is written only where a step needs the window too
 short for a dialog's body, which then scrolls (`ui.tabToRegion`, which focuses that scrolling body as Tab would, finds
 none in a window tall enough to hold the dialog), and a scenario that merely wants to be seen in a short window is
-seen with the Short height control instead.
+seen with the Short height control instead. A height needed by a step determines how that step can run; it does
+not justify another page for a focus or scrolling state reachable from an existing setup.
 
 A step names a control in the language the window is in, so copy is never written out: a control is named through
 `ui.t` (`ui.press(ui.t("rail.settings"))`), a session row through `ui.session` and a change row through `ui.changeRow`.
@@ -115,10 +126,20 @@ and preselected, fallbacks only for accounts the machine lacks, a result that li
 
 #### Sweeping the gallery
 
-`pnpm gallery:sweep` is the check that a scenario still runs: a step that no longer finds its control, a fixture that
-cannot be answered, an exit that never ends, or a page that never becomes ready is seen nowhere else, since neither the
-type checker nor the unit tests load a scenario. It starts this checkout's Vite dev server (the gallery is the dev
-server's unbundled modules, so it is not swept from a build), loads each scenario's frame page, waits for
+`pnpm gallery:sweep` checks that selected scenarios run: their steps find controls and pass their assertions,
+fixtures answer, exit transitions finish, pages become ready, and the gallery reports no rendering or setup failure.
+Limit it to affected scenario ids, patterns or groups, and the languages and themes relevant to the change. For a
+shared component, include every affected caller's scenarios, not just a newly added one. Run the full gallery only
+when a broad change leaves the affected scope uncertain.
+
+Do not repeat a sweep when actual browser verification already covered the same scenarios and conditions, including
+the setup steps, their assertions and failure checks. Looking at the final picture alone does not cover an assertion
+that ran earlier. Check mock fields and conditions against the changed component, fixture implementation and protocol
+contracts; a clean sweep does not prove that a fixture represents the latest UI or that the intended state is visible.
+Use browser inspection when the visual or interaction behavior needs confirmation, rather than for every data update.
+
+The sweep starts this checkout's Vite dev server (the gallery is the dev server's unbundled modules, so it is not
+swept from a build), loads each scenario's frame page, waits for
 `data-gallery-ready`, gives the page another 150 ms for whatever a step did not wait for, and reads the
 `[data-gallery-failure]` overlay. That pause is a fixed one: the sweep does not watch the page's requests, so a
 renderer that takes longer than that to arrive after the steps ended is read before it has had its say. Each failure is
@@ -127,10 +148,11 @@ printed with the language, theme, scenario id and the banner's text, and the exi
 the pages it was loading).
 
 ```sh
-pnpm gallery:sweep                          # every scenario, en and zh-Hans, light
-pnpm gallery:sweep git-badges               # one scenario; "git-*" is a pattern; several may be given
+pnpm gallery:sweep git-badges               # one affected scenario, en and zh-Hans, light
+pnpm gallery:sweep "git-*"                  # affected ids by pattern; several ids or patterns may be given
 pnpm gallery:sweep --group "Project pane: Git" --lang zh-Hans
-pnpm gallery:sweep --theme dark             # or "both"; --list prints the ids a selection names
+pnpm gallery:sweep git-badges --theme dark  # or "both"; --list prints the ids a selection names
+pnpm gallery:sweep                         # full gallery only for a broad change with uncertain scope
 ```
 
 Languages default to `en` and `zh-Hans`, the two with catalogs (the other 15 render English word for word, so sweeping

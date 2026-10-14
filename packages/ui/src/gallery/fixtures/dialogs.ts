@@ -1,12 +1,11 @@
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
-import { SAMPLE, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
+import { SAMPLE, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
 import { IMAGES } from "./viewerImages";
 
 const GROUP = "Dialogs";
 
 const { console: console_, web, api, sessions } = SAMPLE;
-const state = snapshotState({ consoles: [console_], projects: [web, api], sessions });
 
 // Two projects carrying tags, so the edited one has some of its own and the field suggests the rest.
 const tagged = [
@@ -121,8 +120,6 @@ const editTaggedProject = [
   (ui: Ui) => ui.press(ui.t("sidebar.project.edit")),
 ];
 
-const addProject = [consoleActions, (ui: Ui) => ui.press(ui.t("sidebar.console.addProject"))];
-
 /** A home directory with more subdirectories than the picker's list is tall, some of them repositories. */
 const HOME_LISTING = [
   "Applications",
@@ -141,54 +138,90 @@ const HOME_LISTING = [
   "work",
 ].map((name) => ({ name, path: `/Users/dev/${name}`, is_git_repo: ["code", "dotfiles", "repos", "scratch"].includes(name) }));
 
+/** Compatible console and project cases coexist; menus select the entity to inspect. */
+const dialogState = {
+  ...accountsState,
+  consoles: new Map([
+    [console_.id, { ...launchSettingsState.consoles!.get(console_.id)!, icon: avatarState.consoles!.get(console_.id)!.icon, claude_account_id: "a-personal" }],
+    ["c-plain", consoleOf("c-plain", "Plain console")],
+  ]),
+  projects: new Map([...accountsState.projects!, ...taggedState.projects!, ...configuredState.projects!, ...onDefaultState.projects!]),
+  sessions: new Map([...twoHubsState.sessions!, ...removeState.sessions!, ...cascadeState.sessions!]),
+};
+
 export const dialogScenarios: Scenario[] = [
-  {
-    id: "dialog-new-console",
-    group: GROUP,
-    title: "New console",
-    state,
-    steps: [(ui) => ui.press(ui.t("rail.newConsole"))],
-  },
-  {
-    id: "dialog-new-console-over-welcome",
-    group: GROUP,
-    title: "New console, over the welcome screen",
-    description: "The first console is created over the welcome screen, with no sidebar behind the dialog.",
-    state: snapshotState({}),
-    // The rail's button, not the welcome screen's: both carry the same name, and `press` finds the
-    // first of them in the DOM. What this scenario is for is the dialog over the welcome screen, and
-    // either button puts it there; that the welcome screen's own button opens it is a unit test.
-    steps: [(ui) => ui.press(ui.t("rail.newConsole"))],
-  },
-  {
-    id: "dialog-edit-console",
-    group: GROUP,
-    title: "Edit console",
-    state,
-    steps: [consoleActions, (ui) => ui.press(ui.t("sidebar.console.edit"))],
-  },
   {
     id: "dialog-new-console-accounts",
     group: GROUP,
-    title: "New console where the agent has accounts",
-    description: "The agent and its account are one input group; agents with no account of their own show the agent alone.",
-    state: accountsState,
-    steps: [(ui) => ui.press(ui.t("rail.newConsole"))],
-  },
-  {
-    id: "dialog-new-console-advanced",
-    group: GROUP,
-    title: "New console with Advanced open",
-    description: "The model and reasoning effort pickers empty, each showing that the agent's own setting is used, with the model list the daemon answered.",
-    state,
-    steps: [(ui) => ui.press(ui.t("rail.newConsole")), (ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
+    title: "Console, project and session dialogs",
+    description: "New console offers accounts; Advanced starts on the agent defaults and Haiku takes no effort. Main has an avatar and retired stored model; Plain console has neither. Edit Configured Site for stored account/model/effort, Default Account Site for inherit/default/named choices, and Docs Site for tag suggestions. New session offers live owners, leaving archived Hub 3 out. Website removal lists default, Work and removed-directory accounts; Hub 4 archive lists its interrupted children. Add project: ~/code/slow stays checking, ~/code/site detects Codex, ~/code/missing fails, and git@example.com:o/private.git is unreadable. The parent-directory source hides account/Advanced; Browse opens a long directory listing. Empty Add shows field errors.",
+    state: dialogState,
+    directories: { "/Users/dev": HOME_LISTING },
+    detections: { ...{ "~/code/slow": "pending" },
+      ...{ "~/code/site": { agent: "codex" } },
+      ...{
+      "~/code/missing": { code: "path_not_found", params: { path: "/Users/me/code/missing" }, message: "`/Users/me/code/missing` does not exist" },
+    },
+      ...{
+      "git@example.com:o/private.git": {
+        code: "git_remote_unreachable",
+        params: { detail: "Permission denied (publickey)." },
+        message: "the repository could not be read: Permission denied (publickey).",
+      },
+    } },
+    steps: [
+      (ui) => projectActions(ui, web.name),
+      (ui) => ui.press(ui.t("sidebar.project.remove")),
+      (ui) => ui.hoverCalloutAgent("Fix the summary layout", ui.t("settings.accounts.defaultName")),
+      (ui) => ui.hoverCalloutAgent("Update the dependencies", "Work"),
+      (ui) => ui.hoverCalloutAgent("Check the release notes", "/Users/dev/.claude-removed"),
+      (ui) => ui.press(ui.t("common.cancel")),
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),
+      (ui) => ui.press(ui.t("sidebar.session.archive")),
+      (ui) => ui.hoverCalloutStatus("Tidy the changelog"),
+      (ui) => ui.hoverCalloutAgent("Rename the index", "Work"),
+      (ui) => ui.press(ui.t("common.cancel")),
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+      (ui) => ui.press(ui.t("common.cancel")),
+      (ui) => projectActions(ui, configured.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+      (ui) => ui.press(ui.t("common.cancel")),
+      (ui) => projectActions(ui, web.name),
+      (ui) => ui.press(ui.t("sidebar.project.openSession")),
+      (ui) => ui.press(ui.t("dialog.session.ownerNone")),
+      (ui) => ui.key("Escape"),
+      (ui) => ui.key("Escape"),
+      (ui) => ui.wait(300),
+      ...editTaggedProject,
+      (ui) => ui.press(ui.t("dialog.project.tagsSuggestions")),
+      (ui) => ui.key("Escape"),
+      (ui) => ui.key("Escape"),
+      (ui) => ui.wait(300),
+      (ui) => projectActions(ui, onDefault.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.account", { agent: "Claude Code" })),
+      (ui) => ui.key("Escape"),
+      (ui) => ui.key("Escape"),
+      (ui) => ui.wait(300),
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.press(ui.t("common.browse")),
+      (ui) => ui.wait(300),
+      (ui) => ui.key("Escape"),
+      (ui) => ui.key("Escape"),
+      (ui) => ui.wait(300),
+      (ui) => ui.press(ui.t("rail.newConsole")),
+    ],
   },
   {
     id: "dialog-new-console-models-loading",
     group: GROUP,
     title: "New console while the model list is out",
     description: "The model and effort pickers are locked and the model field says the list is loading.",
-    state,
+    state: dialogState,
     agentModels: { claude: "pending" },
     steps: [(ui) => ui.press(ui.t("rail.newConsole")), (ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
   },
@@ -197,7 +230,7 @@ export const dialogScenarios: Scenario[] = [
     group: GROUP,
     title: "Edit a console whose agent cannot list its models",
     description: "The daemon found no binary for the agent, so the model picker offers the stored model alone and says why; the effort picker still works over what is stored.",
-    state: launchSettingsState,
+    state: dialogState,
     agentModels: {
       claude: {
         models: [],
@@ -209,239 +242,5 @@ export const dialogScenarios: Scenario[] = [
       },
     },
     steps: [consoleActions, (ui) => ui.press(ui.t("sidebar.console.edit")), (ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
-  },
-  {
-    id: "dialog-new-console-models-no-effort",
-    group: GROUP,
-    title: "New console with a model that takes no reasoning effort",
-    description: "Haiku is chosen: the effort picker stays operable over an empty list, and its note says the model takes none.",
-    state,
-    steps: [
-      (ui) => ui.press(ui.t("rail.newConsole")),
-      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
-      // The pickers are named by their placeholder, the Model one being the first.
-      (ui) => ui.press(ui.t("dialog.agentSettings.placeholder")),
-      (ui) => ui.press("Haiku"),
-    ],
-  },
-  {
-    id: "dialog-edit-console-launch-settings",
-    group: GROUP,
-    title: "Edit a console with a stored model and effort",
-    description: "The stored model is not in the list the daemon answered, so it is kept and marked; the effort is a listed one.",
-    state: launchSettingsState,
-    steps: [consoleActions, (ui) => ui.press(ui.t("sidebar.console.edit")), (ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
-  },
-  {
-    id: "dialog-edit-console-avatar",
-    group: GROUP,
-    title: "Edit a console with an avatar",
-    description: "The image fills the round control, with its delete button over the corner.",
-    state: avatarState,
-    steps: [consoleActions, (ui) => ui.press(ui.t("sidebar.console.edit"))],
-  },
-  {
-    id: "dialog-delete-console",
-    group: GROUP,
-    title: "Confirm deleting a console",
-    description: "The destructive confirmation where the user types a word.",
-    state,
-    steps: [consoleActions, (ui) => ui.press(ui.t("sidebar.console.delete"))],
-  },
-  {
-    id: "dialog-add-project",
-    group: GROUP,
-    title: "Add project",
-    state,
-    steps: [consoleActions, (ui) => ui.press(ui.t("sidebar.console.addProject"))],
-  },
-  {
-    id: "dialog-add-project-invalid",
-    group: GROUP,
-    title: "Add project with nothing filled in",
-    description: "Submitting an empty form: what is required is said under the field it belongs to.",
-    state,
-    steps: [
-      consoleActions,
-      (ui) => ui.press(ui.t("sidebar.console.addProject")),
-      (ui) => ui.press(ui.t("common.add")),
-    ],
-  },
-  {
-    id: "dialog-add-project-checking",
-    group: GROUP,
-    title: "Add project while the directory is checked",
-    description: "The daemon has not answered for the path yet: the form says so and keeps what is below the path disabled.",
-    state,
-    detections: { "~/code/slow": "pending" },
-    steps: [...addProject, (ui) => ui.focus(ui.t("dialog.project.directory")), (ui) => ui.type("~/code/slow"), (ui) => ui.wait(700)],
-  },
-  {
-    id: "dialog-add-project-detected",
-    group: GROUP,
-    title: "Add project with a detected agent",
-    description: "The directory's agent is preselected in the Default agent field, which stays changeable.",
-    state,
-    detections: { "~/code/site": { agent: "codex" } },
-    steps: [...addProject, (ui) => ui.focus(ui.t("dialog.project.directory")), (ui) => ui.type("~/code/site"), (ui) => ui.wait(700)],
-  },
-  {
-    id: "dialog-add-project-path-refused",
-    group: GROUP,
-    title: "Add project with a path that is no directory",
-    description: "The refusal shows under the path field and keeps the fields below it disabled.",
-    state,
-    detections: {
-      "~/code/missing": { code: "path_not_found", params: { path: "/Users/me/code/missing" }, message: "`/Users/me/code/missing` does not exist" },
-    },
-    steps: [...addProject, (ui) => ui.focus(ui.t("dialog.project.directory")), (ui) => ui.type("~/code/missing"), (ui) => ui.wait(700)],
-  },
-  {
-    id: "dialog-add-project-git-unreachable",
-    group: GROUP,
-    title: "Add project from a repository that cannot be read",
-    description: "The probe failed: git's reason shows under the URL, and everything below it stays disabled.",
-    state,
-    detections: {
-      "git@example.com:o/private.git": {
-        code: "git_remote_unreachable",
-        params: { detail: "Permission denied (publickey)." },
-        message: "the repository could not be read: Permission denied (publickey).",
-      },
-    },
-    steps: [
-      ...addProject,
-      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.local"))),
-      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.git"))),
-      (ui) => ui.focus(ui.t("dialog.project.repositoryUrl")),
-      (ui) => ui.type("git@example.com:o/private.git"),
-      (ui) => ui.wait(1100),
-    ],
-  },
-  {
-    id: "dialog-add-project-parent",
-    group: GROUP,
-    title: "Add the repositories under a parent directory",
-    description: "\"Detect from files\" is preselected, with the helper text saying what it reads; the agent has accounts, yet neither the account picker nor Advanced is offered.",
-    state: accountsState,
-    steps: [
-      ...addProject,
-      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.local"))),
-      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.parent"))),
-    ],
-  },
-  {
-    id: "dialog-directory-picker",
-    group: GROUP,
-    title: "Directory picker",
-    description:
-      "Browse from the add-project dialog. The list is longer than its box, so it scrolls on its own and fades at the edge it can still be scrolled towards.",
-    state,
-    directories: { "/Users/dev": HOME_LISTING },
-    steps: [
-      consoleActions,
-      (ui) => ui.press(ui.t("sidebar.console.addProject")),
-      (ui) => ui.press(ui.t("common.browse")),
-      (ui) => ui.wait(300),
-    ],
-  },
-  {
-    id: "dialog-new-session",
-    group: GROUP,
-    title: "New session",
-    state,
-    steps: [(ui) => projectActions(ui, web.name), (ui) => ui.press(ui.t("sidebar.project.openSession"))],
-  },
-  {
-    id: "dialog-new-session-owner",
-    group: GROUP,
-    title: "New session, choosing its console session",
-    description: "The owner choice open: none, then each live console session beside its colour; the archived one is absent.",
-    state: twoHubsState,
-    steps: [
-      (ui) => projectActions(ui, web.name),
-      (ui) => ui.press(ui.t("sidebar.project.openSession")),
-      (ui) => ui.press(ui.t("dialog.session.ownerNone")),
-    ],
-  },
-  {
-    id: "dialog-remove-project-running",
-    group: GROUP,
-    title: "Remove a project with running sessions",
-    description:
-      "The confirmation lists the project's running sessions, each agent icon naming the account its session runs under: a removed account, which falls back to the directory it recorded and where the pointer rests, then the default account, then a stored one.",
-    state: removeState,
-    steps: [
-      (ui) => projectActions(ui, web.name),
-      (ui) => ui.press(ui.t("sidebar.project.remove")),
-      (ui) => ui.hoverCalloutAgent("Fix the summary layout", ui.t("settings.accounts.defaultName")),
-      (ui) => ui.hoverCalloutAgent("Update the dependencies", "Work"),
-      (ui) => ui.hoverCalloutAgent("Check the release notes", "/Users/dev/.claude-removed"),
-    ],
-  },
-  {
-    id: "dialog-archive-session",
-    group: GROUP,
-    title: "Confirm archiving a session",
-    state,
-    steps: [
-      (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Fix the summary layout" })),
-      (ui) => ui.press(ui.t("sidebar.session.archive")),
-    ],
-  },
-  {
-    id: "dialog-archive-console-session",
-    group: GROUP,
-    title: "Confirm archiving a console session with bound sessions",
-    description:
-      "The confirmation lists the interrupted sessions bound to it, which are archived with it. The pointer rests on the agent icon of the second, whose tooltip names its account, Work.",
-    state: cascadeState,
-    steps: [
-      (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),
-      (ui) => ui.press(ui.t("sidebar.session.archive")),
-      (ui) => ui.hoverCalloutStatus("Tidy the changelog"),
-      (ui) => ui.hoverCalloutAgent("Rename the index", "Work"),
-    ],
-  },
-  {
-    id: "dialog-edit-project-tag-suggestions",
-    group: GROUP,
-    title: "Tag suggestions in the project dialog",
-    description: "The field's list offers the tags the other projects carry, and none this project already has.",
-    state: taggedState,
-    steps: [...editTaggedProject, (ui) => ui.press(ui.t("dialog.project.tagsSuggestions"))],
-  },
-  {
-    id: "dialog-add-project-accounts",
-    group: GROUP,
-    title: "Add project where the agent has accounts",
-    description: "The default agent and its account are one input group, the account starting on inheriting the console's.",
-    state: accountsState,
-    steps: addProject,
-  },
-  {
-    id: "dialog-edit-project-launch-settings",
-    group: GROUP,
-    title: "Edit a project with a stored account, model and effort",
-    description: "The stored model is not in the list the daemon answered, so it is kept and marked; the effort is a listed one.",
-    state: configuredState,
-    steps: [
-      (ui) => projectActions(ui, configured.name),
-      (ui) => ui.press(ui.t("sidebar.project.edit")),
-      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
-    ],
-  },
-  {
-    id: "dialog-edit-project-account-choices",
-    group: GROUP,
-    title: "Edit a project on the agent's default account, with its account choices open",
-    description:
-      "The console pins a named account while the project is on the agent's default account, so its sessions do not take the console's: the picker rests on the default account, and its choices are inheriting the console's (named for that account), the agent's default account, then the named accounts.",
-    state: onDefaultState,
-    steps: [
-      (ui) => projectActions(ui, onDefault.name),
-      (ui) => ui.press(ui.t("sidebar.project.edit")),
-      (ui) => ui.press(ui.t("dialog.agentSettings.account", { agent: "Claude Code" })),
-    ],
   },
 ];

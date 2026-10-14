@@ -77,7 +77,7 @@ const unreadableDir = (path: string): FixtureFile => ({
   },
 });
 
-const { console: console_, web, api, consoleSession, sessions } = SAMPLE;
+const { console: console_, web, api, sessions } = SAMPLE;
 const state = snapshotState({ consoles: [console_], projects: [web, api], sessions });
 const openFiles = [(ui: Ui) => ui.press(ui.session("Fix the summary layout")), (ui: Ui) => ui.wait(400)];
 
@@ -87,27 +87,9 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     title: "A project session's files",
     description:
-      "Selecting a project session puts its project's files in the aside: folders first, natural order, .git left out. src is expanded; press a file to open the viewer, then Left and Right to move through the files on screen.",
+      "Folders first, natural order, .git left out. src is expanded; press a file for the viewer and Left/Right to visit visible files. Hover or focus file and folder rows for their Copy path actions; select main.ts, close its viewer, and open src's actions to check the selected row. Select Hub, then Search API actions → Browse files to inspect a project without changing the selected console session. Narrow the window and open the project pane drawer to see the same tree over the terminal.",
     state,
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.wait(300)],
-  },
-  {
-    id: "files-row-actions",
-    group: GROUP,
-    title: "File and folder row actions",
-    description:
-      "Files and folders carry an actions button at the row's end, shown on hover, focus or selection. main.ts is the current file; expanded src has its Copy path menu open. Collapsed docs offers the same action, without expanding the folder.",
-    state,
-    steps: [
-      ...openFiles,
-      (ui) => ui.press("src"),
-      (ui) => ui.press("main.ts"),
-      (ui) => ui.wait(600),
-      (ui) => ui.key("Escape"),
-      (ui) => ui.wait(300),
-      (ui) => ui.press(ui.t("browser.directory.actions", { name: "src" })),
-      (ui) => ui.wait(300),
-    ],
   },
   {
     id: "files-row-no-clipboard",
@@ -127,19 +109,6 @@ export const projectFilesScenarios: Scenario[] = [
     state,
     toasts: [{ kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "" }],
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600)],
-  },
-  {
-    id: "files-no-session",
-    group: GROUP,
-    title: "Browsing a project with no session",
-    description: "Browse files from a project's menu: the console session stays selected, and the aside shows the project's files instead of its report.",
-    state,
-    steps: [
-      (ui) => ui.press(ui.session(consoleSession.title)),
-      (ui) => ui.press(ui.t("sidebar.project.actions", { name: api.name })),
-      (ui) => ui.press(ui.t("sidebar.project.browse")),
-      (ui) => ui.wait(400),
-    ],
   },
   {
     id: "files-states",
@@ -180,18 +149,5 @@ export const projectFilesScenarios: Scenario[] = [
       },
     },
     steps: openFiles,
-  },
-  {
-    id: "files-narrow",
-    group: GROUP,
-    title: "Narrow window, files drawer open",
-    width: 800,
-    state,
-    steps: [
-      (ui) => ui.press(ui.t("titleBar.sidebar.show")),
-      (ui) => ui.press(ui.session("Fix the summary layout")),
-      (ui) => ui.press(ui.t("titleBar.projectPane.show")),
-      (ui) => ui.wait(500),
-    ],
   },
 ];

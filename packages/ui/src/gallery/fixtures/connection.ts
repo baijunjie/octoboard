@@ -66,7 +66,7 @@ export const connectionScenarios: Scenario[] = [
     id: "terminal-output",
     group: TERMINAL,
     title: "A terminal with output",
-    description: "A canned ANSI sample: colours, a prompt box whose right bar lines up on every row (one row is CJK, double-width) and a long line that wraps.",
+    description: "A canned ANSI sample: colours, a prompt box with a CJK row and a long wrapping line. Select Interrupted by a restart for Resume; open the project archive and Archived and done for the archived terminal and its breadcrumb status tooltip.",
     state: connected("open"),
     steps: [(ui) => ui.press(ui.session("Fix the summary layout"))],
   },
@@ -88,27 +88,5 @@ export const connectionScenarios: Scenario[] = [
     terminalRetriesImmediate: true,
     state: connected("open"),
     steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(2000)],
-  },
-  {
-    id: "terminal-not-running",
-    group: TERMINAL,
-    title: "Not running, with Resume",
-    description: "An interrupted session selected; the fixture's resume is a no-op, so the overlay stays.",
-    state: connected("open"),
-    steps: [(ui) => ui.press(ui.session("Interrupted by a restart")), (ui) => ui.wait(500)],
-  },
-  {
-    id: "terminal-archived",
-    group: TERMINAL,
-    title: "Archived session",
-    description:
-      "The pointer rests on the status glyph at the end of the top bar's breadcrumb, whose tooltip reads Archived. No sidebar row carries an archived session's status, so the top bar is the only place to see this one. Select a session of another status to see its glyph's tooltip there.",
-    state: connected("open"),
-    steps: [
-      (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
-      (ui) => ui.press(ui.t("sidebar.project.archive")),
-      (ui) => ui.press("Archived and done"),
-      (ui) => ui.hoverTopBarStatus(),
-    ],
   },
 ];

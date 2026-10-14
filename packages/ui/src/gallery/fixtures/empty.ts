@@ -15,26 +15,10 @@ export const emptyScenarios: Scenario[] = [
   {
     id: "empty-no-consoles",
     group: GROUP,
-    title: "No consoles",
+    title: "Fresh install and first console",
     description:
-      "A fresh install: the welcome screen fills the content area with New console and, quieter beneath it, Import configuration, and there is no sidebar, terminal hint or top bar sidebar toggle. The rail keeps its New console, bell and Settings. Narrow the window too: the welcome screen still fills the content area, and there is no drawer to open.",
+      "A fresh install: the welcome screen fills the content area with New console and, quieter beneath it, Import configuration, and there is no sidebar, terminal hint or top bar sidebar toggle. New console opens its dialog over this welcome screen. Enter Work as its name and Create: the real fixture reply adds the first console, replacing welcome with the sidebar and terminal. The rail keeps its New console, bell and Settings. Narrow the window too: the welcome screen still fills the content area, and there is no drawer to open.",
     state: snapshotState({}),
-  },
-  {
-    id: "empty-no-consoles-create-first",
-    group: GROUP,
-    title: "No consoles, first console created",
-    description:
-      "The first console is created while the welcome screen is up: the sidebar and terminal take its place.",
-    state: snapshotState({}),
-    steps: [
-      // The rail's button, not the welcome screen's: both carry the same name, and `press` finds the
-      // first of them in the DOM. Either opens the dialog this scenario goes on to fill in.
-      (ui) => ui.press(ui.t("rail.newConsole")),
-      (ui) => ui.focus(ui.t("common.name")),
-      (ui) => ui.type("Work"),
-      (ui) => ui.press(ui.t("common.create")),
-    ],
   },
   {
     id: "empty-no-consoles-no-agent",

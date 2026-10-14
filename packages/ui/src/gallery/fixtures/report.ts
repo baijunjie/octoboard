@@ -1,17 +1,10 @@
-import type { Page } from "../../protocol";
 import type { Scenario } from "../scenario";
-import { consoleOf, minutesAgo, pageOf, projectOf, sessionOf, snapshotState } from "./builders";
+import { consoleOf, pageOf, projectOf, sessionOf, snapshotState } from "./builders";
 
 const GROUP = "Report panel";
 
 const console_ = consoleOf("c-1", "Main");
 const project = projectOf("p-1", console_.id, "Search API");
-const consoleSession = sessionOf("s-console", console_.id, undefined, "Hub", "idle", { colour: "teal" });
-const sessions = [
-  consoleSession,
-  sessionOf("s-1", console_.id, project.id, "Add idempotency keys", "working"),
-];
-
 const summary = (title: string) => `<!doctype html><html><head><title>${title}</title></head><body>
 <h1>${title}</h1>
 <p>Two sessions finished since the last report. Nothing needs your attention.</p>
@@ -31,23 +24,18 @@ const form = `<!doctype html><html><head><title>Choose a release</title></head><
 </form>
 </body></html>`;
 
-const pages: Page[] = [
-  pageOf("pg-1", consoleSession.id, summary("Morning summary"), 60 * 20),
-  pageOf("pg-2", consoleSession.id, summary("Midday summary"), 60 * 8),
-  pageOf("pg-3", consoleSession.id, form, 12),
-];
-
-const withPages = (list: Page[]) =>
-  snapshotState({ consoles: [console_], projects: [project], sessions, pages: { [consoleSession.id]: list } });
-
-// Two console sessions in one console, each with pages of its own.
+// Four console sessions keep empty, old, historical and interactive reports independently.
 const hub1 = sessionOf("s-hub-1", console_.id, undefined, "Hub", "idle", { colour: "olive" });
 const hub2 = sessionOf("s-hub-2", console_.id, undefined, "Hub 2", "idle", { colour: "jade" });
+const emptyHub = sessionOf("s-hub-empty", console_.id, undefined, "No reports", "idle", { colour: "azure" });
+const oldHub = sessionOf("s-hub-old", console_.id, undefined, "Old report", "idle", { colour: "violet" });
 const twoSessions = snapshotState({
   consoles: [console_],
   projects: [project],
-  sessions: [hub1, hub2],
+  sessions: [hub1, hub2, emptyHub, oldHub],
   pages: {
+    [emptyHub.id]: [],
+    [oldHub.id]: [pageOf("old-1", oldHub.id, summary("A day old"), 60 * 30)],
     [hub1.id]: [pageOf("h1-1", hub1.id, summary("Hub, first"), 60 * 6), pageOf("h1-2", hub1.id, summary("Hub, second"), 30)],
     [hub2.id]: [
       pageOf("h2-1", hub2.id, summary("Hub 2, first"), 60 * 5),
@@ -59,34 +47,12 @@ const twoSessions = snapshotState({
 
 export const reportScenarios: Scenario[] = [
   {
-    id: "report-no-pages",
-    group: GROUP,
-    title: "No pages yet",
-    state: withPages([]),
-    steps: [(ui) => ui.press(ui.session("Hub"))],
-  },
-  {
-    id: "report-history",
-    group: GROUP,
-    title: "A history page, read-only",
-    description: "Paged back one page: the read-only badge, with the page's controls disabled.",
-    state: withPages(pages),
-    steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.press(ui.t("report.previous")), (ui) => ui.wait(500)],
-  },
-  {
-    id: "report-one-old-page",
-    group: GROUP,
-    title: "One page, a day old",
-    state: withPages([{ ...pages[0], created_at: minutesAgo(60 * 30) }]),
-    steps: [(ui) => ui.press(ui.session("Hub")), (ui) => ui.wait(500)],
-  },
-  {
     id: "report-two-console-sessions",
     group: GROUP,
-    title: "Two console sessions, each with its own pages",
+    title: "Reports across console sessions",
     description:
-      "Hub is paged back to its first page (read-only, 1 / 2). Selecting Hub 2 shows only its own pages, " +
-      "on its newest (3 / 3, a form that can be submitted; the fixture accepts it). Selecting Hub again shows its newest page, not where it was left.",
+      "Previous on Hub reaches its first read-only page (1 / 2). Hub 2 shows only its own pages, " +
+      "on its newest (3 / 3, a form that can be submitted; the fixture accepts it). Selecting Hub again shows its newest page, not where it was left. No reports has no pages; Old report has one page a day old. Previous pages are read-only, while the latest form can be submitted.",
     state: twoSessions,
     steps: [
       (ui) => ui.press(ui.session("Hub")),

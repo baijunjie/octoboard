@@ -47,8 +47,8 @@ function entriesUnder(files: FixtureFiles, dir: string): BrowseEntry[] {
 /**
  * A `Daemon` with no connection behind it, for the gallery: the store holds the scenario's state as
  * it is, requests are answered from the scenario (`list_dir`, `list_pages`, the browse requests) or
- * accepted and ignored (a new console excepted, which is added, and the deletion of a scope's
- * archived sessions, which removes them), and the scenario's toasts are raised once the app is
+ * accepted and ignored (settings and trusted folders are updated, a new console is added, and
+ * deleting a scope's archived sessions removes them), and the scenario's toasts are raised once the app is
  * listening.
  *
  * A project pane's Git-mode requests are answered by `fixtureGit.ts` instead, and the export and import
@@ -101,6 +101,37 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
       const fromConfiguration = configurationReply(body);
       if (fromConfiguration !== undefined) return fromConfiguration;
       switch (body.type) {
+        case "update_settings": {
+          const current = store.getState();
+          let cloneDir = current.settings.default_clone_dir;
+          if (body.default_clone_dir !== undefined) {
+            const given = body.default_clone_dir;
+            const expanded = given === "~" ? HOME : given.startsWith("~/") ? `${HOME}/${given.slice(2)}` : given;
+            if (given.trim() === "") cloneDir = `${HOME}/Projects`;
+            else {
+              if (!expanded.startsWith("/")) return fail({ code: "path_not_absolute", params: { path: given }, message: `\`${given}\` is not an absolute path; give the full path or start it with \`~/\`` });
+              const parts: string[] = [];
+              for (const part of expanded.split("/")) {
+                if (part === "..") parts.pop();
+                else if (part !== "" && part !== ".") parts.push(part);
+              }
+              cloneDir = `/${parts.join("/")}`;
+            }
+          }
+          store.setState({ settings: { ...current.settings, auto_sync_repositories: body.auto_sync_repositories ?? current.settings.auto_sync_repositories, default_clone_dir: cloneDir } });
+          return { type: "ack" };
+        }
+        case "remove_trusted_directory": {
+          const expanded = body.path === "~" ? HOME : body.path.startsWith("~/") ? `${HOME}/${body.path.slice(2)}` : body.path;
+          const parts: string[] = [];
+          for (const part of expanded.split("/")) {
+            if (part === "..") parts.pop();
+            else if (part !== "" && part !== ".") parts.push(part);
+          }
+          const path = `${expanded.startsWith("/") ? "/" : ""}${parts.join("/")}`;
+          store.setState((current) => ({ trustedDirectories: current.trustedDirectories.filter((given) => given !== path) }));
+          return { type: "ack" };
+        }
         case "list_project_dir": {
           const dir = browsed(body.path);
           const complete = "dir" in dir ? dir.complete !== false : true;

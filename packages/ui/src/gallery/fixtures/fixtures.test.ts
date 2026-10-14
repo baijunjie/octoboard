@@ -123,8 +123,8 @@ describe("gallery scenarios", () => {
     for (const { id, matcher } of rowMatchers) {
       expect(typeof matcher === "function" && labels.some(matcher), `${id}: ${String(matcher)}`).toBe(true);
     }
-    const selector = recorded.filter(({ id }) => id === "git-worktrees").at(-1)!.matcher;
-    expect(typeof selector === "function" && selector("main")).toBe(true);
+    const selector = recorded.filter(({ id }) => id === "git-changes").find(({ matcher }) => String(matcher) === "branchOption(main)")!.matcher;
+    expect(typeof selector === "function" && selector("main4f2a9c1")).toBe(true);
   });
 
   it.each(["en", "zh-Hans", "ar"] as const)("viewer change stages follow the window language in %s", async (language) => {
