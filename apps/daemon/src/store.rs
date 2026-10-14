@@ -176,6 +176,12 @@ impl Store {
                 -- `Session::account_id`.
                 account_id       TEXT,
                 config_dir       TEXT,
+                -- A clear override flag inherits the project's or console's current setting.
+                -- A set flag with a NULL value explicitly leaves the choice to the agent.
+                model            TEXT,
+                effort           TEXT,
+                model_override   INTEGER NOT NULL DEFAULT 0,
+                effort_override  INTEGER NOT NULL DEFAULT 0,
                 pinned           INTEGER NOT NULL DEFAULT 0,
                 started_at       INTEGER NOT NULL,
                 ended_at         INTEGER
@@ -219,19 +225,8 @@ impl Store {
             );
             "#,
         )?;
-        // No migration runs here: the application has not shipped, so a database whose schema is
-        // not this one has already been moved aside by `supersede_if_outdated`, above, rather than
-        // upgraded in place. `CREATE TABLE IF NOT EXISTS` therefore only ever meets either a brand
-        // new file or one already in this shape. Moving the file aside would cost the user every
-        // console, project and account, so six changes that lose nothing are made in place
-        // instead. Five add a column: an optional setting gained after a database was created, a
-        // session's lead flag (which no session stored before it can have), a console's per-agent
-        // console session model and effort, a project's per-agent account, model and effort, and
-        // a project's per-agent flag for pinning the default account.
-        // The sixth renames the project's trust permission, once Claude Code's alone and now shared
-        // by every agent, keeping its values. A seventh, a data change rather than a column, brings
-        // each console's console session agent in line with its default agent; it is explained
-        // where it runs, below.
+        // Older milestone schemas are moved aside above. Compatible additions are migrated in
+        // place so consoles, projects, accounts and sessions keep their stored state.
         if !column_exists(&conn, "settings", "default_clone_dir")? {
             conn.execute("ALTER TABLE settings ADD COLUMN default_clone_dir TEXT", [])?;
         }
@@ -243,6 +238,22 @@ impl Store {
         }
         if !column_exists(&conn, "sessions", "terminal_title")? {
             conn.execute("ALTER TABLE sessions ADD COLUMN terminal_title TEXT", [])?;
+        }
+        for column in ["model", "effort"] {
+            if !column_exists(&conn, "sessions", column)? {
+                conn.execute(
+                    &format!("ALTER TABLE sessions ADD COLUMN {column} TEXT"),
+                    [],
+                )?;
+            }
+        }
+        for column in ["model_override", "effort_override"] {
+            if !column_exists(&conn, "sessions", column)? {
+                conn.execute(
+                    &format!("ALTER TABLE sessions ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0"),
+                    [],
+                )?;
+            }
         }
         for column in CONSOLE_SESSION_LAUNCH_COLUMNS {
             if !column_exists(&conn, "consoles", column)? {
@@ -268,9 +279,8 @@ impl Store {
                 )?;
             }
         }
-        // A console session always runs the console's default agent now; the column is kept, but
-        // no longer a setting of its own. Rows from before that may differ, and this is a no-op
-        // on every open after the first.
+        // The legacy console session agent column mirrors the console's default and is no longer
+        // read for agent selection. Rows from before that may differ; later opens are a no-op.
         conn.execute(
             "UPDATE consoles SET console_session_agent = default_agent
              WHERE console_session_agent <> default_agent",
@@ -813,6 +823,21 @@ impl Store {
         insert_session_row(&self.lock(), session)
     }
 
+    /// Reads the persisted high-water mark without reserving it. Another open may advance it
+    /// before the caller submits; deleting sessions cannot move it backwards.
+    pub fn preview_console_session_title(&self, console_id: &str) -> Result<String> {
+        let ordinal: Option<i64> = self
+            .lock()
+            .query_row(
+                "SELECT next_console_session_ordinal FROM consoles WHERE id = ?1",
+                params![console_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let ordinal = ordinal.ok_or_else(|| CodedError::unknown_console(console_id))?;
+        Ok(console_session_title(ordinal))
+    }
+
     /// Inserts a freshly-opened console session, assigning its colour and its ordinal — and, with
     /// no `title` given, the default title that ordinal spells out ("Hub", then "Hub 2", "Hub 3",
     /// …) — in the same locked step as the row insert itself.
@@ -871,18 +896,14 @@ impl Store {
         )?;
         session.colour = Some(colour);
         session.ordinal = Some(ordinal);
-        session.title = title.unwrap_or_else(|| match ordinal {
-            // The first one needs no number to tell it apart.
-            1 => "Hub".to_string(),
-            _ => format!("Hub {ordinal}"),
-        });
+        session.title = title.unwrap_or_else(|| console_session_title(ordinal));
         insert_session_row(&conn, &session)?;
         Ok(session)
     }
 
     /// Writes back the fields that change over a session's life. Identity and placement
-    /// (`console_id`, `project_id`, `role`, `origin`, `colour`, `ordinal`) never change, `bound_to`
-    /// and `lead` change only through [`Self::bind_session`], once, and `account_id` and
+    /// (`console_id`, `project_id`, `role`, `origin`, `colour`, `ordinal`, `model`, `effort`)
+    /// never change; `bound_to` and `lead` change only through [`Self::bind_session`], once, and `account_id` and
     /// `config_dir` change only through [`Self::set_session_account`], the one write path a switch
     /// of the session's account uses, so a record read before a switch can never write the old
     /// account back over it. `pinned` is the user's own statement ([`Self::set_session_pinned`]),
@@ -1311,7 +1332,7 @@ const PROJECT_SETTING_COLUMNS: [&str; 9] = [
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
                                role, origin, title, status, has_conversation, bound_to, colour,
                                ordinal, account_id, config_dir, pinned, started_at, ended_at,
-                               lead, terminal_title";
+                               lead, terminal_title, model, effort, model_override, effort_override";
 
 const CONSOLE_COLUMNS: &str = "id, name, workdir, console_session_agent, default_agent,
                                claude_account_id, codex_account_id, grok_account_id,
@@ -1332,6 +1353,13 @@ const CONSOLE_SESSION_LAUNCH_COLUMNS: [&str; 6] = [
     "grok_console_session_effort",
 ];
 
+fn console_session_title(ordinal: i64) -> String {
+    match ordinal {
+        1 => "Hub".to_string(),
+        _ => format!("Hub {ordinal}"),
+    }
+}
+
 /// Shared by [`Store::insert_session`] and [`Store::insert_console_session`], which differ only in
 /// how `colour`, `ordinal` and `title` are decided before this runs.
 fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
@@ -1339,9 +1367,9 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
         "INSERT INTO sessions
             (id, agent, agent_session_id, console_id, project_id, host_id, role, origin, title,
              status, has_conversation, bound_to, colour, ordinal, account_id, config_dir, pinned,
-             started_at, ended_at, lead, terminal_title)
+             started_at, ended_at, lead, terminal_title, model, effort, model_override, effort_override)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19, ?20, ?21)",
+                 ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
         params![
             session.id,
             enum_to_text(&session.agent),
@@ -1364,6 +1392,10 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             session.ended_at,
             session.lead,
             session.terminal_title,
+            session.model.as_ref().and_then(|value| value.as_deref()),
+            session.effort.as_ref().and_then(|value| value.as_deref()),
+            session.model.is_some(),
+            session.effort.is_some(),
         ],
     )?;
     Ok(())
@@ -1494,6 +1526,8 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         ended_at: row.get(18)?,
         lead: row.get(19)?,
         terminal_title: row.get(20)?,
+        model: row.get::<_, bool>(23)?.then(|| row.get(21)).transpose()?,
+        effort: row.get::<_, bool>(24)?.then(|| row.get(22)).transpose()?,
     })
 }
 
@@ -1599,6 +1633,8 @@ mod tests {
             title: "Hub".to_string(),
             status: SessionStatus::Idle,
             terminal_title: None,
+            model: None,
+            effort: None,
             has_conversation: false,
             bound_to: None,
             lead: false,
@@ -1711,6 +1747,59 @@ mod tests {
         let store = Store::open(&path).expect("reopened in place");
         let session = store.get_session("session-1").unwrap().expect("kept");
         assert!(!session.lead);
+    }
+
+    /// Migration keeps older sessions inheriting. New overrides, including explicit nulls,
+    /// survive unrelated writes, account changes and opening the database again.
+    #[test]
+    fn session_launch_overrides_migrate_and_survive_reopening() {
+        let path = temp_db("session-launch-overrides");
+        {
+            let store = Store::open(&path).unwrap();
+            store.insert_console(&console(None, None, None)).unwrap();
+            store.insert_session(&session(None)).unwrap();
+        }
+        {
+            let conn = Connection::open(&path).unwrap();
+            for column in ["model", "effort", "model_override", "effort_override"] {
+                conn.execute(&format!("ALTER TABLE sessions DROP COLUMN {column}"), [])
+                    .unwrap();
+            }
+        }
+        let store = Store::open(&path).unwrap();
+        let kept = store.get_session("session-1").unwrap().unwrap();
+        assert_eq!((kept.model, kept.effort), (None, None));
+        let cases = [
+            (Some(Some("opus".to_string())), Some(None)),
+            (Some(None), Some(Some("high".to_string()))),
+            (None, Some(Some("medium".to_string()))),
+            (Some(Some("sonnet".to_string())), None),
+        ];
+        for (index, (model, effort)) in cases.iter().enumerate() {
+            let mut opened = session(None);
+            opened.id = format!("override-{index}");
+            opened.model = model.clone();
+            opened.effort = effort.clone();
+            let mut stored = store.insert_console_session(opened, None).unwrap();
+            stored.status = SessionStatus::Archived;
+            stored.model = None;
+            stored.effort = None;
+            store.update_session(&stored).unwrap();
+            store
+                .set_session_account(&stored.id, Some("other"), Some("/other"))
+                .unwrap();
+        }
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        for (index, expected) in cases.into_iter().enumerate() {
+            let stored = store
+                .get_session(&format!("override-{index}"))
+                .unwrap()
+                .unwrap();
+            assert_eq!((stored.model, stored.effort), expected);
+            assert_eq!(stored.status, SessionStatus::Archived);
+            assert_eq!(stored.config_dir.as_deref(), Some("/other"));
+        }
     }
 
     /// A database from before a console carried a console session model and effort keeps its
@@ -2598,6 +2687,14 @@ mod tests {
             .insert_console(&console(None, None, None))
             .expect("console");
 
+        assert_eq!(
+            store.preview_console_session_title("console-1").unwrap(),
+            "Hub"
+        );
+        assert_eq!(
+            store.preview_console_session_title("console-1").unwrap(),
+            "Hub"
+        );
         let first = store
             .insert_console_session(console_session("session-0"), None)
             .expect("inserted");
@@ -2614,6 +2711,10 @@ mod tests {
             .delete_session_if_archived(&archived.id)
             .expect("delete"));
 
+        assert_eq!(
+            store.preview_console_session_title("console-1").unwrap(),
+            "Hub 3"
+        );
         let third = store
             .insert_console_session(console_session("session-2"), None)
             .expect("inserted");

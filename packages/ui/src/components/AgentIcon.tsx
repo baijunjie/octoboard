@@ -44,8 +44,8 @@ export function AgentIcon({ agent, className = "size-4", tooltip }: { agent: Age
 /** The agents as `OptionSelect` options, each with its mark. */
 export const AGENT_ICON_OPTIONS = AGENT_OPTIONS.map((option) => ({ ...option, icon: <AgentIcon agent={option.value} /> }));
 
-/** `agentPickerOptions`, with each agent's mark — what the agent pickers outside the session
- * dialog show: an agent the machine does not have is named rather than hidden, and cannot be selected. */
+/** `agentPickerOptions`, with each agent's mark: an agent the machine does not have is named
+ * rather than hidden, and cannot be selected. */
 export function agentIconPickerOptions(t: Translate, agentAvailability: Map<Agent, AgentAvailability>) {
   return agentPickerOptions(t, agentAvailability).map((option) => ({ ...option, icon: <AgentIcon agent={option.value} /> }));
 }

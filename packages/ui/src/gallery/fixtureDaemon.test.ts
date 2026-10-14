@@ -4,6 +4,40 @@ import { describe, expect, it } from "vitest";
 import { createFixtureDaemon } from "./fixtureDaemon";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 
+describe("the fixture daemon's session creation", () => {
+  it("honors a console session's explicit agent, account, name and launch overrides", async () => {
+    const owner = consoleOf("c", "Release", { default_agent: "claude", codex_account_id: "work", codex_console_session_model: "inherited-model", codex_console_session_effort: "high" });
+    const project = projectOf("p", owner.id, "Website");
+    const existing = sessionOf("hub", owner.id, undefined, "Renamed release coordinator", "archived", { ordinal: 6 });
+    const accounts = [{ id: "work", agent: "codex" as const, name: "Work", config_dir: "/Users/dev/.codex-work" }];
+    const daemon = createFixtureDaemon({ id: "open", group: "Dialogs", title: "", state: snapshotState({ consoles: [owner], projects: [project], sessions: [existing], settings: { auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts } }) });
+    const preview = { type: "preview_console_session_title" as const, console: owner.id };
+    for (let read = 0; read < 2; read++) {
+      await expect(daemon.request(preview)).resolves.toEqual({ type: "console_session_title", console: owner.id, title: "Hub 7" });
+    }
+    await daemon.request({ type: "delete_archived_sessions", console: owner.id });
+    expect(daemon.store.getState().sessions.size).toBe(0);
+    await expect(daemon.request(preview)).resolves.toMatchObject({ title: "Hub 7" });
+    const reply = await daemon.request({ type: "open_session", console_id: owner.id, agent: "codex", title: "Coordinate release", model: "chosen-model", effort: "xhigh", bound_to: "ignored-console-binding" });
+    expect(reply.type).toBe("session_opened");
+    if (reply.type !== "session_opened") throw new Error("Missing opened session");
+    expect(reply.session).toMatchObject({ agent: "codex", role: "console", origin: "user", status: "idle", title: "Coordinate release", account_id: "work", config_dir: accounts[0].config_dir, model: "chosen-model", effort: "xhigh", ordinal: 7 });
+    expect(reply.session.bound_to).toBeUndefined();
+    expect(daemon.store.getState().sessions.get(reply.session.id)).toEqual(reply.session);
+    const defaults = await daemon.request({ type: "open_session", console_id: owner.id, agent: "codex", account: null, model: null, effort: null });
+    expect(defaults).toMatchObject({ type: "session_opened", session: { title: "Hub 8", ordinal: 8, model: null, effort: null } });
+    if (defaults.type !== "session_opened") throw new Error("Missing default session");
+    expect(defaults.session.account_id).toBeUndefined();
+    const blank = await daemon.request({ type: "open_session", console_id: owner.id, title: "", task: "" });
+    expect(blank).toMatchObject({ type: "session_opened", session: { origin: "user", status: "working", title: "" } });
+    const projectReply = await daemon.request({ type: "open_session", console_id: owner.id, project_id: project.id });
+    expect(projectReply).toMatchObject({ type: "session_opened", session: { role: "project", origin: "user", status: "idle", title: project.name } });
+    await expect(daemon.request(preview)).resolves.toMatchObject({ title: "Hub 10" });
+    await expect(daemon.request({ ...preview, console: "missing" })).rejects.toMatchObject({ code: "unknown_console" });
+    expect(daemon.store.getState().consoles.get(owner.id)).toEqual(owner);
+  });
+});
+
 describe("the fixture daemon's session pins", () => {
   it("updates only the requested session and refuses an unknown session", async () => {
     const first = sessionOf("first", "c-1", "p-1", "Pinned work", "working", { pinned: true, bound_to: "hub" });

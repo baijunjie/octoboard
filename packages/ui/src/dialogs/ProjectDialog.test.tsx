@@ -142,7 +142,7 @@ const choose = (option: string) =>
 /** The account picker, which is the one named for the agent's account. */
 const accountPicker = () => buttons().find((b) => b.getAttribute("aria-label") === "Claude Code account" || b.getAttribute("aria-labelledby")?.split(" ").some((id) => document.getElementById(id)?.getAttribute("aria-label") === "Claude Code account"));
 const pickerNamed = (name: string) =>
-  buttons().find((b) => b.getAttribute("aria-labelledby")?.split(" ").some((id) => document.getElementById(id)?.textContent === name))!;
+  buttons().find((b) => b.getAttribute("aria-label") === name || b.getAttribute("aria-labelledby")?.split(" ").some((id) => document.getElementById(id)?.textContent === name))!;
 const clearButton = (name: string) => pickerNamed(name).querySelector<HTMLElement>('[data-slot="select-clear-button"]');
 const sentOf = (pending: Pending[], type: string) => pending.find((p) => p.body.type === type)?.body;
 

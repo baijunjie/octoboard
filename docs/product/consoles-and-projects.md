@@ -13,14 +13,14 @@ A console carries:
 | Field | Set by | Notes |
 |---|---|---|
 | Name | the user, required | Free text. |
-| Default agent | the user | The agent the console's console sessions run, and the fallback agent for sessions opened under this console's projects. |
+| Default agent | the user | The default for new console sessions, and the fallback agent for sessions opened under this console's projects. |
 | Agent accounts | the user, optional | One per agent: the account that agent's sessions in this console run under, the agent's default account when none is picked; see "Agent config directories" below. |
-| Console session model and reasoning effort | the user, optional | One pair per agent: what the console's console sessions are launched with, the agent's own default when unset; see `docs/product/model-and-reasoning-effort.md`. |
+| Console session model and reasoning effort | the user, optional | One pair of defaults per agent for the console's console sessions, the agent's own default when unset; session overrides and inheritance are in `docs/product/model-and-reasoning-effort.md`. |
 | Avatar | the user, optional | A custom image shown in place of the default avatar, in a circle; see "Avatar" below. |
 | Working directory | Octoboard | `~/.octoboard/consoles/<console id>/`, created when the console is created. Not settable and not changeable. |
 
-A console has a single agent field. Its console sessions run its default agent, and so does every session opened under
-its projects unless the project or the session itself names another (see "Which agent a session uses" in
+A console has a single default agent field. A console session can choose its own agent, and a project session can take
+its project's default or choose its own; otherwise each falls back to the console's default (see "Which agent a session uses" in
 `docs/product/sessions.md`).
 
 The field takes one of the three supported agents (Claude Code, Codex, Grok Build) and defaults to Claude Code in the
@@ -121,8 +121,8 @@ account when it is opened, in the order given in "Which account a session uses" 
 nothing but the user changes it afterwards: not an edit to the project's or the console's reference, not an edit to the
 account's directory. Resuming or reopening it relaunches with that same directory, because the agent keeps the
 conversation inside it. The user can move the session to another account of its agent from its action menu; that
-copies the conversation into the target's directory and carries the session into that account's whole setup, not only
-its login (see "Switching a session's account" in `docs/product/sessions.md`). A session opened on the default account
+copies the conversation into the target's directory and reads that account's configuration, while keeping explicit
+model and reasoning effort choices (see "Switching a session's account" in `docs/product/sessions.md`). A session opened on the default account
 holds no directory and resumes under whatever the user's shell exports at that moment.
 
 If a session's directory no longer exists when it is launched or resumed, the launch is refused rather than
@@ -141,9 +141,10 @@ The name, the default agent, the account the dialog shows, that agent's console 
 the avatar can be changed. The account can be put back on the agent's default account, and the model and the effort
 back to unset, the agent's own default. Changing the agent or an account affects sessions opened afterwards; a
 session that already exists keeps the agent and the account and directory it was started with. A change to the default
-agent therefore shows in the next console session started from the console sessions section, while the console
-sessions already running keep the agent they were started with (see "Console sessions and project sessions" in
-`docs/product/sessions.md`); a changed model or effort is taken by the next console session opened or resumed.
+agent therefore changes the initial choice in the next console-session dialog, while existing console sessions keep
+the agent they were started with (see "Console sessions and project sessions" in
+`docs/product/sessions.md`); a changed model or effort reaches a console session's next launch only when that value
+is inherited (see `docs/product/model-and-reasoning-effort.md`).
 
 An account, a model and an effort are saved only when they are changed: saving a console with a picker untouched
 succeeds regardless of what has happened to the account it refers to since. Removing an account in Settings puts every
@@ -343,8 +344,9 @@ A project the console session associates sets none of the three: it inherits its
 leaves every model and effort unset. A parent-directory association gives every project it creates the same values the
 form was filled in with.
 
-A changed account applies to sessions opened afterwards; a changed model or effort is taken by the next session of the
-project opened or resumed. Sessions already running are unaffected by any of the three.
+A changed account applies to sessions opened afterwards; a changed model or effort reaches a project session's next
+launch only when that value is inherited (see `docs/product/model-and-reasoning-effort.md`). Sessions already running
+are unaffected by any of the three.
 
 ### The project's remote URL
 

@@ -1,4 +1,5 @@
 import { DaemonRequestError } from "../daemon-client";
+import { consoleAccount, inheritedAccount } from "../accountChoices";
 import { daemonMessage } from "../daemonMessage";
 import { errorPresentation } from "../errorPresentation";
 import { currentLanguage } from "../i18n/language";
@@ -61,6 +62,15 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
   const toastListeners = new Set<(toast: ToastRequest) => void>();
   const emitToast = (toast: ToastRequest) => toastListeners.forEach((listener) => listener(toast));
   let toastsRaised = false;
+  let openedSessionCount = 0;
+  // The daemon remembers its ordinal counter independently of session history. Seed it from
+  // fixture ordinals once, so renaming or deleting a session never makes a title reusable.
+  const initial = store.getState();
+  const nextConsoleOrdinals = new Map([...initial.consoles.keys()].map((id) => {
+    const sessions = [...initial.sessions.values()].filter((session) => session.console_id === id && session.role === "console");
+    return [id, Math.max(0, ...sessions.map((session, index) => session.ordinal ?? index + 1)) + 1];
+  }));
+  const consoleTitle = (ordinal: number) => ordinal === 1 ? "Hub" : `Hub ${ordinal}`;
 
   const raiseScenarioToasts = () => {
     if (toastsRaised) return;
@@ -110,9 +120,45 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           store.setState((state) => ({ sessions: new Map(state.sessions).set(body.session, updated) }));
           return { type: "ack" };
         }
-        case "open_session":
+        case "preview_console_session_title": {
+          if (!store.getState().consoles.has(body.console)) return fail({ code: "unknown_console", params: { console: body.console }, message: `unknown console ${body.console}` });
+          return { type: "console_session_title", console: body.console, title: consoleTitle(nextConsoleOrdinals.get(body.console) ?? 1) };
+        }
+        case "open_session": {
           if (scenario.sessionOpenError) return fail(scenario.sessionOpenError);
-          return { type: "ack" };
+          const current = store.getState();
+          const owner = current.consoles.get(body.console_id);
+          if (!owner) return fail({ code: "unknown_console", params: { console: body.console_id }, message: `unknown console ${body.console_id}` });
+          const project = body.project_id ? current.projects.get(body.project_id) : undefined;
+          if (body.project_id && !project) return fail({ code: "unknown_project", params: { project: body.project_id }, message: `unknown project ${body.project_id}` });
+          const agent = body.agent ?? project?.default_agent ?? owner.default_agent;
+          const accountId = body.account === undefined
+            ? project ? inheritedAccount(owner, project, agent, current.settings.accounts) : consoleAccount(owner, agent, current.settings.accounts)
+            : body.account;
+          const account = current.settings.accounts.find((candidate) => candidate.id === accountId && candidate.agent === agent);
+          const ordinal = nextConsoleOrdinals.get(owner.id) ?? 1;
+          if (!project) nextConsoleOrdinals.set(owner.id, ordinal + 1);
+          const session: Session = {
+            id: `s-gallery-opened-${++openedSessionCount}`,
+            agent,
+            console_id: owner.id,
+            project_id: project?.id,
+            host_id: project?.host_id ?? "local",
+            role: project ? "project" : "console",
+            origin: "user",
+            title: body.title ?? project?.name ?? consoleTitle(ordinal),
+            status: body.task == null ? "idle" : "working",
+            has_conversation: false,
+            pinned: false,
+            started_at: Date.now(),
+            ...(project ? { bound_to: body.bound_to } : { ordinal, colour: "teal" }),
+            ...(account && { account_id: account.id, config_dir: account.config_dir }),
+            ...(body.model !== undefined && { model: body.model }),
+            ...(body.effort !== undefined && { effort: body.effort }),
+          };
+          store.setState({ sessions: new Map(current.sessions).set(session.id, session) });
+          return { type: "session_opened", session };
+        }
         case "update_settings": {
           const current = store.getState();
           let cloneDir = current.settings.default_clone_dir;

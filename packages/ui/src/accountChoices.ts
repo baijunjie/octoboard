@@ -87,10 +87,11 @@ export function resolveProjectAccount(own: ProjectAccount, consoleAccountId: str
   return own.kind === "account" ? own.id : consoleAccountId;
 }
 
-/** The account a project session of `agent` runs under when none is chosen for it, for the project
- * as stored. */
-export function inheritedAccount(owner: Console, project: Project, agent: Agent, accounts: Account[]): string | null {
-  return resolveProjectAccount(projectAccount(project, agent, accounts), consoleAccount(owner, agent, accounts));
+/** The account a session of `agent` runs under when none is chosen, using the project settings
+ * when opening a project session and the console settings otherwise. */
+export function inheritedAccount(owner: Console, project: Project | undefined, agent: Agent, accounts: Account[]): string | null {
+  const account = consoleAccount(owner, agent, accounts);
+  return project ? resolveProjectAccount(projectAccount(project, agent, accounts), account) : account;
 }
 
 /** Where the session dialog's control opens: the agent the dialog already resolves — the
@@ -100,11 +101,11 @@ export function inheritedAccount(owner: Console, project: Project, agent: Agent,
  * the daemon's own chain puts a session's choice above both. */
 export function initialChoice(
   owner: Console,
-  project: Project,
+  project: Project | undefined,
   accounts: Account[],
   agentAvailability: Map<Agent, AgentAvailability>,
 ): AccountChoice {
-  const agent = selectableAgent(agentAvailability, project.default_agent ?? owner.default_agent);
+  const agent = selectableAgent(agentAvailability, project?.default_agent ?? owner.default_agent);
   return { agent, account: inheritedAccount(owner, project, agent, accounts) };
 }
 

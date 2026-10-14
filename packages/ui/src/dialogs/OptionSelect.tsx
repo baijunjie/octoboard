@@ -18,7 +18,7 @@ export type Option<T extends string> = {
  * cannot be chosen — the current `value` may still be one, so the reason it cannot be changed
  * away *to* is on screen without taking away what is already picked. `isDisabled` locks it, and
  * `description` is a note under it. A label too long for the control fades at its clipped edge
- * and runs as a marquee on hover, as in `AccountSelect`.
+ * and runs as a marquee on hover.
  *
  * With `inline` it is only as wide as its value and `label` is its accessible name alone, for a
  * control whose own row already shows the name (a setting). With `joined` it is one part of an

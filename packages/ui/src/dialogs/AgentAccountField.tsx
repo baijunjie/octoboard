@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useRef } from "react";
+
+import { useFocusHandoff } from "../components/useFocusHandoff";
 
 import { LabelledGroup } from "./LabelledGroup";
 import { OptionSelect, type Option } from "./OptionSelect";
@@ -24,30 +26,23 @@ export function AgentAccountField<T extends string>({
   isDisabled?: boolean;
   description?: React.ReactNode;
 }): React.ReactElement {
-  if (!account) {
-    return (
-      <OptionSelect
-        label={label}
-        options={options}
-        value={value}
-        onChange={onChange}
-        isDisabled={isDisabled}
-        description={description}
-      />
-    );
-  }
+  const controls = useRef<HTMLDivElement>(null);
+  const agentTrigger = () => controls.current?.querySelector<HTMLElement>('[data-slot="select-trigger"]');
+  const focusHandoff = useFocusHandoff(() => agentTrigger()?.focus());
   return (
-    <LabelledGroup label={label} description={description} isDisabled={isDisabled}>
-      <div className="flex items-stretch">
-        <OptionSelect joined="start" label={label} options={options} value={value} onChange={onChange} isDisabled={isDisabled} />
-        <OptionSelect
+    <LabelledGroup label={label} description={account ? description : undefined} isDisabled={isDisabled}>
+      <div ref={controls} {...focusHandoff} className="flex items-stretch">
+        {/* Keeping the agent picker mounted lets its popover restore focus when the next agent
+            has no accounts to choose between. */}
+        <OptionSelect joined={account ? "start" : undefined} hideLabel label={label} options={options} value={value} onChange={onChange} isDisabled={isDisabled} description={account ? undefined : description} />
+        {account && <OptionSelect
           joined="end"
           label={account.label}
           options={account.options}
           value={account.value}
           onChange={account.onChange}
           isDisabled={isDisabled}
-        />
+        />}
       </div>
     </LabelledGroup>
   );

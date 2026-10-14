@@ -167,8 +167,7 @@ pub async fn handle(
             if let Some(icon) = icon {
                 console.icon = icon;
             }
-            // Rewritten rather than left alone: the file is named for the console session's agent,
-            // so a console that changed agents would otherwise keep reading the old one's.
+            // Refresh both agents' instruction files so console sessions can use either agent.
             mcp::role::write_console_session_instructions(&console)?;
             state.store.update_console(&console)?;
             state.broadcast(Event::ConsoleUpserted { console });
@@ -492,11 +491,22 @@ pub async fn handle(
             }))
         }
 
+        RequestBody::PreviewConsoleSessionTitle { console } => {
+            let title = state.store.preview_console_session_title(&console)?;
+            Ok(Some(Event::ConsoleSessionTitle {
+                id: request_id,
+                console,
+                title,
+            }))
+        }
+
         RequestBody::OpenSession {
             console_id,
             project_id,
             agent,
             account,
+            model,
+            effort,
             task,
             title,
             bound_to,
@@ -508,6 +518,8 @@ pub async fn handle(
                     project_id,
                     agent,
                     account,
+                    model,
+                    effort,
                     task,
                     title,
                     origin: Origin::User,
@@ -1083,6 +1095,9 @@ pub struct OpenRequest {
     /// session's agent, else the console's; `Some(None)` chooses the default account outright. See
     /// [`session_account`].
     pub account: Option<Option<String>>,
+    /// A model or effort override, preserving absent versus explicitly unset.
+    pub model: Option<Option<String>>,
+    pub effort: Option<Option<String>>,
     pub task: Option<String>,
     pub title: Option<String>,
     pub origin: Origin,
@@ -1098,6 +1113,8 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         project_id,
         agent,
         account,
+        model,
+        effort,
         task,
         title,
         origin,
@@ -1120,11 +1137,6 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         }
         None => {
             let workdir = PathBuf::from(&console.workdir);
-            // Refreshed right before the console session launches, so the file it reads is the one
-            // for the agent this console currently uses whatever happened to it since. A console
-            // may hold any number of live console sessions, so nothing here checks for one already
-            // running.
-            mcp::role::write_console_session_instructions(&console)?;
             // Overwritten by `Store::insert_console_session` below, which decides the real default
             // ("Hub" for the first, "Hub <ordinal>" after) once it knows the ordinal; nothing here
             // reads this value.
@@ -1134,16 +1146,14 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
 
     let bound_to = resolve_bound_to(state, &console_id, project_id.as_deref(), role, bound_to)?;
 
-    // Agent selection, in descending priority: what this launch asked for, the project's default,
-    // then the console's. A console session always runs the console's default agent, whatever the
-    // launch asked for: the instruction file written above is for that agent.
-    let agent = match (&role, &project) {
-        (Role::Console, _) => console.default_agent,
-        (_, Some(project)) => {
-            agent.unwrap_or(project.default_agent.unwrap_or(console.default_agent))
-        }
-        (_, None) => agent.unwrap_or(console.default_agent),
-    };
+    // An explicit session choice wins over the project's default, then the console's default.
+    // A console session has no project, so it falls straight back to the console.
+    let agent = agent.unwrap_or_else(|| {
+        project
+            .as_ref()
+            .and_then(|project| project.default_agent)
+            .unwrap_or(console.default_agent)
+    });
     refuse_if_agent_unavailable(state, agent)?;
 
     let (account_id, config_dir) =
@@ -1173,6 +1183,8 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         // whatever the console's reference says by then.
         account_id,
         config_dir,
+        model: normalize_session_launch_setting(model),
+        effort: normalize_session_launch_setting(effort),
         bound_to,
         // A session is opened bound or unbound; only binding it afterwards makes it a lead session.
         lead: false,
@@ -1499,29 +1511,33 @@ fn project_launch_settings(project: &Project, agent: Agent) -> (Option<String>, 
 }
 
 /// The model and reasoning effort `session` is launched with, for its own agent: a console session
-/// reads its console's console session pair, a project session its project's. Read from the stored
-/// record as it stands now rather than copied onto the session, so a session opened or resumed
-/// later takes a changed setting.
+/// reads its console's console session pair, a project session its project's, unless that field
+/// has a session override. Inherited values are read at every launch, while an override (including
+/// explicitly leaving the choice to the agent) survives resumes and account switches.
 fn launch_settings(
     state: &Arc<AppState>,
     session: &Session,
 ) -> Result<(Option<String>, Option<String>)> {
-    match &session.project_id {
+    let inherited = match &session.project_id {
         Some(project_id) => {
             let project = state
                 .store
                 .get_project(project_id)?
                 .ok_or_else(|| CodedError::unknown_project(project_id))?;
-            Ok(project_launch_settings(&project, session.agent))
+            project_launch_settings(&project, session.agent)
         }
         None => {
             let console = state
                 .store
                 .get_console(&session.console_id)?
                 .ok_or_else(|| CodedError::unknown_console(&session.console_id))?;
-            Ok(console_session_launch_settings(&console, session.agent))
+            console_session_launch_settings(&console, session.agent)
         }
-    }
+    };
+    Ok((
+        session.model.clone().unwrap_or(inherited.0),
+        session.effort.clone().unwrap_or(inherited.1),
+    ))
 }
 
 /// Launches the agent for an already-stored session and starts watching it.
@@ -1534,6 +1550,15 @@ async fn start_process(
     resume_agent_session_id: Option<&str>,
     shell_env: Option<HashMap<String, String>>,
 ) -> Result<()> {
+    // Refresh both agents' files on every console launch, resume and account switch. A missing
+    // directory is left to the launch's refusal, rather than recreated by the instruction writer.
+    if session.role == Role::Console && cwd.is_dir() {
+        let console = state
+            .store
+            .get_console(&session.console_id)?
+            .ok_or_else(|| CodedError::unknown_console(&session.console_id))?;
+        mcp::role::write_console_session_instructions(&console)?;
+    }
     let (model, effort) = launch_settings(state, session)?;
     let request = term::LaunchRequest {
         session_id: session.id.clone(),
@@ -2410,6 +2435,11 @@ fn normalize_launch_setting(text: Option<&str>) -> Option<String> {
         .map(str::to_string)
 }
 
+/// A session override keeps its presence even when blank means explicitly unset.
+fn normalize_session_launch_setting(value: Option<Option<String>>) -> Option<Option<String>> {
+    value.map(|text| normalize_launch_setting(text.as_deref()))
+}
+
 /// A console's avatar as it is stored. Blank means unset. Checked lightly: it has to be an image
 /// `data:` URL and not too long; whether it decodes is left to the client that draws it.
 fn normalize_icon(text: Option<&str>) -> Result<Option<String>> {
@@ -2547,6 +2577,41 @@ mod tests {
         assert_eq!(state.store.default_clone_dir().unwrap(), built_in);
     }
 
+    #[tokio::test]
+    async fn a_title_preview_echoes_the_request_and_refuses_unknown_consoles() {
+        let (state, _dir) = crate::test_support::app_state("console-title-preview");
+        state
+            .store
+            .insert_console(&console(Agent::Claude, Path::new("/tmp/unused")))
+            .unwrap();
+        let request = || RequestBody::PreviewConsoleSessionTitle {
+            console: "console-1".to_string(),
+        };
+        for _ in 0..2 {
+            let reply = handle(&state, Some("req-1".to_string()), request())
+                .await
+                .unwrap();
+            assert!(
+                matches!(reply, Some(Event::ConsoleSessionTitle { id: Some(id), console, title })
+                if id == "req-1" && console == "console-1" && title == "Hub")
+            );
+        }
+        let error = handle(
+            &state,
+            None,
+            RequestBody::PreviewConsoleSessionTitle {
+                console: "missing".to_string(),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<CodedError>().unwrap().code,
+            error_code::UNKNOWN_CONSOLE
+        );
+        assert!(state.store.list_sessions().unwrap().is_empty());
+    }
+
     fn console(console_session_agent: Agent, workdir: &Path) -> Console {
         Console {
             id: "console-1".to_string(),
@@ -2580,29 +2645,22 @@ mod tests {
         ScratchDir::new(&format!("coordinator-{name}"))
     }
 
-    /// Every agent matches its instruction filename by exact spelling, and Grok reads several of
-    /// them — so a file left behind by a console that changed agents would be loaded alongside the
-    /// right one.
+    /// A console can run different agents together: refreshing its guidance keeps both exact
+    /// filenames, with each agent's own tool names, regardless of the console's default agent.
     #[test]
-    fn the_console_session_instruction_file_is_the_only_one_left_in_the_working_directory() {
+    fn a_console_keeps_each_agents_own_instruction_file() {
         let workdir = temp_dir("console-session-instructions");
-
-        mcp::role::write_console_session_instructions(&console(Agent::Claude, &workdir))
-            .expect("written");
-        assert!(workdir.join("CLAUDE.md").is_file());
-        assert!(!workdir.join("AGENTS.md").exists());
-
-        mcp::role::write_console_session_instructions(&console(Agent::Codex, &workdir))
-            .expect("written");
-        assert!(workdir.join("AGENTS.md").is_file());
-        assert!(!workdir.join("CLAUDE.md").exists());
-
-        // Grok reads no project instructions without a git root, and a console's working directory
-        // is not a repository — so it gets none, and the previous agent's file goes.
-        mcp::role::write_console_session_instructions(&console(Agent::Grok, &workdir))
-            .expect("written");
-        assert!(!workdir.join("AGENTS.md").exists());
-        assert!(!workdir.join("CLAUDE.md").exists());
+        for default_agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+            mcp::role::write_console_session_instructions(&console(default_agent, &workdir))
+                .unwrap();
+            for (agent, filename) in [(Agent::Claude, "CLAUDE.md"), (Agent::Codex, "AGENTS.md")] {
+                assert_eq!(
+                    std::fs::read_to_string(workdir.join(filename)).unwrap(),
+                    mcp::role::console_session_instructions(agent)
+                );
+            }
+            assert_eq!(workdir.read_dir().unwrap().count(), 2);
+        }
     }
 
     /// An account directory is stored absolute and lexically normalised or not at all; unlike a
@@ -2689,6 +2747,8 @@ mod tests {
                     title: id.to_string(),
                     status,
                     terminal_title: None,
+                    model: None,
+                    effort: None,
                     has_conversation: false,
                     bound_to: None,
                     lead: false,
@@ -2811,6 +2871,8 @@ mod tests {
                 title: "Project".to_string(),
                 status: SessionStatus::Archived,
                 terminal_title: None,
+                model: None,
+                effort: None,
                 has_conversation: false,
                 bound_to: None,
                 lead: false,
@@ -3026,32 +3088,39 @@ mod tests {
             .store
             .insert_console(&console(Agent::Claude, &workdir))
             .unwrap();
-        state.set_agent_availability(vec![crate::protocol::AgentAvailability {
-            agent: Agent::Claude,
-            availability: Availability::Unavailable,
-            default_account_dir: Some("/home/user/.claude".to_string()),
-        }]);
-
-        let err = open_session(
-            &state,
-            OpenRequest {
-                console_id: "console-1".to_string(),
-                project_id: None,
-                agent: None,
-                account: None,
-                task: None,
-                title: None,
-                origin: Origin::User,
-                bound_to: None,
-            },
-        )
-        .await
-        .expect_err("refused");
-        let coded = err.downcast_ref::<CodedError>().expect("a coded error");
-        assert_eq!(coded.code, error_code::AGENT_NOT_AVAILABLE);
-        assert!(err.to_string().contains("Claude Code"), "{err}");
-        // Refused ahead of the write that would have recorded a console session.
-        assert!(state.store.list_sessions().unwrap().is_empty());
+        state.set_agent_availability(
+            [Agent::Claude, Agent::Codex]
+                .into_iter()
+                .map(|agent| crate::protocol::AgentAvailability {
+                    agent,
+                    availability: Availability::Unavailable,
+                    default_account_dir: None,
+                })
+                .collect(),
+        );
+        for (chosen, expected) in [(None, Agent::Claude), (Some(Agent::Codex), Agent::Codex)] {
+            let err = open_session(
+                &state,
+                OpenRequest {
+                    console_id: "console-1".to_string(),
+                    project_id: None,
+                    agent: chosen,
+                    account: None,
+                    task: None,
+                    title: None,
+                    model: None,
+                    effort: None,
+                    origin: Origin::User,
+                    bound_to: None,
+                },
+            )
+            .await
+            .expect_err("refused");
+            let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+            assert_eq!(coded.code, error_code::AGENT_NOT_AVAILABLE);
+            assert_eq!(coded.params["agent"], expected.label());
+            assert!(state.store.list_sessions().unwrap().is_empty());
+        }
     }
 
     /// While availability has not yet been determined — the state every run begins in — nothing is
@@ -3343,6 +3412,8 @@ mod tests {
             title: "Session".to_string(),
             status: SessionStatus::Idle,
             terminal_title: None,
+            model: None,
+            effort: None,
             has_conversation: false,
             bound_to: None,
             lead: false,
@@ -3807,10 +3878,10 @@ mod tests {
         request
     }
 
-    /// The console session runs the console's default agent from the moment the console exists,
-    /// and a launch setting is stored trimmed, with blank read as unset.
+    /// A new console stores its default agent and launch settings; a model or effort is trimmed,
+    /// with blank read as unset.
     #[tokio::test]
-    async fn a_new_console_runs_its_console_sessions_on_its_default_agent() {
+    async fn a_new_console_stores_its_default_agent_and_launch_settings() {
         let (state, dir) = crate::test_support::app_state("coordinator-create-console-agent");
         handle(
             &state,
@@ -4023,6 +4094,65 @@ mod tests {
             launched(Role::Project, Some("plain"), Agent::Codex),
             pair(None, None)
         );
+    }
+
+    /// Every launch reads inherited defaults live, independently per field, while a session's
+    /// explicit value or explicit null takes precedence over its parent's defaults.
+    #[test]
+    fn session_launch_overrides_take_precedence_over_live_defaults() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-session-overrides");
+        let mut owner = console(Agent::Claude, Path::new("/tmp/unused"));
+        owner.claude_console_session_model = Some("console-model".to_string());
+        owner.claude_console_session_effort = Some("console-effort".to_string());
+        state.store.insert_console(&owner).unwrap();
+        let mut project = project_of("console-1", "project-1");
+        project.claude_session_model = Some("project-model".to_string());
+        project.claude_session_effort = Some("project-effort".to_string());
+        state.store.insert_project(&project).unwrap();
+        for (role, project_id) in [(Role::Console, None), (Role::Project, Some("project-1"))] {
+            let mut session = bare_session("s", role);
+            session.project_id = project_id.map(str::to_string);
+            let defaults = if role == Role::Console {
+                (
+                    owner.claude_console_session_model.clone(),
+                    owner.claude_console_session_effort.clone(),
+                )
+            } else {
+                (
+                    project.claude_session_model.clone(),
+                    project.claude_session_effort.clone(),
+                )
+            };
+            assert_eq!(launch_settings(&state, &session).unwrap(), defaults);
+            session.model = normalize_session_launch_setting(Some(Some(" custom ".to_string())));
+            assert_eq!(
+                launch_settings(&state, &session).unwrap(),
+                (Some("custom".to_string()), defaults.1)
+            );
+            session.effort = normalize_session_launch_setting(Some(Some(" high ".to_string())));
+            assert_eq!(
+                launch_settings(&state, &session).unwrap(),
+                (Some("custom".to_string()), Some("high".to_string()))
+            );
+            session.effort = normalize_session_launch_setting(Some(Some("  ".to_string())));
+            assert_eq!(
+                launch_settings(&state, &session).unwrap(),
+                (Some("custom".to_string()), None)
+            );
+            session.model = normalize_session_launch_setting(Some(None));
+            assert_eq!(launch_settings(&state, &session).unwrap(), (None, None));
+        }
+        let mut inherited = bare_session("legacy", Role::Project);
+        inherited.project_id = Some("project-1".to_string());
+        state.store.insert_session(&inherited).unwrap();
+        project.claude_session_model = Some("changed-model".to_string());
+        state.store.update_project(&project).unwrap();
+        let reread = state.session_record("legacy").unwrap();
+        assert_eq!(
+            launch_settings(&state, &reread).unwrap().0.as_deref(),
+            Some("changed-model")
+        );
+        assert_eq!(normalize_session_launch_setting(None), None);
     }
 
     /// An `update_project` request that changes nothing, then `edit` applied to it.

@@ -85,7 +85,7 @@ export function noAgentAvailable(agentAvailability: Map<Agent, AgentAvailability
   return AGENT_OPTIONS.every((option) => isAgentUnavailable(agentAvailability, option.value));
 }
 
-/** The options of the agent pickers outside the session dialog, each carrying whether it may be picked and, when it
+/** The options of the agent pickers, each carrying whether it may be picked and, when it
  * may not, a label saying so: an unavailable agent is shown named rather than hidden, so the reason
  * it cannot be picked is on screen, but it cannot be selected either. An agent whose availability
  * is not yet determined is left selectable, since nothing is known to be missing yet. */

@@ -130,6 +130,15 @@ export function RequestedDialog({
         />
       );
     }
+    case "new-console-session":
+      return (
+        <SessionDialog
+          console={dialog.console}
+          sessions={Array.from(sessions.values())}
+          onClose={onClose}
+          onOpened={onSessionOpened}
+        />
+      );
     case "new-session":
       return (
         <SessionDialog

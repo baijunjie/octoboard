@@ -85,33 +85,30 @@ A resume reassembles the full injection, because all three agents resolve hooks 
 arguments every time and a resume that omitted them would leave a session nobody can observe and nothing to report
 with.
 
-A model and a reasoning effort set for the session's console or project are passed on the launch as well (see "The
-model and reasoning effort" below). They are not part of the injection: they are the user's own choice carried to the
+The model and reasoning effort resolved for the session are passed on the launch as well (see "The model and
+reasoning effort" below). They are not part of the injection: they are the user's own choice carried to the
 agent, not a capability Octoboard adds.
 
 ### The console session's instruction file
 
-A console session whose agent reads an instruction file gets one generated in the console's working
-directory: `CLAUDE.md` for a Claude Code console session, `AGENTS.md` for a Codex console session. It
-holds the console session's role — decompose, dispatch, follow up, summarize, and make no change to a
-project itself, reading one being how it checks what its sessions report (see
-`docs/product/hub-orchestration.md`) — and how to use the orchestration tools. A **Grok Build
-console session gets no such file**, because Grok reads no instructions in a directory that is not a
-git repository and a console's working directory is not one; its whole role travels in a launch flag
-instead.
+Octoboard keeps both `CLAUDE.md` and `AGENTS.md` in the console's working directory: a Claude Code console session
+reads the former, a Codex console session the latter. Each holds the console session's role — decompose, dispatch,
+follow up, summarize, and make no change to a project itself, reading one being how it checks what its sessions report
+(see `docs/product/hub-orchestration.md`) — and how to use the orchestration tools, with that agent's own tool names.
+Both files stay present so console sessions of different agents have their own guidance while running together.
+A Grok Build console session reads neither, because Grok reads no instructions in a directory that is not a git
+repository and a console's working directory is not one; its whole role travels in a launch flag instead.
 
-The file is written when the console is created, rewritten when the console's default agent — the agent its console
-sessions run — changes, and refreshed immediately before every console session launch, so an edit the user makes to
-it does not survive the next launch. Only the file for the console's current default agent is
-kept: one left behind by a previous agent is removed, because every agent matches instruction
-filenames by exact spelling and some read more than one of them.
+Both files are written when the console is created or updated, and refreshed before every console session launch,
+including a resume or an account switch, so edits the user makes to them do not survive the next launch. A missing
+console working directory is still a launch failure, rather than being recreated by that refresh.
 
 ## The model and reasoning effort
 
-A console session is launched with the model and reasoning effort its console holds for its agent, a project session
-with the ones its project holds (see `docs/product/model-and-reasoning-effort.md`). Each value set is passed as that
-agent's own launch argument, on every launch, a resume included, and nothing else about the launch changes. A session
-with neither set is launched exactly as the agent would run it unasked.
+The session's model and reasoning effort are resolved under the inheritance and override rules in
+`docs/product/model-and-reasoning-effort.md`. Each resolved value is passed as that agent's own launch argument, on
+every launch, a resume and an account switch included, and nothing else about the launch changes. A value left to
+the agent's own default produces no launch argument for that value.
 
 Octoboard checks neither value against anything at launch. Which models and which effort levels exist is the agent's
 own business — the dialogs that set them offer what the agent itself answers, and the agent is what answers for a

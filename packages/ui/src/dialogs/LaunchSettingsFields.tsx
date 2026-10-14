@@ -83,10 +83,7 @@ export function LaunchSettingsFields({
           first note and below the last picker is HeroUI's own, the same on both sides. */}
       <Disclosure.Content className="-mx-1">
         <Disclosure.Body className="-mx-1 flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <Description>{note}</Description>
-            <Description>{t("dialog.agentSettings.clearHint")}</Description>
-          </div>
+          <Description>{note}</Description>
           <OptionSelect
             label={t("dialog.agentSettings.model")}
             options={launchSettingOptions(

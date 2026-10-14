@@ -18,7 +18,7 @@ const project = projectOf("p-1", parentConsole.id, "Search API");
 function fakeDaemon(initial: Partial<State> = {}): Daemon {
   return {
     store: createStateStore(initial),
-    request: vi.fn(),
+    request: vi.fn(async () => ({ type: "ack" })) as Daemon["request"],
     toastError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
@@ -42,7 +42,7 @@ function renderDialog(
   initial: Partial<State> = {},
   consoleOverride: Partial<typeof parentConsole> = {},
   binding: NewSessionBinding = { kind: "choose" },
-  projectOverride: Partial<typeof project> = {},
+  projectOverride: Partial<typeof project> | null = {},
 ): { container: HTMLElement; root: ReturnType<typeof createRoot>; daemon: Daemon } {
   const daemon = fakeDaemon(initial);
   const container = document.body.appendChild(document.createElement("div"));
@@ -52,7 +52,7 @@ function renderDialog(
       <DaemonProvider value={daemon}>
         <SessionDialog
           console={{ ...parentConsole, ...consoleOverride }}
-          project={{ ...project, ...projectOverride }}
+          project={projectOverride === null ? undefined : { ...project, ...projectOverride }}
           binding={binding}
           sessions={sessions}
           onClose={() => {}}
@@ -178,7 +178,8 @@ it("opens on a selectable agent, with the console's account for it, and sends bo
     { codex_account_id: "a-1" },
   );
   vi.mocked(daemon.request).mockResolvedValue({ type: "ack" } as never);
-  expect(document.body.textContent).toContain("Codex (Work)");
+  expect(pickerNamed("Agent").textContent).toContain("Codex");
+  expect(pickerNamed("Codex account").textContent).toContain("Work");
 
   const open = Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Open");
   await act(async () => open?.click());
@@ -234,4 +235,232 @@ it("updates the fixed owner's displayed name while the session dialog is open", 
   act(() => daemon.store.setState({ sessions: new Map([[owner.id, { ...owner, terminal_title: "Next task" }]]) }));
   expect(document.body.textContent).toContain(`${isolate("Next task")}｜${isolate(owner.title)}`);
   expect(document.body.textContent).not.toContain("First task");
+});
+
+
+const pickerNamed = (name: string) => buttons().find((button) =>
+  button.getAttribute("aria-label") === name ||
+  button.getAttribute("aria-labelledby")?.split(" ").some((id) => document.getElementById(id)?.textContent === name),
+)!;
+
+function answerSessionModels(daemon: Daemon) {
+  vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "list_agent_models"
+    ? { type: "agent_models", agent: body.agent, account: body.account ?? null, models: [
+        { id: "opus", name: "Opus", efforts: ["low", "high"] },
+        { id: "sonnet", name: "Sonnet", efforts: ["low", "high"] },
+      ], unavailable: null }
+    : { type: "ack" });
+}
+
+it.each(["inherit", "pick", "clear"] as const)("opens with session launch settings: %s", async (mode) => {
+  const { container, root, daemon } = renderDialog([], {}, {}, { kind: "unbound" }, {
+    claude_session_model: "opus", claude_session_effort: "high",
+  });
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  answerSessionModels(daemon);
+  expect(vi.mocked(daemon.request).mock.calls.some(([body]) => body.type === "list_agent_models")).toBe(false);
+  await act(async () => buttons().find((button) => button.textContent === "Advanced")!.click());
+  expect(pickerNamed("Model").textContent).toContain("Opus");
+  expect(pickerNamed("Reasoning effort").textContent).toContain("high");
+  if (mode === "pick") {
+    await act(async () => pickerNamed("Model").click());
+    await act(async () => optionElements().find((option) => option.textContent === "Sonnet")!.click());
+    await act(async () => pickerNamed("Reasoning effort").click());
+    await act(async () => optionElements().find((option) => option.textContent === "low")!.click());
+  } else if (mode === "clear") {
+    await act(async () => pickerNamed("Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
+  }
+  await act(async () => buttons().find((button) => button.textContent === "Open")!.click());
+  const sent = vi.mocked(daemon.request).mock.calls.find(([body]) => body.type === "open_session")![0];
+  if (mode === "inherit") {
+    expect(sent).not.toHaveProperty("model");
+    expect(sent).not.toHaveProperty("effort");
+  } else if (mode === "pick") {
+    expect(sent).toMatchObject({ model: "sonnet", effort: "low" });
+  } else {
+    expect(sent).toMatchObject({ model: null });
+    expect(sent).not.toHaveProperty("effort");
+  }
+});
+
+it("queries the selected account and keeps overrides separate when changing agents", async () => {
+  const { container, root, daemon } = renderDialog([], {
+    settings: { auto_sync_repositories: false, default_clone_dir: "", accounts: [
+      { id: "a-work", agent: "claude", name: "Work", config_dir: "/accounts/work" },
+    ] },
+  }, { claude_account_id: "a-work" }, { kind: "unbound" }, { codex_session_model: "codex-project" });
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  answerSessionModels(daemon);
+  await act(async () => buttons().find((button) => button.textContent === "Advanced")!.click());
+  expect(daemon.request).toHaveBeenCalledWith({ type: "list_agent_models", agent: "claude", account: "a-work" });
+  await act(async () => pickerNamed("Model").click());
+  await act(async () => optionElements().find((option) => option.textContent === "Sonnet")!.click());
+  await act(async () => pickerNamed("Claude Code account").click());
+  expect(optionElements().map((option) => option.textContent)).toEqual(["Default", "Work"]);
+  await act(async () => optionElements().find((option) => option.textContent === "Default")!.click());
+  expect(daemon.request).toHaveBeenCalledWith({ type: "list_agent_models", agent: "claude" });
+  const agentTrigger = pickerNamed("Agent");
+  await act(async () => { agentTrigger.focus(); agentTrigger.click(); });
+  await act(async () => optionElements().find((option) => option.getAttribute("data-key") === "codex")!.click());
+  await act(async () => {
+    await vi.waitFor(() => expect(document.activeElement).toBe(agentTrigger));
+  });
+  expect(pickerNamed("Agent")).toBe(agentTrigger);
+  expect(daemon.request).toHaveBeenCalledWith({ type: "list_agent_models", agent: "codex" });
+  expect(pickerNamed("Model").textContent).toContain("codex-project");
+  expect(buttons().some((button) => button.getAttribute("aria-label") === "Codex account")).toBe(false);
+  await act(async () => pickerNamed("Agent").click());
+  await act(async () => optionElements().find((option) => option.getAttribute("data-key") === "claude")!.click());
+  expect(pickerNamed("Model").textContent).toContain("Sonnet");
+  expect(pickerNamed("Claude Code account").textContent).toContain("Default");
+  await act(async () => buttons().find((button) => button.textContent === "Open")!.click());
+  const sent = vi.mocked(daemon.request).mock.calls.find(([body]) => body.type === "open_session")![0];
+  expect(sent).toMatchObject({ agent: "claude", account: null, model: "sonnet" });
+});
+
+
+it.each(["trigger", "popover"] as const)("keeps the selected agent and hands focus back when the last named account is removed from %s", async (focused) => {
+  const { container, root, daemon } = renderDialog([], {
+    settings: { auto_sync_repositories: false, default_clone_dir: "", accounts: [
+      { id: "a-work", agent: "claude", name: "Work", config_dir: "/accounts/work" },
+    ] },
+  }, { default_agent: "codex" });
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  await act(async () => pickerNamed("Agent").click());
+  await act(async () => optionElements().find((option) => option.getAttribute("data-key") === "claude")!.click());
+  await act(async () => pickerNamed("Claude Code account").click());
+  await act(async () => optionElements().find((option) => option.textContent === "Work")!.click());
+  const agentTrigger = pickerNamed("Agent");
+  act(() => pickerNamed("Claude Code account").focus());
+  if (focused === "popover") {
+    await act(async () => pickerNamed("Claude Code account").click());
+    await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+    expect(document.activeElement?.getAttribute("role")).toBe("option");
+  }
+  act(() => daemon.store.setState({ settings: { auto_sync_repositories: false, default_clone_dir: "", accounts: [] } }));
+  expect(pickerNamed("Agent")).toBe(agentTrigger);
+  expect(agentTrigger.textContent).toContain("Claude Code");
+  await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+  expect(document.activeElement).toBe(agentTrigger);
+});
+
+
+it.each(["inherit", "pick", "clear"] as const)("opens console sessions with console launch settings: %s", async (mode) => {
+  const { container, root, daemon } = renderDialog([hub1], {
+    settings: { auto_sync_repositories: false, default_clone_dir: "", accounts: [
+      { id: "a-console", agent: "claude", name: "Console account", config_dir: "/accounts/console" },
+      { id: "a-codex", agent: "codex", name: "Codex work", config_dir: "/accounts/codex" },
+    ] },
+  }, {
+    claude_account_id: "a-console", claude_console_session_model: "opus", claude_console_session_effort: "high",
+    codex_account_id: "a-codex", codex_console_session_model: "codex-console", codex_console_session_effort: "medium",
+  }, { kind: "choose" }, null);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  answerSessionModels(daemon);
+  expect(document.body.querySelector('[role="dialog"] h2')?.textContent).toBe(`Open console session in ${isolate("Main")}`);
+  expect(document.body.textContent).not.toContain("Report to");
+  const name = document.body.querySelector<HTMLInputElement>('[role="dialog"] input')!;
+  expect(name.placeholder).toBe("Automatic name");
+  expect(pickerNamed("Agent").textContent).toContain("Claude Code");
+  expect(pickerNamed("Claude Code account").textContent).toContain("Console account");
+  expect(vi.mocked(daemon.request).mock.calls.some(([body]) => body.type === "list_agent_models")).toBe(false);
+  await act(async () => buttons().find((button) => button.textContent === "Advanced")!.click());
+  expect(pickerNamed("Model").textContent).toContain("Opus");
+  expect(pickerNamed("Reasoning effort").textContent).toContain("high");
+  expect(document.body.textContent).toContain("Unchanged values follow the console settings.");
+  if (mode === "pick") {
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(name, "Release coordination");
+      name.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => pickerNamed("Agent").click());
+    await act(async () => optionElements().find((option) => option.getAttribute("data-key") === "codex")!.click());
+    expect(pickerNamed("Codex account").textContent).toContain("Codex work");
+    expect(pickerNamed("Model").textContent).toContain("codex-console");
+    expect(pickerNamed("Reasoning effort").textContent).toContain("medium");
+    await act(async () => pickerNamed("Codex account").click());
+    await act(async () => optionElements().find((option) => option.textContent === "Default")!.click());
+    await act(async () => pickerNamed("Model").click());
+    await act(async () => optionElements().find((option) => option.textContent === "Sonnet")!.click());
+    await act(async () => pickerNamed("Reasoning effort").click());
+    await act(async () => optionElements().find((option) => option.textContent === "low")!.click());
+  } else if (mode === "clear") {
+    await act(async () => pickerNamed("Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
+    await act(async () => pickerNamed("Reasoning effort").querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
+  }
+  expect(vi.mocked(daemon.request).mock.calls.some(([body]) => body.type === "open_session")).toBe(false);
+  await act(async () => buttons().find((button) => button.textContent === "Open")!.click());
+  const sent = vi.mocked(daemon.request).mock.calls.find(([body]) => body.type === "open_session")![0];
+  expect(sent).not.toHaveProperty("project_id");
+  expect(sent).not.toHaveProperty("bound_to");
+  if (mode === "inherit") {
+    expect(sent).toMatchObject({ agent: "claude", account: "a-console" });
+    expect(sent).not.toHaveProperty("model");
+    expect(sent).not.toHaveProperty("effort");
+    expect(sent).toHaveProperty("title", undefined);
+  } else if (mode === "pick") {
+    expect(sent).toMatchObject({ title: "Release coordination", agent: "codex", account: null, model: "sonnet", effort: "low" });
+  } else {
+    expect(sent).toMatchObject({ model: null, effort: null });
+  }
+});
+
+it("opens console sessions on the console's default agent and its account", async () => {
+  const { container, root, daemon } = renderDialog([], {
+    settings: { auto_sync_repositories: false, default_clone_dir: "", accounts: [
+      { id: "a-codex", agent: "codex", name: "Work", config_dir: "/accounts/codex" },
+    ] },
+  }, { default_agent: "codex", codex_account_id: "a-codex" }, undefined, null);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  vi.mocked(daemon.request).mockResolvedValue({ type: "ack" });
+  expect(pickerNamed("Agent").textContent).toContain("Codex");
+  expect(pickerNamed("Codex account").textContent).toContain("Work");
+  await act(async () => buttons().find((button) => button.textContent === "Open")!.click());
+  expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ agent: "codex", account: "a-codex" }));
+});
+
+
+it("previews the stored next console title without turning it into a custom title, and refreshes on creation", async () => {
+  const { container, root, daemon } = renderDialog([], {}, {}, undefined, null);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "preview_console_session_title"
+    ? { type: "console_session_title", console: body.console, title: "Hub 9" }
+    : { type: "ack" });
+  // A new session updates the preview even when earlier sessions have been deleted.
+  await act(async () => root.render(
+    <DaemonProvider value={daemon}>
+      <SessionDialog console={parentConsole} sessions={[hub1]} onClose={() => {}} onOpened={() => {}} />
+    </DaemonProvider>,
+  ));
+  const name = document.body.querySelector<HTMLInputElement>('[role="dialog"] input')!;
+  expect(name.placeholder).toBe("Hub 9");
+  expect(name.value).toBe("");
+  expect(daemon.request).toHaveBeenCalledWith({ type: "preview_console_session_title", console: parentConsole.id });
+  vi.mocked(daemon.request).mockRejectedValueOnce(new Error("Disconnected"));
+  await act(async () => root.render(
+    <DaemonProvider value={daemon}>
+      <SessionDialog console={parentConsole} sessions={[hub1, hub2]} onClose={() => {}} onOpened={() => {}} />
+    </DaemonProvider>,
+  ));
+  expect(name.placeholder).toBe("Automatic name");
+  await act(async () => buttons().find((button) => button.textContent === "Open")!.click());
+  expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", title: undefined }));
+});
+
+it.each(["Backspace", "Delete"])("clears a launch choice with %s only while its list is closed", async (key) => {
+  const { container, root, daemon } = renderDialog([], {}, {}, undefined, { claude_session_model: "opus" });
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  answerSessionModels(daemon);
+  await act(async () => buttons().find((button) => button.textContent === "Advanced")!.click());
+  const trigger = pickerNamed("Model");
+  await act(async () => { trigger.focus(); trigger.click(); });
+  await act(async () => { await vi.waitFor(() => expect(document.activeElement?.getAttribute("role")).toBe("option")); });
+  await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
+  expect(trigger.textContent).toContain("Opus");
+  await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  await act(async () => { await vi.waitFor(() => expect(document.activeElement).toBe(trigger)); });
+  await act(async () => trigger.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
+  expect(trigger.textContent).toContain("The agent's own setting");
+  await act(async () => buttons().find((button) => button.textContent === "Open")!.click());
+  expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", model: null }));
 });

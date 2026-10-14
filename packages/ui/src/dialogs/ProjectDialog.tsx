@@ -258,7 +258,6 @@ export function ProjectDialog({
           onChange={setTags}
           suggestions={knownTags}
           placeholder={t("dialog.project.tagsExample")}
-          description={t("dialog.project.tagsHint")}
           isDisabled={locked}
         />
         <AgentAccountField

@@ -544,6 +544,8 @@ where
         account: None,
         task: None,
         title: None,
+        model: None,
+        effort: None,
         origin: Origin::User,
         bound_to: None,
     })
@@ -710,6 +712,8 @@ mod tests {
             title: format!("Work {id}"),
             status: SessionStatus::Idle,
             terminal_title: None,
+            model: None,
+            effort: None,
             has_conversation: true,
             bound_to: None,
             lead: false,

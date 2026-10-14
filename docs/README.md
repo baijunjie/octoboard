@@ -19,10 +19,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   like any other, the opt-in application setting, and what is refused before anything is created against what is
   reported as failed afterwards.
 - [Model and reasoning effort](product/model-and-reasoning-effort.md) — the model and reasoning effort a console's
-  console sessions and a project's sessions launch with: where they are set, what unset means, how the model list is
-  asked of the agent itself for the account in question, how the effort levels follow the chosen model, and what the
-  pickers do while that list is out or cannot be had.
-- [Sessions](product/sessions.md) — console and project sessions, agent selection, the five session statuses, their
+  console sessions and a project's sessions launch with: parent defaults, persistent session overrides, what unset
+  means, how the model list is asked of the agent itself for the account in question, how the effort levels follow
+  the chosen model, and what the pickers do while that list is out or cannot be had.
+- [Sessions](product/sessions.md) — console and project sessions, their shared creation dialog, optional names,
+  agent and account selection, Advanced launch settings, the five session statuses, their
   glyphs and their transitions, the raised hand and its notification, how a declined Claude Code prompt lowers the
   hand from the agent's own transcript and what that costs to keep working, archiving, interruption and resuming,
   switching a session to another account of its agent, how a console session's archive, reopen and delete follow the
@@ -144,7 +145,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   never writes the user's agent configuration (the two narrow exceptions being the conversation record a switch of a
   session's account copies and the Grok Build trust entry carried to the user's own store), and that a fast-forward
   and a push are the ways it changes a project repository, both only at the user's word; the three things injected
-  per launch and the console session's generated instruction file, the launch environment, and the per-agent specifics.
+  per launch and the console's generated instruction files for Claude Code and Codex, their refresh on each launch,
+  the launch environment, and the per-agent specifics.
 - [Folder trust](product/folder-trust.md) — each agent's own folder-trust confirmation and where it records the trust,
   the one auto-trust permission Claude Code, Codex and Grok Build share (a project or a trusted folder), the trust
   dialog, how Octoboard presses each agent's confirmation, carrying Grok Build's trust entry into the user's store, and

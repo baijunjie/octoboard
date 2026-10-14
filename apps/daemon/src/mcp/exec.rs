@@ -173,6 +173,8 @@ async fn start_session(
             // A session a session starts takes the project's account for its agent, else the
             // console's.
             account: None,
+            model: None,
+            effort: None,
             task: Some(task),
             // Named for the task, not the project: several sessions dispatched into one project
             // would otherwise all carry the project's name and be indistinguishable in the menu.
@@ -776,6 +778,8 @@ mod tests {
             title: "Hub".to_string(),
             status: SessionStatus::Idle,
             terminal_title: None,
+            model: None,
+            effort: None,
             has_conversation: false,
             bound_to: None,
             lead: false,

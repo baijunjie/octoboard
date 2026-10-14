@@ -1,5 +1,5 @@
 //! The text Octoboard tells a session about itself: the injected role description every session
-//! gets, and the console session instruction file written into a console's working directory.
+//! gets, and the console session instruction files written into a console's working directory.
 //!
 //! Tool names are rendered per agent rather than written out, because the prefix an agent shows
 //! its model differs (see [`super::qualified_tool_name`]).
@@ -163,7 +163,7 @@ fn unbound_project_session_description(agent: Agent) -> String {
 
 /// The console session's own guidance. Written into the console's working directory as an
 /// instruction file for a Claude Code or Codex console session, and injected as the role
-/// description for all three.
+/// description for Grok, which reads no file in that directory.
 pub fn console_session_instructions(agent: Agent) -> String {
     let tool = |name: &str| qualified_tool_name(agent, name);
     format!(
@@ -256,47 +256,21 @@ pub fn console_session_instruction_filename(agent: Agent) -> Option<&'static str
     }
 }
 
-/// Writes the console session instruction file, or removes it where the console session's agent
-/// reads none.
-///
-/// Every agent matches its instruction filename by **exact spelling**, and they disagree on which:
-/// Claude Code reads `CLAUDE.md` and not `AGENTS.md` at all, Codex reads `AGENTS.md`, and Grok reads
-/// several spellings of both — so on a case-sensitive volume a file left over from a console that
-/// changed agents would be loaded alongside, or instead of, the right one. Every name Octoboard
-/// might have written is therefore cleared before the current one is written.
+/// Writes both agents' instruction files into Octoboard's console working directory. Claude Code
+/// reads only `CLAUDE.md`, Codex only `AGENTS.md`, so sessions of both agents can share a console
+/// without replacing each other's guidance. Grok reads neither here, since there is no git root.
 pub fn write_console_session_instructions(console: &Console) -> Result<()> {
     let workdir = Path::new(&console.workdir);
     std::fs::create_dir_all(workdir).with_context(|| format!("creating {}", workdir.display()))?;
 
-    let wanted = console_session_instruction_filename(console.default_agent);
-    for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
-        let Some(name) = console_session_instruction_filename(agent) else {
-            continue;
-        };
-        if Some(name) == wanted {
-            continue;
-        }
-        if let Err(err) = std::fs::remove_file(workdir.join(name)) {
-            if err.kind() != std::io::ErrorKind::NotFound {
-                tracing::warn!(workdir = %console.workdir, name, %err, "removing a stale console session instruction file failed");
-            }
-        }
-    }
-
-    if let Some(name) = wanted {
+    for agent in [Agent::Claude, Agent::Codex] {
+        let name = console_session_instruction_filename(agent).expect("reads an instruction file");
         let path = workdir.join(name);
-        // Written to a temporary file and renamed into place rather than `std::fs::write`, which
-        // truncates before it writes: a console may hold several live console sessions at once,
-        // and both would otherwise race to rewrite the same file — a reader of the truncated half
-        // would see a console session's agent come up with no instructions at all. The rename is
-        // atomic on the same filesystem, which the temporary file is by construction, being a
-        // sibling of `path`.
+        // A sibling temporary file and atomic rename keep concurrent launches from reading a
+        // truncated file, including when they run different agents in the same console.
         let temp_path = workdir.join(format!("{name}.octoboard-tmp-{}", uuid::Uuid::new_v4()));
-        std::fs::write(
-            &temp_path,
-            console_session_instructions(console.default_agent),
-        )
-        .with_context(|| format!("writing {}", temp_path.display()))?;
+        std::fs::write(&temp_path, console_session_instructions(agent))
+            .with_context(|| format!("writing {}", temp_path.display()))?;
         std::fs::rename(&temp_path, &path)
             .with_context(|| format!("renaming {} to {}", temp_path.display(), path.display()))?;
     }

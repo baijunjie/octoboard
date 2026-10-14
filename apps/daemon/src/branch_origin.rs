@@ -1095,6 +1095,8 @@ mod tests {
                     title: format!("Session {id}"),
                     status,
                     terminal_title: None,
+                    model: None,
+                    effort: None,
                     has_conversation: true,
                     bound_to: None,
                     lead: false,

@@ -220,15 +220,14 @@ export function App(): React.ReactElement {
     focusTerminal,
   });
 
-  // Every click that could resume or create a session is guarded against its own double-click: two
-  // fast clicks on the console sessions section's "New console session" button otherwise create two
-  // console sessions, and two fast clicks on a dormant session fire two `resume_session` calls.
+  // A dormant session can be resumed through several controls, so overlapping requests for the
+  // same session share one in-flight guard.
   const inFlightRef = useRef<Set<string>>(new Set());
 
   /** Runs `action` unless one with the same `key` is in flight; says whether it went through. A
    * second call while one is in flight counts as having gone through, since what it asks is under
    * way, and so does an "already running" refusal that is not shown. */
-  const runOnce = async (key: string, action: () => Promise<void>, suppressAlreadyRunning = true): Promise<boolean> => {
+  const runOnce = async (key: string, action: () => Promise<void>): Promise<boolean> => {
     if (inFlightRef.current.has(key)) return true;
     inFlightRef.current.add(key);
     try {
@@ -237,10 +236,9 @@ export function App(): React.ReactElement {
     } catch (err) {
       // The in-flight guard above already stops this client from causing the double-click kind of
       // "already running" (see `ALREADY_RUNNING_CODES`), but another path to the same session — the
-      // sidebar row and the terminal's Resume button, for instance — can still race it;
-      // `suppressAlreadyRunning` decides per call whether that race is worth showing.
+      // sidebar row and the terminal's Resume button, for instance — can still race it.
       const isAlreadyRunning = err instanceof DaemonRequestError && ALREADY_RUNNING_CODES.includes(err.code);
-      if (!isAlreadyRunning || !suppressAlreadyRunning) {
+      if (!isAlreadyRunning) {
         toastError(errorPresentation(err as Error));
         return false;
       }
@@ -289,11 +287,7 @@ export function App(): React.ReactElement {
     }
   };
 
-  const openConsoleSession = (console_: Console) =>
-    void runOnce(`console-session:${console_.id}`, async () => {
-      const reply = await request({ type: "open_session", console_id: console_.id });
-      if (reply.type === "session_opened") showOpenedSession(reply.session.id);
-    });
+  const openConsoleSession = (console_: Console) => openDialog({ kind: "new-console-session", console: console_ });
 
   /** Puts a session this window just opened on screen; it is always in the console and project the
    * sidebar already shows, so only the archive view, were it open, has to give way. */

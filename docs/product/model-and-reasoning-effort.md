@@ -2,35 +2,48 @@
 
 A console carries a model and a reasoning effort for its console sessions, and a project carries a pair for the
 sessions opened under it — in both cases one pair per agent, since model names and effort levels are each agent's own.
-A session is launched with the pair of its own agent and no other: a console session its console's, a project session
-its project's. Neither falls back to the other. A project that sets nothing therefore launches its sessions exactly as
-the agent would run them unasked, whatever its console sets for its console sessions, and the console's pair reaches
-console sessions alone.
+These are the defaults for a session of that agent: a console session follows its console, a project session its
+project. Neither falls back to the other. A project that sets nothing therefore leaves the choices to the agent,
+whatever its console sets for its console sessions.
 
-**Unset means the agent picks**: Octoboard passes nothing, and the agent chooses as it would outside Octoboard — which
-is whatever the agent's own configuration pins, where it pins a model. Unset is not a promise of the agent's newest
-model. Both values are read from the console or the project each time a session is opened or resumed, rather than
-recorded on the session, so a running session keeps what it was started with and a change reaches it at its next
-resume.
+Each session can override **each value independently** when it is opened:
 
-Where the pair is set is in "Editing a console" and "Editing a project" in `docs/product/consoles-and-projects.md`;
-which pair a session takes is in "Which model and reasoning effort a session uses" in `docs/product/sessions.md`; how
-each value reaches the agent, and what each agent does with one it cannot honour, is in "The model and reasoning
-effort" in `docs/product/launching-agents.md`.
+- **Inherited** — no session choice is recorded, and the console's or project's current value is read on every launch,
+  including a resume. Sessions with no recorded override follow this rule.
+- **Agent's own default** — the session explicitly clears the value, so Octoboard passes nothing for it even when the
+  console or project sets one.
+- **A chosen value** — the session keeps that value and passes it on every launch.
+
+The last two choices are recorded on the session and survive a daemon restart, resuming, reopening and switching
+accounts. A changed console or project default reaches only values the session still inherits, on its next launch;
+a running session keeps what it started with.
+
+**The agent's own default means the agent picks**: Octoboard passes nothing, and the agent chooses as it would outside
+Octoboard — including whatever the agent's own configuration pins. It is not a promise of the agent's newest model.
+Unset console and project values have this meaning too.
+
+Where defaults are set is in "Editing a console" and "Editing a project" in `docs/product/consoles-and-projects.md`;
+opening a session is in "Opening a session" in `docs/product/sessions.md`; how each value reaches the agent, and what
+each agent does with one it cannot honour, is in "The model and reasoning effort" in
+`docs/product/launching-agents.md`.
 
 ## The Advanced section
 
-Both are set in the **Advanced** section of the console dialog and of the project dialog, collapsed when the dialog
-opens, which holds a **Model** picker and a **Reasoning effort** picker for the agent the dialog's agent field
-currently settles on, and a note saying whose
-sessions they apply to. An unset picker is empty, showing a placeholder standing for the agent's own setting instead of
-a value. A picked value is put back to unset with the picker's clear button, or with Backspace or Delete while the
-picker has keyboard focus, which the section says under its note.
+The console dialog, project dialog and dialog that opens a console or project session hold an **Advanced** section,
+collapsed when the dialog opens. It holds a **Model** picker and a **Reasoning effort** picker for the agent the
+dialog's agent field currently settles on, and a note saying whose sessions they apply to. In the session dialog, untouched fields
+show that agent's current project defaults, or the console's console-session defaults for a console session, and keep
+following them; changing a field applies only to that session, including its later resumes. Switching agents shows the other agent's values and retains edits separately, but only
+the selected agent's edits apply to the opened session. Changing accounts keeps those edits.
+
+An unset picker is empty, showing a placeholder standing for the agent's own setting instead of a value. A picked
+value is cleared by clicking the picker's × button, or by pressing Backspace or Delete while its list is closed and
+its trigger has keyboard focus. These keys do not clear the choice while focus is on an option in the open list.
+Clearing a value in the session dialog explicitly chooses the agent's own default for that value.
 
 Neither value is checked against any list, in the dialog or at launch. What is stored is whatever was given, trimmed,
-with a blank value read as unset. A stored value the current list does not hold is kept, offered last and marked as
-not in the list, so the dialog never silently changes what a console or a project is set to — which matters the more
-now that the list is the agent's own rather than Octoboard's.
+with a blank value treated as the agent's own default. A stored value the current list does not hold is kept, offered
+last and marked as not in the list, so the dialog never silently changes a setting.
 
 ## The models offered
 
@@ -48,8 +61,9 @@ Grok Build catalogue's own id — not the name shown.
 
 A catalogue belongs to an account, so the list is asked for the account that agent's sessions would run under: in the
 console dialog the account the dialog is currently set to for that agent, and in the project dialog the project's own
-account for that agent — the agent's default account included — else the one its console resolves to (see "The
-project's account, model and reasoning effort" in `docs/product/consoles-and-projects.md`).
+account for that agent — the agent's default account included — else the one its console resolves to; in the session
+dialog the account currently selected for that session (see "The project's account, model and reasoning effort" in
+`docs/product/consoles-and-projects.md` and "Which account a session uses" in `docs/product/sessions.md`).
 
 Nothing is asked of the agent until the Advanced section is opened for the first time, and it is asked again whenever
 the agent or that account changes; an answer to a question the dialog has since moved off is dropped. An answer is

@@ -128,9 +128,8 @@ pub struct Console {
     pub id: String,
     pub name: String,
     pub workdir: String,
-    /// The agent this console's console sessions run, which is always `default_agent`: kept
-    /// equal on every save, and reconciled once on open for databases that predate that. Nothing
-    /// reads it; the column is kept so that no existing database has to be rewritten.
+    /// Legacy copy of `default_agent`, kept equal on every save and reconciled on open for older
+    /// databases. Session agent selection reads `default_agent` instead; nothing reads this field.
     /// Daemon-only: not part of the record clients are sent.
     #[serde(skip)]
     pub console_session_agent: Agent,
@@ -369,6 +368,21 @@ pub struct Session {
     /// a later edit of the account's directory never reaches a session that already exists.
     /// Written together with `account_id`, never alone.
     pub config_dir: Option<String>,
+    /// This session's model override: absent inherits its project's (or console's) current
+    /// setting, explicit null leaves the choice to the agent, and a value pins the model.
+    #[serde(
+        default,
+        deserialize_with = "present_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub model: Option<Option<String>>,
+    /// The reasoning effort override, with the same inheritance rule as `model`.
+    #[serde(
+        default,
+        deserialize_with = "present_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub effort: Option<Option<String>>,
     /// The user pinned this session to the top of its list. Only `set_session_pinned` changes it,
     /// and a pinned session stays pinned across archiving and resuming.
     pub pinned: bool,
@@ -1099,10 +1113,14 @@ pub enum RequestBody {
         #[serde(default)]
         apply_settings: bool,
     },
+    /// Previews the next automatic title without reserving its ordinal.
+    PreviewConsoleSessionTitle {
+        console: String,
+    },
     OpenSession {
         console_id: String,
         project_id: Option<String>,
-        /// Ignored for a console session, which always runs the console's default agent.
+        /// The session's agent; absent takes the project's default, else the console's.
         agent: Option<Agent>,
         /// The account this session's agent reads, by id. Absent leaves the choice to the
         /// project's reference for that agent, else the console's, else the default account; an
@@ -1111,6 +1129,12 @@ pub enum RequestBody {
         /// `unknown_account`.
         #[serde(default, deserialize_with = "present_option")]
         account: Option<Option<String>>,
+        /// Absent inherits the project's (or console's) current setting; null or blank uses the
+        /// agent's own default. A string is trimmed and kept for every later launch.
+        #[serde(default, deserialize_with = "present_option")]
+        model: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        effort: Option<Option<String>>,
         task: Option<String>,
         title: Option<String>,
         /// The session this (project) session should report to. Absent means none: a session the
@@ -1368,6 +1392,11 @@ pub enum Event {
     ConsoleSessionRequestClosed {
         request_id: String,
         reason: ConsoleRequestEnding,
+    },
+    ConsoleSessionTitle {
+        id: Option<String>,
+        console: String,
+        title: String,
     },
     /// The reply to `open_session`, and to an approving `answer_console_session_request`: the
     /// session that was started. The same record is broadcast as
@@ -2390,6 +2419,48 @@ mod tests {
             parse(r#"{"type":"open_session","console_id":"c","account":"acct-1"}"#),
             Some(Some("acct-1".to_string()))
         );
+    }
+
+    /// Each session launch setting distinguishes inheriting from deliberately using the agent's
+    /// own default, and a record emitted on the wire keeps that distinction too.
+    #[test]
+    fn session_launch_settings_preserve_absent_null_and_values() {
+        for (fields, expected) in [
+            ("", (None, None)),
+            (
+                r#","model":null,"effort":"high""#,
+                (Some(None), Some(Some("high".to_string()))),
+            ),
+            (
+                r#","model":"opus","effort":null"#,
+                (Some(Some("opus".to_string())), Some(None)),
+            ),
+        ] {
+            let json = format!(r#"{{"type":"open_session","console_id":"c"{fields}}}"#);
+            let RequestBody::OpenSession { model, effort, .. } =
+                serde_json::from_str::<Request>(&json).unwrap().body
+            else {
+                panic!("parses as open_session")
+            };
+            assert_eq!((model, effort), expected, "{json}");
+
+            let json = format!(
+                r#"{{"id":"s","agent":"claude","agent_session_id":null,
+                "console_id":"c","project_id":null,"host_id":"local","role":"console",
+                "origin":"user","title":"Hub","status":"idle","has_conversation":false,
+                "bound_to":null,"colour":null,"ordinal":null,"account_id":null,"config_dir":null,
+                "pinned":false,"started_at":0,"ended_at":null{fields}}}"#
+            );
+            let session: super::Session = serde_json::from_str(&json).unwrap();
+            assert_eq!((session.model.clone(), session.effort.clone()), expected);
+            let emitted = serde_json::to_value(&session).unwrap();
+            for (field, value) in [("model", expected.0), ("effort", expected.1)] {
+                assert_eq!(emitted.get(field).is_some(), value.is_some());
+                if let Some(value) = value {
+                    assert_eq!(emitted[field], serde_json::to_value(value).unwrap());
+                }
+            }
+        }
     }
 
     /// The avatar is cleared the same way as an account: an explicit `null`.

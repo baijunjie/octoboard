@@ -1,6 +1,7 @@
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import { SAMPLE, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
+import { SAMPLE_CODEX_MODELS } from "./agentModels";
 import { IMAGES } from "./viewerImages";
 import { SHELL_TIMEOUT } from "./shellTimeout";
 
@@ -20,9 +21,9 @@ const twoHubsState = snapshotState({
   consoles: [console_],
   projects: [web, api],
   sessions: [
-    ...sessions.map((s) => (s.id === SAMPLE.consoleSession.id ? { ...s, title: "Hub" } : s)),
-    sessionOf("s-console-2", console_.id, undefined, "A release coordinator with a console session name too long for the owner picker", "working", { colour: "rose", started_at: minutesAgo(20) }),
-    sessionOf("s-console-old", console_.id, undefined, "Hub 3", "archived", { colour: "azure" }),
+    ...sessions.map((s) => (s.id === SAMPLE.consoleSession.id ? { ...s, title: "Hub", ordinal: 1 } : s)),
+    sessionOf("s-console-2", console_.id, undefined, "A release coordinator with a console session name too long for the owner picker", "working", { colour: "rose", ordinal: 2, started_at: minutesAgo(20) }),
+    sessionOf("s-console-old", console_.id, undefined, "Hub 3", "archived", { colour: "azure", ordinal: 3 }),
   ],
 });
 
@@ -42,7 +43,7 @@ const accountsState = snapshotState({
 });
 
 // A console session whose bound sessions are all interrupted, so archiving it takes them along.
-const cascadeHub = sessionOf("s-hub-4", console_.id, undefined, "Hub 4", "idle", { colour: "azure" });
+const cascadeHub = sessionOf("s-hub-4", console_.id, undefined, "Hub 4", "idle", { colour: "azure", ordinal: 4 });
 const cascadeState = snapshotState({
   consoles: [console_],
   projects: [web, api],
@@ -164,7 +165,57 @@ const dialogFixture = { state: dialogState, directories: { "/Users/dev": HOME_LI
       },
     } } } satisfies Partial<Scenario>;
 
+// Session settings initially reflect the selected agent's project defaults. Both agents have
+// usable stored values so changing the agent lets the same view show either model list.
+const sessionLaunchState = {
+  ...dialogState,
+  // The open-session buttons share one label; keep the confirmation target's project alone
+  // rather than depending on the first button of the alphabetically sorted sidebar.
+  projects: new Map([[web.id, {
+    ...web,
+    claude_session_model: "opus",
+    claude_session_effort: "high",
+    codex_session_model: SAMPLE_CODEX_MODELS[0].id,
+    codex_session_effort: "xhigh",
+  }]]),
+  sessions: new Map([...dialogState.sessions].filter(([, session]) => !session.project_id || session.project_id === web.id)),
+};
+
+const consoleSessionLaunchState = {
+  ...sessionLaunchState,
+  consoles: new Map([[console_.id, {
+    ...dialogState.consoles.get(console_.id)!,
+    claude_console_session_model: "opus",
+    claude_console_session_effort: "high",
+    codex_console_session_model: SAMPLE_CODEX_MODELS[0].id,
+    codex_console_session_effort: "xhigh",
+  }]]),
+};
+
 export const dialogScenarios: Scenario[] = [
+  {
+    ...dialogFixture,
+    state: consoleSessionLaunchState,
+    id: "dialog-new-console-session",
+    group: GROUP,
+    title: "New console session",
+    description: "The empty Name field previews Hub 5 from the console's next ordinal. Joined agent and inherited account pickers follow; Advanced starts collapsed and there is no report-to field.",
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.consoleSessions.new")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: consoleSessionLaunchState,
+    id: "dialog-new-console-session-advanced",
+    group: GROUP,
+    title: "New console session advanced settings",
+    description: "Name previews Hub 5. Advanced shows the console's Opus model and high reasoning effort for Claude Code. Changes apply to this new session.",
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.consoleSessions.new")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+    ],
+  },
   {
     ...dialogFixture,
     id: "dialog-new-console-accounts",
@@ -176,9 +227,11 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
+    state: { ...dialogState, settings: { ...accountsState.settings!, accounts: [] } },
     id: "dialog-new-console-advanced",
     group: GROUP,
     title: "New console advanced settings",
+    description: "Without named accounts the agent picker fills the whole field; Advanced exposes the model and reasoning effort settings.",
     steps: [
       (ui) => ui.press(ui.t("rail.newConsole")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
@@ -236,19 +289,46 @@ export const dialogScenarios: Scenario[] = [
     sessionOpenError: SHELL_TIMEOUT,
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
-      (ui) => ui.focus(ui.t("dialog.session.titleField")),
+      (ui) => ui.focus(ui.t("common.name")),
       (ui) => ui.confirm(),
       async () => { document.querySelector<HTMLElement>('[role="dialog"] [role="alert"]')?.scrollIntoView({ block: "end" }); },
     ],
   },
   {
     ...dialogFixture,
+    state: sessionLaunchState,
+    id: "dialog-new-session-advanced",
+    group: GROUP,
+    title: "New session advanced settings",
+    description: "Name comes first. Claude Code and its inherited long account name share the joined field; expanded Advanced shows the project's Opus model and high reasoning effort. Changing either applies to this session.",
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.project.openSession")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: {
+      ...sessionLaunchState,
+      projects: new Map([...sessionLaunchState.projects].map(([id, project]) => [id, { ...project, default_agent: "codex" as const }])),
+    },
+    id: "dialog-new-session-agent-only",
+    group: GROUP,
+    title: "New session without named agent accounts",
+    description: "Codex has no named accounts, so the agent picker fills the whole field. Advanced shows its project model and xhigh reasoning effort; choosing Claude Code reveals its joined account picker.",
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.project.openSession")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: sessionLaunchState,
     id: "dialog-new-session-owner",
     group: GROUP,
     title: "New session owner choices",
-    description: "Short and long owner names appear together. Hover the long option to read it as a marquee; the current account label uses the same fade.",
+    description: "Short and long owner names appear together below the joined agent and account field. Hover the long option to read it as a marquee; the selected long account label uses the same fade.",
     steps: [
-      (ui) => projectActions(ui, web.name),
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
       (ui) => ui.press(ui.t("dialog.session.ownerNone")),
     ],
@@ -384,7 +464,7 @@ export const dialogScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
       (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.local"))),
       (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.parent"))),
-      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.agentDetect"))),
+      (ui) => ui.press(ui.t("dialog.project.defaultAgent")),
       (ui) => ui.press("Claude Code"),
     ],
   },

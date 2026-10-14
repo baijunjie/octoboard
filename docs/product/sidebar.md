@@ -96,9 +96,9 @@ what selecting one does, and what its row's menu offers are in "Console sessions
 The console sessions heading appends the number of console sessions listed in parentheses, including interrupted
 sessions and excluding archived ones. It shows zero when none are listed.
 
-The section's own heading carries a **+** button, **New console session**, which opens one with the console's current
-default agent and its account for that agent, and, while the console has an archived console session, the section's
-action menu, whose only entry is **Archived console sessions** — a submenu of the console's newest archived console
+The section's own heading carries a **+** button, **New console session**, which opens the session dialog before
+launching anything (see "Opening a session" in `docs/product/sessions.md`), and, while the console has an archived
+console session, the section's action menu, whose only entry is **Archived console sessions** — a submenu of the console's newest archived console
 sessions, each of which can be selected, and the way to the archive view of all of them (see "The archive view" below).
 This is the one entry a console session's own row never carries: archived console sessions are reached from the section,
 not from a row. With no console session at all, the section shows an empty row saying so; the whole row is a button that
@@ -429,8 +429,8 @@ follows it**: it switches to the session's console, and leaves focus mode when t
 focus mode is on (see "Leaving focus mode, and what is remembered" in `docs/product/focus-mode.md`). Back and Forward
 return to earlier selections without resuming anything (see `docs/product/navigation-history.md`).
 
-A session is selected automatically only when this application is the one that opened it — through the console
-sessions section's New console session button or the new-session dialog — and that closes the archive view if it is
+A session is selected automatically only when this application is the one that opened it through the session dialog,
+for either a console or a project session, and that closes the archive view if it is
 open. A session that appears any other way, such as one the console session started or one another client of the
 daemon opened, is listed unselected and is put on screen by the user selecting it.
 

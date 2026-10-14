@@ -1,6 +1,6 @@
 # Sessions
 
-A **session** is one agent CLI process, running with a project's directory as its working directory and rendered in a
+A **session** is one agent CLI process, running in a console's or a project's working directory and rendered in a
 terminal the user types into directly. Octoboard is not an agent and not a terminal of its own: it starts the agent's
 own binary and shows it as it is. What it adds to each launch, and what it guarantees it does not change, is in
 `docs/product/launching-agents.md`.
@@ -21,7 +21,7 @@ A console session's row follows a session row exactly — the same status glyph,
 title, a pin button when pinned, and selecting it resumes it when it is interrupted, as selecting an
 interrupted session's row does. Its action menu offers **Pin**/**Unpin**, **Rename**, **Focus mode** (see
 `docs/product/focus-mode.md`), **Switch account** and **Archive**; there is no Resume item, for the same reason. A
-console session's title is renameable, like a project session's; its default is under **Title** in "Opening a session"
+console session's title is renameable, like a project session's; its default is under **Name** in "Opening a session"
 below.
 
 The console session cannot archive itself (see "The console session's tools" in
@@ -30,9 +30,9 @@ is archived. Archiving it moves it among the console's archived console sessions
 from any one row, but from the console sessions section's own menu, which offers **Archived console
 sessions** — a submenu of the console's newest archived console sessions, each of which can be
 selected, and the way to the archive view of all of them (see "The archive view" in
-`docs/product/sidebar.md`). The section's own **New console session** button opens one with the
-console's current default agent and its account for that agent — whereas resuming or reopening a
-console session keeps the ones it has recorded, which only a switch changes (see "Agent config directories" in
+`docs/product/sidebar.md`). The section's own **New console session** button opens the session dialog described in
+"Opening a session" below — whereas resuming or reopening a console session keeps its
+recorded agent and account; only switching accounts changes its account (see "Agent config directories" in
 `docs/product/consoles-and-projects.md` and "Switching a session's account" below).
 
 A console session carries no project; it runs in the console's working directory. It is given
@@ -73,24 +73,36 @@ are listed in, pinning, the archive view and how selecting a session works — i
 
 ## Opening a session
 
-A session is opened under a project with:
+New console session from the console sessions section, including its empty row, and the terminal's offer of the
+same action open a dialog before anything is launched. New session under a project opens the same dialog for that
+project. Both offer these fields in this order:
 
-- **Agent and account** — one grouped list that settles both at once, so no combination that does not exist can be
-  chosen. Each group is an agent, headed by its icon and name, and lists that agent's accounts with its default account
-  first, each entry named by the account alone. It opens on the agent resolved as in "Which agent a session uses"
-  below, and on the account that agent resolves to when none is chosen (the project's, else the console's, see "Which account a
-  session uses" below), and any other entry can be picked for this session only. All three agents are listed every time; one Octoboard has
-  determined unavailable (its binary does not resolve on the user's login shell `PATH`) keeps its group, headed as not
-  installed, with none of its entries selectable — they are still reached with the arrow keys and announced as
-  disabled — and the list opens on a selectable entry whenever there is one. Before that determination has landed
-  every group is selectable and none is labelled as not installed. Until accounts have been
-  added an agent's group holds its default account alone.
-- **Title** (optional) — the empty field shows the project's name as its placeholder; leaving it empty uses that
-  name as the session's title. A console session's title defaults to "Hub" for ordinal 1
-  and "Hub `<ordinal>`" for any later one ("Hub 2", "Hub 3", …), where the ordinal is one past the highest ever used in
-  its console, so a title is not reused after a console session is archived or deleted.
-- **Report to** (a choice, "No console session" by default) — one of the console's console sessions that are not
-  archived, the most recently started first, each shown beside its colour, the same one the session's binding badge
+- **Name** (optional) — for a project session, the empty field shows the project's name as its placeholder and
+  leaving it empty uses that name. For a console session, the placeholder previews the next automatic name from the
+  daemon's persisted counter: "Hub" for ordinal 1 and "Hub `<ordinal>`" for any later one ("Hub 2", "Hub 3", …), where
+  the ordinal is one past the highest ever used in its console. Each console session consumes an ordinal even when given a custom name, and
+  automatic names are not reused after a console session is renamed, archived or deleted. The preview consumes no
+  ordinal and reserves no name; another creation can advance the final automatic name before this dialog is submitted.
+  It refreshes when console sessions are created or deleted while the dialog is open, and an outdated answer is ignored.
+  While the preview is being fetched or cannot be read, the placeholder indicates automatic naming instead. The field
+  stays empty: the preview is not a custom name. The dialog removes surrounding whitespace from an entered name and
+  uses automatic naming when nothing remains.
+- **Agent** — an agent picker joined to an account picker, as in the console and project dialogs. The agent picker
+  lists all three agents with their icons and names. An agent Octoboard has determined unavailable (its binary does
+  not resolve on the user's login shell `PATH`) is marked as not installed and cannot be selected; before that
+  determination has landed, each agent remains selectable. The field opens on a selectable agent whenever there is
+  one, starting from the default resolved in "Which agent a session uses" below.
+  The account picker offers only that agent's accounts, with its default account first, and is omitted when the agent
+  has no named accounts. It opens on the account resolved from the project and console for that agent (see "Which
+  account a session uses" below); a console session starts from its console's account for the selected agent.
+  There is no inheritance entry: both pickers settle concrete choices for this session.
+  Switching agents retains each agent's account choice separately. If a remembered account is removed while the dialog
+  is open, that agent stays selected and its account falls back to its project's and console's current resolution,
+  or its console's alone for a console session.
+  Switching agents returns focus to the Agent picker even when the account picker appears or disappears. If the last
+  named account is removed while focus is on the account picker or one of its open options, focus returns to Agent.
+- **Report to** (project sessions only; a choice, "No console session" by default) — one of the console's console
+  sessions that are not archived, the most recently started first, each shown beside its colour, the same one the session's binding badge
   will carry (see "The binding badge" in `docs/product/sidebar.md`), or none. A chosen console session receives this
   session's reports, instead of the session staying outside the orchestration. A console with no console session that
   is not archived shows no choice at all, and the session is unbound. A binding, once set, is never changed or undone.
@@ -100,6 +112,16 @@ A session is opened under a project with:
   mode. Opened from a project's focus mode the dialog has no such field and the session is always unbound; opened from a console session's focus mode it
   has none either, and shows a line saying the session reports to that console session instead, which is the binding
   it gets (see `docs/product/focus-mode.md`).
+
+After these fields, the collapsed **Advanced** section offers the model and reasoning effort for this session. It
+initially shows the selected agent's project defaults, or the console's console-session defaults for a console
+session; untouched values follow that parent, and changes apply only to this session, including when resumed.
+The choices, clearing and account-specific lists are described in "The Advanced section" in `docs/product/model-and-reasoning-effort.md`.
+
+A console session has no project or Report to field and is never bound to another session. Opening it with the daemon
+protocol's `open_session` accepts an explicit agent and account as the dialog does. Its `title` string is kept exactly
+as supplied, including an empty string; only an absent or `null` title requests the automatic Hub name. This differs
+from the dialog's trimming and omission of an empty name.
 
 The dialog takes no task: a session the user opens by hand starts in *awaiting instructions*, sitting at the agent's
 prompt, and is given its work by typing into its terminal. Only a session started with `start_session` — by a console
@@ -137,10 +159,9 @@ In descending priority:
 2. the project's default agent;
 3. the console's default agent.
 
-**A console session always runs the console's default agent.** No agent is chosen for one when it is opened, and an
-agent named in the request that opens it is ignored; the console session instruction file in the console's working
-directory is written for that same agent (see "The console session's instruction file" in
-`docs/product/launching-agents.md`).
+A console session has no project, so it uses the agent chosen for that session, or the console's default agent when
+none is given. Console sessions of different agents can run alongside each other in the same console. Their
+instruction files are described in "The console session's instruction file" in `docs/product/launching-agents.md`.
 
 A session's agent is fixed for its lifetime. Resuming or reopening a session always relaunches the same agent —
 session records belong to a specific agent and cannot be moved across agents.
@@ -155,26 +176,25 @@ The account of the session's agent, in descending priority:
 3. the console's account for that agent;
 4. that agent's default account.
 
-A console session carries no project, so its chain starts at the console's reference. A project leaves the account to
-the console for every agent it inherits for, which is how every project starts (see "The project's account, model and
-reasoning effort" in `docs/product/consoles-and-projects.md`). A session opened without touching the list therefore
-runs under the project's account for its agent, or the console's, or the agent's default account when neither pins
-anything. Where a session's agent is named in the sidebar, its account is named with it (see "Session rows" in
+A console session carries no project, so after its own account choice its chain goes straight to the console's
+reference. A project leaves the account to the console for every agent it inherits for, which is how every project starts (see "The project's account, model and
+reasoning effort" in `docs/product/consoles-and-projects.md`). A session opened without changing the account picker
+therefore runs under the project's account for its agent, or the console's, or the agent's default account when
+neither pins anything. Where a session's agent is named in the sidebar, its account is named with it (see "Session rows" in
 `docs/product/sidebar.md`).
 
 A session that makes no choice of its own — one a console session or a project session starts with its own
 `start_session` tool — takes the project's setting. The dialog that opens a session by hand always makes a choice,
 opening on the account the rest of the chain resolves to (the project's setting for the agent, else the console's, else
 the agent's default account) and sending that as the session's own choice, so a session opened there runs under that
-account unless the user picks another in the list.
+account unless the user picks another in the account picker.
 
 ### Which model and reasoning effort a session uses
 
-A console session is launched with its console's pair for its agent, a project session with its project's pair for its
-agent. Neither falls back to the other, and unset means the agent's own choice. Both are read when the session is
-opened or resumed, so a running session keeps what it started with. The settings themselves are in
-`docs/product/model-and-reasoning-effort.md`, and how they reach the agent in "The model and reasoning effort" in
-`docs/product/launching-agents.md`.
+A session uses its own model and reasoning effort choices, each independently, or inherits the current defaults for
+its agent from its project (its console for a console session). The inheritance, explicit clearing and persistence
+rules are in `docs/product/model-and-reasoning-effort.md`. How the resolved values reach the agent is in "The model
+and reasoning effort" in `docs/product/launching-agents.md`.
 
 ## Session statuses
 
@@ -463,8 +483,8 @@ there, where it is listed, and that selecting an archived one does not relaunch 
 ### Switching a session's account
 
 A session can be moved to another account of its own agent from its row's **Switch account** submenu (see "Session
-rows" in `docs/product/sidebar.md`); a console session is switched from its own row, among that console's console
-session agent's accounts. The submenu is offered only when the agent has more than one account, and the user is asked
+rows" in `docs/product/sidebar.md`); a console session is switched from its own row, among that session's own agent's
+accounts. The submenu is offered only when the agent has more than one account, and the user is asked
 to confirm. It is the user's action alone: Octoboard never switches a session on its own, and reads no sign that an
 account's usage has run out.
 
@@ -480,9 +500,10 @@ way leaves the sessions bound to it as they are.
   conversation to copy; the switch records the account and relaunches into a fresh conversation, as a resume of such a
   session does. The default account is a target like any other: the directory it resolves to at that moment is where
   the conversation is copied, and the relaunch runs against that same resolution.
-- **The session takes on the target account's whole setup, not only its login.** An account's directory holds the
-  agent's global configuration as well — its settings file and defaults — so a setting kept in one account's
-  directory does not follow the session into another's. The same conversation can come up with different defaults.
+- **The session reads the target account's configuration and keeps its explicit model and reasoning effort choices.**
+  An account's directory holds the agent's global configuration as well as its login. Settings kept only in the old
+  account's directory do not follow the session; values explicitly supplied by Octoboard still apply according to
+  `docs/product/model-and-reasoning-effort.md`. The same conversation can come up with different account defaults.
 - **A switch that cannot be made leaves the session on the account it had, and says why.** It is refused, with nothing
   recorded, when the session is being launched or resumed at that moment, when it is archived, when it is on that
   account already, when the target is a Grok Build directory that is not an initialized Grok home, when the user's
@@ -653,7 +674,8 @@ scope:
 - **Outside focus mode**, the offer depends on whether the current console has a console session that is not
   archived, and on its number of projects:
   - With **no console session that is not archived**, it offers **New console session**, regardless of the number
-    of projects or whether project sessions already exist. This follows the ordinary console-session action.
+    of projects or whether project sessions already exist. This opens the console-session dialog described in
+    "Opening a session" above.
   - With **a console session that is not archived and exactly one project**, it offers **New session** for that
     project, even when the project already has sessions. This opens the ordinary new-session dialog with its usual
     "Report to" choice.

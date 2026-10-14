@@ -1,18 +1,20 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
-import { choiceGroups, currentChoice, initialChoice, type AccountChoice } from "../accountChoices";
-import { noAgentAvailable } from "../agents";
+import { choiceGroups, choiceKey, currentChoice, findEntry, inheritedAccount, initialChoice } from "../accountChoices";
+import { AGENT_CONSOLE_EFFORT_FIELD, AGENT_CONSOLE_MODEL_FIELD, AGENT_LABEL, AGENT_PROJECT_EFFORT_FIELD, AGENT_PROJECT_MODEL_FIELD, noAgentAvailable } from "../agents";
+import { agentIconPickerOptions } from "../components/AgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
-import type { Console, Project, Session } from "../protocol";
+import type { Agent, Console, Project, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { BindingBadge } from "../sidebar/BindingBadge";
 import { liveConsoleSessions } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
-import { AccountSelect } from "./AccountSelect";
+import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
 import type { NewSessionBinding } from "./dialogRequest";
+import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { OptionSelect } from "./OptionSelect";
 import { TextInput } from "./TextInput";
 
@@ -20,11 +22,11 @@ import { TextInput } from "./TextInput";
 const NO_OWNER = "none";
 
 /**
- * Opens a session manually under a project. One grouped control settles the agent and its account
- * together. It opens on the agent per the "Which agent a session uses" section of
+ * Opens a console session or a session manually under a project. Joined pickers settle the agent and its account
+ * together. They open on the agent per the "Which agent a session uses" section of
  * docs/product/sessions.md (project default, then console default) with the account that agent
  * resolves to when none is chosen (the project's reference, else the console's), and the user can
- * pick any other entry for this one session; the entry goes out as `open_session`'s `agent` and
+ * pick another agent or one of its accounts for this session; the choice goes out as `open_session`'s `agent` and
  * `account` fields.
  *
  * `open_session` answers with `session_opened`, which names the session it started — the broadcast
@@ -43,14 +45,14 @@ const NO_OWNER = "none";
 export function SessionDialog({
   console: parentConsole,
   project,
-  binding,
+  binding = { kind: "unbound" },
   sessions,
   onClose,
   onOpened,
 }: {
   console: Console;
-  project: Project;
-  binding: NewSessionBinding;
+  project?: Project;
+  binding?: NewSessionBinding;
   sessions: Session[];
   onClose: () => void;
   onOpened: (sessionId: string) => void;
@@ -60,13 +62,45 @@ export function SessionDialog({
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const blocked = noAgentAvailable(agentAvailability);
   const accounts = useDaemonStore((s) => s.settings.accounts);
-  const [picked, setPicked] = useState<AccountChoice>();
+  const [pickedAgent, setPickedAgent] = useState<Agent>();
+  const [pickedAccounts, setPickedAccounts] = useState<Partial<Record<Agent, string | null>>>({});
   const [title, setTitle] = useState("");
+  const [automaticTitle, setAutomaticTitle] = useState<{ console: string; sessionIds: string; title: string }>();
+  const [launchSettings, setLaunchSettings] = useState<Partial<Record<Agent, { model?: string | null; effort?: string | null }>>>({});
   const [pickedOwner, setPickedOwner] = useState(NO_OWNER);
   const { error, busy, run } = useDialogAction();
 
+  const consoleId = project ? undefined : parentConsole.id;
+  const consoleSessionIds = sessions.filter((session) => session.console_id === consoleId && !session.project_id)
+    .map((session) => session.id).sort().join(",");
+  useEffect(() => {
+    if (!consoleId) return;
+    let current = true;
+    void request({ type: "preview_console_session_title", console: consoleId }).then(
+      (event) => {
+        if (current && event.type === "console_session_title" && event.console === consoleId) {
+          setAutomaticTitle({ console: consoleId, sessionIds: consoleSessionIds, title: event.title });
+        }
+      },
+      () => {},
+    );
+    return () => { current = false; };
+  }, [consoleId, consoleSessionIds, request]);
+
   const groups = choiceGroups(accounts, agentAvailability, t("settings.accounts.defaultName"));
+  const pickedAccount = pickedAgent ? pickedAccounts[pickedAgent] : undefined;
+  const pickedEntry = groups.find((group) => group.agent === pickedAgent)?.entries.find((entry) => entry.account === pickedAccount);
+  const picked = pickedAgent ? {
+    agent: pickedAgent,
+    account: pickedEntry ? pickedEntry.account : inheritedAccount(parentConsole, project, pickedAgent, accounts),
+  } : undefined;
   const choice = currentChoice(picked, initialChoice(parentConsole, project, accounts, agentAvailability), groups);
+  const accountEntries = groups.find((group) => group.agent === choice.agent)?.entries ?? [];
+  const overrides = launchSettings[choice.agent];
+  const inheritedModel = project ? project[AGENT_PROJECT_MODEL_FIELD[choice.agent]] : parentConsole[AGENT_CONSOLE_MODEL_FIELD[choice.agent]];
+  const inheritedEffort = project ? project[AGENT_PROJECT_EFFORT_FIELD[choice.agent]] : parentConsole[AGENT_CONSOLE_EFFORT_FIELD[choice.agent]];
+  const model = overrides?.model === undefined ? inheritedModel ?? null : overrides.model;
+  const effort = overrides?.effort === undefined ? inheritedEffort ?? null : overrides.effort;
 
   // The select is shown from the moment there is a console session to offer and stays mounted
   // for the rest of the dialog's life, even if the list later empties, leaving "none" alone: it is
@@ -81,13 +115,14 @@ export function SessionDialog({
   // falls back to none, visibly in the select. `pickedOwner` keeps the stale id, so reopening that
   // console session while the dialog is still open restores the choice, which is harmless. A fixed
   // owner that is no longer live cannot fall back to anything, so it stops the dialog instead.
+  const sessionBinding: NewSessionBinding = project ? binding : { kind: "unbound" };
   const owners = liveConsoleSessions(sessions, parentConsole.id);
-  const storedFixedOwner = useDaemonStore((s) => binding.kind === "bound" ? s.sessions.get(binding.to.id) : undefined);
-  const fixedOwner = binding.kind === "bound"
-    ? storedFixedOwner ?? sessions.find((s) => s.id === binding.to.id) ?? binding.to
+  const storedFixedOwner = useDaemonStore((s) => sessionBinding.kind === "bound" ? s.sessions.get(sessionBinding.to.id) : undefined);
+  const fixedOwner = sessionBinding.kind === "bound"
+    ? storedFixedOwner ?? sessions.find((s) => s.id === sessionBinding.to.id) ?? sessionBinding.to
     : undefined;
   const fixedOwnerGone = fixedOwner !== undefined && !owners.some((s) => s.id === fixedOwner.id);
-  const owner = fixedOwner ?? (binding.kind === "choose" ? owners.find((s) => s.id === pickedOwner) : undefined);
+  const owner = fixedOwner ?? (sessionBinding.kind === "choose" ? owners.find((s) => s.id === pickedOwner) : undefined);
   const [ownerOffered, setOwnerOffered] = useState(owners.length > 0);
   if (owners.length > 0 && !ownerOffered) setOwnerOffered(true);
 
@@ -96,11 +131,11 @@ export function SessionDialog({
       const reply = await request({
         type: "open_session",
         console_id: parentConsole.id,
-        project_id: project.id,
+        ...(project ? { project_id: project.id, bound_to: owner?.id } : {}),
         agent: choice.agent,
         account: choice.account,
         title: title || undefined,
-        bound_to: owner?.id,
+        ...overrides,
       });
       if (reply.type === "session_opened") onOpened(reply.session.id);
       onClose();
@@ -108,7 +143,9 @@ export function SessionDialog({
 
   return (
     <Dialog
-      title={t("dialog.session.title", { project: isolate(project.name) })}
+      title={project
+        ? t("dialog.session.title", { project: isolate(project.name) })
+        : t("dialog.consoleSession.title", { console: isolate(parentConsole.name) })}
       onClose={onClose}
       submitLabel={t("dialog.session.open")}
       busy={busy}
@@ -116,13 +153,31 @@ export function SessionDialog({
       onSubmit={submit}
     >
       {blocked && <p className="text-sm text-app-danger">{t("agents.installPrompt")}</p>}
-      <AccountSelect label={t("dialog.session.agentAccount")} groups={groups} value={choice} onChange={setPicked} />
       <TextInput
-        label={t("dialog.session.titleField")}
+        label={t("common.name")}
         value={title}
         onChange={setTitle}
-        placeholder={project.name}
-        description={t("dialog.session.titleHint")}
+        placeholder={project?.name ?? (automaticTitle && automaticTitle.console === consoleId && automaticTitle.sessionIds === consoleSessionIds
+          ? automaticTitle.title : t("dialog.consoleSession.namePlaceholder"))}
+        description={t(project ? "dialog.session.titleHint" : "dialog.consoleSession.titleHint")}
+      />
+      <AgentAccountField
+        label={t("dialog.session.agent")}
+        options={agentIconPickerOptions(t, agentAvailability)}
+        value={choice.agent}
+        onChange={setPickedAgent}
+        account={accountEntries.length > 1 ? {
+          label: t("dialog.agentSettings.account", { agent: AGENT_LABEL[choice.agent] }),
+          options: accountEntries.map((entry) => ({ value: entry.key, label: entry.name, isDisabled: blocked })),
+          value: choiceKey(choice),
+          onChange: (key) => {
+            const entry = findEntry(groups, key);
+            if (entry) {
+              setPickedAgent(entry.agent);
+              setPickedAccounts((current) => ({ ...current, [entry.agent]: entry.account }));
+            }
+          },
+        } : undefined}
       />
       {fixedOwner && (
         <div data-marquee-scope className="flex items-center gap-2 text-sm">
@@ -133,7 +188,7 @@ export function SessionDialog({
         </div>
       )}
       {fixedOwner && fixedOwnerGone && <p className="text-sm text-app-danger">{t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}</p>}
-      {binding.kind === "choose" && ownerOffered && (
+      {sessionBinding.kind === "choose" && ownerOffered && (
         <OptionSelect
           label={t("dialog.session.owner")}
           value={owner?.id ?? NO_OWNER}
@@ -144,6 +199,16 @@ export function SessionDialog({
           ]}
         />
       )}
+      <LaunchSettingsFields
+        agent={choice.agent}
+        account={choice.account}
+        model={model}
+        effort={effort}
+        onModelChange={(value) => setLaunchSettings((current) => ({ ...current, [choice.agent]: { ...current[choice.agent], model: value } }))}
+        onEffortChange={(value) => setLaunchSettings((current) => ({ ...current, [choice.agent]: { ...current[choice.agent], effort: value } }))}
+        note={t(project ? "dialog.session.launchSettingsNote" : "dialog.consoleSession.launchSettingsNote")}
+        isDisabled={blocked}
+      />
       <DialogError message={error} />
     </Dialog>
   );

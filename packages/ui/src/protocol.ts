@@ -50,8 +50,8 @@ export interface Console {
   codex_account_id?: string | null;
   grok_account_id?: string | null;
   /** The model and reasoning effort a console session of this console is launched with, in the
-   * agent's own spelling; one pair per agent, and a session reads only its own agent's (always the
-   * default agent's). Absent means the agent's own default. Read when a console session is opened
+   * agent's own spelling; one pair per agent, and a session reads only its own agent's, unless the
+   * session overrides it. Absent means the agent's own default. Read when a console session is opened
    * or resumed, so one already running keeps what it started with; project sessions never read
    * them. */
   claude_console_session_model?: string | null;
@@ -122,7 +122,7 @@ export interface Project {
   codex_account_id: ProjectAccount;
   grok_account_id: ProjectAccount;
   /** The model and reasoning effort a session of this project is launched with, in the agent's own
-   * spelling; one pair per agent, and a session reads only its own agent's. Absent means the
+   * spelling; one pair per agent, and a session reads only its own agent's unless it overrides it. Absent means the
    * agent's own default: there is no console-level fallback. Read when a session is opened or
    * resumed, so one already running keeps what it started with. */
   claude_session_model?: string | null;
@@ -174,6 +174,10 @@ export interface Session {
   /** The config directory of this session's own agent that it launches with, recorded with the
    * account so a resume finds its transcript even after the account's own directory changes. */
   config_dir?: string | null;
+  /** Absent follows the project's or console's current setting; null explicitly uses the
+   * agent's own default. Overrides survive resuming and switching accounts. */
+  model?: string | null;
+  effort?: string | null;
   /** The user pinned this session to the top of its list; survives archiving and resuming. */
   pinned: boolean;
   started_at: number;
@@ -715,6 +719,9 @@ export type RequestBody =
    * with no resolution is left out. Refused before anything is created with the codes of
    * `inspect_configuration`, `import_resolution_invalid` and `import_settings_missing`. */
   | { type: "import_configuration"; document: unknown; resolutions?: ProjectResolution[]; apply_settings?: boolean }
+  /** Reads the next automatic title without reserving it; answered with `console_session_title`.
+   * Refused with `unknown_console` when the console does not exist. */
+  | { type: "preview_console_session_title"; console: string }
   | {
       type: "open_session";
       console_id: string;
@@ -726,6 +733,10 @@ export type RequestBody =
       account?: string | null;
       task?: string;
       title?: string;
+      /** Absent inherits the project's or console's setting; null uses the agent's own default.
+       * Values are saved on this session and reused when it resumes. */
+      model?: string | null;
+      effort?: string | null;
       /** The console session this (project) session should report to. Absent means none: a
        * session the user opens by hand stays outside the orchestration unless they choose one.
        * Ignored for the console session itself, which is never bound. */
@@ -905,6 +916,7 @@ export type Event =
    * once, when the session starts; nothing stores it, so a client that connects later never sees
    * it. */
   | { type: "session_notice"; session: string; code: string; params: MessageParams; message: string }
+  | { type: "console_session_title"; id?: string; console: string; title: string }
   /** The reply to `open_session`, and to an approving `answer_console_session_request`: the session
    * that was started. The same record is also broadcast as `session_upserted`, but that broadcast
    * carries no request id, so this is the only way the caller can tell which session in the tree

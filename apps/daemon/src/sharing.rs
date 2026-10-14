@@ -148,6 +148,8 @@ mod tests {
             title: title.to_string(),
             status: SessionStatus::Idle,
             terminal_title: None,
+            model: None,
+            effort: None,
             has_conversation: false,
             bound_to: None,
             lead: false,
