@@ -120,8 +120,9 @@ wrapping the control in `TitledControl` from `packages/ui/src/components/TitledC
 `ChromeButton` in `packages/ui/src/components/ChromeButton.tsx` does. Passing `title` to the HeroUI control itself
 does nothing: its react-aria base filters `title` out of the DOM props without a warning.
 
-Any tooltip on a control takes this shape — the control directly inside HeroUI's `Tooltip`, as `TitledControl` does —
-never `Tooltip.Trigger`, which renders a focusable `role="button"` `div` around the control: an extra tab stop that
+Except for the `Switch` case below, a tooltip on a control takes this shape — the control directly inside HeroUI's
+`Tooltip`, as `TitledControl` does — never `Tooltip.Trigger`, which renders a focusable `role="button"` `div` around
+the control: an extra tab stop that
 also takes focus on a mouse press, undoing `preventFocusOnPress`. The shape works only when the child itself consumes
 react-aria's `FocusableContext` (through `useFocusable` or `Focusable`), which is where HeroUI's `Tooltip` leaves the
 trigger props and the trigger ref; every HeroUI button and trigger does. Any other child gets no tooltip at all and
@@ -129,13 +130,21 @@ nothing warns — a plain element or a `span` around the control, and a react-ar
 (`ListBox.Item`, built on `useOption` / `useSelectableItem`), which reads as a react-aria-components control and is
 not one for this purpose.
 
-`TitledControl` is one of **three** tooltip shapes and there is no fourth; which one to use follows what carries the
-tooltip:
+Choose the tooltip shape by what carries it:
 
 - A control: `TitledControl`, as above. It opens on hover and on keyboard focus, or on keyboard focus alone where
   its `focusOnly` prop is passed, for a control whose hover already does something else. While it is open react-aria
   links it to the control as its description, except where the tooltip only repeats the control's `aria-label`:
   `TitledControl` unlinks that one on purpose, so the same words are not announced twice.
+- A HeroUI `Switch` needing both hover and keyboard-focus tooltips outside a collection row: wrap the whole
+  `Switch` in `Tooltip.Trigger role="presentation" tabIndex={-1}` inside `Tooltip`, and give `Tooltip.Content`
+  `pointer-events-none`, as in `packages/ui/src/sidebar/FocusView.tsx`. Keep the accessible name on `Switch`; when
+  the tooltip repeats that name, pass `aria-describedby=""` on `Switch` to avoid a duplicate announcement. Do not
+  cancel the wrapper's mouse press: the switch must still take focus. `TitledControl` directly around `Switch`
+  sends its hover props to the visually hidden input through `useSwitch` / `useToggle`, so the visible control
+  does not open it on hover; directly around `Switch.Content` reaches neither hover nor focus, since its
+  `SwitchButton` does not consume `FocusableContext`. Verify hover and keyboard focus in the running page when
+  changing this composition.
 - A non-control indicator that can be its own trigger — a badge, a status mark: `IndicatorTooltip` in
   `packages/ui/src/components/IndicatorTooltip.tsx`. It answers the pointer, and fixes what a bare
   `Tooltip.Trigger` gets wrong: the trigger hardcodes `role="button"` (so one left without a `role` exposes an

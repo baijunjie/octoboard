@@ -165,7 +165,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus",
     state: state,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    description: "Live console-bound sessions make the Show all project sessions switch available; it starts off. Colored summary chips with contrasting gray count badges sit above archives, including bound sessions and an archived child of an active lead.",
+    description: "Live console-bound sessions make the switch available to the right of the Sessions count; it starts off. Hover or focus the switch for its Show all project sessions tooltip. Colored summary chips with contrasting gray count badges sit above archives, including bound sessions and an archived child of an active lead.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Plan the database migration", name: "Write the migration" }))),
     ],
@@ -176,7 +176,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus including console sessions",
     state: combinedState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The switch is on: bound and unbound sessions share subtly distinct cards. Owner badges precede single-line titles following the reading direction; long Latin and CJK names fade at the edge, with marquee and the full title available on hover. Status glyphs, owner badges and agent marks share one leading column; all three text lines start together, including unbound cards with an empty owner slot. Pin/menu spacing matches the header's plus/menu spacing. Bound nested cards inherit the owner's color. Hover a badge to read its owner. Pinned cards stay first; other siblings sort Waiting for you, Awaiting instructions, Working, Interrupted, with children kept under their parent. Archives remain available below the cards.",
+    description: "The switch beside the Sessions count is on; hover or focus it for its Show all project sessions tooltip. Bound and unbound sessions share subtly distinct cards. Owner badges precede single-line titles following the reading direction; long Latin and CJK names fade at the edge, with marquee and the full title available on hover. Status glyphs, owner badges and agent marks share one leading column; all three text lines start together, including unbound cards with an empty owner slot. Pin/menu spacing matches the header's plus/menu spacing. Bound nested cards inherit the owner's color. Hover a badge to read its owner. Pinned cards stay first; other siblings sort Waiting for you, Awaiting instructions, Working, Interrupted, with children kept under their parent. Archives remain available below the cards.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Compare ranking strategies", name: "Rework the result ranking" }))),
     ],

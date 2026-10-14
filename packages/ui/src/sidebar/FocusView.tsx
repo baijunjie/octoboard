@@ -1,4 +1,4 @@
-import { Badge, Button, Label, Switch } from "@heroui/react";
+import { Badge, Button, Switch, Tooltip } from "@heroui/react";
 import { ArrowLeft, FolderOpen, FolderPlus, List, MessageSquarePlus, Plus } from "lucide-react";
 import React, { useLayoutEffect, useRef } from "react";
 
@@ -148,25 +148,34 @@ export function ProjectFocusView({
           />
         </RowIconGroup>
       </FocusHeader>
-      {elsewhere && (
-        <span className="contents" {...switchFocus}>
-          <Switch
-            size="sm"
-            isSelected={includeConsoleSessions}
-            onChange={(value) => projectFocusIncludeConsoleSessions.set(value)}
-            className="mx-4 my-2 shrink-0"
-          >
-            <Switch.Content className="w-full justify-between">
-              <Label className="text-xs">{t("sidebar.focus.includeConsoleSessions")}</Label>
-              <Switch.Control>
-                <Switch.Thumb />
-              </Switch.Control>
-            </Switch.Content>
-          </Switch>
-        </span>
-      )}
       <FadedScroller className="min-h-0 flex-1 px-2 pb-2">
-        <SectionHeading>{t("sidebar.focus.sessions", { count: live.length })}</SectionHeading>
+        <SectionHeading
+          action={elsewhere && (
+            <span className="contents" {...switchFocus}>
+              <Tooltip>
+                {/* Switch sends hover props to its hidden input; this trigger covers the visible control without adding a tab stop. */}
+                <Tooltip.Trigger role="presentation" tabIndex={-1}>
+                  <Switch
+                    size="sm"
+                    aria-label={t("sidebar.focus.includeConsoleSessions")}
+                    aria-describedby=""
+                    isSelected={includeConsoleSessions}
+                    onChange={(value) => projectFocusIncludeConsoleSessions.set(value)}
+                  >
+                    <Switch.Content>
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                    </Switch.Content>
+                  </Switch>
+                </Tooltip.Trigger>
+                <Tooltip.Content className="pointer-events-none">{t("sidebar.focus.includeConsoleSessions")}</Tooltip.Content>
+              </Tooltip>
+            </span>
+          )}
+        >
+          {t("sidebar.focus.sessions", { count: live.length })}
+        </SectionHeading>
         {live.length === 0 ? (
           <EmptyPanel
             compact
