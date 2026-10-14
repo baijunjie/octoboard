@@ -1,5 +1,5 @@
 import { Button, Spinner, Surface } from "@heroui/react";
-import { FolderOpen, FolderPlus, MessageSquarePlus, Plus, SquareTerminal, TriangleAlert, Unplug } from "lucide-react";
+import { FolderPlus, MessageSquarePlus, Plus, SquareTerminal, TriangleAlert, Unplug } from "lucide-react";
 import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 
 import "@xterm/xterm/css/xterm.css";
@@ -426,7 +426,7 @@ export function TerminalPane({
             />
           ) : onAddProject ? (
             <EmptyPanel
-              icon={FolderOpen}
+              icon={FolderPlus}
               message={t("sidebar.noProjects")}
               description={t("terminal.noProjects.description")}
               action={{ label: t("sidebar.console.addProject"), icon: FolderPlus, onPress: onAddProject }}

@@ -1,5 +1,5 @@
 import { Badge, Button, Label, Switch } from "@heroui/react";
-import { ArrowLeft, FolderOpen, List, MessageSquarePlus, Plus } from "lucide-react";
+import { ArrowLeft, FolderOpen, FolderPlus, List, MessageSquarePlus, Plus } from "lucide-react";
 import React, { useLayoutEffect, useRef } from "react";
 
 import { AGENT_LABEL } from "../agents";
@@ -269,7 +269,7 @@ export function ConsoleSessionFocusView({
           // The header's "+" is disabled with no project to open a session in, so say why here.
           <EmptyPanel
             compact
-            icon={FolderOpen}
+            icon={FolderPlus}
             message={t("sidebar.noProjects")}
             action={{ label: t("sidebar.console.addProject"), onPress: () => handlers.onOpenDialog({ kind: "new-project", console: parentConsole }) }}
           />
