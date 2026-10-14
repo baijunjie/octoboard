@@ -12,6 +12,7 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { RowControls } from "../components/RowControls";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
+import { useFocusHandoff } from "../components/useFocusHandoff";
 import { FadedScroller } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
 import { joinPhrases } from "../i18n/joinPhrases";
@@ -126,6 +127,7 @@ export function ProjectFocusView({
     handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project, binding: { kind: "unbound" } });
   const viewAll = () => handlers.onOpenArchive({ console: project.console_id, project: project.id });
   const headerRef = useRef<HTMLDivElement>(null);
+  const switchFocus = useFocusHandoff(() => headerRef.current?.querySelector("button")?.focus());
 
   return (
     <>
@@ -144,19 +146,23 @@ export function ProjectFocusView({
           contextTargetRef={headerRef}
         />
       </FocusHeader>
-      <Switch
-        size="sm"
-        isSelected={includeConsoleSessions}
-        onChange={(value) => projectFocusIncludeConsoleSessions.set(value)}
-        className="mx-4 my-2 shrink-0"
-      >
-        <Switch.Content className="w-full justify-between">
-          <Label className="text-xs">{t("sidebar.focus.includeConsoleSessions")}</Label>
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-        </Switch.Content>
-      </Switch>
+      {elsewhere && (
+        <span className="contents" {...switchFocus}>
+          <Switch
+            size="sm"
+            isSelected={includeConsoleSessions}
+            onChange={(value) => projectFocusIncludeConsoleSessions.set(value)}
+            className="mx-4 my-2 shrink-0"
+          >
+            <Switch.Content className="w-full justify-between">
+              <Label className="text-xs">{t("sidebar.focus.includeConsoleSessions")}</Label>
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+            </Switch.Content>
+          </Switch>
+        </span>
+      )}
       <FadedScroller className="min-h-0 flex-1 px-2 pb-2">
         <SectionHeading>{t("sidebar.focus.sessions", { count: live.length })}</SectionHeading>
         {live.length === 0 ? (

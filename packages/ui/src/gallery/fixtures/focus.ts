@@ -102,7 +102,7 @@ const state = snapshotState({
     sessionOf("s-long-cjk", console_.id, cjkProject.id, "检查构建并更新依赖项", "idle", { bound_to: longHub.id }),
     sessionOf("s-cjk-bound", console_.id, project.id, "检查构建", "idle", { bound_to: cjkHub.id }),
     sessionOf("s-long-project-bound", console_.id, project.id, "Check long names", "idle", { bound_to: longHub.id }),
-    sessionOf("s-empty-old", console_.id, emptyProject.id, "Older investigation", "archived", { ended_at: minutesAgo(300) }),
+    sessionOf("s-empty-old", console_.id, emptyProject.id, "Older investigation", "archived", { bound_to: hub1.id, ended_at: minutesAgo(300) }),
     sessionOf("s-lone", loneConsole.id, undefined, "Only hub", "idle"),
     sessionOf("s-projectless", projectlessConsole.id, undefined, "Projectless hub", "idle"),
     sessionOf("s-fitting-a", fittingConsole.id, undefined, "A", "idle"),
@@ -127,7 +127,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus",
     state: state,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    description: "Console-bound sessions stay in colored summary chips with contrasting gray count badges above archives. Archives include bound sessions and an archived child of an active lead; the switch starts off.",
+    description: "Live console-bound sessions make the Show all project sessions switch available; it starts off. Colored summary chips with contrasting gray count badges sit above archives, including bound sessions and an archived child of an active lead.",
     steps: [
       (ui) => ui.press(ui.session("Write the migration")),
     ],
@@ -167,8 +167,8 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     title: "Project with archived sessions only",
     state: state,
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}` },
-    description: "The sidebar offers creation through a compact empty session row above the archive. The main area carries the prominent New session action for this project.",
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}`, projectFocusIncludeConsoleSessions: true },
+    description: "The Show all project sessions switch is absent with only archived console-bound sessions, even when its saved preference is on. A compact empty session row sits above the archive; the main area offers New session.",
   },
   {
     id: "focus-project-empty",
@@ -176,7 +176,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project with no sessions yet",
     state,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${freshProject.id}` },
-    description: "With no archive either, the sidebar keeps one compact clickable empty row and the main area offers New session for the focused project.",
+    description: "With no sessions or archive, the Show all project sessions switch is absent. The sidebar keeps one compact clickable empty row and the main area offers New session for the focused project.",
   },
   {
     id: "focus-console-session-empty",

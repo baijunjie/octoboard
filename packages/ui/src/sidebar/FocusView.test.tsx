@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
@@ -86,12 +86,36 @@ it("a project's focus mode lists only its unbound sessions, its archive in full,
   unmount();
 });
 
-it("a project's focus mode has no line when nothing is bound here", () => {
-  const { text, unmount } = mount((h) => (
-    <ProjectFocusView handlers={h} console={main} project={web} sessions={inProject(web.id).filter((s) => !s.bound_to || s.status === "archived")} owners={owners} />
+it.each([
+  ["empty", []],
+  ["unbound sessions and a bound archive", inProject(web.id).filter((s) => !s.bound_to || s.status === "archived")],
+  ["an unbound project session's team", [sessions.find((s) => s.id === "web-free")!, underFree]],
+])("project focus hides the combined-view switch for %s", (_name, projectSessions) => {
+  const { container, text } = mount((h) => (
+    <ProjectFocusView handlers={h} console={main} project={web} sessions={projectSessions} owners={owners} />
   ));
-  expect(text()).not.toContain("bound to");
-  unmount();
+  expect(text()).not.toContain("sessions in this project are under console sessions");
+  expect(container.querySelector('input[role="switch"]')).toBeNull();
+});
+
+it("removing the last live console-bound session hides the switch, restores focus and preserves its preference", () => {
+  projectFocusIncludeConsoleSessions.set(true);
+  onTestFinished(() => projectFocusIncludeConsoleSessions.set(false));
+  let archive!: () => void;
+  function View({ handlers }: { handlers: SidebarHandlers }) {
+    const [bound, setBound] = useState(lead);
+    archive = () => setBound({ ...lead, status: "archived" });
+    return <ProjectFocusView handlers={handlers} console={main} project={web} sessions={[bound]} owners={owners} />;
+  }
+  const { container } = mount((handlers) => <View handlers={handlers} />);
+  const toggle = container.querySelector<HTMLInputElement>('input[role="switch"]')!;
+  expect(toggle.checked).toBe(true);
+  act(() => toggle.focus());
+  expect(document.activeElement).toBe(toggle);
+  act(archive);
+  expect(container.querySelector('input[role="switch"]')).toBeNull();
+  expect(document.activeElement?.getAttribute("aria-label")).toBe("Leave focus mode");
+  expect(localStorage.getItem(PREFERENCE_KEYS.projectFocusIncludeConsoleSessions)).toBe("true");
 });
 
 it("a console session's focus mode shows only its projects and sessions, naming each session's account", () => {

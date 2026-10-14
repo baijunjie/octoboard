@@ -45,11 +45,13 @@ plain text. These lists do not carry a separate empty-state heading or button.
 
 ## A project's focus mode
 
-The switch below the header chooses whether all of the project's sessions are listed together. It is **off by
-default**: sessions under console sessions are shown separately as summary chips. Turning it on lists all of the
-project's live sessions as cards and hides the summary chips. The choice applies to every project's focus mode in
-this client and survives reloading; it is not a shared application setting and is not exported with configuration.
-If client storage is unavailable, the choice lasts for the current page load only.
+The switch below the header chooses whether all of the project's sessions are listed together. It appears only
+while the project has live sessions under a console session that is not archived, including a lead session and the
+sessions under it; archived bound sessions alone do not make it appear. It is **off by default**: sessions under
+console sessions are shown separately as summary chips. Turning it on lists all of the project's live sessions as
+cards and hides the summary chips. The choice applies to every project's focus mode in this client and survives
+reloading, including while the switch is hidden; it is not a shared application setting and is not exported with
+configuration. If client storage is unavailable, the choice lasts for the current page load only.
 
 From the top, below the switch:
 
