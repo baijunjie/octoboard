@@ -102,4 +102,15 @@ At delivery:
   of its own — you maintain it yourself, from what the change turned up and from what a writer subagent hands back as
   belonging to it. Skip it when this round's changes touch nothing it states.
 
+- Before reporting any change that affects the UI for user review, start a temporary preview service from the task's
+  branch or worktree. Skip this when the changes do not affect the UI.
+- Include a working, directly accessible link to each page needed to verify the changed UI in the report; confirm the
+  links show the branch's changes and provide any necessary access instructions.
+- Keep the preview service running while awaiting user confirmation and while addressing requested revisions; refresh
+  the preview and report updated links when needed.
+- Once the user confirms the UI changes (including permission to merge), stop the temporary preview service and report
+  that it has been stopped. Stop only services started for this review.
+- If a usable preview cannot be provided, report the blocker explicitly instead of presenting the UI changes as ready
+  for confirmation.
+
 <!-- setup-agent:workflow:end -->
