@@ -32,10 +32,11 @@ export function terminalEmptyState(
       ? { kind: "no-agents" }
       : { kind: "new-session", project: focus.project, binding: { kind: "unbound" } };
   }
-  if (inConsole.some((s) => s.status !== "archived")) return undefined;
+  if (!inConsole.some((s) => s.role === "console" && s.status !== "archived")) {
+    return noAgentAvailable(availability) ? { kind: "no-agents" } : { kind: "new-console-session" };
+  }
   if (listedProjects.length === 0) return { kind: "add-project" };
+  if (listedProjects.length > 1) return undefined;
   if (noAgentAvailable(availability)) return { kind: "no-agents" };
-  return listedProjects.length === 1
-    ? { kind: "new-session", project: listedProjects[0], binding: { kind: "choose" } }
-    : { kind: "new-console-session" };
+  return { kind: "new-session", project: listedProjects[0], binding: { kind: "choose" } };
 }

@@ -19,11 +19,12 @@ it("does not treat pre-snapshot empty collections as a bare console", () => {
 });
 
 it.each([
-  { projects: [], sessions: [archive], kind: "add-project" },
-  { projects: [project], sessions: [archive], kind: "new-session" },
-  { projects: [project, other], sessions: [archive], kind: "new-console-session" },
-  { projects: [project], sessions: [live], kind: undefined },
-])("offers $kind in normal mode with only live sessions counting as selectable", ({ projects, sessions, kind }) => {
+  { projects: [project], sessions: [live, { ...owner, status: "archived" as const }], kind: "new-console-session" },
+  { projects: [project], sessions: [owner, archive, live], kind: "new-session" },
+  { projects: [project, other], sessions: [owner], kind: undefined },
+  { projects: [], sessions: [], kind: "new-console-session" },
+  { projects: [], sessions: [owner], kind: "add-project" },
+])("offers $kind in normal mode based on console sessions and project count", ({ projects, sessions, kind }) => {
   const state = terminalEmptyState(true, console, undefined, projects, sessions, pending);
   expect(state?.kind).toBe(kind);
   if (state?.kind === "new-session") expect(state).toEqual({ kind, project, binding: { kind: "choose" } });
@@ -44,5 +45,7 @@ it("a console session in focus is itself selectable even without bound sessions"
 it("known missing agents explain recovery while undetermined availability still offers creation", () => {
   expect(terminalEmptyState(true, console, { project }, [project], [], unavailable)).toEqual({ kind: "no-agents" });
   expect(terminalEmptyState(true, console, undefined, [project, other], [], unavailable)).toEqual({ kind: "no-agents" });
-  expect(terminalEmptyState(true, console, undefined, [], [], unavailable)).toEqual({ kind: "add-project" });
+  expect(terminalEmptyState(true, console, undefined, [], [owner], unavailable)).toEqual({ kind: "add-project" });
+  expect(terminalEmptyState(true, console, undefined, [project], [owner], unavailable)).toEqual({ kind: "no-agents" });
+  expect(terminalEmptyState(true, console, undefined, [project, other], [owner], unavailable)).toBeUndefined();
 });

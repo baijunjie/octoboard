@@ -64,38 +64,42 @@ export const emptyScenarios: Scenario[] = [
     group: GROUP,
     title: "A console with no projects",
     description:
-      "With neither a project nor a session, the terminal's area offers Add project instead of asking for a session to be selected, and F6 reaches that button; the sidebar's Projects section carries the same offer as a row.",
-    state: snapshotState({ consoles: [consoleOf("c-1", "Main")] }),
+      "With a console session and no projects, the main area offers Add project, and F6 reaches that button; the sidebar's Projects section carries the same offer as a row.",
+    state: snapshotState({
+      consoles: [consoleOf("c-1", "Main")],
+      sessions: [sessionOf("s-hub", "c-1", undefined, "Hub", "idle")],
+    }),
   },
   {
-    id: "empty-project-no-sessions",
+    id: "empty-no-console-session",
     group: GROUP,
-    title: "A project with no sessions",
-    description: "The project and Console sessions keep compact creation rows. The main area offers New session while no live session can be selected.",
+    title: "No console session: create a console session",
+    description: "The Console sessions and project sections keep compact creation rows. The main area offers New console session.",
     state: snapshotState({
       consoles: [consoleOf("c-1", "Main")],
       projects: [projectOf("p-1", "c-1", "Website")],
     }),
   },
   {
-    id: "empty-projects-no-sessions",
+    id: "empty-console-session-one-project",
     group: GROUP,
-    title: "Several projects with no live sessions",
-    description: "Both projects keep compact creation rows. The main area offers New console session, without choosing a project on the user's behalf.",
+    title: "A console session and one project: create a project session",
+    description: "The console session remains unselected. The main area offers New session for Website, whose sidebar row offers the same action.",
+    state: snapshotState({
+      consoles: [consoleOf("c-1", "Main")],
+      projects: [projectOf("p-1", "c-1", "Website")],
+      sessions: [sessionOf("s-hub", "c-1", undefined, "Hub", "idle")],
+    }),
+  },
+  {
+    id: "empty-console-session-several-projects",
+    group: GROUP,
+    title: "A console session and several projects: select a session",
+    description: "The console session remains unselected and both projects keep creation rows. The main area asks for a session to be selected, with no creation button.",
     state: snapshotState({
       consoles: [consoleOf("c-1", "Main")],
       projects: [projectOf("p-1", "c-1", "Website"), projectOf("p-2", "c-1", "Search API")],
-    }),
-  },
-  {
-    id: "empty-project-archived-only",
-    group: GROUP,
-    title: "A project with archived sessions only",
-    description: "The compact project creation row and archive remain visible together. The main area offers New session because archived sessions are not live selection targets.",
-    state: snapshotState({
-      consoles: [consoleOf("c-1", "Main")],
-      projects: [projectOf("p-1", "c-1", "Website")],
-      sessions: [sessionOf("s-old", "c-1", "p-1", "Older investigation", "archived")],
+      sessions: [sessionOf("s-hub", "c-1", undefined, "Hub", "idle")],
     }),
   },
 ];

@@ -552,7 +552,7 @@ A session's title can be changed at any time, archived sessions included. An emp
 ## The terminal
 
 With no session selected, the terminal's area shows a full empty panel (see "The full panel" in
-`docs/product/empty-states.md`). It offers the next creation action when the current scope has no sessions to select
+`docs/product/empty-states.md`). It offers the next creation action for the current console and focus scope
 (see "A console with nothing in it" below); otherwise a terminal glyph, a heading saying no session is selected and a
 line asking for a session to be selected. With no button in that panel, the terminal cannot take keyboard focus:
 whatever would hand focus to it (hiding a pane that holds focus, or the session going away while the terminal holds
@@ -647,19 +647,29 @@ scope:
   dialog has no "Report to" choice and creates an unbound session, just as the focus view's header and compact empty
   row do. Archived sessions and live sessions under console sessions do not fill this list, so neither prevents the
   offer (see "A project's focus mode" in `docs/product/focus-mode.md`).
-- **Outside focus mode**, when the console has no session that is not archived, it offers **Add project** with no
-  projects, **New session** for its sole project with one, or **New console session** with more than one. Add project
-  opens the ordinary new-project dialog; New session opens the ordinary new-session dialog with its usual binding
-  choice; New console session follows the ordinary console-session action. The panel's glyph, heading and explaining
-  line say what is needed: a project or a session.
-- **When all supported agents are known to be unavailable** for session creation, the panel explains that no agent
-  was found and how to make one available, with no creation button. Availability that has not yet been determined does not prevent the offer.
-- With a session that is not archived in the applicable list, or in a console session's focus mode, the panel asks
-  for a session to be selected instead. A console session in focus is itself selectable even with no bound sessions.
+- **Outside focus mode**, the offer depends on whether the current console has a console session that is not
+  archived, and on its number of projects:
+  - With **no console session that is not archived**, it offers **New console session**, regardless of the number
+    of projects or whether project sessions already exist. This follows the ordinary console-session action.
+  - With **a console session that is not archived and exactly one project**, it offers **New session** for that
+    project, even when the project already has sessions. This opens the ordinary new-session dialog with its usual
+    "Report to" choice.
+  - With **a console session that is not archived and more than one project**, it asks for a session to be selected,
+    with no creation button.
+  - With **a console session that is not archived and no projects**, it offers **Add project**, opening the ordinary
+    new-project dialog.
+- **When all supported agents are known to be unavailable**, an otherwise offered **New session** or **New console
+  session** is replaced by an explanation that no agent was found and how to make one available, with no creation
+  button. Availability that has not yet been determined does not prevent either offer. The **Add project** offer and
+  the panel asking for a session to be selected do not depend on agent availability.
+- In a project's focus mode with a session that is not archived in its applicable list, or in a console session's
+  focus mode, the panel asks for a session to be selected instead. A console session in focus is itself selectable
+  even with no bound sessions.
 
 The sidebar's empty lists stay compact alongside this panel (see "Empty rows" in `docs/product/sidebar.md`).
 
-- An **archived** session does not count as a live session, including when every session in the console is archived.
+- An **archived console session** does not satisfy the console-session condition outside focus mode; an interrupted
+  console session does. Archived project sessions do not fill a project's focus-mode live list.
 - A selected session suppresses the panel. The selection survives a console switch, so immediately after switching
   to an empty console, or creating one, the terminal may still show the previous console's selected session; the
   sidebar's compact row carries the offer then.
@@ -671,5 +681,5 @@ The sidebar's empty lists stay compact alongside this panel (see "Empty rows" in
   hands keyboard focus to the terminal puts it on that button, just as with the cover's Reconnect button (see "Moving
   focus between regions with F6" in `docs/product/moving-focus-between-regions.md`). A panel with no button is skipped.
   Focus that is on nothing is left on nothing. When the creation button goes away while holding focus, because a
-  session is selected or the list gains content from this window or another client, focus goes to the terminal when
-  it can take it, otherwise to the top bar's first enabled control.
+  session is selected or the console's sessions or projects change from this window or another client, focus goes to
+  the terminal when it can take it, otherwise to the top bar's first enabled control.

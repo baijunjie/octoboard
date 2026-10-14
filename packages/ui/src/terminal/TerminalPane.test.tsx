@@ -263,7 +263,7 @@ it("offers Add project in place of the select-a-session line while the console i
 
 it("offers the contextual session action and hands focus on when it disappears", () => {
   const onPress = vi.fn();
-  const { container, handle, topBarButton, elsewhere, show } = mountEmpty({ newSession: { label: "New session", onPress } });
+  const { container, handle, topBarButton, elsewhere, show } = mountEmpty({ newSession: { message: "New session", label: "New session", onPress } });
   expect(container.textContent).not.toContain("Select a session");
   const button = container.querySelector("button")!;
   elsewhere.focus();

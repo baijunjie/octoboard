@@ -42,7 +42,7 @@ reachable. On narrow windows, row contents wrap rather than being cut off.
   `docs/product/window-layout.md`). So there is no sidebar to float in on hover either, and no drawer to open below
   1148 px.
 - **No terminal.** None of the terminal's empty states appears here: the panel asking for a session to be selected, or
-  the panel offering **Add project**, **New session** or **New console session** for an empty scope (see "The terminal"
+  the panel offering **Add project**, **New session** or **New console session** for the current scope (see "The terminal"
   and "A console with nothing in it" in `docs/product/sessions.md`).
 - **Neither pane toggle in the top bar**: there is no sidebar for the sidebar toggle to control, and the right pane's
   toggle, at the bar's end, is there only while the right pane has an owner (see "The two pane toggles" in

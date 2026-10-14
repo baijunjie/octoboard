@@ -425,8 +425,7 @@ export const en = {
 
   "terminal.empty": "No session selected",
   "terminal.empty.description": "Select a session to view its terminal.",
-  // Under `sidebar.noProjects` as the heading: what the terminal's area says in place of asking
-  // for a session to be selected, while the console has neither a project nor a session.
+  // Under `sidebar.noProjects` as the heading, when a console session exists but no projects do.
   "terminal.noProjects.description": "A project is a directory you work in and run sessions in.",
   "terminal.noSessions.description": "Start a session to work here.",
   "terminal.input": "Terminal input",

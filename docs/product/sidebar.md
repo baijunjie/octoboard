@@ -111,8 +111,8 @@ console session" row.
 
 Below it, a **Projects** heading and the console's projects (see "Order of projects and sessions" below). With no
 project, an empty row saying the console has none yet takes their place; the whole row is a button opening the
-new-project dialog, as the console's **Add project** does (see "The console header" above and "Empty rows" below). While
-the console has nothing in it at all, the terminal's area carries the same offer as a full panel (see "A console with
+new-project dialog, as the console's **Add project** does (see "The console header" above and "Empty rows" below). The
+terminal's area chooses its own next action from the console's console sessions and projects (see "A console with
 nothing in it" in `docs/product/sessions.md`).
 
 ### Filtering the project list

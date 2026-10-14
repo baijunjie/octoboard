@@ -23,12 +23,10 @@ interface TerminalPaneProps {
   onResume: (sessionId: string) => Promise<boolean>;
   /** A resume of `session` is in flight: its process is being started. */
   resuming?: boolean;
-  /** Adds a project to the console, offered by the empty state in place of its line while the
-   * console has neither a project nor a session to select, since asking for a session to be
-   * selected says nothing then. */
+  /** Adds a project when the current console already has a console session but no projects. */
   onAddProject?: () => void;
-  /** Starts a session in the current scope when there is no live session to select. */
-  newSession?: { label: string; onPress: () => void };
+  /** Offers session creation for the current console and focus scope. */
+  newSession?: { message: string; label: string; onPress: () => void };
   /** No supported agent is installed, so creating a session cannot be offered. */
   noAgents?: boolean;
   ref?: React.Ref<TerminalPaneHandle>;
@@ -422,7 +420,7 @@ export function TerminalPane({
           ) : newSession ? (
             <EmptyPanel
               icon={MessageSquarePlus}
-              message={t("sidebar.noSessions")}
+              message={newSession.message}
               description={t("terminal.noSessions.description")}
               action={{ ...newSession, icon: Plus }}
             />
