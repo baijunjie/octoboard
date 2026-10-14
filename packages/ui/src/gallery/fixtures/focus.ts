@@ -111,6 +111,14 @@ const state = snapshotState({
 
 export const focusScenarios: Scenario[] = [
   {
+    id: "sidebar-session-hierarchy",
+    group: "Sidebar sessions",
+    title: "Project session hierarchy",
+    state,
+    preferences: { sidebarConsole: console_.id },
+    description: "Rounded branches connect each project session and its nested sessions; the final branch ends at the last child.",
+  },
+  {
     id: "focus-project",
     group: GROUP,
     title: "Project focus",

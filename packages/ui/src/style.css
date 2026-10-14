@@ -729,3 +729,51 @@ html.pane-resizing * {
     var(--scroll-shadow-scrollbar-size) 100%,
     100% var(--scroll-shadow-scrollbar-size);
 }
+
+/* Logical corners mirror the branches with the UI. The first-level rail follows the flat
+   animated rows; a nested child's own rail continues only into its next sibling. */
+.session-branch {
+  position: absolute;
+  inset-block: -1px;
+  inset-inline-start: -5px;
+  inline-size: 9px;
+  pointer-events: none;
+}
+.session-branch::before,
+.session-nested-row::before {
+  content: "";
+  position: absolute;
+  inset-block-start: -1px;
+  inset-inline-start: -5px;
+  inline-size: 9px;
+  block-size: calc(50% + 1px);
+  border-inline-start: 1px solid var(--color-separator);
+  border-block-end: 1px solid var(--color-separator);
+  border-end-start-radius: 3px;
+  pointer-events: none;
+}
+.session-branch::before {
+  block-size: 50%;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+}
+.session-branch:not([data-last])::after,
+.session-nested-row:has(+ .session-nested-row)::after {
+  content: "";
+  position: absolute;
+  inset-block-start: -1px;
+  inset-block-end: -1px;
+  inset-inline-start: -5px;
+  border-inline-start: 1px solid var(--color-separator);
+  pointer-events: none;
+}
+.session-branch:not([data-last])::after {
+  inset-inline-start: 0;
+  inset-block: 0;
+}
+.session-branch[data-ancestor] {
+  inset-inline-start: -22px;
+}
+.session-branch[data-ancestor]::before {
+  display: none;
+}

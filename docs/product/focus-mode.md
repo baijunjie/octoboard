@@ -30,7 +30,7 @@ badge" in `docs/product/sidebar.md`).
 ten most recent rows of the view's archive, each showing its agent's icon, its title and how long ago it was
 archived. Clicking one selects it. Its action menu offers **Rename** and **Delete** (which asks for confirmation; see
 "Deleting archived sessions" in `docs/product/sessions.md`). Below them **View all (n)** opens the archive view. An
-archived session whose owner is a project session the list holds too is inset under it, with a line down the inset, as
+archived session whose owner is a project session the list holds too is inset under it, with rounded connectors, as
 in the archive view (see "The archive view" in `docs/product/sidebar.md`); the ten are counted as rows, so the preview
 can end between an owner and the sessions under it but never shows an inset row without the row it is inset under.
 

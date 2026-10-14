@@ -40,7 +40,7 @@ import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectF
 import { archiveSubmenu, consoleMenu, projectMenu, sessionMenu } from "./menus";
 import { archivedSessions, consoleActivity, isInactiveProject, liveSessionRows, liveSessions, sortProjects } from "./order";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
-import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, PinButton, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
+import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, PinButton, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import { focusTargetId } from "./focus";
 import type { FocusTarget, SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
@@ -633,6 +633,7 @@ function ProjectNode({
   // needed).
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
   const rows = liveSessionRows(sessions);
+  const lastRootIndex = rows.reduce((last, row, index) => row.under ? last : index, -1);
   const archived = archivedSessions(sessions);
   const activity = consoleActivity(sessions);
   const listRef = useFlip<HTMLDivElement>();
@@ -696,12 +697,13 @@ function ProjectNode({
             />
           ) : (
             <div ref={listRef} className="relative flex flex-col gap-0.5">
-              {rows.map(({ session, under }) => (
+              {rows.map(({ session, under }, index) => (
                 // One flat list, a session bound to a project session only inset
                 // (`NESTED_ROW_CLASS`), rather than a list nested inside the owner's row: the
                 // reorder animation reads the list's direct children (`useFlip`), so a third level
                 // of its own would leave a team unanimated while its statuses change.
-                <div key={session.id} data-flip={session.id} className={under ? NESTED_ROW_CLASS : undefined}>
+                <div key={session.id} data-flip={session.id} className={under ? NESTED_ROW_CLASS : "relative"}>
+                  <NestedBranch last={index >= lastRootIndex} ancestor={!!under} />
                   <SessionRow
                     handlers={handlers}
                     session={session}

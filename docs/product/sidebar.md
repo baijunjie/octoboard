@@ -245,15 +245,16 @@ while the project's status says the directory is a git repository, **Git**.
 - **Remove project** — see "Removing a project" in `docs/product/consoles-and-projects.md`; it asks for confirmation
   first.
 
-An expanded project lists its sessions that are not archived as session rows. With none, it shows an empty row saying
+An expanded project lists its sessions that are not archived as session rows, with a connector bending smoothly
+toward the middle of each child row and stopping at the last child. With none, it shows an empty row saying
 there are no sessions yet; the whole row is a button that opens the new-session dialog for that project, as the row's
 **+** button does (see "Empty rows" above).
 
 A session **bound to another of the project's sessions** — one that session started, a lead session's own sessions
 included (see "Lead sessions" in `docs/product/hub-orchestration.md`) — is listed **under that session**, one level
-deeper, inset with a line running down the inset. Unbound sessions and sessions bound to a console session stay at the
-project's own level, so a project's sessions go at most two levels deep. The nesting has no fold control of its own:
-the sessions under an owner fold away with their project, like every other session row.
+deeper, inset with the same rounded connectors toward each child row. Unbound sessions and sessions bound to a console
+session stay at the project's own level, so a project's sessions go at most two levels deep. The nesting has no fold
+control of its own: the sessions under an owner fold away with their project, like every other session row.
 
 ## Session rows
 
@@ -457,10 +458,10 @@ project's archive alone.
   account and how long ago it was archived. Its **Reopen** and **Delete** buttons show while the row is hovered or holds
   keyboard focus, and are still reached with Tab.
 - A session whose owner is **a project session listed here too** — an archived session of an archived lead session, or
-  of any archived project session that had started sessions — is **inset under that owner**, with a line running down
-  the inset, and follows it instead of being ranked against the rows beside it; one whose owner is not in the list is
-  listed on its own. The row's text names the owner for assistive technology, in the wording a session row uses (see
-  "The binding badge" above). The 30 rows are counted as rows, so an inset row is never shown before the row it is
+  of any archived project session that had started sessions — is **inset under that owner**, with rounded connectors
+  as in "Project rows" above, and follows it instead of being ranked against the rows beside it; one whose owner is
+  not in the list is listed on its own. The row's text names the owner for assistive technology, in the wording a
+  session row uses (see "The binding badge" above). The 30 rows are counted as rows, so an inset row is never shown before the row it is
   inset under.
 - **Reopen** resumes the session and selects it, which closes the view (see "Selecting a session" above).
 - **Delete** asks for confirmation, then deletes that session — for an archived owner, listing the archived sessions
