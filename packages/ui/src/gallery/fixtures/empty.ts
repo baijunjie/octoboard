@@ -64,7 +64,7 @@ export const emptyScenarios: Scenario[] = [
     group: GROUP,
     title: "A console with no projects",
     description:
-      "With a console session and no projects, the main area offers Add project, and F6 reaches that button; the sidebar's Projects section carries the same offer as a row.",
+      "The sidebar headings show Console sessions (1) and Projects (0). With no projects, the main area offers Add project, and F6 reaches that button; the sidebar's Projects section carries the same offer as a row.",
     state: snapshotState({
       consoles: [consoleOf("c-1", "Main")],
       sessions: [sessionOf("s-hub", "c-1", undefined, "Hub", "idle")],
@@ -74,7 +74,7 @@ export const emptyScenarios: Scenario[] = [
     id: "empty-no-console-session",
     group: GROUP,
     title: "No console session: create a console session",
-    description: "The Console sessions and project sections keep compact creation rows. The main area offers New console session.",
+    description: "The headings show Console sessions (0) and Projects (1); their sections keep compact creation rows. The main area offers New console session.",
     state: snapshotState({
       consoles: [consoleOf("c-1", "Main")],
       projects: [projectOf("p-1", "c-1", "Website")],

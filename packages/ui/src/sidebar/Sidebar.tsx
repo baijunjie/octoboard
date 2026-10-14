@@ -477,7 +477,7 @@ function ConsoleBody({
           )
         }
       >
-        {t("sidebar.projects")}
+        {t("sidebar.projects.headingWithCount", { count: ordered.length })}
       </SectionHeading>
       {/* The modal filter popover hides the surrounding sidebar from assistive technology;
           React Aria keeps a mounted live announcer and its ancestors exposed. */}
@@ -587,7 +587,7 @@ function ConsoleSessionsSection({
           </>
         }
       >
-        {t("sidebar.consoleSessions.heading")}
+        {t("sidebar.consoleSessions.headingWithCount", { count: live.length })}
       </SectionHeading>
       {/* A warning rather than the glyph the rows below carry: this row is the one in the section
           that offers nothing to press, and the section's own `+` is disabled beside it. */}

@@ -111,6 +111,7 @@ export const archiveScenarios: Scenario[] = [
     id: "archive-console-sessions",
     group: GROUP,
     title: "Archived console sessions",
+    description: "Console sessions (2) counts the live sidebar rows; the eight archived console sessions appear in the archive view.",
     state: archiveState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.consoleSessions.actions", { name: console_.name })),

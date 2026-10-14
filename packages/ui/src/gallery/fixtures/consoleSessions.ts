@@ -45,6 +45,7 @@ export const consoleSessionsScenarios: Scenario[] = [
     group: GROUP,
     title: "Console sessions, and project sessions bound, unbound and nested",
     description:
+      "The section headings show Console sessions (4) and Projects (2), counting only the rows in each section. " +
       "Agent task titles appear before the original session names, with untitled sessions keeping their names. " +
       "Console sessions and each project's sibling sessions put Waiting for you first, then Awaiting instructions, " +
       "Working and Interrupted. Above the projects, Hub 3, the release-plan task under Hub, Hub 2 and Hub 4 show that order, each in its own " +

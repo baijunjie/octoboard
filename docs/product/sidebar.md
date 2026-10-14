@@ -93,6 +93,9 @@ focus mode, switch account, archive), in the order of "Order of projects and ses
 what selecting one does, and what its row's menu offers are in "Console sessions and project sessions" in
 `docs/product/sessions.md`.
 
+The console sessions heading appends the number of console sessions listed in parentheses, including interrupted
+sessions and excluding archived ones. It shows zero when none are listed.
+
 The section's own heading carries a **+** button, **New console session**, which opens one with the console's current
 default agent and its account for that agent, and, while the console has an archived console session, the section's
 action menu, whose only entry is **Archived console sessions** — a submenu of the console's newest archived console
@@ -114,6 +117,9 @@ project, an empty row saying the console has none yet takes their place; the who
 new-project dialog, as the console's **Add project** does (see "The console header" above and "Empty rows" below). The
 terminal's area chooses its own next action from the console's console sessions and projects (see "A console with
 nothing in it" in `docs/product/sessions.md`).
+
+The Projects heading appends the number of projects listed in parentheses, including inactive and collapsed projects.
+The count follows the current project filter and shows zero when the console has no projects or none match.
 
 ### Filtering the project list
 
@@ -153,7 +159,7 @@ the mouse leaves keyboard focus where it was.
 ### Expanding and collapsing the listed projects
 
 One icon-only button follows the filter button. Its name is whichever action it will take, **Collapse all projects**
-or **Expand all projects**. The Projects heading holds only its "Projects" label and, at its end, Filter projects
+or **Expand all projects**. The Projects heading holds its label and project count and, at its end, Filter projects
 followed by this button.
 
 - It shows while the console has projects **and** the list shows at least one of them. With a filter matching no
