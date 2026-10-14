@@ -1,6 +1,7 @@
 <script setup lang="ts">
 defineProps<{
   name:
+    | "github-logo"
     | "apple-logo"
     | "linux-logo"
     | "windows-logo"
@@ -31,6 +32,9 @@ defineProps<{
 }
 .icon-apple-logo {
   mask: url("../assets/icons/apple-logo.svg") center / contain no-repeat;
+}
+.icon-github-logo {
+  mask: url("../assets/icons/github-logo.svg") center / contain no-repeat;
 }
 .icon-linux-logo {
   mask: url("../assets/icons/linux-logo.svg") center / contain no-repeat;

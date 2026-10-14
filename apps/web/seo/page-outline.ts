@@ -10,6 +10,12 @@ export const homeFeatures = [
 
 export const homeSteps = ["One", "Two", "Three"] as const;
 
+export const collaborationScenarios = [
+  "Projects",
+  "Images",
+  "Browser",
+] as const;
+
 export const homeQuestions = [
   "One",
   "Two",
@@ -45,15 +51,36 @@ export const heroAgents = [
 // The illustrative workflow in WorkflowDemo.vue. Paths and agent names are
 // example content, not a live session.
 export const workflowProjects = [
-  { key: "Frontend", agent: "Codex", icon: "codex", path: "apps/web" },
+  { key: "Admin", agent: "Codex", icon: "codex", path: "apps/admin-web" },
   {
-    key: "Backend",
+    key: "Merchant",
     agent: "Claude Code",
     icon: "claude",
-    path: "services/api",
+    path: "apps/merchant-web",
   },
-  { key: "Docs", agent: "Grok Build", icon: "grok", path: "docs" },
+  {
+    key: "Customer",
+    agent: "Grok Build",
+    icon: "grok",
+    path: "apps/customer-web",
+  },
+  { key: "Server", agent: "Codex", icon: "codex", path: "services/orders" },
+  { key: "Mobile", agent: "Claude Code", icon: "claude", path: "apps/mobile" },
+  { key: "Tablet", agent: "Grok Build", icon: "grok", path: "apps/waiter-pad" },
+  { key: "Pos", agent: "Codex", icon: "codex", path: "apps/cashier-pos" },
+  {
+    key: "Kitchen",
+    agent: "Claude Code",
+    icon: "claude",
+    path: "apps/kitchen-display",
+  },
 ] as const;
+
+// The constellation and its readable copy describe the same participating repositories.
+export const workflowNodes = workflowProjects.map((project) => ({
+  project,
+  path: project.path,
+}));
 
 export const privacySections = [
   "Local",

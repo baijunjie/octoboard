@@ -9,6 +9,7 @@
     "gallery": "vite --port 5175 --open /gallery.html",
     "gallery:sweep": "node scripts/gallery-sweep.mjs",
     "build": "tsc --noEmit && vitest run src/i18n && vite build",
+    "build:preview": "vite build --config vite.preview.config.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
+  collaborationScenarios,
   developedPlatform,
   githubPrivacyUrl,
   heroAgents,
@@ -9,7 +10,7 @@ import {
   homeSteps,
   plannedPlatforms,
   privacySections,
-  workflowProjects,
+  workflowNodes,
 } from "./page-outline.ts";
 import {
   languageHomeUrl,
@@ -25,7 +26,7 @@ import {
 // URL in its body, and the HTML head points at the file. The copies stay
 // crawlable, so one can be indexed beside its HTML page. Header, footer,
 // decorative art, section eyebrows, section numbers, the scroll cue, the
-// MIT badge, and controls (the replay button among them) are omitted. The
+// MIT badge, and interactive controls are omitted. The
 // badge repeats the license line; the other labels are section chrome.
 
 export type AgentCopy = {
@@ -59,7 +60,10 @@ function flatten(value: string): string {
 }
 
 function document(parts: Array<string | false | undefined>): string {
-  return `${parts.filter((part): part is string => Boolean(part)).join("\n\n").trim()}\n`;
+  return `${parts
+    .filter((part): part is string => Boolean(part))
+    .join("\n\n")
+    .trim()}\n`;
 }
 
 function heading(level: number, text: string): string {
@@ -119,14 +123,24 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     text("heroStatus"),
     text("heroNote"),
     link(text("heroCta"), releasesUrl(copy.repositoryUrl)),
+    link(text("heroSecondary"), copy.repositoryUrl),
     text("heroAgentLabel"),
     heroAgents.map((agent) => agent.name).join(", "),
-    heading(2, text("principlesTitle")),
-    ...homeFeatures.flatMap((feature) => [
-      heading(3, text(`feature${feature.key}Title`)),
-      text(`feature${feature.key}Description`),
-    ]),
-    text("revealTagline"),
+    heading(2, text("painTitle")),
+    text("painDescription"),
+    heading(3, text("painManagementTitle")),
+    text("painManagementDescription"),
+    heading(3, text("painQualityTitle")),
+    text("painQualityDescription"),
+    text("painResolution"),
+    heading(2, text("previewTitle")),
+    text("previewDescription"),
+    text("previewCaption"),
+    [
+      text("previewScenarioOverview"),
+      text("previewScenarioReport"),
+      text("previewScenarioChanges"),
+    ].join(" · "),
     heading(2, text("howTitle")),
     text("howDescription"),
     heading(3, text("demoLabel")),
@@ -135,9 +149,9 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     `**${text("demoYou")}:** ${text("demoRequest")}`,
     `**${text("demoCoordinator")}:** ${text("demoCoordinatorText")}`,
     `${text("demoStatusWorking")} · ${text("demoStatusIdle")}`,
-    ...workflowProjects.flatMap((project) => [
+    ...workflowNodes.flatMap(({ project, path }) => [
       heading(4, `${text(`demo${project.key}`)} — ${project.agent}`),
-      `\`${project.path}\``,
+      `\`${path}\``,
       `${text("demoStatusWorking")} · ${text("demoStatusIdle")}`,
       text("demoContext"),
       text("demoRules"),
@@ -153,14 +167,29 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
       heading(3, text(`step${step}Title`)),
       text(`step${step}Description`),
     ]),
-    heading(2, text("proofTitle")),
+    heading(2, text("principlesTitle")),
+    ...homeFeatures.flatMap((feature) => [
+      heading(3, text(`feature${feature.key}Title`)),
+      text(`feature${feature.key}Description`),
+      ...(feature.key === "Three"
+        ? [
+            collaborationScenarios
+              .map(
+                (scenario) =>
+                  `- **${text(`featureThree${scenario}Title`)}** — ${text(`featureThree${scenario}Description`)}`,
+              )
+              .join("\n"),
+          ]
+        : []),
+    ]),
+    heading(2, text("localTitle")),
+    text("localDescription"),
+    link(text("localLink"), privacy),
+    heading(3, text("proofTitle")),
     text("proofDescription"),
     text("proofCaption"),
     link(text("proofRepository"), copy.repositoryUrl),
     link(text("proofLicense"), licenseUrl(copy.repositoryUrl)),
-    heading(2, text("localTitle")),
-    text("localDescription"),
-    link(text("localLink"), privacy),
     heading(3, text("remoteTitle")),
     text("remoteBadge"),
     text("remoteDescription"),
@@ -188,8 +217,7 @@ function privacyMarkdown(copy: AgentCopy, locale: SiteLocale): string {
   const messages = catalog(copy, locale.code);
   const params = valuesFor(copy);
   const text = (key: string) => message(messages, key, params);
-  const canonical =
-    copy.siteUrl + localizedPath(locale.code, "privacy/");
+  const canonical = copy.siteUrl + localizedPath(locale.code, "privacy/");
   const home = markdownUrl(copy.siteUrl, `/${localizedPath(locale.code, "")}`);
   return document([
     heading(1, text("privacyTitle")),
@@ -233,14 +261,21 @@ function llmsTxt(copy: AgentCopy): string {
   const pageLink = (code: string, page: "" | "privacy/") => {
     const messages = catalog(copy, code);
     const titleKey = page === "" ? "seoTitle" : "privacySeoTitle";
-    const descriptionKey = page === "" ? "seoDescription" : "privacySeoDescription";
+    const descriptionKey =
+      page === "" ? "seoDescription" : "privacySeoDescription";
     const title = flatten(message(messages, titleKey, params));
-    const description = truncate(message(messages, descriptionKey, params), 160);
+    const description = truncate(
+      message(messages, descriptionKey, params),
+      160,
+    );
     const href = markdownUrl(copy.siteUrl, `/${localizedPath(code, page)}`);
     return `- ${link(title, href)}: ${description}`;
   };
   const languages = locales.map((locale) => {
-    const href = markdownUrl(copy.siteUrl, `/${localizedPath(locale.code, "")}`);
+    const href = markdownUrl(
+      copy.siteUrl,
+      `/${localizedPath(locale.code, "")}`,
+    );
     const suffix =
       locale.code === "en"
         ? "content included below"
@@ -264,7 +299,12 @@ function llmsTxt(copy: AgentCopy): string {
 
 function llmsFull(
   copy: AgentCopy,
-  pages: Array<{ source: string; title: string; description: string; markdown: string }>,
+  pages: Array<{
+    source: string;
+    title: string;
+    description: string;
+    markdown: string;
+  }>,
 ): string {
   const description = flatten(
     message(catalog(copy, "en"), "seoDescription", valuesFor(copy)),
@@ -296,7 +336,9 @@ function sitemapMd(
   entries: Array<{ route: string; title: string; href: string }>,
 ): string {
   const groups = new Map<string, typeof entries>();
-  for (const entry of [...entries].sort((a, b) => a.route.localeCompare(b.route))) {
+  for (const entry of [...entries].sort((a, b) =>
+    a.route.localeCompare(b.route),
+  )) {
     const key = entry.route.split("/").filter(Boolean)[0] ?? "";
     const group = groups.get(key);
     if (group) group.push(entry);
@@ -307,7 +349,11 @@ function sitemapMd(
     if (b === "") return 1;
     return a.localeCompare(b);
   });
-  const parts = [`# ${copy.appName} Sitemap`, "", "All pages in Markdown format."];
+  const parts = [
+    `# ${copy.appName} Sitemap`,
+    "",
+    "All pages in Markdown format.",
+  ];
   for (const key of keys) {
     parts.push("", `## ${key || "Root"}`);
     for (const entry of groups.get(key) ?? []) {
@@ -346,7 +392,9 @@ export function renderAgentFiles(copy: AgentCopy): Record<string, string> {
     for (const page of ["", "privacy/"] as const) {
       const route = `/${localizedPath(locale.code, page)}`;
       const markdown =
-        page === "" ? homeMarkdown(copy, locale) : privacyMarkdown(copy, locale);
+        page === ""
+          ? homeMarkdown(copy, locale)
+          : privacyMarkdown(copy, locale);
       const title = flatten(
         message(
           catalog(copy, locale.code),

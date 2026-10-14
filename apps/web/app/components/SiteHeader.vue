@@ -12,6 +12,7 @@ useLiquidGlass(glass);
 useLiquidGlassPointer(glass);
 const sections = [
   { id: "benefits", key: "navBenefits" },
+  { id: "product-preview", key: "previewEyebrow" },
   { id: "how-it-works", key: "navHow" },
   { id: "questions", key: "navFaq" },
 ];
@@ -183,9 +184,9 @@ onBeforeUnmount(() => {
                       class="menu-section-arrow" /></NuxtLink
                   ><a
                     :href="config.public.repositoryUrl"
-                    :style="{ '--link-order': 3 }"
+                    :style="{ '--link-order': 4 }"
                   >
-                    <span class="menu-number">04</span>GitHub<span
+                    <span class="menu-number">05</span>GitHub<span
                       class="link-arrow"
                       aria-hidden="true"
                   /></a>

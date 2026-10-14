@@ -1,0 +1,25 @@
+/* The application keeps its own layout, tokens and component styles inside the preview. */
+.website-preview-label {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font:
+    11px/1.4 system-ui,
+    sans-serif;
+  letter-spacing: 0.02em;
+  color: var(--foreground);
+  background: var(--background);
+  border-bottom: 1px solid var(--separator);
+}
+
+.website-preview-app {
+  height: calc(100dvh - 30px);
+  overflow: hidden;
+  /* Keep fixed application drawers below the preview's sample-data label. */
+  contain: layout;
+}
+
+.website-preview-app > * {
+  height: 100%;
+}

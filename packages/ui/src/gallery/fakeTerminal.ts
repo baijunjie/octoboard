@@ -76,7 +76,7 @@ class FakeTerminalSocket extends EventTarget {
   binaryType: BinaryType = "blob";
   readyState = 0;
 
-  constructor(readonly url: string) {
+  constructor(readonly url: string, output = SAMPLE) {
     super();
     const behaviour = url.slice(FIXTURE_ORIGIN.length).split("/")[0];
     // A refusal takes a moment, as a real one does: closing in the same frame as the attempt would
@@ -86,7 +86,7 @@ class FakeTerminalSocket extends EventTarget {
       if (behaviour === "refuse") return this.close();
       this.readyState = 1;
       this.dispatchEvent(new Event("open"));
-      const bytes = new TextEncoder().encode(SAMPLE);
+      const bytes = new TextEncoder().encode(output);
       setTimeout(() => this.dispatchEvent(new MessageEvent("message", { data: bytes.buffer })), 20);
     }, behaviour === "refuse" ? 100 : 0);
   }
@@ -100,13 +100,25 @@ class FakeTerminalSocket extends EventTarget {
   }
 }
 
-/** Makes `new WebSocket(url)` for a fixture URL a fake one, and leaves every other URL to the real
- * constructor. */
-export function installFakeTerminal(): void {
+export interface FakeTerminalOptions {
+  /** Alternate sample text, keyed by session, for consumers such as the public website preview. */
+  output?: (session: string) => string;
+  /** Refuse all other sockets rather than falling back to a real network connection. */
+  strict?: boolean;
+}
+
+/** Makes fixture sockets local. The gallery keeps real sockets for Vite; a static preview can
+ * explicitly refuse every non-fixture URL. */
+export function installFakeTerminal(options: FakeTerminalOptions = {}): void {
   const RealWebSocket = window.WebSocket;
   window.WebSocket = new Proxy(RealWebSocket, {
     construct(target, args: [string | URL, (string | string[])?]) {
-      if (String(args[0]).startsWith(FIXTURE_ORIGIN)) return new FakeTerminalSocket(String(args[0]));
+      const url = String(args[0]);
+      if (url.startsWith(FIXTURE_ORIGIN)) {
+        const session = url.slice(FIXTURE_ORIGIN.length).split("/").slice(1).join("/");
+        return new FakeTerminalSocket(url, options.output?.(session));
+      }
+      if (options.strict) throw new Error("The website preview cannot open network sockets");
       return Reflect.construct(target, args);
     },
   });

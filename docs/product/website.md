@@ -26,8 +26,8 @@ The site has a homepage and a privacy page. Paths below are relative to the site
 - Simplified Chinese uses the route prefix `zh`, with the language identified as `zh-Hans` in page metadata.
   Traditional Chinese uses `zh-Hant` for both.
 
-All 17 languages have complete website translations, including navigation, the illustrative workflow, questions and
-answers, privacy text, client error messages, and page metadata: Arabic, German, English, Spanish, French, Hindi,
+All 17 languages have complete website translations, including navigation, the two homepage goals, preview controls,
+the illustrative workflow, questions and answers, privacy text, client error messages, and page metadata: Arabic, German, English, Spanish, French, Hindi,
 Indonesian, Italian, Japanese, Korean, Brazilian Portuguese, Russian, Thai, Turkish, Vietnamese, Simplified Chinese,
 and Traditional Chinese. This coverage is specific to the website; the application's translation coverage is described
 in `docs/product/language.md`, "What is translated so far".
@@ -60,7 +60,8 @@ copy can be indexed beside its HTML page.
 Each entry carries an alternate for every language and an `x-default` alternate. The language value is
 the BCP-47 tag identified in "Pages and languages": Simplified Chinese is `zh-Hans` while its route
 prefix stays `zh`. `x-default` is the unprefixed English URL of that page. Every listed URL ends with
-a slash. The error page is not listed; see "Missing pages and errors".
+a slash. The standalone product preview is not listed and requests `noindex`. The error page is not listed;
+see "Missing pages and errors".
 
 Each HTML homepage and privacy page, in every language, has an absolute canonical URL with a trailing slash, and
 hreflang alternates for the HTML versions, also with trailing slashes. `x-default` is again the
@@ -139,41 +140,59 @@ another page of the site points at the Markdown file. Links that leave the site 
 the repository, the license, the GitHub privacy statement, and email — stay on those targets.
 
 The Markdown carries the page's localized wording. It includes the visible text, including the license
-caption and the illustrative workflow's Working and Awaiting instructions labels. Download links are
+caption, the preview scene names and sample-data explanation, and every workflow node's task, report, and
+Working and Awaiting instructions labels. It does not include the embedded application's sample screens. Download links are
 the releases links in "Homepage and navigation" and sit beside the statement that the macOS app is an
 early prototype still in development. The workflow is identified as an illustration. The copies omit
 the header, the footer, decorative art, the labels and numbers that mark a section, the scroll cue,
-the MIT badge, and the replay control. The brand slogan, the privacy page's introductory line, and
+the MIT badge, and interactive controls. The brand slogan, the privacy page's introductory line, and
 the workflow's participant labels stay.
 
 ## Homepage and navigation
 
 The homepage uses Octoboard's original silver mechanical octopus, red eyes, and pixel wordmark on a dark surface.
-It presents requests that span several projects and four benefits: reducing manual coordination between projects,
-keeping independent native project sessions with their own rules, retaining different agent brands and toolchains,
-and letting the user work directly with the project agent handling a task. The explanation connects these benefits
-to transferring tasks and results between frontend, backend, and documentation projects, preserving local project
-configuration, and explaining specific requirements or code details directly to the agent doing the work.
-The different-brands benefit also includes assigning a step to another brand. A coordinator running Claude Code can give
-image generation to Codex, because Claude Code does not generate images, and can give Codex the steps that drive a local
-application or a browser, where Codex is stronger. The coordinator then continues from what Codex reports.
+The first screen introduces coordination across projects and offers links to download the app, visit its GitHub
+repository, and open the preview section. The second screen gives equal weight to two goals: delegating agent
+management across projects and keeping development quality in each project. The quality explanation ties this goal to independent native sessions that retain
+project instructions, Skills, hooks and tools, with the user able to inspect and steer any conversation.
 
-A statement about collaboration across repositories appears beside a static illustration connecting the three agent
-brands to Octoboard's mascot. It leads into the three stages of coordination: give the goal to a coordinator, let
-project agents work, and follow or intervene in their conversations. The workflow illustration follows one team
-invitation request through three independent project sessions: Codex handles the frontend, Claude Code the backend,
-and Grok Build the documentation. All three project cards remain visible, each with its directory, project instructions,
-Skills and hooks, assigned task, and report. They appear in three columns on wider screens and stack on smaller screens.
+The page continues through the product preview, the coordination illustration, four supporting principles, local data
+and open-source information, platform availability, and questions. These seven sections share a numbered heading,
+a short label marked by a red square, and a title. Section and workflow-step numbers are prominent visual markers.
+The four principles cover reducing manual coordination, keeping independent native project sessions with their own
+rules, retaining different agent brands and toolchains, and letting the user work directly with the project agent
+handling a task. The different-brands explanation has a short introduction and three titled scenarios, presented
+as a list in both the page and its Markdown version: Codex working on the admin project and Claude Code on the
+merchant project under their respective project rules; a Claude Code coordinator delegating promotion images to
+Codex and continuing after receiving the assets; and Codex checking ordering and redemption in an application or
+browser, then reporting results for the coordinator to follow up.
 
-The example combines invitation and team-joining screens, invitation endpoints and permission checks, and a matching
-user guide. Each project reports to the coordinator; the summary below the projects represents the same coordinator
-shown above them, gathering all three results into one feature delivery. These are fixed, localized examples,
-explicitly labelled as an illustration. The diagram does not show live application activity, run agents, or submit work.
-Its replay control restarts the demonstration.
+The workflow illustration places Octoboard's mascot and coordinating agent at the center of eight distinct
+project-agent nodes: admin, merchant, customer, server, mobile, staff tablet, point of sale and kitchen. Every node
+identifies its agent brand, project role and example directory. Codex handles admin, server and point of sale;
+Claude Code handles merchant, mobile and kitchen; Grok Build handles customer and staff tablet. The nodes surround
+the coordinator on wide screens and form two columns below it on small screens. Curved connections carry outgoing
+task signals and incoming report signals, with a labelled direction legend.
+
+Selecting a node by pointer or keyboard highlights it and shows its directory, native project context, instructions,
+Skills and hooks, assigned task, and report below the diagram. The admin app at `apps/admin-web` is selected initially.
+Each project has its own task and report in the example of launching a meal deal promotion across restaurant
+locations. The admin app sets prices, promotion dates and eligible locations; the merchant app handles listings,
+stock and order redemption; the customer web app supports browsing, ordering and order details; and the server
+validates promotion dates and locations, calculates prices, deducts stock and prevents duplicate orders. The mobile
+app offers customer browsing, ordering and redemption codes. The staff tablet supports ordering by table, adding
+meal deals and synchronizing orders. The point-of-sale app handles checkout, discount validation and redemption;
+the kitchen app handles preparation tickets and synchronizes food-ready status.
+
+The summary represents the central coordinator collecting the participating projects' results into one feature
+delivery. The three stages below it explain giving a goal to the coordinator, letting project agents work, and following or
+intervening in their conversations. The illustration is fixed sample content: it does not show live activity, run
+agents, or submit work.
 
 The homepage then presents the source repository and MIT License, local data handling and planned remote support,
 platform availability, and nine questions. Each question can be expanded or collapsed independently, with the first
-expanded initially; several answers can remain open at once. The questions cover suitable tasks, loading several
+expanded initially; several answers can remain open at once. The plus marker rotates into a cross when an answer
+opens and rotates back when it closes. The questions cover suitable tasks, loading several
 projects into one session, configuration loading across directories or through subagents, different agent brands,
 reporting and direct participation, product understanding, platform availability, preparation and costs, data handling,
 and planned remote hosts. Configuration loading is described as dependent on the agent and its tools. Product
@@ -189,7 +208,8 @@ the repository's GitHub Releases page. It does not link directly to an installer
 Apple Silicon and describes the app as an early prototype still in development. The closing note repeats that
 status beside the MIT License. The download action does not imply that a package has already been published.
 Other repository links open GitHub; the footer links to the localized privacy page, the MIT License as the license
-terms, and the operator's email address.
+terms, and the operator's email address. The hero, open-source section and footer use icon-only GitHub links with
+44-by-44-pixel targets, accessible names and hover titles. The navigation menu retains its text repository link.
 
 The footer forms a compact centered group: the wordmark and localized tagline, followed by navigation links and
 copyright. On small screens, the wordmark and tagline stack vertically.
@@ -198,8 +218,8 @@ The closing section displays the mascot and the wordmark with the localized bran
 horizontal arrangement on wider screens, with the slogan starting at the wordmark's start edge, and a centered
 vertical arrangement on small screens. Decorative graphics do not act as slide or pagination controls.
 
-The floating header stays visible while scrolling and links to benefits, the coordination explanation, and questions
-from either page. Following a section link leaves space for the header above the destination. Its inline links
+The floating header stays visible while scrolling and links to the two goals, product preview, coordination
+explanation, and questions from either page. Following a section link leaves space for the header above the destination. Its inline links
 identify the current homepage section as the visitor moves through the page. The header has a glass surface with edge
 refraction where supported and a sheen that follows the pointer. Browsers without refraction support use blurred glass;
 those without backdrop blur use a more opaque surface.
@@ -207,6 +227,53 @@ A menu button is available at every screen width and opens a full-screen navigat
 close control; the background cannot be interacted with or scrolled while the menu is open. Tab and Shift+Tab stay
 within the dialog. Closing it with the button or Escape returns focus to the header's menu button. Choosing an internal
 destination or another language closes the dialog as well.
+
+## Product preview
+
+The preview shows the actual application's interface populated with fictional data and identifies itself as a
+sample. Three buttons select project management, team reports, or code review; project management is the initial
+scene. All three scenes follow the restaurant meal deal promotion across four independent business projects: Admin,
+Merchant, Customer and Server. They show the coordinating and project sessions, a delivery report, and a selected
+order-validation diff. Choosing a scene resets the demonstration to that scene's prepared state.
+
+Each project has its own sample repository, with a distinct root, feature branch, file tree and changes. Selecting
+another project shows that project's source and diffs. The three frontend projects include components, API clients,
+domain rules, tests and configuration for their respective restaurant roles; the server project includes order
+handling, HTTP validation, database queries and migrations, and tests. Files can be opened in the real viewer, and
+the source shown there agrees with the corresponding diff. All sample repositories exist only in memory; their
+displayed source is not executed.
+
+The delivery report summarizes each project's result and presents sample figures of four coordinated projects,
+48 passed checks and one decision awaiting confirmation: whether the meal deal can be combined with a member
+discount. The sample currently keeps the discounts separate. The code-review scene shows `src/meal-deal-orders.ts`,
+with changes that calculate prices from an eligible active offer, reserve available stock and prevent repeated
+requests from creating duplicate orders, alongside sample tests and promotion rules. These files and check counts
+are demonstration data.
+
+The homepage embeds a complete desktop viewport scaled to fit its available width. Once ready, the embedded
+application accepts pointer and keyboard interaction, including its report and project panes, and is available to
+assistive technology. While loading, it remains hidden and cannot receive interaction. Its lower edge fades into the
+page at rest; hovering over the preview or focusing within it removes the fade. Devices without hover show no fade.
+The standalone link opens the selected scene and language in a new tab at `preview/website-preview.html`, relative
+to the site's deployment root.
+
+Vertical mouse-wheel and trackpad gestures scroll the embedded list, terminal, code or report under the pointer
+while it has room to scroll in that direction. At its top or bottom boundary, continuing in the same direction
+scrolls the surrounding homepage. Horizontal gestures, gestures modified by Shift, Ctrl or Meta, and zoom retain
+their normal behavior. The standalone preview keeps native scrolling within the application.
+
+When the embedded preview's container is 800 pixels wide or narrower, the application uses that width in a
+640-pixel-high viewport. Both the embedded and standalone previews support the application's responsive layout;
+on narrow screens the sidebar and report/project panes are drawers. The report scene opens its report pane, and the
+code-review scene opens the sample change in the diff viewer automatically, including on phones. The preview does
+not connect to a daemon, run real agents, read or change real project files, or retain its preferences after a reload.
+It does not replace the website's stored language preference. The application controls follow the selected supported
+UI language; the fictional tasks, terminal output and report use Simplified Chinese for that language and English
+for all others.
+
+The embedded view shows a loading message until ready. A reported startup failure, or no readiness after 20 seconds,
+shows a localized error message; selecting the current scene again retries it. The standalone preview shows an alert
+if its startup fails. JavaScript is required to load and operate either preview.
 
 ## Brand slogan
 
@@ -218,8 +285,8 @@ claim that fully autonomous development is already implemented.
 Every language has its own translation, which keeps those meanings and uses the film's title in that language where
 one is established (Brazilian Portuguese "O Exterminador", Thai "คนเหล็ก", Vietnamese "Kẻ hủy diệt"). Translations use
 sentence case. The slogan appears as the eyebrow above the homepage title, as text under the wordmark in the closing
-section, under the wordmark on the share image, and in the language's Markdown page. On the website no image
-carries the slogan; the wordmark is the only brand image the pages use.
+section, under the wordmark on the share image, and in the language's Markdown page. On the website the slogan
+remains localized text rather than part of the wordmark artwork.
 
 ## Platform availability
 
@@ -240,32 +307,28 @@ that predates this positioning and is to be replaced.
 
 ## Motion and accessibility
 
-The hero text and mascot enter with a short motion. Red and silver pixel particles move through the surrounding
-space without covering the content or intercepting interaction; they pause when the hero is out of view or the page
-is in the background. Sections reveal as they enter view. The standalone collaboration statement reveals its words
-in reading order as they reach the viewing area, with word boundaries appropriate to the selected language.
-Assistive technology receives the complete statement rather than a sequence of separate animated words.
+The hero text and mascot enter with a short motion. The mascot's eight tentacles move independently, its body
+floats slightly, and its red eyes brighten and dim. Red and silver pixel particles move through the surrounding
+space without covering content or intercepting interaction. Sections reveal as they enter view.
 
-The workflow illustration runs one finite sequence as it enters view or the replay control is activated: the request
-reaches the coordinator, tasks travel to all three project sessions, and execution and reporting are highlighted.
-Three reports then reach the summary; it and the coordinator above highlight together to acknowledge receipt before
-the shared feature delivery is highlighted. Brief signals travel along the connections, while card highlights hold
-before fading softly. All tasks and reports remain readable throughout the sequence.
+A control beside the mascot pauses and resumes the homepage's decorative animation, including the mascot,
+particles and workflow signals. The mascot and particles pause when their area is offscreen or the page is in the
+background; workflow signals and the working-status pulse do the same for the diagram. They resume when visible
+again unless the visitor has paused them. The workflow's signals repeat along the connections rather than implying
+a real task's progress; selecting a project remains available while motion is paused.
 
-The illustration uses the application's working pulse and awaiting-instructions speech bubble, with visible labels
-and accessible names. They retain the meanings in `docs/product/sessions.md`, "Session statuses"; awaiting instructions
-is not a task-completion indicator. The example reports and shared delivery describe the outcome separately.
-The sequence and working pulses pause offscreen or in the background; returning to view starts a new pass. A layout
-change leaves the connections static instead of continuing a highlight along a changed route. The planned remote-host
-illustration has a pulsing connection indicator. Question expansion and control state changes also have visual
-transitions.
+The illustration's legend shows Working with the application's dark-theme blue pulse and label, alongside the
+awaiting-instructions speech bubble. Both have visible labels and accessible names. They retain the meanings in
+`docs/product/sessions.md`, "Session statuses"; awaiting instructions is not a task-completion indicator. The sample reports and shared delivery describe the outcome
+separately. Question expansion and control state changes also have visual transitions.
 
-A reduced-motion preference disables these animations and transitions, hides the particles, and leaves the content
-visible. The header keeps a static blurred glass surface without refraction or a moving sheen. Without JavaScript,
-the pre-rendered homepage and privacy content remain readable, and questions can still be expanded and collapsed;
-section reveals never leave that content hidden. Replaying the illustration and opening the menu require JavaScript;
-the replay control is absent when motion is reduced or playback is unavailable. The header provides a skip link to the
-main content, and interactive controls, including questions, show keyboard focus.
+A reduced-motion preference disables decorative animations and transitions, hides the particles and motion control,
+and leaves the content visible. The header keeps a static blurred glass surface without refraction or a moving sheen.
+Without JavaScript, the pre-rendered homepage and privacy content remain readable, and questions can still be expanded
+and collapsed; section reveals never leave that content hidden. The diagram retains its initial selection and,
+on wide screens, static connections. Selecting another node, the product preview and opening the menu require
+JavaScript. The header provides a skip link to the main content, and interactive controls, including questions and
+project nodes, show keyboard focus.
 
 ## Missing pages and errors
 
@@ -300,7 +363,7 @@ website terms page; the software's license is linked separately from the privacy
 ## Remote host support
 
 Status: not implemented. The homepage and the privacy page say that remote host support is planned and do not describe
-a workflow. A decorative illustration sits beside that status.
+a workflow. The homepage presents that status in a card beside the open-source information.
 
 Remote host support runs in one direction only: the daemon the user is talking to reaching a second machine to run
 sessions there. The server form runs the other way — one daemon, on a server, with the user's browser on another

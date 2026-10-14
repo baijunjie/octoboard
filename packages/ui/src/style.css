@@ -2,6 +2,12 @@
 @import "@heroui/styles";
 @import "./viewer/markdown.css";
 
+/* xterm's default black viewport can show through fractional scaling at the screen edges.
+   Use the same theme colour as TerminalPane's opaque surface, including after a theme switch. */
+[data-region="terminal"] .xterm .xterm-viewport {
+  background-color: var(--terminal-background);
+}
+
 @plugin "@tailwindcss/typography";
 
 @theme {

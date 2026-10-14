@@ -1,7 +1,8 @@
 # Octoboard website
 
 The public product website, built with Nuxt 4 and Nuxt i18n. It generates localized home and privacy pages as static
-files; it has no backend and does not connect to `octoboardd` or reuse the desktop UI.
+files and embeds a separate fixture-backed build of the shared React UI; it has no backend and does not connect to
+`octoboardd`.
 
 This is the `@octoboard/web` package in the repository's pnpm workspace. Dependencies and their lockfile belong to
 the workspace root.
@@ -11,11 +12,12 @@ the workspace root.
 Run these commands from the repository root:
 
 - `pnpm install` — installs workspace dependencies and prepares Nuxt's generated types.
-- `pnpm --filter @octoboard/web dev` — starts the website development server.
+- `pnpm --filter @octoboard/web dev` — builds the React product preview, then starts the website development server.
 - `pnpm --filter @octoboard/web check:locales` — checks language coverage, message keys and interpolation placeholders.
 - `pnpm --filter @octoboard/web typecheck` — prepares Nuxt and checks the website's TypeScript and Vue code.
 - `pnpm --filter @octoboard/web test` — runs the website's Node test.
-- `pnpm --filter @octoboard/web build` — generates the static website in `apps/web/.output/public`.
+- `pnpm --filter @octoboard/web build` — builds the React product preview and generates the static website in
+  `apps/web/.output/public`.
 - `pnpm --filter @octoboard/web generate` — exposes the same static generation command for deployment.
 - `pnpm --filter @octoboard/web generate:og-images` — runs `python3 scripts/generate-og-images.py` to draw one
   share image per language.
@@ -34,7 +36,8 @@ Run these commands from the repository root:
   Graph locale values, canonical and Markdown path helpers, and JSON-LD construction.
 - [`apps/web/seo/page-outline.ts`](seo/page-outline.ts) lists the homepage features, steps, questions, and
   platforms, the hero agents (a name plus an icon file in [`apps/web/public/agents/`](public/agents/)), the
-  workflow projects, and the privacy sections. The Vue app and the Markdown renderer both walk it.
+  workflow project roles and eight `workflowNodes`, the `collaborationScenarios`, and the privacy sections. The Vue app and the Markdown renderer
+  both walk it.
 - [`apps/web/seo/agent-documents.ts`](seo/agent-documents.ts) renders, from the locale catalogs and that
   outline, one Markdown file per homepage and privacy page, plus `llms.txt`, `llms-full.txt`, and
   `sitemap.md`. It reads catalogs with `node:fs` and is imported from `apps/web/nuxt.config.ts` and the Node
@@ -51,24 +54,32 @@ Run these commands from the repository root:
   script on the home and privacy pages.
 - [`apps/web/app/components/`](app/components/) owns navigation, language selection, the footer and the illustrative
   workflow; `LanguageSelect.vue` is shared by the header's desktop and mobile controls.
+- [`apps/web/app/components/SectionHeading.vue`](app/components/SectionHeading.vue) supplies the homepage's shared
+  numbered section heading.
+- [`apps/web/app/components/HeroMascot.vue`](app/components/HeroMascot.vue) owns the layered SVG animation of the
+  existing mascot artwork; [`apps/web/app/composables/useVisibleMotion.ts`](app/composables/useVisibleMotion.ts)
+  supplies element visibility, document visibility and reduced-motion gating for it and the workflow.
+- [`apps/web/app/components/ProductPreview.vue`](app/components/ProductPreview.vue) hosts the separately built
+  React preview in an iframe, with scene selection, loading/error handling, responsive presentation, and a link to
+  the standalone preview. It receives scroll handoffs from that iframe. The React entry and fixtures belong to
+  [`packages/ui/`](../../packages/ui/README.md).
 - [`apps/web/app/components/WorkflowDemo.vue`](app/components/WorkflowDemo.vue) renders the illustrative
-  workflow for the projects listed in [`apps/web/seo/page-outline.ts`](seo/page-outline.ts): task dispatch,
-  three reports to the same coordinator, shared delivery and replay, including measured connectors and
-  scoped layout and animation styles.
+  eight-node constellation from [`apps/web/seo/page-outline.ts`](seo/page-outline.ts), with the coordinator at its
+  center, project selection, task/report details, status and signal legends, and measured animated connectors. It
+  also supplies the initial server-rendered connector geometry.
 - [`apps/web/app/components/WorkflowStatus.vue`](app/components/WorkflowStatus.vue) supplies localized working and
   idle indicators matching the application's status glyphs: a working ping and Lucide's `MessageCircleMore` for idle.
   The original SVG paths come from `lucide-react` 1.52.0, with attribution in the component and license text in
   [`apps/web/public/licenses/lucide-icons.txt`](public/licenses/lucide-icons.txt).
 - [`apps/web/app/components/SiteIcon.vue`](app/components/SiteIcon.vue) supplies shared decorative icons from the local
-  SVG assets in [`apps/web/app/assets/icons/`](app/assets/icons/): platform brand icons come from Font Awesome Free
+  SVG assets in [`apps/web/app/assets/icons/`](app/assets/icons/): platform and GitHub brand icons come from Font Awesome Free
   6.7.2, and other UI icons come from Phosphor. The brand SVGs retain their embedded attribution; both libraries'
   license and attribution files are
   [`apps/web/public/licenses/font-awesome-free.txt`](public/licenses/font-awesome-free.txt) and
   [`apps/web/public/licenses/phosphor-icons.txt`](public/licenses/phosphor-icons.txt).
-- [`apps/web/app/components/WordReveal.vue`](app/components/WordReveal.vue) and
-  [`apps/web/app/composables/useSectionReveal.ts`](app/composables/useSectionReveal.ts) own the homepage's word and
-  section reveal effects; [`apps/web/app/components/AmbientParticles.vue`](app/components/AmbientParticles.vue) owns
-  the hero's decorative canvas and its animation lifecycle.
+- [`apps/web/app/composables/useSectionReveal.ts`](app/composables/useSectionReveal.ts) owns the homepage's section
+  reveal effects; [`apps/web/app/components/AmbientParticles.vue`](app/components/AmbientParticles.vue) owns the
+  hero's decorative canvas and its animation lifecycle. The homepage supplies the shared motion-pause state.
 - [`apps/web/app/assets/css/main.css`](app/assets/css/main.css) owns shared visual styles and the site's general
   reduced motion rules; component-specific styles also live in their Vue files.
 - [`apps/web/app/composables/useLiquidGlass.ts`](app/composables/useLiquidGlass.ts) owns the header's backdrop filter
@@ -82,6 +93,9 @@ Run these commands from the repository root:
 - [`apps/web/i18n/locales/`](i18n/locales/) holds all website copy, including privacy text and page metadata;
   [`apps/web/app/composables/useSiteCopy.ts`](app/composables/useSiteCopy.ts) supplies product and operator name
   interpolation from public runtime configuration.
+- [`apps/web/scripts/build-preview.mjs`](scripts/build-preview.mjs) invokes the UI package's `build:preview` before
+  website development and generation, placing the generated assets in the ignored `apps/web/public/preview/`
+  directory for Nuxt to serve and copy into the static output.
 - [`apps/web/scripts/check-locales.mjs`](scripts/check-locales.mjs) validates each catalog against the English source
   and the supported language list.
 - [`apps/web/scripts/generate-og-images.py`](scripts/generate-og-images.py) writes one committed 1200×630 PNG per
@@ -111,7 +125,8 @@ The English catalog is the message source, and the locale check validates every 
 client-side locale choice and persistence, reusing the shared language matcher in
 [`packages/ui/src/i18n/matchLanguage.ts`](../../packages/ui/src/i18n/matchLanguage.ts).
 
-Static generation includes every localized homepage and privacy page, their loading assets, `sitemap.xml`,
+Static generation includes every localized homepage and privacy page, their loading assets, the separately built
+React preview at `preview/website-preview.html`, `sitemap.xml`,
 `robots.txt`, and `404.html`, plus one Markdown file for each of those pages, `llms.txt`, `llms-full.txt`, and
 `sitemap.md`. English home Markdown is `index.md`; every other home is `{route code}.md` (Simplified Chinese
 is `zh.md`). Privacy Markdown is `privacy.md` or `{route code}/privacy.md`. Routes use directory indexes so

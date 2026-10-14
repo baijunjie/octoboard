@@ -5,3 +5,6 @@
 node_modules/
 .env
 .env.*
+
+# Generated React product preview
+/public/preview/

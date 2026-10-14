@@ -59,7 +59,8 @@ Per-package commands are in that package's doc.
 - [`apps/android/`](../apps/android/README.md) — placeholder for the native Android client; no content, not a
   workspace package.
 - [`apps/web/`](../apps/web/README.md) — `@octoboard/web`, the public Nuxt website: localized product and privacy
-  pages generated as static files for GitHub Pages, independent of the daemon and desktop UI.
+  pages generated as static files for GitHub Pages, including a fixture-backed preview built from the shared React UI,
+  without a live daemon connection.
 
 ## Shared packages
 
@@ -70,4 +71,5 @@ Per-package commands are in that package's doc.
   dialog, the other dialogs, the read-only file viewer (code, rendered Markdown, image and diff rendering behind an application-owned
   interface), the aside at the end side of the content panel (a console session's report panel or a project's
   browser, its files, its worktrees' uncommitted changes and a comparison of two local branches) and the internationalization (language choice and message catalogs), and a dev-only gallery of UI states
-  over a fixture daemon (`src/gallery/`, served by the dev server, not part of the build). Loaded by the `apps/desktop/` shell and also runs in a plain browser.
+  over a fixture daemon (`src/gallery/`, served by the dev server), plus the separate website-preview build. Loaded by
+  the `apps/desktop/` shell and also runs in a plain browser.

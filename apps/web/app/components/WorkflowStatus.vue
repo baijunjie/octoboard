@@ -62,7 +62,7 @@ const messagePaths = [
   line-height: 16px;
 }
 .workflow-status.working {
-  color: var(--red);
+  color: oklch(0.7 0.15 254);
 }
 .status-glyph {
   display: grid;

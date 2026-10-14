@@ -167,8 +167,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   (running sessions grouped by status in sidebar order, at most 10 per group with an "N more…" line, "No sessions
   running", Open, Quit), choosing a session from it, and its Quit.
 
-- [Website](product/website.md) — the localized homepage, privacy and error pages, keyboard navigation, motion,
-  illustrative workflow, release download links, platform roadmap (the Linux entry standing for the server form, and
+- [Website](product/website.md) — the localized homepage and its two product goals, privacy and error pages, keyboard
+  navigation, motion, interactive workflow illustration, sample application preview, release download links,
+  platform roadmap (the Linux entry standing for the server form, and
   the site copy that still has to say so), privacy disclosures, planned remote host support and how the server form
   differs from it, search indexing, and the agent-readable Markdown copies.
 

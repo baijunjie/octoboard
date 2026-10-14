@@ -22,7 +22,12 @@ const localePath = useLocalePath();
     </div>
     <div class="footer-bottom">
       <nav class="footer-links" :aria-label="t('navMenu')">
-        <a :href="config.public.repositoryUrl">GitHub</a
+        <a
+          :href="config.public.repositoryUrl"
+          class="github-link"
+          aria-label="GitHub"
+          title="GitHub"
+          ><SiteIcon name="github-logo" /></a
         ><NuxtLink :to="localePath('/privacy/')">{{
           t("footerPrivacy")
         }}</NuxtLink

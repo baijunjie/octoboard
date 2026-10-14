@@ -1,831 +1,738 @@
 <script setup lang="ts">
-import { workflowProjects as projects } from "../../seo/page-outline";
+import {
+  workflowNodes,
+  workflowProjects as projects,
+} from "../../seo/page-outline";
 
+defineProps<{ paused?: boolean }>();
 const { t } = useSiteCopy();
 const { locale } = useI18n();
 const config = useRuntimeConfig();
-const diagramId = useId();
-const markerId = `workflow-arrow-${diagramId}`;
-const body = ref<HTMLElement | null>(null);
-const request = ref<HTMLElement | null>(null);
-const coordinator = ref<HTMLElement | null>(null);
-const summary = ref<HTMLElement | null>(null);
-const delivery = ref<HTMLElement | null>(null);
-const cards = ref<HTMLElement[]>([]);
-const reports = ref<HTMLElement[]>([]);
-const receipts = ref<HTMLElement[]>([]);
-const intakeSignal = ref<SVGPathElement | null>(null);
-const dispatchSignals = ref<SVGPathElement[]>([]);
-const reportSignals = ref<SVGPathElement[]>([]);
-const deliverySignal = ref<SVGPathElement | null>(null);
-const projectStatus = ref<"working" | "idle">("idle");
-const coordinatorStatus = ref<"working" | "idle">("idle");
-const animating = ref(false);
-const canReplay = ref(false);
+const id = useId();
+const stage = ref<HTMLElement | null>(null);
+const center = ref<HTMLElement | null>(null);
+const nodeElements = ref<HTMLElement[]>([]);
+const running = useVisibleMotion(stage);
+const selected = ref(0);
+const measured = ref(false);
+const positions = [
+  [29, 13],
+  [71, 13],
+  [13, 37],
+  [87, 37],
+  [13, 67],
+  [87, 67],
+  [29, 90],
+  [71, 90],
+] as const;
+const nodes = workflowNodes.map((node, index) => ({
+  ...node,
+  x: positions[index]![0],
+  y: positions[index]![1],
+}));
+function curve(cx: number, cy: number, x: number, y: number) {
+  const dx = x - cx;
+  const dy = y - cy;
+  return `M${cx} ${cy}C${cx + dx * 0.15 - dy * 0.1} ${cy + dy * 0.55 + dx * 0.1} ${x - dx * 0.4} ${y - dy * 0.05} ${x} ${y}`;
+}
 const diagram = ref({
-  width: 1,
-  height: 1,
-  intake: "",
-  dispatch: [] as string[],
-  reports: [] as string[],
-  delivery: "",
+  width: 1000,
+  height: 640,
+  paths: nodes.map((node) => curve(500, 320, node.x * 10, node.y * 6.4)),
 });
-let dimensions: ResizeObserver | undefined;
-let visibility: IntersectionObserver | undefined;
-let direction: MutationObserver | undefined;
-let motion: MediaQueryList | undefined;
-let inView = false;
-let disposed = false;
-let sequenceVersion = 0;
-let animations: Animation[] = [];
+const activeProject = computed(() => nodes[selected.value]!.project.key);
+let observer: ResizeObserver | undefined;
 
-function measureDiagram() {
-  if (
-    !body.value ||
-    !request.value ||
-    !coordinator.value ||
-    !summary.value ||
-    !delivery.value
-  )
-    return false;
-  const root = body.value.getBoundingClientRect();
-  if (!root.width || !root.height) return false;
-  const relative = (element: HTMLElement) => {
+function measure() {
+  if (!stage.value || !center.value) return;
+  const bounds = stage.value.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) return;
+  const origin = center.value.getBoundingClientRect();
+  const cx = origin.left + origin.width / 2 - bounds.left;
+  const cy = origin.top + origin.height / 2 - bounds.top;
+  const stacked = matchMedia("(max-width: 760px)").matches;
+  const paths = nodes.map((_, index) => {
+    const element = nodeElements.value.find(
+      (node) => Number(node.dataset.index) === index,
+    );
+    if (!element) return "";
     const rect = element.getBoundingClientRect();
-    return {
-      left: rect.left - root.left,
-      right: rect.right - root.left,
-      top: rect.top - root.top,
-      bottom: rect.bottom - root.top,
-      cx: rect.left - root.left + rect.width / 2,
-      cy: rect.top - root.top + rect.height / 2,
-    };
-  };
-  const intake = relative(request.value);
-  const owner = relative(coordinator.value);
-  const collector = relative(summary.value);
-  const result = relative(delivery.value);
-  const lanes = projects.flatMap((project) => {
-    const card = cards.value.find(
-      (element) => element.dataset.project === project.key,
-    );
-    const report = reports.value.find(
-      (element) => element.dataset.project === project.key,
-    );
-    const receipt = receipts.value.find(
-      (element) => element.dataset.project === project.key,
-    );
-    return card && report && receipt
-      ? [
-          {
-            card: relative(card),
-            report: relative(report),
-            receipt: relative(receipt),
-          },
-        ]
-      : [];
+    const x = rect.left + rect.width / 2 - bounds.left;
+    const y = rect.top + rect.height / 2 - bounds.top;
+    return stacked
+      ? `M${cx} ${cy}C${cx} ${y} ${cx} ${y} ${x} ${y}`
+      : curve(cx, cy, x, y);
   });
-  if (lanes.length !== projects.length) return false;
-  const rtl = getComputedStyle(body.value).direction === "rtl";
-  const stacked = matchMedia("(max-width: 900px)").matches;
-  const branchY =
-    (owner.bottom + Math.min(...lanes.map((lane) => lane.card.top))) / 2;
-  const gatherY =
-    (Math.max(...lanes.map((lane) => lane.card.bottom)) + collector.top) / 2;
-  // Mobile uses two straight outside rails: dispatch enters cards, reports travel to the same coordinator below.
-  const dispatchRail = rtl
-    ? Math.max(...lanes.map((lane) => lane.card.right)) + 12
-    : Math.min(...lanes.map((lane) => lane.card.left)) - 12;
-  const reportRail = rtl
-    ? Math.min(...lanes.map((lane) => lane.card.left)) - 12
-    : Math.max(...lanes.map((lane) => lane.card.right)) + 12;
-  const nextDiagram = {
-    width: root.width,
-    height: root.height,
-    intake: `M${intake.cx} ${intake.bottom}V${owner.top}`,
-    dispatch: lanes.map(({ card }) =>
-      stacked
-        ? `M${owner.cx} ${owner.bottom}V${branchY}H${dispatchRail}V${card.top + 32}H${rtl ? card.right : card.left}`
-        : `M${owner.cx} ${owner.bottom}V${branchY}H${card.cx}V${card.top}`,
-    ),
-    reports: lanes.map(({ report, receipt }) =>
-      stacked
-        ? `M${rtl ? report.left : report.right} ${report.cy}H${reportRail}V${gatherY}H${receipt.cx}V${receipt.cy}`
-        : `M${report.cx} ${report.bottom}V${gatherY}H${receipt.cx}V${receipt.cy}`,
-    ),
-    delivery: `M${collector.cx} ${collector.bottom}V${result.top}`,
-  };
-  if (JSON.stringify(nextDiagram) === JSON.stringify(diagram.value))
-    return false;
-  diagram.value = nextDiagram;
-  return true;
+  diagram.value = { width: bounds.width, height: bounds.height, paths };
+  measured.value = true;
 }
-
-function cancelSequence() {
-  for (const animation of animations) animation.cancel();
-  animations = [];
-  animating.value = false;
-  projectStatus.value = "idle";
-  coordinatorStatus.value = "idle";
-}
-function refreshGeometry() {
-  if (!measureDiagram()) return;
-  sequenceVersion++;
-  cancelSequence();
-}
-function signal(
-  element: SVGPathElement | null,
-  delay: number,
-  duration: number,
-) {
-  if (!element) return;
-  const animation = element.animate(
-    [
-      { strokeDashoffset: "0.08", opacity: 0 },
-      { strokeDashoffset: "0", opacity: 1, offset: 0.08 },
-      { strokeDashoffset: "-0.92", opacity: 1, offset: 0.92 },
-      { strokeDashoffset: "-1", opacity: 0 },
-    ],
-    { delay, duration, easing: "cubic-bezier(0.45, 0, 0.55, 1)" },
-  );
-  animations.push(animation);
-  return animation;
-}
-function emphasize(
-  element: HTMLElement | null,
-  delay: number,
-  duration: number,
-) {
-  if (!element) return;
-  const animation = element.animate(
-    [
-      { boxShadow: "inset 0 0 0 1px transparent" },
-      { boxShadow: "inset 0 0 0 1px #ff4b3e", offset: 0.25 },
-      { boxShadow: "inset 0 0 0 1px #ff4b3e", offset: 0.7 },
-      { boxShadow: "inset 0 0 0 1px transparent" },
-    ],
-    { delay, duration, easing: "cubic-bezier(0.45, 0, 0.55, 1)" },
-  );
-  animations.push(animation);
-  return animation;
-}
-function whenFinished(
-  animation: Animation | undefined,
-  version: number,
-  action: () => void,
-) {
-  if (animation)
-    animation.onfinish = () => {
-      if (!disposed && version === sequenceVersion) action();
-    };
-}
-function replay() {
-  const version = ++sequenceVersion;
-  cancelSequence();
-  measureDiagram();
-  void nextTick(() => {
-    if (
-      disposed ||
-      version !== sequenceVersion ||
-      !inView ||
-      document.hidden ||
-      !canReplay.value
-    )
-      return;
-    animating.value = true;
-    coordinatorStatus.value = "working";
-    signal(intakeSignal.value, 0, 450);
-    for (const element of dispatchSignals.value) {
-      whenFinished(signal(element, 450, 1000), version, () => {
-        projectStatus.value = "working";
-      });
-    }
-    for (const element of cards.value) {
-      whenFinished(emphasize(element, 1450, 1800), version, () => {
-        projectStatus.value = "idle";
-      });
-    }
-    for (const element of reports.value) emphasize(element, 3250, 1800);
-    for (const element of reportSignals.value) signal(element, 5050, 1000);
-    emphasize(coordinator.value, 6050, 1600);
-    whenFinished(emphasize(summary.value, 6050, 1600), version, () => {
-      coordinatorStatus.value = "idle";
-    });
-    signal(deliverySignal.value, 7650, 450);
-    whenFinished(emphasize(delivery.value, 8100, 1800), version, () => {
-      animating.value = false;
-    });
-  });
-}
-function updateMotion() {
-  canReplay.value =
-    !motion?.matches && typeof body.value?.animate === "function";
-  if (canReplay.value) replay();
-  else {
-    sequenceVersion++;
-    cancelSequence();
-  }
-}
-function onVisibilityChange() {
-  for (const animation of animations) {
-    if (document.hidden && animation.playState === "running") animation.pause();
-    else if (
-      !document.hidden &&
-      inView &&
-      canReplay.value &&
-      animation.playState === "paused"
-    )
-      animation.play();
-  }
-  animating.value =
-    !document.hidden &&
-    inView &&
-    animations.some((animation) => animation.playState === "running");
-}
-watch(locale, () => nextTick(refreshGeometry), { flush: "post" });
+watch(locale, () => nextTick(measure), { flush: "post" });
 onMounted(() => {
-  motion = matchMedia("(prefers-reduced-motion: reduce)");
-  motion.addEventListener("change", updateMotion);
-  document.addEventListener("visibilitychange", onVisibilityChange);
-  measureDiagram();
-  updateMotion();
-  if ("ResizeObserver" in window) {
-    dimensions = new ResizeObserver(refreshGeometry);
-    for (const element of [
-      body.value,
-      request.value,
-      coordinator.value,
-      summary.value,
-      delivery.value,
-      ...cards.value,
-      ...reports.value,
-      ...receipts.value,
-    ]) {
-      if (element) dimensions.observe(element);
-    }
-  }
-  if ("MutationObserver" in window) {
-    direction = new MutationObserver(refreshGeometry);
-    direction.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["dir"],
-    });
-  }
-  if ("IntersectionObserver" in window && body.value) {
-    visibility = new IntersectionObserver(
-      ([entry]) => {
-        const visible = entry?.isIntersecting ?? false;
-        if (visible === inView) return;
-        inView = visible;
-        if (inView) replay();
-        else {
-          animating.value = false;
-          for (const animation of animations)
-            if (animation.playState === "running") animation.pause();
-        }
-      },
-      { threshold: 0.1 },
-    );
-    visibility.observe(body.value);
-  }
+  measure();
+  observer = new ResizeObserver(measure);
+  if (stage.value) observer.observe(stage.value);
+  for (const element of nodeElements.value) observer.observe(element);
 });
-onBeforeUnmount(() => {
-  disposed = true;
-  sequenceVersion++;
-  cancelSequence();
-  dimensions?.disconnect();
-  visibility?.disconnect();
-  direction?.disconnect();
-  motion?.removeEventListener("change", updateMotion);
-  document.removeEventListener("visibilitychange", onVisibilityChange);
-});
+onBeforeUnmount(() => observer?.disconnect());
 </script>
 
 <template>
-  <div class="workflow-board" role="group" :aria-label="t('demoLabel')">
-    <div class="workflow-board-header">
-      <span><SiteIcon name="tree-structure" />{{ t("demoWorkspace") }}</span>
+  <div
+    class="workflow-board"
+    :class="{ running: running && !paused }"
+    role="group"
+    :aria-label="t('demoLabel')"
+  >
+    <div class="workflow-heading">
+      <span class="workflow-caption"
+        ><SiteIcon name="tree-structure" />{{ t("demoWorkspace") }}</span
+      >
       <span>{{ t("demoIllustration") }}</span>
     </div>
-    <div ref="body" class="workflow-body">
-      <div ref="request" class="request-block">
-        <span class="eyebrow">{{ t("demoYou") }}</span>
+    <div class="workflow-request">
+      <span class="workflow-index" aria-hidden="true">01</span>
+      <div>
+        <span class="workflow-caption">{{ t("demoYou") }}</span>
         <p>{{ t("demoRequest") }}</p>
       </div>
-      <div class="intake-space" aria-hidden="true" />
-      <div ref="coordinator" class="coordinator-block">
-        <div class="coordinator-heading">
-          <SiteIcon name="tree-structure" /><span>{{
-            t("demoCoordinator")
-          }}</span>
-        </div>
-        <p>{{ t("demoCoordinatorText") }}</p>
-        <WorkflowStatus :status="coordinatorStatus" :animating="animating" />
-      </div>
-      <div class="branch-space" aria-hidden="true" />
-      <div class="project-grid">
-        <article
-          v-for="project in projects"
-          :key="project.key"
-          ref="cards"
-          :data-project="project.key"
-          class="project-card"
-          :aria-labelledby="`${diagramId}-${project.key}`"
-        >
-          <header class="project-heading">
-            <h3 :id="`${diagramId}-${project.key}`">
-              {{ t(`demo${project.key}`) }}
-            </h3>
-            <span class="code-path" dir="ltr">{{ project.path }}</span>
-          </header>
-          <div class="agent-identity">
-            <img
-              :src="`${config.app.baseURL}agents/${project.icon}.svg`"
-              alt=""
-              width="28"
-              height="28"
-            />
-            <div class="agent-copy">
-              <strong>{{ project.agent }}</strong
-              ><span>{{ t("demoContext") }}</span>
-            </div>
-            <WorkflowStatus :status="projectStatus" :animating="animating" />
-          </div>
-          <p class="session-rules">{{ t("demoRules") }}</p>
-          <p class="project-task">{{ t(`demo${project.key}Task`) }}</p>
-          <div ref="reports" :data-project="project.key" class="project-report">
-            <span class="report-label"
-              ><SiteIcon name="chat-circle-dots" />{{
-                t("demoReportLabel")
-              }}</span
-            >
-            <p>{{ t(`demo${project.key}Report`) }}</p>
-          </div>
-        </article>
-      </div>
-      <div class="branch-space" aria-hidden="true" />
-      <div ref="summary" class="summary-block">
-        <div class="receipt-ports" aria-hidden="true">
-          <span
-            v-for="project in projects"
-            :key="project.key"
-            ref="receipts"
-            :data-project="project.key"
-          />
-        </div>
-        <div class="coordinator-heading">
-          <SiteIcon name="tree-structure" /><span>{{
-            t("demoReportsTitle")
-          }}</span>
-        </div>
-        <p>{{ t("demoReportsDescription") }}</p>
-      </div>
-      <div class="intake-space" aria-hidden="true" />
-      <div ref="delivery" class="delivery-block">
-        <SiteIcon name="plugs-connected" />
-        <div>
-          <h3>{{ t("demoDeliveryTitle") }}</h3>
-          <p>{{ t("demoDeliveryDescription") }}</p>
-        </div>
-      </div>
+    </div>
+    <div ref="stage" class="constellation" dir="ltr">
       <svg
-        class="connector-layer"
+        class="network-layer"
+        :class="{ measured }"
         :viewBox="`0 0 ${diagram.width} ${diagram.height}`"
         aria-hidden="true"
       >
-        <defs>
-          <marker
-            :id="markerId"
-            viewBox="0 0 8 8"
-            refX="8"
-            refY="4"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto"
-          >
-            <path d="M1 1L7 4L1 7" fill="none" stroke="currentColor" />
-          </marker>
-        </defs>
-        <path
-          :d="diagram.intake"
-          class="connector-track"
-          :marker-end="`url(#${markerId})`"
-        />
-        <path
-          v-for="(path, index) in diagram.dispatch"
-          :key="`dispatch-${index}`"
-          :d="path"
-          class="connector-track"
-          :marker-end="`url(#${markerId})`"
-        />
-        <path
-          v-for="(path, index) in diagram.reports"
-          :key="`report-${index}`"
-          :d="path"
-          class="connector-track report-track"
-          :marker-end="`url(#${markerId})`"
-        />
-        <path
-          :d="diagram.delivery"
-          class="connector-track"
-          :marker-end="`url(#${markerId})`"
-        />
-        <path
-          ref="intakeSignal"
-          :d="diagram.intake"
-          class="connector-signal"
-          pathLength="1"
-        />
-        <path
-          v-for="(path, index) in diagram.dispatch"
-          :key="`dispatch-signal-${index}`"
-          ref="dispatchSignals"
-          :d="path"
-          class="connector-signal"
-          pathLength="1"
-        />
-        <path
-          v-for="(path, index) in diagram.reports"
-          :key="`report-signal-${index}`"
-          ref="reportSignals"
-          :d="path"
-          class="connector-signal report-signal"
-          pathLength="1"
-        />
-        <path
-          ref="deliverySignal"
-          :d="diagram.delivery"
-          class="connector-signal"
-          pathLength="1"
-        />
+        <g
+          v-for="(path, index) in diagram.paths"
+          :key="index"
+          :class="{ 'selected-link': selected === index }"
+        >
+          <path :d="path" class="network-track" />
+          <path
+            :d="path"
+            class="network-dispatch"
+            pathLength="1"
+            :style="{ animationDelay: `${index * -0.7}s` }"
+          />
+          <path
+            :d="path"
+            class="network-report"
+            pathLength="1"
+            :style="{ animationDelay: `${index * -0.7 - 2.8}s` }"
+          />
+        </g>
       </svg>
+      <div ref="center" class="command-core" dir="auto">
+        <div class="core-orbit" aria-hidden="true" />
+        <span class="core-index" aria-hidden="true">02</span>
+        <img
+          :src="`${config.app.baseURL}logo-640.png`"
+          alt=""
+          width="150"
+          height="150"
+          loading="lazy"
+        />
+        <strong>{{ t("demoCoordinator") }}</strong>
+        <p>{{ t("demoCoordinatorText") }}</p>
+      </div>
+      <div class="agent-nodes">
+        <!-- These controls belong to the Vue marketing site, outside the React HeroUI application. -->
+        <button
+          v-for="(node, index) in nodes"
+          :id="`${id}-node-${index}`"
+          :key="node.path"
+          ref="nodeElements"
+          :data-index="index"
+          type="button"
+          class="agent-node"
+          :class="{ selected: selected === index }"
+          :style="{ '--node-x': `${node.x}%`, '--node-y': `${node.y}%` }"
+          :aria-pressed="selected === index"
+          :aria-controls="`${id}-detail-${node.project.key}`"
+          @click="selected = index"
+        >
+          <span class="node-port" aria-hidden="true" />
+          <span class="node-brand"
+            ><img
+              :src="`${config.app.baseURL}agents/${node.project.icon}.svg`"
+              alt=""
+              width="20"
+              height="20"
+            /><strong>{{ node.project.agent }}</strong
+            ><span class="node-arrow" aria-hidden="true">↗</span></span
+          >
+          <span class="node-project" dir="auto">{{
+            t(`demo${node.project.key}`)
+          }}</span>
+          <span class="node-path" dir="ltr">{{ node.path }}</span>
+        </button>
+      </div>
     </div>
-    <div class="workflow-footer">
-      <p><SiteIcon name="chat-circle-dots" />{{ t("demoDirect") }}</p>
-      <button v-if="canReplay" type="button" @click="replay">
-        {{ t("demoReplay") }}
-      </button>
+    <div class="project-details">
+      <article
+        v-for="project in projects"
+        v-show="activeProject === project.key"
+        :id="`${id}-detail-${project.key}`"
+        :key="project.key"
+        class="project-detail"
+        :aria-labelledby="`${id}-detail-heading-${project.key}`"
+      >
+        <div class="detail-context">
+          <h3 :id="`${id}-detail-heading-${project.key}`">
+            {{ t(`demo${project.key}`) }}
+          </h3>
+          <span class="detail-path" dir="ltr">{{ nodes[selected]!.path }}</span>
+          <span>{{ t("demoContext") }}</span>
+          <p>{{ t("demoRules") }}</p>
+        </div>
+        <div class="detail-task">
+          <span class="detail-label">{{ project.agent }}</span>
+          <p>{{ t(`demo${project.key}Task`) }}</p>
+        </div>
+        <div class="detail-report">
+          <span class="detail-label"
+            ><SiteIcon name="chat-circle-dots" />{{
+              t("demoReportLabel")
+            }}</span
+          >
+          <p>{{ t(`demo${project.key}Report`) }}</p>
+        </div>
+      </article>
     </div>
+    <div class="workflow-summary">
+      <span class="workflow-index" aria-hidden="true">03</span>
+      <div>
+        <h3>{{ t("demoReportsTitle") }}</h3>
+        <p>{{ t("demoReportsDescription") }}</p>
+      </div>
+      <SiteIcon name="plugs-connected" />
+      <div class="summary-delivery">
+        <h3>{{ t("demoDeliveryTitle") }}</h3>
+        <p>{{ t("demoDeliveryDescription") }}</p>
+      </div>
+    </div>
+    <div class="workflow-legend">
+      <span
+        ><i class="dispatch-swatch" aria-hidden="true" />{{
+          t("demoDispatch")
+        }}</span
+      >
+      <span
+        ><i class="report-swatch" aria-hidden="true" />{{
+          t("demoReportLabel")
+        }}</span
+      >
+      <WorkflowStatus status="working" :animating="running && !paused" />
+      <WorkflowStatus status="idle" :animating="false" />
+    </div>
+    <p class="workflow-footer">
+      <SiteIcon name="chat-circle-dots" />{{ t("demoDirect") }}
+    </p>
   </div>
 </template>
 
 <style scoped>
 .workflow-board {
-  border: 1px solid #515151;
-  background: #181818;
+  --network-background: #101112;
+  position: relative;
+  background: var(--network-background);
+  border: 1px solid #ffffff20;
+  overflow: hidden;
 }
-.workflow-board-header {
+.workflow-heading {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 24px;
-  background: #272727;
-  color: #ababab;
+  padding: 20px 28px;
+  border-bottom: 1px solid #ffffff16;
+  color: #a7a7ab;
   font-size: 12px;
-  line-height: 16px;
+  line-height: 1.5;
 }
-.workflow-board-header > span:first-child {
-  display: flex;
+.workflow-caption {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  color: #f5f5f5;
+  gap: 10px;
+  color: #bfc0c3;
+  font-size: 12px;
+  letter-spacing: 0.04em;
 }
-.workflow-board-header .site-icon {
+.workflow-caption .site-icon {
   width: 16px;
   height: 16px;
 }
-.workflow-body {
-  position: relative;
-  padding: 32px;
-}
-.request-block,
-.coordinator-block,
-.summary-block,
-.delivery-block {
-  width: min(100%, 680px);
-  margin-inline: auto;
-}
-.request-block {
-  text-align: center;
-  padding: 16px;
-}
-.request-block .eyebrow {
-  justify-content: center;
-}
-.request-block p {
-  margin-top: 16px;
-  font-size: 20px;
-  line-height: 28px;
-}
-.coordinator-block,
-.summary-block {
-  position: relative;
-  padding: 24px;
-  border: 1px solid #797979;
-  background: #272727;
-  text-align: center;
-}
-.coordinator-heading {
+.workflow-request {
   display: flex;
-  justify-content: center;
+  gap: 24px;
   align-items: center;
-  gap: 16px;
+  padding: 34px 40px 0;
+}
+.workflow-index {
+  color: #8b8c91;
+  font-family: var(--font-mono, monospace);
+  font-size: 42px;
+  line-height: 1;
+  font-weight: 300;
+  letter-spacing: -0.08em;
+  flex-shrink: 0;
+}
+.workflow-request p {
+  color: #f0f0f2;
+  font-size: clamp(18px, 2.1vw, 25px);
+  line-height: 1.5;
+  margin-top: 8px;
+}
+.constellation {
+  position: relative;
+  min-height: 640px;
+  background: radial-gradient(ellipse at center, #ffffff05, transparent 55%);
+}
+.constellation::before {
+  content: "";
+  position: absolute;
+  width: 42%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1px dashed #ffffff0b;
+  left: 29%;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.network-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.network-track {
+  fill: none;
+  stroke: #ffffff26;
+  stroke-width: 1;
+}
+.selected-link .network-track {
+  stroke: #ff4b3e66;
+}
+.network-dispatch,
+.network-report {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-dasharray: 0.065 1;
+  stroke-dashoffset: 1.065;
+  animation: network-signal 7s linear infinite;
+  animation-play-state: paused;
+}
+.network-dispatch {
+  stroke: #e1e1e8;
+}
+.network-report {
+  stroke: #ff675b;
+  animation-direction: reverse;
+  stroke-width: 1;
+}
+.running .network-dispatch,
+.running .network-report {
+  animation-play-state: running;
+}
+.command-core {
+  position: absolute;
+  z-index: 1;
+  width: 240px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  padding: 12px 12px 24px;
+  background: radial-gradient(ellipse, #101112 55%, #10111200 72%);
+}
+.command-core img {
+  display: block;
+  width: 150px;
+  height: 150px;
+  margin: 0 auto 4px;
+  position: relative;
+}
+.command-core strong {
   color: #f5f5f5;
   font-size: 16px;
-  line-height: 24px;
+  line-height: 1.6;
+  position: relative;
 }
-.coordinator-heading .site-icon {
-  color: var(--red);
-  flex-shrink: 0;
-}
-.coordinator-block > p,
-.summary-block > p {
-  margin-top: 16px;
-  color: #d0d0d0;
-  font-size: 16px;
-  line-height: 24px;
-}
-.coordinator-block .workflow-status {
-  justify-content: center;
-  margin-top: 16px;
-}
-.branch-space {
-  height: 48px;
-}
-.intake-space {
-  height: 32px;
-}
-.project-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: stretch;
-  gap: 24px;
-}
-.project-card {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: 24px;
-  border: 1px solid #515151;
-  background: #1f1f1f;
-}
-.project-heading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px 16px;
-  margin-bottom: 24px;
-}
-.project-heading h3 {
-  font-size: 20px;
-  line-height: 28px;
-}
-.code-path {
+.command-core p {
   font-size: 12px;
-  line-height: 16px;
-  color: #b4b4b4;
-  overflow-wrap: anywhere;
+  line-height: 1.8;
+  color: #afb0b5;
+  margin-top: 9px;
+  position: relative;
 }
-.agent-identity {
+.core-orbit {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  top: -6px;
+  left: 20px;
+  border: 1px solid #ff4b3e25;
+  border-radius: 50%;
+}
+.core-orbit::before,
+.core-orbit::after {
+  content: "";
+  position: absolute;
+  inset: -12px;
+  border: 1px solid #ffffff0a;
+  border-radius: 50%;
+}
+.core-orbit::after {
+  inset: -26px;
+  border-style: dashed;
+}
+.core-index {
+  position: absolute;
+  inset-inline-end: 10px;
+  top: 2px;
+  color: #96969b;
+  font: 24px/1.2 monospace;
+}
+.agent-node {
+  position: absolute;
+  z-index: 2;
+  left: var(--node-x);
+  top: var(--node-y);
+  transform: translate(-50%, -50%);
+  width: 190px;
+  padding: 15px 18px;
+  color: #e1e1e5;
+  border: 1px solid #63636a;
+  border-radius: 5px;
+  background: linear-gradient(120deg, #1b1c1f, #141517);
+  text-align: start;
+  cursor: pointer;
+  transition:
+    border-color 180ms,
+    background 180ms;
+}
+.agent-node:hover {
+  border-color: #a0a1a6;
+  background: #202124;
+}
+.agent-node.selected {
+  border-color: #ff786c;
+  background: linear-gradient(120deg, #272021, #171719);
+}
+.agent-node:focus {
+  outline: 2px solid #f1f1f1;
+  outline-offset: 5px;
+}
+.node-port {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  background: #9d9fa6;
+  border-radius: 50%;
+  left: -3px;
+  top: calc(50% - 2px);
+  box-shadow: 0 0 0 4px #101112;
+}
+.selected .node-port {
+  background: #ff786c;
+}
+.node-brand {
   display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
   align-items: center;
-  margin-bottom: 16px;
+  gap: 8px;
 }
-.agent-copy {
-  flex: 1;
-  min-width: 96px;
-}
-.agent-identity .workflow-status {
-  margin-inline-start: auto;
-  max-width: 100%;
-}
-.agent-identity img {
+.node-brand img {
   flex-shrink: 0;
 }
-.agent-identity strong {
-  display: block;
-  font-size: 16px;
-  line-height: 24px;
+.node-brand strong {
+  font-size: 13px;
+  line-height: 1.5;
   font-weight: 500;
 }
-.agent-copy > span {
+.node-arrow {
+  color: #b8b8c0;
+  margin-inline-start: auto;
+  font-size: 16px;
+}
+.node-project {
   display: block;
-  color: #ababab;
+  color: #eeeef0;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-top: 12px;
+}
+.node-path {
+  display: block;
+  color: #9d9fa6;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.project-details {
+  margin: 10px 28px 0;
+  padding: 24px 0;
+  border-block: 1px solid #ffffff20;
+}
+.project-detail {
+  display: grid;
+  grid-template-columns: 0.85fr 1fr 1.2fr;
+  gap: 30px;
+}
+.detail-context h3 {
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.detail-context > span {
+  display: block;
+  margin-top: 6px;
+  color: #aaaab0;
   font-size: 12px;
-  line-height: 16px;
+  line-height: 1.6;
 }
-.session-rules {
-  color: #ababab;
+.detail-context .detail-path {
+  color: #d1d1d5;
+  font-family: var(--font-mono, monospace);
+}
+.detail-context p {
+  color: #aaaab0;
   font-size: 12px;
-  line-height: 16px;
-  margin-top: 16px;
+  line-height: 1.8;
+  margin-top: 12px;
 }
-.project-task {
-  font-size: 18px;
-  line-height: 28px;
-  color: #f5f5f5;
-  margin-top: 24px;
-  margin-bottom: 24px;
-}
-.project-report {
-  margin-top: auto;
-  padding: 16px;
-  border: 1px solid #666;
-  background: #131209;
-}
-.report-label {
+.detail-label {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  line-height: 16px;
-  color: #c8c8c8;
+  line-height: 1.8;
+  color: #c0c0c6;
 }
-.report-label .site-icon {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-  color: var(--red);
+.detail-label .site-icon {
+  width: 16px;
+  height: 16px;
+  color: #ff867b;
 }
-.project-report > p {
-  margin-top: 16px;
+.detail-task p,
+.detail-report p {
+  margin-top: 12px;
+  color: #e0e0e5;
   font-size: 14px;
-  line-height: 20px;
-  color: #deded4;
+  line-height: 1.8;
 }
-.workflow-body p,
-.coordinator-heading,
-.agent-identity {
-  overflow-wrap: anywhere;
+.detail-report {
+  border-inline-start: 1px solid #ff4b3e40;
+  padding-inline-start: 24px;
 }
-.receipt-ports {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  position: absolute;
-  inset-inline: 20%;
-  top: -3px;
-  height: 6px;
-}
-.receipt-ports > span {
-  width: 6px;
-  height: 6px;
-  background: #d0d0d0;
-  margin-inline: auto;
-}
-.delivery-block {
+.workflow-summary {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
-  padding: 24px;
-  border: 1px solid #797979;
-  background: #272727;
+  gap: 24px;
+  padding: 30px 28px;
 }
-.delivery-block > .site-icon {
-  color: #72d6a0;
-  flex-shrink: 0;
+.workflow-summary > div {
+  flex: 1;
+  min-width: 0;
 }
-.delivery-block h3 {
-  font-size: 20px;
-  line-height: 28px;
+.workflow-summary h3 {
+  color: #e1e1e5;
+  font-size: 15px;
+  line-height: 1.6;
+  font-weight: 500;
 }
-.delivery-block p {
+.workflow-summary p {
+  color: #a8a8ae;
+  font-size: 12px;
+  line-height: 1.8;
   margin-top: 8px;
-  color: #c5c5c5;
-  font-size: 14px;
-  line-height: 20px;
 }
-.connector-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  pointer-events: none;
-  color: #ababab;
-}
-.connector-track {
-  fill: none;
-  stroke: #797979;
-  stroke-width: 1;
-  stroke-linejoin: round;
-}
-.report-track {
-  stroke: #9a645f;
-}
-.connector-signal {
-  fill: none;
-  stroke: #f5f5f5;
-  stroke-width: 2;
-  stroke-dasharray: 0.08 2;
-  stroke-dashoffset: 0.08;
-  opacity: 0;
-}
-.report-signal {
-  stroke: var(--red);
+.workflow-summary > .site-icon {
+  color: #aaaab0;
+  margin-top: 5px;
+  flex-shrink: 0;
 }
 .workflow-footer {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
+  gap: 12px;
   align-items: center;
-  gap: 16px;
-  padding: 24px 24px;
-  border-top: 1px solid #515151;
+  color: #babac0;
+  font-size: 12px;
+  line-height: 1.7;
+  padding: 18px 28px;
+  background: #ffffff04;
+  border-top: 1px solid #ffffff0c;
 }
-.workflow-footer p {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  color: #c5c5c5;
-  font-size: 14px;
-  line-height: 20px;
-}
-.workflow-footer p .site-icon {
-  width: 20px;
-  height: 20px;
+.workflow-footer .site-icon {
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
 }
-.workflow-footer button {
-  padding: 8px 16px;
-  border: 1px solid #797979;
-  color: #f5f5f5;
-  background: #272727;
+.workflow-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  padding: 0 28px 24px;
+  color: #b9b9bf;
   font-size: 12px;
-  line-height: 16px;
-  transition: background 300ms cubic-bezier(0.32, 0.72, 0, 1);
+  line-height: 1.6;
 }
-.workflow-footer button:hover {
-  background: #313131;
+.workflow-legend > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.workflow-footer button:active {
-  background: #272727;
-  transform: translateY(1px);
+.workflow-legend i {
+  display: inline-block;
+  width: 24px;
+  height: 1px;
+  background: #e1e1e8;
+  position: relative;
 }
-@media (max-width: 1100px) {
-  .workflow-body {
-    padding: 24px;
-  }
-  .project-grid {
-    gap: 16px;
-  }
-  .project-card {
-    padding: 16px;
-  }
-  .project-report {
-    padding: 16px;
+.workflow-legend i::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: -2px;
+  width: 5px;
+  height: 5px;
+  border-top: 1px solid currentColor;
+  border-right: 1px solid currentColor;
+  transform: rotate(45deg);
+}
+.workflow-legend .report-swatch {
+  background: #ff867b;
+  color: #ff867b;
+  transform: rotate(180deg);
+}
+@keyframes network-signal {
+  to {
+    stroke-dashoffset: -1.065;
   }
 }
-@media (max-width: 900px) {
-  .project-grid {
-    grid-template-columns: minmax(0, 1fr);
+@media (max-width: 1050px) and (min-width: 761px) {
+  .agent-node {
+    width: 160px;
+    padding: 12px;
+  }
+  .command-core {
+    width: 210px;
+  }
+  .core-orbit {
+    left: 5px;
+  }
+  .constellation {
+    min-height: 600px;
+  }
+}
+@media (max-width: 760px) {
+  .network-layer:not(.measured) {
+    display: none;
+  }
+  .workflow-heading {
+    padding: 16px 20px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .workflow-request {
+    padding: 28px 20px 0;
+    gap: 20px;
+  }
+  .constellation {
+    min-height: 0;
+    padding: 24px 20px 16px;
+  }
+  .constellation::before {
+    width: 260px;
+    left: calc(50% - 130px);
+    top: 140px;
+  }
+  .command-core {
+    position: relative;
+    left: auto;
+    top: auto;
+    transform: none;
+    width: 240px;
+    margin: 0 auto 38px;
+  }
+  .agent-nodes {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px 32px;
+  }
+  .agent-node {
+    position: relative;
+    width: auto;
+    left: auto;
+    top: auto;
+    transform: none;
+    padding: 14px;
+  }
+  .agent-node:nth-child(odd) .node-port {
+    left: auto;
+    right: -3px;
+  }
+  .node-brand {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .node-brand strong {
+    font-size: 12px;
+  }
+  .node-arrow {
+    display: none;
+  }
+  .project-details {
+    margin-inline: 20px;
+  }
+  .project-detail {
+    grid-template-columns: 1fr;
     gap: 24px;
-    margin-inline: 16px;
   }
-  .project-card {
-    padding: 24px;
+  .detail-context p {
+    margin-top: 8px;
   }
-  .project-report {
-    padding: 16px;
+  .detail-report {
+    padding-inline-start: 16px;
   }
-  .project-heading {
-    margin-bottom: 24px;
+  .workflow-summary {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 22px 20px;
+    padding: 28px 20px;
+  }
+  .workflow-summary > .site-icon {
+    margin-inline: auto;
+  }
+  .workflow-footer {
+    padding: 18px 20px;
   }
 }
-@media (max-width: 480px) {
-  .workflow-body {
-    padding: 16px;
+@media (max-width: 380px) {
+  .agent-nodes {
+    gap: 20px 24px;
   }
-  .workflow-board-header,
-  .workflow-footer {
-    padding: 16px;
+  .agent-node {
+    padding: 12px 10px;
   }
-  .coordinator-block,
-  .summary-block,
-  .delivery-block {
-    padding: 24px 16px;
-  }
-  .project-card {
-    padding: 16px;
-  }
-  .project-report {
-    padding: 16px;
-  }
-  .request-block p,
-  .project-heading h3,
-  .delivery-block h3 {
-    font-size: 18px;
-    line-height: 28px;
+  .node-brand img {
+    width: 18px;
+    height: 18px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .connector-signal {
+  .network-dispatch,
+  .network-report {
+    animation: none;
     display: none;
+  }
+  .agent-node {
+    transition: none;
   }
 }
 </style>

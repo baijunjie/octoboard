@@ -371,7 +371,10 @@ export function TerminalPane({
       data-escape-scope
       data-region="terminal"
       className="relative flex min-h-0 min-w-0 flex-1 flex-col"
-      style={{ backgroundColor: XTERM_THEMES[colorTheme].background }}
+      style={{
+        "--terminal-background": XTERM_THEMES[colorTheme].background,
+        backgroundColor: "var(--terminal-background)",
+      } as React.CSSProperties}
     >
       {/* The padding sits on a wrapper, not on the element xterm is mounted in: the fit addon sizes
           the terminal from that element's computed height and width, padding included, so padding

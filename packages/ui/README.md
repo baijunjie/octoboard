@@ -12,7 +12,8 @@ archive view, the dialogs and the settings dialog, toasts and the failure screen
 It talks to `octoboardd` (see [`../../apps/daemon/`](../../apps/daemon/README.md)) only over the WebSocket protocol in
 [`../../apps/daemon/PROTOCOL.md`](../../apps/daemon/PROTOCOL.md), and reaches anything native (quit flow, system
 notifications, Dock badge, the native window's own theme, the window chrome, the app menu, the menu bar icon, the macOS privacy grants) only through the platform
-adapter, which is chosen once at startup.
+adapter, which is chosen once at startup. The separate website-preview entry renders the same `App` over local
+fixtures for the public website, without a live daemon connection.
 
 ## Development
 
@@ -29,6 +30,41 @@ the scripts from this directory.
 - `pnpm build` — typechecks, runs the catalog check (`vitest run src/i18n`), then writes `dist/` with relative asset
   paths, so a static server or a shell can serve it from any path. Opening `dist/index.html` over `file://` does not
   work: Chrome refuses module scripts from a `null` origin.
+- `pnpm build:preview` — builds the standalone website demonstration into `apps/web/public/preview/` using
+  `vite.preview.config.ts`; the website's development and generation commands invoke it.
+
+### Website product preview
+
+[`packages/ui/website-preview.html`](website-preview.html) is a separate entry whose build is owned by
+[`packages/ui/vite.preview.config.ts`](vite.preview.config.ts). It uses relative asset URLs and is copied into the
+public website's static output; the normal application build retains its own entry and output.
+
+[`packages/ui/src/website-preview/`](src/website-preview/) owns the preview bootstrap and fixtures:
+
+- [`packages/ui/src/website-preview/main.tsx`](src/website-preview/main.tsx) mounts the real `App` with the preview
+  daemon and the gallery's fake terminal, prepares the selected scene, reports readiness or failure to the embedding
+  page, and owns the preview scroll bridge's lifetime.
+- [`packages/ui/src/website-preview/daemon.ts`](src/website-preview/daemon.ts) exports `createPreviewDaemon`, routing
+  project browsing requests to independent gallery fixture daemons while keeping application state and terminals shared.
+- [`packages/ui/src/website-preview/repositories/index.ts`](src/website-preview/repositories/index.ts) exports
+  `previewRepositories`, assembling file and Git fixtures from the separate Admin, Merchant, Customer and Server
+  examples in [`packages/ui/src/website-preview/repositories/`](src/website-preview/repositories/).
+  [`packages/ui/src/website-preview/repositories/types.ts`](src/website-preview/repositories/types.ts) defines
+  `RepositoryExample` and the `webFiles` helper for shared example scaffolding.
+- [`packages/ui/src/website-preview/storage.ts`](src/website-preview/storage.ts) exports `installPreviewStorage`,
+  which installs ephemeral preference storage before application modules load.
+- [`packages/ui/src/website-preview/scrollBridge.ts`](src/website-preview/scrollBridge.ts) exports
+  `installPreviewScrollBridge` for the embedded preview's parent-page scroll handoffs, `installBoundaryWheelRelay`
+  for scroll-boundary detection, and `withReportScrollBridge` for the marked sample report's relay. It owns the
+  bridge's message-source checks; the website owns receipt of the outer iframe's handoff.
+- [`packages/ui/src/website-preview/scenarios.ts`](src/website-preview/scenarios.ts) exports `createPreviewScenario`
+  for the `overview`, `report` and `changes` scenes and their preparation through the application's controls,
+  including the diff viewer and narrow layout.
+- [`packages/ui/src/website-preview/locales/`](src/website-preview/locales/) owns the sample content;
+  [`packages/ui/src/website-preview/style.css`](src/website-preview/style.css) owns the preview's outer presentation.
+
+The iframe, scene buttons and standalone-preview link belong to
+[`apps/web/`](../../apps/web/README.md).
 
 ### The UI state gallery
 
@@ -346,7 +382,8 @@ Imports run one way between the feature directories: `src/browser/` imports `src
 | Path | Role |
 |---|---|
 | `index.html` | The window's only Content Security Policy, delivered as a `<meta>` tag, and the inline bootstrap script that resolves and applies the theme class before the first paint; the file's own comment has the reasoning for both |
-| `gallery.html`, `gallery-frame.html`, `src/gallery/` | The dev-only UI state gallery, not part of a build (see "The UI state gallery" above): the shell page (`gallery.html`, `shell.tsx`), the page one scenario renders in (`gallery-frame.html`, `frame.tsx`, which mirrors `main.tsx` over a fixture daemon and gets `index.html`'s Content Security Policy through `vite.config.ts`), the scenario type (`scenario.ts`; its `agentModels` sets what the fixture daemon lists per agent for `list_agent_models`, the default being `SAMPLE_CLAUDE_MODELS` in `fixtures/agentModels.ts`), the steps' helpers (`interact.ts`), how a gallery failure is reported, the overlay it is shown in and the `FixtureUnfillableError` a refused fixture reply is raised as (`banner.ts`), the fake terminal sockets (`fakeTerminal.ts`), the fixture daemon (`fixtureDaemon.ts`: the file browsing, directory and page listings, consoles, the deletion of archived sessions by `delete_archived_sessions`, taking the archived sessions bound to each as the daemon does and held by `fixtureDaemon.test.ts`, toasts and the terminal) with the replies it gives a project pane's Git mode, which have to track the real daemon's own conditions, kept apart in `fixtureGit.ts` (`createGitReplies`), the storage a scenario starts from (`prepare.ts`) and the scenarios (`fixtures/`, with `fixtures/builders.ts` building their state and `fixtures/groups.ts` listing their groups and icons), and the "Component colors" group (`codeGallery.tsx`, selected by `codePalette`, comparing the shared code and alert wrappers), and the "File viewer" group, whose scenarios set `viewer` and render `viewerGallery.tsx` over the real `FileViewer` in place of the app (`fixtures/viewer.ts`, `viewerImages.ts`), and the "Project pane: files" group, whose scenarios drive a project's browser over the files the fixture daemon serves for `list_project_dir` and `read_project_file` (`fixtures/projectFiles.ts`; a scenario's `files` replaces them), and the "Project pane: Git" group, whose scenarios drive the browser's Git mode over the source, change lists, changes, branches and comparisons the fixture daemon serves, through `fixtureGit.ts`, for `get_project_source`, `list_project_changes`, `read_project_change`, `read_project_change_bodies`, `list_project_branches`, `compare_project_branches`, `read_project_comparison_change` and `read_project_comparison_change_bodies` (`fixtures/projectGit.ts`, the sample repository and the scenarios, whose changes are built by the factories in `fixtures/changeFixtures.ts`, which also holds the `FixtureGit` and `FixtureChange` contract; a scenario's `git` replaces them, `null` for no repository; `fixtures/invariants.ts` holds `objectIdCheck`, the check of a rule over a whole repository, which `projectGit.test.ts` runs over the sample repository) |
+| `website-preview.html`, `src/website-preview/`, `vite.preview.config.ts` | The separate fixture-backed React build embedded by the public website (see "Website product preview" above) |
+| `gallery.html`, `gallery-frame.html`, `src/gallery/` | The dev-only UI state gallery, whose pages are not part of the normal application build (see "The UI state gallery" above): the shell page (`gallery.html`, `shell.tsx`), the page one scenario renders in (`gallery-frame.html`, `frame.tsx`, which mirrors `main.tsx` over a fixture daemon and gets `index.html`'s Content Security Policy through `vite.config.ts`), the scenario type (`scenario.ts`; its `agentModels` sets what the fixture daemon lists per agent for `list_agent_models`, the default being `SAMPLE_CLAUDE_MODELS` in `fixtures/agentModels.ts`), the steps' helpers (`interact.ts`), how a gallery failure is reported, the overlay it is shown in and the `FixtureUnfillableError` a refused fixture reply is raised as (`banner.ts`), the fake terminal sockets (`fakeTerminal.ts`), the fixture daemon (`fixtureDaemon.ts`: the file browsing, directory and page listings, consoles, the deletion of archived sessions by `delete_archived_sessions`, taking the archived sessions bound to each as the daemon does and held by `fixtureDaemon.test.ts`, toasts and the terminal) with the replies it gives a project pane's Git mode, which have to track the real daemon's own conditions, kept apart in `fixtureGit.ts` (`createGitReplies`), the storage a scenario starts from (`prepare.ts`) and the scenarios (`fixtures/`, with `fixtures/builders.ts` building their state and `fixtures/groups.ts` listing their groups and icons), and the "Component colors" group (`codeGallery.tsx`, selected by `codePalette`, comparing the shared code and alert wrappers), and the "File viewer" group, whose scenarios set `viewer` and render `viewerGallery.tsx` over the real `FileViewer` in place of the app (`fixtures/viewer.ts`, `viewerImages.ts`), and the "Project pane: files" group, whose scenarios drive a project's browser over the files the fixture daemon serves for `list_project_dir` and `read_project_file` (`fixtures/projectFiles.ts`; a scenario's `files` replaces them), and the "Project pane: Git" group, whose scenarios drive the browser's Git mode over the source, change lists, changes, branches and comparisons the fixture daemon serves, through `fixtureGit.ts`, for `get_project_source`, `list_project_changes`, `read_project_change`, `read_project_change_bodies`, `list_project_branches`, `compare_project_branches`, `read_project_comparison_change` and `read_project_comparison_change_bodies` (`fixtures/projectGit.ts`, the sample repository and the scenarios, whose changes are built by the factories in `fixtures/changeFixtures.ts`, which also holds the `FixtureGit` and `FixtureChange` contract; a scenario's `git` replaces them, `null` for no repository; `fixtures/invariants.ts` holds `objectIdCheck`, the check of a rule over a whole repository, which `projectGit.test.ts` runs over the sample repository) |
 | `scripts/gallery-sweep.mjs` | `pnpm gallery:sweep`: serves this checkout's gallery, loads every scenario in a headless browser, in parallel, and reports each `[data-gallery-failure]` banner (see "Sweeping the gallery" above); not part of the app or its type-check |
 | `src/preferenceKeys.ts` | The `localStorage` key of every persisted preference, apart from the modules that read them so the gallery's storage reset can name a key without loading them |
 | `src/main.tsx` | Startup: picks the platform, locates the daemon, creates the connection, pushes the resolved theme and reveals the native window, installs `contextMenuGuard`, marks the page when the window is translucent behind it (`style.css`), and renders either the app or `StartupScreen` |

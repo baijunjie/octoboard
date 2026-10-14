@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const props = defineProps<{ paused?: boolean }>();
 const canvas = ref<HTMLCanvasElement | null>(null);
 let dispose: (() => void) | undefined;
 
@@ -131,7 +132,7 @@ onMounted(() => {
         break;
       }
     }
-    if (visible && !document.hidden && !motion.matches) draw();
+    if (visible && !document.hidden && !motion.matches && !props.paused) draw();
   }
 
   function tick(timestamp: number) {
@@ -145,7 +146,7 @@ onMounted(() => {
   }
 
   function synchronize() {
-    if (visible && !document.hidden && !motion.matches) {
+    if (visible && !document.hidden && !motion.matches && !props.paused) {
       if (!frame) {
         previous = 0;
         frame = requestAnimationFrame(tick);
@@ -170,7 +171,9 @@ onMounted(() => {
   document.addEventListener("visibilitychange", synchronize);
   motion.addEventListener("change", synchronize);
 
+  const stopWatching = watch(() => props.paused, synchronize);
   dispose = () => {
+    stopWatching();
     cancelAnimationFrame(frame);
     visibility.disconnect();
     dimensions.disconnect();
