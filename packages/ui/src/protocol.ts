@@ -153,6 +153,7 @@ export interface Session {
   role: Role;
   origin: Origin;
   title: string;
+  terminal_title?: string | null;
   status: SessionStatus;
   has_conversation: boolean;
   /** The console session this session is bound to, or absent for one outside the orchestration.

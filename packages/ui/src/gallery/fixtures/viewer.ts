@@ -4,6 +4,7 @@
 // inert — and a rendered document's diagrams, formulas, project images and links. The viewer
 // renders them outside the app (see `viewerGallery.tsx`).
 import { format, type Translate } from "../../i18n/catalog";
+import { isolate } from "../../i18n/isolate";
 import type { Language } from "../../i18n/languages";
 import type { FileContent } from "../../protocol";
 import { RENDER_BUDGETS } from "../../viewer/budgets";
@@ -317,9 +318,9 @@ A claim that needs a source[^1], and another[^2].
 [^1]: The first source, with a [link](https://example.com/source).
 [^2]: The second source.
 
-A claim in Chinese[^注1].
+A claim with a named footnote[^source].
 
-[^注1]: 中文脚注的来源。
+[^source]: The source for the named footnote.
 
 ## Inert
 
@@ -609,12 +610,12 @@ async function files(): Promise<ViewerSubject[]> {
       content: { state: "error", message: "src/gone.ts no longer exists in this project." },
     },
     { key: "live:src/offline.ts", path: "src/offline.ts", content: { state: "disconnected", what: "file" } },
-    // Names too long for the header, in Latin and in CJK script.
+    // Names too long for the header, for both source files and design notes.
     file(
       "packages/settings/src/components/notification-preferences/an-extraordinarily-long-component-file-name-that-keeps-going.tsx",
       text("an-extraordinarily-long-component-file-name-that-keeps-going.tsx", NEW_SESSION),
     ),
-    file("docs/设计说明/交互与视觉/项目文件浏览器的交互与视觉设计说明（最终评审版，请勿直接修改）.md", text("说明.md", MARKDOWN)),
+    file(DESIGN_PATH, text("notes.md", MARKDOWN)),
     // A generated name with no place to break a line.
     file(
       "dist/assets/chunk.3f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c.js",
@@ -635,9 +636,14 @@ index 1111111..2222222 100644
 +A paragraph with **bold** and _italic_.
  
 `;
-const CJK_PATH = "docs/设计说明/交互与视觉/项目文件浏览器的交互与视觉设计说明（最终评审版，请勿直接修改）.md";
-// The catalog's Simplified Chinese wording of the comparison, with long CJK branch names.
-const CJK_COMPARISON = "从 发布/二零二四年十一月稳定化与紧急修复候选分支（1234567）到 功能/排序实验与长名称分支用于验证换行行为（fedcba0）";
+const DESIGN_PATH = "docs/design-notes/interaction-and-visuals/project-file-browser-interaction-and-visual-design-notes-final-review-do-not-edit-directly.md";
+// Long branch names and comparison wording follow the window's language.
+const designComparison = (t: Translate) => t("git.compare.source", {
+  from: isolate("release/november-2024-stabilisation-and-hotfix-candidates"),
+  fromCommit: isolate("1234567"),
+  to: isolate("feature/ranking-experiments-with-a-long-name-for-checking-line-wrap"),
+  toCommit: isolate("fedcba0"),
+});
 const oldSession = text("src/session.ts", OLD_SESSION);
 const newSession = text("src/session.ts", NEW_SESSION);
 const before = binary("assets/logo.png", IMAGES.before_png);
@@ -752,13 +758,13 @@ async function changes(language: Language): Promise<ViewerSubject[]> {
         },
       },
     },
-    // CJK in the widest places: a long path and long branch names in the subtitle.
+    // Long design-note paths and branch names make the subtitle wrap.
     {
-      key: `Compare:${CJK_PATH}`,
-      path: CJK_PATH,
-      source: CJK_COMPARISON,
-      sourceText: CJK_COMPARISON,
-      content: { state: "change", change: { old: { state: "absent" }, new: present(CJK_PATH, text("设计说明.md", GUIDE)) } },
+      key: `Compare:${DESIGN_PATH}`,
+      path: DESIGN_PATH,
+      source: designComparison(t),
+      sourceText: designComparison(t),
+      content: { state: "change", change: { old: { state: "absent" }, new: present(DESIGN_PATH, text("design-notes.md", GUIDE)) } },
     },
     change(t, "bin/tool.wasm", present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAA=" })), present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAABBAFgAAA=" }))),
     change(t, "data/rows.ts", present("data/rows.ts"), present("data/rows.ts"), longPatch()),
@@ -902,7 +908,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     title: "Rendered document",
     description:
-      "The note opens as a document. The first diagram runs left to right, from Client to Reply, and is named Request flow; the theme control above the window switches its background and text with highlighted code (white and #0e1116 in light, #0a0c10 and #f0f3f6 in dark). The next diagram has no title, so it is named Diagram, or 图表 when the language is Chinese. The one after that cannot be drawn: its source sits under the failure notice, and the sentence under it is still there. Diagram and block formula notices retain their status background with compact corners; their icon and source share a horizontal inset, and their outer edges align with the document. In the line about cost, $20 and $30 stay text, while $100/2$ and E=mc^2 are formulas, as is the formula on its own line. Unfinished inline and block formulas show their source, a math fence stays code, and the formula in the Arabic sentence stays left to right. The picture is shown and named by its description. The picture whose path leaves the project keeps only its description. The missing one keeps its description and says it could not be shown. Further down, a diagram is left as source under the notice that the document is large. The link to the other note opens that file on the heading Kept; Next opens the same file from the top. The link to the heading in this note scrolls to it.",
+      "The note opens as a document. The first diagram runs left to right, from Client to Reply, and is named Request flow; the theme control above the window switches its background and text with highlighted code (white and #0e1116 in light, #0a0c10 and #f0f3f6 in dark). The next diagram has no title, so it uses the translated Diagram label for the current interface language. The one after that cannot be drawn: its source sits under the failure notice, and the sentence under it is still there. Diagram and block formula notices retain their status background with compact corners; their icon and source share a horizontal inset, and their outer edges align with the document. In the line about cost, $20 and $30 stay text, while $100/2$ and E=mc^2 are formulas, as is the formula on its own line. Unfinished inline and block formulas show their source, a math fence stays code, and the formula in the Arabic sentence stays left to right. The picture is shown and named by its description. The picture whose path leaves the project keeps only its description. The missing one keeps its description and says it could not be shown. Further down, a diagram is left as source under the notice that the document is large. The link to the other note opens that file on the heading Kept; Next opens the same file from the top. The link to the heading in this note scrolls to it.",
     files: { "docs/picture.png": { image: IMAGES.before_png } },
     viewer: { subjects: documentSubjects },
   },
@@ -911,7 +917,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     title: "Changes",
     description:
-      "Modified (one with lines wider than the viewer), added, deleted, renamed, type-changed and renamed-below-itself files, in both directions, from patches, sides outside the project, image changes, a binary change, an untracked symbolic link and repository of its own, a change whose two sides are the same, a patch past the budget, a patch that cannot be read and a change without a patch. In each title the name comes first, then the status chip, then the stage tag; a conflicted, untracked or compared change has no stage tag. A change from the Compare view has its comparison as a subtitle directly under the title, faded where clipped (the long and the Chinese ones), and the neighbouring changes show that a subject without one loses that row. At the end of the path's row the copy button comes first, then the diff layout and word wrap choices (the Markdown diffs show all three); the rename with long branches and a long origin has the most rows once the window is narrow (the width controls above the window). A diff taller than the viewer (data/rows.ts) and a patch shown as plain text (data/table.ts) fade at the edge they hide more behind, as the diffs that fit (src/badge.ts, and plain, src/garbled.ts) show no fade.",
+      "Modified (one with lines wider than the viewer), added, deleted, renamed, type-changed and renamed-below-itself files, in both directions, from patches, sides outside the project, image changes, a binary change, an untracked symbolic link and repository of its own, a change whose two sides are the same, a patch past the budget, a patch that cannot be read and a change without a patch. In each title the name comes first, then the status chip, then the stage tag; a conflicted, untracked or compared change has no stage tag. A change from the Compare view has its comparison as a subtitle directly under the title, faded where clipped (the long comparisons), and the neighbouring changes show that a subject without one loses that row. At the end of the path's row the copy button comes first, then the diff layout and word wrap choices (the Markdown diffs show all three); the rename with long branches and a long origin has the most rows once the window is narrow (the width controls above the window). A diff taller than the viewer (data/rows.ts) and a patch shown as plain text (data/table.ts) fade at the edge they hide more behind, as the diffs that fit (src/badge.ts, and plain, src/garbled.ts) show no fade.",
     viewer: { subjects: changes },
   },
   {

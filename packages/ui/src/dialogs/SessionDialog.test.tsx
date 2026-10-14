@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { isolate } from "../i18n/isolate";
 import type { Agent, AgentAvailability, Session } from "../protocol";
@@ -220,4 +220,18 @@ it("opens on the project's account for the agent, over the console's, and sends 
 
 it("opens on the console's account when the project pins none", async () => {
   expect(await openedAccount({})).toBe("a-console");
+});
+
+
+it("updates the fixed owner's displayed name while the session dialog is open", () => {
+  const owner = { ...hub1, terminal_title: "First task" };
+  const { container, root, daemon } = renderDialog([owner], { sessions: new Map([[owner.id, owner]]) }, {}, { kind: "bound", to: owner });
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  expect(document.body.textContent).toContain("First task");
+  act(() => daemon.store.setState({ sessions: new Map([[owner.id, { ...owner, terminal_title: "Next task" }]]) }));
+  expect(document.body.textContent).toContain(`${isolate("Next task")}｜${isolate(owner.title)}`);
+  expect(document.body.textContent).not.toContain("First task");
 });

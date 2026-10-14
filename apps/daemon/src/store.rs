@@ -152,6 +152,7 @@ impl Store {
                 role             TEXT NOT NULL,
                 origin           TEXT NOT NULL,
                 title            TEXT NOT NULL,
+                terminal_title   TEXT,
                 status           TEXT NOT NULL,
                 has_conversation INTEGER NOT NULL DEFAULT 0,
                 -- The console session this (project) session reports to, or NULL outside the
@@ -239,6 +240,9 @@ impl Store {
                 "ALTER TABLE sessions ADD COLUMN lead INTEGER NOT NULL DEFAULT 0",
                 [],
             )?;
+        }
+        if !column_exists(&conn, "sessions", "terminal_title")? {
+            conn.execute("ALTER TABLE sessions ADD COLUMN terminal_title TEXT", [])?;
         }
         for column in CONSOLE_SESSION_LAUNCH_COLUMNS {
             if !column_exists(&conn, "consoles", column)? {
@@ -903,6 +907,31 @@ impl Store {
         Ok(changed > 0)
     }
 
+    /// Writes only the terminal title, and skips unchanged or deleted rows. The read and write
+    /// share the store lock so a concurrent rename or status update is preserved.
+    pub fn set_terminal_title(&self, id: &str, title: Option<&str>) -> Result<Option<Session>> {
+        let conn = self.lock();
+        let session = conn
+            .query_row(
+                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
+                params![id],
+                read_session,
+            )
+            .optional()?;
+        let Some(mut session) = session else {
+            return Ok(None);
+        };
+        if session.terminal_title.as_deref() == title {
+            return Ok(None);
+        }
+        conn.execute(
+            "UPDATE sessions SET terminal_title = ?2 WHERE id = ?1",
+            params![id, title],
+        )?;
+        session.terminal_title = title.map(str::to_owned);
+        Ok(Some(session))
+    }
+
     /// Moves a session to `status`, but only while it is still `expected`, and returns the record
     /// as it now stands when it moved. Both statements run under one lock, so a caller whose write
     /// is only valid while the session has not moved on cannot be overtaken between deciding and
@@ -1282,7 +1311,7 @@ const PROJECT_SETTING_COLUMNS: [&str; 9] = [
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
                                role, origin, title, status, has_conversation, bound_to, colour,
                                ordinal, account_id, config_dir, pinned, started_at, ended_at,
-                               lead";
+                               lead, terminal_title";
 
 const CONSOLE_COLUMNS: &str = "id, name, workdir, console_session_agent, default_agent,
                                claude_account_id, codex_account_id, grok_account_id,
@@ -1310,9 +1339,9 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
         "INSERT INTO sessions
             (id, agent, agent_session_id, console_id, project_id, host_id, role, origin, title,
              status, has_conversation, bound_to, colour, ordinal, account_id, config_dir, pinned,
-             started_at, ended_at, lead)
+             started_at, ended_at, lead, terminal_title)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19, ?20)",
+                 ?19, ?20, ?21)",
         params![
             session.id,
             enum_to_text(&session.agent),
@@ -1334,6 +1363,7 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             session.started_at,
             session.ended_at,
             session.lead,
+            session.terminal_title,
         ],
     )?;
     Ok(())
@@ -1463,6 +1493,7 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         started_at: row.get(17)?,
         ended_at: row.get(18)?,
         lead: row.get(19)?,
+        terminal_title: row.get(20)?,
     })
 }
 
@@ -1567,6 +1598,7 @@ mod tests {
             origin: Origin::User,
             title: "Hub".to_string(),
             status: SessionStatus::Idle,
+            terminal_title: None,
             has_conversation: false,
             bound_to: None,
             lead: false,
@@ -2677,6 +2709,50 @@ mod tests {
         store.delete_console("console-1").unwrap();
         assert!(ids("session-b").is_empty());
         assert!(store.get_page("b-1").unwrap().is_none());
+    }
+
+    #[test]
+    fn terminal_titles_migrate_and_survive_unrelated_writes_and_reopening() {
+        let path = temp_db("terminal-title");
+        let store = Store::open(&path).unwrap();
+        store.insert_console(&console(None, None, None)).unwrap();
+        store.insert_session(&session(None)).unwrap();
+        drop(store);
+        Connection::open(&path)
+            .unwrap()
+            .execute("ALTER TABLE sessions DROP COLUMN terminal_title", [])
+            .unwrap();
+        let store = Store::open(&path).unwrap();
+        let mut stale = store.get_session("session-1").unwrap().unwrap();
+        assert!(stale.terminal_title.is_none());
+        assert!(store
+            .set_terminal_title("session-1", Some("Task title"))
+            .unwrap()
+            .is_some());
+        assert!(store
+            .set_terminal_title("session-1", Some("Task title"))
+            .unwrap()
+            .is_none());
+        stale.title = "Renamed".to_string();
+        stale.status = SessionStatus::Archived;
+        store.update_session(&stale).unwrap();
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        let stored = store.get_session("session-1").unwrap().unwrap();
+        assert_eq!(stored.terminal_title.as_deref(), Some("Task title"));
+        assert_eq!(stored.title, "Renamed");
+        assert_eq!(stored.status, SessionStatus::Archived);
+        assert!(store
+            .set_terminal_title("session-1", None)
+            .unwrap()
+            .unwrap()
+            .terminal_title
+            .is_none());
+        store.delete_session("session-1").unwrap();
+        assert!(store
+            .set_terminal_title("session-1", Some("Late title"))
+            .unwrap()
+            .is_none());
     }
 
     /// A database already in the current shape is opened in place, and one whose `pages` table

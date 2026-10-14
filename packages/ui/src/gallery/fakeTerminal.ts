@@ -49,11 +49,10 @@ const SAMPLE = [
   "",
   `${ESC}2m  cwd: /Users/dev/code/website${ESC}0m`,
   "",
-  // A CJK row, double-width, so a cell-width bug misaligns the right bar: "Confirm the summary layout
-  // on narrow screens once more".
+  // A follow-up instruction beside the task in the prompt box.
   ...box([
     ` ${ESC}1m>${ESC}0m Fix the summary layout on narrow screens`,
-    "   再确认一下窄屏上的摘要布局",
+    "   Confirm the layout on narrow screens again",
   ]),
   "",
   `${ESC}32m●${ESC}0m I will start by reading the summary styles.`,

@@ -6,6 +6,7 @@ import { PANE_ID } from "../layout/paneOverlay";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
+import { sessionDisplayTitle } from "../sessionLabel";
 import { useDaemonStore } from "../store";
 import { ChromeButton } from "./ChromeButton";
 import { FadeOverflow } from "./FadeOverflow";
@@ -67,9 +68,10 @@ export function BareTitleBar(): React.ReactElement {
  * project, so its trail is just the console and its own title. The trail fades at its end edge when
  * too long, the icon always stays. */
 function Breadcrumb({ session }: { session: Session }): React.ReactElement {
+  const t = useT();
   const consoleName = useDaemonStore((s) => s.consoles.get(session.console_id)?.name);
   const projectName = useDaemonStore((s) => (session.project_id ? s.projects.get(session.project_id)?.name : undefined));
-  const trail = session.role === "console" ? [consoleName, session.title] : [consoleName, projectName, session.title];
+  const trail = session.role === "console" ? [consoleName, sessionDisplayTitle(t, session)] : [consoleName, projectName, sessionDisplayTitle(t, session)];
   return (
     <Trail names={trail.map((part) => part ?? "…")}>
       <StatusIcon status={session.status} withTooltip />

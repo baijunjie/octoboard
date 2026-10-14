@@ -321,6 +321,9 @@ pub struct Session {
     pub role: Role,
     pub origin: Origin,
     pub title: String,
+    /// Last title emitted by the terminal, retained when its process ends.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_title: Option<String>,
     pub status: SessionStatus,
     /// Whether this session has ever had a turn. Until it has, the agent has stored no
     /// conversation to resume: `claude --resume` on such an id fails outright with "No conversation

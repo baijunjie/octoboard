@@ -10,7 +10,7 @@ import { ImportConfigurationDialog } from "../configuration/ImportConfigurationD
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { isLive, type Session } from "../protocol";
-import { sessionAccountTooltip, sessionAgentLabel } from "../sessionLabel";
+import { sessionAccountTooltip, sessionAgentLabel, sessionDisplayTitle } from "../sessionLabel";
 import { boundArchivedSessions, boundSessionsArchivedWith, compareSessions } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -42,8 +42,8 @@ function SessionCallout({ title, sessions }: { title: string; sessions?: Session
                 <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
                 {/* The icon is decorative, and nothing else here names the agent. */}
                 <span className="sr-only">{sessionAgentLabel(t, session, accounts)}</span>
-                <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={session.title}>
-                  {session.title}
+                <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={sessionDisplayTitle(t, session)}>
+                  {sessionDisplayTitle(t, session)}
                 </FadeOverflow>
               </li>
             ))}
@@ -57,7 +57,7 @@ function SessionCallout({ title, sessions }: { title: string; sessions?: Session
 /** The dialog a sidebar menu asked for. `onClose` is called once the dialog is done or dismissed;
  * `onSessionOpened` receives the session a "new session" dialog started. */
 export function RequestedDialog({
-  dialog,
+  dialog: requestedDialog,
   onClose,
   onSessionOpened,
   onSwitchAccount,
@@ -72,6 +72,9 @@ export function RequestedDialog({
   const t = useT();
   const { request } = useDaemon();
   const sessions = useDaemonStore((s) => s.sessions);
+  const dialog = "session" in requestedDialog && requestedDialog.kind !== "rename-session"
+    ? { ...requestedDialog, session: sessions.get(requestedDialog.session.id) ?? requestedDialog.session }
+    : requestedDialog;
 
   switch (dialog.kind) {
     case "new-console":
@@ -171,7 +174,7 @@ export function RequestedDialog({
       const withIt = boundSessionsArchivedWith(Array.from(sessions.values()), dialog.session.id);
       return (
         <ConfirmDialog
-          title={t("dialog.archiveSession.title", { title: isolate(dialog.session.title) })}
+          title={t("dialog.archiveSession.title", { title: isolate(sessionDisplayTitle(t, dialog.session)) })}
           message={
             <>
               <p>{t("dialog.archiveSession.message")}</p>
@@ -190,7 +193,7 @@ export function RequestedDialog({
     case "switch-account":
       return (
         <ConfirmDialog
-          title={t("dialog.switchAccount.title", { title: isolate(dialog.session.title), account: isolate(dialog.accountName) })}
+          title={t("dialog.switchAccount.title", { title: isolate(sessionDisplayTitle(t, dialog.session)), account: isolate(dialog.accountName) })}
           message={t(dialog.session.has_conversation ? "dialog.switchAccount.message" : "dialog.switchAccount.messageFresh")}
           confirmLabel={t("dialog.switchAccount.confirm")}
           pendingLabel={t("dialog.switchAccount.pending")}
@@ -206,7 +209,7 @@ export function RequestedDialog({
       const withIt = boundArchivedSessions(Array.from(sessions.values()), dialog.session.id);
       return (
         <ConfirmDialog
-          title={t("dialog.deleteSession.title", { title: isolate(dialog.session.title) })}
+          title={t("dialog.deleteSession.title", { title: isolate(sessionDisplayTitle(t, dialog.session)) })}
           message={
             <>
               <p>{t("dialog.deleteSession.message")}</p>

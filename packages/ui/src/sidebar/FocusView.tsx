@@ -19,7 +19,7 @@ import { joinPhrases } from "../i18n/joinPhrases";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
-import { activityLabelKey, sessionAccountName, sessionAccountTooltip, sessionAgentLabel, sessionAriaLabel, statusLabel } from "../sessionLabel";
+import { activityLabelKey, sessionAccountName, sessionAccountTooltip, sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, statusLabel } from "../sessionLabel";
 import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
@@ -233,7 +233,7 @@ export function ConsoleSessionFocusView({
         >
           <BindingBadge owner={consoleSession} decorative />
           <div className="min-w-0 flex-1">
-            <FocusTitle consoleName={parentConsole.name} title={consoleSession.title} />
+            <FocusTitle consoleName={parentConsole.name} title={sessionDisplayTitle(t, consoleSession)} />
           </div>
         </TreeRow>
         {projects.length === 0 ? (
@@ -253,7 +253,7 @@ export function ConsoleSessionFocusView({
           />
         )}
         <ActionMenu
-          label={t("sidebar.session.actions", { title: isolate(consoleSession.title) })}
+          label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, consoleSession)) })}
           items={sessionMenu(t, handlers, consoleSession, accounts, { placement: "focused" })}
           contextTargetRef={headerRef}
         />
@@ -340,7 +340,7 @@ function SwitchStrip({
             size="sm"
             variant="tertiary"
             preventFocusOnPress
-            aria-label={activityKey ? t(activityKey, { name: isolate(consoleSession.title) }) : consoleSession.title}
+            aria-label={activityKey ? t(activityKey, { name: isolate(sessionDisplayTitle(t, consoleSession)) }) : sessionDisplayTitle(t, consoleSession)}
             aria-current={current ? "true" : undefined}
             data-switch-current={current || undefined}
             onPress={() => handlers.onSwitchConsoleSession(consoleSession)}
@@ -351,8 +351,8 @@ function SwitchStrip({
             className="h-7 min-h-0 min-w-0 max-w-48 shrink-0 gap-1.5 rounded-full border border-transparent px-2.5 text-xs font-medium data-switch-current:border-accent-glyph"
           >
             <BindingBadge owner={consoleSession} decorative />
-            <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={consoleSession.title}>
-              {consoleSession.title}
+            <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={sessionDisplayTitle(t, consoleSession)}>
+              {sessionDisplayTitle(t, consoleSession)}
             </FadeOverflow>
             <ActivityMarker activity={activity} />
           </Button>
@@ -435,7 +435,7 @@ function BoundElsewhere({
             size="sm"
             variant="tertiary"
             preventFocusOnPress
-            aria-label={t("sidebar.focus.enterConsoleSession", { name: isolate(owner.title), count: bound })}
+            aria-label={t("sidebar.focus.enterConsoleSession", { name: isolate(sessionDisplayTitle(t, owner)), count: bound })}
             onPress={() => handlers.onFocus({ consoleSession: owner })}
             // Pill-shaped on purpose, on the sidebar's tinted tertiary fill (`.sidebar-fills`): a chip
             // reads as a tag, not as one of the sidebar's buttons.
@@ -443,8 +443,8 @@ function BoundElsewhere({
           >
             <BindingBadge owner={owner} decorative />
             {/* A name longer than the line is cut rather than pushed past the sidebar's edge. */}
-            <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={owner.title}>
-              {owner.title}
+            <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={sessionDisplayTitle(t, owner)}>
+              {sessionDisplayTitle(t, owner)}
             </FadeOverflow>
             <Badge
               size="sm"
@@ -557,7 +557,7 @@ function SessionCard({
   return (
     <TreeRow
       ref={rowRef}
-      ariaLabel={under && consoleOwner ? joinPhrases(language, [label, t("sidebar.session.boundTo", { name: isolate(consoleOwner.title) })]) : label}
+      ariaLabel={under && consoleOwner ? joinPhrases(language, [label, t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, consoleOwner)) })]) : label}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
       className="min-h-8 flex-col gap-1 border border-separator p-[7px] data-selected:border-accent-glyph"
@@ -567,13 +567,13 @@ function SessionCard({
         <StatusIcon status={session.status} decorative />
         <span className="text-xs font-medium text-muted">{statusLabel(t, session.status)}</span>
         <span className="flex-1" />
-        {session.pinned && <PinButton name={session.title} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}
+        {session.pinned && <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}
         <RowControls always>
-          <ActionMenu label={t("sidebar.session.actions", { title: isolate(session.title) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
+          <ActionMenu label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, session)) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
         </RowControls>
       </div>
       <div dir="auto" className="line-clamp-2 text-sm font-medium break-words">
-        {session.title}
+        {sessionDisplayTitle(t, session)}
       </div>
       <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
         <AgentIcon agent={session.agent} className="size-3.5" tooltip={sessionAccountTooltip(t, session, accounts)} />
@@ -616,14 +616,14 @@ function ArchivedRow({
       onActivate={() => handlers.onSelectSession(session)}
     >
       <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
-      <RowLabel title={session.title}>
-        <span className="text-muted">{session.title}</span>
+      <RowLabel title={sessionDisplayTitle(t, session)}>
+        <span className="text-muted">{sessionDisplayTitle(t, session)}</span>
       </RowLabel>
       <span className="shrink-0 text-xs text-muted">
         {formatRelativeTime(language, session.ended_at ?? session.started_at)}
       </span>
       <RowControls>
-        <ActionMenu label={t("sidebar.session.actions", { title: isolate(session.title) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
+        <ActionMenu label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, session)) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
       </RowControls>
     </TreeRow>
   );

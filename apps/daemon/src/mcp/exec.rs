@@ -775,6 +775,7 @@ mod tests {
             origin: Origin::User,
             title: "Hub".to_string(),
             status: SessionStatus::Idle,
+            terminal_title: None,
             has_conversation: false,
             bound_to: None,
             lead: false,

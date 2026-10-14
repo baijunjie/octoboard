@@ -35,6 +35,7 @@ import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { isLive, type Location } from "./navigation/history";
 import { useNavigationHistory } from "./navigation/useNavigationHistory";
 import { ALREADY_RUNNING_CODES, type Console, type Project, type Session } from "./protocol";
+import { sessionDisplayTitle } from "./sessionLabel";
 import { ReportPanel } from "./report/ReportPanel";
 import { SettingsDialog } from "./settings/SettingsDialog";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
@@ -535,7 +536,7 @@ export function App(): React.ReactElement {
             ? archiveProject
               ? [archiveConsole.name, archiveProject.name, t("archive.heading.project")]
               : archiveBoundTo
-                ? [archiveConsole.name, archiveBoundTo.title, t("archive.heading.boundSessions")]
+                ? [archiveConsole.name, sessionDisplayTitle(t, archiveBoundTo), t("archive.heading.boundSessions")]
                 : [archiveConsole.name, t("archive.heading.consoleSessions")]
             : undefined
         }

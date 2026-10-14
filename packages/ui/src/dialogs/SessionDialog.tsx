@@ -5,6 +5,7 @@ import { noAgentAvailable } from "../agents";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
+import { sessionDisplayTitle } from "../sessionLabel";
 import { BindingBadge } from "../sidebar/BindingBadge";
 import { liveConsoleSessions } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
@@ -80,7 +81,10 @@ export function SessionDialog({
   // console session while the dialog is still open restores the choice, which is harmless. A fixed
   // owner that is no longer live cannot fall back to anything, so it stops the dialog instead.
   const owners = liveConsoleSessions(sessions, parentConsole.id);
-  const fixedOwner = binding.kind === "bound" ? binding.to : undefined;
+  const storedFixedOwner = useDaemonStore((s) => binding.kind === "bound" ? s.sessions.get(binding.to.id) : undefined);
+  const fixedOwner = binding.kind === "bound"
+    ? storedFixedOwner ?? sessions.find((s) => s.id === binding.to.id) ?? binding.to
+    : undefined;
   const fixedOwnerGone = fixedOwner !== undefined && !owners.some((s) => s.id === fixedOwner.id);
   const owner = fixedOwner ?? (binding.kind === "choose" ? owners.find((s) => s.id === pickedOwner) : undefined);
   const [ownerOffered, setOwnerOffered] = useState(owners.length > 0);
@@ -123,11 +127,11 @@ export function SessionDialog({
         <div className="flex items-center gap-2 text-sm">
           <BindingBadge owner={fixedOwner} decorative />
           <span dir="auto" className="min-w-0 truncate">
-            {t("dialog.session.ownerFixed", { name: isolate(fixedOwner.title) })}
+            {t("dialog.session.ownerFixed", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}
           </span>
         </div>
       )}
-      {fixedOwner && fixedOwnerGone && <p className="text-sm text-danger">{t("dialog.session.ownerGone", { name: isolate(fixedOwner.title) })}</p>}
+      {fixedOwner && fixedOwnerGone && <p className="text-sm text-danger">{t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}</p>}
       {binding.kind === "choose" && ownerOffered && (
         <OptionSelect
           label={t("dialog.session.owner")}
@@ -135,7 +139,7 @@ export function SessionDialog({
           onChange={setPickedOwner}
           options={[
             { value: NO_OWNER, label: t("dialog.session.ownerNone") },
-            ...owners.map((s) => ({ value: s.id, label: s.title, icon: <BindingBadge owner={s} decorative /> })),
+            ...owners.map((s) => ({ value: s.id, label: sessionDisplayTitle(t, s), icon: <BindingBadge owner={s} decorative /> })),
           ]}
         />
       )}

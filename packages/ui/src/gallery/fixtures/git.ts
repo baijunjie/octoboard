@@ -53,8 +53,8 @@ const gitStatuses = [
 // the badge-versus-name squeeze (see the doc comment at `GitBadge.tsx`'s `min-w-0`) and for the
 // branch-and-count line's shared fade and marquee. The CJK branch also keeps its beginning on
 // the left in an RTL interface; the short branch exposes a fade falling within the counts. The long
-// branch ends in CJK, whose tail only the marquee and the tooltip reach, and the tooltip's sentence
-// wraps with that mixed text in it.
+// Latin branch has a tail only the marquee and the tooltip reach; the Japanese branch exercises
+// wide characters and tooltip wrapping.
 const squeezeProject = projectOf(
   "p-squeeze",
   console_.id,
@@ -62,7 +62,7 @@ const squeezeProject = projectOf(
 );
 const squeezeSession = sessionOf("s-squeeze", console_.id, squeezeProject.id, "Working on it", "idle");
 const squeezeStatus = gitStatusOf(squeezeProject.id, {
-  branch: "feature/ABC-1234-a-genuinely-long-branch-name-支持多语言的超长分支名称不会在窄栏里完整显示",
+  branch: "feature/ABC-1234-a-genuinely-long-branch-name-a-branch-title-that-will-not-fit-in-a-narrow-sidebar",
   ahead: 12,
   behind: 345,
   error: "fetch: Could not resolve host 'origin'",

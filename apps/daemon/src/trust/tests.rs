@@ -432,6 +432,7 @@ fn session(id: &str, agent: Agent, role: Role, project_id: Option<&str>) -> Sess
         origin: Origin::User,
         title: "Session".to_string(),
         status: SessionStatus::Idle,
+        terminal_title: None,
         has_conversation: false,
         bound_to: None,
         lead: false,

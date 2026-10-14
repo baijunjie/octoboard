@@ -512,6 +512,7 @@ mod tests {
             origin: Origin::User,
             title: "Distinctive session title".to_string(),
             status: SessionStatus::Idle,
+            terminal_title: None,
             has_conversation: true,
             bound_to: None,
             lead: false,

@@ -105,6 +105,9 @@ pub struct AppState {
     /// before `console_requests`, never after. Dropped with the session's other bookkeeping.
     request_hands: Mutex<HashMap<String, SessionStatus>>,
     events: broadcast::Sender<Event>,
+    /// Serializes session readback with event sends, including deletions, so a stale reader
+    /// cannot announce its snapshot after a newer title or removal.
+    session_publication: Mutex<()>,
     shutdown: tokio::sync::Notify,
 }
 
@@ -195,6 +198,7 @@ impl AppState {
             console_requests: Default::default(),
             agent_models: Default::default(),
             events,
+            session_publication: Mutex::new(()),
             shutdown: tokio::sync::Notify::new(),
         }
     }
@@ -220,6 +224,14 @@ impl AppState {
     }
 
     pub fn broadcast(&self, event: Event) {
+        let _publication = self
+            .session_publication
+            .lock()
+            .expect("session publication lock poisoned");
+        self.broadcast_locked(event);
+    }
+
+    fn broadcast_locked(&self, event: Event) {
         // No subscribers is the normal state while the application is not running.
         let _ = self.events.send(event);
     }
@@ -353,10 +365,33 @@ impl AppState {
         Ok(false)
     }
 
-    pub fn register_live(&self, session: Arc<LiveSession>) {
+    pub fn register_live(self: &Arc<Self>, session: Arc<LiveSession>) {
         session.enter_crash_cleanup();
         let mut live = self.live.write().expect("live sessions lock poisoned");
-        live.sessions.insert(session.id.clone(), session);
+        live.sessions.insert(session.id.clone(), session.clone());
+        drop(live);
+        session.observe_titles(self);
+    }
+
+    /// The live lock keeps registration/relaunch from replacing the process between checking its
+    /// identity and storing its title. Only this column is written: status and user names may move
+    /// concurrently. A deleted record is never recreated.
+    pub(crate) fn record_terminal_title(&self, session: &LiveSession, title: Option<&str>) {
+        let live = self.live.read().expect("live sessions lock poisoned");
+        if !live
+            .sessions
+            .get(&session.id)
+            .is_some_and(|current| std::ptr::eq(current.as_ref(), session))
+        {
+            return;
+        }
+        match self.store.set_terminal_title(&session.id, title) {
+            Ok(Some(record)) => self.publish_session(&record),
+            Ok(None) => {}
+            Err(err) => {
+                tracing::warn!(session = %session.id, %err, "storing the terminal title failed")
+            }
+        }
     }
 
     /// Drops a session from the live map — but only if it is still *this* session. Comparing by id
@@ -392,9 +427,19 @@ impl AppState {
     }
 
     pub fn publish_session(&self, session: &Session) {
-        self.broadcast(Event::SessionUpserted {
-            session: session.clone(),
-        });
+        let _publication = self
+            .session_publication
+            .lock()
+            .expect("session publication lock poisoned");
+        // Partial store writes preserve columns owned by other paths. Always publish the stored
+        // row so a previously read record cannot blank a terminal title learned in the meantime.
+        match self.store.get_session(&session.id) {
+            Ok(Some(session)) => self.broadcast_locked(Event::SessionUpserted { session }),
+            Ok(None) => {}
+            Err(err) => {
+                tracing::warn!(session = %session.id, %err, "reading the session for publication failed")
+            }
+        }
     }
 
     /// Writes a session record and tells every client about it. A record deleted in the meantime
@@ -1287,6 +1332,7 @@ mod tests {
             origin: Origin::User,
             title: "Session".to_string(),
             status,
+            terminal_title: None,
             has_conversation: false,
             bound_to: None,
             lead: false,
@@ -1336,6 +1382,66 @@ mod tests {
             assert!(Instant::now() < deadline, "the exit was never recorded");
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
+    }
+
+    #[test]
+    fn terminal_titles_reach_unattached_sessions_without_stale_processes_or_records_winning() {
+        let (state, dir) = app_state("state-terminal-title");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let original = state.session_record("s").unwrap();
+        let first = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        let mut events = state.subscribe();
+        let output = b"before\x1b]2;First task\x07after";
+        first.on_output(output);
+        assert!(
+            events.try_recv().is_err(),
+            "no record update before registration"
+        );
+        state.register_live(first.clone());
+        assert_eq!(first.recent_output(1024), output, "raw output is unchanged");
+        let Event::SessionUpserted { session } = events.try_recv().unwrap() else {
+            panic!("expected a title update")
+        };
+        assert_eq!(session.terminal_title.as_deref(), Some("First task"));
+        first.on_output(b"\x1b]2;First task\x07");
+        assert!(
+            events.try_recv().is_err(),
+            "equal titles are not announced again"
+        );
+        state.save_session(&original).unwrap();
+        let Event::SessionUpserted { session } = events.try_recv().unwrap() else {
+            panic!("expected the saved session")
+        };
+        assert_eq!(
+            session.terminal_title.as_deref(),
+            Some("First task"),
+            "a stale caller cannot blank the title"
+        );
+        let successor = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        state.register_live(successor.clone());
+        first.on_output(b"\x1b]2;Stale task\x07");
+        assert!(events.try_recv().is_err());
+        assert_eq!(
+            state.session_record("s").unwrap().terminal_title.as_deref(),
+            Some("First task")
+        );
+        successor.on_output(b"\x1b]2;Next task\x1b\\");
+        let Event::SessionUpserted { session } = events.try_recv().unwrap() else {
+            panic!("expected successor title")
+        };
+        assert_eq!(session.terminal_title.as_deref(), Some("Next task"));
+        let mut archived = state.session_record("s").unwrap();
+        archived.status = SessionStatus::Archived;
+        state.save_session(&archived).unwrap();
+        events.try_recv().unwrap();
+        assert!(state.delete_if_archived("s").unwrap());
+        assert!(matches!(
+            events.try_recv().unwrap(),
+            Event::SessionDeleted { .. }
+        ));
+        successor.on_output(b"\x1b]2;Deleted task\x07");
+        assert!(events.try_recv().is_err());
+        assert!(state.store.get_session("s").unwrap().is_none());
     }
 
     /// The output is saved before the live entry goes, so the moment the session stops being

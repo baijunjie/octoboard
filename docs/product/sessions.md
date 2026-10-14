@@ -547,7 +547,9 @@ Removing a project or deleting a console also deletes its archived sessions alon
 
 ## Renaming a session
 
-A session's title can be changed at any time, archived sessions included. An empty title is rejected.
+A session's created name can be changed at any time, archived sessions included. The rename field contains that
+name alone; an empty name is rejected. An agent's terminal title remains separate (see "Displayed names" in
+`docs/product/session-titles.md`).
 
 ## The terminal
 

@@ -104,7 +104,8 @@ It runs, left to right:
 - The sidebar toggle ("Show sessions" / "Hide sessions"), there only while there is a sidebar — so not while the
   window shows the welcome screen (see `docs/product/welcome-screen.md`).
 - The selected session's **breadcrumb** — *console › project › session title* for a project session, *console › session
-  title* for a console session, which belongs to no project — followed by the session's status icon. Nothing in the
+  title* for a console session, which belongs to no project — followed by the session's status icon. The session
+  title follows "Displayed names" in `docs/product/session-titles.md`. Nothing in the
   bar reports the session's terminal connection; the terminal itself does (see "The terminal" in
   `docs/product/sessions.md`). At 1148 px and wider, while the sidebar is shown, the breadcrumb starts where the
   terminal's area does, over the sidebar's inner edge, and follows that edge while the sidebar is resized and while the docked column eases open

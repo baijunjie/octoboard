@@ -1094,6 +1094,7 @@ mod tests {
                     origin: Origin::User,
                     title: format!("Session {id}"),
                     status,
+                    terminal_title: None,
                     has_conversation: true,
                     bound_to: None,
                     lead: false,

@@ -100,7 +100,7 @@ describe("gallery scenarios", () => {
     expect(isEnglishCopy((name) => name.startsWith("Show whole file"))).toBe(true);
     expect(isEnglishCopy("src")).toBe(false);
     expect(isEnglishCopy("feature/login")).toBe(false);
-    expect(isEnglishCopy("new-name.ts，已重命名")).toBe(false);
+    expect(isEnglishCopy(format("zh-Hans", "git.row", { name: "new-name.ts", status: format("zh-Hans", "git.status.renamed") }))).toBe(false);
     expect(isEnglishCopy("Show all 27 unmodified lines")).toBe(true);
     expect(isEnglishCopy("View all (3)")).toBe(true);
     // The limit: a name shaped like a message's frame is flagged, whatever it is. Name such a control
@@ -114,7 +114,7 @@ describe("gallery scenarios", () => {
     const sessionMatchers = recorded.filter(({ matcher }) => String(matcher).startsWith("session("));
     expect(sessionMatchers.length).toBeGreaterThan(0);
     for (const { matcher } of sessionMatchers) {
-      expect(typeof matcher === "function" && matcher("会话 Fix the summary layout，Claude Code，工作中")).toBe(true);
+      expect(typeof matcher === "function" && matcher(t("sidebar.session.ariaLabel", { title: "Fix the summary layout", agent: "Claude Code", status: t("session.status.working") }))).toBe(true);
     }
     const changes = [...Object.values(SAMPLE_GIT.changes), ...Object.values(SAMPLE_GIT.comparisons ?? {})].flatMap((list) => Array.isArray(list) ? list.map(({ entry }) => entry) : []);
     const labels = changeItems(changes).flatMap((item) => [false, true].map((selected) => changeRowText(t, item, selected, false).ariaLabel.replace(/[\u2066-\u2069]/g, "")));

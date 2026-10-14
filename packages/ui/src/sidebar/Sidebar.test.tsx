@@ -293,3 +293,20 @@ it("lets the card go once the pointer is off the card, its gap, its toggle and t
   wait(SLIDE_AWAY_MS);
   expect(hide).toHaveBeenCalledTimes(1);
 });
+
+
+it("updates a session's visible and accessible name as the daemon title changes", () => {
+  const session = { ...sessions[2], terminal_title: "Explain the gallery" };
+  const { container, render } = mountSidebar({ sessions: [hub1, session] });
+  const row = () => container.querySelector<HTMLElement>(`[data-flip="${session.id}"] [role="button"]`)!;
+  const first = `${isolate("Explain the gallery")}｜${isolate(session.title)}`;
+  expect(row().textContent).toContain(first);
+  expect(row().getAttribute("aria-label")).toContain(isolate(first));
+  render({ sessions: [hub1, { ...session, terminal_title: "Compare layouts" }] });
+  const changed = `${isolate("Compare layouts")}｜${isolate(session.title)}`;
+  expect(row().textContent).toContain(changed);
+  expect(row().getAttribute("aria-label")).toContain(isolate(changed));
+  render({ sessions: [hub1, { ...session, terminal_title: null }] });
+  expect(row().textContent).toContain(session.title);
+  expect(row().textContent).not.toContain("｜");
+});

@@ -233,8 +233,9 @@ function reducer(state: State, action: Action): State {
           return { ...state, consoles, projects, sessions, pages, gitStatuses };
         }
         case "session_opened": {
-          // The reply to our own `open_session`. The broadcast carries the same record, but
-          // whichever arrives first should already put the session in the tree.
+          // A title or status broadcast can arrive before this launch-time reply. Keep the
+          // authoritative record if one already exists; otherwise seed the newly opened session.
+          if (state.sessions.has(event.session.id)) return state;
           const sessions = new Map(state.sessions);
           sessions.set(event.session.id, event.session);
           return { ...state, sessions };

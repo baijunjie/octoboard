@@ -7,6 +7,8 @@ what they list.
 
 ## What both views show
 
+Session titles throughout either view follow "Displayed names" in `docs/product/session-titles.md`.
+
 **The header**, in both: a back button, **Leave focus mode**, which returns to the full sidebar; the console's name
 above the name of what is in focus; a **+** button for a new session; and that thing's action menu, without its **Focus
 mode** and **Pin** / **Unpin** items. The header shows no pin button either. A project's header also carries its branch

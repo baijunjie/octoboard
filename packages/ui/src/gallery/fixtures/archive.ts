@@ -11,6 +11,7 @@ const AGENTS: Agent[] = ["claude", "codex", "grok"];
 const archived = Array.from({ length: 70 }, (_, i) =>
   sessionOf(`s-a${i}`, console_.id, project.id, i % 7 === 3 ? `Audit the retry path ${i}` : i % 11 === 5 ? `A very long archived session title that does not fit one row ${i}` : `Archived session ${i}`, "archived", {
     agent: AGENTS[i % 3],
+    ...(i === 0 ? { terminal_title: "Explain the differences between the three galleries" } : i === 1 ? { terminal_title: "Review a very long archived agent task title and preserve its original session name" } : {}),
     ended_at: minutesAgo(20 + i * 400),
   }),
 );
@@ -99,7 +100,7 @@ export const archiveScenarios: Scenario[] = [
     group: GROUP,
     title: "Project archive, many entries",
     state: archiveState,
-    description: "Seventy entries are loaded thirty at a time.",
+    description: "Seventy entries are loaded thirty at a time. The newest entries retain English agent task titles beside their original names, including a long title; other entries keep only their session names.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),

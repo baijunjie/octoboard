@@ -5,7 +5,7 @@ import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
 import type { Account } from "./protocol";
-import { sessionAgentLabel } from "./sessionLabel";
+import { sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, sessionWithLocation } from "./sessionLabel";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
 const accounts: Account[] = [{ id: "w", agent: "claude", name: "Work", config_dir: "/home/w" }];
@@ -18,5 +18,24 @@ describe("sessionAgentLabel", () => {
     ["a removed account that recorded no directory by the agent alone", { account_id: "gone" }, "Claude Code"],
   ] as const)("names %s", (_, extra, expected) => {
     expect(sessionAgentLabel(t, sessionOf("s", "c", "p", "Title", "idle", extra), accounts)).toBe(expected);
+  });
+});
+
+
+describe("sessionDisplayTitle", () => {
+  it.each([undefined, null, "", " \n ", "octoboard", " octoboard "])("keeps the created name for an absent or identical title: %s", (terminal_title) => {
+    const session = sessionOf("s", "c", "p", "octoboard", "idle", { terminal_title });
+    expect(sessionDisplayTitle(t, session)).toBe("octoboard");
+  });
+
+  it("combines trimmed task and created names with independent reading directions", () => {
+    const session = sessionOf("s", "c", "p", "octoboard", "working", { terminal_title: "  شرح المعرض  " });
+    const title = `${isolate("شرح المعرض")}｜${isolate("octoboard")}`;
+    expect(sessionDisplayTitle(t, session)).toBe(title);
+    expect(sessionAriaLabel(t, "en", session, [])).toContain(isolate(title));
+    expect(sessionWithLocation(t, session, new Map(), new Map())).toContain(isolate(title));
+    const zh: Translate = ((key: string, ...args: unknown[]) => format("zh-Hans", key as never, args[0] as never)) as Translate;
+    expect(sessionDisplayTitle(zh, session)).toBe(title);
+    expect(session.title).toBe("octoboard");
   });
 });

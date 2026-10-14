@@ -3,7 +3,7 @@
 use std::io;
 use std::os::unix::io::RawFd;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
@@ -57,9 +57,17 @@ struct Fan {
     next_id: u64,
 }
 
+#[derive(Default)]
+struct TitleObserver {
+    parser: crate::terminal_title::Parser,
+    latest: Option<Option<String>>,
+    state: Weak<crate::state::AppState>,
+}
+
 pub struct LiveSession {
     pub id: String,
     pub agent: Agent,
+    title: Mutex<TitleObserver>,
     pub pid: u32,
     /// The PTY master descriptor, in non-blocking mode. Reads and writes both go through it;
     /// `master` is kept only so the window can be resized.
@@ -120,6 +128,7 @@ impl LiveSession {
         Self {
             id: session.id,
             agent: session.agent,
+            title: Mutex::new(TitleObserver::default()),
             pid: session.pid,
             fd: session.fd,
             master: Mutex::new(session.master),
@@ -139,6 +148,16 @@ impl LiveSession {
             trust: TrustState::new(session.agent, session.carried_trust),
             input_writes: AtomicU64::new(0),
             input_lock: Mutex::new(()),
+        }
+    }
+
+    /// Output may already have arrived before the launch is registered. Bind and publish the
+    /// retained observation under the same lock as feeding, so an older title cannot win later.
+    pub(crate) fn observe_titles(&self, state: &Arc<crate::state::AppState>) {
+        let mut observer = self.title.lock().expect("title observer lock poisoned");
+        observer.state = Arc::downgrade(state);
+        if let Some(title) = &observer.latest {
+            state.record_terminal_title(self, title.as_deref());
         }
     }
 
@@ -211,6 +230,15 @@ impl LiveSession {
     /// channel within a fraction of a second under heavy output and the client is dropped, at every
     /// frame size tested.
     pub fn on_output(&self, data: &[u8]) {
+        {
+            let mut observer = self.title.lock().expect("title observer lock poisoned");
+            if let Some(title) = observer.parser.feed(data) {
+                observer.latest = Some(title.clone());
+                if let Some(state) = observer.state.upgrade() {
+                    state.record_terminal_title(self, title.as_deref());
+                }
+            }
+        }
         let chunk = Bytes::copy_from_slice(data);
         let (targets, total): (Vec<(u64, mpsc::Sender<Bytes>)>, u64) = {
             let mut fan = self.fan.lock().expect("fan mutex poisoned");

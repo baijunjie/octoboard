@@ -1167,6 +1167,7 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         } else {
             SessionStatus::Idle
         },
+        terminal_title: None,
         has_conversation: false,
         // Resolved now and kept: a resume must find the transcript where the first launch put it,
         // whatever the console's reference says by then.
@@ -2687,6 +2688,7 @@ mod tests {
                     origin: Origin::User,
                     title: id.to_string(),
                     status,
+                    terminal_title: None,
                     has_conversation: false,
                     bound_to: None,
                     lead: false,
@@ -2808,6 +2810,7 @@ mod tests {
                 origin: Origin::User,
                 title: "Project".to_string(),
                 status: SessionStatus::Archived,
+                terminal_title: None,
                 has_conversation: false,
                 bound_to: None,
                 lead: false,
@@ -3339,6 +3342,7 @@ mod tests {
             origin: Origin::User,
             title: "Session".to_string(),
             status: SessionStatus::Idle,
+            terminal_title: None,
             has_conversation: false,
             bound_to: None,
             lead: false,

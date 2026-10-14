@@ -28,6 +28,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   switching a session to another account of its agent, how a console session's archive, reopen and delete follow the
   sessions bound to it, where archived sessions are kept, and the terminal, including what its area offers in place of
   asking for a session to be selected while the console has nothing in it.
+- [Session titles](product/session-titles.md) — agent terminal titles alongside created session names: where they
+  are displayed, what renaming edits, how titles are retained, and the accepted terminal sequences.
 - [Sidebar](product/sidebar.md) — one console at a time, picked on the rail's console switcher with each console's
   activity badge, previewing another console from the rail while the sidebar is hidden, the console header, the
   console sessions section and the project list, project and session rows and their menus, the sessions bound to a

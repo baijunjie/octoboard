@@ -31,16 +31,16 @@ const settings = {
 // which the project's focus mode nests under it. `s-console-old` is an archived console session, which the
 // switch strip leaves out. For the strip's three kinds of activity: `hub1` waits through `s-2`, `hub2` is
 // working itself and `hub3` works through `s-3d`, while `hub4` has nothing going on.
-const lead = sessionOf("s-lead", console_.id, project.id, "Rework the result ranking", "idle", { bound_to: hub1.id, account_id: "a-work" });
+const lead = sessionOf("s-lead", console_.id, project.id, "Rework the result ranking", "idle", { bound_to: hub1.id, account_id: "a-work", terminal_title: "Compare ranking strategies" });
 const sessions = [
   hub1,
   hub2,
   hub3,
   hub4,
   sessionOf("s-console-old", console_.id, undefined, "Archived console session", "archived", { colour: "azure", ended_at: minutesAgo(60 * 24) }),
-  sessionOf("s-1", console_.id, project.id, "Add idempotency keys", "working", { pinned: true, bound_to: hub1.id, account_id: "a-work" }),
+  sessionOf("s-1", console_.id, project.id, "Add idempotency keys", "working", { pinned: true, bound_to: hub1.id, account_id: "a-work", terminal_title: "Prevent duplicate API requests" }),
   sessionOf("s-2", console_.id, project.id, "Fix the rounding of partial results", "waiting_user", { bound_to: hub1.id }),
-  sessionOf("s-3", console_.id, project.id, "Write the migration", "idle"),
+  sessionOf("s-3", console_.id, project.id, "Write the migration", "idle", { terminal_title: "Plan the database migration" }),
   sessionOf("s-3a", console_.id, project.id, "Check the index sizes", "interrupted", { bound_to: "s-3" }),
   lead,
   sessionOf("s-lead-1", console_.id, project.id, "Chase the flaky test", "working", { bound_to: lead.id }),
@@ -66,19 +66,19 @@ const sessions = [
   sessionOf("s-9b", console_.id, third.id, "An archived session of the fourth", "archived", { bound_to: hub4.id, ended_at: minutesAgo(60) }),
 ];
 
-// Names that test a narrow layout: a long Latin one and a CJK one.
-const longHub = sessionOf("s-long-hub", console_.id, undefined, "A console session titled at a length no row fits", "idle", { colour: "azure" });
-const cjkHub = sessionOf("s-cjk-hub", console_.id, undefined, "负责网站改版的编排会话", "idle", { colour: "olive" });
-const cjkProject = projectOf("p-cjk", console_.id, "搜索接口服务");
+// Names that test a narrow layout: a long console-session name and a redesign coordinator.
+const longHub = sessionOf("s-long-hub", console_.id, undefined, "A console session titled at a length no row fits", "idle", { colour: "azure", terminal_title: "Review a very long agent-generated task title across the entire release pipeline" });
+const redesignHub = sessionOf("s-redesign-hub", console_.id, undefined, "Website redesign coordinator", "idle", { colour: "olive" });
+const searchProject = projectOf("p-search", console_.id, "Search interface service");
 
 
 
-// Many console sessions, some with long and CJK titles, so the strip has to scroll; started in the
+// Many console sessions, some with long titles, so the strip has to scroll; started in the
 // order they are listed here, which is the strip's order.
 const crowd = [
   sessionOf("o-1", console_.id, undefined, "Website redesign", "working", { colour: "teal" }),
   sessionOf("o-2", console_.id, undefined, "A console session titled at a length no chip fits", "idle", { colour: "azure" }),
-  sessionOf("o-3", console_.id, undefined, "负责网站改版的编排会话", "waiting_user", { colour: "olive" }),
+  sessionOf("o-3", console_.id, undefined, "Website redesign coordinator", "waiting_user", { colour: "olive" }),
   sessionOf("o-4", console_.id, undefined, "Release notes", "idle", { colour: "rose" }),
   sessionOf("o-5", console_.id, undefined, "Billing migration", "idle", { colour: "violet" }),
   sessionOf("o-6", console_.id, undefined, "Docs", "idle", { colour: "jade" }),
@@ -95,12 +95,12 @@ const freshProject = projectOf("p-fresh", console_.id, "No sessions yet");
 const longProject = projectOf("p-long", console_.id, "A project whose name is far too long for one row");
 const state = snapshotState({
   consoles: [{ ...console_, name: "A console with a rather long name indeed" }, loneConsole, projectlessConsole, crowdedConsole, fittingConsole],
-  projects: [project, other, third, cjkProject, longProject, emptyProject, freshProject, projectOf("p-lone", loneConsole.id, "No bound sessions"), projectOf("p-fitting", fittingConsole.id, "Short strip")],
+  projects: [project, other, third, searchProject, longProject, emptyProject, freshProject, projectOf("p-lone", loneConsole.id, "No bound sessions"), projectOf("p-fitting", fittingConsole.id, "Short strip")],
   sessions: [
-    ...sessions, longHub, cjkHub,
-    sessionOf("s-long-latin", console_.id, longProject.id, "Check the build", "working", { bound_to: longHub.id }),
-    sessionOf("s-long-cjk", console_.id, cjkProject.id, "检查构建并更新依赖项", "idle", { bound_to: longHub.id }),
-    sessionOf("s-cjk-bound", console_.id, project.id, "检查构建", "idle", { bound_to: cjkHub.id }),
+    ...sessions, longHub, redesignHub,
+    sessionOf("s-long-latin", console_.id, longProject.id, "Check the build", "working", { bound_to: longHub.id, terminal_title: "Review build failures and dependency upgrade compatibility" }),
+    sessionOf("s-long-dependencies", console_.id, searchProject.id, "Check the build and update dependencies", "idle", { bound_to: longHub.id, terminal_title: "Explain the differences between the three galleries and check how long task titles are clipped" }),
+    sessionOf("s-redesign-bound", console_.id, project.id, "Check the build", "idle", { bound_to: redesignHub.id }),
     sessionOf("s-long-project-bound", console_.id, project.id, "Check long names", "idle", { bound_to: longHub.id }),
     sessionOf("s-empty-old", console_.id, emptyProject.id, "Older investigation", "archived", { bound_to: hub1.id, ended_at: minutesAgo(300) }),
     sessionOf("s-lone", loneConsole.id, undefined, "Only hub", "idle"),
@@ -119,7 +119,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project session hierarchy",
     state,
     preferences: { sidebarConsole: console_.id },
-    description: "Rounded branches connect each project session and its nested sessions; the final branch ends at the last child.",
+    description: "Rounded branches connect each project session and its nested sessions; the final branch ends at the last child. Agent task titles and fallback session names appear together.",
   },
   {
     id: "focus-project",
@@ -129,7 +129,7 @@ export const focusScenarios: Scenario[] = [
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
     description: "Live console-bound sessions make the Show all project sessions switch available; it starts off. Colored summary chips with contrasting gray count badges sit above archives, including bound sessions and an archived child of an active lead.",
     steps: [
-      (ui) => ui.press(ui.session("Write the migration")),
+      (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Plan the database migration", name: "Write the migration" }))),
     ],
   },
   {
@@ -140,7 +140,7 @@ export const focusScenarios: Scenario[] = [
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
     description: "The switch is on: bound and unbound sessions share the card list, with the owner hub's color on bound cards and their nested sessions. Archives remain available below the cards.",
     steps: [
-      (ui) => ui.press(ui.session("Rework the result ranking")),
+      (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Compare ranking strategies", name: "Rework the result ranking" }))),
     ],
   },
   {
@@ -151,7 +151,7 @@ export const focusScenarios: Scenario[] = [
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
     description: "Bound cards and archives stay under their owners. The switch strip includes waiting, working and inactive sessions; hover markers for details.",
     steps: [
-      (ui) => ui.press(ui.session("Add idempotency keys")),
+      (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Prevent duplicate API requests", name: "Add idempotency keys" }))),
     ],
   },
   {
@@ -160,7 +160,7 @@ export const focusScenarios: Scenario[] = [
     title: "Long console session and project names",
     state: state,
     preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `consoleSession:${longHub.id}` },
-    description: "A long header and Latin/CJK project headings in the same view.",
+    description: "Long English agent task titles with original session names in the header and cards, alongside long session names and project headings.",
   },
   {
     id: "focus-project-no-sessions",

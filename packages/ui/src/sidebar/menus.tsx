@@ -7,6 +7,7 @@ import { PathText } from "../components/PathText";
 import type { Translate } from "../i18n/catalog";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Account, Console, Project, Session } from "../protocol";
+import { sessionDisplayTitle } from "../sessionLabel";
 import { FocusShortcutKbd } from "./focusShortcut";
 import type { SidebarHandlers } from "./types";
 
@@ -23,7 +24,7 @@ export function archiveSubmenu(
   onViewAll: () => void,
 ): ActionMenuSubmenu {
   const items: ActionMenuItem[] = archived.slice(0, ARCHIVE_SUBMENU_COUNT).map((session) => ({
-    label: session.title,
+    label: sessionDisplayTitle(t, session),
     icon: <AgentIcon agent={session.agent} />,
     onClick: () => onSelect(session),
   }));

@@ -18,7 +18,7 @@ const owner = sessionOf("s-owner", console_.id, project.id, "Owner", "idle");
 const account: Account = { id: "a-1", agent: "claude", name: "Work", config_dir: "/home/dev/.claude-work" };
 
 /** Mounts the dialog for `dialog` over a store holding `sessions` and `accounts`. */
-function mount(dialog: DialogRequest, sessions: Session[], accounts: Account[] = []): HTMLElement {
+function mount(dialog: DialogRequest, sessions: Session[], accounts: Account[] = []): { container: HTMLElement; daemon: Daemon } {
   const daemon: Daemon = {
     store: createStateStore({
       sessions: new Map(sessions.map((s) => [s.id, s])),
@@ -32,11 +32,12 @@ function mount(dialog: DialogRequest, sessions: Session[], accounts: Account[] =
     reconnect: () => {},
     terminalUrl: () => "",
   };
-  return mountForTooltip(
+  const container = mountForTooltip(
     <DaemonProvider value={daemon}>
       <RequestedDialog dialog={dialog} onClose={() => {}} onSessionOpened={() => {}} onSwitchAccount={async () => {}} />
     </DaemonProvider>,
   );
+  return { container, daemon };
 }
 
 /** The agent icon's tooltip trigger in the callout's first listed session: the status glyph's
@@ -121,4 +122,26 @@ it.each([
   settle();
   expect(openTooltip()).toBeNull();
   expect(vi.getTimerCount()).toBe(0);
+});
+
+
+it("edits the created session name while the agent has a dynamic terminal title", () => {
+  const session = { ...owner, terminal_title: "Explain the gallery" };
+  mount({ kind: "rename-session", session }, [session]);
+  const input = document.body.querySelector<HTMLInputElement>('[role="dialog"] input');
+  expect(input?.value).toBe(owner.title);
+});
+
+
+it.each(["archive-session", "delete-session", "switch-account"] as const)("updates the %s confirmation heading when the terminal title changes", (kind) => {
+  const session = { ...owner, terminal_title: "First task" };
+  const dialog: DialogRequest = kind === "switch-account"
+    ? { kind, session, account: account.id, accountName: account.name }
+    : { kind, session };
+  const { daemon } = mount(dialog, [session]);
+  const title = () => document.body.querySelector('[role="alertdialog"] h2')?.textContent;
+  expect(title()).toContain("First task");
+  act(() => daemon.store.setState({ sessions: new Map([[session.id, { ...session, terminal_title: "Next task" }]]) }));
+  expect(title()).toContain(`${isolate("Next task")}｜${isolate(session.title)}`);
+  expect(title()).not.toContain("First task");
 });

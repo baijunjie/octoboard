@@ -6,6 +6,14 @@ import type { Language } from "./i18n/languages";
 import type { Account, Console, Project, Session, SessionStatus } from "./protocol";
 import type { Activity } from "./sidebar/order";
 
+/** Keeps the agent's current task beside the session name the user created. Each name is
+ * isolated separately so mixed reading directions cannot reorder them across the separator. */
+export function sessionDisplayTitle(t: Translate, session: Session): string {
+  const terminalTitle = session.terminal_title?.trim();
+  if (!terminalTitle || terminalTitle === session.title.trim()) return session.title;
+  return t("session.displayTitle", { title: isolate(terminalTitle), name: isolate(session.title) });
+}
+
 /** Where to tell the user a session is, since the daemon's `Session` record itself only carries
  * ids. A console session has no project, so it is named for its console instead. The name comes
  * back isolated even where it is the whole answer rather than part of a sentence: a caller cannot
@@ -35,9 +43,10 @@ export function sessionWithLocation(
 ): string {
   // Compared before either is isolated: the marks would only get in the way of the comparison.
   const project = session.project_id ? projects.get(session.project_id) : undefined;
-  if (project?.name === session.title) return session.title;
+  const title = sessionDisplayTitle(t, session);
+  if (project?.name === session.title) return title;
   const location = sessionLocation(t, session, consoles, projects);
-  return t("session.withLocation", { session: isolate(session.title), location });
+  return t("session.withLocation", { session: isolate(title), location });
 }
 
 /** The catalog message naming each status, for the "Session statuses" table in
@@ -94,11 +103,11 @@ export function sessionAriaLabel(
   owner?: Session,
 ): string {
   const base = t(session.pinned ? "sidebar.session.ariaLabelPinned" : "sidebar.session.ariaLabel", {
-    title: isolate(session.title),
+    title: isolate(sessionDisplayTitle(t, session)),
     agent: sessionAgentLabel(t, session, accounts),
     status: statusLabel(t, session.status),
   });
-  return owner ? joinPhrases(language, [base, t("sidebar.session.boundTo", { name: isolate(owner.title) })]) : base;
+  return owner ? joinPhrases(language, [base, t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, owner)) })]) : base;
 }
 
 /** What an activity marker stands for, on its own, for the tooltip it carries; `undefined` for a

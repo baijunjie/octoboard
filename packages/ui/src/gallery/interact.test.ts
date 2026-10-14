@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { createUi, stuckExit, type Matcher } from "./interact";
+import { format } from "../i18n/catalog";
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
@@ -65,16 +66,25 @@ it("press takes the control inside a band of the same name, not the band", async
 it("changeRow names a change row by its file and status in the window's language, whatever follows", () => {
   const english = createUi(document, "en").changeRow("new-name.ts", "renamed");
   const chinese = createUi(document, "zh-Hans").changeRow("new-name.ts", "renamed");
+  const translatedFrom = format("zh-Hans", "git.row.detail", {
+    name: "new-name.ts", status: format("zh-Hans", "git.status.renamed"),
+    detail: format("zh-Hans", "git.row.from", { path: "src/old-name.ts" }),
+  });
+  const translatedSelected = format("zh-Hans", "git.row.selected", { name: "new-name.ts", status: format("zh-Hans", "git.status.renamed") });
+  const translatedFromSelected = format("zh-Hans", "git.row.detail.selected", {
+    name: "new-name.ts", status: format("zh-Hans", "git.status.renamed"),
+    detail: format("zh-Hans", "git.row.from", { path: "src/old-name.ts" }),
+  });
   const matches = (matcher: Matcher, name: string) => (typeof matcher === "string" ? matcher === name : matcher(name));
   expect(matches(english, "new-name.ts, renamed, from src/old-name.ts")).toBe(true);
   expect(matches(english, "new-name.ts, renamed")).toBe(true);
   expect(matches(english, "new-name.ts, renamed, selected")).toBe(true);
   expect(matches(english, "new-name.ts, renamed, from src/old-name.ts, selected")).toBe(true);
   expect(matches(english, "new-name.ts, modified")).toBe(false);
-  expect(matches(english, "new-name.ts，已重命名，来自 src/old-name.ts")).toBe(false);
-  expect(matches(chinese, "new-name.ts，已重命名，来自 src/old-name.ts")).toBe(true);
-  expect(matches(chinese, "new-name.ts，已重命名，已选中")).toBe(true);
-  expect(matches(chinese, "new-name.ts，已重命名，来自 src/old-name.ts，已选中")).toBe(true);
+  expect(matches(english, translatedFrom)).toBe(false);
+  expect(matches(chinese, translatedFrom)).toBe(true);
+  expect(matches(chinese, translatedSelected)).toBe(true);
+  expect(matches(chinese, translatedFromSelected)).toBe(true);
   expect(matches(chinese, "new-name.ts, renamed, from src/old-name.ts")).toBe(false);
 });
 

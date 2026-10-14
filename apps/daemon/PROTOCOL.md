@@ -295,7 +295,7 @@ Project { id, console_id, host_id, name, path, default_agent?, source, remote_ur
           grok_session_model?, grok_session_effort?,
           trust_consent, pinned, tags: string[] }
 Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
-          role: "console"|"project", origin: "console"|"user", title,
+          role: "console"|"project", origin: "console"|"user", title, terminal_title?,
           status: "working"|"waiting_user"|"idle"|"interrupted"|"archived",
           has_conversation, bound_to?, colour?: "olive"|"jade"|"teal"|"azure"|"violet"|"rose", ordinal?,
           account_id?, config_dir?, pinned, started_at, ended_at? }
@@ -315,6 +315,15 @@ local, worktree): `origin` comes first so that the value says where the working 
 with the checked-out branch. It is written when the project is associated, re-read for every project once at daemon
 start, and kept current by the git status check (step 3 of "Daemon behaviour, per project"); a change reaches
 clients as `project_upserted`.
+
+`Session.terminal_title` is the last valid UTF-8 terminal title emitted by the session's current process with
+OSC 0 or OSC 2, terminated by BEL or `ESC \`. The daemon observes the PTY independently of attached clients,
+keeps at most 4096 title bytes, trims surrounding whitespace and rejects control characters. A blank title clears
+it; when absent, clients use `title` alone. It is stored independently of the user-managed `title`, retained across
+archiving, process exit, daemon restart and resume until the next valid title, and carried by `session_upserted`
+and snapshots. Unsupported OSC commands and titles inside other control strings have no effect; raw terminal
+output is passed through unchanged. Repeated equal titles cause no store write or event. An older process cannot
+replace the title once a successor has been registered for the same session.
 
 `Session.origin` is `console` for a session started by a session's `start_session` tool (a console session, or a
 project session that is unbound or a lead session) and `user` for one the user opened.

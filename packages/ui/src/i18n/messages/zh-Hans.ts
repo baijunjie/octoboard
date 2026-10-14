@@ -217,6 +217,7 @@ export const zhHans: Translation<"other"> = {
   "statusItem.open": "打开 {appName}",
 
   "session.agentAccount": "{agent}（{account}）",
+  "session.displayTitle": "{title}｜{name}",
   "session.withLocation": "{session}，{location}",
   "session.location.project": "某个项目",
   "session.location.consoleSession": "{console} 的控制台会话",

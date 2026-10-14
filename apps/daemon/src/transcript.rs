@@ -344,6 +344,7 @@ mod tests {
             origin: Origin::User,
             title: "Session".to_string(),
             status: SessionStatus::WaitingUser,
+            terminal_title: None,
             has_conversation: true,
             bound_to: None,
             lead: false,

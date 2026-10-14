@@ -31,7 +31,7 @@ import type { PanePeek } from "../layout/usePaneToggles";
 import { usePlatform } from "../platform/react";
 import { effectiveTags, matchesFilter, tagVocabulary, withoutTags } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
-import { activityLabelKey, sessionAccountTooltip, sessionAriaLabel } from "../sessionLabel";
+import { activityLabelKey, sessionAccountTooltip, sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
 import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
@@ -752,7 +752,7 @@ function SessionRow({
     >
       <StatusIcon status={session.status} decorative withTooltip />
       <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
-      <RowLabel title={session.title}>{session.title}</RowLabel>
+      <RowLabel title={sessionDisplayTitle(t, session)}>{sessionDisplayTitle(t, session)}</RowLabel>
       {/* A console session shows its own colour, decorative here since the row's own label already
           names it; a session bound to one shows that console session's, naming its owner in the
           tooltip. A session bound to a project session shows none: it is listed under its owner. */}
@@ -761,9 +761,9 @@ function SessionRow({
       ) : (
         owner?.role === "console" && <BindingBadge owner={owner} />
       )}
-      {session.pinned && <PinButton name={session.title} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}
+      {session.pinned && <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}
       <RowControls>
-        <ActionMenu label={t("sidebar.session.actions", { title: isolate(session.title) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
+        <ActionMenu label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, session)) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
       </RowControls>
     </TreeRow>
   );

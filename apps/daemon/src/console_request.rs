@@ -709,6 +709,7 @@ mod tests {
             origin: Origin::User,
             title: format!("Work {id}"),
             status: SessionStatus::Idle,
+            terminal_title: None,
             has_conversation: true,
             bound_to: None,
             lead: false,

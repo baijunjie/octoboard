@@ -4,6 +4,7 @@ import { IndicatorTooltip } from "../components/IndicatorTooltip";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Session } from "../protocol";
+import { sessionDisplayTitle } from "../sessionLabel";
 
 /**
  * A bound project session's binding badge: a dot in its owner console session's colour, on the
@@ -39,7 +40,7 @@ export function BindingBadge({ owner, decorative }: { owner: Session; decorative
     />
   );
   if (decorative) return dot;
-  const label = t("sidebar.session.boundTo", { name: isolate(owner.title) });
+  const label = t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, owner)) });
   return (
     <IndicatorTooltip tooltip={label} label={label} className="inline-flex">
       {dot}

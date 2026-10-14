@@ -254,6 +254,7 @@ export const en = {
   "statusItem.open": "Open {appName}",
 
   "session.agentAccount": "{agent} ({account})",
+  "session.displayTitle": "{title}｜{name}",
   "session.withLocation": "{session} — {location}",
   "session.location.project": "a project",
   "session.location.consoleSession": "{console}'s console session",

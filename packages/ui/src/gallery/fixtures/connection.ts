@@ -66,7 +66,7 @@ export const connectionScenarios: Scenario[] = [
     id: "terminal-output",
     group: TERMINAL,
     title: "A terminal with output",
-    description: "A canned ANSI sample: colours, a prompt box with a CJK row and a long wrapping line. Select Interrupted by a restart for Resume; open the project archive and Archived and done for the archived terminal and its breadcrumb status tooltip.",
+    description: "A canned ANSI sample: colours, a prompt box with a follow-up instruction and a long wrapping line. Select Interrupted by a restart for Resume; open the project archive and Archived and done for the archived terminal and its breadcrumb status tooltip.",
     state: connected("open"),
     steps: [(ui) => ui.press(ui.session("Fix the summary layout"))],
   },
