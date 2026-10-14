@@ -40,10 +40,9 @@ function mount(dialog: DialogRequest, sessions: Session[], accounts: Account[] =
   return { container, daemon };
 }
 
-/** The agent icon's tooltip trigger in the callout's first listed session: the status glyph's
- * neighbour, the second child of the row. */
+/** The agent icon's tooltip trigger in the callout's first listed session. */
 function agentIcon(): HTMLElement {
-  return document.body.querySelector<HTMLElement>("[role=alertdialog] li")!.children[1] as HTMLElement;
+  return document.body.querySelector<SVGElement>("[role=alertdialog] li svg[fill-rule=evenodd]")!.parentElement!;
 }
 
 function hoverAgentIcon(): string | undefined {

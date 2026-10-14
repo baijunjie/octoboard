@@ -189,7 +189,8 @@ opened or resumed, so a running session keeps what it started with. The settings
 The first three mean a process is running; the last two mean none is, and both can be resumed.
 
 The glyph stands for the status wherever one is shown — the sidebar's rows, focus mode's cards, the top bar's
-breadcrumb and a confirmation's list of the sessions it affects. The waving hand and the outward pulse stand still
+breadcrumb and a confirmation's list of the sessions it affects. In a confirmation, archived sessions omit the
+status glyph; the warning identifies them as archived. The waving hand and the outward pulse stand still
 where the system asks for reduced motion, leaving the working glyph a plain accent-coloured dot; working and awaiting
 instructions still differ by shape as well as by colour.
 

@@ -164,7 +164,7 @@ export const archiveScenarios: Scenario[] = [
     title: "Delete an archived lead session",
     state: archiveState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
-    description: "The confirmation includes both children; hover their agent and status marks for account and archive details.",
+    description: "The confirmation lists both archived children with their agent icons and titles; hover the agent icons for account details.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
       (ui) => ui.press(ui.t("archive.delete", { title: archivedLead.title })),

@@ -21,7 +21,8 @@ import { RenameDialog } from "./RenameDialog";
 import { SessionDialog } from "./SessionDialog";
 
 /** A warning callout for what a confirmation is about to take along, over the list of sessions when
- * there is one to show: each with its status glyph, its agent's icon and its title. HeroUI's own
+ * there is one to show: each with its agent's icon and title, plus a status glyph for live sessions.
+ * Archived sessions are already identified by the warning's wording. HeroUI's own
  * warning tint rather than its default surface, which is the dialog's own fill and leaves the
  * callout unmarked. */
 function SessionCallout({ title, sessions }: { title: string; sessions?: Session[] }): React.ReactElement {
@@ -38,7 +39,7 @@ function SessionCallout({ title, sessions }: { title: string; sessions?: Session
           <ul className="mt-1 flex min-w-0 flex-col gap-1 self-stretch text-sm text-foreground">
             {sessions.map((session) => (
               <li key={session.id} className="flex min-w-0 items-center gap-2">
-                <StatusIcon status={session.status} withTooltip />
+                {session.status !== "archived" && <StatusIcon status={session.status} withTooltip />}
                 <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
                 {/* The icon is decorative, and nothing else here names the agent. */}
                 <span className="sr-only">{sessionAgentLabel(t, session, accounts)}</span>
