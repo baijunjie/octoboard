@@ -59,7 +59,7 @@ function FocusHeader({
     // A row or card below sits in the scroll area (`px-2`), then inside its own padding (a card's
     // border and padding add up to `px-2`), so the end padding matches that and this header's
     // trailing menus line up with the menu on a row or card. The start stays put.
-    <div ref={ref} className="flex h-(--pane-header-height) shrink-0 items-center gap-1 border-b border-separator ps-2 pe-4">
+    <div ref={ref} data-marquee-scope className="flex h-(--pane-header-height) shrink-0 items-center gap-1 border-b border-separator ps-2 pe-4">
       <TitledControl title={t("sidebar.focus.exit")}>
         <Button
           isIconOnly
@@ -84,9 +84,9 @@ function FocusHeader({
 function FocusTitle({ consoleName, title }: { consoleName: string; title: string }): React.ReactElement {
   return (
     <>
-      <div className="truncate text-xs text-muted" dir="auto">
+      <FadeOverflow className="text-xs text-muted" dir="auto" titleWhenClipped={consoleName}>
         {consoleName}
-      </div>
+      </FadeOverflow>
       <h2 className="min-w-0">
         <RowLabel title={title} className="block min-w-0">
           <span className="text-sm font-semibold">{title}</span>

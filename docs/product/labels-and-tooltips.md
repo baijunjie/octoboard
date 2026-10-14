@@ -145,13 +145,17 @@ These are:
 
 A single-line name or label too long for its space — a sidebar row's name, a focus mode session card's title, the top
 bar's breadcrumb, a session listed in a confirmation, the report panel's page timestamp, a name in a project pane's
-file tree or its header, a name or
-what follows it in the Git mode's change list, a worktree's name or path in its worktree selector, a branch's name in
-its branch selectors, a picked tag's label and the sidebar filter's keyword (see "Picked tags" in
-`docs/product/consoles-and-projects.md`) — fades out where it is cut off rather than ending in an ellipsis. A name,
-unlike the timestamp, then has its full text as its tooltip, shown while the pointer is on the label and not on
-keyboard focus; the label's whole text is in the document whether or not it is cut, so assistive technology is given
-it either way.
+file tree or its header, a name or what follows it in the Git mode's change list, a worktree's name or path in its
+worktree selector, a branch's name in its branch selectors, a picked tag's label and the sidebar filter's keyword
+(see "Picked tags" in `docs/product/consoles-and-projects.md`) — fades out where it is cut off rather than ending in
+an ellipsis. The same holds for action-menu items and submenu names, a select's current choice or placeholder and
+its listed options, directory-picker rows, the console name above a focus view's title, the archive view's heading
+and count, and each archived session's agent, account and relative-time line. A fixed session-owner label and a
+diff's collapsed-line label follow the same fade and marquee rules.
+
+Except for the report timestamp, clipped text then has its full text as its tooltip, shown while the pointer is on
+the label and not on keyboard focus; the label's whole text is in the document whether or not it is cut, so assistive
+technology is given it either way. The diff separator's tooltip follows the operating system's rules instead.
 
 **A path is cut at its start instead**, so that its last folder stays in view (see "Right-to-left layout" in
 `docs/product/window-layout.md`); every other label is cut at its end. Everything this section says holds for a label
@@ -164,8 +168,10 @@ state, shown whether or not the line is cut (see "The branch badge" in `docs/pro
 
 **While the pointer is over it, such a label runs as a marquee**, so all of it can be read:
 
-- For a sidebar row the pointer only has to be over the row, and for a picked tag over the tag; elsewhere it has to be
-  over the label itself.
+- For a sidebar or archive row, an action-menu item or submenu item, a select's option or directory-picker row,
+  the pointer only has to be over that row. A select's current choice or placeholder runs while the pointer is over
+  its trigger; the focus and archive headers run while it is over the header, and a picked tag while it is over the
+  tag. A diff's collapsed-line label runs over its text control. Elsewhere the pointer has to be over the label itself.
 - After a short pause the text scrolls at reading speed, about 60 px a second, toward the edge it is cut at — a label
   cut at its end scrolls forward through its text, one cut at its start scrolls back toward its beginning — pauses
   there, scrolls quickly back to where it rests and goes round again for as long as the pointer stays. The pacing is

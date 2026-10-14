@@ -3,6 +3,7 @@ import { CornerLeftUp, Folder } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { DaemonRequestError } from "../daemon-client";
+import { FadeOverflow } from "../components/FadeOverflow";
 import { useScrollFade } from "../components/scrollFade";
 import { useT } from "../i18n/react";
 import type { DirEntry, Event } from "../protocol";
@@ -132,17 +133,17 @@ export function DirectoryPicker({
           onAction={(key) => void load(key === PARENT_KEY ? parentOf(resolvedPath ?? "/") : String(key))}
         >
           {resolvedPath && resolvedPath !== "/" && (
-            <ListBox.Item id={PARENT_KEY} textValue={t("directoryPicker.parent")} aria-label={t("directoryPicker.parent")}>
+            <ListBox.Item data-marquee-scope id={PARENT_KEY} textValue={t("directoryPicker.parent")} aria-label={t("directoryPicker.parent")}>
               <CornerLeftUp aria-hidden="true" className="size-4 shrink-0 text-muted rtl:-scale-x-100" />
-              <span className="text-muted">{t("directoryPicker.parent")}</span>
+              <FadeOverflow className="min-w-0 flex-1 text-muted" titleWhenClipped={t("directoryPicker.parent")}>{t("directoryPicker.parent")}</FadeOverflow>
             </ListBox.Item>
           )}
           {entries.map((entry) => (
-            <ListBox.Item key={entry.path} id={entry.path} textValue={entry.name}>
+            <ListBox.Item data-marquee-scope key={entry.path} id={entry.path} textValue={entry.name}>
               <Folder aria-hidden="true" className="size-4 shrink-0 text-muted" />
-              <span dir="auto" className="min-w-0 truncate text-foreground">
+              <FadeOverflow dir="auto" className="min-w-0 flex-1 text-foreground" titleWhenClipped={entry.name}>
                 {entry.name}
-              </span>
+              </FadeOverflow>
               {entry.is_git_repo && (
                 <Chip size="sm" variant="soft" className="ms-auto">
                   git
@@ -153,8 +154,8 @@ export function DirectoryPicker({
           {entries.length === 0 && (
             // Inside the list, as an option that cannot be acted on: arrow keys skip it, and the
             // list is never left without an option, which a listbox needs.
-            <ListBox.Item id={EMPTY_KEY} isDisabled textValue={t("directoryPicker.empty")}>
-              {t("directoryPicker.empty")}
+            <ListBox.Item data-marquee-scope id={EMPTY_KEY} isDisabled textValue={t("directoryPicker.empty")}>
+              <FadeOverflow className="min-w-0 flex-1" titleWhenClipped={t("directoryPicker.empty")}>{t("directoryPicker.empty")}</FadeOverflow>
             </ListBox.Item>
           )}
         </ListBox>

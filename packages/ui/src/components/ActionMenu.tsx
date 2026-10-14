@@ -3,6 +3,7 @@ import { EllipsisVertical, type LucideIcon } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { useT } from "../i18n/react";
+import { FadeOverflow } from "./FadeOverflow";
 import { TitledControl } from "./TitledControl";
 import { usePointerFocusReturn } from "./usePointerFocusReturn";
 
@@ -93,6 +94,7 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
       key={index}
       id={String(index)}
       textValue={entry.label}
+      data-marquee-scope
       aria-label={entry.ariaLabel}
       variant={entry.destructive ? "danger" : "default"}
       isDisabled={entry.disabled}
@@ -100,7 +102,9 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
       <ItemIcon icon={entry.icon} destructive={entry.destructive} className={entry.iconClassName} />
       {/* A label is often a name the user typed, so it reads in its own direction; `content` sets
           its own. */}
-      <Label dir={entry.content ? undefined : "auto"} className="min-w-0 flex-1 truncate">{entry.content ?? entry.label}</Label>
+      <Label className="min-w-0 flex-1 text-clip">
+        {entry.content ?? <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>}
+      </Label>
       {entry.end}
       {entry.selected !== undefined && <Dropdown.ItemIndicator />}
     </Dropdown.Item>
@@ -130,9 +134,11 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
     } else if ("items" in entry) {
       nodes.push(
         <Dropdown.SubmenuTrigger key={index}>
-          <Dropdown.Item id={String(index)} textValue={entry.label}>
+          <Dropdown.Item id={String(index)} textValue={entry.label} data-marquee-scope>
             <ItemIcon icon={entry.icon} />
-            <Label>{entry.label}</Label>
+            <Label className="min-w-0 flex-1 text-clip">
+              <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>
+            </Label>
             {/* HeroUI's indicator is a chevron that always points right, while the submenu opens
                 towards the start of the line in a right-to-left interface; a flip points it towards
                 the submenu. */}

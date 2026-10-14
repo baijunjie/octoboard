@@ -21,7 +21,7 @@ const twoHubsState = snapshotState({
   projects: [web, api],
   sessions: [
     ...sessions.map((s) => (s.id === SAMPLE.consoleSession.id ? { ...s, title: "Hub" } : s)),
-    sessionOf("s-console-2", console_.id, undefined, "Hub 2", "working", { colour: "rose", started_at: minutesAgo(20) }),
+    sessionOf("s-console-2", console_.id, undefined, "A release coordinator with a console session name too long for the owner picker", "working", { colour: "rose", started_at: minutesAgo(20) }),
     sessionOf("s-console-old", console_.id, undefined, "Hub 3", "archived", { colour: "azure" }),
   ],
 });
@@ -35,8 +35,8 @@ const accountsState = snapshotState({
     auto_sync_repositories: false,
     default_clone_dir: "/Users/dev/Projects",
     accounts: [
-      { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
-      { id: "a-personal", agent: "claude", name: "Personal", config_dir: "/Users/dev/.claude-personal" },
+      { id: "a-work", agent: "claude", name: "Work account for release coordination across all production services", config_dir: "/Users/dev/.claude-work" },
+      { id: "a-personal", agent: "claude", name: "Personal account for documentation and experimental development", config_dir: "/Users/dev/.claude-personal" },
     ],
   },
 });
@@ -72,7 +72,7 @@ const removeState = snapshotState({
 // A console that carries a stored model and effort for its default agent: the model is one the
 // dialog's list no longer names, so it is offered on the end, marked.
 const launchSettingsState = snapshotState({
-  consoles: [{ ...console_, claude_console_session_model: "retired-model", claude_console_session_effort: "high" }],
+  consoles: [{ ...console_, claude_console_session_model: "retired-model-for-production-release-coordination-and-compatibility-review", claude_console_session_effort: "high" }],
   projects: [web, api],
   sessions,
 });
@@ -89,7 +89,7 @@ const avatarState = snapshotState({
 const configured = projectOf("p-configured", console_.id, "Configured Site", {
   default_agent: "claude",
   claude_account_id: { kind: "account", id: "a-work" },
-  claude_session_model: "retired-model",
+  claude_session_model: "retired-model-for-production-release-coordination-and-compatibility-review",
   claude_session_effort: "high",
 });
 const configuredState = snapshotState({
@@ -124,6 +124,7 @@ const editTaggedProject = [
 /** A home directory with more subdirectories than the picker's list is tall, some of them repositories. */
 const HOME_LISTING = [
   "Applications",
+  "a-project-directory-with-a-name-too-long-for-the-directory-picker-row",
   "code",
   "Desktop",
   "Documents",
@@ -245,6 +246,7 @@ export const dialogScenarios: Scenario[] = [
     id: "dialog-new-session-owner",
     group: GROUP,
     title: "New session owner choices",
+    description: "Short and long owner names appear together. Hover the long option to read it as a marquee; the current account label uses the same fade.",
     steps: [
       (ui) => projectActions(ui, web.name),
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
@@ -288,6 +290,7 @@ export const dialogScenarios: Scenario[] = [
     id: "dialog-edit-project-launch-settings",
     group: GROUP,
     title: "Stored project account and launch settings",
+    description: "Long selected account and retained model labels fade at the field edge and scroll on hover. Open either picker to inspect the matching option labels.",
     steps: [
       (ui) => projectActions(ui, configured.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
@@ -299,6 +302,7 @@ export const dialogScenarios: Scenario[] = [
     id: "dialog-edit-project-account-choices",
     group: GROUP,
     title: "Project account choices",
+    description: "Inherited, default and long named accounts coexist. Hover a clipped account option to reveal its text as a marquee.",
     steps: [
       (ui) => projectActions(ui, onDefault.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
@@ -310,6 +314,7 @@ export const dialogScenarios: Scenario[] = [
     id: "dialog-directory-picker",
     group: GROUP,
     title: "Directory picker",
+    description: "Short directory names and a long directory row share the list; the long name fades and runs as a marquee on hover while its folder icon stays visible.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),

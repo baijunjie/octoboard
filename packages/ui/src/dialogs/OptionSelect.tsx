@@ -1,6 +1,8 @@
 import { Description, Label, ListBox, Select } from "@heroui/react";
 import React, { useId } from "react";
 
+import { FadeOverflow } from "../components/FadeOverflow";
+
 /** One choice of an `OptionSelect`. */
 export type Option<T extends string> = {
   value: T;
@@ -15,8 +17,8 @@ export type Option<T extends string> = {
  * in the trigger while it is the chosen one. An option with `isDisabled` is shown, named, but
  * cannot be chosen — the current `value` may still be one, so the reason it cannot be changed
  * away *to* is on screen without taking away what is already picked. `isDisabled` locks it, and
- * `description` is a note under it. A label too long for the control is cut with an ellipsis, as
- * in `AccountSelect`.
+ * `description` is a note under it. A label too long for the control fades at its clipped edge
+ * and runs as a marquee on hover, as in `AccountSelect`.
  *
  * With `inline` it is only as wide as its value and `label` is its accessible name alone, for a
  * control whose own row already shows the name (a setting). With `joined` it is one part of an
@@ -58,6 +60,7 @@ export function OptionSelect<T extends string>({
   | { value: T | null; onChange: (value: T | null) => void; placeholder: string }
 )): React.ReactElement {
   const descriptionId = useId();
+  const current = options.find((option) => option.value === value);
   return (
     // HeroUI's variant for a field on a surface: every one of these sits in a dialog.
     <Select
@@ -96,6 +99,7 @@ export function OptionSelect<T extends string>({
           border would sit close to this variant's fill in the dark one, and HeroUI's own input
           group draws no boundary between its parts either. */}
       <Select.Trigger
+        data-marquee-scope
         className={
           joined === "start"
             ? "w-full rounded-e-none"
@@ -104,23 +108,29 @@ export function OptionSelect<T extends string>({
               : undefined
         }
       >
-        {/* Renders the chosen item's own content, its icon included, so it lays that out in a row. */}
-        <Select.Value className="flex min-w-0 items-center gap-2" />
+        <Select.Value className="flex min-w-0 flex-1 items-center gap-2 text-clip">
+          {() => <>
+            {current?.icon && <span aria-hidden="true" className="flex shrink-0">{current.icon}</span>}
+            <FadeOverflow as="span" lang={current?.lang} dir="auto" className="min-w-0 flex-1" titleWhenClipped={current?.label ?? placeholder}>
+              {current?.label ?? placeholder}
+            </FadeOverflow>
+          </>}
+        </Select.Value>
         {placeholder !== undefined && <Select.ClearButton />}
         <Select.Indicator />
       </Select.Trigger>
-      <Select.Popover>
+      <Select.Popover className="w-(--trigger-width) max-w-[calc(100vw-2rem)]">
         <ListBox>
           {options.map((option) => (
-            <ListBox.Item className="pe-7" key={option.value} id={option.value} textValue={option.label} isDisabled={option.isDisabled}>
+            <ListBox.Item data-marquee-scope className="pe-7" key={option.value} id={option.value} textValue={option.label} isDisabled={option.isDisabled}>
               {option.icon && (
                 <span aria-hidden="true" className="flex shrink-0">
                   {option.icon}
                 </span>
               )}
-              <span lang={option.lang} dir="auto" className="min-w-0 truncate">
+              <FadeOverflow lang={option.lang} dir="auto" className="min-w-0 flex-1" titleWhenClipped={option.label}>
                 {option.label}
-              </span>
+              </FadeOverflow>
               <ListBox.ItemIndicator />
             </ListBox.Item>
           ))}

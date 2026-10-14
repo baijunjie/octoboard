@@ -89,13 +89,13 @@ const deleteState = snapshotState({
 });
 
 // A second project keeps the bound archive separate from the seventy-entry project archive.
-const boundProject = projectOf("p-bound", console_.id, "Bound archive");
+const boundProject = projectOf("p-bound", console_.id, "Bound archive for release coordination across all production services");
 const archiveState = {
   ...state,
   projects: new Map([...state.projects!, [boundProject.id, boundProject]]),
   sessions: new Map([
     ...state.sessions!,
-    ...Array.from(deleteState.sessions!, ([id, session]) => [id, { ...session, project_id: session.project_id === undefined ? undefined : boundProject.id }] as const),
+    ...Array.from(deleteState.sessions!, ([id, session]) => [id, { ...session, project_id: session.project_id === undefined ? undefined : boundProject.id, title: session.id === otherOwnerArchived.id ? "Archived session bound elsewhere with a long title for the archive menu" : session.id === unboundArchived.id ? "Unbound archived session with a long title for the archive menu" : session.title }] as const),
   ]),
 };
 
@@ -105,7 +105,7 @@ export const archiveScenarios: Scenario[] = [
     group: GROUP,
     title: "Project archive menu, parents only",
     state: archiveState,
-    description: "The menu lists archived parents, including directly console-bound sessions, and View all. Children of live and archived leads stay out of this preview.",
+    description: "The menu lists archived parents, including directly console-bound sessions, and View all. Children of live and archived leads stay out of this preview. Long archived names fade at the menu edge and run as a marquee when their row is hovered.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
@@ -116,7 +116,7 @@ export const archiveScenarios: Scenario[] = [
     group: GROUP,
     title: "Project archive with live and archived owners",
     state: archiveState,
-    description: "The full project archive includes children omitted from the preview. Children of the archived lead nest under it; the archived child of the active lead appears as a standalone row.",
+    description: "The full project archive includes children omitted from the preview. Children of the archived lead nest under it; the archived child of the active lead appears as a standalone row. The long project heading and session metadata fade when clipped and reveal their text on hover.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),

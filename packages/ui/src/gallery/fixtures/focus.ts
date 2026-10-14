@@ -219,7 +219,7 @@ export const focusScenarios: Scenario[] = [
     title: "Long console session and project names",
     state: state,
     preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `consoleSession:${longHub.id}` },
-    description: "Long English agent task titles with original session names in the header and cards, alongside long session names and project headings.",
+    description: "Long English agent task titles with original session names in the header and cards, alongside long session names and project headings. The console subtitle fades when clipped and runs as a marquee on hover.",
   },
   {
     id: "focus-project-no-sessions",
@@ -307,8 +307,8 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     title: "New session from console focus",
     state: state,
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "The chosen owner is a fixed line.",
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${longHub.id}` },
+    description: "The chosen owner is a fixed line with a long agent task title and original name; it fades and runs as a marquee on hover.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.focus.newSession")),
       (ui) => ui.press(third.name),

@@ -262,6 +262,8 @@ interface FadeOverflowProps {
    * `auto` for a name the user typed. The fade follows the direction the element resolves to, while
    * text that fits stays aligned the way its surroundings are. */
   dir?: "ltr" | "rtl" | "auto";
+  /** Language of the text when it differs from the surrounding UI. */
+  lang?: string;
   /** Which edge the content is cut at. `end` (the default) shows the content's beginning; `start`
    * aligns it to the end, so what is lost is its beginning (a path whose last folder must stay
    * readable). */
@@ -302,6 +304,7 @@ export function FadeOverflow({
   as: Tag = "div",
   className = "",
   dir,
+  lang,
   clip = "end",
   titleWhenClipped,
   title,
@@ -373,6 +376,7 @@ export function FadeOverflow({
     <Tag
       ref={attach}
       dir={dir}
+      lang={lang}
       className={`overflow-hidden whitespace-nowrap${dir ? " align-match-parent" : ""} ${className}`}
       style={mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined}
       onPointerEnter={follows ? () => setHovered(true) : undefined}

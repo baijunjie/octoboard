@@ -15,7 +15,7 @@ import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Account, Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
-import { sessionAccountName, sessionAccountTooltip, sessionDisplayTitle } from "../sessionLabel";
+import { sessionAccountName, sessionAccountTooltip, sessionAgentLabel, sessionDisplayTitle } from "../sessionLabel";
 import { archivedSessionRows, boundArchivedSessions } from "../sidebar/order";
 import { NESTED_ROW_CLASS } from "../sidebar/rows";
 
@@ -123,11 +123,13 @@ export function ArchiveView({
       {/* Built like the sidebar's focus-mode header (a small line over a title) and given the same
           height (`--pane-header-height`), so their bottom borders run on as one line. Where it is
           lives in the top bar's breadcrumb. */}
-      <header className="flex h-(--pane-header-height) shrink-0 items-center gap-1 border-b border-separator px-2 ps-4">
+      <header data-marquee-scope className="flex h-(--pane-header-height) shrink-0 items-center gap-1 border-b border-separator px-2 ps-4">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-xs text-muted">{t("archive.count", { count: archived.length })}</div>
-          <h2 className="truncate text-sm font-semibold">
-            {t(project ? "archive.heading.project" : boundTo ? "archive.heading.boundSessions" : "archive.heading.consoleSessions")}
+          <FadeOverflow className="text-xs text-muted" titleWhenClipped={t("archive.count", { count: archived.length })}>{t("archive.count", { count: archived.length })}</FadeOverflow>
+          <h2 className="min-w-0 text-sm font-semibold">
+            <FadeOverflow titleWhenClipped={heading}>
+              {t(project ? "archive.heading.project" : boundTo ? "archive.heading.boundSessions" : "archive.heading.consoleSessions")}
+            </FadeOverflow>
           </h2>
         </div>
         {archived.length > 0 && (
@@ -161,7 +163,13 @@ export function ArchiveView({
                   <FadeOverflow dir="auto" className="text-sm" titleWhenClipped={sessionDisplayTitle(t, session)}>
                     {sessionDisplayTitle(t, session)}
                   </FadeOverflow>
-                  <div className="truncate text-xs text-muted">
+                  <FadeOverflow
+                    className="text-xs text-muted"
+                    titleWhenClipped={t("archive.meta", {
+                      agent: sessionAgentLabel(t, session, accounts),
+                      archived: formatRelativeTime(language, session.ended_at ?? session.started_at),
+                    })}
+                  >
                     <Message
                       id="archive.meta"
                       params={{
@@ -169,7 +177,7 @@ export function ArchiveView({
                         archived: formatRelativeTime(language, session.ended_at ?? session.started_at),
                       }}
                     />
-                  </div>
+                  </FadeOverflow>
                   {/* The inset alone says which lead session a row was archived under, and a row
                       here is plain text rather than a button with a name of its own, so the fact is
                       put into words for assistive technology where the rest of the row is read. */}

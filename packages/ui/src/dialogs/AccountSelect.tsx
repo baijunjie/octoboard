@@ -5,6 +5,8 @@ import { choiceKey, findEntry, type AccountChoice, type ChoiceGroup } from "../a
 import { AGENT_LABEL } from "../agents";
 import { AgentAccountText } from "../components/AgentAccountText";
 import { AgentIcon } from "../components/AgentIcon";
+import { FadeOverflow } from "../components/FadeOverflow";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 
 /** One drop-down that settles an agent and one of its accounts together: a group per agent, headed
@@ -40,32 +42,34 @@ export function AccountSelect({
       {...({ disabledBehavior: "selection" } as React.ComponentProps<typeof Select>)}
     >
       <Label>{label}</Label>
-      <Select.Trigger>
-        <Select.Value className="flex min-w-0 items-center gap-2">
+      <Select.Trigger data-marquee-scope>
+        <Select.Value className="flex min-w-0 flex-1 items-center gap-2 text-clip">
           {() =>
             current && (
               <>
                 <AgentIcon agent={current.agent} />
-                <span className="min-w-0 truncate">
+                <FadeOverflow as="span" className="min-w-0 flex-1" titleWhenClipped={t("session.agentAccount", { agent: AGENT_LABEL[current.agent], account: isolate(current.name) })}>
                   <AgentAccountText agent={AGENT_LABEL[current.agent]} account={current.name} />
-                </span>
+                </FadeOverflow>
               </>
             )
           }
         </Select.Value>
         <Select.Indicator />
       </Select.Trigger>
-      <Select.Popover>
+      <Select.Popover className="w-(--trigger-width) max-w-[calc(100vw-2rem)]">
         <ListBox>
           {groups.map((group) => (
             <ListBox.Section key={group.agent}>
-              <Header className="flex items-center gap-2">
+              <Header data-marquee-scope className="flex min-w-0 items-center gap-2">
                 <AgentIcon agent={group.agent} className="size-3.5" />
-                {group.selectable ? AGENT_LABEL[group.agent] : t("agents.notInstalled", { agent: AGENT_LABEL[group.agent] })}
+                <FadeOverflow className="min-w-0 flex-1" titleWhenClipped={group.selectable ? AGENT_LABEL[group.agent] : t("agents.notInstalled", { agent: AGENT_LABEL[group.agent] })}>
+                  {group.selectable ? AGENT_LABEL[group.agent] : t("agents.notInstalled", { agent: AGENT_LABEL[group.agent] })}
+                </FadeOverflow>
               </Header>
               {group.entries.map((entry) => (
-                <ListBox.Item className="pe-7" key={entry.key} id={entry.key} textValue={entry.name} isDisabled={!group.selectable}>
-                  <span dir="auto">{entry.name}</span>
+                <ListBox.Item data-marquee-scope className="pe-7" key={entry.key} id={entry.key} textValue={entry.name} isDisabled={!group.selectable}>
+                  <FadeOverflow dir="auto" className="min-w-0 flex-1" titleWhenClipped={entry.name}>{entry.name}</FadeOverflow>
                   <ListBox.ItemIndicator />
                 </ListBox.Item>
               ))}

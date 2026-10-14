@@ -74,6 +74,8 @@ export interface ExpansionHooks {
   showAll: () => void;
   /** Offers no expansion from here on: the separators go back to showing only what they hide. */
   stop: () => void;
+  /** Told after separator wording changes so the renderer can draw its visible labels. */
+  onLabels?: (root: ShadowRoot) => void;
 }
 
 /** A side's text as the library is handed it. */
@@ -328,7 +330,7 @@ export class Expansion {
         seen.add(id);
         // The label's control is named for its action and its tooltip says the visible sentence,
         // whatever state that is in (counted, loading, failed...): the tooltip also gives back what
-        // the label's ellipsis cuts off.
+        // the label's available room cuts off.
         const name =
           kind === "gap"
             ? revealed !== undefined
@@ -338,6 +340,7 @@ export class Expansion {
         describeControl(control, kind, name, kind === "gap" ? text : name, first, this.loadingGap !== undefined);
       }
     }
+    this.hooks.onLabels?.(root);
   }
 
   /** The drawing after an expansion replaces the separators, taking focus with them; it goes to the

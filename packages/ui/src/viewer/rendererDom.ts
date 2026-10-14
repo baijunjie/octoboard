@@ -110,6 +110,17 @@ export function writeLabel(label: HTMLElement, text: string): void {
   label.dataset.written = text;
 }
 
+/** Visible separator labels, with their native source kept for the library's count bookkeeping.
+ * The renderer puts its fading label beside that source inside the same control. */
+export function separatorLabels(root: ShadowRoot): { target: HTMLElement; text: string }[] {
+  return Array.from(root.querySelectorAll<HTMLElement>("[data-gutter] [data-unmodified-lines]")).flatMap((label) => {
+    const target = label.parentElement;
+    if (!target) return [];
+    target.setAttribute("data-marquee-scope", "");
+    return [{ target, text: label.textContent ?? "" }];
+  });
+}
+
 /** Whether a separator has an arrow to expand from: the label counts as a control only where it has,
  * as the bars of a diff that offers no expansion have none. The library draws the arrows and
  * `data-expand-index` under one condition, so where `gapOf` finds a gap this holds; it is kept as
@@ -143,8 +154,8 @@ export function setWholeFile(separator: HTMLElement, offered: boolean): void {
     return;
   }
   if (existing) return;
-  // Built by hand, and not a HeroUI `Button`: the library draws these bars inside its own shadow
-  // root, where no React tree reaches; it is named and made a tab stop in `describeControl`.
+  // This control belongs to the library's separator layout and is created with its native
+  // controls; it is named and made a tab stop in `describeControl`.
   const all = separator.ownerDocument.createElement("div");
   all.setAttribute("role", "button");
   all.setAttribute("data-expand-button", "");
@@ -170,7 +181,7 @@ export function removeSeparator(separator: HTMLElement): void {
  * Names a control and makes it reachable. Of the copies the library draws of a separator only the
  * `first` of each control is a tab stop and is named; the rest are hidden from assistive technology.
  * A control `disabled` says it is not available for now. The tooltip is `title`, which is the name
- * unless the control shows other text it must give back whole (the label, whose text an ellipsis
+ * unless the control shows other text it must give back whole (the label, whose text the available room
  * may cut off); the name is the action and `aria-label` wins as the accessible name.
  */
 export function describeControl(control: HTMLElement, kind: ExpandKind, name: string, title: string, first: boolean, disabled: boolean): void {
@@ -183,8 +194,8 @@ export function describeControl(control: HTMLElement, kind: ExpandKind, name: st
   // The library draws the label as a plain div; it becomes a button here, being what a reader aims at.
   if (kind === "gap") control.setAttribute("role", "button");
   control.setAttribute("aria-label", name);
-  // A native tooltip, and not `TitledControl`'s HeroUI one, for the same reason as the hand-built
-  // control (`setWholeFile`): there is no React tree here to render a tooltip into.
+  // The library owns this control; its native tooltip keeps the complete label available while
+  // the visible text fades beside the library's other controls.
   control.setAttribute("title", title);
   control.removeAttribute("aria-hidden");
   if (disabled) control.setAttribute("aria-disabled", "true");

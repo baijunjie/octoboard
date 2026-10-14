@@ -2,6 +2,7 @@ import React, { useState } from "react";
 
 import { choiceGroups, currentChoice, initialChoice, type AccountChoice } from "../accountChoices";
 import { noAgentAvailable } from "../agents";
+import { FadeOverflow } from "../components/FadeOverflow";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
@@ -124,11 +125,11 @@ export function SessionDialog({
         description={t("dialog.session.titleHint")}
       />
       {fixedOwner && (
-        <div className="flex items-center gap-2 text-sm">
+        <div data-marquee-scope className="flex items-center gap-2 text-sm">
           <BindingBadge owner={fixedOwner} decorative />
-          <span dir="auto" className="min-w-0 truncate">
+          <FadeOverflow dir="auto" className="min-w-0 flex-1" titleWhenClipped={t("dialog.session.ownerFixed", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}>
             {t("dialog.session.ownerFixed", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}
-          </span>
+          </FadeOverflow>
         </div>
       )}
       {fixedOwner && fixedOwnerGone && <p className="text-sm text-danger">{t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}</p>}

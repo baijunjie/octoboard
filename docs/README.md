@@ -122,7 +122,7 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Labels and tooltips](product/labels-and-tooltips.md) — how every tooltip in the window behaves (the wait before one
   opens, one at a time, what closes it, how it wraps) and the two places that keep the browser's own instead, the
   tooltip every icon-only control of the top bar, the rail and the sidebar carries, the tooltips the indicators carry,
-  and how a name too long for its space is faded and offered in full.
+  and how names, menu items and selector labels too long for their space fade and run as a hover marquee.
 - [Scrolling surfaces](product/scrolling-surfaces.md) — what the window does wherever a surface holds more than it
   can show: the fade on the edge that hides the content, which edge it sits on and that it is a mark alone, the
   surfaces it holds for and the scrolling it leaves alone (a document of its own, a menu's list of choices), where no

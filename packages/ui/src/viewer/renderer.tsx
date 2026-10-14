@@ -15,12 +15,15 @@ import { File, FileDiff, WorkerPoolContext } from "@pierre/diffs/react";
 import { getOrCreateWorkerPoolSingleton, terminateWorkerPoolSingleton } from "@pierre/diffs/worker";
 import DiffsWorker from "@pierre/diffs/worker/worker.js?worker";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
+import { FadeOverflow } from "../components/FadeOverflow";
 import { RENDER_BUDGETS } from "./budgets";
 import { CODE_THEMES } from "./codeTheme";
 import type { ChangeBodies } from "./content";
 import type { DiffLayout } from "./diffLayout";
 import { EXPANSION_STEP, Expansion, type ExpansionStatus, type HunkExpander, type SeparatorLabels } from "./expansion";
+import { separatorLabels } from "./rendererDom";
 
 // GitHub's high-contrast palettes: of the bundled themes measured, the ones whose every token
 // reaches WCAG AA's 4.5:1 on the code background in both appearances.
@@ -53,7 +56,7 @@ function diffCss(theme: "light" | "dark"): string {
        (\`line-info-basic\`) gives the wrapper's first grid column all of the gutter's width and lets the
        label run on in the next one, past the gutter: a label wider than what is left of the bar would
        paint over the control. So the control is held to \`--whole-file-width\`, that next column ends
-       that far short of the end of the visible bar, and the label ends in an ellipsis.
+       that far short of the end of the visible bar, and the label fades within that column.
        \`[data-code]\` is made a size container so \`cqi\` is that visible width (it has a definite
        width in both layouts), and the track is \`max(0px, calc(…))\` rather than the natural
        \`minmax(0, calc(…))\`, which WebKit — the app's own engine — resolves to 0. The column is
@@ -66,12 +69,11 @@ function diffCss(theme: "light" | "dark"): string {
       grid-template-columns: 100% max(0px, calc(100cqi - 100% - var(--whole-file-width)));
     }
     [data-gutter] [data-separator-content] { min-width: 0; }
-    [data-gutter] [data-unmodified-lines] {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+    /* The native label retains the count the library supplied; its visible sibling is rendered
+       by the application, with the same fade and marquee as every other clipped label. */
+    [data-gutter] [data-unmodified-lines] { display: none; }
+    [data-faded-label] { display: block; min-width: 0; width: 100%; }
+    [data-faded-label] > div { overflow: hidden; white-space: nowrap; }
     [data-separator] [data-whole-file] {
       position: sticky;
       inset-inline-end: 0;
@@ -313,6 +315,15 @@ export const RenderedDiff = memo(function RenderedDiff({
   // Called back with the latest props, so a new callback each render does not reset the expansion.
   const latest = useRef({ loadBodies, labels, trailing, onExpansion });
   latest.current = { loadBodies, labels, trailing, onExpansion };
+  const [drawnLabels, setDrawnLabels] = useState<ReturnType<typeof separatorLabels>>([]);
+  const onLabels = useCallback((root: ShadowRoot) => {
+    const next = separatorLabels(root);
+    setDrawnLabels((previous) =>
+      previous.length === next.length && previous.every((label, index) => label.target === next[index].target && label.text === next[index].text)
+        ? previous
+        : next,
+    );
+  }, []);
   // Also for a diff that cannot be expanded: its separators are worded in the app's language all the same.
   const expansion = useMemo(
     () =>
@@ -327,6 +338,7 @@ export const RenderedDiff = memo(function RenderedDiff({
             report: (status) => latest.current.onExpansion?.(status),
             showAll: () => setEnded({ diff: fileDiff, how: "all" }),
             stop: () => setEnded({ diff: fileDiff, how: "stopped" }),
+            onLabels,
           })
         : undefined,
     [fileDiff],
@@ -362,6 +374,11 @@ export const RenderedDiff = memo(function RenderedDiff({
   return (
     <WorkerPoolContext.Provider value={rendererPool()}>
       {fileDiff && <FileDiff fileDiff={fileDiff} options={options} disableWorkerPool={lang === "text"} />}
+      {drawnLabels.map(({ target, text }, index) => createPortal(
+        <span data-faded-label><FadeOverflow dir="auto">{text}</FadeOverflow></span>,
+        target,
+        String(index),
+      ))}
     </WorkerPoolContext.Provider>
   );
 });
