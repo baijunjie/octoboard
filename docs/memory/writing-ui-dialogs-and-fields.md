@@ -6,6 +6,12 @@ Any confirmation in `packages/ui` — including one where the user has to type a
 `ConfirmDialog` (`packages/ui/src/dialogs/ConfirmDialog.tsx`, whose `typeToConfirm` asks for that word), never a
 dialog of its own.
 
+## Read the project's placeholder standard before adding or changing a field
+
+For an input in `packages/ui`, follow `docs/ui-accessibility.md`, "Input placeholders", before choosing its
+placeholder. That project standard takes precedence over the generic "Input placeholders" guidance in
+`.claude/skills/knowledge-i18n-copy/SKILL.md`.
+
 ## A single-line field hands its form the trimmed value
 
 Leading and trailing whitespace is never meant, so a form never holds it: every single-line text field in

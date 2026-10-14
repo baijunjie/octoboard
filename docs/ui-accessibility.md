@@ -81,6 +81,22 @@ there; with only its empty line it is skipped. A region whose focus goes through
 of its own rather than its first control (the terminal's) is only a stop when that method actually leaves focus inside
 it, which is how the cycle tells the two apart.
 
+## Input placeholders
+
+Every editable text input has a non-empty placeholder, including fields whose current value hides it.
+
+- A required input shows a valid example with the localized example prefix: `例：XXX` in Simplified Chinese
+  and `Ex. XXX` in English. This applies to format examples such as paths, URLs and email addresses too.
+- An optional input shows the default that takes effect when it is left empty, without an example prefix.
+  Derive the placeholder from the current context: a session title uses its project's name, and a project name
+  uses the directory or repository name. Update it when the context changes; a fixed sample is not a default.
+- When the empty state means an inherited setting or no value, name that default state accurately rather than
+  inventing a concrete value. A default that belongs to each item in a batch must not be presented as one shared
+  value.
+
+The placeholder is a hint, never an initial input value or a substitute for the field's label, accessible name,
+description or validation. Leaving a field empty retains its existing requiredness and default behavior.
+
 ## Visible focus
 
 HeroUI controls draw their own focus ring.
