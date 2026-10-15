@@ -94,8 +94,8 @@ or disconnected, the cover described in "Reconnecting" above is shown in its pla
 - **A dormant session shows its own saved terminal preview**, behind that card, read-only. Entering dormancy replaces
   the live screen with that preview, even while the same session remains selected; reopening the view or loading it
   on another client shows the same saved content. Selecting a different dormant session shows its own preview, or a
-  blank terminal if it has none. Clicking, selecting or scrolling does not resume it. Nothing typed reaches the
-  stopped process; typing into an archived session reopens it as above.
+  blank terminal if it has none. Clicking, selecting, scrolling or focusing the terminal does not resume it. Nothing
+  typed reaches the stopped process; typing into an archived session reopens it as above.
 - **Archiving preserves the screen before the agent is asked to exit.** The same rule applies when switching accounts
   or stopping the daemon normally: cleanup, a clear screen or leaving an agent's full-screen interface cannot replace
   the captured preview. An agent that exits or crashes on its own instead leaves its final screen, so content it clears

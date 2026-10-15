@@ -281,6 +281,23 @@ describe("a dormant session's saved output", () => {
     expect(wakes).toEqual(["a"]);
   });
 
+  it("does not take a focus report for typing, but passes it on to a live process", async () => {
+    controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
+    controller.armWake("a");
+    lastSocket().receive("last words");
+    await settle();
+    term.emit("\x1b[I");
+    term.emit("\x1b[O");
+    expect(wakes).toEqual([]);
+
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    live.open();
+    await settle();
+    term.emit("\x1b[I");
+    expect(live.sent).toContainEqual(new TextEncoder().encode("\x1b[I"));
+  });
+
   it("does not take a mouse report for typing while saved output has mouse tracking on", async () => {
     controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
     controller.armWake("a");

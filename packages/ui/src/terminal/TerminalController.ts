@@ -68,6 +68,11 @@ function watchUserInput(term: Terminal, onUserInput: () => void): void {
 // eslint-disable-next-line no-control-regex -- Terminal mouse reports begin with the escape control character.
 const MOUSE_REPORT = /^\x1b\[<\d+;\d+;\d+[Mm]$/;
 
+/** A focus report (`CSI I` / `CSI O`), which xterm sends unmarked whenever the terminal gains or
+ * loses focus while focus reporting (`?1004h`) is on. */
+// eslint-disable-next-line no-control-regex -- Terminal focus reports begin with the escape control character.
+const FOCUS_REPORT = /^\x1b\[[IO]$/;
+
 /** Turns off the mouse tracking (X10 to any-motion, and the SGR encoding) and focus reporting an
  * agent may have switched on, which xterm answers with input of its own. `?1015l` (urxvt) is a
  * no-op in xterm 6.0.0, which does not support that encoding; it is harmless and kept for an
@@ -227,6 +232,10 @@ export class TerminalController {
     this.term.onData((data) => {
       let fromUser = this.userInput;
       this.userInput = false;
+      // With no socket attached, a focus report is never the user typing, and must not wake a
+      // dormant session: focus returning to the terminal (a dialog closing, say) before the mode
+      // reset (`RESET_REPORTING_MODES`) is parsed would otherwise reopen it.
+      if (!this.socket && FOCUS_REPORT.test(data)) return;
       // Saved output may have turned mouse tracking on, with the reset (`RESET_REPORTING_MODES`)
       // still to be parsed: a click then would be reported, and a report is not the user typing.
       if (
