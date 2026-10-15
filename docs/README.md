@@ -386,4 +386,5 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   restyle cost; why every modal overlay still pays one whole-document restyle (React Aria's `inert` on `#root`;
   `isNonModal` is not the fix); keeping a tag, class or id on the rightmost compound of every CSS rule (the
   typography plugin only through `typography.mjs`, and checking the built CSS for rules WebKit cannot file); and
-  measuring UI latency in the system WKWebView, since Playwright's WebKit and Chrome under-report restyle cost.
+  measuring UI latency with `pnpm bench:wkwebview` in the system WKWebView on the base and on the branch (Playwright's
+  WebKit and Chrome under-report restyle cost), never against the user's own daemon.

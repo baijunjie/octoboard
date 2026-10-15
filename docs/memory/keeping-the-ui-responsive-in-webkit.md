@@ -53,11 +53,11 @@ Only the system WKWebView the app runs in gives real style-recalculation cost. P
 it several times too low and Chrome lower still, so a cause that dominates in the app can look negligible in both:
 never conclude from either that styling is not the bottleneck.
 
-- Measure in a WKWebView: a small native macOS host that opens a `WKWebView` window on `packages/ui/dist` from
-  `pnpm build` served statically (never the dev server), connected to a throwaway daemon (throwaway `HOME` and
-  `TMPDIR`) with stand-in agent sessions, so nothing reaches the user's own. Inject a script that dispatches the
-  user's real input (clicks, wheel events) and times from the event to the main thread being idle. To calibrate a
-  region's restyle cost, set a custom property on it and read `offsetHeight` or `getComputedStyle`.
-- Use Chrome CPU profiles for function-level attribution of script time, and Playwright's `webkit` only as a coarse
-  check of before against after, judged by ratio. If a Playwright run attaches to the user's running daemon, drop
-  every frame the page sends before it leaves (`page.routeWebSocket`, passing on only what the daemon sends).
+- To judge a change's latency, run `pnpm bench:wkwebview` in `packages/ui` on the base and on the branch, on the same
+  machine with nothing else busy, and compare the two tables; `packages/ui/scripts/wkbench/README.md` (sections
+  "Running it" and "Reading the tables") has the options and what each column means.
+- Its `--engine webkit|chromium` runs are only a coarse before-against-after ratio, and its Chrome CPU profiles
+  (`--profile`) only say which code spends the time, never how long the app takes.
+- Never point it at the user's own daemon: its scenarios drive that daemon's sessions (the `idle` one renames them),
+  and its fixtures create consoles and sessions and trust folders. Leave `--port` out so it starts its own throwaway
+  one, or pass it only for a daemon you started yourself on a scratch `HOME`.

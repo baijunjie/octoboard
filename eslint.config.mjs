@@ -23,6 +23,7 @@ export default defineConfig(
     "**/out/**",
     "**/coverage/**",
     "**/target/**",
+    "packages/ui/.bench/**",
     ".claude/**",
     ".agents/**",
     ".codex/**",

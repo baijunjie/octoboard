@@ -20,6 +20,9 @@ coverage/
 # The one Cargo build directory of the root workspace
 /target/
 
+# Scratch of `pnpm bench:wkwebview` in packages/ui: throwaway HOME, daemon build, bundles, host binary
+/packages/ui/.bench/
+
 # Env & logs: `.env` and `.env.secret.example` are committed; credentials live in `.env.secret`
 .env.secret*
 !.env.secret.example
