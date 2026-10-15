@@ -101,3 +101,7 @@ A comment explains only the level it sits at: a function comment explains that f
 - A reference only points the way, **it does not restate the referenced doc's content**; "why it is written this way here" is still spelled out in the comment, the doc only fills in the cross-file whole picture.
 - A doc inside the repo is written as **path + section heading text**, the path relative to the repo root, no line numbers, no anchors, so that the reference can still be found by search after the doc changes, e.g. `// For the full state transition rules see docs/product/order.md's "Order state machine" section`.
 - An external doc is written as **name + version / number + section**, URL optional: `RFC 7231 §6.5.1`.
+
+## This project
+
+- Memory may also reference a long-lived doc under `docs/` that is registered in the documentation index (such as `docs/ui-accessibility.md`), written as "path + exact section heading", and memory-writer hands such a doc's content back as belonging to it; a development plan or a ticket is still never referenced. Supplements `.claude/agents/memory-writer.md`'s "Judging whether it is worth recording" (what is already spelled out elsewhere), "How to write it" (which docs memory may reference) and "Report" (what is handed back). (Source: user instruction)

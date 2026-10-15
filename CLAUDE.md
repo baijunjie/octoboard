@@ -25,11 +25,9 @@ repeated trial — should go to a subagent wherever you can; you take only the c
   concurrently: the former overwrite each other, the latter fight over resources and none of them converges.
 - If you need its result to go on, explicitly ask for the dispatch to block until it finishes; do not assume a
   dispatch will wait, and do not wait on a timer or poll its status: for a subtask dispatched in the background, the
-  report never reaches you, and your turn is handed back the moment it stops. This reaches any dispatch a subagent
-  makes in turn — the change check, the writers — not only your own.
+  report never reaches you, and your turn is handed back the moment it stops.
 - Do not hand back without a result: a report that says "dispatched, waiting on it" in place of a conclusion counts
   as not done.
-- The UI state gallery is written only through its own skill, which dispatches the subagent that owns it.
 - If a dedicated subagent owns the job, give it to them; otherwise pick by task difficulty from the table below,
   and do not reach for the strongest every time.
 
@@ -50,6 +48,12 @@ repeated trial — should go to a subagent wherever you can; you take only the c
   never a specific model version, so the rule survives a change of model generation.
 
 <!-- setup-agent:subagents:end -->
+
+## Dispatching subagents in this project
+
+- The rule on blocking for a result reaches any dispatch a subagent makes in turn — the change check, the
+  writers — not only your own.
+- The UI state gallery is written only through its own skill, which dispatches the subagent that owns it.
 
 <!-- setup-git:worktree:begin -->
 

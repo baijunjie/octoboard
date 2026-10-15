@@ -49,7 +49,7 @@ Anything that clears the bar but is not of this shape does not belong to memory 
 | Topic docs (the record of a task focused on one thing, such as research conclusions, measured baselines) | Maintained by that dedicated task; do not break it into entries and haul it in — hand it back |
 | Why some concrete object in the repo (a piece of code, a config, a file) is the way it is, and what to watch out for when using it | That object's own comment — hand it back; important, hidden, and painfully expensive are not exceptions |
 | Content that only holds on one machine (local paths, environment variable values, local install locations and versions, a phenomenon that only reproduces on one person's machine) | Hand it back, listed separately |
-| Anything already spelled out in an instruction file, a skill, the product docs, the project map, or a long-lived doc under `docs/` registered in the documentation index | Not recorded; when an entry genuinely has to mention it, reference it as "path + exact section heading" |
+| Anything already spelled out in an instruction file, a skill, the product docs, or the project map | Not recorded; when an entry genuinely has to mention it, reference it as "path + exact section heading" |
 | Code change history, outdated content, general programming knowledge, one-off problems | Not recorded; an outdated entry is changed or deleted in place |
 
 A helping test for "is this a concrete object": when the reader actually needs this entry, are they necessarily
@@ -62,7 +62,7 @@ looking at that object? If so, it does not belong to memory.
 - It must hold for anyone on any machine: write locations as paths relative to the repo root, write an environment variable's name rather than its value on this machine; a premise that genuinely holds only on one platform / one environment is written with its conditions of application spelled out.
 - Before adding, see whether an old entry can be replaced or deleted, **do not only add and never remove**; an entry overturned by this change is changed or deleted in place.
 - Memory entries do not reference each other: one thing lands in one entry only, related ones are merged into the nearest.
-- Memory may reference systematic docs (the product docs, the project map, a long-lived doc under `docs/` registered in the documentation index, instruction files, skills), written as "path + exact section heading"; no other docs are referenced, and a temporary doc (a development plan, a ticket) never is.
+- Memory may reference systematic docs (the product docs, the project map, instruction files, skills), written as "path + exact section heading"; no other docs are referenced.
 - One topic per file, the file name saying the topic plainly; merge into an existing topic where it belongs. When a single file goes past roughly 15 entries, split it by subtopic. No `README.md` under the memory directory acting as a directory index; do not pre-create empty directories or placeholder files.
 
 ## Report
@@ -71,4 +71,4 @@ State conclusions only:
 
 - which section of which file you wrote into; changed or deleted old entries and why; each refused item with its reasoning, noting a clear destination when there is one; what you left unrecorded, unchanged because you were not sure;
 - **the files added, deleted, or renamed**, each with a one-sentence description someone can use to judge whether to open it, for updating the documentation index;
-- hand back anything with a clear destination, listed separately: belonging to the product docs or the project map, belonging in some code comment, belonging to a long-lived doc under `docs/` registered in the documentation index, or only holding on this machine.
+- hand back anything with a clear destination, listed separately: belonging to the product docs or the project map, belonging in some code comment, belonging to a topic doc, or only holding on this machine.

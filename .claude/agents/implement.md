@@ -13,6 +13,6 @@ You were dispatched to complete a development subtask whose design is already se
   code around it: naming, structure, comment density, and error handling all follow local habit.
 - Once done, clear out the dead code this change produced, update the comments along with it, then run the quality
   check commands the project agreed on.
-- Ask design-level questions back first (how an interface should be defined, how a behavior should be traded off), or
-  anything else you are unsure about — report back; do not change the design yourself.
+- Design-level questions (how an interface should be defined, how a behavior should be traded off), or anything
+  else you are unsure about: report back; do not change the design yourself.
 - The report states: which files were changed, what was verified, and what has not been verified.
