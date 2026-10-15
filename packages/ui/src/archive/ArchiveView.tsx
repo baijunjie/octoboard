@@ -80,12 +80,13 @@ export function ArchiveView({
     return () => observer.disconnect();
   }, [more, shown]);
 
-  // The view takes keyboard focus as it opens, so keys stop reaching the terminal it covers. A
+  // The view takes keyboard focus as it opens, so keys stop reaching the terminal it covers.
+  // Scrolling to reveal the translated view would cancel its slide-in. Focus moves a
   // moment later rather than at once: the menu item that opened it hands focus back to where the
   // menu took it from (`ActionMenu`) a task after it closes, which would otherwise win.
   useEffect(() => {
     if (!active) return;
-    const timer = setTimeout(() => rootRef.current?.focus(), 50);
+    const timer = setTimeout(() => rootRef.current?.focus({ preventScroll: true }), 50);
     return () => clearTimeout(timer);
   }, [active]);
 
@@ -95,7 +96,7 @@ export function ArchiveView({
   useEffect(() => {
     if (!active) return;
     const timer = setTimeout(() => {
-      if (document.activeElement === document.body) rootRef.current?.focus();
+      if (document.activeElement === document.body) rootRef.current?.focus({ preventScroll: true });
     }, 100);
     return () => clearTimeout(timer);
   }, [archived.length, dialogOpen, active]);

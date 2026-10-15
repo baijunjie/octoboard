@@ -30,8 +30,8 @@ The console session cannot archive itself (see "The console session's tools" in
 is archived. Archiving it moves it among the console's archived console sessions; these are not reached
 from any one row, but from the console's own menu, which offers **Archived console sessions** — a
 submenu of the console's newest archived console sessions, each of which can be selected, and the way
-to the archive view of all of them (see "The console header" in `docs/product/sidebar.md`). The console sessions
-section's own **New console session** button opens the session dialog described in "Opening a session" below — whereas resuming or reopening a console session keeps its
+to the archive view of all of them (see "The console header" in `docs/product/sidebar.md`). The console
+header's **New console session** button opens the session dialog described in "Opening a session" below — whereas resuming or reopening a console session keeps its
 recorded agent and account; only switching accounts changes its account (see "Agent config directories" in
 `docs/product/consoles-and-projects.md` and "Switching a session's account" below).
 
@@ -66,15 +66,15 @@ panel** (see `docs/product/report-panel.md`), or with a project session's projec
 
 Sessions are listed in the sidebar, one console at a time: its console sessions in the console
 sessions section, a project session under its project. Archived sessions are not listed among the
-others; they are reached from their project's or, for a console session, the section's own action
-menu, and from the archive view. Everything about the sidebar — its rows and menus, the order sessions
+others; they are reached from their project's action menu or, for a console session, the console header's
+action menu, and from the archive view. Everything about the sidebar — its rows and menus, the order sessions
 are listed in, pinning, the archive view and how selecting a session works — is in
 `docs/product/sidebar.md`; focus mode is in `docs/product/focus-mode.md`.
 
 ## Opening a session
 
-New console session from the console sessions section, including its empty row, and the terminal's offer of the
-same action open a dialog before anything is launched. New session under a project opens the same dialog for that
+New console session from the console header, the console sessions section's empty row, and the terminal's offer of
+the same action open a dialog before anything is launched. New session under a project opens the same dialog for that
 project. Both offer these fields in this order:
 
 - **Name** (optional) — the empty field shows the project's name for a project session, or the console's name for a
@@ -137,7 +137,7 @@ reported. A missing config directory does not fail a brand new session for the o
 to lose, so Claude Code creates the directory itself and Octoboard creates it for Codex.
 
 **With every agent determined unavailable, opening a session is refused outright, before any of that**: the dialog
-cannot be submitted, the console sessions section's own new-session action is disabled, and a console session's
+cannot be submitted, the console header's new-session action is disabled, and a console session's
 `start_session` tool is refused with a reason it can report (see "The console session's tools" in
 `docs/product/hub-orchestration.md`). The dialog and the tool's refusal say which agents Octoboard supports and that one
 of them has to be on the user's `PATH`, without saying how to install one; the console sessions section, with room for
@@ -543,8 +543,8 @@ project is removed or the console is deleted. They are listed most recently arch
 
 - from the project's "View archive" submenu, or for console sessions the console's "Archived console
   sessions" submenu, with the newest five;
-- from the project's focus mode, with the newest ten, bound sessions included; from a console session's focus mode,
-  the archived sessions under it, again the newest ten;
+- from either focus mode, as the parent-session preview described in "The archive view" in
+  `docs/product/sidebar.md`, within that focus mode's scope;
 - from the archive view, with all of them.
 
 How each of those looks and behaves is in "Project rows" and "The archive view" in `docs/product/sidebar.md`, and in

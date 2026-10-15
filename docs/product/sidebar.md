@@ -77,8 +77,10 @@ is a **preview**:
 
 ## The console header
 
-The top of the sidebar names the console being shown, with its action menu beside it: **Add project**, **Edit
-console**, **Archived console sessions** and, after a separator, **Delete console** (see "Associating a project",
+The top of the sidebar names the console being shown, followed by a **+** button, **New console session**,
+then its action menu. The **+** opens the session dialog before launching anything (see "Opening a session" in
+`docs/product/sessions.md`). The menu offers **Add project**, **Edit console**, **Archived console sessions** and,
+after a separator, **Delete console** (see "Associating a project",
 "Editing a console" and "Deleting a console" in `docs/product/consoles-and-projects.md`; deleting asks for a typed
 confirmation first). **Archived console sessions** is a submenu of the console's newest archived console sessions, each
 with its agent's icon and its title; choosing one selects it (see "Selecting a session" below). After them, **View
@@ -97,15 +99,13 @@ what selecting one does, and what its row's menu offers are in "Console sessions
 The console sessions heading appends the number of console sessions listed in parentheses, including interrupted
 sessions and excluding archived ones. It shows zero when none are listed.
 
-The section's own heading carries a **+** button, **New console session**, which opens the session dialog before
-launching anything (see "Opening a session" in `docs/product/sessions.md`), and no action menu. Archived console
-sessions are reached from the console's own menu (see "The console header" above), not from the section or from any
+The section's heading carries no action buttons or menu. Archived console sessions are reached from the console's own menu (see "The console header" above), not from the section or from any
 one row. With no console session at all, the section shows an empty row saying so; the whole row is a button that
-does what the heading's **+** button does (see "Empty rows" below).
+does what the console header's **+** button does (see "Empty rows" below).
 
 With no agent available on the machine at all, the section instead carries an empty row saying that no agent was found
-on the user's `PATH`, and the **+** button is disabled, since starting one would only be refused. The row says that much
-and no more: the new-session dialog explains which agents Octoboard supports and the `PATH` requirement (see "Opening
+on the user's `PATH`, and the console header's **+** button is disabled, since starting one would only be refused.
+The row says that much and no more: the new-session dialog explains which agents Octoboard supports and the `PATH` requirement (see "Opening
 a session" in `docs/product/sessions.md`); the welcome screen's supported-tool list and hint are described in "What
 the welcome screen shows" in `docs/product/welcome-screen.md`. The row shows whatever the section lists — a console
 session left interrupted from before an agent went off the `PATH` still has its row — and it takes the place of the "no
@@ -119,6 +119,11 @@ nothing in it" in `docs/product/session-terminal.md`).
 
 The Projects heading appends the number of projects listed in parentheses, including inactive and collapsed projects.
 The count follows the current project filter and shows zero when the console has no projects or none match.
+
+The console sessions and Projects headings stay at the top of the scrolling list while their rows move underneath.
+As Projects approaches the top, it pushes the console sessions heading upward out of view and takes its place.
+Each heading has an opaque background; the edge fade begins below it, and keyboard focus scrolled into view stays
+below both the heading and the fade.
 
 ### Filtering the project list
 
@@ -139,8 +144,8 @@ a check mark, so it is not told apart by colour alone. Opening and closing it wi
 the mouse leaves keyboard focus where it was.
 
 - While a filter is in force, a row under the Projects heading, across the sidebar's whole width, shows it; with no
-  filter the row is not there. The keyword, if there is one, comes first, as a tag in a neutral grey which otherwise
-  looks and behaves as the tags in a project's Tags field (see "Picked tags" in
+  filter the row is not there. This row scrolls with the project list below the sticky heading. The keyword, if there
+  is one, comes first, as a tag in a neutral grey which otherwise looks and behaves as the tags in a project's Tags field (see "Picked tags" in
   `docs/product/consoles-and-projects.md`); removing it drops just the keyword and leaves the picked tags. The picked
   tags follow it, in the accent look of those tags, so they are told apart from the keyword, and the row wraps onto
   further lines when they do not fit. Removing a picked tag drops just that tag from the filter. The row has no
@@ -493,8 +498,8 @@ only children shows View all alone in its submenu; the disabled empty item is sh
 is empty. Focus mode's preview offers View all whenever it omits any archived session (see "What both views show"
 in `docs/product/focus-mode.md`).
 
-**Archive previews**, in those submenus and both focus modes, show at most five archived parent sessions, most
-recently archived first. A session bound to a project session is a child and is omitted, whether its owner is
+**Archive previews** show at most five archived parent sessions in those submenus and at most ten in either focus
+mode, most recently archived first. A session bound to a project session is a child and is omitted, whether its owner is
 live or archived. Unbound sessions and sessions bound directly to a console session are parent sessions; a session
 whose owner is no longer known is included as well. Children remain available in the full archive view, whose
 scope and nesting are described below.

@@ -40,9 +40,10 @@ which stays opaque while they move, so text from other cards, the console-sessio
 show through them.
 
 A card for a session **bound to a project session the same view lists** is **inset under that session's card** and
-follows it, as a session row is under its owner's row (see "Project rows" in `docs/product/sidebar.md`); the cards sit
-apart from one another, so the nesting is the inset alone, with no line down it. The owner's name in the card's
-accessible name carries the nesting to assistive technology. In a project's combined view, cards also identify the
+follows it, as a session row is under its owner's row (see "Project rows" in `docs/product/sidebar.md`). A connector
+runs from the owner's card across the gaps between cards, bending smoothly toward the middle of each child card
+and stopping at the last child. It follows the inset side under a right-to-left language. The owner's name in the
+card's accessible name carries the nesting to assistive technology. In a project's combined view, cards also identify the
 console session above them (see "A project's focus mode" below and "The binding badge" in
 `docs/product/sidebar.md`).
 
@@ -52,7 +53,7 @@ agent's icon and its title on one compact line, with native token usage at the t
 "Native session usage" in `docs/product/session-usage.md`). These preview rows show no creation or archive time.
 The heading counts every archived session in the view's scope, including children omitted from the preview. Clicking a row selects it. Its action menu offers **Rename**
 and **Delete** (which asks for confirmation; see "Deleting archived sessions" in `docs/product/sessions.md`).
-Whenever any archived session is omitted — a child or a parent beyond the first five — **View all** follows the
+Whenever any archived session is omitted — a child or a parent beyond the first ten — **View all** follows the
 preview as a row with the same alignment, hover feedback and keyboard focus treatment as the session rows; it
 opens the archive view and carries no count. With only archived children, the section shows its count and View all
 without any preview rows. When every archived session fits in the preview, there is no View all row.

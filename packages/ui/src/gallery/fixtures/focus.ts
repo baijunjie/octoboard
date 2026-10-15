@@ -136,23 +136,23 @@ const scrollingFocusState = {
 };
 
 // Archive-only views keep the preview boundary and heading counts visible together. The
-// five-root boundary has no hidden children; the six-root overflow also has two hidden children.
+// ten-root boundary has no hidden children; the eleven-root overflow also has two hidden children.
 const previewHub = sessionOf("s-preview-hub", console_.id, undefined, "Hub", "idle", { colour: "teal" });
 const previewLead = sessionOf("s-preview-lead", console_.id, emptyProject.id, "Archived lead session", "archived", { bound_to: previewHub.id, ended_at: minutesAgo(8), usage: { input_tokens: 184_320, output_tokens: 16_384, total_tokens: 200_704 } });
-function archivePreviewState(count: 5 | 6) {
+function archivePreviewState(count: 10 | 11) {
   return snapshotState({
     consoles: [console_],
     projects: [emptyProject],
     sessions: [
       previewHub,
       previewLead,
-      ...Array.from({ length: count === 6 ? 2 : 0 }, (_, i) => sessionOf(`s-preview-child-${i}`, console_.id, emptyProject.id, `Session ${i + 1} of the archived lead`, "archived", { bound_to: previewLead.id, agent: i === 1 ? "codex" : "claude", ended_at: minutesAgo(2 + i * 3) })),
+      ...Array.from({ length: count === 11 ? 2 : 0 }, (_, i) => sessionOf(`s-preview-child-${i}`, console_.id, emptyProject.id, `Session ${i + 1} of the archived lead`, "archived", { bound_to: previewLead.id, agent: i === 1 ? "codex" : "claude", ended_at: minutesAgo(2 + i * 3) })),
       ...Array.from({ length: count - 1 }, (_, i) => sessionOf(`s-preview-${i}`, console_.id, emptyProject.id, (i === 0 ? "A completed search investigation with a long archived preview title" : i === 1 ? "A completed search investigation whose long archived title scrolls only when hovering the text" : `Bound archived session ${i + 1}`), "archived", { bound_to: previewHub.id, ended_at: minutesAgo(10 + i * 5), ...(i === 0 ? { usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } } : {}) })),
     ],
   });
 }
-const archivePreviewFive = archivePreviewState(5);
-const archivePreviewSix = archivePreviewState(6);
+const archivePreviewTen = archivePreviewState(10);
+const archivePreviewEleven = archivePreviewState(11);
 
 // Long bound titles exercise the single-line fade and full-title hover without displacing the owner badge.
 const combinedState = {
@@ -186,7 +186,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project session hierarchy",
     state: hierarchyState,
     preferences: { sidebarConsole: console_.id },
-    description: "Rounded branches connect each project session and its nested sessions; the final branch ends at the last child. Agent task titles and fallback session names appear together. Search API and its bound Add idempotency keys and unbound Write the migration are pinned. Binding dots and pins remain visible while action menus hide; hover or focus a row to compare the evenly spaced controls, then unpin either session to see the remaining controls close together. Long session names scroll only while their text is hovered; hovering row icons or controls leaves them still.",
+    description: "The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches connect each project session and its nested sessions; the final branch ends at the last child. Agent task titles and fallback session names appear together. Search API and its bound Add idempotency keys and unbound Write the migration are pinned. Binding dots and pins remain visible while action menus hide; hover or focus a row to compare the evenly spaced controls, then unpin either session to see the remaining controls close together. Long session names scroll only while their text is hovered; hovering row icons or controls leaves them still.",
   },
   {
     id: "focus-project",
@@ -195,7 +195,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus",
     state: scrollingFocusState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    description: "Write the migration has recorded zero usage, so its usage value is hidden, as it is for sessions without an agent usage record. The switch beside the Sessions count starts off; hover or focus it for its Show all project sessions tooltip. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height, Archived pushes it away at the top; the preview hides child sessions and retains View all. Compare the selected session card and project header actions buttons at rest with muted glyphs, then hover or open each menu for the shared subtle tint.",
+    description: "Write the migration has one nested card: a rounded branch crosses the card gap and stops at that child’s centre, with no line below it or beside top-level cards. The branch mirrors in Arabic. Write the migration has recorded zero usage, so its usage value is hidden, as it is for sessions without an agent usage record. The switch beside the Sessions count starts off; hover or focus it for its Show all project sessions tooltip. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height, Archived pushes it away at the top; the preview hides child sessions and retains View all. Compare the selected session card and project header actions buttons at rest with muted glyphs, then hover or open each menu for the shared subtle tint.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Plan the database migration", name: "Write the migration" }))),
     ],
@@ -207,7 +207,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus including console sessions",
     state: combinedState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "Agent names sit on the left of the metadata line; positive native usage and creation age sit on the right with a dot between them. A substantial cached total is shown; zero totals and missing native records omit usage and its separator without adding a row. Account names appear only in agent icon tooltips and accessible session labels. The switch beside Sessions is on; hover or focus it for its tooltip. Bound and unbound cards differ subtly; owner badges precede long single-line titles, which fade and scroll on text hover. Hover only the text to scroll it; owner, status and agent marks or menu controls leave both lines still. Bound cards keep status, owner and agent marks in one column; titles without an owner badge start at the card content edge without an empty owner slot. Pin/menu spacing matches the header controls. Nested cards inherit owner colors; hover badges for owner names. Pinned cards come first, then Waiting for you, Awaiting instructions, Working and Interrupted; children stay under parents. Scroll to confirm Sessions stays above the fade and Archived pushes it away at a 200px window height. Card and header actions buttons share muted resting glyphs and the shared subtle tint when hovered or open.",
+    description: "Agent names sit on the left of the metadata line; positive native usage and creation age sit on the right with a dot between them. A substantial cached total is shown; zero totals and missing native records omit usage and its separator without adding a row. Account names appear only in agent icon tooltips and accessible session labels. The switch beside Sessions is on; hover or focus it for its tooltip. Bound and unbound cards differ subtly; owner badges precede long single-line titles, which fade and scroll on text hover. Hover only the text to scroll it; owner, status and agent marks or menu controls leave both lines still. Bound cards keep status, owner and agent marks in one column; titles without an owner badge start at the card content edge without an empty owner slot. Pin/menu spacing matches the header controls. Nested cards inherit owner colors; hover badges for owner names. Rounded branches connect both the single child under Write the migration and the two children under Rework the result ranking. The vertical rail crosses the card gaps and stops at the last child’s centre; top-level cards have no rail. Arabic mirrors the branches. Pinned cards come first, then Waiting for you, Awaiting instructions, Working and Interrupted; children stay under parents. Scroll to confirm Sessions stays above the fade and Archived pushes it away at a 200px window height. Card and header actions buttons share muted resting glyphs and the shared subtle tint when hovered or open.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Compare ranking strategies", name: "Rework the result ranking" }))),
     ],
@@ -219,7 +219,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console session focus",
     state: scrollingFocusState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "Bound cards place agent names on the left and positive native usage beside creation age on the right, with a dot between usage and age. Zero and absent usage omit their separator without adding a row; hover usage for input, output and cache details, or agent icons for account details. Bound cards and archives stay under their owners. Scroll the long list to confirm Sessions stays clear above the fade and, at a 200px window height, Archived replaces it at the top. The switch strip includes waiting, working and inactive sessions; hover markers for details. The header plus menu, header actions, nested project actions, session card actions and archived session actions use the same muted resting glyphs and the shared subtle tint when hovered or open.",
+    description: "Bound cards place agent names on the left and positive native usage beside creation age on the right, with a dot between usage and age. Zero and absent usage omit their separator without adding a row; hover usage for input, output and cache details, or agent icons for account details. Bound cards and archives stay under their owners. The two cards under Rework the result ranking have rounded branches joined by a continuous vertical rail across the card gap. The rail stops at the last child’s centre and does not appear beside top-level cards; Arabic mirrors it. Scroll the long list to confirm Sessions stays clear above the fade and, at a 200px window height, Archived replaces it at the top. The switch strip includes waiting, working and inactive sessions; hover markers for details. The header plus menu, header actions, nested project actions, session card actions and archived session actions use the same muted resting glyphs and the shared subtle tint when hovered or open.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Prevent duplicate API requests", name: "Add idempotency keys" }))),
     ],
@@ -237,37 +237,37 @@ export const focusScenarios: Scenario[] = [
     id: "focus-project-no-sessions",
     group: GROUP,
     category: "normal",
-    title: "Project archive preview, exactly five parents",
-    state: archivePreviewFive,
+    title: "Project archive preview, exactly ten parents",
+    state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The headings count zero live sessions and five archived parents. All five parents appear without View all. Compact archive rows omit dates and show bare usage only for positive totals. Long preview titles scroll only while the pointer is over their text; icons and row controls do not start them. The Show all project sessions switch is absent even when its saved preference is on.",
+    description: "The headings count zero live sessions and ten archived parents. All ten parents appear without View all. Compact archive rows omit dates and show bare usage only for positive totals. Long preview titles scroll only while the pointer is over their text; icons and row controls do not start them. The Show all project sessions switch is absent even when its saved preference is on.",
   },
   {
     id: "focus-project-archive-overflow",
     group: GROUP,
     category: "normal",
-    title: "Project archive preview, six parents with children",
-    state: archivePreviewSix,
+    title: "Project archive preview, eleven parents with children",
+    state: archivePreviewEleven,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}` },
-    description: "The heading counts eight archived sessions: six parents and two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show bare usage only for positive totals. Five parent rows precede View all; children of the archived lead appear only in the full archive.",
+    description: "The heading counts thirteen archived sessions: eleven parents and two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show bare usage only for positive totals. Ten parent rows precede View all; children of the archived lead appear only in the full archive.",
   },
   {
     id: "focus-console-archive-five",
     group: GROUP,
     category: "normal",
-    title: "Console archive preview, exactly five parents",
-    state: archivePreviewFive,
+    title: "Console archive preview, exactly ten parents",
+    state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The headings count zero live sessions and five directly bound archived parents. All five appear without View all. Compact archive rows omit dates and show bare usage only for positive totals. Long preview titles scroll only while their text is hovered; icons and controls leave them still.",
+    description: "The headings count zero live sessions and ten directly bound archived parents. All ten appear without View all. Compact archive rows omit dates and show bare usage only for positive totals. Long preview titles scroll only while their text is hovered; icons and controls leave them still.",
   },
   {
     id: "focus-console-archive-overflow",
     group: GROUP,
     category: "normal",
-    title: "Console archive preview, six parents with children",
-    state: archivePreviewSix,
+    title: "Console archive preview, eleven parents with children",
+    state: archivePreviewEleven,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The heading counts eight bound archived sessions, including two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show bare usage only for positive totals. Only five of six parent rows appear before View all; the full archive keeps children under their archived lead.",
+    description: "The heading counts thirteen bound archived sessions, including two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show bare usage only for positive totals. Only ten of eleven parent rows appear before View all; the full archive keeps children under their archived lead.",
   },
   {
     id: "focus-project-empty",

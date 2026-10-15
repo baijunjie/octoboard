@@ -218,3 +218,17 @@ export function SectionHeading({
     </div>
   );
 }
+
+export const STICKY_HEADING_HEIGHT = 38;
+
+/** Each heading stays inside its section so the next section pushes it out of the way. */
+export function StickySectionHeading({ children, action, below }: React.ComponentProps<typeof SectionHeading>): React.ReactElement {
+  return (
+    <>
+      <div className="sticky top-0 z-3 flow-root bg-panel-sidebar">
+        <SectionHeading action={action}>{children}</SectionHeading>
+      </div>
+      {below && <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-1.5 px-2 py-1">{below}</div>}
+    </>
+  );
+}

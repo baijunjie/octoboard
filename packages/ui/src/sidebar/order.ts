@@ -63,11 +63,11 @@ export function archivedSessions(sessions: Session[]): Session[] {
 /** The archive previews show parent sessions only. Resolve bindings against every status so a
  * child whose project owner is still live stays in the full archive alone. An unknown owner is
  * not enough to classify a session as a child; direct console bindings remain parent rows. */
-export function archivePreviewSessions(archived: Session[], sessions: Session[]): Session[] {
+export function archivePreviewSessions(archived: Session[], sessions: Session[], limit = 5): Session[] {
   const byId = new Map(sessions.map((session) => [session.id, session]));
   return archivedSessions(archived)
     .filter((session) => !session.bound_to || byId.get(session.bound_to)?.role !== "project")
-    .slice(0, 5);
+    .slice(0, limit);
 }
 
 /** A session as a list nests it. The lists are flat and in display order — an owner immediately

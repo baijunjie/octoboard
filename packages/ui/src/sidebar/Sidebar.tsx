@@ -19,7 +19,7 @@ import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { handFocusOff } from "../components/handFocusOff";
-import { RowControls, RowIconSlot } from "../components/RowControls";
+import { RowControls, RowIconGroup, RowIconSlot } from "../components/RowControls";
 import { FadedScroller } from "../components/scrollFade";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { StatusIcon } from "../components/StatusIcon";
@@ -43,7 +43,7 @@ import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectF
 import { consoleMenu, projectMenu, sessionMenu } from "./menus";
 import { archivedSessions, consoleActivity, hasBoundSessions, isInactiveProject, liveSessionRows, liveSessions, sortProjects } from "./order";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
-import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, PinButton, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
+import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, PinButton, RowIconButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
 import { focusTargetId } from "./focus";
 import type { FocusTarget, SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
@@ -286,7 +286,7 @@ export function Sidebar({
     content = (
       <>
         <ConsoleHeader handlers={handlers} current={shownConsole} sessions={consoleSessions} />
-        <FadedScroller className="min-h-0 flex-1 px-2 pb-2">
+        <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT} className="min-h-0 flex-1 px-2 pb-2">
           <ConsoleBody
             handlers={handlers}
             console={shownConsole}
@@ -385,6 +385,7 @@ export function Sidebar({
 function ConsoleHeader({ handlers, current, sessions }: { handlers: SidebarHandlers; current: Console; sessions: Session[] }): React.ReactElement {
   const t = useT();
   const headerRef = useRef<HTMLDivElement>(null);
+  const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   return (
     // The list under this header is inset twice — the scroll area, then each heading and row — so
     // the end padding matches that and this menu lines up with the rows' menus.
@@ -392,11 +393,14 @@ function ConsoleHeader({ handlers, current, sessions }: { handlers: SidebarHandl
       <RowLabel title={current.name}>
         <span className="text-base font-semibold">{current.name}</span>
       </RowLabel>
-      <ActionMenu
-        label={t("sidebar.console.actions", { name: isolate(current.name) })}
-        items={consoleMenu(t, current, handlers, sessions)}
-        contextTargetRef={headerRef}
-      />
+      <RowIconGroup>
+        <RowIconButton icon={Plus} label={t("sidebar.consoleSessions.new")} onPress={() => handlers.onOpenConsoleSession(current)} isDisabled={noAgentAvailable(agentAvailability)} />
+        <ActionMenu
+          label={t("sidebar.console.actions", { name: isolate(current.name) })}
+          items={consoleMenu(t, current, handlers, sessions)}
+          contextTargetRef={headerRef}
+        />
+      </RowIconGroup>
     </div>
   );
 }
@@ -468,121 +472,123 @@ function ConsoleBody({
   return (
     <>
       <ConsoleSessionsSection handlers={handlers} console={thisConsole} sessions={sessions} selectedSessionId={selectedSessionId} />
-      <SectionHeading
-        below={
+      <section className="flow-root">
+        <StickySectionHeading
+          below={
           // Only while the filter button is there (above): the keyword and tags hand focus
           // to it when removed.
-          projects.length > 0 &&
+            projects.length > 0 &&
           isFiltering(filter) && (
-            <div data-project-filter className="contents">
-              {filter.keyword !== "" && (
-                <ProjectFilterTag
-                  keyword={filter.keyword}
-                  returnFocusTo={filterButton}
-                  onRemove={() => setFilter((f) => ({ ...f, keyword: "" }))}
-                />
-              )}
-              {filter.tags.length > 0 && (
-                <ProjectFilterTags
-                  tags={filter.tags}
-                  returnFocusTo={filterButton}
-                  onRemove={(removed) => setFilter((f) => ({ ...f, tags: withoutTags(f.tags, removed) }))}
-                />
-              )}
-            </div>
-          )
-        }
-        action={
-          projects.length > 0 && (
-            <>
-              <ProjectFilterButton
-                filter={filter}
-                vocabulary={vocabulary}
-                onChange={setFilter}
-                holderRef={filterButton}
-              />
-              {/* Only with something listed: a filter matching nothing leaves them nothing to act
-                  on, while the filter button beside them stays, as the way back. */}
-              {ordered.length > 0 && (
-                <span ref={foldButton} className="flex">
-                  {/* Lines of the list sit on the leading side, so the glyph mirrors under
-                      right-to-left. The chevrons stay vertical: inward to collapse, outward to expand. */}
-                  <RowIconButton
-                    icon={foldControl === "collapse" ? ListChevronsDownUp : ListChevronsUpDown}
-                    iconClassName="rtl:-scale-x-100"
-                    label={t(foldControl === "collapse" ? "sidebar.collapseAll" : "sidebar.expandAll")}
-                    onPress={foldAll}
+              <div data-project-filter className="contents">
+                {filter.keyword !== "" && (
+                  <ProjectFilterTag
+                    keyword={filter.keyword}
+                    returnFocusTo={filterButton}
+                    onRemove={() => setFilter((f) => ({ ...f, keyword: "" }))}
                   />
-                </span>
-              )}
-            </>
-          )
-        }
-      >
-        {t("sidebar.projects.headingWithCount", { count: ordered.length })}
-      </SectionHeading>
-      {/* The modal filter popover hides the surrounding sidebar from assistive technology;
+                )}
+                {filter.tags.length > 0 && (
+                  <ProjectFilterTags
+                    tags={filter.tags}
+                    returnFocusTo={filterButton}
+                    onRemove={(removed) => setFilter((f) => ({ ...f, tags: withoutTags(f.tags, removed) }))}
+                  />
+                )}
+              </div>
+            )
+          }
+          action={
+            projects.length > 0 && (
+              <>
+                <ProjectFilterButton
+                  filter={filter}
+                  vocabulary={vocabulary}
+                  onChange={setFilter}
+                  holderRef={filterButton}
+                />
+                {/* Only with something listed: a filter matching nothing leaves them nothing to act
+                  on, while the filter button beside them stays, as the way back. */}
+                {ordered.length > 0 && (
+                  <span ref={foldButton} className="flex">
+                    {/* Lines of the list sit on the leading side, so the glyph mirrors under
+                      right-to-left. The chevrons stay vertical: inward to collapse, outward to expand. */}
+                    <RowIconButton
+                      icon={foldControl === "collapse" ? ListChevronsDownUp : ListChevronsUpDown}
+                      iconClassName="rtl:-scale-x-100"
+                      label={t(foldControl === "collapse" ? "sidebar.collapseAll" : "sidebar.expandAll")}
+                      onPress={foldAll}
+                    />
+                  </span>
+                )}
+              </>
+            )
+          }
+        >
+          {t("sidebar.projects.headingWithCount", { count: ordered.length })}
+        </StickySectionHeading>
+        {/* The modal filter popover hides the surrounding sidebar from assistive technology;
           React Aria keeps a mounted live announcer and its ancestors exposed. */}
-      <div data-live-announcer="true">
-        <StatusAnnouncer text={noMatch} />
-      </div>
-      {noMatch ? (
-        <EmptyPanel compact silent icon={SearchX} message={noMatch} />
-      ) : ordered.length === 0 ? (
+        <div data-live-announcer="true">
+          <StatusAnnouncer text={noMatch} />
+        </div>
+        {noMatch ? (
+          <EmptyPanel compact silent icon={SearchX} message={noMatch} />
+        ) : ordered.length === 0 ? (
         // A row, as the console sessions section's own empty state is: the full panel with the same
         // offer now stands in the terminal's area (`TerminalPane`), but only while nothing at all
         // is selected there, which a console switch leaves it short of — so the offer stays here
         // too rather than falling back to the console header's menu alone.
-        <EmptyPanel
-          compact
-          icon={FolderPlus}
-          message={t("sidebar.noProjects")}
-          action={{ label: t("sidebar.console.addProject"), onPress: () => handlers.onOpenDialog({ kind: "new-project", console: thisConsole }) }}
-        />
-      ) : (
+          <EmptyPanel
+            compact
+            icon={FolderPlus}
+            message={t("sidebar.noProjects")}
+            action={{ label: t("sidebar.console.addProject"), onPress: () => handlers.onOpenDialog({ kind: "new-project", console: thisConsole }) }}
+          />
+        ) : (
         // The inactive projects (no running session) sit at the end, dimmed as one group; pointing at
         // any of them, keyboard focus or an open menu inside one, brings the whole group back.
         // Keyboard focus only (`data-focus-visible`, set by the rows and HeroUI's controls alike):
         // focus a mouse-opened menu hands back to its trigger would otherwise keep the group lit
         // after the pointer has gone. An open menu is matched on `aria-haspopup`, since a project
         // row is itself `aria-expanded` while open.
-        <div
-          ref={listRef}
-          className="relative flex flex-col gap-0.5 [&:has(>[data-inactive]:hover)>[data-inactive]]:after:bg-transparent [&:has(>[data-inactive]_[data-focus-visible])>[data-inactive]]:after:bg-transparent [&:has(>[data-inactive]_[aria-haspopup][aria-expanded=true])>[data-inactive]]:after:bg-transparent"
-        >
-          {ordered.map((project) => (
-            <div
-              key={project.id}
-              data-flip={project.id}
-              data-inactive={isInactiveProject(sessionsOf(project)) || undefined}
-              // Dimmed by a veil of the sidebar's own colour laid over it, not by `opacity`: WebKit
-              // composites an element that fades in or out (a row's hover controls, its chevron)
-              // inside a translucent ancestor wrongly, painting it as a blank tile. The veil is
-              // plain paint and lets every pointer event through. It takes the dimmed names below
-              // WCAG AA (about 2.9:1, muted text about 1.9:1) on purpose, by the user's decision: a
-              // de-emphasis cue, lifted as soon as the group is pointed at, focused or has a menu open.
-              className="relative after:pointer-events-none after:absolute after:inset-0 after:transition-colors after:duration-200 data-inactive:after:bg-panel-sidebar/55"
-            >
-              <ProjectNode
-                handlers={handlers}
-                project={project}
-                parentConsole={thisConsole}
-                sessions={sessionsOf(project)}
-                owners={owners}
-                selectedSessionId={selectedSessionId}
-                isCollapsed={collapsed.has(project.id)}
-                onToggle={() => toggle(project.id)}
-              />
-            </div>
-          ))}
-        </div>
-      )}
+          <div
+            ref={listRef}
+            className="relative flex flex-col gap-0.5 [&:has(>[data-inactive]:hover)>[data-inactive]]:after:bg-transparent [&:has(>[data-inactive]_[data-focus-visible])>[data-inactive]]:after:bg-transparent [&:has(>[data-inactive]_[aria-haspopup][aria-expanded=true])>[data-inactive]]:after:bg-transparent"
+          >
+            {ordered.map((project) => (
+              <div
+                key={project.id}
+                data-flip={project.id}
+                data-inactive={isInactiveProject(sessionsOf(project)) || undefined}
+                // Dimmed by a veil of the sidebar's own colour laid over it, not by `opacity`: WebKit
+                // composites an element that fades in or out (a row's hover controls, its chevron)
+                // inside a translucent ancestor wrongly, painting it as a blank tile. The veil is
+                // plain paint and lets every pointer event through. It takes the dimmed names below
+                // WCAG AA (about 2.9:1, muted text about 1.9:1) on purpose, by the user's decision: a
+                // de-emphasis cue, lifted as soon as the group is pointed at, focused or has a menu open.
+                className="relative after:pointer-events-none after:absolute after:inset-0 after:transition-colors after:duration-200 data-inactive:after:bg-panel-sidebar/55"
+              >
+                <ProjectNode
+                  handlers={handlers}
+                  project={project}
+                  parentConsole={thisConsole}
+                  sessions={sessionsOf(project)}
+                  owners={owners}
+                  selectedSessionId={selectedSessionId}
+                  isCollapsed={collapsed.has(project.id)}
+                  onToggle={() => toggle(project.id)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </>
   );
 }
 
 /** The console's console sessions, listed above the project list: every one that is not archived,
- * ordered the way a project's own sessions are (`liveSessions`), with an action to start a new one.
+ * ordered the way a project's own sessions are (`liveSessions`).
  * The archived ones are reached from the console's own menu; see "The console
  * sessions section and the project list" in `docs/product/sidebar.md`. */
 function ConsoleSessionsSection({
@@ -611,16 +617,12 @@ function ConsoleSessionsSection({
   const listRef = useFlip<HTMLDivElement>();
 
   return (
-    <>
-      <SectionHeading
-        action={
-          <RowIconButton icon={Plus} label={t("sidebar.consoleSessions.new")} onPress={openNew} isDisabled={blocked} />
-        }
-      >
+    <section className="flow-root">
+      <StickySectionHeading>
         {t("sidebar.consoleSessions.headingWithCount", { count: live.length })}
-      </SectionHeading>
+      </StickySectionHeading>
       {/* A warning rather than the glyph the rows below carry: this row is the one in the section
-          that offers nothing to press, and the section's own `+` is disabled beside it. */}
+          that offers nothing to press, and the console header's `+` is disabled. */}
       {blocked && <EmptyPanel compact icon={TriangleAlert} message={t("agents.noneFound")} />}
       {live.length === 0 && !blocked && (
         <EmptyPanel
@@ -639,7 +641,7 @@ function ConsoleSessionsSection({
           ))}
         </div>
       )}
-    </>
+    </section>
   );
 }
 

@@ -50,6 +50,16 @@ describe("liveSessions", () => {
 });
 
 describe("archivePreviewSessions", () => {
+  it("keeps the ten newest parents for a focus-mode preview", () => {
+    const parents = Array.from({ length: 11 }, (_, index) => ({
+      ...session(`parent-${index}`, "archived", index),
+      ended_at: index,
+    }));
+    const child = session("child", "archived", 200, false, "parent-10");
+    expect(archivePreviewSessions([...parents, child], [...parents, child], 10).map((s) => s.id))
+      .toEqual(Array.from({ length: 10 }, (_, index) => `parent-${10 - index}`));
+  });
+
   it("keeps five newest parents, including console-bound and unknown-owner roots, but no project children", () => {
     const consoleOwner = { ...session("hub", "idle", 0), role: "console" as const, project_id: undefined };
     const parents = Array.from({ length: 6 }, (_, index) => ({

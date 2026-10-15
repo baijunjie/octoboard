@@ -27,20 +27,9 @@ import { GitBadge } from "./GitBadge";
 import { projectMenu, sessionMenu } from "./menus";
 import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroups, hasBoundSessions, liveSessionRows, type NestedSession, notUnderConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
-import { NESTED_INSET_CLASS, PinButton, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
+import { NESTED_INSET_CLASS, PinButton, RowIconButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
-
-const FOCUS_HEADING_HEIGHT = 38;
-
-/** Kept inside its own section so the next heading pushes it away without covering its text. */
-function FocusSectionHeading({ children, action }: { children: React.ReactNode; action?: React.ReactNode }): React.ReactElement {
-  return (
-    <div className="sticky top-0 z-3 flow-root bg-panel-sidebar">
-      <SectionHeading action={action}>{children}</SectionHeading>
-    </div>
-  );
-}
 
 /** The top of either focus view: the back button that leaves focus mode, then whatever the view
  * puts after it. Both views are built from this header, the session cards and the archived list
@@ -155,9 +144,9 @@ export function ProjectFocusView({
           />
         </RowIconGroup>
       </FocusHeader>
-      <FadedScroller stickyHeadingHeight={FOCUS_HEADING_HEIGHT} className="min-h-0 flex-1 px-2 pb-2">
+      <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT} className="min-h-0 flex-1 px-2 pb-2">
         <section>
-          <FocusSectionHeading
+          <StickySectionHeading
             action={elsewhere && (
               <span className="contents" {...switchFocus}>
                 <Tooltip>
@@ -183,7 +172,7 @@ export function ProjectFocusView({
             )}
           >
             {t("sidebar.focus.sessions", { count: live.length })}
-          </FocusSectionHeading>
+          </StickySectionHeading>
           {live.length === 0 ? (
             <EmptyPanel
               compact
@@ -281,9 +270,9 @@ export function ConsoleSessionFocusView({
         </RowIconGroup>
       </FocusHeader>
       {strip.length > 1 && <SwitchStrip handlers={handlers} entries={strip} currentId={consoleSession.id} />}
-      <FadedScroller stickyHeadingHeight={FOCUS_HEADING_HEIGHT} className="min-h-0 flex-1 px-2 pb-2">
+      <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT} className="min-h-0 flex-1 px-2 pb-2">
         <section>
-          <FocusSectionHeading>{t("sidebar.focus.sessions", { count: liveCount })}</FocusSectionHeading>
+          <StickySectionHeading>{t("sidebar.focus.sessions", { count: liveCount })}</StickySectionHeading>
           {projects.length === 0 ? (
             // The header's "+" is disabled with no project to open a session in, so say why here.
             <EmptyPanel
@@ -497,9 +486,8 @@ function BoundElsewhere({
 /** A focus mode's sessions as cards, in the order given, a session bound to a project session inset
  * under its owner. One flat list rather than a list nested inside the owner's card: the reorder
  * animation reads the list's direct children (`useFlip`), so a level of its own would leave a team
- * unanimated while its statuses change. Cards sit apart from one another, so the nesting is the
- * inset alone (`NESTED_INSET_CLASS`), without the line that would break at every gap between
- * them. The moving wrapper supplies an opaque base beneath the card's translucent state fills,
+ * unanimated while its statuses change. The moving wrapper supplies an opaque base beneath
+ * the card's translucent state fills,
  * so overlapping cards cannot show each other's text during a reorder. The list's stacking context
  * keeps the summary and archive from painting over cards moving beyond the list's new bounds. */
 function SessionCards({
@@ -517,7 +505,7 @@ function SessionCards({
   return (
     <div ref={listRef} className="relative z-1 flex flex-col gap-2">
       {sessions.map(({ session, under }) => (
-        <div key={session.id} data-flip={session.id} className={`rounded-lg bg-panel ${under ? NESTED_INSET_CLASS : ""}`}>
+        <div key={session.id} data-flip={session.id} className={`relative rounded-lg bg-panel ${under ? `session-nested-card ${NESTED_INSET_CLASS}` : ""}`}>
           <SessionCard handlers={handlers} session={session} under={under} selected={session.id === selectedSessionId} consoleOwner={consoleOwner?.(session)} />
         </div>
       ))}
@@ -525,7 +513,7 @@ function SessionCards({
   );
 }
 
-/** A focus mode's archive: the five newest archived parent sessions. The heading counts the full
+/** A focus mode's archive: the ten newest archived parent sessions. The heading counts the full
  * archive, and "View all" keeps every omitted session reachable, including hidden children. */
 function ArchivedList({
   handlers,
@@ -542,10 +530,10 @@ function ArchivedList({
 }): React.ReactElement | null {
   const t = useT();
   if (archived.length === 0) return null;
-  const preview = archivePreviewSessions(archived, sessions);
+  const preview = archivePreviewSessions(archived, sessions, 10);
   return (
     <section>
-      <FocusSectionHeading>{t("sidebar.focus.archived", { count: archived.length })}</FocusSectionHeading>
+      <StickySectionHeading>{t("sidebar.focus.archived", { count: archived.length })}</StickySectionHeading>
       <div className="flex flex-col gap-0.5">
         {preview.map((session) => (
           <ArchivedRow key={session.id} handlers={handlers} session={session} selected={session.id === selectedSessionId} />

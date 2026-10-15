@@ -34,6 +34,19 @@ const state = snapshotState({
   sessions: [...sessions, ...sessions.map((session) => ({ ...session, id: `crowded-${session.id}`, console_id: crowdedConsole.id, project_id: `crowded-${session.project_id}` }))],
 });
 
+// The matching project stays long enough for its filter chips to leave the viewport while
+// Projects remains pinned; the other filter previews retain their compact project lists.
+const scrollingMatchState = {
+  ...state,
+  sessions: new Map([
+    ...state.sessions!,
+    ...Array.from({ length: 24 }, (_, i) => {
+      const session = sessionOf(`s-docs-scroll-${i}`, console_.id, projects[3].id, `Review documentation section ${i + 1}`, "idle");
+      return [session.id, session] as const;
+    }),
+  ]),
+};
+
 const openFilter = (ui: Ui) => ui.press(ui.t("sidebar.filter.open"));
 
 export const filterScenarios: Scenario[] = [
@@ -56,8 +69,8 @@ export const filterScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Matching projects",
-    description: "Projects (1) counts the single matching project. The heading's Funnel X clears the keyword and both tags together. The keyword, short tag and long tag fit their content at rest; each remains removable on its own. Hover a short tag to reveal its remove button and minimum width.",
-    state: state,
+    description: "Projects (1) counts the single matching project. The heading's Funnel X clears the keyword and both tags together. Scroll the project sessions: Projects and its controls stay pinned above the fade while the filter chips scroll away below it. The keyword, short tag and long tag fit their content at rest; each remains removable on its own. Hover a short tag to reveal its remove button and minimum width.",
+    state: scrollingMatchState,
     preferences: { sidebarConsole: console_.id },
     steps: [
       openFilter,
