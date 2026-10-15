@@ -66,6 +66,32 @@ So run the items through a bounded runner instead — a `JoinSet` held at a fixe
 as any one finishes — and give each item a deadline of its own, so one that stalls holds a single place rather than
 the pass. Four at a time is this daemon's figure everywhere it does this.
 
+## A request handler is never alone with the state: re-check after a step, or hold a claim
+
+Every control request is handled on a task of its own (`apps/daemon/src/server.rs`) on a multi-threaded runtime
+(`apps/daemon/src/main.rs`), so any other request — another client's, or the same client's next one — can run between
+any two lines of a handler, not only across an `.await`. Making a step synchronous, or dropping an `.await` from it,
+gives the handler no exclusivity. A check made early in a handler (no session running in this project, nothing else
+using this path) can therefore be stale by the time the handler acts on it.
+
+Where acting on a stale check would do harm, either take a claim on `AppState` that the competing path checks too —
+`AppState::begin_launch` is the existing one — or redo the check after the long step and deal with what changed. Put
+blocking filesystem or process work in a handler on `tokio::task::spawn_blocking` and await it; do not use
+`block_in_place`, which panics under the current-thread runtime plain `#[tokio::test]` gives the coordinator tests.
+
+## On macOS, reach the system through APIs that need no consent, never through Apple Events
+
+Applies to host integrations in the daemon and in the desktop shell: moving to the Trash, revealing or opening
+something in Finder, driving Terminal or any other app. The app is signed with the hardened runtime
+(`apps/desktop/src-tauri/tauri.conf.json`), and the daemon is its sidecar signed the same way, with no Apple Events
+entitlement and no `NSAppleEventsUsageDescription` in `apps/desktop/src-tauri/Info.plist`. So anything that sends
+Apple Events — `osascript`, AppleScript, Scripting Bridge — fails or waits on an Automation prompt in the shipped app.
+
+Development hides this: a daemon started from a terminal has the consent asked of, and usually already granted to,
+that terminal, so the call works there. Check what a crate does on macOS before adopting it, since some default to
+Finder through `osascript` (the `trash` crate's default `DeleteMethod::Finder`), and pick the consent-free path
+instead: a Foundation API such as `NSFileManager`, or `/usr/bin/open`.
+
 ## Build every `git` the daemon spawns from `git_env.rs`, and give it a deadline
 
 `apps/daemon/src/git_env.rs` assembles every `git` command the daemon runs: `non_interactive` is the base, and a

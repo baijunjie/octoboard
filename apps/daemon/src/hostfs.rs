@@ -1,6 +1,6 @@
-//! The host role's filesystem work: browsing directories, finding the git repositories under a
-//! parent directory, cloning a repository, and detecting which agent a directory or a remote
-//! repository is set up for.
+//! The host role's filesystem work: browsing directories, moving a directory to the Trash, finding
+//! the git repositories under a parent directory, cloning a repository, and detecting which agent a
+//! directory or a remote repository is set up for.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -19,6 +19,29 @@ pub fn expand(path: &str) -> PathBuf {
         return crate::paths::home_dir().join(rest);
     }
     PathBuf::from(trimmed)
+}
+
+/// Moves `path` to the system Trash, where it can be recovered. On macOS this goes through
+/// `NSFileManager`: the default, Finder through AppleScript, needs an Automation permission the
+/// hardened app does not hold. It costs the Finder's "Put Back" option; the folder is still
+/// recoverable from the Trash.
+pub fn move_to_trash(path: &Path) -> Result<()> {
+    let shown = path.to_string_lossy();
+    #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
+    let mut context = trash::TrashContext::default();
+    #[cfg(target_os = "macos")]
+    {
+        use trash::macos::{DeleteMethod, TrashContextExtMacos};
+        context.set_delete_method(DeleteMethod::NsFileManager);
+    }
+    context.delete(path).map_err(|err| {
+        let detail = err.to_string();
+        CodedError::raised(
+            error_code::PROJECT_DIRECTORY_TRASH_FAILED,
+            format!("could not move {shown} to the Trash: {detail}"),
+            &[("path", &shown), ("detail", &detail)],
+        )
+    })
 }
 
 /// A path with its `.` components dropped, each `..` folded into the component before it, and no

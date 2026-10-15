@@ -137,6 +137,10 @@ export interface Scenario {
   /** A refused request to open a project's directory in the host's file manager. The fixture
    * otherwise acknowledges the request without opening any host application. */
   projectDirectoryOpenError?: FixtureError;
+  /** A refusal of `delete_project` that asks for the folder to be moved to the Trash (`trash_directory`),
+   * as the daemon refuses a folder shared with another project or one it cannot move. A removal that
+   * does not ask for it is not refused. */
+  projectDeleteError?: FixtureError;
   /** A restore refusal or explicit post-restore repository and file tree, keyed by project.
    * Without a result the fixture refuses to acknowledge a destructive change it cannot model. */
   projectRestores?: Record<string, FixtureError | { git: FixtureGit; files: FixtureFiles }>;

@@ -1,5 +1,5 @@
-import { Alert } from "@heroui/react";
-import React from "react";
+import { Alert, Checkbox, Description, Label } from "@heroui/react";
+import React, { useState } from "react";
 
 import { AgentIcon } from "../components/AgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -9,7 +9,7 @@ import { ExportConfigurationDialog } from "../configuration/ExportConfigurationD
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
-import { isLive, type Session } from "../protocol";
+import { isLive, type Project, type Session } from "../protocol";
 import { sessionAccountTooltip, sessionAgentLabel, sessionDisplayTitle } from "../sessionLabel";
 import { boundArchivedSessions, boundSessionsArchivedWith, compareSessions } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
@@ -53,6 +53,58 @@ function SessionCallout({ title, sessions }: { title: string; sessions?: Session
         )}
       </Alert.Content>
     </TintedAlert>
+  );
+}
+
+/** Confirms removing a project. The folder stays on disk unless the user opts in to moving it to
+ * the Trash, which the daemon does before removing the project and refuses (keeping the project)
+ * when it cannot. */
+function DeleteProjectDialog({ project, running, onClose }: { project: Project; running: Session[]; onClose: () => void }): React.ReactElement {
+  const t = useT();
+  const { request } = useDaemon();
+  const [trash, setTrash] = useState(false);
+  // The confirmation's own busy state is not visible from here; the option is frozen while the request runs.
+  const [busy, setBusy] = useState(false);
+  const confirmKey =
+    running.length > 0
+      ? trash
+        ? "dialog.removeProject.confirmRunningTrash"
+        : "dialog.removeProject.confirmRunning"
+      : trash
+        ? "dialog.removeProject.confirmTrash"
+        : "common.remove";
+  return (
+    <ConfirmDialog
+      title={t("dialog.removeProject.title", { name: isolate(project.name) })}
+      message={
+        <>
+          <p>{t(trash ? "dialog.removeProject.messageTrash" : "dialog.removeProject.message")}</p>
+          {running.length > 0 && <SessionCallout title={t("dialog.removeProject.running", { count: running.length })} sessions={running} />}
+        </>
+      }
+      confirmLabel={t(confirmKey)}
+      pendingLabel={trash ? t("dialog.removeProject.pendingTrash") : undefined}
+      destructive
+      extraControl={
+        <Checkbox variant="secondary" isSelected={trash} onChange={setTrash} isReadOnly={busy}>
+          <Checkbox.Content className="min-h-6 items-start">
+            <Checkbox.Control><Checkbox.Indicator /></Checkbox.Control>
+            <Label>{t("dialog.removeProject.trash")}</Label>
+          </Checkbox.Content>
+          <Description>{t("dialog.removeProject.trashHint")}</Description>
+        </Checkbox>
+      }
+      onCancel={onClose}
+      onConfirm={async () => {
+        setBusy(true);
+        try {
+          await request({ type: "delete_project", project: project.id, stop_sessions: running.length > 0, trash_directory: trash });
+          onClose();
+        } finally {
+          setBusy(false);
+        }
+      }}
+    />
   );
 }
 
@@ -123,29 +175,11 @@ export function RequestedDialog({
         />
       );
     case "delete-project": {
-      const project = dialog.project;
       // Read live: a session that starts or stops while the dialog is open joins or leaves the list.
       const running = Array.from(sessions.values())
-        .filter((s) => s.project_id === project.id && isLive(s.status))
+        .filter((s) => s.project_id === dialog.project.id && isLive(s.status))
         .sort(compareSessions);
-      return (
-        <ConfirmDialog
-          title={t("dialog.removeProject.title", { name: isolate(project.name) })}
-          message={
-            <>
-              <p>{t("dialog.removeProject.message")}</p>
-              {running.length > 0 && <SessionCallout title={t("dialog.removeProject.running", { count: running.length })} sessions={running} />}
-            </>
-          }
-          confirmLabel={t(running.length > 0 ? "dialog.removeProject.confirmRunning" : "common.remove")}
-          destructive
-          onCancel={onClose}
-          onConfirm={async () => {
-            await request({ type: "delete_project", project: project.id, stop_sessions: running.length > 0 });
-            onClose();
-          }}
-        />
-      );
+      return <DeleteProjectDialog project={dialog.project} running={running} onClose={onClose} />;
     }
     case "new-console-session":
       return (

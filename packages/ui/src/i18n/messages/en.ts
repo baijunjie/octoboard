@@ -115,6 +115,10 @@ export const en = {
     "This console still has sessions that are running or starting. Archive the running ones, or wait for the ones that are starting to finish.",
   "daemon.project_has_running_sessions":
     "This project still has sessions that are running or starting. Archive the running ones, or wait for the ones that are starting to finish.",
+  "daemon.project_directory_shared":
+    "The folder is shared with project “{project}”, so it cannot be moved to the Trash. Remove that project first, or keep the folder.",
+  "daemon.project_directory_protected": "This is your home folder, the root of a disk, or holds Octoboard’s own data, so it cannot be moved to the Trash.",
+  "daemon.project_directory_trash_failed": "The folder could not be moved to the Trash, so the project was kept: {detail}",
   "daemon.path_not_absolute": "“{path}” is not an absolute path. Give the full path, or start it with “~/”.",
   "daemon.path_not_found": "“{path}” does not exist.",
   "daemon.path_not_a_directory": "“{path}” is not a directory.",
@@ -752,6 +756,12 @@ export const en = {
     other: "{count} sessions are still running and will be ended",
   },
   "dialog.removeProject.confirmRunning": "End and remove",
+  "dialog.removeProject.messageTrash": "Its sessions are deleted with it, and its folder is moved to the Trash.",
+  "dialog.removeProject.trash": "Also move the project folder to the Trash",
+  "dialog.removeProject.trashHint": "The whole folder goes, including anything not committed to Git. You can recover it from the Trash.",
+  "dialog.removeProject.confirmTrash": "Remove and move to Trash",
+  "dialog.removeProject.confirmRunningTrash": "End, remove and move to Trash",
+  "dialog.removeProject.pendingTrash": "Moving to Trash…",
   "dialog.archiveSession.title": "Archive “{title}”?",
   "dialog.archiveSession.message": "Its process ends. You can reopen it later.",
   "dialog.archiveSession.bound": {

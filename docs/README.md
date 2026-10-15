@@ -359,4 +359,6 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   `cargo clippy --all-targets`, since the plain command lints no `#[cfg(test)]` code and so none of this repository's
   tests; how to type-check Linux-only code from macOS (a scratch crate, since bundled SQLite blocks a cross-check
   of the daemon); and why a test fixture is built only from Git 2.36's commands, since the Mac's newer git lets a
-  fixture needing more pass every local run.
+  fixture needing more pass every local run; why a request handler can never assume it is alone with the daemon's
+  state, so it re-checks after a long step or holds a claim; and why macOS host integrations avoid Apple Events
+  (`osascript`, a crate's Finder default) in favour of consent-free APIs.

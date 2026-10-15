@@ -493,7 +493,13 @@ fn shown(row: BranchOrigin) -> Option<BranchOriginInfo> {
 /// cannot be traced to its repository, and neither can any repository when the store's list of
 /// projects cannot be read: in both the rows stay, bounded by the per-repository cap.
 pub fn project_deleted(state: &AppState, project_path: &str) {
-    let Some(repo) = repository_of(Path::new(project_path)) else {
+    project_deleted_in(state, repository_of(Path::new(project_path)));
+}
+
+/// [`project_deleted`] for a repository found earlier, for a deletion that takes the directory
+/// away first, after which it can no longer be traced.
+pub fn project_deleted_in(state: &AppState, repo: Option<PathBuf>) {
+    let Some(repo) = repo else {
         return;
     };
     let shared = match state.store.list_projects() {
@@ -916,7 +922,7 @@ fn repo_key(repo: &Path) -> String {
 /// The canonical common directory of the repository holding `dir`, found from the filesystem
 /// alone: this runs for every hook, and spawning `git` to ask would defeat the point of the stamp.
 /// `None` for a directory in no repository.
-fn repository_of(dir: &Path) -> Option<PathBuf> {
+pub fn repository_of(dir: &Path) -> Option<PathBuf> {
     let ceiling = source::home_ceiling();
     let canonical = fs::canonicalize(dir).ok()?;
     let top = source::find_dot_git(&canonical, ceiling.as_deref())?;

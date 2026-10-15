@@ -695,8 +695,10 @@ export type RequestBody =
     tags?: string[];
   }
   /** `stop_sessions` ends the project's running sessions first (as `archive_session` does) instead
-   * of being refused with `project_has_running_sessions`; default false. */
-  | { type: "delete_project"; project: string; stop_sessions?: boolean }
+   * of being refused with `project_has_running_sessions`; default false. `trash_directory` moves
+   * the project's folder to the system Trash first, and keeps the project when that fails or
+   * the folder is shared with another project; default false. */
+  | { type: "delete_project"; project: string; stop_sessions?: boolean; trash_directory?: boolean }
   | { type: "list_dir"; path: string }
   /** Answered with `agent_detected`, or an error when `path` is not an existing directory. */
   | { type: "detect_directory_agent"; path: string }

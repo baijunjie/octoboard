@@ -156,15 +156,29 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
-async function confirmSwitch(): Promise<void> {
+async function submitDialog(): Promise<void> {
   await act(async () => {
     document.body.querySelector("[role=alertdialog] form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
 }
 
-function checkAll(): void {
-  act(() => document.body.querySelector<HTMLInputElement>('[role=alertdialog] input[type="checkbox"]')!.click());
+function checkbox(): HTMLInputElement {
+  return document.body.querySelector<HTMLInputElement>('[role=alertdialog] input[type="checkbox"]')!;
 }
+
+function checkAll(): void {
+  act(() => checkbox().click());
+}
+
+it("moves the project folder to the Trash only when the checkbox is selected", async () => {
+  const { daemon } = mount({ kind: "delete-project", project }, []);
+  expect(checkbox().checked).toBe(false);
+  await submitDialog();
+  expect(daemon.request).toHaveBeenLastCalledWith({ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: false });
+  act(() => checkbox().click());
+  await submitDialog();
+  expect(daemon.request).toHaveBeenLastCalledWith({ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: true });
+});
 
 it("switches only the selected session to the default account unless the checkbox is selected", async () => {
   const selected = { ...owner, account_id: account.id };
@@ -173,7 +187,7 @@ it("switches only the selected session to the default account unless the checkbo
   const onSwitchAccount = vi.fn(() => waiting.promise);
   mount({ kind: "switch-account", session: selected, account: null, accountName: "Default" }, [selected, { ...selected, id: "s-other" }], [account], { onClose, onSwitchAccount });
   expect(document.body.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked).toBe(false);
-  await confirmSwitch();
+  await submitDialog();
   expect(onSwitchAccount).toHaveBeenCalledExactlyOnceWith(selected.id, null);
   expect(document.body.querySelector('[role="progressbar"]')?.getAttribute("aria-valuemax")).toBe("1");
   expect(onClose).not.toHaveBeenCalled();
@@ -197,7 +211,7 @@ it("switches a console's same-agent console, project and bound sessions sequenti
   const onSwitchAccount = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise).mockReturnValueOnce(third.promise);
   const { daemon } = mount({ kind: "switch-account", session: owner, account: account.id, accountName: account.name }, [hub, owner, bound, ...excluded], [account], { onClose, onSwitchAccount });
   checkAll();
-  await confirmSwitch();
+  await submitDialog();
   expect(onSwitchAccount.mock.calls).toEqual([[hub.id, account.id]]);
   const progress = () => document.body.querySelector('[role="progressbar"]')!;
   expect(progress().getAttribute("aria-valuemax")).toBe("3");
@@ -210,7 +224,7 @@ it("switches a console's same-agent console, project and bound sessions sequenti
     document.body.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click();
     document.body.querySelector('[role="alertdialog"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   });
-  await confirmSwitch();
+  await submitDialog();
   expect(onClose).not.toHaveBeenCalled();
   expect(onSwitchAccount).toHaveBeenCalledTimes(1);
   await act(async () => first.resolve());
@@ -230,14 +244,14 @@ it("continues after a failure and retries only failed sessions without relying o
   const onSwitchAccount = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("Copy failed")).mockResolvedValue(undefined);
   const { daemon } = mount({ kind: "switch-account", session: owner, account: account.id, accountName: account.name }, [owner, failed, last], [account], { onClose, onSwitchAccount });
   checkAll();
-  await confirmSwitch();
+  await submitDialog();
   expect(onSwitchAccount.mock.calls).toEqual([[owner.id, account.id], [failed.id, account.id], [last.id, account.id]]);
   expect(document.body.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("3");
   expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("Needs attention");
   expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("Copy failed");
   expect(onClose).not.toHaveBeenCalled();
   act(() => daemon.store.setState({ sessions: new Map([...daemon.store.getState().sessions, ["late", { ...owner, id: "late" }]]) }));
-  await confirmSwitch();
+  await submitDialog();
   expect(onSwitchAccount.mock.calls).toEqual([[owner.id, account.id], [failed.id, account.id], [last.id, account.id], [failed.id, account.id]]);
   expect(onClose).toHaveBeenCalledOnce();
 });
@@ -249,7 +263,7 @@ it.each(["archived", "on-target", "removed"] as const)("skips a snapshotted sess
   const onSwitchAccount = vi.fn(() => first.promise);
   const { daemon } = mount({ kind: "switch-account", session: owner, account: account.id, accountName: account.name }, [owner, next], [account], { onClose, onSwitchAccount });
   checkAll();
-  await confirmSwitch();
+  await submitDialog();
   act(() => {
     const sessions = new Map(daemon.store.getState().sessions);
     if (change === "removed") sessions.delete(next.id);

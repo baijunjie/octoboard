@@ -145,6 +145,11 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           if (scenario.projectDirectoryOpenError) return fail(scenario.projectDirectoryOpenError);
           return { type: "ack" };
         }
+        case "delete_project": {
+          if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
+          if (body.trash_directory && scenario.projectDeleteError) return fail(scenario.projectDeleteError);
+          return { type: "ack" };
+        }
         case "set_session_pinned": {
           const session = store.getState().sessions.get(body.session);
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });

@@ -121,6 +121,12 @@ const editTaggedProject = [
   (ui: Ui) => ui.press(ui.t("sidebar.project.edit")),
 ];
 
+const removeDocsSite = [
+  (ui: Ui) => projectActions(ui, tagged[0].name),
+  (ui: Ui) => ui.press(ui.t("sidebar.project.remove")),
+  (ui: Ui) => ui.press(ui.t("dialog.removeProject.trash")),
+];
+
 /** A home directory with more subdirectories than the picker's list is tall, some of them repositories. */
 const HOME_LISTING = [
   "Applications",
@@ -408,11 +414,62 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Remove project with running sessions",
-    description: "Default, named and removed-directory account cases coexist in the confirmation; hover each agent mark.",
+    description: "The confirmation as first opened: the Trash option is unchecked. Default, named and removed-directory account cases coexist in the running-sessions list; hover each agent mark.",
     steps: [
       (ui) => projectActions(ui, web.name),
       (ui) => ui.press(ui.t("sidebar.project.remove")),
     ],
+  },
+  {
+    ...dialogFixture,
+    id: "dialog-remove-project-trash",
+    group: "Projects",
+    category: "normal",
+    title: "Remove project and move its folder to the Trash",
+    description: "The Trash option is checked: the message, the hint under the option and the confirming button all say the folder goes too.",
+    steps: removeDocsSite,
+  },
+  {
+    ...dialogFixture,
+    projectDeleteError: {
+      code: "project_directory_shared",
+      params: { project: tagged[1].name },
+      message: "The folder is shared with another project",
+    },
+    id: "dialog-remove-project-folder-shared",
+    group: "Projects",
+    category: "exceptional",
+    title: "Project folder shared with another project",
+    description: "The daemon refuses to move the folder to the Trash; the error shows in the dialog and nothing is changed.",
+    steps: [...removeDocsSite, (ui) => ui.confirm()],
+  },
+  {
+    ...dialogFixture,
+    projectDeleteError: {
+      code: "project_directory_protected",
+      params: { path: tagged[0].path },
+      message: "This folder is too important to move to the Trash from here",
+    },
+    id: "dialog-remove-project-folder-protected",
+    group: "Projects",
+    category: "exceptional",
+    title: "Project folder protected from the Trash",
+    description: "The daemon refuses to move a protected folder (the home directory, the root of a disk, or one holding Octoboard's data); the error names why, shows in the dialog and the project is kept.",
+    steps: [...removeDocsSite, (ui) => ui.confirm()],
+  },
+  {
+    ...dialogFixture,
+    projectDeleteError: {
+      code: "project_directory_trash_failed",
+      params: { path: tagged[0].path, detail: "Operation not permitted (os error 1)" },
+      message: "The folder could not be moved to the Trash",
+    },
+    id: "dialog-remove-project-trash-failed",
+    group: "Projects",
+    category: "exceptional",
+    title: "Project folder could not be moved to the Trash",
+    description: "The move to the Trash failed; the error shows in the dialog and the project is kept.",
+    steps: [...removeDocsSite, (ui) => ui.confirm()],
   },
   {
     ...dialogFixture,

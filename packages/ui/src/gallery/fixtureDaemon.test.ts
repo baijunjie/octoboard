@@ -25,6 +25,20 @@ describe("the fixture daemon's system directory action", () => {
   });
 });
 
+describe("the fixture daemon's project removal", () => {
+  const project = projectOf("p", "c", "Website");
+  const error = { code: "project_directory_shared", params: { project: "Billing" }, message: "shared" };
+  const scenario = { id: "removal", group: "Projects" as const, category: "exceptional" as const, title: "", state: snapshotState({ projects: [project] }), projectDeleteError: error };
+
+  it("refuses only a removal that asks for the folder to be moved to the Trash", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(daemon.request({ type: "delete_project", project: project.id })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "delete_project", project: project.id, trash_directory: false })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "delete_project", project: project.id, trash_directory: true })).rejects.toMatchObject({ code: error.code, params: error.params });
+    await expect(daemon.request({ type: "delete_project", project: "missing", trash_directory: true })).rejects.toMatchObject({ code: "unknown_project" });
+  });
+});
+
 describe("the fixture daemon's project file trees", () => {
   it("uses each project's tree for listings and reads, retaining the shared fallback", async () => {
     const daemon = createFixtureDaemon({

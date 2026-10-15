@@ -1183,6 +1183,10 @@ pub enum RequestBody {
         /// refusing while there are any. Absent is false.
         #[serde(default)]
         stop_sessions: bool,
+        /// Moves the project's directory to the system Trash once its sessions are stopped,
+        /// and removes the project only if that worked. Absent is false.
+        #[serde(default)]
+        trash_directory: bool,
     },
     ListDir {
         path: String,
@@ -2011,6 +2015,16 @@ pub mod error_code {
     pub const INVALID_REMOTE_URL: &str = "invalid_remote_url";
     pub const CONSOLE_HAS_RUNNING_SESSIONS: &str = "console_has_running_sessions";
     pub const PROJECT_HAS_RUNNING_SESSIONS: &str = "project_has_running_sessions";
+    /// Another project's directory is the one being moved to the Trash, lies inside it, or holds
+    /// it, so trashing would take that project's files too. `params` names the other project as
+    /// `project`.
+    pub const PROJECT_DIRECTORY_SHARED: &str = "project_directory_shared";
+    /// The project's directory is one the Trash is never offered for: the home directory, a
+    /// root of a disk, or a directory holding Octoboard's own data. The project is kept.
+    pub const PROJECT_DIRECTORY_PROTECTED: &str = "project_directory_protected";
+    /// The project's directory could not be moved to the Trash. The project is kept. The reason
+    /// is carried as the `detail` param.
+    pub const PROJECT_DIRECTORY_TRASH_FAILED: &str = "project_directory_trash_failed";
     pub const PATH_NOT_ABSOLUTE: &str = "path_not_absolute";
     pub const PATH_NOT_FOUND: &str = "path_not_found";
     pub const PATH_NOT_A_DIRECTORY: &str = "path_not_a_directory";

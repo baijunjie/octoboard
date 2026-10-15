@@ -279,6 +279,7 @@ pub async fn handle(
         RequestBody::DeleteProject {
             project: id,
             stop_sessions,
+            trash_directory,
         } => {
             let deleted = state
                 .store
@@ -298,38 +299,37 @@ pub async fn handle(
                     &[],
                 ));
             }
+            // Checked before any session is stopped, so a refusal leaves everything as it was.
+            let to_trash = if trash_directory {
+                directory_to_trash(&deleted, &state.store.list_projects()?)?
+            } else {
+                None
+            };
             if stop_sessions {
-                // Archived the way the user's own archive request does it; a process still
-                // exiting when its rows are gone is tolerated by `watch_exit` and the hook paths.
-                // The deepest level goes first: archiving an owner is refused while a session
-                // bound to it still has a process, and all of them are in this project. So the
-                // sessions bound to a lead session go before it, and it, bound to a console
-                // session, before the unbound ones. A console session belongs to no project and
-                // is not in this loop; a lead session's binding to one is left as any bound
-                // session's is, and goes with its record.
-                let mut in_this_project = Vec::new();
-                for live in state.live_sessions() {
-                    if let Some(session) = state.store.get_session(&live.id)? {
-                        if in_project(&session) {
-                            in_this_project.push(session);
-                        }
-                    }
-                }
-                let levels = in_this_project
-                    .iter()
-                    .map(|session| Ok((session.id.clone(), binding_depth(state, session)?)))
-                    .collect::<Result<HashMap<String, usize>>>()?;
-                in_this_project.sort_by_key(|session| std::cmp::Reverse(levels[&session.id]));
-                for session in in_this_project {
-                    archive_session(state, &session.id)?;
+                stop_project_sessions(state, in_project)?;
+            }
+            // The directory goes first, once nothing runs in it, so a failure leaves the project
+            // in place for a retry. Without `trash_directory` only the association goes away: the
+            // directory is the user's. The repository is found first, as it cannot be once the
+            // directory is gone.
+            let repository = crate::branch_origin::repository_of(Path::new(&deleted.path));
+            if let Some(directory) = to_trash {
+                // Off the runtime's worker: a move across volumes copies.
+                tokio::task::spawn_blocking(move || hostfs::move_to_trash(&directory)).await??;
+                // Requests run concurrently, so a session may have been started in the project
+                // while the folder moved, and nothing held it back. The folder is gone by now, so
+                // the project is removed regardless: such a session is ended here as well as it
+                // can be, and one still being launched, which cannot be ended, is left to fail
+                // once its record goes.
+                if let Err(err) = stop_project_sessions(state, in_project) {
+                    tracing::warn!(project = %id, %err, "ending sessions started during the move to the Trash failed");
                 }
             }
-            // Only the association goes away. The directory is the user's. Its sessions cascade
-            // with it, so their saved output is collected first.
+            // The project's sessions cascade with it, so their saved output is collected first.
             let session_ids = session_ids_where(state, in_project)?;
             state.store.delete_project(&id)?;
             state.remove_git_status(&id);
-            crate::branch_origin::project_deleted(state, &deleted.path);
+            crate::branch_origin::project_deleted_in(state, repository);
             for session_id in &session_ids {
                 state.forget_saved_output(session_id);
             }
@@ -1984,6 +1984,101 @@ fn team(state: &Arc<AppState>, owner: &Session) -> Result<Vec<Session>> {
     Ok(sessions)
 }
 
+/// Archives the running sessions of the project `in_project` matches, the way the user's own
+/// archive request does.
+fn stop_project_sessions(
+    state: &Arc<AppState>,
+    in_project: impl Fn(&Session) -> bool,
+) -> Result<()> {
+    // A process still exiting when its rows are gone is tolerated by `watch_exit` and the hook paths.
+    // The deepest level goes first: archiving an owner is refused while a session
+    // bound to it still has a process, and all of them are in this project. So the
+    // sessions bound to a lead session go before it, and it, bound to a console
+    // session, before the unbound ones. A console session belongs to no project and
+    // is not in this loop; a lead session's binding to one is left as any bound
+    // session's is, and goes with its record.
+    let mut in_this_project = Vec::new();
+    for live in state.live_sessions() {
+        if let Some(session) = state.store.get_session(&live.id)? {
+            if in_project(&session) {
+                in_this_project.push(session);
+            }
+        }
+    }
+    let levels = in_this_project
+        .iter()
+        .map(|session| Ok((session.id.clone(), binding_depth(state, session)?)))
+        .collect::<Result<HashMap<String, usize>>>()?;
+    in_this_project.sort_by_key(|session| std::cmp::Reverse(levels[&session.id]));
+    for session in in_this_project {
+        archive_session(state, &session.id)?;
+    }
+    Ok(())
+}
+
+/// Whether `directory` is the root of a disk: `/`, or a mount point such as `/Volumes/Backup`,
+/// which sits on a different device from its parent.
+fn is_disk_root(directory: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let Some(parent) = directory.parent() else {
+        return true;
+    };
+    match (std::fs::metadata(directory), std::fs::metadata(parent)) {
+        (Ok(this), Ok(above)) => this.dev() != above.dev(),
+        _ => false,
+    }
+}
+
+/// The directory to move to the Trash for `deleted`, or `None` when it is already gone. Refused
+/// for a directory whose loss would be drastic (see [`PROJECT_DIRECTORY_PROTECTED`]), and while
+/// another project's directory is the same, inside it or holds it, or another project's Git
+/// repository lies inside it, as a linked worktree's does: trashing would take that project's
+/// files too. Symlinks are resolved where the path exists, so two spellings of one directory are
+/// one.
+///
+/// [`PROJECT_DIRECTORY_PROTECTED`]: error_code::PROJECT_DIRECTORY_PROTECTED
+fn directory_to_trash(deleted: &Project, projects: &[Project]) -> Result<Option<PathBuf>> {
+    let resolve = |path: &Path| {
+        std::fs::canonicalize(path).unwrap_or_else(|_| hostfs::lexically_normalise(path))
+    };
+    let directory = resolve(Path::new(&deleted.path));
+    let home = crate::paths::known_home_dir().map(|home| resolve(&home));
+    if is_disk_root(&directory)
+        || home.as_deref() == Some(directory.as_path())
+        || resolve(&crate::paths::data_dir()).starts_with(&directory)
+    {
+        return Err(CodedError::raised(
+            error_code::PROJECT_DIRECTORY_PROTECTED,
+            "this folder is too important to move to the Trash from here",
+            &[("path", &deleted.path)],
+        ));
+    }
+    if let Some(other) = projects
+        .iter()
+        .filter(|other| other.id != deleted.id)
+        .find(|other| {
+            let theirs = resolve(Path::new(&other.path));
+            theirs.starts_with(&directory)
+                || directory.starts_with(&theirs)
+                || crate::branch_origin::repository_of(&theirs)
+                    .is_some_and(|repository| repository.starts_with(&directory))
+        })
+    {
+        return Err(CodedError::raised(
+            error_code::PROJECT_DIRECTORY_SHARED,
+            format!(
+                "the folder is shared with project \"{}\"; remove that project first",
+                other.name
+            ),
+            &[("project", &other.name)],
+        ));
+    }
+    // A symlink is trashed as itself, not as what it points to.
+    Ok(std::fs::symlink_metadata(&deleted.path)
+        .is_ok()
+        .then(|| PathBuf::from(&deleted.path)))
+}
+
 /// How many owners up `session`'s bindings go: 0 for an unbound session, 1 for one bound to an
 /// owner that is itself unbound, 2 for one bound to a lead session.
 fn binding_depth(state: &Arc<AppState>, session: &Session) -> Result<usize> {
@@ -3178,6 +3273,7 @@ mod tests {
         let delete = || RequestBody::DeleteProject {
             project: "project-1".to_string(),
             stop_sessions: true,
+            trash_directory: false,
         };
 
         let claim = state.begin_launch("project").unwrap();
@@ -3202,6 +3298,7 @@ mod tests {
             RequestBody::DeleteProject {
                 project: "project-1".to_string(),
                 stop_sessions: false,
+                trash_directory: false,
             },
             RequestBody::DeleteConsole {
                 console: "console-1".to_string(),
@@ -6038,6 +6135,7 @@ mod tests {
             RequestBody::DeleteProject {
                 project: "project-1".to_string(),
                 stop_sessions: true,
+                trash_directory: false,
             },
         )
         .await
@@ -6046,6 +6144,69 @@ mod tests {
         assert_eq!(session_ids(&state), ["hub"]);
         assert_eq!(status_of(&state, "hub"), Some(Idle));
         assert!(!live[0].poll_exit(), "the console session keeps running");
+    }
+
+    /// Trashing is refused for a protected directory, and over any other project's directory
+    /// that is the same, inside or holding this one, or whose repository is inside it, as a
+    /// linked worktree's is; a sibling whose name merely starts the same is not in the way, and a
+    /// directory already gone is skipped.
+    #[test]
+    fn trashing_a_directory_leaves_every_other_projects_files_alone() {
+        let dir = crate::test_support::ScratchDir::new("coordinator-trash-guard");
+        let outer = dir.join("outer");
+        let inner = outer.join("inner");
+        let sibling = dir.join("outer-2");
+        for path in [&inner, &sibling] {
+            std::fs::create_dir_all(path).unwrap();
+        }
+        let at = |id: &str, path: &Path| Project {
+            path: path.to_string_lossy().into_owned(),
+            ..project_of("console-1", id)
+        };
+        let refused = |deleted: &Project, others: &[Project]| {
+            let err = directory_to_trash(deleted, others).unwrap_err();
+            err.downcast::<CodedError>().unwrap().code
+        };
+        let outer_project = at("outer", &outer);
+        let inner_project = at("inner", &inner);
+        for (deleted, other) in [
+            (&outer_project, inner_project.clone()),
+            (&inner_project, outer_project.clone()),
+            (&outer_project, at("twin", &outer)),
+        ] {
+            assert_eq!(
+                refused(deleted, &[deleted.clone(), other]),
+                error_code::PROJECT_DIRECTORY_SHARED
+            );
+        }
+
+        // A linked worktree elsewhere keeps its repository in the folder.
+        let repo = crate::test_support::repo_with("coordinator-trash-repo", &[(b"a", b"a")]);
+        let worktree = dir.join("worktree");
+        crate::test_support::git(
+            &repo,
+            &["worktree", "add", "-b", "other", worktree.to_str().unwrap()],
+        );
+        assert_eq!(
+            refused(&at("repo", &repo), &[at("worktree", &worktree)]),
+            error_code::PROJECT_DIRECTORY_SHARED
+        );
+
+        let home = crate::paths::home_dir();
+        for protected in [Path::new("/"), home.as_path()] {
+            assert_eq!(
+                refused(&at("protected", protected), &[]),
+                error_code::PROJECT_DIRECTORY_PROTECTED
+            );
+        }
+
+        let others = [at("sibling", &sibling)];
+        assert_eq!(
+            directory_to_trash(&outer_project, &others).unwrap(),
+            Some(outer.clone())
+        );
+        let gone = at("gone", &dir.join("gone"));
+        assert_eq!(directory_to_trash(&gone, &others).unwrap(), None);
     }
 
     fn page_of(id: &str, console_session_id: &str, created_at: i64) -> crate::protocol::Page {

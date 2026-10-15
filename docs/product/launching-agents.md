@@ -10,7 +10,9 @@ This is the guarantee the whole design rests on:
 - **Octoboard installs nothing into a project.** Outside the Git operations below, it writes no instruction file,
   no settings file and no hook of its own, and changes none of the project's. What the session's agent itself writes
   while it works is the point of the
-  whole thing and is not Octoboard's doing. Removing a project removes an association, never a directory.
+  whole thing and is not Octoboard's doing. Removing a project removes an association and leaves the directory
+  alone, unless the user chooses to move the folder to the system Trash with it (see "Moving the project folder to
+  the Trash" in `docs/product/consoles-and-projects.md`).
   Octoboard changes a project's files only through an authorized fast-forward or **Restore file changes…**, and does
   not push except at the user's word. A branch that is
   behind its upstream and has no commits of its own is fast-forwarded, which moves its working tree — on its own
