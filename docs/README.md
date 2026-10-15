@@ -57,7 +57,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   project; which of the user's own git settings a check's `git` is given and which are filtered out; and the
   Automatically sync repositories switch — what it fast-forwards, what it never does, where it is kept, and the
   immediate fast-forward pass turning it on runs — and Push current branch: which branch is published, when an
-  upstream is recorded, and what is refused.
+  upstream is recorded, and what is refused; and Switch branch: the third-level local branch menu, immediate
+  switching, and failures.
 - [Opening a project terminal](product/project-terminal.md) — Open terminal in a project's action menu: the system
   terminal at the project's directory on the machine the daemon runs on, Terminal.app on macOS and the first installed
   emulator on Linux, when the request finishes, and when it is refused.

@@ -1418,6 +1418,12 @@ pub enum RequestBody {
     PushProjectBranch {
         project: String,
     },
+    /// Switches to an existing local branch in canonical wire form. A success publishes a local
+    /// status re-read, without fetching or fast-forwarding. Answered after Git exits.
+    SwitchProjectBranch {
+        project: String,
+        branch: String,
+    },
     /// Discards this project's staged and unstaged tracked changes against HEAD, including
     /// staged additions. Untracked files, ignored files and submodules are preserved. Requires
     /// client confirmation. Answered with `ack` after Git exits; commits and branch stay put.
@@ -2152,6 +2158,8 @@ pub mod error_code {
     /// `git push` failed, or the branch name cannot be placed in a refspec. `params` names
     /// `detail`, `git`'s own message when it ran.
     pub const GIT_PUSH_FAILED: &str = "git_push_failed";
+    /// Switching to a local branch failed. `params` names `detail`, Git's message when it ran.
+    pub const GIT_SWITCH_FAILED: &str = "git_switch_failed";
     pub const RESTORE_NOT_ON_BRANCH: &str = "restore_not_on_branch";
     pub const NO_COMMITS_TO_RESTORE: &str = "no_commits_to_restore";
     pub const GIT_OPERATION_IN_PROGRESS: &str = "git_operation_in_progress";
@@ -2366,6 +2374,16 @@ mod tests {
                 r#"{"type":"push_project_branch","id":"request-1","project":"project-7"}"#,
                 |body| match body {
                     RequestBody::PushProjectBranch { project } => Some(project),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"switch_project_branch","id":"request-1","project":"project-7","branch":"feature/100%25"}"#,
+                |body| match body {
+                    RequestBody::SwitchProjectBranch { project, branch } => {
+                        assert_eq!(branch, "feature/100%25");
+                        Some(project)
+                    }
                     _ => None,
                 },
             ),

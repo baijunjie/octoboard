@@ -110,7 +110,7 @@ describe("a project's menu", () => {
       );
       return entry && typeof entry === "object" && "items" in entry ? entry.items.flatMap((item) => (typeof item === "object" ? [item.label] : [])) : undefined;
     };
-    expect(git(true)).toEqual(["Sync repository", "Push current branch", "Restore file changes…"]);
+    expect(git(true)).toEqual(["Sync repository", "Push current branch", "Switch branch", "Restore file changes…"]);
     expect(git(false)).toBeUndefined();
   });
 

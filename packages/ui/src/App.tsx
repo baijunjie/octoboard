@@ -1,3 +1,7 @@
+import { FadeOverflow } from "./components/FadeOverflow";
+import { GitBranch } from "lucide-react";
+import type { ActionMenuEntry } from "./components/ActionMenu";
+import { displayWirePath } from "./wirePath";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { errorPresentation } from "./errorPresentation";
 import { flushSync } from "react-dom";
@@ -352,6 +356,34 @@ export function App(): React.ReactElement {
       .catch((err: unknown) => toastError(errorPresentation(err as Error)));
   };
 
+  const loadProjectBranches = async (project: Project): Promise<ActionMenuEntry[]> => {
+    const [reply, source] = await Promise.all([
+      request({ type: "list_project_branches", project: project.id }),
+      request({ type: "get_project_source", project: project.id }),
+    ]);
+    if (reply.type !== "project_branches") throw new Error(t("sidebar.project.branchesFailed"));
+    const git = source.type === "project_source" ? source.source.git : undefined;
+    const currentBranch = git?.worktrees.find((worktree) => worktree.id === git.worktree)?.branch;
+    const entries: ActionMenuEntry[] = reply.branches.map((branch) => {
+      const name = displayWirePath(branch.name);
+      const current = currentBranch === branch.name;
+      return {
+        label: name,
+        content: <FadeOverflow as="span" dir="ltr" className="block" titleWhenClipped={name}>{name}</FadeOverflow>,
+        icon: GitBranch,
+        selected: current,
+        onClick: () => {
+          if (current) return;
+          request({ type: "switch_project_branch", project: project.id, branch: branch.name })
+            .catch((err: unknown) => toastError(errorPresentation(err as Error)));
+        },
+      };
+    });
+    if (!entries.length) entries.push({ label: t("sidebar.project.noBranches"), icon: GitBranch, disabled: true, onClick: () => {} });
+    if (!reply.complete) entries.push({ label: t("sidebar.project.branchesIncomplete"), icon: GitBranch, disabled: true, onClick: () => {} });
+    return entries;
+  };
+
   const openArchive = (scope: ArchiveScope) => {
     setArchiveScope(scope);
     // Below the `docked` breakpoint the sidebar is a drawer over the terminal, and would keep
@@ -580,6 +612,7 @@ export function App(): React.ReactElement {
                 onCopyProjectName={copyProjectName}
                 onSyncProjectGit={syncProjectGit}
                 onPushProjectBranch={pushProjectBranch}
+                onLoadProjectBranches={loadProjectBranches}
                 onSetPinned={setPinned}
                 onOpenSettings={openSettingsAt}
                 open={panes.sidebarOpen}

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { createFixtureDaemon } from "./fixtureDaemon";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore";
-import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
+import { consoleOf, gitStatusOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 
 describe("the fixture daemon's system directory action", () => {
   const project = projectOf("p", "c", "Website");
@@ -240,5 +240,30 @@ describe("the fixture daemon's project restore", () => {
     const daemon = createFixtureDaemon({ ...scenario, projectRestores: { [project.id]: error } });
     await expect(daemon.request({ type: "restore_project_changes", project: project.id })).rejects.toMatchObject({ code: error.code, params: error.params });
     await expect(daemon.request({ type: "read_project_file", project: project.id, path: "new.txt" })).resolves.toMatchObject({ file: { text: "A staged new file.\n" } });
+  });
+});
+
+
+describe("the fixture daemon's local branch switches", () => {
+  const project = projectOf("switch", "c", "Search API");
+  const other = projectOf("other", "c", "Other project");
+  const status = gitStatusOf(project.id, { branch: "feature/search" });
+  const scenario = { id: "switch", group: "Projects" as const, category: "normal" as const, title: "", state: snapshotState({ projects: [project, other] }), git: RESTORE_GIT, files: RESTORE_FILES };
+
+  it("applies the supplied branch snapshot and badge to only the requested project", async () => {
+    const daemon = createFixtureDaemon({ ...scenario, projectBranchSwitches: { [project.id]: { "feature/search": { ...RESTORED_PROJECT, status } } } });
+    await expect(daemon.request({ type: "switch_project_branch", project: "missing", branch: "feature/search" })).rejects.toMatchObject({ code: "unknown_project" });
+    await expect(daemon.request({ type: "switch_project_branch", project: project.id, branch: "feature/search" })).resolves.toEqual({ type: "ack" });
+    expect(daemon.store.getState().gitStatuses.get(project.id)).toEqual(status);
+    await expect(daemon.request({ type: "read_project_file", project: project.id, path: "README.md" })).resolves.toMatchObject({ file: { text: "# Search API\n" } });
+    await expect(daemon.request({ type: "read_project_file", project: other.id, path: "README.md" })).resolves.toMatchObject({ file: { text: "# Working edit\n" } });
+  });
+
+  it("keeps files and the badge intact when switching fails", async () => {
+    const error = { code: "git_switch_failed", params: { detail: "local changes would be overwritten" }, message: "Switch failed" };
+    const daemon = createFixtureDaemon({ ...scenario, projectBranchSwitches: { [project.id]: { "feature/search": error } } });
+    await expect(daemon.request({ type: "switch_project_branch", project: project.id, branch: "feature/search" })).rejects.toMatchObject({ code: error.code, params: error.params });
+    expect(daemon.store.getState().gitStatuses.has(project.id)).toBe(false);
+    await expect(daemon.request({ type: "read_project_file", project: project.id, path: "README.md" })).resolves.toMatchObject({ file: { text: "# Working edit\n" } });
   });
 });

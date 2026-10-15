@@ -22,6 +22,7 @@ use crate::git_push;
 use crate::git_remote;
 use crate::git_restore;
 use crate::git_status;
+use crate::git_switch;
 use crate::hostfs;
 use crate::launch_settings::{
     self, normalize_launch_setting, normalize_session_launch_setting, LaunchChange, LaunchCheck,
@@ -605,6 +606,19 @@ pub async fn handle(
             let state = Arc::clone(state);
             tokio::task::spawn_blocking(move || git_push::push_current_branch(&state, &project))
                 .await??;
+            Ok(None)
+        }
+
+        RequestBody::SwitchProjectBranch { project, branch } => {
+            let project = state
+                .store
+                .get_project(&project)?
+                .ok_or_else(|| CodedError::unknown_project(&project))?;
+            let state = Arc::clone(state);
+            tokio::task::spawn_blocking(move || {
+                git_switch::switch_branch(&state, &project, &branch)
+            })
+            .await??;
             Ok(None)
         }
 

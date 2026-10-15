@@ -2,7 +2,7 @@ import type { Language } from "../i18n/languages";
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/ImportReview";
 import type { MacosPermissionsStatus } from "../platform";
-import type { Agent, AgentModel, DirEntry, MessageParams, ModelsUnavailable } from "../protocol";
+import type { Agent, AgentModel, DirEntry, GitStatus, MessageParams, ModelsUnavailable } from "../protocol";
 import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
 import type { GroupTitle } from "./fixtures/groups";
 import type { FixtureGit } from "./fixtures/changeFixtures";
@@ -144,6 +144,11 @@ export interface Scenario {
   /** A restore refusal or explicit post-restore repository and file tree, keyed by project.
    * Without a result the fixture refuses to acknowledge a destructive change it cannot model. */
   projectRestores?: Record<string, FixtureError | { git: FixtureGit; files: FixtureFiles }>;
+  /** Per-project local branch listings kept pending or refused; otherwise the repository's branches. */
+  projectBranches?: Record<string, FixtureError | "pending">;
+  /** Per-project, per-branch switch refusals or explicit post-switch repository, files and badge.
+   * A switch without an outcome is refused rather than acknowledged without modeling its effect. */
+  projectBranchSwitches?: Record<string, Record<string, FixtureError | { git: FixtureGit; files: FixtureFiles; status: GitStatus }>>;
   /** The files every project's browser shows (`list_project_dir`, `read_project_file`); without it,
    * `SAMPLE_FILES`. */
   files?: FixtureFiles;

@@ -13,8 +13,8 @@ This is the guarantee the whole design rests on:
   whole thing and is not Octoboard's doing. Removing a project removes an association and leaves the directory
   alone, unless the user chooses to move the folder to the system Trash with it (see "Moving the project folder to
   the Trash" in `docs/product/consoles-and-projects.md`).
-  Octoboard changes a project's files only through an authorized fast-forward or **Restore file changes…**, and does
-  not push except at the user's word. A branch that is
+  Octoboard changes a project's files only through an authorized fast-forward, **Switch branch** or
+  **Restore file changes…**, and does not push except at the user's word. A branch that is
   behind its upstream and has no commits of its own is fast-forwarded, which moves its working tree — on its own
   once **Automatically sync repositories** has been turned on, or for one project when the user chooses **Sync
   repository** (see "Automatically syncing repositories" and "Syncing one project by hand" in
@@ -24,7 +24,9 @@ This is the guarantee the whole design rests on:
   the current branch" in `docs/product/project-git-status.md`). **Restore file changes…**, after confirmation,
   discards staged and unstaged tracked changes in the project's own worktree, restoring files to `HEAD` without
   moving the branch or changing commits (see "Restoring file changes" in `docs/product/project-git-status.md`).
-  A check's fetch of remote refs is neither of these:
+  **Switch branch** moves the project's own worktree to an existing local branch when chosen, preserving local
+  changes Git can carry safely (see "Switching the local branch" in `docs/product/project-git-status.md`).
+  A check's fetch of remote refs is separate:
   it does not move the working tree and it does not push (see "What one check does" in
   `docs/product/project-git-status.md`).
 - **The user's own agent configuration is never written to, with two narrow exceptions.** Octoboard does not edit

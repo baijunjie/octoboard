@@ -3,7 +3,7 @@ import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import type { Event, Project, RequestBody } from "../protocol";
+import type { Event, GitStatus, Project, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { useProjectBrowserState } from "./browserState";
 import { ProjectBrowser } from "./ProjectBrowser";
@@ -235,4 +235,28 @@ it("says the changes are loading once, from one status region, across the source
   await answer("list_project_changes", changes("git-live"));
   expect(statuses()).toEqual([region]);
   expect(region?.textContent).toBe("");
+});
+
+
+it.each(["files", "git"] as const)("refreshes the visible %s pane when a switched branch is published", async (mode) => {
+  const project = `switch-${mode}`;
+  const publish = async (branch: string) => act(async () => {
+    daemon.store.setState((state) => ({ gitStatuses: new Map(state.gitStatuses).set(project, {
+      project, branch, detached: false, repository: true, ahead: 0, behind: 0, activity: "idle", error: null,
+    } as GitStatus) }));
+  });
+  await publish("main");
+  await mount(project, mode);
+  if (mode === "files") await answer("list_project_dir", dir(project));
+  else {
+    await answer("get_project_source", source(project));
+    await answer("list_project_changes", changes(project));
+  }
+  if (pending.some((request) => request.body.type === "list_project_dir")) await answer("list_project_dir", dir(project));
+  expect(pending).toHaveLength(0);
+  await publish("feature");
+  const types = pending.map((request) => request.body.type);
+  expect(types).toContain(mode === "files" ? "list_project_dir" : "get_project_source");
+  expect(types).not.toContain("sync_project_git");
+  expect(types).not.toContain("refresh_git_status");
 });

@@ -72,8 +72,8 @@ export type MenuPlacement = "list" | "focused" | "nested";
 /** The project's actions, opening its files first, in the project row and in a focus mode (the
  * project's own header, and a console session's project headings); `placement` says which.
  * Git is a submenu, offered only while the project is known to be a git repository
- * (`gitRepository`, from its git status): sync the repository, push the current branch, and
- * restore its tracked file changes after confirmation. */
+ * (`gitRepository`, from its git status): sync the repository, push the current branch, switch
+ * to a local branch through its own submenu, and restore tracked file changes after confirmation. */
 export function projectMenu(
   t: Translate,
   handlers: SidebarHandlers,
@@ -96,6 +96,7 @@ export function projectMenu(
           items: [
             { label: t("sidebar.project.syncGit"), icon: RefreshCw, onClick: () => handlers.onSyncProjectGit(project) },
             { label: t("sidebar.project.pushBranch"), icon: Upload, onClick: () => handlers.onPushProjectBranch(project) },
+            { label: t("sidebar.project.switchBranch"), icon: ArrowLeftRight, items: [], loadItems: () => handlers.onLoadProjectBranches(project) },
             "separator" as const,
             { label: t("sidebar.project.restoreChanges"), icon: Undo2, onClick: () => handlers.onOpenDialog({ kind: "restore-project-changes", project }), destructive: true },
           ],

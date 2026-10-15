@@ -97,7 +97,7 @@ again until its next check.
 ### What one check does
 
 - A directory that is not a git repository is reported as such, and the badge shows nothing for it. For this badge,
-  for **Sync repository** and for **Push current branch**, a directory is a git repository only when it has a `.git`
+  for the Git actions in its project menu, a directory is a git repository only when it has a `.git`
   entry of its own; a subdirectory of a repository is not one. The project pane's Git mode looks further up the
   folders (see "The repository and its worktrees" in `docs/product/project-pane-git-mode.md`); the badge does not.
   The project's recorded remote URL is cleared, unless the directory cannot be seen at all (see "The project's remote
@@ -171,7 +171,8 @@ on" below) — and the badge shows the fast-forward in flight. With it off, only
 Fast-forwarding a branch — with the switch on, or by Sync repository — moves that branch's working tree. Pushing
 the current branch does not: it updates the remote and, in the repository, the remote-tracking refs `git` updates
 for that push, and when the branch had no upstream it records one. It does not edit the project's files (see
-"Pushing the current branch" below). Restoring file changes discards tracked changes without moving the branch
+"Pushing the current branch" below). Switching to a local branch moves the project's own working tree
+(see "Switching the local branch" below). Restoring file changes discards tracked changes without moving the branch
 (see "Restoring file changes" below). A check's fetch still updates remote refs only and still does not move the
 working tree or push (see "What one check does" above). The guarantee these qualify is in "What Octoboard never
 modifies" in `docs/product/launching-agents.md`.
@@ -292,9 +293,37 @@ unless that re-read fails, in which case the warning becomes the re-read's messa
 stay as they were. A re-read that fails does not turn the notice into an error toast: the push was accepted.
 Turning **Automatically sync repositories** on never pushes.
 
+## Switching the local branch
+
+**Switch branch**, under **Git** in every placement of the project's action menu, opens a third-level menu of
+existing local branches. Remote-only branches are not offered. The list is read afresh when the submenu opens,
+in byte order of branch names, with the project's own worktree's current branch checked. Selecting that branch
+closes the menu without requesting a switch.
+
+While the list is being read, the submenu shows a loading state. No local branches produces an unavailable empty
+item. A failed read shows its reason and **Try again**, which reloads without closing the menu. At most 10,000
+branches, or as many as 2 MiB of encoded names hold, are listed; a truncated list carries an incomplete-list notice.
+
+Selecting another branch closes the menus and switches immediately, without confirmation. It changes the project's
+own worktree, including a linked worktree, regardless of which worktree the Git pane is reviewing. It never creates
+a branch, guesses a remote branch, fetches, pushes or syncs. It does not force the switch or stash or discard local
+changes: changes Git can carry safely stay, and a conflict, a branch checked out in another worktree, or another Git
+refusal fails with an error toast. Running agent sessions do not prevent a switch; the working tree can change
+underneath them. Other Git operations are not serialized with the switch.
+
+The directory must contain its own `.git` entry, as for the badge. A missing project is `unknown_project`, a
+directory that is not a repository under that rule is `not_a_git_repository`, and an invalid or vanished local
+branch or a Git failure is `git_switch_failed`, with the reason as `detail`. Each Git call uses the filtered,
+non-interactive environment described in "The environment a check runs `git` in" above and has at most two minutes.
+
+Success raises no toast. The local branch and upstream counts are read again for the badge in every window,
+without fetching; an earlier remote-check warning stays unless that read itself fails. A failed status re-read
+records its warning without turning a completed switch into a switch error. The project pane refreshes when the
+reported branch changes (see "Files and Git" in `docs/product/project-pane.md`).
+
 ## Restoring file changes
 
-**Restore file changes…**, under **Git** in every project's action-menu placement, follows Push current branch
+**Restore file changes…**, under **Git** in every project's action-menu placement, follows Switch branch
 after a separator (see "Project rows" in `docs/product/sidebar.md`). It opens a destructive confirmation dialog
 explaining that staged and unstaged tracked changes will be discarded, staged new files deleted, and untracked and
 ignored files kept, and that the discard cannot be undone. Cancelling makes no restore request. Confirming waits

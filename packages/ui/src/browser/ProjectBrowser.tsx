@@ -15,6 +15,7 @@ import { useStableHandler } from "../components/useLatest";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { AsidePane, type AsideLayout } from "../layout/AsidePane";
+import { useDaemonStore } from "../store";
 import type { Project } from "../protocol";
 import { FileViewer } from "../viewer/FileViewer";
 import { useProjectBrowserState, type BrowserMode } from "./browserState";
@@ -113,6 +114,17 @@ export function ProjectBrowser({
   };
 
   const refresh = () => (mode === "files" ? dirs.refreshAll() : git.refresh());
+
+  const branch = useDaemonStore((state) => {
+    const status = state.gitStatuses.get(project.id);
+    return status ? `${status.detached}:${status.branch ?? ""}` : undefined;
+  });
+  const refreshedBranch = useRef({ files: branch, git: branch });
+  useEffect(() => {
+    if (!active || refreshedBranch.current[mode] === branch) return;
+    refreshedBranch.current[mode] = branch;
+    refresh();
+  }, [active, branch, mode]);
 
   // The Refresh icon spins while a refresh the button started is out, and for at least
   // `MIN_SPIN_MS`. Only the button's own refreshes count: the periodic ones would keep it turning.

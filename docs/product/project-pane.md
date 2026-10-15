@@ -51,6 +51,10 @@ sent have been answered or have failed, or the connection drops; a folder that d
 because a read from disk has no deadline. The periodic refreshes do not turn it, and the icon stays still under the
 system's Reduce motion setting.
 
+When the project's reported branch or detached state changes, the visible mode is refreshed immediately. A mode
+that was hidden catches up when shown, without waiting for the five-second freshness threshold. This includes a
+successful project-menu branch switch (see "Switching the local branch" in `docs/product/project-git-status.md`).
+
 "The file tree", "The selected file" and "Keeping the tree up to date" below are about the Files mode.
 
 ## The file tree

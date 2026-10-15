@@ -1,5 +1,6 @@
 import { type Ui } from "../interact";
 import type { Scenario } from "../scenario";
+import type { FixtureGit } from "./changeFixtures";
 import { consoleOf, gitStatusOf, projectOf, sessionOf, snapshotState } from "./builders";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./restore";
 
@@ -113,6 +114,27 @@ const restoreState = snapshotState({ consoles: [console_], projects: [restorePro
 const restoreFixture = { state: restoreState, git: RESTORE_GIT, files: RESTORE_FILES };
 const openRestore = [...openGitSubmenu(restoreProject.name), (ui: Ui) => ui.press(ui.t("sidebar.project.restoreChanges"))];
 
+const switchBranch = "feature/search-ranking";
+const switchGit: FixtureGit = {
+  ...RESTORE_GIT,
+  branches: [
+    { name: "feature/a-long-local-branch-name-to-check-menu-width-and-overflow", commit: "def123456789" },
+    { name: switchBranch, commit: RESTORE_GIT.worktrees[0].head! },
+    { name: "main", commit: RESTORE_GIT.worktrees[0].head! },
+    { name: "機能/日本語ブランチ", commit: "fed123456789" },
+  ],
+};
+const switchFixture = {
+  ...restoreFixture,
+  git: switchGit,
+  projectBranchSwitches: { [restoreProject.id]: { [switchBranch]: {
+    git: { ...switchGit, worktrees: switchGit.worktrees.map((worktree) => ({ ...worktree, branch: switchBranch })) },
+    files: RESTORE_FILES,
+    status: gitStatusOf(restoreProject.id, { branch: switchBranch, upstream: null }),
+  } } },
+};
+const openSwitch = [...openGitSubmenu(restoreProject.name), (ui: Ui) => ui.press(ui.t("sidebar.project.switchBranch")), (ui: Ui) => ui.wait(300)];
+
 export const gitScenarios: Scenario[] = [
   {
     id: "git-badges-errors", group: GROUP, category: "exceptional",
@@ -136,6 +158,43 @@ export const gitScenarios: Scenario[] = [
     ...restoreFixture,
     projectRestores: { [restoreProject.id]: RESTORED_PROJECT },
     steps: openGitSubmenu(restoreProject.name),
+  },
+  {
+    id: "git-switch-branch", group: "Projects", category: "normal",
+    title: "Local branch menu",
+    description: "The third menu lists local branches and checks the current one. Long Latin and Japanese branch names remain readable. Selecting feature/search-ranking switches immediately.",
+    ...switchFixture,
+    steps: openSwitch,
+  },
+  {
+    id: "git-switch-branch-empty", group: "Projects", category: "normal",
+    title: "No local branches",
+    ...restoreFixture, git: { ...RESTORE_GIT, branches: [], worktrees: RESTORE_GIT.worktrees.map((worktree) => ({ ...worktree, head: null, branch: null })) },
+    state: snapshotState({ consoles: [console_], projects: [restoreProject], gitStatuses: [gitStatusOf(restoreProject.id, { branch: null, upstream: null })] }),
+    steps: openSwitch,
+  },
+  {
+    id: "git-switch-branch-loading", group: "Projects", category: "normal",
+    title: "Loading local branches",
+    ...switchFixture,
+    projectBranches: { [restoreProject.id]: "pending" },
+    steps: openSwitch,
+  },
+  {
+    id: "git-switch-branch-list-error", group: "Projects", category: "exceptional",
+    title: "Local branches could not be read",
+    description: "The third menu shows the listing error and a retry action.",
+    ...switchFixture,
+    projectBranches: { [restoreProject.id]: { code: "git_failed", params: { detail: "fatal: unable to read refs/heads" }, message: "Unable to list local branches" } },
+    steps: openSwitch,
+  },
+  {
+    id: "git-switch-branch-error", group: "Projects", category: "exceptional",
+    title: "Branch switch failed",
+    description: "A refused switch reports Git's reason in an error toast. The branch badge stays on main.",
+    ...switchFixture,
+    projectBranchSwitches: { [restoreProject.id]: { [switchBranch]: { code: "git_switch_failed", params: { detail: "error: Your local changes to README.md would be overwritten by checkout. Please commit your changes or stash them before you switch branches." }, message: "Git switch failed" } } },
+    steps: [...openSwitch, (ui) => ui.press(switchBranch), (ui) => ui.wait(300)],
   },
   {
     id: "git-restore-confirm",

@@ -803,6 +803,8 @@ export type RequestBody =
   /** Pushes the project's current branch and only that branch. Answered with `ack` once `git push`
    * has exited; a success is followed by `project_git_status` from a local re-read. */
   | { type: "push_project_branch"; project: string }
+  /** Switches to an existing local branch named in canonical wire form; never fetches or syncs. */
+  | { type: "switch_project_branch"; project: string; branch: string }
   /** Restores staged and unstaged tracked changes to HEAD in the project worktree, preserving
    * untracked and ignored files. Answered with `ack` after the restore finishes. */
   | { type: "restore_project_changes"; project: string }

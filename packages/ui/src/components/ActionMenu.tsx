@@ -1,7 +1,9 @@
 import { Dropdown, Label, Separator } from "@heroui/react";
-import { EllipsisVertical, type LucideIcon } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
+import { EllipsisVertical, LoaderCircle, RefreshCw, TriangleAlert, type LucideIcon } from "lucide-react";
+import React, { useEffect, useId, useRef, useState } from "react";
 
+import { isolate } from "../i18n/isolate";
+import { StatusAnnouncer } from "./StatusAnnouncer";
 import { useT } from "../i18n/react";
 import { FadeOverflow } from "./FadeOverflow";
 import { TitledControl } from "./TitledControl";
@@ -43,6 +45,7 @@ export interface ActionMenuItem {
   iconClassName?: string;
   onClick: () => void;
   destructive?: boolean;
+  closeOnSelect?: boolean;
   disabled?: boolean;
   /** The accessible name when it should say more than `label` (a console and what is going on in it). */
   ariaLabel?: string;
@@ -57,7 +60,9 @@ export interface ActionMenuItem {
 export interface ActionMenuSubmenu {
   label: string;
   icon: LucideIcon | React.ReactElement;
-  items: (ActionMenuItem | "separator")[];
+  items: ActionMenuEntry[];
+  /** Loads fresh items when this submenu opens. */
+  loadItems?: () => Promise<ActionMenuEntry[]>;
 }
 
 export type ActionMenuEntry = ActionMenuItem | ActionMenuSubmenu | "separator";
@@ -83,21 +88,25 @@ function isChoice(entry: ActionMenuEntry): entry is ActionMenuItem {
 }
 
 function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElement {
-  // Items are keyed by position: two entries may share a label (two sessions of one title).
+  const prefix = useId();
+  const itemId = (index: number) => `${prefix}:${index}`;
+  // Each menu owns its keys, including actions bubbling from a deeper submenu.
   const run = (key: React.Key) => {
-    const entry = entries[Number(key)];
+    if (typeof key !== "string" || !key.startsWith(`${prefix}:`)) return;
+    const entry = entries[Number(key.slice(prefix.length + 1))];
     if (entry && entry !== "separator" && !("items" in entry)) entry.onClick();
   };
 
   const renderItem = (entry: ActionMenuItem, index: number) => (
     <Dropdown.Item
       key={index}
-      id={String(index)}
+      id={itemId(index)}
       textValue={entry.label}
       data-marquee-scope
       aria-label={entry.ariaLabel}
       variant={entry.destructive ? "danger" : "default"}
       isDisabled={entry.disabled}
+      shouldCloseOnSelect={entry.closeOnSelect}
     >
       <ItemIcon icon={entry.icon} destructive={entry.destructive} className={entry.iconClassName} />
       {/* A label is often a name the user typed, so it reads in its own direction; `content` sets
@@ -124,7 +133,7 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
         <Dropdown.Section
           key={group[0]}
           selectionMode="single"
-          selectedKeys={group.filter((i) => (entries[i] as ActionMenuItem).selected).map(String)}
+          selectedKeys={group.filter((i) => (entries[i] as ActionMenuItem).selected).map(itemId)}
         >
           {group.map((i) => renderItem(entries[i] as ActionMenuItem, i))}
         </Dropdown.Section>,
@@ -134,7 +143,7 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
     } else if ("items" in entry) {
       nodes.push(
         <Dropdown.SubmenuTrigger key={index}>
-          <Dropdown.Item id={String(index)} textValue={entry.label} data-marquee-scope>
+          <Dropdown.Item id={itemId(index)} textValue={entry.label} data-marquee-scope>
             <ItemIcon icon={entry.icon} />
             <Label className="min-w-0 flex-1 text-clip">
               <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>
@@ -146,7 +155,7 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
           </Dropdown.Item>
           {/* The submenu's menu is named after its trigger item, so its dialog goes without. */}
           <Dropdown.Popover aria-labelledby="" className="max-w-72">
-            <MenuItems entries={entry.items} />
+            {entry.loadItems ? <LoadedMenuItems load={entry.loadItems} /> : <MenuItems entries={entry.items} />}
           </Dropdown.Popover>
         </Dropdown.SubmenuTrigger>,
       );
@@ -155,6 +164,33 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
     }
   }
   return <Dropdown.Menu onAction={run}>{nodes}</Dropdown.Menu>;
+}
+
+function LoadedMenuItems({ load }: { load: () => Promise<ActionMenuEntry[]> }): React.ReactElement {
+  const t = useT();
+  const [entries, setEntries] = useState<ActionMenuEntry[]>();
+  const [error, setError] = useState<string>();
+  const sequence = useRef(0);
+  const refresh = () => {
+    const asked = ++sequence.current;
+    setEntries(undefined);
+    setError(undefined);
+    load().then(
+      (items) => { if (asked === sequence.current) setEntries(items); },
+      (err: unknown) => { if (asked === sequence.current) setError((err as Error).message); },
+    );
+  };
+  useEffect(() => {
+    refresh();
+    return () => { sequence.current += 1; };
+  }, []);
+  return <>
+    <StatusAnnouncer text={entries ? undefined : error ? t("menu.loadFailed", { detail: isolate(error) }) : t("menu.loading")} />
+    <MenuItems entries={entries ?? (error ? [
+      { label: t("menu.loadFailed", { detail: isolate(error) }), icon: TriangleAlert, disabled: true, onClick: () => {} },
+      { label: t("error.tryAgain"), icon: RefreshCw, closeOnSelect: false, onClick: refresh },
+    ] : [{ label: t("menu.loading"), icon: LoaderCircle, disabled: true, onClick: () => {} }])} />
+  </>;
 }
 
 export function ActionMenu({

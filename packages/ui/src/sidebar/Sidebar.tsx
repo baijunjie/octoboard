@@ -109,6 +109,7 @@ export function Sidebar({
   onCopyProjectName,
   onSyncProjectGit,
   onPushProjectBranch,
+  onLoadProjectBranches,
   onSetPinned,
   onOpenSettings,
 }: SidebarProps): React.ReactElement {
@@ -129,6 +130,7 @@ export function Sidebar({
     onCopyProjectName,
     onSyncProjectGit,
     onPushProjectBranch,
+    onLoadProjectBranches,
     onSetPinned,
     onOpenSettings,
   } satisfies Record<keyof SidebarHandlers, unknown>;

@@ -20,6 +20,7 @@ mod git_push;
 mod git_remote;
 mod git_restore;
 mod git_status;
+mod git_switch;
 mod hook_mode;
 mod hooks;
 mod hostfs;

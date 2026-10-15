@@ -1,3 +1,4 @@
+import type { ActionMenuEntry } from "../components/ActionMenu";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Console, Project, Session } from "../protocol";
 import type { SettingsSectionId } from "../settings/SettingsDialog";
@@ -44,6 +45,8 @@ export interface SidebarHandlers {
   /** Checks the project against its remote and fast-forwards it now, whatever the automatic sync
    * setting says. */
   onSyncProjectGit: (project: Project) => void;
+  /** Loads the local branch choices for this project's Switch branch submenu. */
+  onLoadProjectBranches: (project: Project) => Promise<ActionMenuEntry[]>;
   /** Pushes the project's current branch. */
   onPushProjectBranch: (project: Project) => void;
   onSetPinned: (target: { project: Project } | { session: Session }, pinned: boolean) => void;

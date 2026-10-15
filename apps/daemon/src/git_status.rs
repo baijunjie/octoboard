@@ -394,13 +394,19 @@ enum GitAccess {
 
 /// Runs `git` with `args` in `path` and returns its stdout as UTF-8, reading the repository and
 /// nothing more.
-pub(crate) fn run_git_read(path: &Path, args: &[&str]) -> Result<String, String> {
+pub(crate) fn run_git_read(
+    path: &Path,
+    args: &[impl AsRef<std::ffi::OsStr>],
+) -> Result<String, String> {
     run_git_access(path, args, GitAccess::Read)
 }
 
 /// Runs `git` with `args` in `path` and discards its stdout, for a step that writes to the
 /// repository: a fetch, a fast-forward, or a push.
-pub(crate) fn run_git_write(path: &Path, args: &[&str]) -> Result<(), String> {
+pub(crate) fn run_git_write(
+    path: &Path,
+    args: &[impl AsRef<std::ffi::OsStr>],
+) -> Result<(), String> {
     run_git_access(path, args, GitAccess::Write).map(|_| ())
 }
 
@@ -409,7 +415,11 @@ pub(crate) fn run_git_write(path: &Path, args: &[&str]) -> Result<(), String> {
 /// operating-system message of a failure to even start it, or a timeout past
 /// `GIT_COMMAND_TIMEOUT` — `GitStatus` carries it as is, untranslated, whichever of the two
 /// wrappers produced it.
-fn run_git_access(path: &Path, args: &[&str], access: GitAccess) -> Result<String, String> {
+fn run_git_access(
+    path: &Path,
+    args: &[impl AsRef<std::ffi::OsStr>],
+    access: GitAccess,
+) -> Result<String, String> {
     let env = env_shell::cached_snapshot().map_err(|err| format!("{err:#}"))?;
     let git = env_shell::resolve_binary("git", &env).map_err(|err| format!("{err:#}"))?;
     run_git_command(&mut git_command(Path::new(&git), &env, path, args, access))
@@ -422,7 +432,7 @@ fn git_command(
     git: &Path,
     env: &HashMap<String, String>,
     path: &Path,
-    args: &[&str],
+    args: &[impl AsRef<std::ffi::OsStr>],
     access: GitAccess,
 ) -> std::process::Command {
     // `git` runs with the user's shell environment, the same one agents are launched with, rather

@@ -110,11 +110,26 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
   return {
     store,
     request: async (body): Promise<Event> => {
+      if (body.type === "list_project_branches") {
+        const result = scenario.projectBranches?.[body.project];
+        if (result === "pending") return new Promise<Event>(() => {});
+        if (result) return fail(result);
+      }
       const fromGit = ("project" in body && typeof body.project === "string" ? restoredGit.get(body.project) ?? gitReply : gitReply)(body);
       if (fromGit !== undefined) return fromGit;
       const fromConfiguration = configurationReply(body);
       if (fromConfiguration !== undefined) return fromConfiguration;
       switch (body.type) {
+        case "switch_project_branch": {
+          if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
+          const result = scenario.projectBranchSwitches?.[body.project]?.[body.branch];
+          if (!result) return refuseUnfillable(`switch_project_branch (${body.project}, ${body.branch}): no post-switch repository, files and badge supplied`);
+          if ("code" in result) return fail(result);
+          restoredFiles.set(body.project, result.files);
+          restoredGit.set(body.project, createGitReplies(result.git, fail));
+          store.setState((state) => ({ gitStatuses: new Map(state.gitStatuses).set(body.project, result.status) }));
+          return { type: "ack" };
+        }
         case "restore_project_changes": {
           if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
           const result = scenario.projectRestores?.[body.project];
