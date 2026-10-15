@@ -160,3 +160,10 @@ from a `requestAnimationFrame` nested in a `requestAnimationFrame`, guarded on f
 that a Tab or a press in between stands, the way `packages/ui/src/browser/focusRow.ts` does it. The library's pull
 runs only while the collection itself holds focus, so a control outside the list, such as a filter field above it,
 needs none of this.
+
+## The platform's shortcut modifier comes from `isPrimaryModifier`, never a check of your own
+
+Any Cmd-on-Apple / Ctrl-elsewhere test in `packages/ui` — a key shortcut or a modifier+click alike — goes through
+`isPrimaryModifier` (and, for showing the key, `IS_MAC`) from `packages/ui/src/useWindowShortcut.ts`. Do not derive
+the platform again (from `navigator.userAgent` or anything else) and do not accept `metaKey || ctrlKey`: the helper
+also requires the *other* modifier to be up, so every shortcut and click in the window agrees on which key it is.

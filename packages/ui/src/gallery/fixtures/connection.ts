@@ -81,6 +81,15 @@ export const connectionScenarios: Scenario[] = [
     ],
   },
   {
+    id: "terminal-link-tooltip",
+    group: TERMINAL,
+    category: "normal",
+    title: "Hovering a terminal hyperlink",
+    description: "The pointer is on the \"layout notes\" hyperlink in the output: a tooltip over it names the link's real address, which its text does not say; the address reads left to right in Arabic too.",
+    state: connected("open"),
+    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(400), (ui) => ui.hoverTerminalLink("layout notes")],
+  },
+  {
     id: "terminal-reconnecting",
     group: TERMINAL,
     category: "exceptional",

@@ -67,8 +67,8 @@ Once it holds more than it can show, each of these fades at its edge:
 
 Two kinds of scrolling show no fade:
 
-- **What scrolls as a document of its own**: the terminal's scrollback (see "The terminal" in
-  `docs/product/sessions.md`) and a report page, which the console session's model wrote (see
+- **What scrolls as a document of its own**: the terminal's scrollback (see "Output, scrollback and size" in
+  `docs/product/session-terminal.md`) and a report page, which the console session's model wrote (see
   `docs/product/report-panel.md`).
 - **A menu's or a selector's own list of choices** — an action menu, the worktree selector, the account and option
   selects — which scrolls with its scrollbar alone. The Compare view's branch selectors are the exception: the list

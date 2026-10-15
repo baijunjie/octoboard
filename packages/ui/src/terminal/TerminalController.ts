@@ -1,6 +1,8 @@
 import { FitAddon } from "@xterm/addon-fit";
-import { Terminal } from "@xterm/xterm";
+import { WebLinksAddon } from "@xterm/addon-web-links";
+import { type IBufferRange, Terminal } from "@xterm/xterm";
 
+import { type HoveredTerminalLink, linkBox, terminalLinkHandler } from "./terminalLinks";
 import { XTERM_THEMES } from "./xtermThemes";
 
 /** Shift, Ctrl, Alt: the keys xterm itself treats as modifier-only. */
@@ -87,6 +89,13 @@ export interface TerminalControllerHandlers {
    * whether the session was started. When it was not, the held input is dropped and the next
    * input asks again. */
   onWake?: (sessionId: string) => Promise<boolean>;
+  /** Opens a web address the user Cmd/Ctrl+clicked in the output, in their own browser; absent
+   * where the platform has no way to, which leaves the links inert. */
+  openLink?: (url: string) => Promise<void>;
+  /** The OSC 8 hyperlink the pointer is on, whose visible text may differ from its target, or
+   * `undefined` once it is no longer on one. Plain-text addresses are not reported: their text is
+   * their target. */
+  onLinkHover?: (link: HoveredTerminalLink | undefined) => void;
 }
 
 /**
@@ -111,6 +120,8 @@ export class TerminalController {
   private handlers: TerminalControllerHandlers;
 
   private container?: HTMLElement;
+  /** The buffer line on the first row when the hovered OSC 8 link was reported. */
+  private hoveredViewportY = 0;
   /** False until a frame has passed since `open()`; see `mount`. */
   private touchable = false;
   private openFrame?: number;
@@ -146,6 +157,7 @@ export class TerminalController {
 
   constructor(handlers: TerminalControllerHandlers, initialColorTheme: "light" | "dark") {
     this.handlers = handlers;
+    const onLinkClick = terminalLinkHandler(handlers.openLink);
     this.term = new Terminal({
       scrollback: 10000,
       // A monospace stack with CJK coverage: these agents render box-drawing TUIs and sometimes
@@ -162,9 +174,24 @@ export class TerminalController {
       // An Option+click sends cursor-move arrow keys marked as the user's input, which would
       // reopen a dormant session; it is only on from `attach` until `detach`.
       altClickMovesCursor: false,
+      // Leaving `allowNonHttpProtocols` unset is what keeps an OSC 8 link to any other scheme
+      // (`file:`, a custom app scheme) from being offered at all. A handler of our own also replaces
+      // xterm's default, which asks with `confirm()` before opening; the target tooltip stands in.
+      linkHandler: {
+        activate: onLinkClick,
+        hover: (_event, uri, range) => this.hoverLink(uri, range),
+        leave: () => this.handlers.onLinkHover?.(undefined),
+      },
     });
     this.fitAddon = new FitAddon();
     this.term.loadAddon(this.fitAddon);
+    this.term.loadAddon(new WebLinksAddon(onLinkClick));
+    // The tooltip is placed against the viewport, so a scroll under the pointer leaves it behind.
+    // xterm reports every line feed that scrolls the buffer, even while the view stays put under a
+    // streaming output, so only a view that has actually moved counts.
+    this.term.onScroll(() => {
+      if (this.term.buffer.active.viewportY !== this.hoveredViewportY) this.handlers.onLinkHover?.(undefined);
+    });
 
     const keepModifiersFromArming = keepModifiersFromArmingKeyDownSeen(this.term);
 
@@ -222,6 +249,16 @@ export class TerminalController {
     this.term.onBinary((data) =>
       this.sendInput(Uint8Array.from(data, (c) => c.charCodeAt(0) & 0xff), false),
     );
+  }
+
+  /** Reports the OSC 8 link the pointer has come onto, placed from the screen's cell grid. */
+  private hoverLink(uri: string, range: IBufferRange): void {
+    const screen = this.term.element?.querySelector(".xterm-screen")?.getBoundingClientRect();
+    if (!screen) return;
+    const { cols, rows } = this.term;
+    const viewportY = this.term.buffer.active.viewportY;
+    this.hoveredViewportY = viewportY;
+    this.handlers.onLinkHover?.(linkBox(uri, range, { cols, rows, viewportY, screen }));
   }
 
   mount(container: HTMLElement): void {
@@ -454,7 +491,9 @@ export class TerminalController {
     this.savedWritesInFlight++;
     this.term.write("", () => {
       this.savedWritesInFlight--;
-      if (!this.disposed) this.term.reset();
+      if (this.disposed) return;
+      this.term.reset();
+      this.handlers.onLinkHover?.(undefined);
     });
   }
 

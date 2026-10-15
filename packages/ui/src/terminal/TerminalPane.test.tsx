@@ -56,6 +56,7 @@ vi.mock("../store", () => ({
   useDaemon: () => daemon,
   useDaemonStore: (select: (state: typeof store) => unknown) => select(store),
 }));
+vi.mock("../platform/react", () => ({ usePlatform: () => ({}) }));
 vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
 
 const roots: Root[] = [];

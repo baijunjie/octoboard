@@ -116,7 +116,7 @@ Below it, a **Projects** heading and the console's projects (see "Order of proje
 project, an empty row saying the console has none yet takes their place; the whole row is a button opening the
 new-project dialog, as the console's **Add project** does (see "The console header" above and "Empty rows" below). The
 terminal's area chooses its own next action from the console's console sessions and projects (see "A console with
-nothing in it" in `docs/product/sessions.md`).
+nothing in it" in `docs/product/session-terminal.md`).
 
 The Projects heading appends the number of projects listed in parentheses, including inactive and collapsed projects.
 The count follows the current project filter and shows zero when the console has no projects or none match.
@@ -201,7 +201,7 @@ The rows with nothing to do about them are not buttons and carry no tooltip: the
 filter (see "Filtering the project list" above) and the one saying no agent was found on the user's `PATH` (see "The
 console sessions section and the project list" above). Focus mode's empty lists use the same compact rows (see "What
 both views show" in `docs/product/focus-mode.md`). The terminal's empty state is a full panel carrying the next action
-for the current scope (see "The terminal" in `docs/product/sessions.md`).
+for the current scope (see "A console with nothing in it" in `docs/product/session-terminal.md`).
 
 ## Project rows
 
@@ -449,7 +449,8 @@ Selecting a session shows its terminal; selecting an interrupted one resumes it,
 `Ctrl+Shift+Tab` in a console session's focus mode, which only shows an interrupted console session (see "The switch
 strip" in `docs/product/focus-mode.md`). Selecting an archived one does not reopen it: it is shown still archived,
 with its saved terminal preview read-only, and typing into its terminal or pressing Reopen reopens it
-(see "Archiving, interruption and resuming" and "The terminal" in `docs/product/sessions.md`). Selecting a session also
+(see "Archiving, interruption and resuming" in `docs/product/sessions.md` and "Interrupted, archived and dormant
+sessions" in `docs/product/session-terminal.md`). Selecting a session also
 puts its own pane in the window's right pane: a console session's report panel, a project session's project pane (see
 "What the right pane shows" in `docs/product/window-layout.md`). Whatever it is selected from — a sidebar row, a "View
 archive" or "Archived console sessions" submenu, focus mode and its switch strip, the archive view, the rail's waiting
@@ -465,7 +466,7 @@ daemon opened, is listed unselected and is put on screen by the user selecting i
 
 When the selected session stops existing — deleted from the archive, by this client or another, for instance — nothing
 is selected in its place, and the terminal's area shows its empty state: the panel asking for a session to be selected,
-or the next creation action for the current scope (see "The terminal" in `docs/product/sessions.md`). The one exception is the session going with the last console: there is then no terminal at all, and the content panel shows
+or the next creation action for the current scope (see "With no session selected" in `docs/product/session-terminal.md`). The one exception is the session going with the last console: there is then no terminal at all, and the content panel shows
 the welcome screen (see `docs/product/welcome-screen.md`).
 
 ## How the sidebar's view changes

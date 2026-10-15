@@ -109,8 +109,8 @@ It runs, left to right:
 - The selected session's **breadcrumb** — *console › project › session title* for a project session, *console › session
   title* for a console session, which belongs to no project — followed by the session's status icon. The session
   title follows "Displayed names" in `docs/product/session-titles.md`. Nothing in the
-  bar reports the session's terminal connection; the terminal itself does (see "The terminal" in
-  `docs/product/sessions.md`). At 1148 px and wider, while the sidebar is shown, the breadcrumb starts where the
+  bar reports the session's terminal connection; the terminal itself does (see "Reconnecting" in
+  `docs/product/session-terminal.md`). At 1148 px and wider, while the sidebar is shown, the breadcrumb starts where the
   terminal's area does, over the sidebar's inner edge, and follows that edge while the sidebar is resized and while the docked column eases open
   or closed (see "Hiding the sidebar and the right pane" below). The start of the bar never becomes narrower than the
   buttons there — in the macOS application, that includes the clear space kept for the window buttons. Once the column no longer
@@ -259,7 +259,8 @@ right pane" below). While either docked column is easing closed, it still takes 
 nothing owning the right pane there is no right pane in the row either.
 
 Anything that changes the terminal's size — resizing the window, resizing a pane, hiding or showing a pane, the right
-pane coming or going with its owner — resizes the agent's terminal (see "The terminal" in `docs/product/sessions.md`).
+pane coming or going with its owner — resizes the agent's terminal (see "Output, scrollback and size" in
+`docs/product/session-terminal.md`).
 
 ### Resizing the sidebar and the right pane
 

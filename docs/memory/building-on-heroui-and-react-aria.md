@@ -168,4 +168,6 @@ Only a control's tooltip opens on keyboard focus, so neither of the other two sh
 it says. An `IndicatorTooltip`'s own `label` is that route where the mark means something on its own. An
 `AnchoredTooltip` adds no element at all and is not linked to what it belongs to for assistive technology either, so
 its text has to reach a screen reader some other way — the text itself, which is in the document whether or not it is
-clipped, or the name of the row it sits in. Do not reach for that shape where no such route exists.
+clipped, or the name of the row it sits in. Do not reach for that shape where no such route exists; the only exception
+is where nothing around the text reaches assistive technology either, kept so far for one case only, in the "A tooltip
+is the application's own, never the browser's `title`" section of `docs/ui-accessibility.md`.

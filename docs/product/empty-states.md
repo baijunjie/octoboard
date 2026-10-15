@@ -36,7 +36,8 @@ Text too long for the panel's width wraps; nothing is cut.
 
 Pressing the button with the mouse never takes keyboard focus of itself: whatever the action opens or starts is what
 places focus. Where a region decides keyboard focus or its place in the `F6` cycle by whether the panel it holds has a
-button to put focus on, that is said where the region is described (see "The terminal" in `docs/product/sessions.md`).
+button to put focus on, that is said where the region is described (see "With no session selected" and "A
+console with nothing in it" in `docs/product/session-terminal.md`).
 
 ## The compact row
 

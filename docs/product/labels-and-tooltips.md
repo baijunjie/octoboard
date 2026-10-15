@@ -18,7 +18,8 @@ carries it — a control, an indicator or a label too long for its space:
   scrolled. It takes no pointer input of its own, so a press lands on whatever is under it.
 - A tooltip on clipped text or a change row's status letter closes on any pointer press or key press in the window,
   even while waiting to open. It stays closed until the pointer leaves and returns, including when the press opens
-  a dialog without moving the pointer.
+  a dialog without moving the pointer. The tooltip showing an OSC 8 hyperlink's target in a session's terminal also
+  closes on any pointer press or key press (see "Links in the output" in `docs/product/session-terminal.md`).
 - Text too long for the tooltip's width **wraps at word boundaries**. A single run with no boundary in it — a path, a
   long branch name — is broken within rather than widening the tooltip. A script written without spaces wraps between
   its characters, which is its word boundary.

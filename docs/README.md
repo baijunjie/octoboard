@@ -27,8 +27,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   glyphs and their transitions, the raised hand and its notification, how a declined Claude Code prompt lowers the
   hand from the agent's own transcript and what that costs to keep working, archiving, interruption and resuming,
   switching a session to another account of its agent, how a console session's archive, reopen and delete follow the
-  sessions bound to it, where archived sessions are kept, and the terminal, including what its area offers in place of
-  asking for a session to be selected while the console has nothing in it.
+  sessions bound to it, and where archived sessions are kept.
+- [Session terminal](product/session-terminal.md) — the selected session's terminal: what its area shows with no
+  session selected, typing and the mouse, output, scrollback and resizing, the reconnect and loading covers,
+  interrupted, archived and dormant sessions and the saved preview, links in the output (Cmd/Ctrl+click, the OSC 8
+  target tooltip), and the creation offer while a console has nothing in it.
 - [Session titles](product/session-titles.md) — agent terminal titles alongside created session names: where they
   are displayed, what renaming edits, how titles are retained, and the accepted terminal sequences.
 - [Sidebar](product/sidebar.md) — one console at a time, picked on the rail's console switcher with each console's

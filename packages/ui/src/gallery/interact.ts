@@ -170,6 +170,11 @@ export interface Ui {
    * `status` that is not the one on screen. A badge that says "No commits yet" in visible text has
    * no tooltip, and fails here rather than hover the activity marker beside it. */
   hoverGitBadge: (status: GitStatus, over: "glyph" | "line", row?: Matcher) => Promise<void>;
+  /** Moves the pointer onto the terminal's text `text` (a run of one terminal row, as the fake terminal
+   * draws it, not copy) and leaves it there, for the tooltip an OSC 8 hyperlink there puts up with
+   * its real target. Fails if no tooltip opens, which is also what a run of text that is not a
+   * hyperlink gives. */
+  hoverTerminalLink: (text: string) => Promise<void>;
   /** Moves focus onto the first control named `matcher`, waiting for it to appear, with the keyboard
    * as its source, so that the focus ring is drawn as it is for a user who tabbed there, and a key
    * pressed next goes to it: for a row of a list, which a press would open rather than focus. */
@@ -425,6 +430,36 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       if (!shown || withoutIsolates(shown).trim() !== nameOf(control)) {
         throw new Error(`The control matching ${String(matcher)} has no tooltip of its name: its last tooltip is ${shown ? `"${shown}"` : "none"}`);
       }
+    },
+    async hoverTerminalLink(text) {
+      // xterm's own DOM renderer draws one element per row, its text in one or more spans (a space
+      // as a no-break space), and finds the link under the pointer from the coordinates of a
+      // `mousemove` alone.
+      const range = await waitFor(() => {
+        for (const row of doc.querySelectorAll(".xterm-rows > div")) {
+          const start = (row.textContent ?? "").replaceAll("\u00a0", " ").indexOf(text);
+          if (start < 0) continue;
+          const found = doc.createRange();
+          let offset = 0;
+          const nodes = doc.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+          for (let node = nodes.nextNode(); node; node = nodes.nextNode()) {
+            const length = node.textContent?.length ?? 0;
+            if (start >= offset && start < offset + length) found.setStart(node, start - offset);
+            if (start + text.length > offset && start + text.length <= offset + length) {
+              found.setEnd(node, start + text.length - offset);
+              return found;
+            }
+            offset += length;
+          }
+        }
+        return undefined;
+      }, `No terminal row holds ${text}`);
+      const box = range.getBoundingClientRect();
+      range.startContainer.parentElement?.dispatchEvent(
+        new MouseEvent("mousemove", { bubbles: true, clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 }),
+      );
+      await wait(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
+      if (!doc.querySelector("[data-anchored-tooltip]")) throw new Error(`Hovering ${text} in the terminal opened no tooltip: it is not a hyperlink`);
     },
     async hoverChangeStatus(row, status) {
       await hover(() => find(row)?.querySelector<HTMLElement>("[data-slot=chip]"), `No change row matching ${String(row)} with a status letter to hover`);

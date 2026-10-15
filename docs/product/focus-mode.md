@@ -161,8 +161,8 @@ tabs.
 - Where it works, the keys never reach the terminal, so the agent never receives them. It does nothing while a dialog
   or a menu is open, and is left alone during an input-method composition. A key held down moves one chip only.
 - It enters the next console session's focus mode and selects it, like pressing its chip, except that **it does not
-  resume an interrupted console session**: it only shows it, with its "Not running" card (see "The terminal" in
-  `docs/product/sessions.md`), so stepping through the chips never starts a process.
+  resume an interrupted console session**: it only shows it, with its "Not running" card (see "Interrupted, archived and
+  dormant sessions" in `docs/product/session-terminal.md`), so stepping through the chips never starts a process.
 - Wherever keyboard focus was, it goes to the terminal of the console session moved to, an interrupted one's
   included.
 - Pressed while focus is inside a report page it is passed to the window (see "Window shortcuts inside a page" in

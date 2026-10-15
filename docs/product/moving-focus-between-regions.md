@@ -29,7 +29,7 @@ It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` s
 is only floating in, the right pane when nothing owns it or it has nothing to take focus (a report panel before its
 pages have arrived or with no pages yet, a project pane while it is still loading, see "Loading the project pane" in
 `docs/product/project-pane.md`), and the terminal when no session is selected — unless its area is then offering a creation
-action, which makes it a stop (see "A console with nothing in it" in `docs/product/sessions.md`) — or while the
+action, which makes it a stop (see "A console with nothing in it" in `docs/product/session-terminal.md`) — or while the
 archive view covers it.
 With no console the sidebar, the archive view, the terminal and the right pane are all skipped together, none of them
 being on screen, and the welcome screen is the only stop between the rail and the connection banner; with a console
@@ -46,7 +46,7 @@ Where focus lands in each region:
 | Welcome screen | its New console button |
 | Sidebar | the selected session's row, or the sidebar's first control when that row is not on screen |
 | Archive view | its first control |
-| Terminal | the terminal, so typing reaches the agent; instead the button its area offers in the terminal's place while there is one — its cover's Reconnect, or its empty state's Add project, New session or New console session (see "The terminal" and "A console with nothing in it" in `docs/product/sessions.md`) |
+| Terminal | the terminal, so typing reaches the agent; instead the button its area offers in the terminal's place while there is one — its cover's Reconnect, or its empty state's Add project, New session or New console session (see "Reconnecting" and "A console with nothing in it" in `docs/product/session-terminal.md`) |
 | Right pane, showing a report panel | the pager's first enabled button, else the report page itself |
 | Right pane, showing a project pane | its header's tab for the mode shown (Files or Git), from which Tab goes on to Refresh and then to the file tree, or in Git to the tab of the view shown (Uncommitted or Compare); Try again while the pane failed to load |
 | Connection banner | its Retry button; it has none while the banner only says it is reconnecting, and F6 then skips it |
@@ -55,7 +55,7 @@ Where focus lands in each region:
 Pressing Retry from the keyboard works as with the mouse. If Retry holds focus when it goes away — because a retry
 begins or the banner disappears — focus returns to an open modal dialog: to the control it left while that control is
 still available in the dialog, otherwise to the dialog itself. With no modal dialog open, focus goes to the terminal
-— or, where the terminal cannot take it, where it goes instead (see "The terminal" in `docs/product/sessions.md` and
+— or, where the terminal cannot take it, where it goes instead (see "With no session selected" in `docs/product/session-terminal.md` and
 "Keyboard focus" in `docs/product/welcome-screen.md`). Pressing Retry with the mouse leaves keyboard focus where it
 was.
 

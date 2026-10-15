@@ -15,6 +15,8 @@ export function terminalFixtureUrl(behaviour: TerminalBehaviour, session: string
 }
 
 const ESC = "\x1b[";
+/** Opens (with a URI after it) or closes an OSC 8 hyperlink; each ends with the string terminator `ESC \`. */
+const OSC8 = "\x1b]8;;";
 
 /** The box's inner width in cells. The docked terminal pane keeps 520px, about 53 columns once its
  * padding is taken off (`docs/product/window-layout.md`, "Pane widths at 1148 px and wider"), so
@@ -57,6 +59,8 @@ const SAMPLE = [
   ]),
   "",
   `${ESC}32m●${ESC}0m I will start by reading the summary styles.`,
+  // An OSC 8 hyperlink whose visible text is not its target, which the terminal's link tooltip tells.
+  `  ${ESC}2mSee the${ESC}0m ${OSC8}https://example.com/docs/summary-layout?section=breakpoints\x1b\\layout notes${OSC8}\x1b\\ ${ESC}2mfor the breakpoints.${ESC}0m`,
   "",
   `${ESC}34m● Read${ESC}0m(src/summary/Summary.css)`,
   `  ${ESC}2m⎿  Read 142 lines${ESC}0m`,

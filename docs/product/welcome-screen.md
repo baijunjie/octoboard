@@ -42,8 +42,8 @@ reachable. On narrow windows, the action row and tool row contents wrap rather t
   `docs/product/window-layout.md`). So there is no sidebar to float in on hover either, and no drawer to open below
   1148 px.
 - **No terminal.** None of the terminal's empty states appears here: the panel asking for a session to be selected, or
-  the panel offering **Add project**, **New session** or **New console session** for the current scope (see "The terminal"
-  and "A console with nothing in it" in `docs/product/sessions.md`).
+  the panel offering **Add project**, **New session** or **New console session** for the current scope (see "With no session
+  selected" and "A console with nothing in it" in `docs/product/session-terminal.md`).
 - **Neither pane toggle in the top bar**: there is no sidebar for the sidebar toggle to control, and the right pane's
   toggle, at the bar's end, is there only while the right pane has an owner (see "The two pane toggles" in
   `docs/product/window-layout.md`). The top bar keeps **Back** and **Forward**, and **both are disabled**: every place
@@ -73,7 +73,7 @@ exactly as the user had left them — a sidebar the user had hidden is still hid
 - Wherever the window would hand keyboard focus to the terminal — the connection banner's Retry going away, a toast
   being dealt with — it hands focus to the New console button instead, and leaves focus on nothing when it is already
   on nothing. This is the rule the terminal itself follows with no session selected and nothing to offer in its place,
-  which hands focus to the top bar (see "The terminal" in `docs/product/sessions.md`); here the top bar has no enabled
+  which hands focus to the top bar (see "With no session selected" in `docs/product/session-terminal.md`); here the top bar has no enabled
   control to take it.
 - **When the first console is created** from the welcome screen's New console, focus moves to the first control in the
   top bar a keyboard can reach. The hand-off is New console's alone: consoles arriving through Import configuration…

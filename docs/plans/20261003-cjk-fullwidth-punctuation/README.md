@@ -94,5 +94,5 @@ Input-method verification requires a person using the real input method. Scripte
 that this path works. The regression cases above are acceptance checks for the future replacement, not a renewed
 request to validate the accepted workaround.
 
-The terminal requirements are in "The terminal" in `docs/product/sessions.md`; the keyboard and WebView pitfalls
+The terminal requirements are in `docs/product/session-terminal.md`; the keyboard and WebView pitfalls
 are in "Known pitfalls of the Tauri / Rust approach" in `docs/architecture.md`.

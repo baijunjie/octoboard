@@ -7,10 +7,13 @@ import { EmptyPanel } from "../components/EmptyPanel";
 import { focusTopBar } from "../components/regionFocus";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useT } from "../i18n/react";
+import { usePlatform } from "../platform/react";
 import { isDormant as isDormantStatus, isLive, type Session } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { useOctoboardTheme } from "../theme";
 import { TerminalController, type TermStatus } from "./TerminalController";
+import { TerminalLinkTooltip } from "./TerminalLinkTooltip";
+import type { HoveredTerminalLink } from "./terminalLinks";
 import { XTERM_THEMES } from "./xtermThemes";
 
 /** The longest the loading state covers a connected terminal still waiting for its first output. */
@@ -69,6 +72,7 @@ export function TerminalPane({
 }: TerminalPaneProps): React.ReactElement {
   const t = useT();
   const { terminalUrl, terminalReconnectDelay } = useDaemon();
+  const links = usePlatform().links;
   const { resolved: colorTheme } = useOctoboardTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -77,6 +81,8 @@ export function TerminalPane({
   const controllerRef = useRef<TerminalController | undefined>(undefined);
   const [status, setStatus] = useState<TermStatus>("closed");
   const [painted, setPainted] = useState(false);
+  // Where the OSC 8 link hover goes: the tooltip holds the state itself, so hovering does not render the pane.
+  const setLinkRef = useRef<((link: HoveredTerminalLink | undefined) => void) | undefined>(undefined);
   // How the selected session's connection is doing once an attempt has failed (`undefined` while
   // it is healthy or has not failed yet); `reconnecting` until the automatic attempts are spent.
   // Stored with the session it was worked out for, so that the first render after a session switch
@@ -163,6 +169,8 @@ export function TerminalPane({
         onStatusChange: handleStatusChange,
         onPaintedChange: setPainted,
         onWake: (sessionId) => onResumeRef.current(sessionId),
+        openLink: links && ((url) => links.open(url)),
+        onLinkHover: (link) => setLinkRef.current?.(link),
       },
       appliedColorThemeRef.current,
     );
@@ -382,6 +390,7 @@ export function TerminalPane({
         {/* xterm lays its cells out left to right whatever the page's direction. */}
         <div dir="ltr" className="h-full overflow-hidden" ref={containerRef} />
       </div>
+      <TerminalLinkTooltip setLink={setLinkRef} />
       {cover && (
         <div
           ref={coverRef}

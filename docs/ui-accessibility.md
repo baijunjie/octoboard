@@ -252,6 +252,11 @@ for assistive technology at all. So whatever a tooltip says must reach a screen 
 label's full text is in the document whether it fits or not, a row carries its own accessible name, and an indicator
 that means something on its own is a named `role="img"`.
 
+One anchored tooltip is kept without that route: the real target of an OSC 8 hyperlink in a session terminal, whose
+visible text may differ from where it leads. Nothing else carries the target, but the terminal's output as a whole
+reaches no assistive technology (xterm.js keeps its rows `aria-hidden` and runs without its screen-reader mode), so the
+tooltip withholds nothing the text around it would otherwise give.
+
 ### Hover marquees belong to one text label
 
 A clipped name, heading or detail scrolls only while the pointer is over its own text region. Independent labels
