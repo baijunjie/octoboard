@@ -31,6 +31,12 @@ Tailwind 4 reads the source as plain text and emits a utility only for a class n
 a name assembled at runtime — `` `${side}-0` ``, a suffix appended to a prefix, anything concatenated — compiles to no
 CSS at all and the element silently loses that property. Write each variant out in full and branch between them.
 
+A name spelled out in full still does not count when an interpolation is glued to its end: in
+`` className={`... hover:bg-panel-hover${cond ? " x" : ""}`} `` the scanner reads `hover:bg-panel-hover${` as one
+invalid candidate and drops it; it still looks fine whenever the same class is spelled out cleanly in some other file.
+Put the separating space inside the template literal, not in the interpolated string:
+`` `... hover:bg-panel-hover ${cond ? "x" : ""}` ``.
+
 The configured ESLint rules do not check whether a Tailwind utility was emitted, and the UI's tests (`vitest`,
 components under jsdom) never evaluate the CSS, so a class whose utility was never emitted is valid TypeScript,
 passes lint and tests, builds clean and reads fine in a diff. After adding or changing a utility class, grep the

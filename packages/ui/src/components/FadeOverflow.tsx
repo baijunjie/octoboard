@@ -377,7 +377,7 @@ export function FadeOverflow({
       ref={attach}
       dir={dir}
       lang={lang}
-      className={`overflow-hidden whitespace-nowrap${dir ? " align-match-parent" : ""} ${className}`}
+      className={`overflow-hidden whitespace-nowrap ${dir ? "align-match-parent" : ""} ${className}`}
       style={mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined}
       onPointerEnter={follows ? () => setHovered(true) : undefined}
       onPointerLeave={follows ? () => setHovered(false) : undefined}

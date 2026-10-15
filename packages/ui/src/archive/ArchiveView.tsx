@@ -147,7 +147,7 @@ export function ArchiveView({
         </TitledControl>
       </header>
       {/* Only the empty state is centred; the list of rows starts at the top. */}
-      <FadedScroller className={`min-h-0 flex-1${archived.length === 0 ? " flex flex-col justify-center-safe" : ""}`}>
+      <FadedScroller className={`min-h-0 flex-1 ${archived.length === 0 ? "flex flex-col justify-center-safe" : ""}`}>
         {archived.length === 0 ? (
           <EmptyPanel icon={Archive} message={t("sidebar.archive.empty")} />
         ) : (
@@ -155,8 +155,8 @@ export function ArchiveView({
             {archived.slice(0, shown).map(({ session, under }) => (
               <li
                 key={session.id}
-                className={`group flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2 transition-colors hover:bg-panel-hover${
-                  under ? ` ${NESTED_ROW_CLASS}` : ""
+                className={`group flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2 transition-colors hover:bg-panel-hover ${
+                  under ? NESTED_ROW_CLASS : ""
                 }`}
               >
                 <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
@@ -176,26 +176,35 @@ export function ArchiveView({
                   {under && <span className="sr-only">{t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, under)) })}</span>}
                   <span className="sr-only">{sessionAgentLabel(t, session, accounts)}</span>
                 </div>
-                <ArchivedSessionMetadata session={session} />
-                {/* Shown while the row is hovered or holds focus, like the sidebar rows' controls;
-                    hidden by opacity, so they stay reachable with Tab. */}
-                <div className="sidebar-fills flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                  <Button size="sm" variant="tertiary" onPress={() => onReopen(session)}>
-                    <RotateCcw aria-hidden="true" className="size-4" />
-                    {t("sidebar.session.reopen")}
-                  </Button>
-                  <TitledControl title={t("archive.delete", { title: isolate(sessionDisplayTitle(t, session)) })}>
-                    <Button
-                      isIconOnly
-                      size="sm"
-                      variant="danger-soft"
-                      aria-label={t("archive.delete", { title: isolate(sessionDisplayTitle(t, session)) })}
-                      onPress={() => onOpenDialog({ kind: "delete-session", session })}
-                      className="text-app-danger"
-                    >
-                      <Trash2 aria-hidden="true" className="size-4" />
-                    </Button>
-                  </TitledControl>
+                {/* The actions and the dates move to a line of their own together, so a narrow pane still
+                    has the dates at the row's end with the actions beside them. */}
+                <div className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-y-1">
+                  {/* Shown while the row is hovered or holds focus, like the sidebar rows' controls.
+                      Hidden by clipping to no width rather than removed, so they take no room from
+                      the title yet stay reachable with Tab; focus lifts the clip so the focus ring
+                      can paint. The gap before the dates sits inside the clip, so a hidden pair
+                      leaves none. */}
+                  <div className="flex max-w-0 shrink-0 overflow-hidden opacity-0 transition-opacity group-hover:max-w-none group-hover:opacity-100 group-focus-within:max-w-none group-focus-within:overflow-visible group-focus-within:opacity-100">
+                    <div className="sidebar-fills flex shrink-0 items-center gap-1 pe-3">
+                      <Button size="sm" variant="tertiary" onPress={() => onReopen(session)}>
+                        <RotateCcw aria-hidden="true" className="size-4" />
+                        {t("sidebar.session.reopen")}
+                      </Button>
+                      <TitledControl title={t("archive.delete", { title: isolate(sessionDisplayTitle(t, session)) })}>
+                        <Button
+                          isIconOnly
+                          size="sm"
+                          variant="danger-soft"
+                          aria-label={t("archive.delete", { title: isolate(sessionDisplayTitle(t, session)) })}
+                          onPress={() => onOpenDialog({ kind: "delete-session", session })}
+                          className="text-app-danger"
+                        >
+                          <Trash2 aria-hidden="true" className="size-4" />
+                        </Button>
+                      </TitledControl>
+                    </div>
+                  </div>
+                  <ArchivedSessionMetadata session={session} />
                 </div>
               </li>
             ))}

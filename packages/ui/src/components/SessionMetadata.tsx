@@ -38,7 +38,7 @@ export function ArchivedSessionMetadata({ session }: { session: Session }): Reac
     year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
   });
   return (
-    <div className="ms-auto flex shrink-0 flex-col items-end gap-0.5 text-end text-xs text-app-muted">
+    <div className="flex shrink-0 flex-col items-end gap-0.5 text-end text-xs text-app-muted">
       {session.ended_at != null && <time dateTime={new Date(session.ended_at).toISOString()}>{t("session.meta.archived", { time: isolate(date.format(session.ended_at)) })}</time>}
       <time dateTime={new Date(session.started_at).toISOString()}>{t("session.meta.created", { time: isolate(date.format(session.started_at)) })}</time>
     </div>

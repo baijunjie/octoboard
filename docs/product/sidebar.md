@@ -512,10 +512,14 @@ scope and nesting are described below.
   when known, then the creation date, each identified by its meaning. These are absolute dates with year, month, day,
   hour and minute, formatted in the current language and the client's local time zone. An unknown archive date is
   omitted; the creation date never stands in for it. Archive previews show no dates: submenu previews keep their compact title-only presentation, and focus
-  mode's preview rows are described in "What both views show" in `docs/product/focus-mode.md`. The date block aligns
-  to the end of the reading direction, on the right in a left-to-right language. Its **Reopen** and **Delete** buttons
-  show while the row is hovered or holds keyboard focus, and are still reached with Tab. Both buttons have filled
-  backgrounds distinct from the hovered row; Delete uses a soft danger fill.
+  mode's preview rows are described in "What both views show" in `docs/product/focus-mode.md`. The date block sits
+  flush at the row's end in the reading direction, on the right in a left-to-right language. The row's **Reopen** and
+  **Delete** buttons show only while the row is hovered or holds keyboard focus, and are still reached with Tab.
+  Hidden, they take no room, so a resting row's title runs up to the date block; shown, they appear just before the
+  date block (to its left in a left-to-right language), which stays at the row's end, and the title gives up room for
+  them, cut off if it must be. On a pane too narrow for one line, the date block moves onto a line of its own, still at
+  the row's end; while the row is hovered or focused the buttons join it there, so such a row grows by a line when its
+  buttons appear. Both buttons have filled backgrounds distinct from the hovered row; Delete uses a soft danger fill.
 - A session whose owner is **a project session listed here too** — an archived session of an archived lead session, or
   of any archived project session that had started sessions — is **inset under that owner**, with rounded connectors
   as in "Project rows" above, and follows it instead of being ranked against the rows beside it; one whose owner is
