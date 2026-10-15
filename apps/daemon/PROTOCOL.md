@@ -790,7 +790,7 @@ SideRead          = { state: "present", path, kind, source: ContentSource, file:
                   | { state: "absent" }
                   | { state: "out_of_scope" }
 BranchInfo        { name, commit, origin? }
-BranchOriginInfo  { source: "hook_diff" | "reflog_match", session, title, created_at }
+BranchOriginInfo  { source: "hook_diff" | "reflog_match" | "worktree_cwd", session, title, created_at }
 ComparisonEndpoint { branch, commit }
 ```
 
@@ -1064,14 +1064,23 @@ sent, are listed, the first in byte order; a list cut there carries `complete: f
 A branch the daemon can name the creating session of carries `origin`, a `BranchOriginInfo`: `session` is that
 session's id (the session may be gone), `title` is what it had when the attribution was made, and `created_at` is when
 the branch was created in milliseconds. `source` says how it was told: `hook_diff` for a branch that appeared while
-only that session was acting in the repository, `reflog_match` for one that predates the daemon's look at it whose
-first reflog entry is one a branch's own creation writes (`branch: Created from …`) and falls inside only that
-session's lifetime. A first entry of any other shape — the default branch a `git init` leaves, a clone's, a bare
-`git update-ref` — says a reference was written rather than that a branch was made there, and is never backfilled,
-however clear the session. Both sources name the session the branch appeared alongside, whatever command made it — a
-branch the user makes in their own terminal while exactly one session is acting in the repository is attributed to that
-session. A branch whose creator cannot be told — several sessions could have made it, nothing was acting for it, or the
-session that was acting was not running when the branch was made — carries no `origin`. Listing the branches is
+only that session of the repository had a tool call in flight — between a call's start and end hooks, its own or a
+subagent's; a session whose model is writing runs nothing and is not counted — and `reflog_match` for one that
+predates the daemon's look at it whose first reflog entry is one a branch's own creation writes
+(`branch: Created from …`) and falls inside only that session's lifetime. A first entry of any other shape — the default
+branch a `git init` leaves, a clone's, a bare `git update-ref` — says a reference was written rather than that a branch
+was made there, and is never backfilled, however clear the session. `worktree_cwd` is the fallback when neither names a
+session: the branch is checked out in a worktree, exactly one running session of the repository has its working
+directory inside that worktree (the innermost one, as a linked worktree can sit inside the main one) — the directory its
+agent last reported in one of the session's own hooks, or its project's directory while none has — its first reflog
+entry is a branch's creation, and that session was running when it was made. A `hook_diff` replaces a `worktree_cwd`,
+and neither of the creation sources is ever replaced. The tool-call source names the session whose call the branch
+appeared during, whatever command made it — a branch the user makes in their own terminal while exactly one session's
+tool call is in flight is attributed to that session. An agent's own ask-the-user tool is not counted as a tool call,
+but a call waiting at a permission prompt is. A new branch is decided only a few seconds after it was born, once every
+hook that could concern it has had time to arrive, so its `origin` can appear on a later listing than the branch itself.
+A branch whose creator cannot be told — several sessions could have made it, nothing was running for it, or the only
+candidate was not running when the branch was made — carries no `origin`. Listing the branches is
 also what removes the record of a branch that no longer exists, and at most 1,000 branches of a repository carry one:
 in a repository with more, the branches a listing reaches first, in the byte order of their names, are the ones
 attributed, and a record past the cap is dropped by the time its branch was created, oldest first. The record is kept

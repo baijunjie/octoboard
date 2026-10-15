@@ -439,9 +439,9 @@ async fn hook_callback(
         crate::trust::on_hook(&state, &live);
     }
 
-    // Whatever the agent ran in the repository may have made a branch; which session was acting
-    // when one appeared is all the attribution needs, so every event counts, a subagent's too.
-    crate::branch_origin::on_hook(&state, &session_id);
+    // Whatever the agent ran in the repository may have made a branch, so every event prompts a
+    // look, a subagent's too: its tool calls run in the session's name.
+    crate::branch_origin::on_hook(&state, &session_id, &payload);
 
     // A subagent's events are the agent's internal business and carry the subagent's own ids.
     if hooks::is_subagent(&payload) {

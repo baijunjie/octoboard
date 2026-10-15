@@ -77,8 +77,9 @@ pub struct AppState {
     /// polling on their own 5-minute phase. Entries are removed wherever the project's `GitStatus`
     /// is, by `remove_git_status`, so a reused project id never inherits a stale timestamp.
     git_check_completed: Mutex<HashMap<String, Instant>>,
-    /// What the daemon remembers between its looks at each repository's branches, which the
-    /// attribution of a new branch to the session that made it rests on (`crate::branch_origin`).
+    /// What the daemon remembers between its looks at each repository's branches, and what each
+    /// session's hooks said about its tool calls and working directory: the attribution of a
+    /// branch to the session that made it rests on both (`crate::branch_origin`).
     pub branch_watch: crate::branch_origin::Watch,
     /// Each agent's availability and what its default account currently resolves to, derived once
     /// per daemon start (`crate::availability`) and broadcast by its own event on change; never a

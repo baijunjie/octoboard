@@ -849,15 +849,18 @@ pub struct BranchInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BranchOriginSource {
-    /// A session's hook arrived and the branch had appeared since the last look at the repository,
-    /// with no other session that could have made it.
+    /// The branch appeared while exactly one session of the repository had a tool call in flight.
     HookDiff,
     /// The branch predates the daemon's look at it; the first entry of its reflog falls inside the
     /// lifetime of exactly one session of the repository.
     ReflogMatch,
+    /// Neither of the above could name a session, and exactly one running session of the
+    /// repository is working in the worktree that has the branch checked out, and was running
+    /// when the branch was made.
+    WorktreeCwd,
     /// No session can be named: several could have made it, or nothing was acting for it. Never
     /// sent to a client, and kept so the branch is not held against its reflog again — a later
-    /// hook window that names one session does replace it.
+    /// signal that does name one session replaces it.
     Unknown,
 }
 
@@ -866,7 +869,8 @@ pub enum BranchOriginSource {
 /// it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BranchOriginInfo {
-    /// `hook_diff` or `reflog_match`: a branch with no session to name carries no origin at all.
+    /// `hook_diff`, `reflog_match` or `worktree_cwd`: a branch with no session to name carries no
+    /// origin at all.
     pub source: BranchOriginSource,
     /// The creating session's id. It may name a session that no longer exists.
     pub session: String,
