@@ -111,6 +111,7 @@ export function Sidebar({
   onPushProjectBranch,
   onLoadProjectBranches,
   onSetPinned,
+  onArchiveSession,
   onOpenSettings,
 }: SidebarProps): React.ReactElement {
   const t = useT();
@@ -132,6 +133,7 @@ export function Sidebar({
     onPushProjectBranch,
     onLoadProjectBranches,
     onSetPinned,
+    onArchiveSession,
     onOpenSettings,
   } satisfies Record<keyof SidebarHandlers, unknown>;
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());

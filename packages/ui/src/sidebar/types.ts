@@ -50,6 +50,8 @@ export interface SidebarHandlers {
   /** Pushes the project's current branch. */
   onPushProjectBranch: (project: Project) => void;
   onSetPinned: (target: { project: Project } | { session: Session }, pinned: boolean) => void;
+  /** Archives the session, asking first unless nothing is cut short. */
+  onArchiveSession: (session: Session) => void;
   /** Opens Settings at a section. */
   onOpenSettings: (section: SettingsSectionId) => void;
 }

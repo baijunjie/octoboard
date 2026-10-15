@@ -324,13 +324,15 @@ names; confirmations provide the agent and account as hidden accessible text bes
   the directory the session recorded. The entry is present for a console session's row as well as a project session's,
   and only when the session's agent has more than one account to be on; with just the default account it is left out
   rather than shown disabled. A session in the archive has no such entry.
-- **Archive** — it asks for confirmation, then archives the session (see "Archiving, interruption and resuming" in
-  `docs/product/sessions.md`). For a console session this is the only way to archive it, since it cannot archive
+- **Archive** — archives the session (see "Archiving, interruption and resuming" in `docs/product/sessions.md`). A
+  session at its prompt or interrupted, with no unarchived session under it, is archived at once; any other asks for
+  confirmation first, and so does one still being resumed. When the archived row takes keyboard focus with it, focus
+  goes to the terminal. For a console session this is the only way to archive it, since it cannot archive
   itself (see "The console session's tools" in `docs/product/hub-orchestration.md`); its confirmation lists the
   interrupted sessions under it — bound to it, or to a lead session bound to it (see "Lead sessions" in
   `docs/product/hub-orchestration.md`) — under a warning with their number, as the ones archived with it, and the
   archive is refused, with the sessions named, while any session under it has a process running. A project session that
-  has started sessions is archived under the same rule, with the same confirmation.
+  has started sessions is archived under the same rule, with the same confirmation while any of them is unarchived.
 - **Delete**, in place of Archive for a session that has never been used — no turn yet, bound to no owner and with no
   session bound to it; it asks for confirmation, then stops the session and deletes it outright, leaving nothing in the
   archive (see "Deleting an unused session" in `docs/product/sessions.md`).

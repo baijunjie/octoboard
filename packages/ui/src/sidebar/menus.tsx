@@ -190,6 +190,6 @@ export function sessionMenu(
     "separator",
     deletable
       ? { label: t("sidebar.session.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true }
-      : { label: t("sidebar.session.archive"), icon: Archive, onClick: () => handlers.onOpenDialog({ kind: "archive-session", session }) },
+      : { label: t("sidebar.session.archive"), icon: Archive, onClick: () => handlers.onArchiveSession(session) },
   ];
 }

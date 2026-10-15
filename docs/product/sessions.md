@@ -417,8 +417,9 @@ reading *working* while Codex sits at its prompt.
 exit first and is killed only if it does not; a kill takes the agent's tool subprocesses with it.
 Archiving is available for any session that is not already archived, including an interrupted one;
 a console session is archived from its own row's menu, like any other (see "Console sessions and
-project sessions" above). The user archives a session from its row's menu, and is asked to confirm
-first; a session that has never been used offers **Delete** there instead (see "Deleting an unused session" below).
+project sessions" above). The user archives a session from its row's menu. A session at its prompt or
+interrupted, with no unarchived session under it, is archived at once, since nothing is cut short; one at work,
+waiting for the user, being resumed, or with an unarchived session under it asks for confirmation first. A session that has never been used offers **Delete** there instead (see "Deleting an unused session" below).
 An archived session keeps its pin, if it had one (see "Order of projects and sessions" in `docs/product/sidebar.md`).
 
 Besides the user, two things archive a session: its owner, explicitly, and a project session's own report saying the

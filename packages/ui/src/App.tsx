@@ -3,6 +3,7 @@ import { GitBranch } from "lucide-react";
 import type { ActionMenuEntry } from "./components/ActionMenu";
 import { displayWirePath } from "./wirePath";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { setInteractionModality } from "react-aria";
 import { errorPresentation } from "./errorPresentation";
 import { flushSync } from "react-dom";
 
@@ -47,7 +48,7 @@ import { SettingsDialog } from "./settings/SettingsDialog";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
 import { belongsToFocus, focusAfterSelect, focusFor, focusKey, followsStartedConsoleSession, KEY_SWITCH_SELECTION, resolveFocus, shortcutOutcome } from "./sidebar/focus";
 import { useFocusShortcut } from "./sidebar/focusShortcut";
-import { consoleSessionAbove, switchStrip } from "./sidebar/order";
+import { archiveNeedsConfirmation, consoleSessionAbove, switchStrip } from "./sidebar/order";
 import { Sidebar } from "./sidebar/Sidebar";
 import { useSidebarView } from "./sidebar/sidebarView";
 import { useSwitchShortcut } from "./sidebar/switchShortcut";
@@ -494,6 +495,32 @@ export function App(): React.ReactElement {
     request(body).catch((err: unknown) => toastError(errorPresentation(err as Error)));
   };
 
+  // Archiving at once takes the row away from under a menu that returns focus to its trigger in
+  // that row, so once the session reads archived focus is handed to the terminal, where the
+  // keyboard user works next.
+  const archivedAtOnce = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const id = archivedAtOnce.current;
+    if (!id || sessions.get(id)?.status !== "archived") return;
+    archivedAtOnce.current = undefined;
+    if (document.activeElement !== document.body) return;
+    setInteractionModality("keyboard");
+    focusTerminal();
+  });
+  // A session being resumed still asks: archiving it would cut the resume short.
+  const archiveSession = (session: Session) => {
+    const live = sessions.get(session.id) ?? session;
+    if (resumingIds.has(live.id) || archiveNeedsConfirmation(sessionList, live)) {
+      openDialog({ kind: "archive-session", session });
+      return;
+    }
+    archivedAtOnce.current = live.id;
+    request({ type: "archive_session", session: live.id }).catch((err: unknown) => {
+      archivedAtOnce.current = undefined;
+      toastError(errorPresentation(err as Error));
+    });
+  };
+
   const waitingSessions = useMemo(
     () => waitingSessionsInTreeOrder(consoleList, projectList, sessionList),
     [consoleList, projectList, sessionList],
@@ -511,6 +538,7 @@ export function App(): React.ReactElement {
   const stableSwitchConsoleSession = useStableHandler(switchConsoleSession);
   const stableOpenConsoleSession = useStableHandler(openConsoleSession);
   const stableOpenDialog = useStableHandler(openDialog);
+  const stableArchiveSession = useStableHandler(archiveSession);
   const stableOpenArchive = useStableHandler(openArchive);
   const stableBrowseProject = useStableHandler(browseProject);
   const stableCommitPreview = useStableHandler(commitPreview);
@@ -622,6 +650,7 @@ export function App(): React.ReactElement {
                 onPushProjectBranch={pushProjectBranch}
                 onLoadProjectBranches={loadProjectBranches}
                 onSetPinned={setPinned}
+                onArchiveSession={stableArchiveSession}
                 onOpenSettings={openSettingsAt}
                 open={panes.sidebarOpen}
                 peek={panes.sidebarDocked ? undefined : panes.sidebarPeek}

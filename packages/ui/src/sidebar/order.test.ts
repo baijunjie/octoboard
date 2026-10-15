@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Project, Session, SessionStatus } from "../protocol";
-import { archivePreviewSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sortProjects, switchStrip } from "./order";
+import { archiveNeedsConfirmation, archivePreviewSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sortProjects, switchStrip } from "./order";
 
 const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to?: string): Session => ({
   id,
@@ -91,6 +91,26 @@ describe("boundSessionsArchivedWith", () => {
       session("under-live", "interrupted", 5, false, "bound-live"),
     ];
     expect(boundSessionsArchivedWith(sessions, "s-console").map((s) => s.id)).toEqual(["lead", "under-lead"]);
+  });
+});
+
+describe("archiveNeedsConfirmation", () => {
+  it("skips the confirmation only for a stopped session with no unarchived session under it", () => {
+    const sessions = [
+      session("idle", "idle", 1),
+      session("interrupted", "interrupted", 2),
+      session("waiting", "waiting_user", 3),
+      session("working", "working", 4),
+      session("owner", "idle", 5),
+      session("child", "interrupted", 6, false, "owner"),
+      session("owner-archived-child", "interrupted", 7),
+      session("archived-child", "archived", 8, false, "owner-archived-child"),
+      session("lead", "idle", 9),
+      session("lead-archived-child", "archived", 10, false, "lead"),
+      session("lead-grandchild", "interrupted", 11, false, "lead-archived-child"),
+    ];
+    const needs = (id: string) => archiveNeedsConfirmation(sessions, sessions.find((s) => s.id === id)!);
+    expect(["idle", "interrupted", "waiting", "working", "owner", "owner-archived-child", "lead"].map(needs)).toEqual([false, false, true, true, true, false, true]);
   });
 });
 

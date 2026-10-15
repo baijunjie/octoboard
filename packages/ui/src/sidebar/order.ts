@@ -145,6 +145,16 @@ export function boundArchivedSessions(sessions: Session[], ownerId: string): Ses
   return archivedSessions(sessions.filter((s) => s.bound_to === ownerId || (s.bound_to && ids.has(s.bound_to))));
 }
 
+/** Whether archiving `session` asks the user first. One sitting at its prompt (`idle`) or with no
+ * process (`interrupted`) is archived at once, since nothing is cut short; one at work or raising
+ * a hand asks, and so does one with an unarchived session bound to it or to one bound to it, since
+ * the archive reaches both levels (or is refused over them, which the dialog shows). */
+export function archiveNeedsConfirmation(sessions: Session[], session: Session): boolean {
+  if (session.status !== "idle" && session.status !== "interrupted") return true;
+  const ids = new Set(sessions.filter((s) => s.bound_to === session.id).map((s) => s.id));
+  return sessions.some((s) => s.status !== "archived" && s.bound_to && (s.bound_to === session.id || ids.has(s.bound_to)));
+}
+
 /** The sessions that go into the archive with `ownerId`: the interrupted ones bound to it and
  * those bound to each of them (a lead session's own sessions, two levels under a console
  * session), which is how far archiving reaches. */
