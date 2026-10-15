@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 
+import { useLatest } from "../components/useLatest";
 import type { PanePeek } from "./usePaneToggles";
 
 /** How a pane that is a row sibling at and above the `docked` breakpoint is laid out:
@@ -215,8 +216,7 @@ export function usePanePeekPointer(
   alsoInside?: string,
 ): void {
   // The listeners outlive the render that added them, and `peek` is rebuilt every render.
-  const latest = useRef(peek);
-  latest.current = peek;
+  const latest = useLatest(peek);
   const active = peek?.active ?? false;
   useEffect(() => {
     if (!active) return;
@@ -283,8 +283,7 @@ export function usePanePeekPointer(
 export function AsidePeekHotZone({ peek }: { peek: PanePeek }): React.ReactElement | null {
   const dwell = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // The dwell's callback outlives the render that scheduled it, and `peek` is rebuilt every render.
-  const latest = useRef(peek);
-  latest.current = peek;
+  const latest = useLatest(peek);
   useEffect(() => () => clearTimeout(dwell.current), []);
   if (peek.active) return null;
   return (

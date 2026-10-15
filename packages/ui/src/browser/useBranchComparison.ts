@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
@@ -45,7 +45,9 @@ export function useBranchComparison(
   // What is held, with the branches it is of: a comparison of other branches is not this one's.
   const [held, setHeld] = useState<{ pair: string | undefined; comparison: Comparison }>({ pair, comparison: { state: "loading" } });
   const live = useRef({ alive: true, sequence: 0, pair, lost: false, sent: undefined as string | undefined });
-  live.current.pair = pair;
+  useLayoutEffect(() => {
+    live.current.pair = pair;
+  });
 
   const send = (background: boolean): Promise<void> => {
     const s = live.current;

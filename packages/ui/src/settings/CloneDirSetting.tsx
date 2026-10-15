@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { AnchoredTooltip } from "../components/AnchoredTooltip";
 import { InlineCode } from "../components/InlineCode";
+import { useLatest } from "../components/useLatest";
 import { errorPresentation } from "../errorPresentation";
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
 import { useTrimmedField } from "../dialogs/useTrimmedField";
@@ -35,8 +36,7 @@ export function CloneDirSetting(): React.ReactElement {
   // Follows the daemon's value: another window, or a refused edit, puts the field back to it.
   useEffect(() => setDraft(stored), [stored]);
   // Read after a send is answered, when the closure's `stored` may predate the broadcast.
-  const latest = useRef(stored);
-  latest.current = stored;
+  const latest = useLatest(stored);
 
   const draftField = useTrimmedField(draft, setDraft);
 

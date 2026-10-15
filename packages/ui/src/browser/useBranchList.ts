@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
@@ -32,7 +32,9 @@ export function useBranchList(project: string, active: boolean): { branches: Bra
   const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
   const [branches, setBranches] = useState<BranchList>({ state: "loading" });
   const live = useRef({ alive: true, active, sequence: 0, inFlight: false, asked: false, lastRefresh: 0 });
-  live.current.active = active;
+  useLayoutEffect(() => {
+    live.current.active = active;
+  });
 
   const send = (): Promise<void> => {
     const s = live.current;

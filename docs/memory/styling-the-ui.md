@@ -10,8 +10,8 @@ to strip custom styling, separate those adaptations from appearance overrides ra
 dropping a sizing override with the look ones broke the layout.
 
 What the component imposes visually lives in a stylesheet of its own,
-`packages/ui/node_modules/@heroui/styles/dist/components/<name>.css` — the readable source of what ends up in
-`heroui.min.css` — and the JavaScript shows none of it: a component's variants can be nothing but
+`packages/ui/node_modules/@heroui/styles/dist/components/<name>.css`, which `packages/ui/src/style.css` imports
+directly, and the JavaScript shows none of it: a component's variants can be nothing but
 `tv({ base: "<name>" })`, with every size, colour and spacing left to that file. So read it, rather than the
 component's own file, when styling anything the project renders inside a HeroUI component, or when working out why
 such a child looks unlike its own classes suggest. A base rule there covers the whole component, so where it sets
@@ -19,6 +19,11 @@ text size or colour (`.empty-state` is `@apply p-2 text-sm text-muted`) every ch
 correct only the parts it styles by slot, never a child of the project's. Giving that child its own size or colour is
 a correction of what it inherited on project-authored content rather than a change to the HeroUI component's look.
 That custom content follows the WCAG 2.2 AA requirements in `docs/ui-accessibility.md`, checked in both appearances.
+
+`style.css` imports only the sheets of the components the app renders, so a component newly taken from
+`@heroui/react` renders unstyled until its sheet, and those of the components it is built from, are added there;
+`packages/ui/src/style.test.ts` names what is missing. When upgrading `@heroui/styles`, also move the `tw-animate-css`
+pin in `packages/ui/package.json` to the version `@heroui/styles` itself depends on; the same test fails until it matches.
 
 ## A Tailwind class name has to stand in the source as literal text
 

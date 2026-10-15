@@ -142,6 +142,9 @@ export function setProjectBrowserMode(project: string, mode: BrowserMode): void 
  * (`PREFERENCE_KEYS.projectBrowsers`), the selections for the window's lifetime.
  */
 export function useProjectBrowserState(project: string): ProjectBrowserState {
+  // Kept out of the React Compiler: the selections are read from module state that changes in
+  // place, which its memoization would take for constant and keep showing as it first was.
+  "use no memo";
   const entry = stored.useValue()[project];
   useSyncExternalStore(subscribeSelections, () => selectionVersion);
   let expanded = NO_EXPANDED;

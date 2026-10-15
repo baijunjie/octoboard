@@ -160,6 +160,9 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
   // A worktree found gone — by its list, or by the source no longer listing it — has no changes
   // left: the open change counts as gone from it, and is read again to say so.
   const worktreeGone = (changes.list.state === "error" && changes.list.unavailable) || (git !== null && !listable);
+  // The React Compiler cannot keep this memo and so leaves the hook uncompiled; the memo stays, as
+  // the list's identity is what tells the reread below that a fresh list arrived.
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const evidenceList = useMemo(
     () => (worktreeGone ? { items: [], complete: true, refreshing: false } : changes.list.state === "loaded" ? changes.list : undefined),
     [worktreeGone, changes.list],

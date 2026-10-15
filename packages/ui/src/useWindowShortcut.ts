@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
+import { useLatest } from "./components/useLatest";
 import { MODAL_OPEN } from "./layout/useRegionCycle";
 
 /** Whether the keyboard is an Apple one, where ⌘ is the shortcut modifier. */
@@ -24,8 +25,7 @@ export function useWindowShortcut<T>(
   run: (matched: T) => void,
   enabled = true,
 ): void {
-  const latest = useRef({ match, run });
-  latest.current = { match, run };
+  const latest = useLatest({ match, run });
   useEffect(() => {
     if (!enabled) return;
     const onKeyDown = (event: KeyboardEvent) => {

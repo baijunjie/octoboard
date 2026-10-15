@@ -1,5 +1,7 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect } from "react";
 import { setInteractionModality } from "react-aria";
+
+import { useLatest } from "./useLatest";
 
 /** Renders nothing; when it unmounts while focus is inside `from`, calls `to` to move it. It is for
  * a hand-off whose trigger is a render rather than a call site, such as the daemon taking the last
@@ -16,8 +18,7 @@ import { setInteractionModality } from "react-aria";
  * hand-off once; that does nothing only because focus cannot already be inside `from` at that
  * moment, so do not place this where it could be. */
 export function HandOffOnUnmount({ from, to }: { from: string; to: () => void }): null {
-  const latest = useRef(to);
-  latest.current = to;
+  const latest = useLatest(to);
   useLayoutEffect(
     () => () => {
       if (!document.activeElement?.closest(from)) return;

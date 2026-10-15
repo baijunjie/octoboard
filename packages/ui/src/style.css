@@ -1,5 +1,70 @@
 @import "tailwindcss";
-@import "@heroui/styles";
+
+/* HeroUI's stylesheet, limited to the components this app renders. A style recalculation that
+   reaches the whole document (opening an overlay makes the rest of the window inert) pays for every
+   rule on the page, and the package's own entry point carries the CSS of all of its components.
+   This keeps that entry point's structure (`@heroui/styles/dist/index.css`): its layers, and the
+   order of `dist/components/index.css`, where the components others build on come first. A
+   component newly taken from `@heroui/react` renders unstyled until its stylesheet is added here,
+   with those of the components it is built from (a `Dropdown` renders menu items and menu
+   sections, a `Select` holds a list box); `style.test.ts` checks the list against the imports.
+   `tw-animate-css` is the entry point's own animation import, pinned to the version `@heroui/styles`
+   depends on and moved with it. */
+@import "tw-animate-css";
+@import "@heroui/styles/base" layer(base);
+@import "@heroui/styles/base/scrollbar.css" layer(base);
+
+@import "@heroui/styles/components/close-button.css" layer(components);
+@import "@heroui/styles/components/description.css" layer(components);
+@import "@heroui/styles/components/field-error.css" layer(components);
+@import "@heroui/styles/components/label.css" layer(components);
+@import "@heroui/styles/components/disclosure.css" layer(components);
+@import "@heroui/styles/components/tabs.css" layer(components);
+@import "@heroui/styles/components/button.css" layer(components);
+@import "@heroui/styles/components/button-group.css" layer(components);
+@import "@heroui/styles/components/toggle-button.css" layer(components);
+@import "@heroui/styles/components/toggle-button-group.css" layer(components);
+@import "@heroui/styles/components/dropdown.css" layer(components);
+@import "@heroui/styles/components/list-box-item.css" layer(components);
+@import "@heroui/styles/components/list-box-section.css" layer(components);
+@import "@heroui/styles/components/list-box.css" layer(components);
+@import "@heroui/styles/components/menu-item.css" layer(components);
+@import "@heroui/styles/components/menu-section.css" layer(components);
+@import "@heroui/styles/components/tag-group.css" layer(components);
+@import "@heroui/styles/components/tag.css" layer(components);
+@import "@heroui/styles/components/switch.css" layer(components);
+@import "@heroui/styles/components/badge.css" layer(components);
+@import "@heroui/styles/components/chip.css" layer(components);
+@import "@heroui/styles/components/alert.css" layer(components);
+@import "@heroui/styles/components/empty-state.css" layer(components);
+@import "@heroui/styles/components/progress-bar.css" layer(components);
+@import "@heroui/styles/components/spinner.css" layer(components);
+@import "@heroui/styles/components/toast.css" layer(components);
+@import "@heroui/styles/components/checkbox-group.css" layer(components);
+@import "@heroui/styles/components/checkbox.css" layer(components);
+@import "@heroui/styles/components/input.css" layer(components);
+@import "@heroui/styles/components/input-group.css" layer(components);
+@import "@heroui/styles/components/radio-group.css" layer(components);
+@import "@heroui/styles/components/radio.css" layer(components);
+@import "@heroui/styles/components/textfield.css" layer(components);
+@import "@heroui/styles/components/search-field.css" layer(components);
+@import "@heroui/styles/components/card.css" layer(components);
+@import "@heroui/styles/components/separator.css" layer(components);
+@import "@heroui/styles/components/surface.css" layer(components);
+@import "@heroui/styles/components/alert-dialog.css" layer(components);
+@import "@heroui/styles/components/modal.css" layer(components);
+@import "@heroui/styles/components/popover.css" layer(components);
+@import "@heroui/styles/components/tooltip.css" layer(components);
+@import "@heroui/styles/components/combo-box.css" layer(components);
+@import "@heroui/styles/components/select.css" layer(components);
+@import "@heroui/styles/components/kbd.css" layer(components);
+@import "@heroui/styles/components/typography.css" layer(components);
+@import "@heroui/styles/components/scroll-shadow.css" layer(components);
+
+@import "@heroui/styles/themes/default" layer(theme);
+@import "@heroui/styles/utilities";
+@import "@heroui/styles/variants";
+
 @import "./viewer/markdown.css";
 
 /* xterm's default black viewport can show through fractional scaling at the screen edges.

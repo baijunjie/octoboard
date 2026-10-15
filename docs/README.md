@@ -285,8 +285,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   fading where more is hidden, with nothing reaching above it.
 - [Styling the UI](memory/styling-the-ui.md) — getting a style to land in `packages/ui`: styling a HeroUI component
   through its supported variants and slots, keeping its default appearance while adapting layout and sizing, and the
-  per-component stylesheet under `@heroui/styles` as the readable source of what the component imposes; why a Tailwind
-  class name has to stand in the source as literal text and how to confirm its utility was emitted, why a `docked:`
+  per-component stylesheet under `@heroui/styles` as the readable source of what the component imposes, imported one
+  by one in `style.css` so a newly used component needs its sheet added (and the `tw-animate-css` pin moved on a
+  HeroUI upgrade); why a Tailwind class name has to stand in the source as literal text and how to confirm its utility was emitted, why a `docked:`
   utility loses to an `sm:` or `rtl:` twin on the same property and what to write instead, dimming a region with a veil
   rather than `opacity` in the app's WKWebView, and taking a style that follows a layout measurement in an effect with
   no dependency array plus a `ResizeObserver`, since an observer alone misses a box whose content changes without its
@@ -322,7 +323,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   while a dialog is open is marked a top layer and ordered against the backdrop.
 - [Reading daemon state in the UI](memory/reading-daemon-state-in-the-ui.md) — why a map read through
   `useDaemonStore` has a new identity after every daemon event of its kind, so an effect or memo meant to fire on one
-  change depends on the resolved values it reads and never on the map, and the derivations that do take the map; why an
+  change depends on the resolved values it reads and never on the map, and a memo reads only those values, resolved
+  into locals first, or the React Compiler skips the component, and the derivations that do take the map; why an
   empty collection stands for "nothing has arrived yet" until `hosts` is set, so a predicate meaning "the daemon has
   none of these" is gated on that rather than on the collection, and why no gallery scenario can catch a missing gate;
   and why the reply to a request arrives after the change it made is already in the store, so code after
@@ -365,3 +367,13 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   fixture needing more pass every local run; why a request handler can never assume it is alone with the daemon's
   state, so it re-checks after a long step or holds a claim; and why macOS host integrations avoid Apple Events
   (`osascript`, a crate's Finder default) in favour of consent-free APIs.
+- [Writing UI code under the React Compiler](memory/writing-ui-code-under-the-react-compiler.md) — why anything a
+  render reads besides props, state, context and hook results (the clock, `getState()`, module state) is frozen at its
+  first value and what to read instead; what leaves a component silently uncompiled (ref access during render,
+  `try/finally`, `??=`, a memo reading more than its deps, an `eslint-disable` of the two hook rules) and how to list
+  bailouts with the compiler's logger; and what keeps a prop every row takes stable across daemon events.
+- [Keeping the UI responsive in WebKit](memory/keeping-the-ui-responsive-in-webkit.md) — why a style change on
+  `<html>`, `<body>` or `#root`, or one flipping `#root`'s `:last-child`, costs tens of milliseconds per interaction in
+  the app's WebKit and why each HTML entry keeps a sibling after `#root`; why every modal overlay still pays one such
+  restyle (React Aria's `inert` on `#root`; `isNonModal` is not the fix); and how to measure UI latency (Playwright
+  WebKit over the production build, ratios not absolute numbers, a live daemon only with outgoing frames dropped).

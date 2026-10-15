@@ -11,8 +11,10 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 
 const formats = new Map<Language, Intl.RelativeTimeFormat>();
 
-/** "5 minutes ago" for a past instant in milliseconds, in `language`; under a minute is "now". */
-export function formatRelativeTime(language: Language, at: number, now = Date.now()): string {
+/** "5 minutes ago" for a past instant in milliseconds, in `language`; under a minute is "now". `now`
+ * is taken from the caller rather than the clock so that a component passes a value it renders on
+ * (`useNow`): a call reading the clock itself is cached on its other inputs and never advances. */
+export function formatRelativeTime(language: Language, at: number, now: number): string {
   let format = formats.get(language);
   if (!format) {
     format = new Intl.RelativeTimeFormat(language, { numeric: "auto" });

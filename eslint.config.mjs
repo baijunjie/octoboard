@@ -58,8 +58,20 @@ export default defineConfig(
   { files: ["apps/web/app/pages/**/*.vue", "apps/web/app/error.vue"], rules: { "vue/multi-word-component-names": "off" } },
   {
     files: ["packages/ui/**/*.{ts,tsx}"],
-    plugins: { "react-hooks": reactHooks },
-    rules: { "react-hooks/rules-of-hooks": "error" },
+    // The React Compiler's rules, which flag what keeps a component or hook from being compiled.
+    extends: [reactHooks.configs.flat.recommended],
+    rules: {
+      // An effect here lists the values it is to react to, not every value it reads: one that must
+      // fire on a particular change depends on resolved ids and statuses rather than on the store
+      // maps it reads them from, which every daemon event replaces. The rule stays off rather than
+      // disabled per line at each such site because `babel-plugin-react-compiler` skips any function
+      // carrying an `eslint-disable` for it or for `rules-of-hooks`, which would leave every such
+      // component uncompiled.
+      "react-hooks/exhaustive-deps": "off",
+      // Lint-only: it has no bearing on what the compiler compiles. What it finds is state set from
+      // an effect when an input changes, which moving into render would change what each commit shows.
+      "react-hooks/set-state-in-effect": "off",
+    },
   },
   {
     files: source,

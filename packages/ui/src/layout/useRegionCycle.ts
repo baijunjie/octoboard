@@ -1,7 +1,8 @@
 import { setInteractionModality } from "react-aria";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { FOCUSABLE, focusOpenDialog } from "../components/regionFocus";
+import { useLatest } from "../components/useLatest";
 
 /** The window's regions in visual order, each an element (or several) marked `data-region`. The
  * toast stack comes last and is a stop only while a toast is on screen; unlike the others it is not
@@ -70,11 +71,10 @@ export function useRegionCycle({
   shown: Record<ShownRegion, boolean>;
   focusTerminal: () => void;
 }): { cycle: (backward: boolean) => void } {
-  const latest = useRef({ shown, focusTerminal });
-  latest.current = { shown, focusTerminal };
+  const latest = useLatest({ shown, focusTerminal });
   const dialogFocus = useRef<Element | null>(null);
 
-  const cycle = useRef((backward: boolean): void => {
+  const cycle = useCallback((backward: boolean): void => {
     const { shown, focusTerminal } = latest.current;
     if (document.querySelector(MODAL_OPEN)) {
       if (document.querySelector('[role="menu"]') || !shown.banner) return;
@@ -98,7 +98,7 @@ export function useRegionCycle({
       setInteractionModality("keyboard");
       if (focusRegion(region, focusTerminal)) break;
     }
-  }).current;
+  }, [latest]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

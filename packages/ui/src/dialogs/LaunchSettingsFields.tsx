@@ -7,7 +7,7 @@ import { daemonMessage } from "../daemonMessage";
 import type { Translate } from "../i18n/catalog";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Agent, AgentModel } from "../protocol";
-import { useDaemon } from "../store";
+import { useDaemon, useDaemonStore } from "../store";
 import { OptionSelect } from "./OptionSelect";
 import { useAgentModels } from "./useAgentModels";
 
@@ -52,16 +52,17 @@ export function LaunchSettingsFields({
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
-  const { request, store } = useDaemon();
+  const { request } = useDaemon();
   const [expanded, setExpanded] = useState(false);
   const { status, models, unavailable, error } = useAgentModels(request, agent, account, expanded);
   const loading = status === "loading";
+  // Selected as the worded text rather than the records it names, so the field follows a rename
+  // without re-rendering on every other change to those records.
+  const unavailableText = useDaemonStore((s) =>
+    unavailable ? daemonMessage(language, unavailable.code, unavailable.params, unavailable.message, s) : undefined,
+  );
 
-  const modelDescription = loading
-    ? t("dialog.agentSettings.modelsLoading")
-    : unavailable
-      ? daemonMessage(language, unavailable.code, unavailable.params, unavailable.message, store.getState())
-      : error;
+  const modelDescription = loading ? t("dialog.agentSettings.modelsLoading") : (unavailableText ?? error);
   const { levels, none } = effortLevels(models, model);
 
   return (

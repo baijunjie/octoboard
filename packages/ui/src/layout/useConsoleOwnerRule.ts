@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 
+import { useLatest } from "../components/useLatest";
+
 /** How long after a press ends its own handlers are given to set the owner before the held rule
  * runs: the click that selects a row follows the release, as with `joinPressVisits` in
  * `useNavigationHistory`. */
@@ -25,8 +27,7 @@ export interface ConsoleOwnerRule {
  * `apply` is read when it runs, so it sees the state as it is then.
  */
 export function useConsoleOwnerRule(consoleId: string | undefined, apply: () => void): ConsoleOwnerRule {
-  const latest = useRef(apply);
-  latest.current = apply;
+  const latest = useLatest(apply);
   // A press is being waited for / the console changed during it / the owner was set during it.
   const holding = useRef(false);
   const pending = useRef(false);

@@ -107,6 +107,16 @@
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      Keeps `#root` from ever being the last child of `<body>`. Every overlay (menu, popover, tooltip,
+      dialog) is portalled to the end of `<body>`, and while `#root` is the last child, each one
+      mounting or unmounting changes whether `#root` matches `:last-child`. Utilities such as
+      `space-y-*` and `divide-y` select on `:not(:last-child)`, so the browser answers that change by
+      recalculating the style of the whole application, which WebKit takes tens of milliseconds
+      over. With this element after it, an overlay only ever changes this element's position. The
+      module script below is no such sibling: the build moves it into `<head>`.
+    -->
+    <div hidden></div>
     <script type="module" src="./src/main.tsx"></script>
   </body>
 </html>

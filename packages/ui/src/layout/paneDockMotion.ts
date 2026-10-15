@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { useLatest } from "../components/useLatest";
+
 /** Matches the column's CSS width ease and the drawer's `duration-200`. */
 export const PANE_SPAN_MS = 200;
 
@@ -165,8 +167,7 @@ export function usePaneDockMotion(
   const [state, setState] = useState(() => initialDockMotion(shown, peekActive));
   const shownRef = useRef(shown);
   const peekRef = useRef(peekActive);
-  const onPhaseRef = useRef(onPhase);
-  onPhaseRef.current = onPhase;
+  const onPhaseRef = useLatest(onPhase);
 
   useLayoutEffect(() => {
     if (shownRef.current === shown && peekRef.current === peekActive) return;

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 
+import { useLatest } from "../components/useLatest";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Console, Project, Session } from "../protocol";
@@ -48,8 +49,7 @@ export function useStatusItemMenu({
   }, [statusItem, ready, t, consoles, projects, sessions, consoleMap, projectMap]);
 
   // Read at call time: the subscription is made once.
-  const chooseRef = useRef({ sessions, onSessionChosen });
-  chooseRef.current = { sessions, onSessionChosen };
+  const chooseRef = useLatest({ sessions, onSessionChosen });
   useEffect(
     () =>
       statusItem?.onSessionChosen((id) => {

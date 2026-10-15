@@ -21,6 +21,7 @@ import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
 import { activityLabelKey, sessionAccountName, sessionAccountTooltip, sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, statusLabel } from "../sessionLabel";
 import { useDaemonStore } from "../store";
+import { useNow } from "../useNow";
 import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu, sessionMenu } from "./menus";
@@ -581,6 +582,7 @@ function SessionCard({
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
+  const now = useNow();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const rowRef = useRef<HTMLDivElement>(null);
   const label = sessionAriaLabel(t, language, session, accounts, under ?? consoleOwner);
@@ -616,7 +618,7 @@ function SessionCard({
         >
           <AgentAccountText agent={AGENT_LABEL[session.agent]} account={sessionAccountName(t, session, accounts)} />
         </FadeOverflow>
-        <span className="shrink-0">{formatRelativeTime(language, session.started_at)}</span>
+        <span className="shrink-0">{formatRelativeTime(language, session.started_at, now)}</span>
       </RowIconLine>
     </TreeRow>
   );
@@ -634,6 +636,7 @@ function ArchivedRow({
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
+  const now = useNow();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const rowRef = useRef<HTMLDivElement>(null);
   return (
@@ -648,7 +651,7 @@ function ArchivedRow({
         <span className="text-app-muted">{sessionDisplayTitle(t, session)}</span>
       </RowLabel>
       <span className="shrink-0 text-xs text-app-muted">
-        {formatRelativeTime(language, session.ended_at ?? session.started_at)}
+        {formatRelativeTime(language, session.ended_at ?? session.started_at, now)}
       </span>
       <RowControls>
         <ActionMenu label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, session)) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />

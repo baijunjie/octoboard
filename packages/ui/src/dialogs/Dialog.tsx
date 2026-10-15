@@ -7,6 +7,7 @@ import { errorPresentation, hasShellTimeoutDetails, type ErrorPresentation } fro
 import { takeMenuFocusToRestore } from "../components/ActionMenu";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 import { TitledControl } from "../components/TitledControl";
+import { useLatest } from "../components/useLatest";
 import { useT } from "../i18n/react";
 import { dialogAround } from "./dialogElement";
 import { useEscapeWhileTooltipOpen } from "./useEscapeWhileTooltipOpen";
@@ -29,8 +30,7 @@ export function useDialogAction(resetKey?: string): {
   const [error, setError] = useState<ErrorPresentation>();
   const [busy, setBusy] = useState(false);
   const [seenKey, setSeenKey] = useState(resetKey);
-  const currentKey = useRef(resetKey);
-  currentKey.current = resetKey;
+  const currentKey = useLatest(resetKey);
   if (seenKey !== resetKey) {
     setSeenKey(resetKey);
     setError(undefined);

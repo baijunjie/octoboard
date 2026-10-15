@@ -6,6 +6,7 @@ import "@xterm/xterm/css/xterm.css";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { focusTopBar } from "../components/regionFocus";
 import { useFocusHandoff } from "../components/useFocusHandoff";
+import { useLatest } from "../components/useLatest";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { isDormant as isDormantStatus, isLive, type Session } from "../protocol";
@@ -88,7 +89,8 @@ export function TerminalPane({
   // Stored with the session it was worked out for, so that the first render after a session switch
   // does not show the previous session's.
   const [troubleOf, setTroubleOf] = useState<{ session: string; state: "reconnecting" | "disconnected" }>();
-  const trouble = troubleOf?.session === session?.id ? troubleOf?.state : undefined;
+  const troubleIsCurrent = troubleOf?.session === session?.id;
+  const trouble = troubleIsCurrent ? troubleOf?.state : undefined;
   const reconnectAttemptsRef = useRef(0);
   const stableTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // What the controller's theme currently is: the construction below reads it for the initial
@@ -103,12 +105,11 @@ export function TerminalPane({
   // With no session the terminal is covered and inert and cannot take focus, so focus asked for it
   // goes to the top bar wherever it is now, except on `<body>`: `refocusIfLost` asks at mount, and
   // launching the app must not pull focus onto a control.
-  const hasSessionRef = useRef(false);
-  hasSessionRef.current = session !== undefined;
+  const hasSessionRef = useLatest(session !== undefined);
   const focusTerminal = useCallback(() => {
     if (hasSessionRef.current) controllerRef.current?.focus();
     else if (document.activeElement !== document.body) focusTopBar();
-  }, []);
+  }, [hasSessionRef]);
   // The session going away turns the terminal inert, and focus inside it would then fall to
   // `<body>` with no event; hand it to the top bar first.
   const noSession = session === undefined;
@@ -147,8 +148,7 @@ export function TerminalPane({
   }, [canReconnect]);
   // The controller is built once; what it calls on input that wakes an archived session must be
   // the latest `onResume`.
-  const onResumeRef = useRef(onResume);
-  onResumeRef.current = onResume;
+  const onResumeRef = useLatest(onResume);
 
   const handleStatusChange = useCallback((s: TermStatus) => {
     if (stableTimerRef.current) {
@@ -221,15 +221,15 @@ export function TerminalPane({
   // just not connected right now).
   const sessionIsLive = session ? isLive(session.status) : false;
 
+  // Keyed on the id alone, so a status change does not produce a new callback.
+  const attachedId = session?.id;
   const attachCurrent = useCallback(
     (userInitiated: boolean) => {
       const controller = controllerRef.current;
-      if (!controller || !session) return;
-      controller.attach(session.id, terminalUrl(session.id), userInitiated);
+      if (!controller || attachedId === undefined) return;
+      controller.attach(attachedId, terminalUrl(attachedId), userInitiated);
     },
-    // Keyed on the id alone, so only `session.id` may be read in here: anything else would go
-    // stale, since a status change does not produce a new callback.
-    [session?.id, terminalUrl],
+    [attachedId, terminalUrl],
   );
 
   useEffect(() => {
@@ -390,7 +390,7 @@ export function TerminalPane({
         {/* xterm lays its cells out left to right whatever the page's direction. */}
         <div dir="ltr" className="h-full overflow-hidden" ref={containerRef} />
       </div>
-      <TerminalLinkTooltip setLink={setLinkRef} />
+      <TerminalLinkTooltip setLinkRef={setLinkRef} />
       {cover && (
         <div
           ref={coverRef}

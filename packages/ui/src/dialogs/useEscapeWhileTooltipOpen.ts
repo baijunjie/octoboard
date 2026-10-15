@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
+import { useLatest } from "../components/useLatest";
 import { isImeKey } from "../imeKey";
 
 /**
@@ -33,10 +34,8 @@ import { isImeKey } from "../imeKey";
  * on the page was waiting for the key (react-aria 3.52.1, unchanged in 3.53.1).
  */
 export function useEscapeWhileTooltipOpen(surface: () => HTMLElement | null | undefined, onClose: () => void): void {
-  const close = useRef(onClose);
-  close.current = onClose;
-  const find = useRef(surface);
-  find.current = surface;
+  const close = useLatest(onClose);
+  const find = useLatest(surface);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.repeat || isImeKey(event)) return;

@@ -21,6 +21,9 @@ import { ArchiveView } from "./ArchiveView";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+// The clock's own timer would count as pending work in the marquee checks, which these tests do not use it for.
+vi.mock("../useNow", () => ({ useNow: () => 0 }));
+
 // Everything the fixture knows about besides `boundConsoleSession`'s own bound, archived sessions:
 // its own (idle, not archived) row, a second owner, a session bound to that second owner, and an
 // unbound one. Passed in full so the view's own filtering, not the fixture, is what narrows it down.

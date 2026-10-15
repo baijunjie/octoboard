@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { useLatest } from "../components/useLatest";
 import { isolate } from "../i18n/isolate";
 import { t } from "../i18n/language";
 import { usePlatform } from "../platform/react";
@@ -62,8 +63,7 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
   // Read through a ref rather than closed over directly: the listener-registration effect below
   // runs once (mount/unmount only), so `requestQuit`/`doQuit` must look up the latest sessions and
   // callbacks at call time instead of capturing whatever they were when the effect first ran.
-  const optionsRef = useRef(options);
-  optionsRef.current = options;
+  const optionsRef = useLatest(options);
 
   // Set from the moment a quit starts shutting the daemon down, which exits on purpose then.
   const quittingRef = useRef(false);

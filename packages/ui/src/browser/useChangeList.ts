@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
@@ -44,8 +44,10 @@ export function useChangeList(
   // What is held, with the worktree it is of: a list held for another worktree is not this one's.
   const [held, setHeld] = useState<{ worktree: string | undefined; list: ChangeList }>({ worktree, list: { state: "loading" } });
   const live = useRef({ alive: true, active, sequence: 0, inFlight: false, worktree, lastRefresh: 0 });
-  live.current.worktree = worktree;
-  live.current.active = active;
+  useLayoutEffect(() => {
+    live.current.worktree = worktree;
+    live.current.active = active;
+  });
 
   /** Asks for the list. In the `background` a held list or failure stays on screen meanwhile;
    * otherwise a failure gives way to `loading`, as the user asked again. */
@@ -57,6 +59,8 @@ export function useChangeList(
     const setList = (change: (list: ChangeList) => ChangeList) =>
       setHeld((now) => ({ worktree: asked, list: change(now.worktree === asked ? now.list : { state: "loading" }) }));
     s.inFlight = true;
+    // `send` calls itself to retry, which the purity rule takes for a call during render.
+    // eslint-disable-next-line react-hooks/purity
     s.lastRefresh = Date.now();
     setList((list) =>
       list.state === "loading" || (list.state === "error" && !background) ? { state: "loading" } : list.refreshing ? list : { ...list, refreshing: true },

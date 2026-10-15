@@ -61,7 +61,9 @@ export function useDirectoryListings(project: string, active: boolean): Director
   const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
   const [listings, setListings] = useState<ReadonlyMap<string, DirListing>>(new Map());
 
-  // The mutable side, read from callbacks that outlive the render that made them.
+  // The mutable side, read from callbacks that outlive the render that made them. The React Compiler
+  // leaves this hook uncompiled whatever is done about the rule findings marked below: `send` calls
+  // itself to retry, which it takes for a call during render.
   const state = useRef({
     alive: true,
     listings: listings as ReadonlyMap<string, DirListing>,
@@ -74,8 +76,10 @@ export function useDirectoryListings(project: string, active: boolean): Director
     queue: [] as string[],
     inFlight: 0,
     // A browser lists what it wants as it first appears, which counts as its first refresh.
+    // eslint-disable-next-line react-hooks/purity
     lastRefresh: Date.now(),
   });
+  // eslint-disable-next-line react-hooks/refs
   state.current.connected = connected;
 
   const commit = (change: (current: Map<string, DirListing>) => void) => {
@@ -90,6 +94,7 @@ export function useDirectoryListings(project: string, active: boolean): Director
     const s = state.current;
     const sequence = s.sequence.get(dir) ?? 0;
     s.inFlight += 1;
+    // eslint-disable-next-line react-hooks/immutability
     shared.inFlight += 1;
     const current = () => s.alive && s.sequence.get(dir) === sequence;
     let retried = false;
@@ -137,6 +142,7 @@ export function useDirectoryListings(project: string, active: boolean): Director
         for (const other of [...shared.pumps]) other();
       });
   };
+  // eslint-disable-next-line react-hooks/refs
   pump.current = () => {
     const s = state.current;
     while (s.alive && s.inFlight < MAX_IN_FLIGHT && shared.inFlight < MAX_WINDOW_IN_FLIGHT && s.queue.length > 0) {

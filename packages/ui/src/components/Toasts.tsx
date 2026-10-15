@@ -1,5 +1,5 @@
 import { Toast, toast, type ToastContentValue } from "@heroui/react";
-import React, { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import React, { useCallback, useEffect, useSyncExternalStore } from "react";
 import type { QueuedToast } from "react-aria-components";
 
 import { hasShellTimeoutDetails } from "../errorPresentation";
@@ -10,6 +10,7 @@ import { sessionLocation } from "../sessionLabel";
 import { useDaemon, type ToastRequest } from "../store";
 import { TOAST_BREAKPOINT } from "./toastGeometry";
 import { TitledControl } from "./TitledControl";
+import { useLatest } from "./useLatest";
 
 /** How long a toast stays before it dismisses itself. An error gets longer: it says something went
  * wrong, where a notice only says something happened. */
@@ -100,8 +101,7 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
   );
 
   // `keepFocus` has to stay the same function, or HeroUI re-runs it and re-attaches its listeners.
-  const focusTerminalRef = useRef(focusTerminal);
-  focusTerminalRef.current = focusTerminal;
+  const focusTerminalRef = useLatest(focusTerminal);
 
   // A toast is a tab stop, so a mouse press on it would focus it and pull focus off whatever had
   // it. The press is cancelled on everything but the text, which has to stay selectable; a press on
@@ -177,7 +177,7 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
       const active = document.activeElement;
       if (active instanceof HTMLElement && region.contains(active)) active.blur();
     }
-  }, []);
+  }, [focusTerminalRef]);
 
   const narrow = useSyncExternalStore(subscribeNarrow, isNarrow);
 

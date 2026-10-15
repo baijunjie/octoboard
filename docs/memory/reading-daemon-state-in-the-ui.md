@@ -15,6 +15,12 @@ unrelated event of that kind, and nothing flags it: the only symptom is whatever
 one-off check (is the selected session still part of this view?) ends up undoing a state the user set by some other
 route.
 
+A `useMemo` (or `useCallback`) goes one step further: its body reads only what its dependencies name, so resolve the
+values into local variables above it and read those inside, as `currentConsoleId` is in `packages/ui/src/App.tsx`. A
+memo whose body reads the map, or `x.y` where its dependencies say `x?.y`, makes the React Compiler skip the whole
+component ("Existing memoization could not be preserved"), with no lint finding. A `useEffect` of that shape compiles
+and may keep reading the map in its body.
+
 The exception is a derivation whose job is to re-run on every event of that kind — the menu bar's session list, the
 waiting notifications, a rail badge's activity — which does take the map itself.
 

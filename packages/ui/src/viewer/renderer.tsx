@@ -209,6 +209,9 @@ function useDrawnCallback<Instance = unknown>(
   onRender?: (node: HTMLElement, instance: Instance, phase: PostRenderPhase) => void,
 ): (node: HTMLElement, instance: Instance, phase: PostRenderPhase) => void {
   const latest = useRef({ onDrawn, onRender });
+  // Written during render, which leaves this hook out of the React Compiler: the library can call
+  // back from its own effects within the same commit, which must already see these.
+  // eslint-disable-next-line react-hooks/refs
   latest.current = { onDrawn, onRender };
   return useCallback((node, instance, phase) => {
     latest.current.onRender?.(node, instance, phase);
@@ -320,6 +323,9 @@ export const RenderedDiff = memo(function RenderedDiff({
   const how = ended && ended.diff === fileDiff ? ended.how : undefined;
   // Called back with the latest props, so a new callback each render does not reset the expansion.
   const latest = useRef({ loadBodies, labels, trailing, onExpansion });
+  // Written during render, which leaves this component out of the React Compiler: the library can
+  // ask for the labels while it draws within the same commit, which must already see these.
+  // eslint-disable-next-line react-hooks/refs
   latest.current = { loadBodies, labels, trailing, onExpansion };
   const [drawnLabels, setDrawnLabels] = useState<ReturnType<typeof separatorLabels>>([]);
   const onLabels = useCallback((root: ShadowRoot) => {
@@ -334,6 +340,7 @@ export const RenderedDiff = memo(function RenderedDiff({
   const expansion = useMemo(
     () =>
       fileDiff
+        // eslint-disable-next-line react-hooks/refs -- read when the library calls back, never while rendering
         ? new Expansion({
           load: () => latest.current.loadBodies!(),
           labels: () => latest.current.labels,

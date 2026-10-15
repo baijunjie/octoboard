@@ -24,6 +24,9 @@ let Browser = load();
  * to the terminal when Try again replaces it by the empty pane of another load.
  */
 export function LazyProjectBrowser({ focusTerminal, ...props }: Props): React.ReactElement {
+  // Kept out of the React Compiler: a retry puts a new `Browser` in place of the module's, which its
+  // memoization would take for constant and so keep rendering the one that failed.
+  "use no memo";
   const [, retried] = useState(0);
   return (
     <LoadBoundary

@@ -3,14 +3,17 @@ import type { Translate } from "../i18n/catalog";
 import { useCurrentLanguage } from "../i18n/react";
 import { ConfigurationFileError } from "../platform";
 import type { ImportFailure } from "../protocol";
-import { useDaemon } from "../store";
+import { useDaemonStore } from "../store";
 
 /** Words a failure the daemon reported inside a result, as one it answered a request with is
  * worded: in the current language, a record shown by its name. */
 export function useFailureText(): (failure: ImportFailure) => string {
   const language = useCurrentLanguage();
-  const { store } = useDaemon();
-  return (failure) => daemonMessage(language, failure.code, failure.params, failure.message, store.getState());
+  const consoles = useDaemonStore((s) => s.consoles);
+  const projects = useDaemonStore((s) => s.projects);
+  const sessions = useDaemonStore((s) => s.sessions);
+  return (failure) =>
+    daemonMessage(language, failure.code, failure.params, failure.message, { consoles, projects, sessions });
 }
 
 /** What went wrong saving or opening the configuration file, worded in the current language: a file

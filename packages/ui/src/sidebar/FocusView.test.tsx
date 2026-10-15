@@ -14,6 +14,9 @@ import type { SidebarHandlers } from "./types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+// The clock's own timer would count as pending work in the marquee checks, which these tests do not use it for.
+vi.mock("../useNow", () => ({ useNow: () => 0 }));
+
 // Nor `matchMedia`, which `useFlip` asks about reduced motion.
 window.matchMedia ??= ((query: string) => ({ matches: false, media: query })) as unknown as typeof window.matchMedia;
 

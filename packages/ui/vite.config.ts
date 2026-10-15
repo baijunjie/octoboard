@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
-import react from "@vitejs/plugin-react";
+import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
@@ -74,7 +75,13 @@ export default defineConfig(({ command }) => {
     // Relative asset URLs, so the build loads from any static directory: a shell's bundled assets, or
     // a path the daemon serves it under.
     base: "./",
-    plugins: [react(), tailwindcss(), appName, galleryFrameCsp, viewerThemes],
+    // React Compiler memoizes components and hooks, so a component below `App` whose inputs did not
+    // change is skipped when a store update re-renders its parent. Without it every daemon event
+    // that replaces a map re-renders the whole tree: a working session's spinner title alone sends
+    // one such event per frame. `reactCompilerPreset` applies to Vite's client environment only, so
+    // the build, the dev server, the gallery and jsdom tests run the compiled code, while tests in
+    // the node environment run it uncompiled.
+    plugins: [react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss(), appName, galleryFrameCsp, viewerThemes],
     define: { __OCTOBOARD_DEV_PROXY__: JSON.stringify(Boolean(daemonPort)) },
     clearScreen: false,
     test: { setupFiles: ["./src/test/setup.ts"] },

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { isActionMenuOpen } from "../components/ActionMenu";
+import { useLatest } from "../components/useLatest";
 import { usePlatform } from "../platform/react";
 import type { SettingsSectionId } from "./SettingsDialog";
 
@@ -41,10 +42,9 @@ export function useSettingsDialog({
   }, [open]);
 
   // Read through a ref so the subscription is made once.
-  const requestFromMenuRef = useRef(() => {});
-  requestFromMenuRef.current = () => {
+  const requestFromMenuRef = useLatest(() => {
     if (ready && !open && !otherModalOpen && !isActionMenuOpen()) setOpen(true);
-  };
+  });
   useEffect(() => appMenu?.onSettingsRequested(() => requestFromMenuRef.current()), [appMenu]);
 
   return {

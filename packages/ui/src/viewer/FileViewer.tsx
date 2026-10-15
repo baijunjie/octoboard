@@ -8,6 +8,7 @@ import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { TitledControl } from "../components/TitledControl";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
 import { useCopyPath } from "../components/useCopyPath";
+import { useLatest } from "../components/useLatest";
 import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
@@ -120,8 +121,7 @@ export function FileViewer({
   // its Escape and Tab would stop working.
   useRefocusIfLost(() => headerRef.current?.closest<HTMLElement>("[role=dialog]"), [content, wrapClaimed]);
   // The latest callbacks, for a listener added once.
-  const latestNavigation = useRef(navigation);
-  latestNavigation.current = navigation;
+  const latestNavigation = useLatest(navigation);
   useEffect(() => {
     const dialog = headerRef.current?.closest<HTMLElement>("[role=dialog]");
     if (!dialog) return;
@@ -136,14 +136,14 @@ export function FileViewer({
     return () => dialog.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const track = (which: "previous" | "next") => ({
-    onFocus: () => (focusedNavigation.current = which),
-    onBlur: (event: React.FocusEvent) => {
-      // A blur to nowhere is the button turning disabled under focus; anything else is the user
-      // moving on.
-      if (event.relatedTarget !== null && focusedNavigation.current === which) focusedNavigation.current = undefined;
-    },
-  });
+  const focusNavigation = (which: "previous" | "next") => {
+    focusedNavigation.current = which;
+  };
+  const blurNavigation = (which: "previous" | "next", event: React.FocusEvent) => {
+    // A blur to nowhere is the button turning disabled under focus; anything else is the user
+    // moving on.
+    if (event.relatedTarget !== null && focusedNavigation.current === which) focusedNavigation.current = undefined;
+  };
 
   const navigationControls = navigation ? (
     <RowIconGroup>
@@ -152,9 +152,17 @@ export function FileViewer({
         label={t("viewer.previous")}
         onPress={navigation.onPrevious}
         icon="previous"
-        {...track("previous")}
+        onFocus={() => focusNavigation("previous")}
+        onBlur={(event) => blurNavigation("previous", event)}
       />
-      <NavigationButton ref={nextRef} label={t("viewer.next")} onPress={navigation.onNext} icon="next" {...track("next")} />
+      <NavigationButton
+        ref={nextRef}
+        label={t("viewer.next")}
+        onPress={navigation.onNext}
+        icon="next"
+        onFocus={() => focusNavigation("next")}
+        onBlur={(event) => blurNavigation("next", event)}
+      />
     </RowIconGroup>
   ) : null;
 

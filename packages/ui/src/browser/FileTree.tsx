@@ -46,7 +46,11 @@ export function useStableNodes(nodes: TreeNode[]): TreeNode[] {
         return result;
       });
     const result = stable(nodes);
+    // A cache kept across renders, which the React Compiler's rules forbid: this hook stays
+    // uncompiled, as the sharing it exists for needs.
+    // eslint-disable-next-line react-hooks/immutability
     previous.clear();
+    // eslint-disable-next-line react-hooks/immutability
     for (const [key, node] of seen) previous.set(key, node);
     return result;
   }, [nodes]);
@@ -115,6 +119,7 @@ export function FileTree({
     let standIn = standIns.get(node.path);
     if (!standIn) {
       standIn = [{ type: "status", key: `collapsed:${node.path}`, dir: node.path, status: "loading" }];
+      // eslint-disable-next-line react-hooks/immutability -- kept across renders on purpose, which leaves the tree uncompiled
       standIns.set(node.path, standIn);
     }
     return standIn;

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { setInteractionModality } from "react-aria";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import { noAgentAvailable } from "../agents";
 import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
@@ -22,6 +23,7 @@ import { RowControls, RowIconSlot } from "../components/RowControls";
 import { FadedScroller } from "../components/scrollFade";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { StatusIcon } from "../components/StatusIcon";
+import { useStableHandler } from "../components/useLatest";
 import { withGitBadge } from "../gitStatusLabel";
 import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
@@ -94,9 +96,42 @@ export function Sidebar({
   onPeekPress,
   onColumnPhase,
   sidebarWidth,
-  ...handlers
+  visibleBrowserProjectId,
+  onSelectSession,
+  onSwitchConsoleSession,
+  onOpenConsoleSession,
+  onOpenDialog,
+  onFocus,
+  onOpenArchive,
+  onBrowseProject,
+  onOpenProjectDirectory,
+  onOpenProjectTerminal,
+  onCopyProjectName,
+  onSyncProjectGit,
+  onPushProjectBranch,
+  onSetPinned,
+  onOpenSettings,
 }: SidebarProps): React.ReactElement {
   const t = useT();
+  // Built from its members rather than gathered with a rest pattern, which makes a new object on
+  // every render: every row takes it, and the React Compiler keeps this one while its members stay.
+  const handlers = {
+    visibleBrowserProjectId,
+    onSelectSession,
+    onSwitchConsoleSession,
+    onOpenConsoleSession,
+    onOpenDialog,
+    onFocus,
+    onOpenArchive,
+    onBrowseProject,
+    onOpenProjectDirectory,
+    onOpenProjectTerminal,
+    onCopyProjectName,
+    onSyncProjectGit,
+    onPushProjectBranch,
+    onSetPinned,
+    onOpenSettings,
+  } satisfies Record<keyof SidebarHandlers, unknown>;
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   // Per console. Set when the Projects heading's fold button should keep offering Expand until
   // every project of that console is expanded again. A mixed list does not change it; only
@@ -179,11 +214,6 @@ export function Sidebar({
     ? `docked:rounded-xl docked:border ${drawerClass("start", "floating", open, dock.insetShown)}${dock.preparingInset ? " docked:transition-none" : ""}`
     : `${drawerClass("start", "drawer", open)} docked:h-full docked:border-e-0`;
 
-  const consoleSessions = sessions.filter((s) => s.console_id === shownConsole.id);
-  // Every project session's binding badge names the console session it is bound to (`bound_to`) by
-  // looking it up here, once, rather than each row searching the console's sessions itself.
-  const owners = new Map(consoleSessions.filter((s) => s.role === "console").map((s) => [s.id, s]));
-
   // What the sidebar is showing, and how it arrived there: going down into a focus mode slides the
   // new view in from the end, coming back up slides it in from the start, and switching to another
   // console fades it in.
@@ -210,6 +240,13 @@ export function Sidebar({
           : { transform: "translateX(calc(-1 * var(--view-shift)))" };
     viewRef.current?.animate([{ ...from, opacity: 0 }, {}], { duration: 240, easing: "cubic-bezier(0.2, 0, 0, 1)" });
   }, [viewKey]);
+
+  const consoleSessions = sessions.filter((s) => s.console_id === shownConsole.id);
+  // Every project session's binding badge names the console session it is bound to (`bound_to`) by
+  // looking it up here, once, rather than each row searching the console's sessions itself. Every
+  // project row takes it, so it is kept while the console sessions stay the same.
+  const ownerSessions = useSameList(consoleSessions.filter((s) => s.role === "console"));
+  const owners = new Map(ownerSessions.map((s) => [s.id, s]));
 
   let content: React.ReactNode;
   if (focus && "project" in focus) {
@@ -620,7 +657,7 @@ function ProjectNode({
   handlers,
   project,
   parentConsole,
-  sessions,
+  sessions: listed,
   owners,
   selectedSessionId,
   isCollapsed,
@@ -642,12 +679,20 @@ function ProjectNode({
   // the same `GitStatus` reference until this project's own entry changes, so no `useShallow` is
   // needed).
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
+  // Every project is handed newly filtered lists on every session event in the console. Held as the
+  // same arrays while this project's own records stay the same, so its rows and its menu are left
+  // alone by an event about another project.
+  const sessions = useSameList(listed);
+  const menuSessions = useSameList([...sessions, ...owners.values()]);
+  const toggle = useStableHandler(onToggle);
+  // The hooks come before anything derived here: the React Compiler keeps no value whose
+  // computation spans a hook call.
+  const listRef = useFlip<HTMLDivElement>();
+  const rowRef = useRef<HTMLDivElement>(null);
   const rows = liveSessionRows(sessions);
   const lastRootIndex = rows.reduce((last, row, index) => row.under ? last : index, -1);
   const archived = archivedSessions(sessions);
   const activity = consoleActivity(sessions);
-  const listRef = useFlip<HTMLDivElement>();
-  const rowRef = useRef<HTMLDivElement>(null);
   const openSession = () =>
     handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project, binding: { kind: "choose" } });
   const activityKey = activityLabelKey(activity, project.pinned);
@@ -662,7 +707,7 @@ function ProjectNode({
       <TreeRow
         ref={rowRef}
         ariaLabel={withGitBadge(language, t, nameLabel, gitStatus)}
-        onActivate={onToggle}
+        onActivate={toggle}
         expanded={!isCollapsed}
       >
         {/* `min-w-16` is the floor itself: it has to sit on this flex item (`flex-1`'s basis is
@@ -691,7 +736,7 @@ function ProjectNode({
         {isCollapsed && <ActivityMarker activity={activity} />}
         <RowControls>
           <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />
-          <ActionMenu label={t("sidebar.project.actions", { name: isolate(project.name) })} items={projectMenu(t, handlers, project, archived, [...sessions, ...owners.values()], { gitRepository: gitStatus?.repository })} contextTargetRef={rowRef} />
+          <ActionMenu label={t("sidebar.project.actions", { name: isolate(project.name) })} items={projectMenu(t, handlers, project, archived, menuSessions, { gitRepository: gitStatus?.repository })} contextTargetRef={rowRef} />
         </RowControls>
       </TreeRow>
       {!isCollapsed && (
@@ -728,6 +773,15 @@ function ProjectNode({
       )}
     </div>
   );
+}
+
+const sameList = (list: Session[]): Session[] => list;
+
+/** `list`, or the array it returned last time while that holds the same records in the same order.
+ * A hook rather than a bare `useShallow` call so that the React Compiler takes what it returns as
+ * settled and keeps what is derived from it. */
+function useSameList(list: Session[]): Session[] {
+  return useShallow(sameList)(list);
 }
 
 /** A session row: a project session's own, or one of the console's console sessions

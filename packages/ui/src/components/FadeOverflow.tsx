@@ -172,7 +172,7 @@ function useMarquee(
           frame = requestAnimationFrame(step);
           return;
         }
-        waitedSince ??= now;
+        if (waitedSince === undefined) waitedSince = now;
         if (now - waitedSince < pause) {
           frame = requestAnimationFrame(step);
           return;

@@ -1,5 +1,6 @@
 import { createElement, useEffect, useRef, useState } from "react";
 
+import { useLatest } from "../components/useLatest";
 import { DaemonRequestError } from "../daemon-client";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
@@ -153,8 +154,7 @@ export function useChangeReader(project: string): ChangeReader {
   const language = useCurrentLanguage();
   // The wording a failure is given when it happens, not when the patch it belongs to arrived: a
   // loader lives as long as its patch is shown, and the language can change in between.
-  const wording = useRef({ t, language });
-  wording.current = { t, language };
+  const wording = useLatest({ t, language });
   const { request, store } = useDaemon();
   const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
   const [opened, setOpened] = useState<Opened>();

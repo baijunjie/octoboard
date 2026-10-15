@@ -15,6 +15,7 @@ import { Scrim } from "./components/Scrim";
 import { BareTitleBar, TitleBar } from "./components/TitleBar";
 import { Toasts } from "./components/Toasts";
 import { useFirstConsoleHandoff } from "./components/useFirstConsoleHandoff";
+import { useLatest, useStableHandler } from "./components/useLatest";
 import { DaemonRequestError } from "./daemon-client";
 import { ConfirmDialog } from "./dialogs/ConfirmDialog";
 import type { DialogRequest } from "./dialogs/dialogRequest";
@@ -68,8 +69,7 @@ export function App(): React.ReactElement {
   const questionPending = usePendingQuestion();
   const [selectedSessionId, setSelectedSessionId] = useState<string>();
   const [dialogRequest, setDialogRequest] = useState<DialogRequest>();
-  const dialogRequestRef = useRef(dialogRequest);
-  dialogRequestRef.current = dialogRequest;
+  const latestDialogRequest = useLatest(dialogRequest);
   const [archiveScope, setArchiveScope] = useState<ArchiveScope>();
   // Sessions whose `resume_session` is in flight, for the terminal's loading state.
   const [resumingIds, setResumingIds] = useState<ReadonlySet<string>>(new Set());
@@ -226,68 +226,32 @@ export function App(): React.ReactElement {
   // same session share one in-flight guard.
   const inFlightRef = useRef<Set<string>>(new Set());
 
-  /** Runs `action` unless one with the same `key` is in flight; says whether it went through. A
-   * second call while one is in flight counts as having gone through, since what it asks is under
-   * way, and so does an "already running" refusal that is not shown. */
-  const runOnce = async (key: string, action: () => Promise<void>): Promise<boolean> => {
-    if (inFlightRef.current.has(key)) return true;
-    inFlightRef.current.add(key);
-    try {
-      await action();
-      return true;
-    } catch (err) {
-      // The in-flight guard above already stops this client from causing the double-click kind of
-      // "already running" (see `ALREADY_RUNNING_CODES`), but another path to the same session — the
-      // sidebar row and the terminal's Resume button, for instance — can still race it.
-      const isAlreadyRunning = err instanceof DaemonRequestError && ALREADY_RUNNING_CODES.includes(err.code);
-      if (!isAlreadyRunning) {
-        toastError(errorPresentation(err as Error));
-        return false;
-      }
-      return true;
-    } finally {
-      inFlightRef.current.delete(key);
-    }
-  };
+  const runOnce = (key: string, action: () => Promise<void>): Promise<boolean> =>
+    runOnceGuarded(inFlightRef.current, key, action, toastError);
 
   /** Resumes a session; resolves to whether the daemon accepted it, so input held for a session
    * that could not start is not replayed later (`TerminalController.armWake`). A console may now
    * hold any number of live console sessions, so there is nothing to pre-emptively refuse here —
    * selecting, resuming or reopening one simply works, whatever else is running in the console. */
   const resumeSession = async (sessionId: string): Promise<boolean> =>
-    runOnce(`resume:${sessionId}`, async () => {
-      setResumingIds((ids) => new Set(ids).add(sessionId));
-      try {
-        await request({ type: "resume_session", session: sessionId });
-      } finally {
-        setResumingIds((ids) => {
-          const next = new Set(ids);
-          next.delete(sessionId);
-          return next;
-        });
-      }
-    });
+    runOnce(`resume:${sessionId}`, () =>
+      whileResuming(setResumingIds, sessionId, () => request({ type: "resume_session", session: sessionId })),
+    );
 
   /** Switches a session's account. The session counts as resuming while it runs, so its terminal
    * says so instead of offering a Resume that would race the switch. Rejects with the daemon's
    * reason, which the confirmation shows. */
-  const switchAccount = async (sessionId: string, account: string | null): Promise<void> => {
-    setResumingIds((ids) => new Set(ids).add(sessionId));
-    try {
-      await request({ type: "switch_session_account", session: sessionId, account });
-    } catch (err) {
-      // The confirmation shows a failure in place and cannot be dismissed while the switch runs;
-      // were it gone anyway, the reason must not be lost with it.
-      if (dialogRequestRef.current?.kind !== "switch-account") toastError(errorPresentation(err as Error));
-      throw err;
-    } finally {
-      setResumingIds((ids) => {
-        const next = new Set(ids);
-        next.delete(sessionId);
-        return next;
-      });
-    }
-  };
+  const switchAccount = (sessionId: string, account: string | null): Promise<void> =>
+    whileResuming(
+      setResumingIds,
+      sessionId,
+      () => request({ type: "switch_session_account", session: sessionId, account }),
+      (err) => {
+        // The confirmation shows a failure in place and cannot be dismissed while the switch runs;
+        // were it gone anyway, the reason must not be lost with it.
+        if (latestDialogRequest.current?.kind !== "switch-account") toastError(errorPresentation(err as Error));
+      },
+    );
 
   const openConsoleSession = (console_: Console) => openDialog({ kind: "new-console-session", console: console_ });
 
@@ -346,8 +310,7 @@ export function App(): React.ReactElement {
   const consoleSessionStarted = (session: Session, requestingProject: string | null) => {
     if (followsStartedConsoleSession(sidebarView.focus, requestingProject)) selectSession(session, { enterFocus: true });
   };
-  const consoleSessionStartedRef = useRef(consoleSessionStarted);
-  consoleSessionStartedRef.current = consoleSessionStarted;
+  const latestConsoleSessionStarted = useLatest(consoleSessionStarted);
 
   const reopenSession = (session: Session) => {
     selectSession(session);
@@ -418,9 +381,10 @@ export function App(): React.ReactElement {
 
   // The console sessions a console session's focus mode offers to switch between (its switch strip),
   // for ⌃Tab.
+  const currentConsoleId = sidebarView.currentConsole?.id;
   const switchableConsoleSessions = useMemo(
-    () => (sidebarView.currentConsole ? switchStrip(sessionList, sidebarView.currentConsole.id).map((e) => e.consoleSession) : []),
-    [sessionList, sidebarView.currentConsole?.id],
+    () => (currentConsoleId !== undefined ? switchStrip(sessionList, currentConsoleId).map((e) => e.consoleSession) : []),
+    [sessionList, currentConsoleId],
   );
   // Pressing a chip is a selection like pressing the session's row, which also enters its focus mode.
   const switchConsoleSession = (session: Session) => selectSession(session, { enterFocus: true });
@@ -499,6 +463,23 @@ export function App(): React.ReactElement {
     if (next) selectSession(next);
   };
 
+  // Handed to the sidebar's and the rail's rows and to the top bar. The React Compiler cannot keep
+  // these closures from changing with every daemon event (they capture the store's maps, or write
+  // refs), so each is one function for good: an event then renders again only the rows whose own
+  // records it changed.
+  const stableSelectSession = useStableHandler((session: Session) => selectSession(session));
+  const stableSwitchConsoleSession = useStableHandler(switchConsoleSession);
+  const stableOpenConsoleSession = useStableHandler(openConsoleSession);
+  const stableOpenDialog = useStableHandler(openDialog);
+  const stableOpenArchive = useStableHandler(openArchive);
+  const stableBrowseProject = useStableHandler(browseProject);
+  const stableCommitPreview = useStableHandler(commitPreview);
+  const stableNextWaiting = useStableHandler(selectNextWaiting);
+  const stableToggleSidebar = useStableHandler(panes.toggleSidebar);
+  const stableToggleAside = useStableHandler(panes.toggleAside);
+  const stableBack = useStableHandler(navigation.back);
+  const stableForward = useStableHandler(navigation.forward);
+
   // Nothing to show until the first snapshot. The toasts belong here all the same, and so does the
   // banner with the Retry the client offers once it has given up — otherwise this screen would say
   // it is connecting forever with nothing the user can do about it.
@@ -528,18 +509,18 @@ export function App(): React.ReactElement {
       <TitleBar
         sidebarShown={panes.sidebarShown}
         hasSidebar={!noConsoles}
-        onToggleSidebar={panes.toggleSidebar}
+        onToggleSidebar={stableToggleSidebar}
         onSidebarToggleEnter={panes.sidebarPeek.reveal}
         onSidebarToggleLeave={panes.sidebarPeek.leave}
         aside={asideOwner?.kind}
         asideShown={panes.asideShown}
-        onToggleAside={panes.toggleAside}
+        onToggleAside={stableToggleAside}
         onAsideToggleEnter={() => panes.asidePeek.reveal()}
         onAsideToggleLeave={panes.asidePeek.leave}
         canGoBack={navigation.canGoBack}
         canGoForward={navigation.canGoForward}
-        onBack={navigation.back}
-        onForward={navigation.forward}
+        onBack={stableBack}
+        onForward={stableForward}
         selectedSession={selectedSession}
         viewTrail={
           archiveOpen && archiveConsole
@@ -560,9 +541,9 @@ export function App(): React.ReactElement {
           onConsoleEnter={panes.sidebarPeek.hoverConsole}
           onConsoleLeave={panes.sidebarPeek.leaveConsole}
           hoverOpensSidebar={panes.sidebarPeek.peekable}
-          onOpenDialog={openDialog}
+          onOpenDialog={stableOpenDialog}
           waitingCount={waitingSessions.length}
-          onNextWaiting={selectNextWaiting}
+          onNextWaiting={stableNextWaiting}
           onOpenSettings={openSettings}
           focusTerminal={focusTerminal}
         />
@@ -586,14 +567,14 @@ export function App(): React.ReactElement {
                 selectedSessionId={selectedSessionId}
                 shownConsole={shownConsole}
                 focus={previewing ? undefined : sidebarView.focus}
-                onSelectSession={(session) => selectSession(session)}
-                onSwitchConsoleSession={switchConsoleSession}
-                onOpenConsoleSession={openConsoleSession}
-                onOpenDialog={openDialog}
+                onSelectSession={stableSelectSession}
+                onSwitchConsoleSession={stableSwitchConsoleSession}
+                onOpenConsoleSession={stableOpenConsoleSession}
+                onOpenDialog={stableOpenDialog}
                 onFocus={sidebarView.setFocus}
-                onOpenArchive={openArchive}
+                onOpenArchive={stableOpenArchive}
                 visibleBrowserProjectId={panes.asideShown || panes.asidePeek.active ? asideProject?.id : undefined}
-                onBrowseProject={browseProject}
+                onBrowseProject={stableBrowseProject}
                 onOpenProjectDirectory={openProjectDirectory}
                 onOpenProjectTerminal={openProjectTerminal}
                 onCopyProjectName={copyProjectName}
@@ -603,7 +584,7 @@ export function App(): React.ReactElement {
                 onOpenSettings={openSettingsAt}
                 open={panes.sidebarOpen}
                 peek={panes.sidebarDocked ? undefined : panes.sidebarPeek}
-                onPeekPress={commitPreview}
+                onPeekPress={stableCommitPreview}
                 onColumnPhase={setSidebarColumnPhase}
                 sidebarWidth={sidebarWidth}
               />
@@ -710,7 +691,7 @@ export function App(): React.ReactElement {
           onSwitchAccount={switchAccount}
         />
       )}
-      <PendingQuestionDialog onConsoleSessionStarted={(session, project) => consoleSessionStartedRef.current(session, project)} />
+      <PendingQuestionDialog onConsoleSessionStarted={(session, project) => latestConsoleSessionStarted.current(session, project)} />
       {exitConfirmOpen && (
         <ConfirmDialog
           title={t("app.quit.title")}
@@ -723,4 +704,59 @@ export function App(): React.ReactElement {
       )}
     </div>
   );
+}
+
+// The two helpers below sit outside `App` because the React Compiler cannot compile a component
+// holding a `try` with a `finally`.
+
+/** Runs `action` unless one with the same `key` is in `inFlight`; says whether it went through. A
+ * second call while one is in flight counts as having gone through, since what it asks is under
+ * way, and so does an "already running" refusal that is not shown. */
+async function runOnceGuarded(
+  inFlight: Set<string>,
+  key: string,
+  action: () => Promise<void>,
+  toastError: (message: string | Error) => void,
+): Promise<boolean> {
+  if (inFlight.has(key)) return true;
+  inFlight.add(key);
+  try {
+    await action();
+    return true;
+  } catch (err) {
+    // The in-flight guard above already stops this client from causing the double-click kind of
+    // "already running" (see `ALREADY_RUNNING_CODES`), but another path to the same session — the
+    // sidebar row and the terminal's Resume button, for instance — can still race it.
+    const isAlreadyRunning = err instanceof DaemonRequestError && ALREADY_RUNNING_CODES.includes(err.code);
+    if (!isAlreadyRunning) {
+      toastError(errorPresentation(err as Error));
+      return false;
+    }
+    return true;
+  } finally {
+    inFlight.delete(key);
+  }
+}
+
+/** Runs `work` with `sessionId` counted as resuming, for the terminal's loading state, until it
+ * settles. A failure goes to `onError` first and is then passed on. */
+async function whileResuming(
+  setResumingIds: React.Dispatch<React.SetStateAction<ReadonlySet<string>>>,
+  sessionId: string,
+  work: () => Promise<unknown>,
+  onError?: (err: unknown) => void,
+): Promise<void> {
+  setResumingIds((ids) => new Set(ids).add(sessionId));
+  try {
+    await work();
+  } catch (err) {
+    onError?.(err);
+    throw err;
+  } finally {
+    setResumingIds((ids) => {
+      const next = new Set(ids);
+      next.delete(sessionId);
+      return next;
+    });
+  }
 }

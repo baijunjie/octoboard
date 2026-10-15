@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
+import { useLatest } from "../components/useLatest";
 import { useT } from "../i18n/react";
 import type { Agent, Event, RequestBody } from "../protocol";
 
@@ -27,8 +28,7 @@ export function useDetectedAgent(
   const t = useT();
   const key = query ? JSON.stringify(query) : undefined;
   const [answered, setAnswered] = useState<{ key: string; error?: string }>();
-  const latest = useRef({ request, query, onDetected, t });
-  latest.current = { request, query, onDetected, t };
+  const latest = useLatest({ request, query, onDetected, t });
 
   useEffect(() => {
     // An answer held from an earlier run is no answer for this one, even for the same query: the

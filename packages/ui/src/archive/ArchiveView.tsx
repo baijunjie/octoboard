@@ -18,6 +18,7 @@ import { formatRelativeTime } from "../relativeTime";
 import { sessionAccountName, sessionAccountTooltip, sessionAgentLabel, sessionDisplayTitle } from "../sessionLabel";
 import { archivedSessionRows, boundArchivedSessions } from "../sidebar/order";
 import { NESTED_ROW_CLASS } from "../sidebar/rows";
+import { useNow } from "../useNow";
 
 /** How many rows the list adds each time its end scrolls into view. */
 const PAGE = 30;
@@ -62,6 +63,7 @@ export function ArchiveView({
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
+  const now = useNow();
   const archived = archivedSessionRows(boundTo ? boundArchivedSessions(sessions, boundTo.id) : sessions);
   const [shown, setShown] = useState(PAGE);
   const sentinelRef = useRef<HTMLLIElement>(null);
@@ -166,14 +168,14 @@ export function ArchiveView({
                     className="text-xs text-app-muted"
                     titleWhenClipped={t("archive.meta", {
                       agent: sessionAgentLabel(t, session, accounts),
-                      archived: formatRelativeTime(language, session.ended_at ?? session.started_at),
+                      archived: formatRelativeTime(language, session.ended_at ?? session.started_at, now),
                     })}
                   >
                     <Message
                       id="archive.meta"
                       params={{
                         agent: <AgentAccountText agent={AGENT_LABEL[session.agent]} account={sessionAccountName(t, session, accounts)} />,
-                        archived: formatRelativeTime(language, session.ended_at ?? session.started_at),
+                        archived: formatRelativeTime(language, session.ended_at ?? session.started_at, now),
                       }}
                     />
                   </FadeOverflow>

@@ -11,6 +11,7 @@ import { FADE_SIZE } from "../components/scrollFade";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
+import { useStableHandler } from "../components/useLatest";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { AsidePane, type AsideLayout } from "../layout/AsidePane";
@@ -155,14 +156,16 @@ export function ProjectBrowser({
     if (evidence.state !== "unknown") lastEvidence.current = { path: viewedPath, evidence, folder };
   }, [dirs.listings, viewedPath, reader.shown.state]);
 
+  // One function for the component's life, so that `navigation` changes only with the neighbours.
+  const openNeighbour = useStableHandler(openFile);
   const navigation = useMemo(() => {
     if (viewedPath === undefined) return undefined;
     const { previous, next } = neighbours(tree.files, viewedPath);
     return {
-      onPrevious: previous === undefined ? undefined : () => openFile(previous),
-      onNext: next === undefined ? undefined : () => openFile(next),
+      onPrevious: previous === undefined ? undefined : () => openNeighbour(previous),
+      onNext: next === undefined ? undefined : () => openNeighbour(next),
     };
-  }, [tree.files, viewedPath]);
+  }, [tree.files, viewedPath, openNeighbour]);
 
   const root = dirs.listings.get("");
   const rootLoading = root === undefined || root.state === "loading";

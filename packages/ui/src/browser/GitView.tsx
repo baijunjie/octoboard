@@ -233,25 +233,28 @@ function WorktreeChanges({
  * it goes, which is what `filterToggleRef` is for. */
 function ChangeViewToggles({ changeView }: { changeView: ChangeViewState }): React.ReactElement {
   const t = useT();
+  // Taken apart first: the React Compiler counts every read of an object that carries a ref as a
+  // read of that ref during render.
+  const { filterToggleRef, filterOpen, onFilterOpenChange, layout } = changeView;
   return (
     <RowIconGroup className="ms-auto">
       <IconToggle
-        ref={changeView.filterToggleRef}
-        label={t(changeView.filterOpen ? "git.filter.hide" : "git.filter.show")}
-        isSelected={changeView.filterOpen}
-        expanded={changeView.filterOpen}
-        onChange={changeView.onFilterOpenChange}
+        ref={filterToggleRef}
+        label={t(filterOpen ? "git.filter.hide" : "git.filter.show")}
+        isSelected={filterOpen}
+        expanded={filterOpen}
+        onChange={onFilterOpenChange}
       >
-        {changeView.filterOpen ? <FunnelX aria-hidden="true" className="size-4" /> : <Funnel aria-hidden="true" className="size-4" />}
+        {filterOpen ? <FunnelX aria-hidden="true" className="size-4" /> : <Funnel aria-hidden="true" className="size-4" />}
       </IconToggle>
       <IconToggle
-        label={t(changeView.layout === "tree" ? "git.layout.flat" : "git.layout.tree")}
-        isSelected={changeView.layout === "tree"}
+        label={t(layout === "tree" ? "git.layout.flat" : "git.layout.tree")}
+        isSelected={layout === "tree"}
         onChange={(selected) => changeLayout.set(selected ? "tree" : "flat")}
       >
         {/* Both glyphs hang their rows off the leading side, so they mirror under right-to-left,
             as the sidebar's fold control does. */}
-        {changeView.layout === "tree" ? <FolderTree aria-hidden="true" className="size-4 rtl:-scale-x-100" /> : <List aria-hidden="true" className="size-4 rtl:-scale-x-100" />}
+        {layout === "tree" ? <FolderTree aria-hidden="true" className="size-4 rtl:-scale-x-100" /> : <List aria-hidden="true" className="size-4 rtl:-scale-x-100" />}
       </IconToggle>
     </RowIconGroup>
   );

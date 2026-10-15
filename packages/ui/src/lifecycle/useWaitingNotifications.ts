@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 
+import { useLatest } from "../components/useLatest";
 import { t } from "../i18n/language";
 import { usePlatform } from "../platform/react";
 import type { Console, Project, Session } from "../protocol";
@@ -36,8 +37,7 @@ export function useWaitingNotifications(
   // `consoles`/`projects` only feed the notification body text, not the waiting/newly-waiting diff
   // itself; reading them through a ref keeps them out of the effect's deps, so a console or project
   // rename alone does not re-run the badge and notify pass for every session.
-  const locationsRef = useRef({ consoles, projects });
-  locationsRef.current = { consoles, projects };
+  const locationsRef = useLatest({ consoles, projects });
 
   useEffect(() => {
     if ((!notifications && !badge) || !ready) return;

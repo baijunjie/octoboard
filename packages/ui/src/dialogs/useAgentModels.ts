@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
+import { useLatest } from "../components/useLatest";
 import { useT } from "../i18n/react";
 import type { Agent, AgentModel, Event, ModelsUnavailable, RequestBody } from "../protocol";
 
@@ -34,8 +35,7 @@ export function useAgentModels(
   const t = useT();
   const key = enabled ? JSON.stringify([agent, account]) : undefined;
   const [answered, setAnswered] = useState<Answer>();
-  const latest = useRef({ request, agent, account, t });
-  latest.current = { request, agent, account, t };
+  const latest = useLatest({ request, agent, account, t });
 
   useEffect(() => {
     // An answer is kept across the section being collapsed and opened again: the `key` check below

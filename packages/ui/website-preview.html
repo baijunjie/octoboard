@@ -13,6 +13,13 @@
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      Keeps `#root` from ever being the last child of `<body>`: overlays are portalled to the end of
+      `<body>`, and each one mounting or unmounting would otherwise flip whether `#root` matches
+      `:last-child`, which WebKit answers by recalculating the style of the whole application. The
+      module script below is no such sibling: the build moves it into `<head>`.
+    -->
+    <div hidden></div>
     <script type="module" src="./src/website-preview/main.tsx"></script>
   </body>
 </html>
