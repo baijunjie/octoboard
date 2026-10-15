@@ -10,7 +10,26 @@ export const homeFeatures = [
 
 export const homeSteps = ["One", "Two", "Three"] as const;
 
-export const collaborationScenarios = ["Claude", "Gpt", "Grok"] as const;
+export const collaborationScenarios = [
+  {
+    brand: "Claude",
+    icon: "claude",
+    strengths: "featureThreeClaudeStrengths",
+    applications: "featureThreeClaudeApplications",
+  },
+  {
+    brand: "Gpt",
+    icon: "codex",
+    strengths: "featureThreeGptStrengths",
+    applications: "featureThreeGptApplications",
+  },
+  {
+    brand: "Grok",
+    icon: "grok",
+    strengths: "featureThreeGrokDescription",
+    applications: "featureThreeGrokUsage",
+  },
+] as const;
 
 export const homeQuestions = [
   "One",

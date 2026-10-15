@@ -172,17 +172,14 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     ...homeFeatures.flatMap((feature) => [
       heading(3, text(`feature${feature.key}Title`)),
       text(`feature${feature.key}Description`),
-      ...(feature.key === "Three"
-        ? [
-          collaborationScenarios
-            .map(
-              (scenario) =>
-                `- **${text(`featureThree${scenario}Title`)}** — ${text(`featureThree${scenario}Description`)}`,
-            )
-            .join("\n"),
-        ]
-        : []),
     ]),
+    heading(3, text("collaborationStrengthsTitle")),
+    collaborationScenarios
+      .map(
+        (scenario) =>
+          `- **${text(`featureThree${scenario.brand}Title`)}** — ${text(scenario.strengths)} ${text(scenario.applications)}`,
+      )
+      .join("\n"),
     heading(2, text("localTitle")),
     text("localDescription"),
     link(text("localLink"), privacy),

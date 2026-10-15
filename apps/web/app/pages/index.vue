@@ -170,7 +170,7 @@ useSeoMeta({
       </div>
     </section>
 
-    <section class="principles-section section-space" data-reveal>
+    <section id="principles" class="principles-section section-space" data-reveal>
       <div class="wrap">
         <SectionHeading
           number="04"
@@ -188,12 +188,29 @@ useSeoMeta({
             <p>{{ t(`feature${feature.key}Description`) }}</p>
           </article>
         </div>
-        <ul class="brand-strengths">
-          <li v-for="brand in collaborationScenarios" :key="brand">
-            <h3>{{ t(`featureThree${brand}Title`) }}</h3>
-            <p>{{ t(`featureThree${brand}Description`) }}</p>
-          </li>
-        </ul>
+        <div id="agent-strengths" class="brand-collaboration">
+          <h3 class="brand-collaboration-title">
+            <span class="red-square" aria-hidden="true" />
+            {{ t("collaborationStrengthsTitle") }}
+          </h3>
+          <ul class="brand-strengths">
+            <li v-for="scenario in collaborationScenarios" :key="scenario.brand">
+              <div class="brand-strengths-identity">
+                <img
+                  :src="`${config.app.baseURL}agents/${scenario.icon}.svg`"
+                  alt=""
+                  width="22"
+                  height="22"
+                />
+                <h4>{{ t(`featureThree${scenario.brand}Title`) }}</h4>
+              </div>
+              <p class="brand-strengths-focus">
+                {{ t(scenario.strengths) }}
+              </p>
+              <p>{{ t(scenario.applications) }}</p>
+            </li>
+          </ul>
+        </div>
       </div>
     </section>
 

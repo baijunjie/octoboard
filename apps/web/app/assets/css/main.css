@@ -1027,26 +1027,60 @@ h3 {
   color: #fff;
   background: #ffffff12;
 }
+.brand-collaboration {
+  margin-top: 24px;
+  padding-top: 32px;
+  border-top: 1px solid #363636;
+}
+.brand-collaboration-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 22px;
+  text-wrap: initial;
+}
+.brand-collaboration-title .red-square {
+  align-self: flex-start;
+  margin-top: 12px;
+}
 .brand-strengths {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0 64px;
-  margin: 0;
+  margin: 28px 0 0;
   padding: 0;
   list-style: none;
 }
 .brand-strengths li {
-  padding-block: 28px 4px;
+  padding-block: 24px 4px;
   border-top: 1px solid #363636;
 }
-.brand-strengths h3 {
-  font-size: 20px;
+.brand-strengths-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand-strengths-identity img {
+  object-fit: contain;
+}
+.brand-strengths h4 {
+  margin: 0;
+  color: #aaa;
+  font-size: 15px;
+  font-weight: 500;
 }
 .brand-strengths p {
   margin-top: 8px;
   color: #aaa;
   font-size: 15px;
   line-height: 1.7;
+}
+.brand-strengths .brand-strengths-focus {
+  margin-top: 20px;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.4;
 }
 .trust-grid {
   display: grid;

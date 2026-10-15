@@ -2,13 +2,13 @@
 """Draw one 1200×630 share image for each website language.
 
 The card is the large-card size (1.91:1). Layout: the mascot on the left; on
-the right the wordmark, the localized slogan, and the three homepage title
+the right the wordmark, the localized slogan and its meaning, and the three homepage title
 lines, with the site hostname along the bottom of that text. A right-to-left
 title moves the mascot to the right and aligns the text to its inner edge. The
 mascot and the wordmark are not mirrored.
 
-The wordmark is public/wordmark.png, the same on every card. The slogan and
-the title lines come from each locale catalog, and {appName} is filled from
+The wordmark is public/wordmark.png, the same on every card. The slogan, its
+meaning, and the title lines come from each locale catalog, and {appName} is filled from
 config/app.json. The hostname comes from the origin written in site.config.ts.
 The filename uses the route code (zh, not zh-Hans), which is the code in
 seo/site-seo.ts. A line that does not fit, or a character the face cannot
@@ -45,6 +45,7 @@ WORDMARK = WEB / "public/wordmark.png"
 WIDTH, HEIGHT = 1200, 630
 BACKGROUND = (0x00, 0x00, 0x00)
 TEXT_SECONDARY = (0xB8, 0xB8, 0xB8)
+TEXT_SUPPORTING = (0x99, 0x99, 0x99)
 TEXT_TERTIARY = (0x77, 0x77, 0x77)
 GLOW = (0xFF, 0x4B, 0x3E)
 
@@ -60,6 +61,8 @@ TAGLINE_SIZES = (42, 28)
 NAME_SLOGAN_GAP = 20
 SLOGAN_TITLE_GAP = 28
 SLOGAN_SIZES = (26, 20)
+MEANING_SIZES = (22, 18)
+SLOGAN_MEANING_GAP = 12
 TEXT_BLOCK_LIFT = 12
 DOMAIN_CLEARANCE = 24
 HERO_LINES = ("heroTitle", "heroTitleSecond", "heroTitleAccent")
@@ -224,6 +227,27 @@ def glyph_bitmap(font: ImageFont.FreeTypeFont, text: str) -> bytes:
     return canvas.tobytes()
 
 
+def wrap_meaning(face: str, text: str, max_width: int) -> tuple[ImageFont.FreeTypeFont, list[str]]:
+    # CJK permits breaks between characters; other scripts keep words together.
+    tokens = re.findall(r"[\u3040-\u30ff\u3400-\u9fff]|[^\s\u3040-\u30ff\u3400-\u9fff]+|\s+", text)
+    for size in range(MEANING_SIZES[0], MEANING_SIZES[1] - 1, -2):
+        font = load_font(face, size, 500)
+        lines: list[str] = []
+        line = ""
+        for token in tokens:
+            candidate = line + token
+            if line.strip() and font.getlength(candidate.rstrip()) > max_width:
+                lines.append(line.rstrip())
+                line = token.lstrip()
+            else:
+                line = candidate
+        if line.strip():
+            lines.append(line.rstrip())
+        if len(lines) <= 3 and all(font.getlength(line) <= max_width for line in lines):
+            return font, lines
+    raise SystemExit(f"Slogan meaning does not fit in three lines: {text!r}")
+
+
 def check_glyphs(font: ImageFont.FreeTypeFont, texts: list[str], face: str) -> None:
     """Fail when a character draws as the font's .notdef glyph.
 
@@ -267,7 +291,7 @@ def glow(diameter: int) -> Image.Image:
     return orb
 
 
-def render(slogan: str, lines: list[str], face: str, domain: str, *, rtl: bool) -> Image.Image:
+def render(slogan: str, meaning: str, lines: list[str], face: str, domain: str, *, rtl: bool) -> Image.Image:
     image = Image.new("RGBA", (WIDTH, HEIGHT), (*BACKGROUND, 255))
     icon = mascot()
     icon_size = icon.width
@@ -292,20 +316,29 @@ def render(slogan: str, lines: list[str], face: str, domain: str, *, rtl: bool) 
         raise SystemExit(f"{WORDMARK.name} is {brand.width}px wide and the column is {max_width}px")
     line_font = fit_size(face, lines, max_width, TAGLINE_SIZES, 500)
     slogan_font = fit_size(face, [slogan], max_width, SLOGAN_SIZES, 500)
+    meaning_font, meaning_lines = wrap_meaning(face, meaning, max_width)
     domain_font = load_font("Geist", 28, 500)
     check_glyphs(line_font, lines, face)
     check_glyphs(slogan_font, [slogan], face)
+    check_glyphs(meaning_font, meaning_lines, face)
     check_glyphs(domain_font, [domain], "Geist")
 
     # Gaps are measured on ink, not on the pen origin. Faces sit on that
     # origin by different amounts, and a fixed origin gap changes with the face.
     slogan_top = slogan_font.getbbox(slogan)[1]
     slogan_height = slogan_font.getbbox(slogan)[3] - slogan_top
+    meaning_top = meaning_font.getbbox(meaning_lines[0])[1]
+    meaning_line_height = int(meaning_font.size * 1.45)
+    meaning_height = (
+        meaning_line_height * (len(meaning_lines) - 1)
+        + meaning_font.getbbox(meaning_lines[-1])[3] - meaning_top
+    )
     line_top = line_font.getbbox(lines[0])[1]
     line_bottom = line_font.getbbox(lines[-1])[3]
     line_height = int(line_font.size * 1.35)
     block_height = (
-        brand.height + NAME_SLOGAN_GAP + slogan_height + SLOGAN_TITLE_GAP
+        brand.height + NAME_SLOGAN_GAP + slogan_height
+        + SLOGAN_MEANING_GAP + meaning_height + SLOGAN_TITLE_GAP
         + line_height * (len(lines) - 1) + (line_bottom - line_top)
     )
     top = (HEIGHT - block_height) // 2 - TEXT_BLOCK_LIFT
@@ -317,8 +350,14 @@ def render(slogan: str, lines: list[str], face: str, domain: str, *, rtl: bool) 
     image.alpha_composite(brand, (brand_x, top))
     draw = ImageDraw.Draw(image)
     slogan_y = top + brand.height + NAME_SLOGAN_GAP - slogan_top
-    draw.text((text_x, slogan_y), slogan, font=slogan_font, fill=TEXT_TERTIARY, anchor=anchor)
-    y = top + brand.height + NAME_SLOGAN_GAP + slogan_height + SLOGAN_TITLE_GAP - line_top
+    draw.text((text_x, slogan_y), slogan, font=slogan_font, fill=TEXT_SECONDARY, anchor=anchor)
+    meaning_y = top + brand.height + NAME_SLOGAN_GAP + slogan_height + SLOGAN_MEANING_GAP
+    for index, line in enumerate(meaning_lines):
+        draw.text(
+            (text_x, meaning_y - meaning_top + index * meaning_line_height),
+            line, font=meaning_font, fill=TEXT_SUPPORTING, anchor=anchor,
+        )
+    y = meaning_y + meaning_height + SLOGAN_TITLE_GAP - line_top
     for line in lines:
         draw.text((text_x, y), line, font=line_font, fill=TEXT_SECONDARY, anchor=anchor)
         y += line_height
@@ -333,8 +372,8 @@ def main() -> None:
         face = FONT_BY_CODE.get(code, "Geist")
         catalog = json.loads((WEB / "i18n/locales" / filename).read_text("utf-8"))
         lines = catalog_lines(catalog, name, code, HERO_LINES)
-        (slogan,) = catalog_lines(catalog, name, code, ("brandSlogan",))
-        image = render(slogan, lines, face, domain, rtl=is_rtl(lines))
+        slogan, meaning = catalog_lines(catalog, name, code, ("brandSlogan", "brandSloganMeaning"))
+        image = render(slogan, meaning, lines, face, domain, rtl=is_rtl(lines))
         destination = WEB / "public" / f"og-image-{code}.png"
         image.save(destination, "PNG", optimize=True)
         print(f"  public/og-image-{code}.png")

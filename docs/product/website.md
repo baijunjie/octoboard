@@ -81,16 +81,17 @@ Each language has one share image, 1200 by 630, at the deployment root as `og-im
 The route code is the URL code in "Pages and languages", so Simplified Chinese is `og-image-zh.png`,
 not `zh-Hans`. The image shows the mascot published as `logo.png` at the deployment root, the pixel
 wordmark published as `wordmark.png` at the deployment root, that language's brand slogan drawn as text
-under the wordmark (see "Brand slogan"; the sentence that states the slogan's two meanings is not drawn),
-the three lines of the homepage title, and the hostname `octoboard.dev`.
-The wordmark, the slogan and the title lines share one start edge. Those lines are the title on the homepage,
+under the wordmark, followed by the localized sentence that states the slogan's two meanings
+(see "Brand slogan"), the three lines of the homepage title, and the hostname `octoboard.dev`.
+The meaning sentence wraps into at most three lines. The wordmark, the slogan, the meaning sentence
+and the title lines share one start edge. Those lines are the title on the homepage,
 not the SEO title sentence. Arabic places the mascot on the right and aligns the text to that inner edge. Neither
 the mascot nor the wordmark is mirrored.
 
 `og:image` and `twitter:image` are the absolute URL of that language's image. `og:image:width` is 1200 and
 `og:image:height` is 630. `twitter:card` is `summary_large_image`. `og:image:alt` is the application name,
-an em dash, that language's brand slogan, an em dash, then the three homepage title lines joined with
-spaces, with a space on each side of each dash.
+an em dash, that language's brand slogan, an em dash, the sentence that states its two meanings,
+an em dash, then the three homepage title lines joined with spaces, with a space on each side of each dash.
 The privacy page uses the same image and the same alt text as that language's homepage. The unlocalized 404
 page uses the English image and the same alt text as the English homepage. It is not a separate card.
 An error within the running site does not set a share image.
@@ -167,11 +168,16 @@ The four principles cover reducing manual coordination, keeping independent nati
 rules, coordinating agents from different brands, and letting the user work directly with the project agent
 handling a task. The four principles are peers. Each is a title and one short paragraph, and the different-brands
 principle does not contain a list. Each project keeps the agent it already uses, and an individual step can be
-given to an agent from another brand when needed. Under the four principles, three equal columns state model-brand
-strengths, in order: Claude is strong at programming, GPT at image generation and device control, and Grok at copy
-and language. The names are Claude, GPT, and Grok, not the agent products Claude Code, Codex, and Grok Build. On a
-small screen the three columns stack into one. The homepage Markdown lists the same three strengths, in the same
-order, under that principle.
+given to an agent from another brand when needed. Under the four principles, a shared heading explains applying
+different agents' strengths within the same project. Three equal columns each show a brand icon and name,
+its strengths, and concrete uses, in order: Claude for programming and system design, including feature
+implementation, refactoring and architecture; GPT for image generation, device control and proposal planning,
+including image assets, validating flows on devices and developing plans; and Grok for copy and language,
+including interface copy, product introductions and multilingual expression. The names are Claude, GPT, and Grok,
+not the agent products Claude Code, Codex, and Grok Build. On a small screen the three columns stack into one.
+The homepage Markdown includes the shared heading and lists the same strengths and uses in the same order
+after the four principles. The different-brand FAQ also describes these strengths and the coordinator assigning
+work accordingly and collecting results.
 
 The homepage describes projects in five categories: server-side services, administration tools, merchant operations
 tools, staff operations tools and customer-facing apps. Staff operations include staff ordering, checkout and
@@ -302,9 +308,10 @@ if its startup fails. JavaScript is required to load and operate either preview.
 ## Brand slogan
 
 The brand slogan is "The Programming Terminator" in English. The sentence that states the slogan's two meanings
-carries both readings of the pun: programming ends here, and the programming itself is as formidable as the
-Terminator. It is not a pun on "terminal". The slogan expresses a vision and a brand identity; it does not claim
-that fully autonomous development is already implemented.
+carries both readings of the pun: bringing programming to an end, and having capability that rivals the
+Terminator. It states these two ideas without repeating the slogan as a prefix. It is not a pun on "terminal".
+The slogan expresses a vision and a brand identity; it does not claim that fully autonomous development is
+already implemented.
 
 Every language has its own slogan, which keeps those meanings and uses the film's title in that language where one
 is established (Brazilian Portuguese "O Exterminador", Thai "คนเหล็ก", Vietnamese "Kẻ hủy diệt"). Translations use
@@ -313,9 +320,9 @@ the two meanings.
 
 The slogan appears as the eyebrow above the homepage title, as text under the wordmark in the closing section, under
 the wordmark on the share image, and in that language's homepage Markdown. The meaning sentence is shown under the
-wordmark in the closing section and is included in that homepage Markdown. It is not drawn on the share image,
-and the image's alt text uses the slogan rather than that sentence. On the website the slogan remains localized
-text rather than part of the wordmark artwork.
+wordmark in the closing section, follows the slogan on the share image, and is included in that homepage
+Markdown. The image's alt text includes both the slogan and the meaning sentence. On the website the slogan
+remains localized text rather than part of the wordmark artwork.
 
 ## Platform availability
 
