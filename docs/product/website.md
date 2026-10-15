@@ -173,22 +173,29 @@ and language. The names are Claude, GPT, and Grok, not the agent products Claude
 small screen the three columns stack into one. The homepage Markdown lists the same three strengths, in the same
 order, under that principle.
 
+The homepage describes projects in five categories: server-side services, administration tools, merchant operations
+tools, staff operations tools and customer-facing apps. Staff operations include staff ordering, checkout and
+kitchen work; customer-facing apps include web and mobile ordering.
+
 The workflow illustration places Octoboard's mascot and coordinating agent at the center of eight distinct
-project-agent nodes: admin, merchant, customer, server, mobile, staff tablet, point of sale and kitchen. Every node
-identifies its agent brand, project role and example directory. Codex handles admin, server and point of sale;
-Claude Code handles merchant, mobile and kitchen; Grok Build handles customer and staff tablet. The nodes surround
-the coordinator on wide screens and form two columns below it on small screens. Curved connections carry outgoing
-task signals and incoming report signals, with a labelled direction legend.
+project-agent nodes: Promotion console, Store management console, Customer ordering website, Restaurant order API,
+Mobile ordering app, Staff ordering tablet, Checkout register and Kitchen display. Every node identifies its agent
+brand, concrete example project and directory. Codex handles Promotion console, Restaurant order API and Checkout
+register; Claude Code handles Store management console, Mobile ordering app and Kitchen display; Grok Build handles
+Customer ordering website and Staff ordering tablet. The nodes surround the coordinator on wide screens and form
+two columns below it on small screens. Curved connections carry outgoing task signals and incoming report signals,
+with a labelled direction legend.
 
 Selecting a node by pointer or keyboard highlights it and shows its directory, native project context, instructions,
-Skills and hooks, assigned task, and report below the diagram. The admin app at `apps/admin-web` is selected initially.
+Skills and hooks, assigned task, and report below the diagram. Promotion console at `apps/admin-web` is selected
+initially.
 Each project has its own task and report in the example of launching a meal deal promotion across restaurant
-locations. The admin app sets prices, promotion dates and eligible locations; the merchant app handles listings,
-stock and order redemption; the customer web app supports browsing, ordering and order details; and the server
-validates promotion dates and locations, calculates prices, deducts stock and prevents duplicate orders. The mobile
-app offers customer browsing, ordering and redemption codes. The staff tablet supports ordering by table, adding
-meal deals and synchronizing orders. The point-of-sale app handles checkout, discount validation and redemption;
-the kitchen app handles preparation tickets and synchronizes food-ready status.
+locations. Promotion console sets prices, promotion dates and eligible locations; Store management console handles
+listings, stock and order redemption; Customer ordering website supports browsing, ordering and order details; and
+Restaurant order API validates promotion dates and locations, calculates prices, deducts stock and prevents
+duplicate orders. Mobile ordering app offers customer browsing, ordering and redemption codes. Staff ordering
+tablet supports ordering by table, adding meal deals and synchronizing orders. Checkout register handles checkout,
+discount validation and redemption; Kitchen display handles preparation tickets and synchronizes food-ready status.
 
 The summary represents the central coordinator collecting the participating projects' results into one feature
 delivery. The three stages below it explain giving a goal to the coordinator, letting project agents work, and following or
@@ -238,24 +245,31 @@ destination or another language closes the dialog as well.
 
 The preview shows the actual application's interface populated with fictional data and identifies itself as a
 sample. Three buttons select project management, team reports, or code review; project management is the initial
-scene. All three scenes follow the restaurant meal deal promotion across eight independent example projects:
-admin, merchant, customer, server, mobile, staff tablet, point of sale and kitchen. They show the coordinating
-and project sessions, a delivery report, and a selected order-validation diff. Choosing a scene resets the
-demonstration to that scene's prepared state.
+scene. All three scenes follow the restaurant meal deal promotion across the eight independent example projects
+named in "Homepage and navigation", using the same concrete project names. They show the coordinating and project
+sessions, a delivery report, and a selected order-validation diff. Choosing a scene resets the demonstration to that
+scene's prepared state.
 
-Each project has its own sample repository, with a distinct root, feature branch, file tree and changes. Selecting
-another project shows that project's source and diffs. The frontend projects include components, API clients,
-domain rules, tests and configuration for their respective restaurant roles; the server project includes order
-handling, HTTP validation, database queries and migrations, and tests. Files can be opened in the real viewer, and
-the source shown there agrees with the corresponding diff. All sample repositories exist only in memory; their
-displayed source is not executed.
+Each of the eight projects has its own sample repository, with a distinct root, feature branch, business files and
+Git changes. Selecting another project shows that project's source and diffs. The examples cover promotion
+configuration in Promotion console, store availability and redemption in Store management console, browsing and
+checkout in Customer ordering website, and order validation, stock reservation and duplicate-request handling in
+Restaurant order API. Mobile ordering app has browsing, order retry and paid-order collection passes; Staff ordering
+tablet has table orders, meal-deal extras and revision conflicts; Checkout register has server quotes, payment and
+redemption confirmation; Kitchen display has station tickets, printer-job status and food-ready updates. Each
+repository includes tests for its own role; frontend repositories also include components, API clients, domain rules
+and web configuration, while Restaurant order API includes HTTP validation, database queries and migrations.
+
+Files can be opened in the real viewer, and the source shown there agrees with the corresponding diff. All sample
+repositories exist only in memory; their displayed source is not executed. The examples do not provide working
+restaurant services, payment devices or printers.
 
 The delivery report summarizes each project's result and presents sample figures of eight coordinated projects,
 48 passed checks and one decision awaiting confirmation: whether the meal deal can be combined with a member
 discount. The sample keeps the discounts separate. The code-review scene shows `src/meal-deal-orders.ts` on the
-server project, with changes that calculate prices from an eligible active offer, reserve available stock and
-prevent repeated requests from creating duplicate orders, alongside sample tests and promotion rules. These files
-and check counts are demonstration data.
+Restaurant order API project, with changes that calculate prices from an eligible active offer, reserve available
+stock and prevent repeated requests from creating duplicate orders, alongside sample tests and promotion rules.
+These files and check counts are demonstration data.
 
 The homepage embeds a complete desktop viewport scaled to fit its available width. The application fills the
 embedded viewport, with the sample-data explanation in a caption below it. Once ready, the embedded

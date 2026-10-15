@@ -47,11 +47,14 @@ public website's static output; the normal application build retains its own ent
 - [`packages/ui/src/website-preview/daemon.ts`](src/website-preview/daemon.ts) exports `createPreviewDaemon`, routing
   project browsing requests to independent gallery fixture daemons while keeping application state and terminals shared.
 - [`packages/ui/src/website-preview/repositories/index.ts`](src/website-preview/repositories/index.ts) exports
-  `previewRepositories`, assembling file and Git fixtures from the separate Admin, Merchant, Customer and Server
-  examples, plus the Mobile, Tablet, Point of sale and Kitchen apps in
-  [`packages/ui/src/website-preview/repositories/clients.ts`](src/website-preview/repositories/clients.ts).
+  `previewRepositories`, assembling independent file and Git fixtures from eight role-specific repository modules:
+  [Admin](src/website-preview/repositories/admin.ts), [Merchant](src/website-preview/repositories/merchant.ts),
+  [Customer](src/website-preview/repositories/customer.ts), [Server](src/website-preview/repositories/server.ts),
+  [Mobile](src/website-preview/repositories/mobile.ts), [Tablet](src/website-preview/repositories/tablet.ts),
+  [Point of sale](src/website-preview/repositories/pos.ts) and [Kitchen](src/website-preview/repositories/kitchen.ts).
+  Each module owns its business source files and Git changes.
   [`packages/ui/src/website-preview/repositories/types.ts`](src/website-preview/repositories/types.ts) defines
-  `RepositoryExample` and the `webFiles` helper for shared example scaffolding.
+  `RepositoryExample` and the `webFiles` helper for shared web build scaffolding.
 - [`packages/ui/src/website-preview/storage.ts`](src/website-preview/storage.ts) exports `installPreviewStorage`,
   which installs ephemeral preference storage before application modules load.
 - [`packages/ui/src/website-preview/scrollBridge.ts`](src/website-preview/scrollBridge.ts) exports

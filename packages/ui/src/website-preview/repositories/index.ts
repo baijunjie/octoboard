@@ -8,7 +8,10 @@ import { admin } from "./admin";
 import { merchant } from "./merchant";
 import { customer } from "./customer";
 import { server } from "./server";
-import { kitchen, mobile, pos, tablet } from "./clients";
+import { mobile } from "./mobile";
+import { tablet } from "./tablet";
+import { pos } from "./pos";
+import { kitchen } from "./kitchen";
 import type { RepositoryExample } from "./types";
 
 /** Full-context patches keep the display fixture and its expandable whole-file bodies identical.

@@ -14,13 +14,32 @@ const primaryFiles: Record<string, string> = {
   "preview-merchant": "src/domain/availability.ts",
   "preview-customer": "src/components/Checkout.tsx",
   "preview-server": "src/meal-deal-orders.ts",
-  "preview-mobile": "src/domain/role.ts",
-  "preview-tablet": "src/domain/role.ts",
-  "preview-pos": "src/domain/role.ts",
-  "preview-kitchen": "src/domain/role.ts",
+  "preview-mobile": "src/domain/redemption.ts",
+  "preview-tablet": "src/domain/add-ons.ts",
+  "preview-pos": "src/domain/checkout.ts",
+  "preview-kitchen": "src/domain/print-job.ts",
 };
 
 describe("the website's eight independent repository fixtures", () => {
+  it("gives every role a distinct business source and change list", () => {
+    const sources = new Set<string>();
+    const changes = new Set<string>();
+    for (const [id, repository] of previewRepositories) {
+      const source = repository.files[primaryFiles[id]];
+      if (!source || !("text" in source)) throw new Error("Missing business source");
+      sources.add(source.text!);
+      const entries = repository.git.changes[repository.git.worktrees[0].id];
+      if (!Array.isArray(entries)) throw new Error("Missing changes");
+      changes.add(JSON.stringify(entries.map(({ entry }) => {
+        if (!("new" in entry) || entry.new.state !== "present")
+          throw new Error("Expected current business files");
+        return entry.new.path;
+      }).sort()));
+    }
+    expect(sources.size).toBe(8);
+    expect(changes.size).toBe(8);
+  });
+
   it.each([...previewRepositories])(
     "routes %s source, directories, files and Git to the same repository",
     async (id, repository) => {
