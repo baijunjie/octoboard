@@ -4,6 +4,46 @@ import { describe, expect, it } from "vitest";
 import { createFixtureDaemon } from "./fixtureDaemon";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 
+describe("the fixture daemon's system directory action", () => {
+  const project = projectOf("p", "c", "Website");
+  const state = snapshotState({ projects: [project] });
+  const scenario = { id: "directory-action", group: "Project pane: files" as const, title: "", state };
+
+  it("acknowledges a known project without opening a host application and refuses an unknown one", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(daemon.request({ type: "open_project_directory", project: project.id })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "open_project_directory", project: "missing" })).rejects.toMatchObject({ code: "unknown_project", params: { project: "missing" } });
+    expect(daemon.store.getState().projects.get(project.id)).toEqual(project);
+  });
+
+  it("returns the configured directory failure, after checking project ownership", async () => {
+    const error = { code: "directory_unavailable", params: { detail: "The directory no longer exists" }, message: "Directory unavailable" };
+    const daemon = createFixtureDaemon({ ...scenario, projectDirectoryOpenError: error });
+    await expect(daemon.request({ type: "open_project_directory", project: project.id })).rejects.toMatchObject({ code: error.code, params: error.params });
+    await expect(daemon.request({ type: "open_project_directory", project: "missing" })).rejects.toMatchObject({ code: "unknown_project" });
+  });
+});
+
+describe("the fixture daemon's project file trees", () => {
+  it("uses each project's tree for listings and reads, retaining the shared fallback", async () => {
+    const daemon = createFixtureDaemon({
+      id: "project-trees", group: "Project pane: files", title: "",
+      files: { "": { dir: true }, "website.txt": { text: "Website" } },
+      filesByProject: { api: { "": { dir: true }, "api.txt": { text: "Search API" } } },
+    });
+    await expect(daemon.request({ type: "list_project_dir", project: "api", path: "" })).resolves.toMatchObject({
+      entries: [{ name: "api.txt" }],
+    });
+    await expect(daemon.request({ type: "list_project_dir", project: "web", path: "" })).resolves.toMatchObject({
+      entries: [{ name: "website.txt" }],
+    });
+    await expect(daemon.request({ type: "read_project_file", project: "api", path: "api.txt" })).resolves.toMatchObject({
+      file: { text: "Search API" },
+    });
+    await expect(daemon.request({ type: "read_project_file", project: "api", path: "website.txt" })).rejects.toMatchObject({ code: "file_not_found" });
+  });
+});
+
 describe("the fixture daemon's session creation", () => {
   it("honors a console session's explicit agent, account, name and launch overrides", async () => {
     const owner = consoleOf("c", "Release", { default_agent: "claude", codex_account_id: "work", codex_console_session_model: "inherited-model", codex_console_session_effort: "high" });

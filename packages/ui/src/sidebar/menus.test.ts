@@ -84,6 +84,25 @@ describe("a project's menu", () => {
     expect(labels("focused")).toContain("Open terminal");
   });
 
+  it.each(["list", "focused", "nested"] as const)("offers Browse files only while this project's browser is not visible in the %s menu", (placement) => {
+    for (const visibleBrowserProjectId of [undefined, "other", "p"]) {
+      const handlers = { visibleBrowserProjectId } as SidebarHandlers;
+      const menu = projectMenu(t, handlers, { id: "p" } as Project, [], [], { placement });
+      const menuLabels = menu.flatMap((entry) => typeof entry === "object" ? [entry.label] : []);
+      expect(menuLabels.includes("Browse files")).toBe(visibleBrowserProjectId !== "p");
+      expect(menuLabels).toContain("Open in file manager");
+    }
+  });
+
+  it("opens this project's directory in the file manager", () => {
+    const project = { id: "p" } as Project;
+    const handlers = { onOpenProjectDirectory: vi.fn(), visibleBrowserProjectId: "p" } as unknown as SidebarHandlers;
+    const menu = projectMenu(t, handlers, project, [], []);
+    const entry = menu.find((item) => typeof item === "object" && item.label === "Open in file manager");
+    (entry as { onClick: () => void }).onClick();
+    expect(handlers.onOpenProjectDirectory).toHaveBeenCalledExactlyOnceWith(project);
+  });
+
   it("puts sync and push under Git only for a git repository", () => {
     const git = (repository: boolean) => {
       const entry = projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], [], { gitRepository: repository }).find(

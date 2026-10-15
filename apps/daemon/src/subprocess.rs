@@ -1,5 +1,5 @@
-//! Running one subprocess the daemon spawned directly, to completion, within bounds: a deadline,
-//! a ceiling on what it may print, and a cancel. Every stop kills the whole process group rather
+//! Running a subprocess to completion within bounds, or detaching an external application.
+//! Bounded runs have a deadline, an output ceiling, and a cancel. Every stop kills the whole process group rather
 //! than the direct child, so anything it forked (`ssh`, an askpass helper) goes with it. Capturing
 //! the login shell's environment, which can leave a background process of its own holding a pipe
 //! open and so needs a completion marker rather than end-of-file, is `crate::env_shell`'s.
@@ -12,6 +12,32 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
+
+/// Starts `command` in a new session and reaps it on another thread. The new session is what
+/// keeps the application alive after the daemon exits; the thread is what keeps it from staying a
+/// zombie until then. A failure to exec is reported by `spawn` itself.
+pub fn spawn_detached(mut command: Command) -> Result<(), String> {
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    // SAFETY: `setsid` takes no arguments and only affects this child, which has not returned
+    // from `exec` yet. If it fails, the closure returns that error, `spawn` ends the child
+    // before `exec` and returns the error, and no application is started.
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let mut child = command.spawn().map_err(|err| err.to_string())?;
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
+}
 
 /// Upper bound on the bounded reap attempted after a timeout's `SIGKILL`. A process wedged in an
 /// uninterruptible kernel wait (a dead network mount under `/Volumes` is the realistic trigger

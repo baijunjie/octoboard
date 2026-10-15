@@ -19,10 +19,12 @@ export type ArchiveScope = { console: string } &
 /** What focus mode is given over to: one project, or one console session. */
 export type FocusTarget = { project: Project } | { consoleSession: Session };
 
-/** The callbacks the sidebar triggers. Kept as one object, passed down by reference rather than
+/** The sidebar action callbacks and shared menu state. Kept as one object, passed down by reference rather than
  * spread, so a child's prop list says exactly what data it narrows instead of inheriting whatever
  * the parent happened to have in scope under the same names. */
 export interface SidebarHandlers {
+  /** The project whose browser is currently visible, including a drawer or floating pane. */
+  visibleBrowserProjectId?: string;
   onSelectSession: (session: Session) => void;
   /** Enters a console session's focus mode and selects it, as one navigation. */
   onSwitchConsoleSession: (session: Session) => void;
@@ -33,6 +35,8 @@ export interface SidebarHandlers {
   onOpenArchive: (scope: ArchiveScope) => void;
   /** Opens the project's browser in the aside, starting nothing. */
   onBrowseProject: (project: Project) => void;
+  /** Opens the project directory in the system file manager. */
+  onOpenProjectDirectory: (project: Project) => void;
   /** Opens the system terminal at the project's directory. */
   onOpenProjectTerminal: (project: Project) => void;
   /** Checks the project against its remote and fast-forwards it now, whatever the automatic sync

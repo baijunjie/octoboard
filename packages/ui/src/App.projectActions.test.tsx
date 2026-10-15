@@ -1,0 +1,103 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { expect, it, onTestFinished, vi } from "vitest";
+
+import { App } from "./App";
+import { setProjectBrowserMode, useProjectBrowserState } from "./browser/browserState";
+import { mountForTooltip } from "./components/tooltipTestSupport";
+import { consoleOf, projectOf, snapshotState } from "./gallery/fixtures/builders";
+import { isolate } from "./i18n/isolate";
+import { PlatformProvider } from "./platform/react";
+import type { Project } from "./protocol";
+import { createStateStore, DaemonProvider, type Daemon } from "./store";
+import { ThemeProvider } from "./theme";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+vi.mock("./browser/LazyProjectBrowser", () => ({
+  LazyProjectBrowser: ({ project }: { project: Project }) => {
+    const state = useProjectBrowserState(project.id);
+    return <div data-browser={project.id} data-mode={state.mode} />;
+  },
+}));
+vi.mock("./terminal/TerminalController", () => ({
+  TerminalController: class {
+    mount() {}
+    dispose() {}
+    fit() {}
+    syncSize() {}
+    setInputLabel() {}
+    detach() {}
+    disarmWake() {}
+  },
+}));
+
+function mountApp(narrow = false) {
+  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: !narrow && media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  document.documentElement.style.setProperty("--rail-width", "48px");
+  document.documentElement.style.setProperty("--breakpoint-docked", "1148px");
+  onTestFinished(() => {
+    vi.unstubAllGlobals();
+    document.documentElement.style.removeProperty("--rail-width");
+    document.documentElement.style.removeProperty("--breakpoint-docked");
+  });
+  const console_ = consoleOf("c-actions", "Main");
+  const projects = [projectOf("p-actions", console_.id, "Website"), projectOf("p-other", console_.id, "API")];
+  const daemon: Daemon = {
+    store: createStateStore(snapshotState({ consoles: [console_], projects })),
+    request: vi.fn(async () => ({ type: "ack" })) as Daemon["request"],
+    toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
+    dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
+  };
+  const container = mountForTooltip(
+    <PlatformProvider value={{ kind: "browser" }}>
+      <ThemeProvider><DaemonProvider value={daemon}><App /></DaemonProvider></ThemeProvider>
+    </PlatformProvider>,
+  );
+  return { container, daemon, project: projects[0] };
+}
+
+async function press(label: string) {
+  const target = Array.from(document.querySelectorAll<HTMLElement>("button, [role=menuitem]")).find((element) =>
+    element.getAttribute("aria-label") === label || element.textContent === label,
+  );
+  expect(target, label).toBeDefined();
+  await act(async () => target!.click());
+}
+
+const menuHas = (label: string) => Array.from(document.querySelectorAll("[role=menuitem]")).some((item) => item.textContent === label);
+const openProjectMenu = (name: string) => press(`Actions for project ${isolate(name)}`);
+
+it.each([false, true])("reopens a hidden project's Files pane when narrow=%s", async (narrow) => {
+  const { container, project } = mountApp(narrow);
+  if (narrow) await press("Show sessions");
+  await openProjectMenu(project.name);
+  await press("Browse files");
+  expect(container.querySelector(`[data-browser="${project.id}"]`)?.getAttribute("data-mode")).toBe("files");
+  expect(container.querySelector('[data-region="topbar"] [aria-label="Hide project pane"]')).not.toBeNull();
+  if (!narrow) {
+    await openProjectMenu(project.name);
+    expect(menuHas("Browse files")).toBe(false);
+    await press("Open in file manager");
+    await openProjectMenu("API");
+    expect(menuHas("Browse files")).toBe(true);
+    await press("Open in file manager");
+  }
+  await press("Hide project pane");
+  if (narrow) await press("Show sessions");
+  await act(async () => setProjectBrowserMode(project.id, "git"));
+  await openProjectMenu(project.name);
+  expect(menuHas("Browse files")).toBe(true);
+  await press("Browse files");
+  expect(container.querySelector(`[data-browser="${project.id}"]`)?.getAttribute("data-mode")).toBe("files");
+  expect(container.querySelector('[data-region="topbar"] [aria-label="Hide project pane"]')).not.toBeNull();
+});
+
+it("sends the project directory request and reports a failure through the normal toast", async () => {
+  const { daemon, project } = mountApp();
+  vi.mocked(daemon.request).mockRejectedValueOnce(new Error("The system file manager could not be opened."));
+  await openProjectMenu(project.name);
+  await press("Open in file manager");
+  expect(daemon.request).toHaveBeenCalledWith({ type: "open_project_directory", project: project.id });
+  expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith("The system file manager could not be opened.");
+});

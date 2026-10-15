@@ -796,6 +796,10 @@ export type RequestBody =
   /** Opens the system terminal at the project's directory, on the daemon's host. Answered with
    * `ack` once the terminal has been asked to open. */
   | { type: "open_project_terminal"; project: string }
+  /** Opens the project's directory in the system file manager on the daemon's host. Answered
+   * with `ack` once `open` succeeds on macOS, or `xdg-open` is spawned on Linux; later Linux
+   * launcher failures are not observed. */
+  | { type: "open_project_directory"; project: string }
   /** Pushes the project's current branch and only that branch. Answered with `ack` once `git push`
    * has exited; a success is followed by `project_git_status` from a local re-read. */
   | { type: "push_project_branch"; project: string }

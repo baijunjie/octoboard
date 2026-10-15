@@ -1274,6 +1274,12 @@ pub enum RequestBody {
     OpenProjectTerminal {
         project: String,
     },
+    /// Opens the project's directory in the system file manager on the daemon's host. Answered
+    /// with `ack` once `open` succeeds on macOS, or once `xdg-open` is spawned on Linux (later
+    /// failures are not observed). Refused with `directory_unavailable` if validation or launch fails.
+    OpenProjectDirectory {
+        project: String,
+    },
     /// Pushes the project's current branch, and only that branch, never with `--force`. Answered
     /// with `ack` once `git push` has exited; a success is followed by `project_git_status` from a
     /// local re-read, with no fetch. Refused with `not_a_git_repository`, `not_on_a_branch`,
@@ -1975,6 +1981,8 @@ pub mod error_code {
     pub const GIT_FAILED: &str = "git_failed";
     /// The system terminal could not be opened at a project's directory. `params` names `detail`.
     pub const TERMINAL_UNAVAILABLE: &str = "terminal_unavailable";
+    /// The system file manager could not open a project directory. `params` names `detail`.
+    pub const DIRECTORY_UNAVAILABLE: &str = "directory_unavailable";
     /// A push was asked for while `HEAD` is detached. Nothing was pushed.
     pub const NOT_ON_A_BRANCH: &str = "not_on_a_branch";
     /// A push was asked for on a branch that has no commit yet. Nothing was pushed.
@@ -2182,6 +2190,13 @@ mod tests {
                 r#"{"type":"open_project_terminal","id":"request-1","project":"project-7"}"#,
                 |body| match body {
                     RequestBody::OpenProjectTerminal { project } => Some(project),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"open_project_directory","id":"request-1","project":"project-7"}"#,
+                |body| match body {
+                    RequestBody::OpenProjectDirectory { project } => Some(project),
                     _ => None,
                 },
             ),

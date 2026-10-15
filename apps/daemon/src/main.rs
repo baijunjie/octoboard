@@ -25,6 +25,7 @@ mod hostfs;
 mod instance_lock;
 mod loopback;
 mod mcp;
+mod open_directory;
 mod open_terminal;
 mod outbox;
 mod paths;

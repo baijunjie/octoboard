@@ -23,6 +23,7 @@ use crate::git_remote;
 use crate::git_status;
 use crate::hostfs;
 use crate::mcp;
+use crate::open_directory;
 use crate::open_terminal;
 use crate::protocol::{
     error_code, now_millis, Account, Agent, Availability, CodedError, Console, Event, Origin,
@@ -665,6 +666,16 @@ pub async fn handle(
             let path = project.path;
             tokio::task::spawn_blocking(move || open_terminal::open_directory(Path::new(&path)))
                 .await??;
+            Ok(None)
+        }
+
+        RequestBody::OpenProjectDirectory { project } => {
+            let project = state
+                .store
+                .get_project(&project)?
+                .ok_or_else(|| CodedError::unknown_project(&project))?;
+            let path = project.path;
+            tokio::task::spawn_blocking(move || open_directory::open(Path::new(&path))).await??;
             Ok(None)
         }
 

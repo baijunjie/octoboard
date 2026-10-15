@@ -168,78 +168,80 @@ export function ProjectBrowser({
   const rootLoading = root === undefined || root.state === "loading";
   return (
     <AsidePane layout={layout} label={t("browser.label", { project: isolate(project.name) })} className="control-fills">
-      <Tabs selectedKey={mode} onSelectionChange={(key) => browser.setMode(key as BrowserMode)} className="flex min-h-0 flex-1 flex-col gap-0">
-        <div ref={headerRef} className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator ps-3 pe-2 text-sm">
-          <FolderOpen aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
-          <h2 className="flex min-w-0 flex-1 font-medium">
-            <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={project.name}>
-              {project.name}
-            </FadeOverflow>
-          </h2>
-          <Tabs.List aria-label={t("browser.modes")} className="w-auto min-w-0 shrink-0 p-0.5">
-            {/* Keep hovered labels at full opacity and use the foreground colour for clear feedback. */}
-            <Tabs.Tab id="files" className="h-7 px-3 whitespace-nowrap hover:text-foreground hover:opacity-100">
-              {t("browser.mode.files")}
-              <Tabs.Indicator />
-            </Tabs.Tab>
-            <Tabs.Tab id="git" className="h-7 px-3 whitespace-nowrap hover:text-foreground hover:opacity-100">
-              {t("browser.mode.git")}
-              <Tabs.Indicator />
-            </Tabs.Tab>
-          </Tabs.List>
-          <TitledControl title={t("browser.refresh")}>
-            <Button isIconOnly size="sm" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("browser.refresh")} preventFocusOnPress onPress={pressRefresh}>
-              <RefreshCw aria-hidden="true" className={spinning > 0 ? "size-4 motion-safe:animate-spin-slow" : "size-4"} />
-            </Button>
-          </TitledControl>
-        </div>
-        <Tabs.Panel id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
-          <StatusAnnouncer text={rootLoading ? t("browser.loading") : undefined} />
-          {rootLoading ? (
-            <div aria-hidden="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-app-muted">
-              <Spinner size="sm" aria-hidden="true" />
-              {t("browser.loading")}
-            </div>
-          ) : root.state === "error" ? (
-            <RootError
-              message={root.message}
+      <div className="project-browser-entry relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <Tabs selectedKey={mode} onSelectionChange={(key) => browser.setMode(key as BrowserMode)} className="project-browser-view flex min-h-0 flex-1 flex-col gap-0">
+          <div ref={headerRef} className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator ps-3 pe-2 text-sm">
+            <FolderOpen aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
+            <h2 className="flex min-w-0 flex-1 font-medium">
+              <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={project.name}>
+                {project.name}
+              </FadeOverflow>
+            </h2>
+            <Tabs.List aria-label={t("browser.modes")} className="w-auto min-w-0 shrink-0 p-0.5">
+              {/* Keep hovered labels at full opacity and use the foreground colour for clear feedback. */}
+              <Tabs.Tab id="files" className="h-7 px-3 whitespace-nowrap hover:text-foreground hover:opacity-100">
+                {t("browser.mode.files")}
+                <Tabs.Indicator />
+              </Tabs.Tab>
+              <Tabs.Tab id="git" className="h-7 px-3 whitespace-nowrap hover:text-foreground hover:opacity-100">
+                {t("browser.mode.git")}
+                <Tabs.Indicator />
+              </Tabs.Tab>
+            </Tabs.List>
+            <TitledControl title={t("browser.refresh")}>
+              <Button isIconOnly size="sm" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("browser.refresh")} preventFocusOnPress onPress={pressRefresh}>
+                <RefreshCw aria-hidden="true" className={spinning > 0 ? "size-4 motion-safe:animate-spin-slow" : "size-4"} />
+              </Button>
+            </TitledControl>
+          </div>
+          <Tabs.Panel id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
+            <StatusAnnouncer text={rootLoading ? t("browser.loading") : undefined} />
+            {rootLoading ? (
+              <div aria-hidden="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-app-muted">
+                <Spinner size="sm" aria-hidden="true" />
+                {t("browser.loading")}
+              </div>
+            ) : root.state === "error" ? (
+              <RootError
+                message={root.message}
+                onRetry={(from) => {
+                  // The error and its button go as the listing starts again; focus on it moves to the
+                  // header's Refresh, which stays.
+                  handFocusOff(from, headerRef.current, true);
+                  dirs.refresh([""]);
+                }}
+              />
+            ) : tree.nodes.length === 0 && root.complete ? (
+              <CenteredEmptyPanel icon={FolderX} message={t("browser.empty")} />
+            ) : (
+              <>
+                <FileTree
+                  nodes={tree.nodes}
+                  expanded={expandedKeys}
+                  label={t("browser.tree.label")}
+                  onExpandedChange={onExpandedChange}
+                  onOpenFile={openFile}
+                  onRetry={(dir) => dirs.refresh([dir])}
+                  treeRef={treeRef}
+                />
+                {!root.complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-app-muted">{t("browser.partial")}</p>}
+              </>
+            )}
+          </Tabs.Panel>
+          <Tabs.Panel id="git" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
+            <GitView
+              {...git.view}
+              selectedSessionId={selectedSessionId}
               onRetry={(from) => {
-                // The error and its button go as the listing starts again; focus on it moves to the
-                // header's Refresh, which stays.
+                // The failure and its button go as the request starts again; focus on it moves to
+                // the header's Refresh, which stays.
                 handFocusOff(from, headerRef.current, true);
-                dirs.refresh([""]);
+                refresh();
               }}
             />
-          ) : tree.nodes.length === 0 && root.complete ? (
-            <CenteredEmptyPanel icon={FolderX} message={t("browser.empty")} />
-          ) : (
-            <>
-              <FileTree
-                nodes={tree.nodes}
-                expanded={expandedKeys}
-                label={t("browser.tree.label")}
-                onExpandedChange={onExpandedChange}
-                onOpenFile={openFile}
-                onRetry={(dir) => dirs.refresh([dir])}
-                treeRef={treeRef}
-              />
-              {!root.complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-app-muted">{t("browser.partial")}</p>}
-            </>
-          )}
-        </Tabs.Panel>
-        <Tabs.Panel id="git" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
-          <GitView
-            {...git.view}
-            selectedSessionId={selectedSessionId}
-            onRetry={(from) => {
-              // The failure and its button go as the request starts again; focus on it moves to
-              // the header's Refresh, which stays.
-              handFocusOff(from, headerRef.current, true);
-              refresh();
-            }}
-          />
-        </Tabs.Panel>
-      </Tabs>
+          </Tabs.Panel>
+        </Tabs>
+      </div>
       {reader.subject && (
         <FileViewer
           subject={reader.subject}

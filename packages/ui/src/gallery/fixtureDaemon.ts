@@ -84,7 +84,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
     }
   };
 
-  const files = scenario.files ?? SAMPLE_FILES;
+  const projectFiles = (project: string) => scenario.filesByProject?.[project] ?? scenario.files ?? SAMPLE_FILES;
   const git = scenario.git === undefined ? SAMPLE_GIT : scenario.git;
   const fail = ({ code, params, message }: FixtureError): never => {
     throw new DaemonRequestError(daemonMessage(currentLanguage(), code, params, message, store.getState()), code, params);
@@ -92,7 +92,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
   const gitReply = createGitReplies(git, fail);
   const configurationReply = createConfigurationReplies(scenario.configuration, store.getState, fail);
   /** A browse request's path, or the daemon error it is answered with, worded as the store words one. */
-  const browsed = (path: string): FixtureFile => {
+  const browsed = (files: FixtureFiles, path: string): FixtureFile => {
     const file = files[path];
     if (file?.error) {
       const { code, params, message } = file.error;
@@ -126,6 +126,11 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           if (reply) return fail(reply);
           const updated = { ...session, account_id: account?.id, config_dir: account?.config_dir };
           store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, updated) }));
+          return { type: "ack" };
+        }
+        case "open_project_directory": {
+          if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
+          if (scenario.projectDirectoryOpenError) return fail(scenario.projectDirectoryOpenError);
           return { type: "ack" };
         }
         case "set_session_pinned": {
@@ -206,12 +211,13 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           return { type: "ack" };
         }
         case "list_project_dir": {
-          const dir = browsed(body.path);
+          const files = projectFiles(body.project);
+          const dir = browsed(files, body.path);
           const complete = "dir" in dir ? dir.complete !== false : true;
           return { type: "project_dir", project: body.project, worktree: null, path: body.path, root_id: "fixture", entries: entriesUnder(files, body.path), complete };
         }
         case "read_project_file": {
-          const file = browsed(body.path);
+          const file = browsed(projectFiles(body.project), body.path);
           const source = { kind: "live" as const, root_id: "fixture", version: "1" };
           const content =
             "text" in file

@@ -226,11 +226,13 @@ At the row's end are a **+** button, **New session**, which opens the new-sessio
 "Opening a session" in `docs/product/sessions.md`), and the project's action menu. The same menu is the focused
 project's, and a project's heading in a console session's focus mode, apart from the items those views leave out
 (see "What both views show" and "A console session's focus mode" in `docs/product/focus-mode.md`). Choosing an item
-closes the menu at once. The first items, set apart from the rest, are **Browse files**, **Open terminal** and,
-while the project's status says the directory is a git repository, **Git**.
+closes the menu at once. The first group contains **Browse files** when offered, **Open in file manager**, **Open
+terminal** and, while the project's status says the directory is a git repository, **Git**.
 
-- **Browse files** — shows the project's files in the right pane, selecting, starting and resuming no session (see
-  `docs/product/project-pane.md`).
+- **Browse files** — see "Opening a project's files" in `docs/product/project-pane.md` for its visibility and the
+  Files mode it opens.
+- **Open in file manager** — opens the project's directory in the system file manager on the daemon's host; see
+  "Opening the system file manager" below.
 - **Open terminal** — every project, including one that is not a git repository and one whose git status has not
   arrived. Opens the system terminal at the project's directory (see "Opening a project terminal" in
   `docs/product/project-terminal.md`). Opening it toasts nothing; a failure is an error toast.
@@ -263,6 +265,28 @@ included (see "Lead sessions" in `docs/product/hub-orchestration.md`) — is lis
 deeper, inset with the same rounded connectors toward each child row. Unbound sessions and sessions bound to a console
 session stay at the project's own level, so a project's sessions go at most two levels deep. The nesting has no fold
 control of its own: the sessions under an owner fold away with their project, like every other session row.
+
+### Opening the system file manager
+
+**Open in file manager** is available for every project in all the project-menu placements above, independently of
+whether its project pane is visible, which mode it shows, and whether the directory is a Git repository. It opens
+the project's directory on the machine running the daemon, including when the client is a browser on another machine.
+It changes no session selection or pane ownership. Success raises no toast; a refusal raises an error toast with the
+reason.
+
+On macOS this asks Finder to open the directory through the system directory opener. The request waits for that
+launcher to finish, for at most 15 seconds, with at most 16 KiB each of standard output and standard error. It does
+not wait for the Finder window to close.
+
+On Linux it uses `xdg-open`, looked up in the user's login-shell environment. The launcher is detached, and the
+request succeeds once it has been started. It does not wait for the launcher or file-manager window to close; a later
+launcher failure is not reported to the client.
+
+A project that no longer exists is refused with `unknown_project`. Otherwise the request is refused with
+`directory_unavailable` when its directory is missing, is not a directory, or has a relative path; when the operating
+system is neither macOS nor Linux; when the Linux launcher or its login-shell environment cannot be obtained; or when
+the process cannot be started. On macOS the request also fails if the launcher exceeds its time or output bound or
+exits unsuccessfully. The refusal carries the reason as `detail`.
 
 ## Session rows
 

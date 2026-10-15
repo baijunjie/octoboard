@@ -1,4 +1,4 @@
-import { Archive, ArrowLeftRight, FileDown, Focus, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Pencil, Pin, PinOff, RefreshCw, Settings2, Terminal, Trash2, Upload } from "lucide-react";
+import { Archive, ArrowLeftRight, FileDown, Focus, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Pencil, Pin, PinOff, RefreshCw, Settings2, Terminal, Trash2, Upload } from "lucide-react";
 
 import { switchEntries } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/ActionMenu";
@@ -82,7 +82,10 @@ export function projectMenu(
   { placement = "list", gitRepository = false }: { placement?: MenuPlacement; gitRepository?: boolean } = {},
 ): ActionMenuEntry[] {
   return [
-    { label: t("sidebar.project.browse"), icon: FolderOpen, onClick: () => handlers.onBrowseProject(project) },
+    ...(handlers.visibleBrowserProjectId === project.id
+      ? []
+      : [{ label: t("sidebar.project.browse"), icon: FolderOpen, onClick: () => handlers.onBrowseProject(project) }]),
+    { label: t("sidebar.project.openDirectory"), icon: Folder, onClick: () => handlers.onOpenProjectDirectory(project) },
     { label: t("sidebar.project.openTerminal"), icon: Terminal, onClick: () => handlers.onOpenProjectTerminal(project) },
     ...(gitRepository
       ? [

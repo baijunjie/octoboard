@@ -641,6 +641,39 @@ html.pane-resizing * {
   --view-shift: -24px;
 }
 
+/* A project's incoming browser keeps the pane's geometry fixed. A surface-coloured veil fades
+   instead of the content: ancestor opacity can blank composited controls in WKWebView. The viewer
+   stays outside this transformed content so its fixed overlays keep the window as their frame. */
+@keyframes project-browser-enter {
+  from { transform: translateX(var(--project-browser-shift, 10px)); }
+  to { transform: translateX(0); }
+}
+
+@keyframes project-browser-reveal {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.project-browser-entry:dir(rtl) {
+  --project-browser-shift: -10px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .project-browser-entry > .project-browser-view {
+    animation: project-browser-enter 240ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .project-browser-entry::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: var(--panel-sidebar);
+    opacity: 0;
+    animation: project-browser-reveal 240ms cubic-bezier(0.2, 0, 0, 1);
+  }
+}
+
 /* The ground under an image in the file viewer (`src/viewer/FileViewer.tsx`): a checkerboard, so a
    transparent image's own transparent areas read as such in either appearance. Built from
    gradients, since the window's Content Security Policy loads no image for it. */

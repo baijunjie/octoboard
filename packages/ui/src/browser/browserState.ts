@@ -132,6 +132,10 @@ export interface ProjectBrowserState {
   touch: () => void;
 }
 
+export function setProjectBrowserMode(project: string, mode: BrowserMode): void {
+  update(project, (entry) => ({ ...entry, mode }));
+}
+
 /**
  * A project's browser state, owned by the project rather than by any session: the mode, the
  * expanded directories and what is selected. The first two are kept in `localStorage` per client
@@ -156,7 +160,7 @@ export function useProjectBrowserState(project: string): ProjectBrowserState {
     right: selections.right.get(project),
     selectedComparedChange: selections.comparedChange.get(project),
     collapsedChangeRows: collapsedRows.get(project) ?? NONE_COLLAPSED,
-    setMode: (mode) => update(project, (e) => ({ ...e, mode })),
+    setMode: (mode) => setProjectBrowserMode(project, mode),
     setExpanded: (next) => update(project, (e) => ({ ...e, expanded: [...next].slice(-MAX_EXPANDED) })),
     setSelected: (path) => setSelection("file", project, path),
     setWorktree: (worktree) => setSelection("worktree", project, worktree),

@@ -87,9 +87,27 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     title: "A project session's files",
     description:
-      "Folders first, natural order, .git left out. src is expanded and main.ts is selected: its rounded highlight has space on all four sides, matching Git rows. Compare its actions button with the selected sidebar session and the console header: resting glyphs stay muted, while hovering or opening each menu gives it the shared subtle tint. Press a file for the viewer and Left/Right to visit visible files. Hover or focus file and folder rows for their Copy path actions. Select Hub, then Search API actions → Browse files to inspect a project without changing the selected console session. Narrow the window and open the project pane drawer to see the same tree over the terminal.",
+      "Folders first, natural order, .git left out. src is expanded and main.ts is selected: its rounded highlight has space on all four sides, matching Git rows. Compare its actions button with the selected sidebar session and the console header: resting glyphs stay muted, while hovering or opening each menu gives it the shared subtle tint. Press a file for the viewer and Left/Right to visit visible files. Hover or focus file and folder rows for their Copy path actions. Switch between Website and Search API sessions to inspect the short file-pane entrance; Search API has its own routes and schema tree. Switching between the two Website sessions keeps the current tree steady. A project's actions offer Browse files when its pane is hidden or belongs to another project. Open in file manager is available independently. Narrow the window and open the project pane drawer to see the same tree over the terminal.",
     state,
+    filesByProject: {
+      [api.id]: {
+        "": { dir: true },
+        routes: { dir: true },
+        "routes/search.ts": { text: "export const search = (query: string) => ({ query, results: [] });\n" },
+        schema: { dir: true },
+        "schema/documents.sql": { text: "CREATE TABLE documents (id INTEGER PRIMARY KEY, title TEXT);\n" },
+        "api.config.json": { text: '{ "port": 8080 }\n' },
+      },
+    },
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
+  },
+  {
+    id: "files-project-menu",
+    group: GROUP,
+    title: "Project actions with its files already visible",
+    description: "Website's files are already visible, so its open actions menu omits Browse files. Open in file manager remains available; in the gallery it acknowledges the request without opening a host application.",
+    state,
+    steps: [...openFiles, (ui) => ui.press(ui.t("sidebar.project.actions", { name: web.name }))],
   },
   {
     id: "files-row-no-clipboard",

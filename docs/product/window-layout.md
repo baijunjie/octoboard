@@ -204,7 +204,8 @@ pane.
 - **Selecting a session** puts the session's own pane in the right pane, whatever the session is selected from (see
   "Selecting a session" in `docs/product/sidebar.md`), a session this window has just opened included. Selecting
   another session of the project whose pane is shown leaves the pane as it is.
-- **Browse files**, the first item of every project's action menu (see "Project rows" in `docs/product/sidebar.md`),
+- **Browse files**, when offered in a project's action menu (see "Opening a project's files" in
+  `docs/product/project-pane.md`),
   gives the right pane to that project and selects, starts and resumes nothing: the selected session's terminal stays,
   and the breadcrumb still names it. It also puts the pane on screen: at 1148 px and wider it shows a hidden pane for
   good, and below that it opens the pane's drawer, closing the sidebar's.

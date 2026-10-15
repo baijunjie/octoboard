@@ -14,14 +14,22 @@ and nothing is staged, committed or checked out.
 
 ## Opening a project's files
 
-- **Browse files**, the first item of a project's action menu — on its row and by right-clicking it (see "Project
+- **Browse files**, in a project's action menu — on its row and by right-clicking it (see "Project
   rows" in `docs/product/sidebar.md`), in its focus mode's header, and on its heading in a console session's focus mode
-  (see `docs/product/focus-mode.md`) — shows that project's project pane, selecting, starting and resuming no session.
+  (see `docs/product/focus-mode.md`) — shows that project's project pane in Files mode, selecting, starting and
+  resuming no session. It is offered when the right pane is hidden or belongs to another owner, and omitted while
+  that project's browser is visible, whether docked, floating in or in an open drawer. This applies in Git mode too;
+  use the Files tab to return to the tree while the pane is already visible.
 - **Selecting a project session** shows its project's project pane.
 
 Moving between sessions of one project leaves its pane as it was: its mode, its expanded folders and selected file, and
 in Git its view, its chosen worktree, its chosen branches and its selected changes. Another project's session, or
 another project's Browse files, shows that project's own pane.
+
+When a project's pane first appears or replaces another project's pane, its header and content fade in with a
+small slide from the right, or from the left in a right-to-left language. The pane keeps its width and position
+throughout. Moving between sessions of the same project, changing tabs or refreshing does not replay this entry.
+The system's Reduce motion setting disables it.
 
 The pane's header names the project, with a folder icon, and carries the **Files** and **Git** tabs (see "Files and
 Git" below) and a **Refresh** button. Pressing Refresh with the mouse leaves keyboard focus where it was.
@@ -29,8 +37,8 @@ Git" below) and a **Refresh** button. Pressing Refresh with the mouse leaves key
 ## Files and Git
 
 The tabs in the pane's header switch between its two modes; a project's pane first opens in Files. The mode is
-remembered per project (see "What is remembered" below), so Browse files or selecting a session shows a project in the
-mode it was last left in.
+remembered per project (see "What is remembered" below), so selecting a session shows a project in the mode it was
+last left in. Browse files explicitly chooses Files.
 
 Only the mode on screen is kept up to date on its own: the Files mode as "Keeping the tree up to date" below says, the
 Git mode as "Uncommitted and Compare" in `docs/product/project-pane-git-mode.md` says. Switching to a mode counts as

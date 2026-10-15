@@ -3,7 +3,7 @@ import { errorPresentation } from "./errorPresentation";
 import { flushSync } from "react-dom";
 
 import { ArchiveView } from "./archive/ArchiveView";
-import { forgetProjectsOtherThan } from "./browser/browserState";
+import { forgetProjectsOtherThan, setProjectBrowserMode } from "./browser/browserState";
 import { LazyProjectBrowser } from "./browser/LazyProjectBrowser";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { ContentPanel } from "./components/ContentPanel";
@@ -355,12 +355,17 @@ export function App(): React.ReactElement {
   /** Opens a project's browser in the aside, putting the aside on screen, without selecting or
    * starting any session: the terminal beside it stays as it is. */
   const browseProject = (project: Project) => {
+    setProjectBrowserMode(project.id, "files");
     setOwnerByUser({ kind: "project", project: project.id });
     panes.showAside();
   };
 
   const syncProjectGit = (project: Project) => {
     request({ type: "sync_project_git", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
+  };
+
+  const openProjectDirectory = (project: Project) => {
+    request({ type: "open_project_directory", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
   };
 
   const openProjectTerminal = (project: Project) => {
@@ -576,7 +581,9 @@ export function App(): React.ReactElement {
                 onOpenDialog={openDialog}
                 onFocus={sidebarView.setFocus}
                 onOpenArchive={openArchive}
+                visibleBrowserProjectId={panes.asideShown || panes.asidePeek.active ? asideProject?.id : undefined}
                 onBrowseProject={browseProject}
+                onOpenProjectDirectory={openProjectDirectory}
                 onOpenProjectTerminal={openProjectTerminal}
                 onSyncProjectGit={syncProjectGit}
                 onPushProjectBranch={pushProjectBranch}

@@ -132,9 +132,14 @@ export interface Scenario {
   /** Per-session account-switch refusals or a request kept pending. Unlisted sessions switch
    * normally, updating their account and recorded configuration directory. */
   sessionAccountSwitches?: Record<string, FixtureError | "pending">;
+  /** A refused request to open a project's directory in the host's file manager. The fixture
+   * otherwise acknowledges the request without opening any host application. */
+  projectDirectoryOpenError?: FixtureError;
   /** The files every project's browser shows (`list_project_dir`, `read_project_file`); without it,
    * `SAMPLE_FILES`. */
   files?: FixtureFiles;
+  /** Per-project file trees for comparing project switches; entries fall back to `files`. */
+  filesByProject?: Record<string, FixtureFiles>;
   /** The repository every project's Git mode shows (`get_project_source`, `list_project_changes`,
    * `read_project_change`); without it, `SAMPLE_GIT`; `null` for a project in no repository. */
   git?: FixtureGit | null;

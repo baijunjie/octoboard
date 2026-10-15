@@ -11,7 +11,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::time::Duration;
 
 use crate::protocol::{error_code, CodedError};
@@ -200,34 +200,7 @@ fn start(launch: &Launch) -> Result<(), String> {
         }
         return Err(format!("the launcher exited with {}", output.status));
     }
-    spawn_detached(command)
-}
-
-/// Starts `command` in a new session and reaps it on another thread. The new session is what
-/// keeps the terminal alive after the daemon exits; the thread is what keeps it from staying a
-/// zombie until then. A failure to exec is reported by `spawn` itself.
-fn spawn_detached(mut command: Command) -> Result<(), String> {
-    use std::os::unix::process::CommandExt;
-    command
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    // SAFETY: `setsid` takes no arguments and only affects this child, which has not returned
-    // from `exec` yet. If it fails, the closure returns that error, `spawn` ends the child
-    // before `exec` and returns the error, and no terminal is started.
-    unsafe {
-        command.pre_exec(|| {
-            if libc::setsid() == -1 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        });
-    }
-    let mut child = command.spawn().map_err(|err| err.to_string())?;
-    std::thread::spawn(move || {
-        let _ = child.wait();
-    });
-    Ok(())
+    crate::subprocess::spawn_detached(command)
 }
 
 #[cfg(test)]
