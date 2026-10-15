@@ -14,10 +14,14 @@
 }
 
 .website-preview-app {
-  height: calc(100dvh - 30px);
+  height: 100dvh;
   overflow: hidden;
-  /* Keep fixed application drawers below the preview's sample-data label. */
+  /* Keep fixed application drawers inside the preview viewport. */
   contain: layout;
+}
+
+.website-preview-label + .website-preview-app {
+  height: calc(100dvh - 30px);
 }
 
 .website-preview-app > * {

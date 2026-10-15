@@ -257,12 +257,15 @@ server project, with changes that calculate prices from an eligible active offer
 prevent repeated requests from creating duplicate orders, alongside sample tests and promotion rules. These files
 and check counts are demonstration data.
 
-The homepage embeds a complete desktop viewport scaled to fit its available width. Once ready, the embedded
+The homepage embeds a complete desktop viewport scaled to fit its available width. The application fills the
+embedded viewport, with the sample-data explanation in a caption below it. Once ready, the embedded
 application accepts pointer and keyboard interaction, including its report and project panes, and is available to
-assistive technology. While loading, it remains hidden and cannot receive interaction. Its lower edge fades into the
-page at rest; hovering over the preview or focusing within it removes the fade. Devices without hover show no fade.
+assistive technology. While loading, it remains hidden and cannot receive interaction. A continuous border with
+four rounded corners frames the preview. At rest, its lower edge, including both application content and border,
+fades into the page. Hovering over the preview or focusing within it removes the fade and reveals the complete
+border. Devices without hover show no fade.
 The standalone link opens the selected scene and language in a new tab at `preview/website-preview.html`, relative
-to the site's deployment root.
+to the site's deployment root. The standalone preview displays its sample-data label above the application.
 
 Vertical mouse-wheel and trackpad gestures scroll the embedded list, terminal, code or report under the pointer
 while it has room to scroll in that direction. At its top or bottom boundary, continuing in the same direction

@@ -10,6 +10,7 @@ const removeScrollBridge = installPreviewScrollBridge();
 window.addEventListener("pagehide", (event) => {
   if (!event.persisted) removeScrollBridge();
 });
+const embedded = window.parent !== window;
 const params = new URLSearchParams(window.location.search);
 const requestedLanguage = params.get("lang");
 const language: Language = isLanguage(requestedLanguage)
@@ -70,7 +71,9 @@ async function start(): Promise<void> {
         <LanguageProvider>
           <ErrorBoundary>
             <ThemeProvider>
-              <div className="website-preview-label">{copy.demo}</div>
+              {!embedded && (
+                <div className="website-preview-label">{copy.demo}</div>
+              )}
               <div className="website-preview-app">
                 <DaemonProvider value={daemon}>
                   <App />

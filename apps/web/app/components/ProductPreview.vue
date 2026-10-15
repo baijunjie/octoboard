@@ -155,8 +155,6 @@ onBeforeUnmount(() => {
           height="900"
         />
       </div>
-      <div class="preview-corner corner-start" aria-hidden="true" />
-      <div class="preview-corner corner-end" aria-hidden="true" />
     </div>
     <p class="preview-caption">
       <span class="red-square" aria-hidden="true" />{{ t("previewCaption") }}
@@ -210,15 +208,18 @@ onBeforeUnmount(() => {
 .preview-window {
   position: relative;
   overflow: hidden;
-  border-top: 1px solid #454545;
-  border-radius: 12px 12px 0 0;
+  border-radius: 12px;
   background: #131313;
   mask-image: linear-gradient(#000 72%, transparent 100%);
 }
-.preview-window:hover,
-.preview-window.is-focused,
-.preview-window:focus-within {
-  mask-image: none;
+.preview-window::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 1px solid #454545;
+  border-radius: inherit;
+  pointer-events: none;
 }
 .preview-crop {
   position: absolute;
@@ -227,6 +228,11 @@ onBeforeUnmount(() => {
   opacity: 0;
   transition: opacity 500ms;
   pointer-events: none;
+}
+.preview-window:hover,
+.preview-window.is-focused,
+.preview-window:focus-within {
+  mask-image: none;
 }
 .is-ready .preview-crop {
   opacity: 1;
@@ -266,22 +272,6 @@ iframe {
   gap: 12px;
   color: #aaa;
   font-size: 13px;
-}
-.preview-corner {
-  pointer-events: none;
-  position: absolute;
-  top: 0;
-  width: 24px;
-  height: 24px;
-  border-top: 1px solid #a5a5a5;
-}
-.corner-start {
-  left: 0;
-  border-left: 1px solid #a5a5a5;
-}
-.corner-end {
-  right: 0;
-  border-right: 1px solid #a5a5a5;
 }
 @media (max-width: 800px) {
   .preview-toolbar {
