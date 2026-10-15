@@ -849,7 +849,7 @@ impl Store {
     pub fn preview_console_session_title(&self, console_id: &str) -> Result<String> {
         self.get_console(console_id)?
             .map(|console| console.name)
-            .ok_or_else(|| CodedError::unknown_console(console_id).into())
+            .ok_or_else(|| CodedError::unknown_console(console_id))
     }
 
     /// Inserts a freshly-opened console session, assigning its colour and ordinal under the same
