@@ -226,7 +226,6 @@ onBeforeUnmount(() => {
   inset: 0;
   overflow: hidden;
   opacity: 0;
-  transition: opacity 500ms;
   pointer-events: none;
 }
 .preview-window:hover,
@@ -236,6 +235,8 @@ onBeforeUnmount(() => {
 }
 .is-ready .preview-crop {
   opacity: 1;
+  /* A replacement frame must hide immediately so its bootstrap cannot show through a fade-out. */
+  transition: opacity 500ms;
   pointer-events: auto;
 }
 iframe {

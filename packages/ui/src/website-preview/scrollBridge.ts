@@ -94,18 +94,18 @@ export function installBoundaryWheelRelay(
   return () => win.removeEventListener("wheel", onWheel, true);
 }
 
-/** Add a relay only to our own report fixture, after the product has sanitized it and composed its
- * nonce-protected srcdoc. The report's normal sanitizer deliberately removes author scripts, so
+/** Add a relay only to our own report fixture, after the product has composed its nonce-protected
+ * srcdoc. The report's normal sanitizer deliberately removes author scripts, so
  * putting a script in the fixture HTML would never run. This leaves product rendering unchanged. */
-export function withReportScrollBridge(srcdoc: string): string | undefined {
+export function withReportScrollBridge(srcdoc: string): string {
   if (
     !srcdoc.includes(REPORT_MARKER) ||
     !srcdoc.includes("window.OCTOBOARD_PAGE") ||
     srcdoc.includes(INJECTED_MARKER)
   )
-    return;
+    return srcdoc;
   const nonce = /<script nonce="([a-f0-9]+)">/.exec(srcdoc)?.[1];
-  if (!nonce) return;
+  if (!nonce) return srcdoc;
   const source = `(${installBoundaryWheelRelay.toString()})(window, function(deltaY) { parent.postMessage({ type: "${REPORT_SCROLL_MESSAGE}", deltaY: deltaY }, "*"); });`;
   return `${srcdoc}<script nonce="${nonce}" ${INJECTED_MARKER}>${source}</script>`;
 }
@@ -118,17 +118,6 @@ export function installPreviewScrollBridge(win: Window = window): () => void {
   const send = (deltaY: number) =>
     win.parent.postMessage({ type: PREVIEW_SCROLL_MESSAGE, deltaY }, "*");
   const removeWheel = installBoundaryWheelRelay(win, send);
-  const reports = new WeakSet<HTMLIFrameElement>();
-  const injectReports = () => {
-    for (const frame of doc.querySelectorAll<HTMLIFrameElement>(
-      ".website-preview-app iframe[srcdoc]",
-    )) {
-      const source = withReportScrollBridge(frame.srcdoc);
-      if (source === undefined) continue;
-      reports.add(frame);
-      frame.srcdoc = source;
-    }
-  };
   const onMessage = (event: MessageEvent) => {
     const data = event.data as { type?: unknown; deltaY?: unknown } | null;
     if (
@@ -143,24 +132,15 @@ export function installPreviewScrollBridge(win: Window = window): () => void {
         ".website-preview-app iframe[srcdoc]",
       ),
     ].some(
-      (frame) => reports.has(frame) && event.source === frame.contentWindow,
+      (frame) =>
+        frame.srcdoc.includes(INJECTED_MARKER) &&
+        event.source === frame.contentWindow,
     );
     if (ownReport) send(data.deltaY);
   };
-  // Attribute observation also covers a new srcdoc on a reused report frame. The marker prevents
-  // our own assignment from recursively reloading it; replacement frames get their own nonce.
-  const observer = new MutationObserver(injectReports);
-  observer.observe(doc.documentElement, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ["srcdoc"],
-  });
-  injectReports();
   win.addEventListener("message", onMessage);
   return () => {
     removeWheel();
-    observer.disconnect();
     win.removeEventListener("message", onMessage);
   };
 }

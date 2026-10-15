@@ -1,7 +1,7 @@
 import { Button, Chip } from "@heroui/react";
 import { errorPresentation } from "../errorPresentation";
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -12,6 +12,7 @@ import { AsidePane, type AsideLayout } from "../layout/AsidePane";
 import { usePlatform } from "../platform/react";
 import type { Page } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
+import { PageDocumentTransform } from "./pageDocumentTransform";
 import {
   composePageDocument,
   ESCAPE_MESSAGE_SOURCE,
@@ -230,17 +231,18 @@ function PageFrame({
   const t = useT();
   const platform = usePlatform();
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const transformDocument = useContext(PageDocumentTransform);
   // State rather than a memo: React may drop a memo's cache, and a new nonce reloads the frame,
   // losing whatever the user has typed into the page.
   const [nonce] = useState(newNonce);
   const srcDoc = useMemo(
     () =>
-      composePageDocument(page.html, isHistory, nonce, {
+      transformDocument(composePageDocument(page.html, isHistory, nonce, {
         noContextMenu: platform.kind === "tauri",
         relayHistoryKeys: platform.windowChrome !== undefined,
         relaySwitchKeys: platform.windowChrome !== undefined,
-      }),
-    [page.html, isHistory, nonce, platform.kind, platform.windowChrome],
+      })),
+    [page.html, isHistory, nonce, platform.kind, platform.windowChrome, transformDocument],
   );
 
   useEffect(() => {

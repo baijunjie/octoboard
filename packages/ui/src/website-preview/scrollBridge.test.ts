@@ -147,15 +147,15 @@ describe("sample report relay", () => {
     expect(injected).toContain(
       '<script nonce="abcdef012345" data-website-preview-scroll-bridge>',
     );
-    expect(withReportScrollBridge(injected)).toBeUndefined();
+    expect(withReportScrollBridge(injected)).toBe(injected);
     expect(
       withReportScrollBridge(
         source.replaceAll("data-website-preview-report", "other-report"),
       ),
-    ).toBeUndefined();
+    ).toBe(source.replaceAll("data-website-preview-report", "other-report"));
     expect(
       withReportScrollBridge("<body data-website-preview-report>"),
-    ).toBeUndefined();
+    ).toBe("<body data-website-preview-report>");
   });
   it("serializes executable code with no module closure dependencies", () => {
     const injected = withReportScrollBridge(reportDocument())!;
@@ -188,7 +188,7 @@ describe("sample report relay", () => {
     expect(wheel(document.body, 40).defaultPrevented).toBe(false);
     expect(report.srcdoc).not.toContain("data-website-preview-scroll-bridge");
   });
-  it("observes report replacements without reload loops, validates source, and cleans up", async () => {
+  it("validates live report sources without rewriting their documents and cleans up", async () => {
     const preview = document.createElement("iframe");
     document.body.appendChild(preview);
     const child = preview.contentWindow!;
@@ -200,7 +200,7 @@ describe("sample report relay", () => {
     const cleanup = installPreviewScrollBridge(child);
     cleanups.push(cleanup);
     const frame = child.document.createElement("iframe");
-    frame.srcdoc = reportDocument();
+    frame.srcdoc = withReportScrollBridge(reportDocument());
     wrapper.appendChild(frame);
     await new Promise((resolve) => setTimeout(resolve, 0));
     const injected = frame.srcdoc;
@@ -225,7 +225,9 @@ describe("sample report relay", () => {
     );
     frame.srcdoc = reportDocument();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(frame.srcdoc).toContain("data-website-preview-scroll-bridge");
+    expect(frame.srcdoc).not.toContain("data-website-preview-scroll-bridge");
+    message(frame.contentWindow!);
+    expect(send).toHaveBeenCalledTimes(1);
     const reportWindow = frame.contentWindow!;
     frame.remove();
     message(reportWindow);

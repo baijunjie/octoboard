@@ -1,5 +1,5 @@
 import { installPreviewStorage } from "./storage";
-import { installPreviewScrollBridge } from "./scrollBridge";
+import { installPreviewScrollBridge, withReportScrollBridge } from "./scrollBridge";
 import { isLanguage, type Language } from "../i18n/languages";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { copyFor, createPreviewScenario, type PreviewScene } from "./scenarios";
@@ -11,6 +11,7 @@ window.addEventListener("pagehide", (event) => {
   if (!event.persisted) removeScrollBridge();
 });
 const embedded = window.parent !== window;
+const reportDocument = embedded ? withReportScrollBridge : (source: string) => source;
 const params = new URLSearchParams(window.location.search);
 const requestedLanguage = params.get("lang");
 const language: Language = isLanguage(requestedLanguage)
@@ -45,6 +46,7 @@ async function start(): Promise<void> {
     { ErrorBoundary },
     { LanguageProvider },
     { PlatformProvider },
+    { PageDocumentTransform },
     { DaemonProvider },
     { ThemeProvider },
     { createPreviewDaemon },
@@ -56,6 +58,7 @@ async function start(): Promise<void> {
     import("../ErrorBoundary"),
     import("../i18n/react"),
     import("../platform/react"),
+    import("../report/pageDocumentTransform"),
     import("../store"),
     import("../theme"),
     import("./daemon"),
@@ -75,9 +78,11 @@ async function start(): Promise<void> {
                 <div className="website-preview-label">{copy.demo}</div>
               )}
               <div className="website-preview-app">
-                <DaemonProvider value={daemon}>
-                  <App />
-                </DaemonProvider>
+                <PageDocumentTransform value={reportDocument}>
+                  <DaemonProvider value={daemon}>
+                    <App />
+                  </DaemonProvider>
+                </PageDocumentTransform>
               </div>
             </ThemeProvider>
           </ErrorBoundary>
