@@ -1194,16 +1194,24 @@ had outstanding.
 - Daemon to client: **binary** frames carrying raw PTY output. On attach the session's ring buffer is replayed first,
   then live output follows.
 - Client to daemon: **binary** frames are raw PTY input, written through verbatim. **Text** frames are JSON control:
-  `{"type":"resize","cols":N,"rows":N}`.
-- Attaching to a session whose process is not running sends what that session's last process printed, as one binary
-  frame, when the daemon kept it, and then closes the socket; with nothing kept it closes straight away. Nothing is
-  read from such a socket. The UI shows the stored status and offers resume, and shows this output read-only in the
-  meantime.
-- What is kept is the ring buffer's contents at the moment the process ended, for whatever reason it ended (archiving,
-  the agent exiting or crashing, a switch of the session's account, the daemon shutting down). Each end replaces what an
-  earlier one left, starting a new process removes it, and deleting the session's record deletes it. A session whose
-  process ended before the daemon kept output, or ended with the daemon killed outright, has none, even if an earlier
-  process left some.
+  `{"type":"resize","cols":N,"rows":N}`. Supported dimensions are 2–1,000 columns and 1–500 rows; other sizes are
+  ignored and logged. Input and resizing are refused once the session's preview has been frozen.
+- Attaching to a dormant session sends its saved terminal preview as one binary frame, when kept, and then closes
+  the socket; with nothing kept it closes straight away. A session frozen for archiving or another controlled stop
+  already answers this way while its process is still exiting. These connections accept no input. The UI reloads
+  the preview on entering dormancy and displays it read-only while offering resume or reopen.
+- The daemon continuously parses terminal output independently of the raw live replay. Before a controlled stop
+  (archiving, switching accounts or daemon shutdown), it freezes the active buffer, including up to 10,000 rows of
+  scrollback when the normal buffer is active, before exposing the dormant status or sending the exit signal. The
+  alternate buffer has no scrollback. Shutdown rendering cannot replace that snapshot. An agent exiting or crashing
+  on its own instead leaves its final parsed screen.
+- A snapshot is ordinary scrolling terminal text with ANSI cell colours and styles, without alternate-screen or input
+  reporting modes. It is independent of the live ring's 2 MiB byte window and can wrap to the reader's width. Normal
+  buffer content reflows when the live terminal is resized. A preview does not reconstruct the agent's full
+  conversation or content already overwritten within its alternate screen.
+- Each end replaces the previous preview; starting a new process removes it, and deleting the session deletes it.
+  Older saved files containing raw PTY output remain replayable as-is. A session whose process ended before previews
+  were kept, or with the daemon killed outright, has none, even if an earlier process left some.
 - The daemon takes backpressure from each attached client: a client that stops draining for longer than the daemon's
   grace window is dropped (its socket closes) rather than allowed to make the daemon buffer without bound. A dropped
   client reconnects and gets the ring buffer replayed.

@@ -14,6 +14,7 @@ use crate::crash_cleanup;
 use crate::protocol::Agent;
 use crate::ptyio;
 use crate::ringbuf::RingBuffer;
+use crate::terminal_snapshot::{TerminalSnapshot, MAX_COLS, MAX_ROWS};
 use crate::trust::{CarriedTrust, TrustState};
 
 /// Terminal replay buffer per session.
@@ -45,11 +46,11 @@ struct Subscriber {
     tx: mpsc::Sender<Bytes>,
 }
 
-/// The ring buffer and the subscriber list share one lock so that an attaching client can take the
-/// replay snapshot and start receiving live output with no gap and no duplicate, even while the
-/// reader thread is pushing bytes.
+/// Raw replay, parsed screen and subscribers share one lock: attaching has no output gap or
+/// duplicate, and freezing captures one exact boundary before exit cleanup can change the screen.
 struct Fan {
     ring: RingBuffer,
+    terminal: TerminalSnapshot,
     /// Every byte ever pushed into `ring`, which it forgets and this does not: what lets a caller
     /// mark a point in the output and later read exactly what came after it.
     total: u64,
@@ -125,6 +126,12 @@ pub struct NewSession {
 
 impl LiveSession {
     pub fn new(session: NewSession) -> Self {
+        let size = session.master.get_size().unwrap_or(portable_pty::PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        });
         Self {
             id: session.id,
             agent: session.agent,
@@ -137,6 +144,7 @@ impl LiveSession {
             crash_cleanup: Mutex::new(None),
             fan: Mutex::new(Fan {
                 ring: RingBuffer::new(RING_CAPACITY),
+                terminal: TerminalSnapshot::new(size.rows, size.cols),
                 total: 0,
                 subscribers: Vec::new(),
                 next_id: 0,
@@ -166,10 +174,14 @@ impl LiveSession {
     }
 
     /// Registers a terminal client. The returned snapshot is everything buffered up to this
-    /// instant, and the receiver picks up with the very next byte after it.
+    /// instant, and the receiver picks up with the very next byte after it. Once frozen, returns
+    /// the archived screen with a closed receiver, so exit cleanup cannot replace it.
     pub fn attach(&self) -> (Vec<u8>, mpsc::Receiver<Bytes>) {
         let (tx, rx) = mpsc::channel(SUBSCRIBER_QUEUE);
         let mut fan = self.fan.lock().expect("fan mutex poisoned");
+        if let Some(output) = fan.terminal.frozen() {
+            return (output.to_vec(), rx);
+        }
         let id = fan.next_id;
         fan.next_id += 1;
         let snapshot = fan.ring.snapshot();
@@ -188,8 +200,53 @@ impl LiveSession {
             .tail(max_bytes)
     }
 
-    /// Hands everything still buffered to `keep`, once the process has exited, and only the first
-    /// time: the exit watcher and a shutdown can both see the same exit. A later caller waits for
+    /// Freezes a readable screen before termination can clear it. Input and the parser share
+    /// the capture boundary; later cleanup output continues to reach live subscribers.
+    pub fn freeze_output(&self) {
+        let _input = self.input_lock.lock().expect("input mutex poisoned");
+        self.fan
+            .lock()
+            .expect("fan mutex poisoned")
+            .terminal
+            .freeze();
+    }
+
+    /// Freezes before a dormant record can become observable. The closure only updates storage;
+    /// publishing happens after this returns. A failed update rolls back only this call's freeze,
+    /// while the input lock keeps termination or another update from claiming that same screen.
+    pub fn freeze_output_for(
+        &self,
+        update: impl FnOnce() -> anyhow::Result<bool>,
+    ) -> anyhow::Result<bool> {
+        let _input = self.input_lock.lock().expect("input mutex poisoned");
+        let created = self
+            .fan
+            .lock()
+            .expect("fan mutex poisoned")
+            .terminal
+            .freeze();
+        let result = update();
+        if created && !matches!(result, Ok(true)) {
+            self.fan
+                .lock()
+                .expect("fan mutex poisoned")
+                .terminal
+                .discard_frozen();
+        }
+        result
+    }
+
+    pub fn frozen_output(&self) -> Option<Vec<u8>> {
+        self.fan
+            .lock()
+            .expect("fan mutex poisoned")
+            .terminal
+            .frozen()
+            .map(<[u8]>::to_vec)
+    }
+
+    /// Hands the frozen screen, or the final parsed screen, to `keep` after exit, only once:
+    /// the exit watcher and a shutdown can both see the same exit. A later caller waits for
     /// the first to finish, so a shutdown that returns has its output kept whichever of the two got
     /// there first. Waits up to `FINAL_OUTPUT_DRAIN` for the reader to finish before taking the
     /// buffer, since what an agent prints on its way out can still be in the PTY when its exit is
@@ -206,7 +263,12 @@ impl LiveSession {
         while self.reader_running.load(Ordering::Acquire) && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(10));
         }
-        let output = self.fan.lock().expect("fan mutex poisoned").ring.snapshot();
+        let output = self
+            .fan
+            .lock()
+            .expect("fan mutex poisoned")
+            .terminal
+            .output();
         keep(&output);
         *kept = true;
     }
@@ -243,6 +305,7 @@ impl LiveSession {
         let (targets, total): (Vec<(u64, mpsc::Sender<Bytes>)>, u64) = {
             let mut fan = self.fan.lock().expect("fan mutex poisoned");
             fan.ring.push(data);
+            fan.terminal.process(data);
             fan.total += data.len() as u64;
             let targets = fan
                 .subscribers
@@ -282,6 +345,22 @@ impl LiveSession {
     /// is the person acting.
     pub fn write_input(&self, data: &[u8]) -> Result<(), ptyio::PartialWrite> {
         let _input = self.input_lock.lock().expect("input mutex poisoned");
+        if self
+            .fan
+            .lock()
+            .expect("fan mutex poisoned")
+            .terminal
+            .frozen()
+            .is_some()
+        {
+            return Err(ptyio::PartialWrite {
+                written: 0,
+                error: io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    "the session output has been archived",
+                ),
+            });
+        }
         if !is_terminal_protocol(data) {
             self.input_writes.fetch_add(1, Ordering::AcqRel);
         }
@@ -311,6 +390,15 @@ impl LiveSession {
     }
 
     pub fn resize(&self, cols: u16, rows: u16) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            (2..=MAX_COLS).contains(&cols) && (1..=MAX_ROWS).contains(&rows),
+            "terminal dimensions exceed the supported range"
+        );
+        let mut fan = self.fan.lock().expect("fan mutex poisoned");
+        anyhow::ensure!(
+            fan.terminal.frozen().is_none(),
+            "the session output has been archived"
+        );
         let master = self.master.lock().expect("master mutex poisoned");
         master.resize(portable_pty::PtySize {
             rows,
@@ -318,6 +406,7 @@ impl LiveSession {
             pixel_width: 0,
             pixel_height: 0,
         })?;
+        fan.terminal.resize(rows, cols);
         Ok(())
     }
 
@@ -407,6 +496,7 @@ impl LiveSession {
         if self.poll_exit() {
             return;
         }
+        self.freeze_output();
         self.signal(libc::SIGTERM, false);
 
         let deadline = Instant::now() + TERM_GRACE;
@@ -629,6 +719,63 @@ mod tests {
     use super::{is_terminal_protocol, send_with_backpressure, SUBSCRIBER_GRACE};
     use bytes::Bytes;
     use tokio::sync::mpsc;
+
+    #[test]
+    fn a_failed_record_update_rolls_back_only_its_own_freeze() {
+        let live = crate::test_support::idle_stand_in("freeze-rollback");
+        live.on_output(b"before update");
+        for failed in [Ok(false), Err(anyhow::anyhow!("storage failed"))] {
+            let failed_with_error = failed.is_err();
+            let result = live.freeze_output_for(|| {
+                assert!(live.frozen_output().is_some(), "freeze precedes the write");
+                assert!(
+                    live.input_lock.try_lock().is_err(),
+                    "writes and termination wait"
+                );
+                live.on_output(b"\r\x1b[2Kafter update");
+                failed
+            });
+            assert_eq!(result.is_err(), failed_with_error);
+            assert!(live.frozen_output().is_none());
+        }
+        assert!(live.freeze_output_for(|| Ok(true)).unwrap());
+        let frozen = live.frozen_output().unwrap();
+        live.on_output(b"\x1b[2J\x1b[Hcleanup");
+        assert!(live
+            .freeze_output_for(|| Err(anyhow::anyhow!("later failure")))
+            .is_err());
+        assert!(!live.freeze_output_for(|| Ok(false)).unwrap());
+        assert_eq!(live.frozen_output().unwrap(), frozen);
+    }
+
+    #[test]
+    fn another_freeze_waits_until_an_unsuccessful_update_has_rolled_back() {
+        let live = crate::test_support::idle_stand_in("freeze-serialized");
+        live.on_output(b"original");
+        let (entered, started) = std::sync::mpsc::channel();
+        let (done, completed) = std::sync::mpsc::channel();
+        let concurrent = live.clone();
+        let freezer = std::thread::spawn(move || {
+            started.recv().expect("the update started");
+            // The main thread checks the mutex is held before releasing this worker.
+            concurrent.freeze_output();
+            done.send(()).expect("the concurrent freeze finished");
+        });
+        assert!(!live
+            .freeze_output_for(|| {
+                assert!(live.input_lock.try_lock().is_err());
+                entered.send(()).unwrap();
+                assert!(completed.try_recv().is_err());
+                live.on_output(b"\r\x1b[2Klatest");
+                Ok(false)
+            })
+            .unwrap());
+        freezer.join().expect("the concurrent freeze joined");
+        completed.recv().unwrap();
+        let frozen = String::from_utf8(live.frozen_output().unwrap()).unwrap();
+        assert!(frozen.contains("latest"), "{frozen}");
+        assert!(!frozen.contains("original"));
+    }
 
     #[test]
     fn only_a_terminals_own_protocol_traffic_is_told_apart_from_input() {

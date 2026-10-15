@@ -126,10 +126,11 @@ export class TerminalController {
   private generation = 0;
   /** The saved output being shown for the session on screen, which has no process (see `detach`).
    * Replaced or cleared with the screen, and compared by identity, so a load that arrives for a
-   * screen that has since been reset is dropped. */
+   * screen that has since been reset is dropped. Retained after close to mark this screen as a
+   * saved snapshot, so repeated dormant renders do not replace it with another load. */
   private savedLoad?: WebSocket;
-  /** Saved output written and not yet parsed. While any is, what xterm emits is taken for its own
-   * answer to a query in that output and dropped, unless xterm marked it as the user's (`userInput`). */
+  /** Saved output or a reset barrier written and not yet parsed. While any is, xterm's answers
+   * to output queries are dropped unless it marked the data as the user's (`userInput`). */
   private savedWritesInFlight = 0;
   /** Set by xterm's `onUserInput` right before the `onData` it belongs to, and consumed there:
    * whether that data came from the user (a key, a paste, an input method) rather than being
@@ -372,31 +373,16 @@ export class TerminalController {
   /** Detaches without connecting a new session — used when nothing is selected, or the selected
    * session is dormant (interrupted/archived) and waiting to be resumed.
    *
-   * With `savedOutputUrl` (the session's terminal socket), a screen that does not already hold
-   * `keepScreenFor`'s output is filled with what that session's last process printed, which the
-   * daemon replays for a session with no process and then closes (`apps/daemon/PROTOCOL.md`, "GET
-   * /ws/term/:session"). Read-only: nothing is ever sent on that socket, and a keystroke still goes
-   * to `armWake`. It counts as the session's output on screen, so a later detach for the same
-   * session neither clears it nor loads it again, and `attach()` replaces it like any other.
+   * With `savedOutputUrl` (the session's terminal socket), replaces the live screen with the
+   * daemon's saved snapshot, even for the same session: a live socket may already have delivered
+   * the agent's shutdown cleanup. Read-only: nothing is sent on the saved-output socket, and a
+   * keystroke still goes to `armWake`. A later detach for the same dormant session keeps that
+   * snapshot, including while its load is pending; `attach()` replaces it on resume.
    *
-   * `keepScreenFor` names the session the pane is detaching *to*, and the last output stays on
-   * screen only while it is the session that produced it — a process that has just ended, whose
-   * final output (why it stopped, what it was waiting for) is the most useful thing the pane can
-   * show while it offers Resume. Pass nothing when the pane is losing its session altogether:
-   * keeping one session's output under another's header, or under no header, would be a lie. The
-   * comparison is against `screenSessionId` rather than the caller's own bookkeeping so that
-   * detaching twice for the same session (any later re-render of a dormant session re-runs the
-   * same effect) keeps the screen both times. A resume re-attaches, and `attach()` clears
-   * unconditionally, so a kept screen never survives into the next connection.
-   *
-   * One real limit of that: if `TerminalPane`'s auto-reconnect timer fires before the daemon's
-   * `session_upserted` → `interrupted` broadcast arrives, `attach()` runs first. The reconnect has
-   * lost the race against the process ending, so the daemon answers it with the saved output and
-   * closes: that frame goes through the live message handler like a replay and counts as painted,
-   * which is harmless because the socket closes right after. The screen then already holds the
-   * session's output, so the detach that follows when the broadcast lands keeps it and loads
-   * nothing. The broadcast normally wins by a wide margin, so this is a note on the contract, not
-   * something worth restructuring for. */
+   * `keepScreenFor` names the session the pane is detaching to. Without a saved-output URL, its
+   * existing screen is kept only if it belongs to that session. Pass nothing when the pane loses
+   * its session altogether, so output never remains under another session's header or no header.
+   */
   detach({
     keepScreenFor,
     savedOutputUrl,
@@ -409,7 +395,11 @@ export class TerminalController {
     this.socket = undefined;
     this.sessionId = undefined;
     this.term.options.altClickMovesCursor = false;
-    if (keepScreenFor === undefined || keepScreenFor !== this.screenSessionId) {
+    if (
+      keepScreenFor === undefined ||
+      keepScreenFor !== this.screenSessionId ||
+      (savedOutputUrl !== undefined && this.savedLoad === undefined)
+    ) {
       this.resetScreen();
       if (keepScreenFor !== undefined && savedOutputUrl !== undefined) {
         this.loadSavedOutput(keepScreenFor, savedOutputUrl);
@@ -459,7 +449,11 @@ export class TerminalController {
     this.savedLoad = undefined;
     this.setPainted(false);
     if (!this.touchable) return;
+    // Queued live output may contain a query. Its answer must not wake the dormant session
+    // while this reset waits for that output to finish parsing.
+    this.savedWritesInFlight++;
     this.term.write("", () => {
+      this.savedWritesInFlight--;
       if (!this.disposed) this.term.reset();
     });
   }

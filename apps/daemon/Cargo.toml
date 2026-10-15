@@ -31,6 +31,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 uuid = { version = "=1.26.1", features = ["v4", "serde"] }
 bytes = "1"
+# A continuously parsed screen for archived previews; compatible with the Rust floor.
+alacritty_terminal = { version = "=0.25.0", default-features = false }
+# Alacritty accepts newer `home` releases, which require Rust 1.88.
+home = "=0.5.11"
 # Encodes a binary file body for the JSON control socket; the version the lockfile already
 # resolves for other dependencies.
 base64 = "0.22"
@@ -47,6 +51,11 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 # version is found by compiling, not by reading manifests.
 rmcp = { version = "=0.9.1", features = ["server", "transport-io"] }
 toml = { version = "1.1.6", default-features = false, features = ["parse", "display", "serde"] }
+
+# Alacritty's Unix PTY module needs std descriptor conversions from rustix-openpty's
+# rustix 0.38 dependency; that crate disables std by default.
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "0.38", features = ["std"] }
 
 [dev-dependencies]
 # A WebSocket client for tests that drive the control socket end to end; the version axum's own

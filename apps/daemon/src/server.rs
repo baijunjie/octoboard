@@ -358,6 +358,16 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, session_id: St
         return;
     };
 
+    // Archiving is announced before the process finishes its graceful exit. Its frozen screen
+    // is already available then, so a read-only client never replays the shutdown renderer.
+    if let Some(output) = session.frozen_output() {
+        if !output.is_empty() && socket.send(Message::Binary(output)).await.is_err() {
+            return;
+        }
+        let _ = socket.send(Message::Close(None)).await;
+        return;
+    }
+
     // Snapshot and subscription happen under one lock inside `attach`, so the replay cannot miss a
     // byte or repeat one even while the agent is producing output right now.
     let (replay, mut live) = session.attach();
@@ -834,6 +844,38 @@ mod tests {
         })
         .await
         .expect("the checks ran");
+    }
+
+    #[tokio::test]
+    async fn a_terminating_session_replays_its_frozen_screen_without_shutdown_output() {
+        let (state, dir) = app_state("server-frozen-output");
+        let live = crate::test_support::fake_live_session(
+            "frozen",
+            crate::protocol::Agent::Grok,
+            80,
+            24,
+            "sleep 30",
+        );
+        live.on_output(b"\x1b[?1049h\x1b[Hbefore archive");
+        live.freeze_output();
+        let expected = live.frozen_output().unwrap();
+        live.on_output(b"\x1b[?1049l\x1b[2J\x1b[Hshutdown cleanup");
+        state.register_live(live.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move { axum::serve(listener, router(state)).await });
+
+        tokio::task::spawn_blocking(move || {
+            assert_eq!(
+                websocket_frames(port, "/ws/term/frozen"),
+                [(0x2, expected), (0x8, Vec::new())]
+            );
+        })
+        .await
+        .unwrap();
+        server.abort();
+        let _ = server.await;
+        drop((live, dir));
     }
 
     /// Sends one request with exactly the headers given (plus a body length) and returns the

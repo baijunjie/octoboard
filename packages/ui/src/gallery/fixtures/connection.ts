@@ -65,10 +65,14 @@ export const connectionScenarios: Scenario[] = [
   {
     id: "terminal-output",
     group: TERMINAL,
-    title: "A terminal with output",
-    description: "A canned ANSI sample: colours, a prompt box with a follow-up instruction and a long wrapping line. Select Interrupted by a restart for Resume; open the project archive and Archived and done for the archived terminal and its breadcrumb status tooltip.",
+    title: "Archived terminal with readable output",
+    description: "The read-only archived terminal retains readable coloured output, the prompt and follow-up instruction, and a long wrapping line. Its breadcrumb shows the archived status.",
     state: connected("open"),
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout"))],
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
+      (ui) => ui.press(ui.t("sidebar.project.archive")),
+      (ui) => ui.press("Archived and done"),
+    ],
   },
   {
     id: "terminal-reconnecting",

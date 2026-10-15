@@ -1,6 +1,6 @@
-//! The last terminal output of each session whose process has ended, one file per session, so that
-//! a client selecting the session later still has something to show. The ring buffer it comes from
-//! goes with the process, and the conversation itself is the agent's, not Octoboard's.
+//! Readable terminal snapshots of ended sessions, one file per session. Older files may contain
+//! raw terminal output; both are replayed as terminal bytes. The conversation itself belongs to
+//! the agent, independently of this preview.
 //!
 //! Nothing here is ever an error to the caller: a file that is missing, unreadable or unwritable
 //! only means there is no saved output to show, so failures are logged and swallowed.

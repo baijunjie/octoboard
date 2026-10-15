@@ -445,7 +445,19 @@ impl AppState {
     /// Writes a session record and tells every client about it. A record deleted in the meantime
     /// is not written and not announced: publishing it would leave a ghost row in every client.
     pub fn save_session(&self, session: &Session) -> Result<()> {
-        if self.store.update_session(session)? {
+        let live = session
+            .status
+            .is_dormant()
+            .then(|| self.live_session(&session.id))
+            .flatten();
+        // Titles and new control snapshots can publish the row independently, so freeze before
+        // the database exposes dormancy, and undo that freeze if the write fails.
+        let update = || self.store.update_session(session);
+        let updated = match live {
+            Some(live) => live.freeze_output_for(update)?,
+            None => update()?,
+        };
+        if updated {
             self.publish_session(session);
         }
         Ok(())
@@ -1055,7 +1067,7 @@ impl AppState {
 
     // -- saved output ------------------------------------------------------------
 
-    /// Keeps what this session's process printed last, now that it has exited. **Blocks** on the
+    /// Keeps the frozen or final parsed screen after exit. **Blocks** on the
     /// file and on the PTY reader (see `LiveSession::keep_final_output`).
     fn save_output(&self, live: &LiveSession) {
         live.keep_final_output(|output| {
@@ -1069,7 +1081,7 @@ impl AppState {
         });
     }
 
-    /// What this session's process printed last, if its output was kept.
+    /// The terminal preview saved for this session, if one was kept.
     pub fn saved_output(&self, id: &str) -> Option<Vec<u8>> {
         self.saved_output.read(id)
     }
@@ -1460,6 +1472,32 @@ mod tests {
         until_unregistered(&state, "s").await;
         let saved = state.saved_output("s").expect("the output was kept");
         assert!(String::from_utf8_lossy(&saved).contains("last words"));
+    }
+
+    #[tokio::test]
+    async fn a_dormant_status_publishes_only_after_its_screen_is_frozen() {
+        for status in [SessionStatus::Archived, SessionStatus::Interrupted] {
+            let (state, dir) = app_state("state-output-frozen-before-publication");
+            insert_record(&state, &dir, "s", SessionStatus::Working);
+            let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+            state.register_live(live.clone());
+            live.on_output(b"\x1b[?1049h\x1b[Hconversation");
+            let mut events = state.subscribe();
+            let mut record = state.session_record("s").unwrap();
+            record.status = status;
+            state.save_session(&record).unwrap();
+            assert!(matches!(
+                events.try_recv(),
+                Ok(Event::SessionUpserted { .. })
+            ));
+            let frozen = live
+                .frozen_output()
+                .expect("published status has a snapshot");
+            live.on_output(b"\x1b[?1049l\x1b[2J\x1b[Hexit message");
+            state.save_output(&live);
+            assert_eq!(state.saved_output("s"), Some(frozen));
+            assert!(live.write_input(b"should stay archived").is_err());
+        }
     }
 
     /// The daemon does not wait for its exit watchers on the way out, so a shutdown keeps the

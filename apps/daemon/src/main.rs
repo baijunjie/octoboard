@@ -43,6 +43,7 @@ mod state;
 mod store;
 mod subprocess;
 mod term;
+mod terminal_snapshot;
 mod terminal_title;
 #[cfg(test)]
 mod test_support;

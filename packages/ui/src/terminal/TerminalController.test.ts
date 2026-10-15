@@ -210,6 +210,51 @@ describe("a dormant session's saved output", () => {
     expect(saved.sent).toEqual([]);
   });
 
+  it("replaces the live shutdown screen with the same session's saved snapshot only once", async () => {
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    live.open();
+    live.receive("shutdown cleanup");
+    await settle();
+    expect(term.screen).toContain("shutdown cleanup");
+
+    controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
+    controller.armWake("a");
+    const saved = lastSocket();
+    expect(saved).not.toBe(live);
+    expect(live.closed).toBe(true);
+    // A re-render while the saved socket is connecting must not restart its load.
+    controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
+    saved.receive("frozen conversation\x1b[c");
+    live.receive("late cleanup");
+    await settle();
+    saved.close();
+    controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
+    await settle();
+
+    expect(FakeSocket.all).toHaveLength(2);
+    expect(term.screen).toContain("frozen conversation");
+    expect(term.screen).not.toContain("cleanup");
+    expect(wakes).toEqual([]);
+    expect(saved.sent).toEqual([]);
+  });
+
+  it("clears queued live cleanup before drawing the saved snapshot", async () => {
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    live.receive("shutdown cleanup\x1b[c");
+    controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
+    controller.armWake("a");
+    // The snapshot can arrive after the live output already queued in xterm is parsed.
+    await settle();
+    expect(wakes).toEqual([]);
+    lastSocket().receive("frozen conversation");
+    await settle();
+
+    expect(term.screen).toContain("frozen conversation");
+    expect(term.screen).not.toContain("shutdown cleanup");
+  });
+
   it.each([
     ["a key", (t: FakeTerminal) => t.press("x", "x")],
     ["a paste", (t: FakeTerminal) => t.userTypes("pasted")],
@@ -320,11 +365,14 @@ describe("a dormant session's saved output", () => {
     expect(term.screen).toContain("from b");
   });
 
-  it("gives way to the live replay once the session is started", async () => {
+  it.each([
+    ["after being parsed", true],
+    ["while still queued", false],
+  ])("gives way to the live replay on resume %s", async (_, parsedFirst) => {
     controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
     const saved = lastSocket();
     saved.receive("old output");
-    await settle();
+    if (parsedFirst) await settle();
 
     controller.attach("a", url("a"), false);
     const live = lastSocket();

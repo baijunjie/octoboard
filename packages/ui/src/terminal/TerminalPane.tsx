@@ -237,8 +237,7 @@ export function TerminalPane({
     // (`apps/daemon/PROTOCOL.md`), only the output its last one left. Once the resume's
     // `session_upserted` broadcast flips the status, this effect re-runs and attaches for real.
     if (!session || isDormant) {
-      // `detach` keeps the screen when it already holds this session's output, and otherwise
-      // replaces it with the output the daemon saved for this session.
+      // `detach` loads the saved screen once on entering dormancy, then keeps that snapshot.
       // Whatever attempts were spent belonged to the process that is gone.
       reconnectAttemptsRef.current = 0;
       controller.detach({

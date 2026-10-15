@@ -419,7 +419,7 @@ heading in a console session's focus mode, to that heading's **+** button.
 Selecting a session shows its terminal; selecting an interrupted one resumes it, except by `Ctrl+Tab` or
 `Ctrl+Shift+Tab` in a console session's focus mode, which only shows an interrupted console session (see "The switch
 strip" in `docs/product/focus-mode.md`). Selecting an archived one does not reopen it: it is shown still archived,
-with the output its last process left on screen read-only, and typing into its terminal or pressing Reopen reopens it
+with its saved terminal preview read-only, and typing into its terminal or pressing Reopen reopens it
 (see "Archiving, interruption and resuming" and "The terminal" in `docs/product/sessions.md`). Selecting a session also
 puts its own pane in the window's right pane: a console session's report panel, a project session's project pane (see
 "What the right pane shows" in `docs/product/window-layout.md`). Whatever it is selected from — a sidebar row, a "View

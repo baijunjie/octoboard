@@ -603,8 +603,8 @@ agent's own mouse-driven TUI is usable. `Ctrl+C` reaches the agent, and so do `T
 never do: they move keyboard focus to another region of the window (see "Moving focus between regions with F6" in
 `docs/product/moving-focus-between-regions.md`).
 
-- Attaching to a session replays the **most recent 2 MiB** of that session's output, then follows live output. The
-  terminal itself keeps 10,000 lines of scrollback.
+- Attaching to a running session replays the **most recent 2 MiB** of that session's raw output, then follows live
+  output. The terminal itself keeps 10,000 lines of scrollback. Dormant sessions show the saved preview described below.
 - A reattach always redraws from the replay rather than appending to what is on screen, so scrollback older than the
   replay window is lost on every reconnect.
 - Whatever changes the terminal pane's size resizes the agent's terminal: resizing the window, resizing
@@ -661,21 +661,28 @@ never do: they move keyboard focus to another region of the window (see "Moving 
   "Reopen". The card is hidden while the session is being resumed.
 - **Typing into an archived session's terminal reopens it.** The first input starts the relaunch, and what is typed
   until the session is connected is held and handed to the agent once it is, so it reaches the agent's prompt.
-- **A session's last output stays on screen once its process has ended**, behind that card, so what the agent
-  printed last — why it stopped, what it was waiting for — can still be read. The kept screen belongs to that one
-  session: selecting a different dormant session shows that session's own saved output (a blank screen if it has
-  none) rather than the previous session's, and resuming re-attaches and redraws from the daemon's replay rather than
-  appending to what was kept.
-- **A dormant session selected later shows the output its last process left.** Whenever a session's process ends —
-  archived, exited or crashed, switched to another account, or stopped with the daemon on the way out — the daemon
-  keeps the most recent 2 MiB of its output, replacing what an earlier end left; a resume that starts a new process
-  discards it. Selecting the session while it has no process puts that output on screen behind the card, read-only:
-  nothing typed reaches it, and in an archived session the first keystroke reopens the session as above;
-  clicking, selecting or scrolling over it does not. While a
-  resume is under way the loading state covers it, so it is what shows when the resume fails. Resuming redraws from
-  the new process's replay rather than appending to it. A session whose process ended before Octoboard kept this
-  output, or with the daemon killed outright, shows a blank terminal, even if an earlier process left some. Deleting
-  the session's record deletes the output too (see "Files Octoboard owns" in `docs/product/application-lifecycle.md`).
+- **A dormant session shows its own saved terminal preview**, behind that card, read-only. Entering dormancy replaces
+  the live screen with that preview, even while the same session remains selected; reopening the view or loading it
+  on another client shows the same saved content. Selecting a different dormant session shows its own preview, or a
+  blank terminal if it has none. Clicking, selecting or scrolling does not resume it. Nothing typed reaches the
+  stopped process; typing into an archived session reopens it as above.
+- **Archiving preserves the screen before the agent is asked to exit.** The same rule applies when switching accounts
+  or stopping the daemon normally: cleanup, a clear screen or leaving an agent's full-screen interface cannot replace
+  the captured preview. An agent that exits or crashes on its own instead leaves its final screen, so content it clears
+  before exiting need not survive. These rules are shared by every supported agent.
+- The preview contains the active terminal screen, retaining text colours and styles. With the normal screen active,
+  it includes up to **10,000 rows of scrollback**. An agent's alternate full-screen interface has no scrollback:
+  its preview contains only that visible screen, without the hidden normal screen's history. The preview is
+  independent of the live replay's 2 MiB limit and wraps to the reader's terminal width. It is **not a full
+  conversation record**: content an agent already overwrote inside its full-screen interface is not reconstructed.
+  The agent's own stored conversation is separate.
+- Each process end replaces the previous preview; starting a new process discards it. While a resume is under way,
+  the loading state covers it, so it is what shows when a resume fails before starting a process. A successful resume
+  redraws from the new process's replay rather than appending to the preview. Older saved output is displayed as
+  recorded, including any clearing it contains; it is not converted into a recovered screen. A session whose process
+  ended before Octoboard kept output, or with the daemon killed outright, shows a blank terminal, even if an earlier
+  process left some. Deleting the session's record deletes its saved preview too (see "Files Octoboard owns" in
+  `docs/product/application-lifecycle.md`).
 
 ### A console with nothing in it
 
