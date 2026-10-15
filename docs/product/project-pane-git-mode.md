@@ -2,10 +2,10 @@
 
 The project pane's **Git mode** reviews the project's repository in two views: **Uncommitted**, the uncommitted
 changes of one worktree — what is staged, what is in conflict, what is changed on disk and what Git does not track —
-and **Compare**, the changes between the tips of two local branches. Either view opens each change in the project
-pane's read-only file viewer. The Git mode is the second of the project pane's two modes: opening the pane, its header,
-switching modes and the file viewer in general are in `docs/product/project-pane.md` (see "Files and Git" and "The
-file viewer" there).
+and **Compare**, what one local branch has changed since it forked from another. Either view opens each change in the
+project pane's read-only file viewer. The Git mode is the second of the project pane's two modes: opening the pane, its
+header, switching modes and the file viewer in general are in `docs/product/project-pane.md` (see "Files and Git" and
+"The file viewer" there).
 
 ## Reading only
 
@@ -292,15 +292,15 @@ connection is lost, the list on screen stays until it is back.
 
 ## Comparing two branches
 
-The **Compare** view shows what changed in the project's folder between the commits at the tips of two local branches
-of the repository. Neither branch has to be checked out, in any worktree, and nothing is checked out, fetched or
+The **Compare** view shows what one local branch of the repository, To, has changed in the project's folder since it
+forked from another, From. Neither branch has to be checked out, in any worktree, and nothing is checked out, fetched or
 written to compare them. The worktree chosen in the Uncommitted view plays no part: a comparison means the same
 whichever worktree is chosen.
 
 ### The branch selectors
 
-At the top of the Compare view are two branch selectors, each with its label before it: **From**, the old side, and
-**To**, the new side.
+At the top of the Compare view are two branch selectors, each with its label before it: **From**, the branch compared
+from, and **To**, the branch whose changes are shown (see "What is compared" below).
 
 - Each one offers every local branch of the repository — checked out in some worktree or in none — in byte order of
   their names, each with the first seven characters of the commit at its tip. At most 10,000 branches, or as many as
@@ -312,8 +312,8 @@ At the top of the Compare view are two branch selectors, each with its label bef
   "Names too long for their space" in `docs/product/labels-and-tooltips.md`), in the selector and in its list.
 - A chosen branch that a complete branch list no longer has stays chosen, its name marked as no longer existing, until
   another one is chosen.
-- **Swap branches**, beside the selectors, exchanges From and To, which reverses every change. It is unavailable while
-  neither side has a branch chosen.
+- **Swap branches**, beside the selectors, exchanges From and To, which shows what the other branch has changed since
+  the same fork — not the same changes turned around. It is unavailable while neither side has a branch chosen.
 - **Choosing other branches, or swapping them, is another comparison**: nothing of the previous one stays on screen,
   and its selected change is cleared. Choosing the branches already chosen changes nothing.
 - A broken branch — its reference names an object the repository does not have, or one that is not a commit — is
@@ -325,8 +325,8 @@ the Git mode is first shown after the project pane is put in the right pane, and
 changes are listed again (see "Keeping the list up to date" above), with the Git mode in place of the Uncommitted view:
 every 10 seconds while it is on screen and the window is visible, when it comes back more than 5 seconds after the
 last reading, on Refresh from either view, and after the connection to the daemon comes back; and, as the worktrees
-are, when one of the project's sessions is selected (see "Following the selected session" below). A branch created, moved
-or deleted in the meantime shows in the selectors then.
+are, when one of the project's sessions is selected (see "Following the selected session" below). A branch created,
+moved or deleted in the meantime shows in the selectors then.
 
 When the branches cannot be read, the Uncommitted view says nothing, and the Compare view says so with the reason: in
 place of the empty state asking for a branch on each side, with **Try again**, while a branch is missing on either side
@@ -335,12 +335,17 @@ the branches already offered staying on offer, until the branches are read again
 
 ### What is compared
 
-- **Tip to tip.** The comparison is between the two branches' commits themselves, never their merge base: whatever
-  From has that To does not reads as removed, and swapping the two reverses every change. Two branches at the same
-  commit have no differences.
-- **At the commits the branches were at when it was made.** The changes listed, and every change opened from them,
-  are between those two commits until the comparison is made again: a branch that moves or is deleted in the meantime
-  never changes what is shown (see "A branch that moves or goes away" below).
+- **Since the fork.** The old side is the commit the two branches forked at — their merge base, as
+  `git diff From...To` takes it — and the new side is the commit at To's tip, so the comparison shows only what To has
+  changed since it forked from From; what only From has done since is not in it. Where the two branches have more than
+  one best common ancestor, the one `git merge-base` gives is the fork. Two branches at the same commit have no
+  differences, and neither has a To that From already contains (To an ancestor of From), which has changed nothing
+  since the fork. Two branches with no commit in common have no fork to compare from and are not compared (see "What
+  the view says" below), rather than one whole branch being shown as a change of the other.
+- **At the commits the branches were at when it was made.** The fork is found once, together with the two tips, and
+  the changes listed, and every change opened from them, are between the fork and To's tip as they were then until the
+  comparison is made again: a branch that moves or is deleted in the meantime never changes what is shown (see "A
+  branch that moves or goes away" below).
 - **Nothing is read from the disk or from any worktree's index**, so a file is compared and opened whether or not it
   is in the project's folder on disk or in the chosen worktree.
 - **A subdirectory project** is compared within its scope as the Uncommitted view lists it (see "What is listed"
@@ -349,7 +354,7 @@ the branches already offered staying on offer, until the branches are read again
   more than 8 MiB of output from Git — far-apart branches of a large repository — a subdirectory project is compared
   within its own folder instead, where a rename across the boundary is listed as the addition or the deletion of its
   half inside. A project at the repository's root whose comparison is that large cannot be compared, and says so.
-- A submodule is listed when the two commits record it at different commits. A type change is one change, and a
+- A submodule is listed when the fork and To's tip record it at different commits. A type change is one change, and a
   submodule moved to another path is paired by the same exact-match rule, both as in the Uncommitted view.
 
 ### When a comparison is made
@@ -366,10 +371,10 @@ until the new one is in.
 
 ### What the view says
 
-- **To choose a branch on each side**, while a branch is missing on either side, or, when the repository has no
-  branches, that it has none yet.
+- **To choose a From and a To branch**, saying that the comparison shows what To has changed since it forked from
+  From, while a branch is missing on either side, or, when the repository has no branches, that it has none yet.
 - **Comparing** while a comparison is made with none on screen, announced to assistive technology.
-- **The commits compared**, From's and then To's, each by its first seven characters, in a line above what the
+- **The commits compared**, the fork's and then To's, each by its first seven characters, in a line above what the
   comparison found:
   - the changed files, in one section, **Changed files**, headed with how many changes it holds. Its rows, their
     order, their status letters (A, M, D, R or T here), the keyboard, their action button and the selected change are
@@ -381,9 +386,13 @@ until the new one is in.
   - **Not every change is shown**, under a list cut short: at most 10,000 changes, or 2 MiB of paths, are listed —
     those Git reported first;
   - **both branches are at the same commit**, so there are no differences;
-  - **no differences in the project's folder** between the two commits.
-- **A failure** — the comparison could not be made — names the reason (a branch that no longer exists or is broken,
-  say), with **Try again**. Try again pressed from the keyboard hands keyboard focus to the header's Refresh.
+  - **no differences**, To having changed nothing in the project's folder since the branches forked — a To that From
+    already contains among them.
+- **A failure** — the comparison could not be made — names the reason (a branch that no longer exists or is broken, or
+  two branches with no commit in common, so nothing to compare from, say), with **Try again**. In a shallow clone, two
+  branches with no commit found in common are reported instead as a history that may be incomplete: no shared commit was
+  found, and since the repository is a shallow clone, the history that would show one may be missing. Try again pressed
+  from the keyboard hands keyboard focus to the header's Refresh.
 
 When the list goes away while one of its rows holds keyboard focus, focus goes to the From selector.
 
@@ -392,13 +401,13 @@ When the list goes away while one of its rows holds keyboard focus, focus goes t
 The comparison on screen stays on the commits it was made at. Once a branch list read after the comparison came in
 shows a compared branch at another commit, a notice under the commits line says that branch has moved since the
 comparison and that Refresh compares its current commit. Once a complete branch list no longer has a compared branch,
-the notice says it no longer exists and that its commit is still shown, and its selector names it as no longer
-existing. A branch list cut short says nothing of a branch it does not have. A notice that appears is announced to
-assistive technology.
+the notice says it no longer exists and that the comparison still uses the commits it was made at, and its selector
+names it as no longer existing. A branch list cut short says nothing of a branch it does not have. A notice that appears
+is announced to assistive technology.
 
-Refresh then compares the branches as they are now, or, for a branch that no longer exists, fails saying there is no
-such branch. A change opened from the comparison still on screen reads from its commits for as long as the repository
-has them (see "Errors" below).
+Refresh then compares the branches as they are now, finding their fork again, or, for a branch that no longer exists,
+fails saying there is no such branch. A change opened from the comparison still on screen reads from its commits for as
+long as the repository has them (see "Errors" below).
 
 ## Following the selected session
 
@@ -409,9 +418,10 @@ is on screen; the view shown does not change.
 
 - **The worktree selector** chooses the worktree that has the session's branch checked out, and the worktree holding
   the project's folder when none has.
-- **From** takes the session's branch, and **To** the branch checked out in the repository's main working copy. With
-  the main working copy's `HEAD` detached, or on the session's branch itself, To is left with no branch chosen, so no
-  comparison is made until one is.
+- **From** takes the branch checked out in the repository's main working copy, and **To** the session's branch, so the
+  comparison shows what the session's branch has changed since it forked from it. With the main working copy's `HEAD`
+  detached, or on the session's branch itself, From is left with no branch chosen, so no comparison is made until one
+  is.
 - **A session with no branch of its own** sets the selectors back to where a project starts: the worktree holding the
   project's folder, and neither From nor To chosen. A branch list that could not be read counts as naming no branch
   for the session.
@@ -457,16 +467,18 @@ a tag against the viewer's background in either appearance. The tags never shrin
 room for it.
 
 A change from the Compare view carries the comparison it is read from in the header's **subtitle**, the line directly
-under the title: the two branches and the commit each was at, each commit by its first seven characters — "main at
-4f2a9c1 to feature at 9e8d7c6", say. The full wording is that line's tooltip where it is cut off (see "The file
-viewer" in `docs/product/project-pane.md`), and each branch name in it is laid out in the direction of its own text
-(see "Right-to-left layout" in `docs/product/window-layout.md`). A change from the Uncommitted view has no such line.
+under the title: To and the commit it was at, then From and the commit the two forked at, each commit by its first
+seven characters — "feature at 9e8d7c6, since it forked from main at 4f2a9c1", say. The full wording is that line's
+tooltip where it is cut off (see "The file viewer" in `docs/product/project-pane.md`), and each branch name in it is
+laid out in the direction of its own text (see "Right-to-left layout" in `docs/product/window-layout.md`). A change from
+the Uncommitted view has no such line.
 
 Under that are the change's details, laid out as the viewer lays out any subject's (see "The file viewer" in
 `docs/product/project-pane.md`): the path within the project and, for a rename, the path it was renamed from.
 
-A change from the Compare view is read from the two commits of the comparison on screen, its old side from From's
-commit and its new side from To's, and is shown as a staged change is below; it is never untracked or in conflict.
+A change from the Compare view is read from the two commits of the comparison on screen, its old side from the commit
+the branches forked at and its new side from To's, and is shown as a staged change is below; it is never untracked or in
+conflict.
 
 ### What it shows
 
@@ -694,9 +706,10 @@ the sections folded away (see "Folding a section" above); and, grouped by folder
 the window, or restarting the application, starts every project on the Uncommitted view and the worktree holding its
 folder, with no branches chosen, no change selected and every section and folder unfolded. Selecting one of the
 project's sessions sets the worktree and the branches anew, once for that selection; the pane put back in the right
-pane while the same session stays selected keeps them as they are (see "Following the selected session" above). Change lists, branch lists, comparisons and their contents are never stored. Whether the
-filter field is on screen, and the text in it, last only while the project's pane stays in the right pane, and the
-text only until the field is closed (see "Filtering by file name" above).
+pane while the same session stays selected keeps them as they are (see "Following the selected session" above). Change
+lists, branch lists, comparisons and their contents are never stored. Whether the filter field is on screen, and the
+text in it, last only while the project's pane stays in the right pane, and the text only until the field is closed (see
+"Filtering by file name" above).
 
 **Across projects and restarts**: whether the change lists are grouped by folder (see "Flat or grouped by folder"
 above), kept as the file viewer's document-or-source, unified-or-split and wrap choices are. The mode itself is kept

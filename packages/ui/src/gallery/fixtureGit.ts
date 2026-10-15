@@ -1,6 +1,7 @@
 // What the fixture daemon answers a project pane's Git mode with, over a fixture repository
 // (`fixtures/changeFixtures.ts`): the source, the change lists, a change's patch and the whole
-// bodies behind it, the branch list and a comparison between two branches.
+// bodies behind it, the branch list and a comparison of one branch with another (what it has changed
+// since it forked from it).
 //
 // These are the replies that have to track the real daemon's own
 // (`apps/daemon/src/browse/changes.rs`), condition for condition, and they are kept apart from the
@@ -165,7 +166,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
     const sides = { old: readWhole(found.entry.old, wholeBody("old")), new: readWhole(found.entry.new, wholeBody("new")) };
     return asked
       ? { type: "project_change_bodies", project: body.project, worktree: body.worktree ?? null, group: body.change.group, ...sides }
-      : { type: "project_comparison_change_bodies", project: body.project, left: body.left, right: body.right, ...sides };
+      : { type: "project_comparison_change_bodies", project: body.project, left: body.left, right: body.right, base: body.base, ...sides };
   };
 
   /** The reply to a Git-mode request, or `undefined` where the request is not one of them. */
@@ -216,8 +217,17 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
         const left = resolve(body.left);
         const right = resolve(body.right);
         compared = true;
-        const changes = left.commit === right.commit ? [] : (git?.comparisons?.[`${body.left}..${body.right}`] ?? []);
-        return { type: "project_comparison", project: body.project, left, right, changes: changes.map((change) => change.entry), complete: true };
+        const key = `${body.left}..${body.right}`;
+        const fork = left.commit === right.commit ? left.commit : git?.forks?.[key] === undefined ? left.commit : git.forks[key];
+        if (fork === null) {
+          const params = { left: body.left, right: body.right };
+          return git?.shallow
+            ? fail({ code: "no_merge_base_shallow", params, message: `${body.left} and ${body.right} share no commit in this shallow clone's history` })
+            : fail({ code: "no_merge_base", params, message: `${body.left} and ${body.right} have no commit in common` });
+        }
+        // A right branch that is an ancestor of the left one forks at its own tip, which is no change.
+        const changes = fork === right.commit ? [] : (git?.comparisons?.[key] ?? []);
+        return { type: "project_comparison", project: body.project, left, right, base: fork, changes: changes.map((change) => change.entry), complete: true };
       }
       case "read_project_comparison_change": {
         const changes = git?.comparisons?.[`${body.left.branch}..${body.right.branch}`] ?? [];
@@ -231,6 +241,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
           project: body.project,
           left: body.left,
           right: body.right,
+          base: body.base,
           old: readSide(at, found.entry.old, found.bodies?.old, whole.old, hasHunk(found)),
           new: readSide(at, found.entry.new, found.bodies?.new, whole.new, hasHunk(found)),
           patch: found.patch === undefined ? null : { size: found.patch.length, kind: "text", media_type: null, text: found.patch, data: null },

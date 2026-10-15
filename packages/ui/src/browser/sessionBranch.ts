@@ -24,9 +24,10 @@ export function sessionBranch(branches: readonly BranchInfo[], session: string):
 
 /**
  * The selectors' values that follow `branch`, a session's branch: the worktree that has it checked
- * out (the default one when none has, as for no branch at all), and a comparison of it against what
- * the repository's main working copy has checked out. A main working copy on no branch, or on
- * `branch` itself, leaves the To side empty: there is nothing to compare it with.
+ * out (the default one when none has, as for no branch at all), and a comparison of what it has
+ * changed since it forked from what the repository's main working copy has checked out: From is
+ * that branch and To `branch`. A main working copy on no branch, or on `branch` itself, leaves
+ * From empty: there is nothing to compare it from.
  */
 export function selectionForBranch(branch: string | undefined, worktrees: readonly WorktreeInfo[], own: string): GitSelection {
   if (branch === undefined) return DEFAULT_SELECTION;
@@ -34,7 +35,7 @@ export function selectionForBranch(branch: string | undefined, worktrees: readon
   const mainBranch = worktrees.find((w) => w.main)?.branch ?? null;
   return {
     worktree: holder && holder.id !== own ? holder.id : undefined,
-    left: branch,
-    right: mainBranch !== null && mainBranch !== branch ? mainBranch : undefined,
+    left: mainBranch !== null && mainBranch !== branch ? mainBranch : undefined,
+    right: branch,
   };
 }

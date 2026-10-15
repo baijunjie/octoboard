@@ -235,9 +235,10 @@ it("words a comparison's source as plain text too, each branch and commit isolat
       kind: "comparison",
       left: { branch: "main", commit: "1234567890abcdef" },
       right: { branch: "feature", commit: "fedcba0987654321" },
+      base: "0123456789abcdef",
     }),
   );
-  expect(hook.current().subject?.sourceText).toBe(`${isolate("main")} at ${isolate(shortCommit("1234567890abcdef"))} to ${isolate("feature")} at ${isolate(shortCommit("fedcba0987654321"))}`);
+  expect(hook.current().subject?.sourceText).toBe(`${isolate("feature")} at ${isolate(shortCommit("fedcba0987654321"))}, since it forked from ${isolate("main")} at ${isolate(shortCommit("0123456789abcdef"))}`);
 });
 
 it("tags a staged or unstaged change with its stage, and marks the rest by their status", () => {
@@ -262,6 +263,7 @@ it("gives a conflicted or compared change no stage tag, and its status as the li
       kind: "comparison",
       left: { branch: "main", commit: "1234567890abcdef" },
       right: { branch: "feature", commit: "fedcba0987654321" },
+      base: "0123456789abcdef",
     }),
   );
   expect(hook.current().subject).toMatchObject({ stage: undefined, status: "added" });
@@ -297,6 +299,7 @@ const comparison = (left: string, right: string, rightCommit: string, path: stri
   project: "p",
   left: endpoint(left, "c-left"),
   right: endpoint(right, rightCommit),
+  base: "c-base",
   changes: [{ group: "committed", old: { state: "absent" }, new: { state: "present", path, kind: "file", source: { kind: "commit", commit: rightCommit, branch: null, blob: "b" } } }],
   complete: true,
 });
@@ -333,16 +336,17 @@ it("reads a compared change from the comparison's two commits, and never takes a
   const { daemon, pending } = controlledDaemon();
   const hook = mount<ChangeReader>(daemon, () => useChangeReader("p"));
   const entry = changeItem({ group: "committed", old: { state: "present", path: "a.ts", kind: "file", source: { kind: "commit", commit: "c1", branch: null, blob: "o" } }, new: { state: "absent" } });
-  const origin = (rightCommit: string): ChangeOrigin => ({ kind: "comparison", left: endpoint("main", "c1"), right: endpoint("topic", rightCommit) });
+  const origin = (rightCommit: string): ChangeOrigin => ({ kind: "comparison", left: endpoint("main", "c1"), right: endpoint("topic", rightCommit), base: "c0" });
   act(() => hook.current().open(entry, origin("c2")));
   act(() => hook.current().open(entry, origin("c3")));
   const [first, second] = pending.splice(0);
-  expect(second.body).toMatchObject({ type: "read_project_comparison_change", slot: "viewer", left: { commit: "c1" }, right: { commit: "c3" } });
+  expect(second.body).toMatchObject({ type: "read_project_comparison_change", slot: "viewer", left: { commit: "c1" }, right: { commit: "c3" }, base: "c0" });
   const reply = (rightCommit: string, patch: string): Event => ({
     type: "project_comparison_change",
     project: "p",
     left: endpoint("main", "c1"),
     right: endpoint("topic", rightCommit),
+    base: "c0",
     old: { state: "present", path: "a.ts", kind: "file", source: { kind: "commit", commit: "c1", branch: null, blob: "o" }, file: null, lines: null },
     new: { state: "absent" },
     patch: { size: patch.length, kind: "text", media_type: null, text: patch, data: null },

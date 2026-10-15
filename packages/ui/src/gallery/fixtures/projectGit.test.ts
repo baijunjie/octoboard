@@ -21,11 +21,21 @@ describe("the sample repository's changes", () => {
   const versionOf = (side: ChangeSide): SideVersion => (side.state === "present" ? { state: "present", source: side.source } : { state: "absent" });
   const versionsOf = (change: { old: ChangeSide; new: ChangeSide }) => ({ old: versionOf(change.old), new: versionOf(change.new) });
   /** The two ends a comparison keyed `<left>..<right>` is read from, at the commits the branch list
-   * names, as the window names them back. */
+   * names, and the fork it is made from, as the window names them back. */
   const endsOf = (comparison: string) => {
     const commitOf = (branch: string) => SAMPLE_GIT.branches?.find((b) => b.name === branch)?.commit ?? "";
     const [left, right] = comparison.split("..");
-    return { left: { branch: left, commit: commitOf(left) }, right: { branch: right, commit: commitOf(right) } };
+    return {
+      left: { branch: left, commit: commitOf(left) },
+      right: { branch: right, commit: commitOf(right) },
+      base: SAMPLE_GIT.forks?.[comparison] ?? commitOf(left),
+    };
+  };
+  /** The comparisons of the sample repository, each list once: two pairs may be answered with the
+   * same changes, which reading twice would only repeat. */
+  const comparisonsOnce = () => {
+    const seen = new Set<unknown>();
+    return Object.entries(SAMPLE_GIT.comparisons ?? {}).filter(([, changes]) => !seen.has(changes) && seen.add(changes));
   };
   /** Swallows the daemon errors a fixture answers on purpose, but never a refusal: that is a gap in
    * the gallery's own data, and the check below exists to name it. */
@@ -43,6 +53,39 @@ describe("the sample repository's changes", () => {
   // cannot be read, and the change whose patch is past the daemon's limit.
   it("name an object by its content", () => {
     expect(objectIdCheck(SAMPLE_GIT)).toEqual({ conflicts: [], unchecked: ["1b2c3d4", "1f2e3d4", "8d2f1a0"] });
+  });
+
+  // A comparison is made from the fork of the two branches, so every committed side the sample
+  // lists names the commit the fork is at (old) or the right branch's tip (new), and a side is
+  // never read from the left branch's own tip.
+  it("list a comparison's changes between its fork and its right branch's tip", () => {
+    for (const [comparison, changes] of Object.entries(SAMPLE_GIT.comparisons ?? {})) {
+      const { base, right } = endsOf(comparison);
+      for (const { entry } of changes) {
+        if (entry.group !== "committed") throw new Error(`${comparison} lists a ${entry.group} change`);
+        if (entry.old.state === "present") expect([comparison, entry.old.source]).toEqual([comparison, expect.objectContaining({ kind: "commit", commit: base })]);
+        if (entry.new.state === "present") expect([comparison, entry.new.source]).toEqual([comparison, expect.objectContaining({ kind: "commit", commit: right.commit })]);
+      }
+    }
+  });
+
+  it("answer a comparison with the commit the branches forked at", async () => {
+    const compare = (git: FixtureGit, left: string, right: string) =>
+      sampleDaemon(git).request({ type: "compare_project_branches", project: "p-1", left, right });
+    const feature = SAMPLE_GIT.branches?.find((b) => b.name === "feature/ranking-experiments")?.commit;
+    const main = SAMPLE_GIT.branches?.find((b) => b.name === "main")?.commit;
+    const base = (reply: Event) => (reply.type === "project_comparison" ? [reply.base, reply.changes.length] : reply.type);
+
+    // A branch made from main forks at main's tip; a branch with commits of its own forks before them.
+    expect(base(await compare(SAMPLE_GIT, "main", "feature/ranking-experiments"))).toEqual([main, 8]);
+    expect(base(await compare(SAMPLE_GIT, "chore/update-dependencies", "feature/ranking-experiments"))).toEqual([main, 8]);
+    // The same commit, and a right branch that is an ancestor of the left one, change nothing.
+    expect(base(await compare(SAMPLE_GIT, "main", "release/2.4"))).toEqual([main, 0]);
+    expect(base(await compare(SAMPLE_GIT, "feature/ranking-experiments", "main"))).toEqual([feature, 0]);
+    // No commit in common is refused rather than compared tip to tip.
+    const orphaned: FixtureGit = { ...SAMPLE_GIT, branches: [...(SAMPLE_GIT.branches ?? []), { name: "gh-pages", commit: "3a2b1c0" }], forks: { "main..gh-pages": null } };
+    await expect(compare(orphaned, "main", "gh-pages")).rejects.toMatchObject({ code: "no_merge_base", params: { left: "main", right: "gh-pages" } });
+    await expect(compare({ ...orphaned, shallow: true }, "main", "gh-pages")).rejects.toMatchObject({ code: "no_merge_base_shallow", params: { left: "main", right: "gh-pages" } });
   });
 
   // A side with no line count leaves an expandable diff ending in a bar promising unmodified lines
@@ -76,7 +119,7 @@ describe("the sample repository's changes", () => {
       }
     }
 
-    for (const [comparison, changes] of Object.entries(SAMPLE_GIT.comparisons ?? {})) {
+    for (const [comparison, changes] of comparisonsOnce()) {
       const ends = endsOf(comparison);
       for (const { entry } of changes) {
         if (entry.group === "conflicted") continue;
@@ -152,7 +195,7 @@ describe("the sample repository's changes", () => {
         asked.push(answer(at, daemon.request(request)));
       }
     }
-    for (const [comparison, changes] of Object.entries(SAMPLE_GIT.comparisons ?? {})) {
+    for (const [comparison, changes] of comparisonsOnce()) {
       const ends = endsOf(comparison);
       for (const { entry } of changes) {
         if (entry.group === "conflicted") continue;

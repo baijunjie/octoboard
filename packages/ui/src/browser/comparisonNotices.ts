@@ -4,7 +4,7 @@ import type { ComparisonEndpoint } from "../protocol";
 import type { BranchList } from "./useBranchList";
 
 /** A compared branch that has moved to another commit since the comparison, or gone. */
-export type ComparisonNotice = { kind: "moved"; branch: string } | { kind: "deleted"; branch: string; commit: string };
+export type ComparisonNotice = { kind: "moved"; branch: string } | { kind: "deleted"; branch: string };
 
 /**
  * What `branches` says of the branches of a comparison received at `receivedAt`: each one now at
@@ -22,7 +22,7 @@ export function comparisonNotices(
     if (notices.some((notice) => notice.branch === endpoint.branch)) continue;
     const now = branches.branches.find((branch) => branch.name === endpoint.branch);
     if (now && now.commit !== endpoint.commit) notices.push({ kind: "moved", branch: endpoint.branch });
-    else if (!now && branches.complete) notices.push({ kind: "deleted", branch: endpoint.branch, commit: endpoint.commit });
+    else if (!now && branches.complete) notices.push({ kind: "deleted", branch: endpoint.branch });
   }
   return notices;
 }

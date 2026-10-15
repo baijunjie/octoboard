@@ -74,12 +74,21 @@ fn a_compared_rename_below_or_above_itself_is_one_diff_between_its_versions() {
         ],
     );
 
+    // `back` undoes the move, so `moved` forks into it and the comparison runs the other way.
+    git(&repo, &["checkout", "-q", "-B", "back", "moved"]);
+    git(&repo, &["rm", "-rfq", "foo", "up"]);
+    write(repo.join("foo"), &lines("foo", &[]));
+    write(repo.join("up"), &lines("up", &[]));
+    git(&repo, &["add", "-A"]);
+    git(&repo, &["commit", "-q", "-m", "back"]);
+    git(&repo, &["checkout", "-q", "main"]);
+
     // Both nesting directions and both comparison directions.
     for (left, right, from, to, edited) in [
         ("main", "moved", "foo", "foo/bar", true),
-        ("moved", "main", "foo/bar", "foo", true),
+        ("moved", "back", "foo/bar", "foo", true),
         ("main", "moved", "up", "up/bar", false),
-        ("moved", "main", "up/bar", "up", false),
+        ("moved", "back", "up/bar", "up", false),
     ] {
         let compared = fixture.compare(&project, left, right).unwrap();
         let read = fixture

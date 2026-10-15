@@ -32,15 +32,21 @@ export interface FixtureChange {
 /** A fixture project's repository: its worktrees, the first holding the project, and each one's
  * changes by its id; a worktree with an `error` in place of changes fails to list. With `gitError`,
  * the repository cannot be read at all. `branches` are its local branches; `comparisons` the
- * changes between two of them, keyed `<left>..<right>` (none for a pair not given), and `missing`
- * branches the list has that a comparison no longer finds. `moved` is what the branch list says of
- * a branch once a comparison has been made: a branch moved to another commit since. */
+ * changes `<right>` made since it forked from `<left>`, keyed `<left>..<right>` (none for a pair not
+ * given), whose old sides are read from the fork's commit; `forks` names that commit for a pair
+ * (`null` for two branches with no commit in common, which a comparison refuses, as a shallow
+ * clone's refusal when `shallow` is set), and a pair it does
+ * not name forks at `<left>`'s own tip, as a branch made from it does. `missing` are branches the
+ * list has that a comparison no longer finds. `moved` is what the branch list says of a branch once
+ * a comparison has been made: a branch moved to another commit since. */
 export interface FixtureGit {
   worktrees: WorktreeInfo[];
   changes: Record<string, FixtureChange[] | FixtureError>;
   gitError?: string;
   branches?: BranchInfo[];
   comparisons?: Record<string, FixtureChange[]>;
+  forks?: Record<string, string | null>;
+  shallow?: boolean;
   missing?: string[];
   moved?: Record<string, string>;
 }

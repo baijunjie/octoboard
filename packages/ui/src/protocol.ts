@@ -566,8 +566,8 @@ export interface BranchOrigin {
 }
 
 /** One end of a branch comparison: the branch (a wire path) and the full id of the commit it was
- * resolved to. A read of one of the comparison's changes names both back; only `commit` decides
- * what is read. */
+ * resolved to. A read of one of the comparison's changes names both back, with the comparison's
+ * `base`; the commits alone decide what is read. */
 export interface ComparisonEndpoint {
   branch: string;
   commit: string;
@@ -849,13 +849,16 @@ export type RequestBody =
     slot?: string;
   }
   | { type: "list_project_branches"; project: string; slot?: string }
-  /** `left` is the old side and `right` the new side, each a branch name as a wire path. */
+  /** Each a branch name as a wire path: the changes are what `right` has changed since it forked
+   * from `left` (`git diff left...right`). Two branches with no commit in common are refused
+   * (`no_merge_base`, or `no_merge_base_shallow` in a shallow clone). */
   | { type: "compare_project_branches"; project: string; left: string; right: string; slot?: string }
   | {
     type: "read_project_comparison_change";
     project: string;
     left: ComparisonEndpoint;
     right: ComparisonEndpoint;
+    base: string;
     change: { old: SideRef; new: SideRef };
     slot?: string;
   }
@@ -876,6 +879,7 @@ export type RequestBody =
     project: string;
     left: ComparisonEndpoint;
     right: ComparisonEndpoint;
+    base: string;
     change: { old: SideRef; new: SideRef };
     old: SideVersion;
     new: SideVersion;
@@ -1059,24 +1063,28 @@ export type Event =
   }
   /** In byte order of the names; `complete` is false when the list was cut at a budget. */
   | { type: "project_branches"; id?: string; project: string; branches: BranchInfo[]; complete: boolean }
-  /** `left` and `right` are the branches as asked for and the commits they were resolved to; every
-   * change in `changes` (all `committed`) is between exactly those two commits. */
+  /** `left` and `right` are the branches as asked for and the commits they were resolved to, and
+   * `base` the commit they forked at (their merge base); every change in `changes` (all
+   * `committed`) is between exactly `base` and `right`'s commit. */
   | {
     type: "project_comparison";
     id?: string;
     project: string;
     left: ComparisonEndpoint;
     right: ComparisonEndpoint;
+    base: string;
     changes: ChangeEntry[];
     complete: boolean;
   }
-  /** `left` and `right` echo the request: both sides and the patch were read from those commits. */
+  /** `left`, `right` and `base` echo the request: the old side was read from `base` and the new
+   * side from `right`'s commit. */
   | {
     type: "project_comparison_change";
     id?: string;
     project: string;
     left: ComparisonEndpoint;
     right: ComparisonEndpoint;
+    base: string;
     old: SideRead;
     new: SideRead;
     patch: FileContent | null;
@@ -1091,13 +1099,14 @@ export type Event =
     old: SideRead;
     new: SideRead;
   }
-  /** `left` and `right` echo the request. */
+  /** `left`, `right` and `base` echo the request. */
   | {
     type: "project_comparison_change_bodies";
     id?: string;
     project: string;
     left: ComparisonEndpoint;
     right: ComparisonEndpoint;
+    base: string;
     old: SideRead;
     new: SideRead;
   }

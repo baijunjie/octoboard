@@ -167,7 +167,7 @@ describe("gallery scenarios", () => {
     for (const { id, matcher } of rowMatchers) {
       expect(typeof matcher === "function" && labels.some(matcher), `${id}: ${String(matcher)}`).toBe(true);
     }
-    const selector = recorded.filter(({ id }) => id === "git-compare").find(({ matcher }) => String(matcher) === "branchOption(main)")!.matcher;
+    const selector = recorded.filter(({ id }) => id === "git-compare-moved").find(({ matcher }) => String(matcher) === "branchOption(main)")!.matcher;
     expect(typeof selector === "function" && selector("main4f2a9c1")).toBe(true);
   });
 

@@ -100,10 +100,11 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
 
   /** Opens a change of the comparison on screen, read from the two commits it was made at. */
   const shownComparison = comparison.comparison.state === "loaded" ? comparison.comparison : undefined;
-  const comparedOrigin = (from: { left: ComparisonEndpoint; right: ComparisonEndpoint }): ChangeOrigin => ({
+  const comparedOrigin = (from: { left: ComparisonEndpoint; right: ComparisonEndpoint; base: string }): ChangeOrigin => ({
     kind: "comparison",
     left: from.left,
     right: from.right,
+    base: from.base,
   });
   const openComparedChange = (item: ChangeItem) => {
     if (!shownComparison) return;
@@ -242,9 +243,9 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
   // focus goes to the list's first row, or to the selectors when it has none.
   useEffect(() => {
     if (viewedChange === undefined || viewedOrigin?.kind !== "comparison" || !shownComparison) return;
-    const { left, right } = viewedOrigin;
+    const { base, right } = viewedOrigin;
     const now = shownComparison;
-    if (left.commit === now.left.commit && right.commit === now.right.commit) return;
+    if (base === now.base && right.commit === now.right.commit) return;
     const item = now.items.find((candidate) => candidate.key === viewedChange.key);
     if (item) return changeReader.open(item, comparedOrigin(now));
     changeReader.close();

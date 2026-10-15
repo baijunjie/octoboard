@@ -52,12 +52,13 @@ const comparison = (right: string, paths: string[]) => () =>
     project: "p",
     left: { branch: "main", commit: "c1" },
     right: { branch: "topic", commit: right },
+    base: "c1",
     changes: paths.map((path) => committed(path, right)),
     complete: true,
   }) satisfies Event;
 const read = (body: RequestBody): Event => {
   if (body.type !== "read_project_comparison_change") throw new Error(body.type);
-  return { type: "project_comparison_change", project: "p", left: body.left, right: body.right, old: { state: "absent" }, new: { state: "absent" }, patch: null };
+  return { type: "project_comparison_change", project: "p", left: body.left, right: body.right, base: body.base, old: { state: "absent" }, new: { state: "absent" }, patch: null };
 };
 
 it("follows a comparison made again with the change still in it, and closes on one without it", async () => {
@@ -414,7 +415,7 @@ it("sets the selectors from the selected session's branch once it is known, unle
   // The attribution arrives in a later list: set.
   act(() => void h.latest.git.refresh());
   await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", session: "s1" }]);
-  expect(h.selectors()).toEqual({ worktree: "w", left: "topic", right: "main" });
+  expect(h.selectors()).toEqual({ worktree: "w", left: "main", right: "topic" });
 
   // Another session with no branch restores the defaults; a choice made since settles it.
   h.show("s2");
@@ -432,10 +433,10 @@ it("sets the selectors again on switching between two sessions that each created
   h.mount(undefined);
   h.show("s1");
   await h.settle([MAIN, TOPIC], branches);
-  expect(h.selectors()).toEqual({ worktree: "w", left: "topic", right: "main" });
+  expect(h.selectors()).toEqual({ worktree: "w", left: "main", right: "topic" });
   h.show("s2");
   await h.settle([MAIN, TOPIC], branches);
-  expect(h.selectors()).toEqual({ worktree: undefined, left: "other", right: "main" });
+  expect(h.selectors()).toEqual({ worktree: undefined, left: "main", right: "other" });
 });
 
 it("asks again for a worktree no listed one is, and sets it from the list that answers", async () => {
@@ -446,10 +447,10 @@ it("asks again for a worktree no listed one is, and sets it from the list that a
   await h.settle([MAIN], branches);
   // The list read so far has no worktree for the branch: the comparison is set, the worktree waits
   // for the list asked for again.
-  expect(h.selectors()).toEqual({ worktree: undefined, left: "topic", right: "main" });
+  expect(h.selectors()).toEqual({ worktree: undefined, left: "main", right: "topic" });
   expect(pending.some((request) => request.body.type === "get_project_source")).toBe(true);
   await h.settle([MAIN, TOPIC], branches);
-  expect(h.selectors()).toEqual({ worktree: "w", left: "topic", right: "main" });
+  expect(h.selectors()).toEqual({ worktree: "w", left: "main", right: "topic" });
 });
 
 it("weighs only what was read after the selection, asking again for what a pane held", async () => {
@@ -458,17 +459,17 @@ it("weighs only what was read after the selection, asking again for what a pane 
   h.mount(undefined);
   h.show("s1");
   await h.settle([MAIN, TOPIC], branches);
-  expect(h.selectors().left).toBe("topic");
+  expect(h.selectors().right).toBe("topic");
   // Selected while the Git mode is off screen: the lists held name a branch for s2, but are from
   // before the selection and are not weighed.
   h.show("s2", false);
-  expect(h.selectors().left).toBe("topic");
+  expect(h.selectors().right).toBe("topic");
   expect(pending).toHaveLength(0);
   h.show("s2", true);
-  expect(h.selectors().left).toBe("topic");
+  expect(h.selectors().right).toBe("topic");
   expect(pending.map((request) => request.body.type)).toEqual(expect.arrayContaining(["get_project_source", "list_project_branches"]));
   await h.settle([MAIN, TOPIC], branches);
-  expect(h.selectors().left).toBe("other");
+  expect(h.selectors().right).toBe("other");
 });
 
 it("sets the selectors again on a new selection of the session, but not on a pane mounted under the same one", async () => {
@@ -477,13 +478,13 @@ it("sets the selectors again on a new selection of the session, but not on a pan
   h.mount(undefined);
   h.show("s1");
   await h.settle([MAIN, TOPIC], branches);
-  act(() => h.latest.git.view.compare.onBranchesChange("main", "topic"));
+  act(() => h.latest.git.view.compare.onBranchesChange("topic", "main"));
 
   // The pane goes and comes back with the selection unchanged: the choice stands.
   h.unmount();
   h.mount("s1");
   await h.settle([MAIN, TOPIC], branches);
-  expect(h.selectors()).toMatchObject({ left: "main", right: "topic" });
+  expect(h.selectors()).toMatchObject({ left: "topic", right: "main" });
 
   // Another selection in between, the pane away: the session is a new switch.
   h.unmount();
@@ -491,7 +492,7 @@ it("sets the selectors again on a new selection of the session, but not on a pan
   h.select("s1");
   h.mount("s1");
   await h.settle([MAIN, TOPIC], branches);
-  expect(h.selectors()).toEqual({ worktree: "w", left: "topic", right: "main" });
+  expect(h.selectors()).toEqual({ worktree: "w", left: "main", right: "topic" });
 });
 
 it("leaves the selectors as they are for a session that is not the project's", async () => {

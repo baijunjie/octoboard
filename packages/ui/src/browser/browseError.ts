@@ -26,7 +26,7 @@ const BYTE_LIMITS = new Set(["file_bytes", "reply_bytes", "git_output", "patch_b
  * isolated through `daemonMessage` only because that isolates every param. */
 function shownParams(language: Language, params: MessageParams, root: string | undefined): MessageParams {
   const shown: MessageParams = { ...params };
-  for (const name of ["path", "branch"]) {
+  for (const name of ["path", "branch", "left", "right"]) {
     if (shown[name] !== undefined) shown[name] = displayWirePath(shown[name]);
   }
   // The empty path is the project's own directory, which reads better as where it is.

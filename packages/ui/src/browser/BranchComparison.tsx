@@ -29,9 +29,10 @@ import { shortCommit } from "./useChangeReader";
 const BRANCH_ROW_HEIGHT = 32;
 
 /**
- * The Git mode's comparison of two local branches: a selector for each — From, the old side, and
- * To, the new side — and the changes between the two branches' commits that touch the project. A
- * comparison is of the commits the branches were at when it was made, which it names; when the
+ * The Git mode's comparison of two local branches: a selector for each — From, the base, and To —
+ * and the changes To has made to the project since it forked from From, from their merge base to
+ * To's tip (as `git diff From...To`). A comparison is of the commits the branches were at when it
+ * was made, which it names, and the fork they share; when the
  * branch list read since says one of them has moved or gone, it says so, and Refresh compares the
  * branches as they are now. Nothing here checks anything out, and the worktree chosen for the
  * uncommitted changes plays no part in it.
@@ -169,12 +170,12 @@ function ComparisonContent({
   }
   if (comparison.state === "loading") return <GitLoading label={t("git.compare.loading")} />;
   if (comparison.state === "error") return <GitFailure title={t("git.compare.error")} message={comparison.message} onRetry={onRetry} />;
-  const { left, right, items, complete } = comparison;
+  const { left, right, base, items, complete } = comparison;
   const notices = comparisonNotices(branches, comparison);
   return (
     <>
       <p className="shrink-0 px-3 py-2 text-xs text-app-muted">
-        {t("git.compare.commits", { from: isolate(shortCommit(left.commit)), to: isolate(shortCommit(right.commit)) })}
+        {t("git.compare.commits", { base: isolate(shortCommit(base)), to: isolate(shortCommit(right.commit)) })}
       </p>
       {/* Mounted for as long as the comparison is, so a notice appearing in it is announced. */}
       <div role="status" className="flex shrink-0 flex-col gap-1 px-3 text-xs text-app-muted not-empty:pb-2">
@@ -185,10 +186,7 @@ function ComparisonContent({
               {notice.kind === "moved" ? (
                 <Message id="git.compare.moved" params={{ branch: <bdi dir="auto">{displayWirePath(notice.branch)}</bdi> }} />
               ) : (
-                <Message
-                  id="git.compare.deleted"
-                  params={{ branch: <bdi dir="auto">{displayWirePath(notice.branch)}</bdi>, commit: <bdi dir="auto">{shortCommit(notice.commit)}</bdi> }}
-                />
+                <Message id="git.compare.deleted" params={{ branch: <bdi dir="auto">{displayWirePath(notice.branch)}</bdi> }} />
               )}
             </span>
           </p>

@@ -10,13 +10,14 @@ use super::*;
 use crate::protocol::{
     BranchInfo, ChangeEntry, ComparedChangeRef, ComparisonEndpoint, SideKind, SideRead, SideRef,
 };
-use crate::test_support::{git, git_stdin, repo_with};
+use crate::test_support::{git, git_stdin, repo_with, ScratchDir};
 
 /// A comparison as `compare_project_branches` answered it.
 #[derive(Debug)]
 pub(super) struct Compared {
     pub(super) left: ComparisonEndpoint,
     pub(super) right: ComparisonEndpoint,
+    pub(super) base: String,
     pub(super) changes: Vec<ChangeEntry>,
     complete: bool,
 }
@@ -57,6 +58,7 @@ impl Fixture {
             Event::ProjectComparison {
                 left: echoed_left,
                 right: echoed_right,
+                base,
                 changes,
                 complete,
                 ..
@@ -69,6 +71,7 @@ impl Fixture {
                 Ok(Compared {
                     left: echoed_left,
                     right: echoed_right,
+                    base,
                     changes,
                     complete,
                 })
@@ -84,14 +87,18 @@ impl Fixture {
         old: SideRef,
         new: SideRef,
     ) -> anyhow::Result<ComparedRead> {
-        self.compared_change_at(project, &compared.left, &compared.right, old, new)
+        self.compared_change_at(
+            project,
+            (&compared.left, &compared.right, &compared.base),
+            old,
+            new,
+        )
     }
 
     fn compared_change_at(
         &self,
         project: &str,
-        left: &ComparisonEndpoint,
-        right: &ComparisonEndpoint,
+        (left, right, base): (&ComparisonEndpoint, &ComparisonEndpoint, &str),
         old: SideRef,
         new: SideRef,
     ) -> anyhow::Result<ComparedRead> {
@@ -99,6 +106,7 @@ impl Fixture {
             project: project.to_string(),
             left: left.clone(),
             right: right.clone(),
+            base: base.to_string(),
             change: ComparedChangeRef { old, new },
         })?;
         let json = serde_json::to_string(&event).unwrap();
@@ -106,12 +114,17 @@ impl Fixture {
             Event::ProjectComparisonChange {
                 left: echoed_left,
                 right: echoed_right,
+                base: echoed_base,
                 old,
                 new,
                 patch,
                 ..
             } => {
-                assert_eq!((&echoed_left, &echoed_right), (left, right), "the echo");
+                assert_eq!(
+                    (&echoed_left, &echoed_right, echoed_base.as_str()),
+                    (left, right, base),
+                    "the echo"
+                );
                 Ok(ComparedRead {
                     old: *old,
                     new: *new,
@@ -236,12 +249,13 @@ fn local_branches_are_listed_with_their_tips_and_cut_at_their_budget() {
 }
 
 #[test]
-fn a_comparison_is_tip_to_tip_in_either_direction_never_from_the_merge_base() {
+fn a_comparison_is_what_the_right_branch_changed_since_the_merge_base() {
     let fixture = Fixture::new();
     let repo = repo_with(
         "compare-diverged",
         &[(b"a.txt", b"base\n"), (b"b.txt", b"b\n")],
     );
+    let fork = rev_parse(&repo, "main");
     let left = commit_on(
         &repo,
         "left",
@@ -256,59 +270,100 @@ fn a_comparison_is_tip_to_tip_in_either_direction_never_from_the_merge_base() {
     );
     let project = fixture.project("p", &repo);
 
-    // The positive control: from their merge base, `right` changes only what it committed.
+    // The positive control: this is what `git diff left...right` shows.
     let from_base = String::from_utf8(git(&repo, &["diff", "--name-only", "left...right"]));
     assert_eq!(from_base.unwrap(), "b.txt\nr.txt\n");
 
     let compared = fixture.compare(&project, "left", "right").unwrap();
     assert_eq!(
-        (&compared.left.commit, &compared.right.commit),
-        (&left, &right)
+        (
+            &compared.left.commit,
+            &compared.right.commit,
+            &compared.base
+        ),
+        (&left, &right, &fork)
     );
     assert_eq!(
         summary(&compared.changes),
-        [
-            "committed - r.txt",
-            "committed a.txt a.txt",
-            "committed b.txt b.txt",
-            "committed l.txt -"
-        ],
-        "what `left` has that `right` does not is undone, as two tips compare"
+        ["committed - r.txt", "committed b.txt b.txt"],
+        "what only `left` has done is not undone"
     );
     let read = fixture
-        .compared_change(&project, &compared, present("a.txt"), present("a.txt"))
+        .compared_change(&project, &compared, present("b.txt"), present("b.txt"))
         .unwrap();
-    assert!(read.patch.unwrap().contains("-left\n+base\n"));
+    assert!(read.patch.unwrap().contains("-b\n+right\n"));
     assert_eq!(
         commit_and_blob(&read.old),
-        (left.clone(), rev_parse(&repo, "left:a.txt"))
+        (fork.clone(), rev_parse(&repo, "main:b.txt"))
     );
     assert_eq!(
         commit_and_blob(&read.new),
-        (right.clone(), rev_parse(&repo, "right:a.txt"))
+        (right.clone(), rev_parse(&repo, "right:b.txt"))
     );
 
+    // The other way round it is what `left` changed.
     let reversed = fixture.compare(&project, "right", "left").unwrap();
+    assert_eq!(reversed.base, fork);
     assert_eq!(
         summary(&reversed.changes),
-        [
-            "committed - l.txt",
-            "committed a.txt a.txt",
-            "committed b.txt b.txt",
-            "committed r.txt -"
-        ]
+        ["committed - l.txt", "committed a.txt a.txt"]
     );
-    let read = fixture
-        .compared_change(&project, &reversed, present("a.txt"), present("a.txt"))
-        .unwrap();
-    assert!(read.patch.unwrap().contains("-base\n+left\n"));
 
+    // A branch that is an ancestor of the other forks at its own tip.
     let from_main = fixture.compare(&project, "main", "right").unwrap();
-    assert_eq!(
-        summary(&from_main.changes),
-        ["committed - r.txt", "committed b.txt b.txt"]
-    );
+    assert_eq!(from_main.base, fork);
+    assert_eq!(summary(&from_main.changes), summary(&compared.changes));
+    let behind = fixture.compare(&project, "right", "main").unwrap();
+    assert_eq!(behind.base, fork);
+    assert!(behind.changes.is_empty() && behind.complete);
     assert_eq!(rev_parse(&repo, "HEAD"), rev_parse(&repo, "main"));
+}
+
+#[test]
+fn branches_with_no_commit_in_common_are_refused() {
+    let fixture = Fixture::new();
+    let repo = repo_with("compare-unrelated", &[(b"a.txt", b"a\n")]);
+    git(&repo, &["checkout", "-q", "--orphan", "unrelated"]);
+    git(&repo, &["rm", "-rfq", "."]);
+    write(repo.join("u.txt"), b"u\n");
+    git(&repo, &["add", "-A"]);
+    git(&repo, &["commit", "-q", "-m", "unrelated"]);
+    git(&repo, &["checkout", "-q", "main"]);
+    let project = fixture.project("p", &repo);
+    for (left, right) in [("main", "unrelated"), ("unrelated", "main")] {
+        assert_eq!(
+            code(fixture.compare(&project, left, right)),
+            error_code::NO_MERGE_BASE
+        );
+    }
+}
+
+#[test]
+fn a_shallow_clone_says_its_history_may_be_incomplete_rather_than_unrelated() {
+    let fixture = Fixture::new();
+    let origin = repo_with("compare-shallow-origin", &[(b"a.txt", b"a\n")]);
+    commit_on(&origin, "topic", "main", &[("a.txt", Some(b"topic\n"))]);
+    // Each branch is cut to its tip, so the two share no commit in what the clone holds.
+    let clone = ScratchDir::new("compare-shallow-clone");
+    let url = format!("file://{}", origin.display());
+    git(
+        &origin,
+        &[
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            "--no-single-branch",
+            &url,
+            clone.to_str().unwrap(),
+        ],
+    );
+    git(&clone, &["branch", "topic", "origin/topic"]);
+    let project = fixture.project("p", &clone);
+    assert_eq!(
+        code(fixture.compare(&project, "main", "topic")),
+        error_code::NO_MERGE_BASE_SHALLOW
+    );
 }
 
 #[test]
@@ -344,6 +399,7 @@ fn the_same_commit_on_both_sides_is_an_explicit_empty_comparison() {
     for (left, right) in [("main", "copy"), ("main", "main")] {
         let compared = fixture.compare(&project, left, right).unwrap();
         assert_eq!(compared.left.commit, compared.right.commit);
+        assert_eq!(compared.base, compared.left.commit);
         assert!(compared.changes.is_empty() && compared.complete);
     }
 }
@@ -524,7 +580,7 @@ fn additions_deletions_renames_images_and_binaries_read_both_sides_from_their_co
         (read_lines(&image.old), read_lines(&image.new)),
         (Some(3), Some(3))
     );
-    assert_eq!(commit_and_blob(&image.old).0, compared.left.commit);
+    assert_eq!(commit_and_blob(&image.old).0, compared.base);
     assert_eq!(commit_and_blob(&image.new).0, compared.right.commit);
 
     let binary = read(present("data.bin"), present("data.bin"));
@@ -650,26 +706,37 @@ fn an_endpoint_is_a_branch_name_or_a_full_commit_id_and_nothing_else() {
         };
         let read = fixture.compared_change_at(
             &project,
-            &main,
-            &endpoint,
+            (&main, &endpoint, &main.commit),
             present("a.txt"),
             present("a.txt"),
         );
         assert_eq!(code(read), expected);
     }
+    // The base is held to being a commit of the repository too.
+    let read = fixture.compared_change_at(
+        &project,
+        (&main, &main, &"0".repeat(40)),
+        present("a.txt"),
+        present("a.txt"),
+    );
+    assert_eq!(code(read), error_code::UNKNOWN_COMMIT);
     let renamed = ComparisonEndpoint {
         branch: "main^".to_string(),
         ..main.clone()
     };
     let read = fixture.compared_change_at(
         &project,
-        &main,
-        &renamed,
+        (&main, &renamed, &main.commit),
         present("a.txt"),
         present("a.txt"),
     );
     assert_eq!(code(read), error_code::INVALID_BRANCH_NAME);
-    let read = fixture.compared_change_at(&project, &main, &main, SideRef::Absent, SideRef::Absent);
+    let read = fixture.compared_change_at(
+        &project,
+        (&main, &main, &main.commit),
+        SideRef::Absent,
+        SideRef::Absent,
+    );
     assert_eq!(code(read), error_code::INVALID_CHANGE);
 }
 
@@ -703,6 +770,7 @@ fn a_comparison_is_cut_at_its_entry_budget_and_a_patch_past_its_budget_is_refuse
         complete,
         left,
         right,
+        base,
         ..
     } = event
     else {
@@ -717,6 +785,7 @@ fn a_comparison_is_cut_at_its_entry_budget_and_a_patch_past_its_budget_is_refuse
     let compared = Compared {
         left,
         right,
+        base,
         changes,
         complete,
     };

@@ -881,8 +881,8 @@ pub struct BranchOriginInfo {
 }
 
 /// One end of a branch comparison: the branch, as a wire path, and the full id of the commit it was
-/// resolved to. A comparison reply reports both; a read of one of its changes names both back, and
-/// only `commit` decides what is read.
+/// resolved to. A comparison reply reports both; a read of one of its changes names both back, with
+/// the comparison's `base`, and the commits alone decide what is read.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComparisonEndpoint {
     pub branch: String,
@@ -988,7 +988,8 @@ pub enum BrowseBody {
     ListProjectBranches {
         project: String,
     },
-    /// `left` and `right` are branch names below `refs/heads/`, as wire paths.
+    /// `left` and `right` are branch names below `refs/heads/`, as wire paths; the changes are
+    /// those the right branch has made since it forked from the left one.
     CompareProjectBranches {
         project: String,
         left: String,
@@ -998,6 +999,8 @@ pub enum BrowseBody {
         project: String,
         left: ComparisonEndpoint,
         right: ComparisonEndpoint,
+        /// The commit the comparison's changes start from, as its reply gave it.
+        base: String,
         change: ComparedChangeRef,
     },
     /// The full bodies of the two sides of a change `read_project_change` made a patch of; `old`
@@ -1015,6 +1018,7 @@ pub enum BrowseBody {
         project: String,
         left: ComparisonEndpoint,
         right: ComparisonEndpoint,
+        base: String,
         change: ComparedChangeRef,
         old: SideVersion,
         new: SideVersion,
@@ -1677,23 +1681,26 @@ pub enum Event {
         complete: bool,
     },
     /// The reply to `compare_project_branches`: the two branches with the commits they were
-    /// resolved to, and the changes between those commits that touch the project, each in the
-    /// `committed` group; `complete` is false when the list was cut at a budget.
+    /// resolved to, the commit they forked at (`base`, their merge base), and the changes from
+    /// that commit to the right branch's that touch the project, each in the `committed` group;
+    /// `complete` is false when the list was cut at a budget.
     ProjectComparison {
         id: Option<String>,
         project: String,
         left: ComparisonEndpoint,
         right: ComparisonEndpoint,
+        base: String,
         changes: Vec<ChangeEntry>,
         complete: bool,
     },
-    /// The reply to `read_project_comparison_change`: `left` and `right` echo the request, and
-    /// both sides and the patch were read from exactly those commits.
+    /// The reply to `read_project_comparison_change`: `left`, `right` and `base` echo the request,
+    /// and both sides and the patch were read from exactly the base and the right commit.
     ProjectComparisonChange {
         id: Option<String>,
         project: String,
         left: ComparisonEndpoint,
         right: ComparisonEndpoint,
+        base: String,
         old: Box<SideRead>,
         new: Box<SideRead>,
         patch: Option<FileContent>,
@@ -1708,12 +1715,14 @@ pub enum Event {
         old: Box<SideRead>,
         new: Box<SideRead>,
     },
-    /// The reply to `read_project_comparison_change_bodies`: `left` and `right` echo the request.
+    /// The reply to `read_project_comparison_change_bodies`: `left`, `right` and `base` echo the
+    /// request.
     ProjectComparisonChangeBodies {
         id: Option<String>,
         project: String,
         left: ComparisonEndpoint,
         right: ComparisonEndpoint,
+        base: String,
         old: Box<SideRead>,
         new: Box<SideRead>,
     },
@@ -2148,6 +2157,12 @@ pub mod error_code {
     pub const UNKNOWN_BRANCH: &str = "unknown_branch";
     pub const INVALID_COMMIT: &str = "invalid_commit";
     pub const UNKNOWN_COMMIT: &str = "unknown_commit";
+    /// A comparison of two branches whose histories share no commit, so there is no point they
+    /// forked at to compare from. `params` names `left` and `right`, the two branches.
+    pub const NO_MERGE_BASE: &str = "no_merge_base";
+    /// As [`NO_MERGE_BASE`], in a shallow clone: the history that would show a common commit may
+    /// simply not be there.
+    pub const NO_MERGE_BASE_SHALLOW: &str = "no_merge_base_shallow";
     pub const GIT_FAILED: &str = "git_failed";
     /// The system terminal could not be opened at a project's directory. `params` names `detail`.
     pub const TERMINAL_UNAVAILABLE: &str = "terminal_unavailable";

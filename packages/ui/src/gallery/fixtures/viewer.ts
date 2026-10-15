@@ -634,7 +634,11 @@ async function failedFiles(): Promise<ViewerSubject[]> {
   return [subjects.find(({ path }) => path === "src/gone.ts")!, ...subjects.filter(({ path }) => path !== "src/gone.ts")];
 }
 
-const LONG_COMPARISON = "release/2024-11-stabilisation-and-hotfix-candidates at 1234567 to feature/ranking-experiments-with-a-long-name at fedcba0";
+// The comparison wording of a change opened from the Compare view, in the window's language.
+const comparisonWording = (t: Translate, from: string, fromCommit: string, to: string, toCommit: string) =>
+  t("git.compare.source", { from: isolate(from), fromCommit: isolate(fromCommit), to: isolate(to), toCommit: isolate(toCommit) });
+const longComparison = (t: Translate) =>
+  comparisonWording(t, "release/2024-11-stabilisation-and-hotfix-candidates", "1234567", "feature/ranking-experiments-with-a-long-name", "fedcba0");
 /** A one-hunk patch of a Markdown file, from `oldPath` to `newPath` (the same for a plain edit). */
 const markdownPatch = (oldPath: string, newPath: string) => `diff --git a/${oldPath} b/${newPath}
 index 1111111..2222222 100644
@@ -647,13 +651,14 @@ index 1111111..2222222 100644
  
 `;
 const DESIGN_PATH = "docs/design-notes/interaction-and-visuals/project-file-browser-interaction-and-visual-design-notes-final-review-do-not-edit-directly.md";
-// Long branch names and comparison wording follow the window's language.
-const designComparison = (t: Translate) => t("git.compare.source", {
-  from: isolate("release/november-2024-stabilisation-and-hotfix-candidates"),
-  fromCommit: isolate("1234567"),
-  to: isolate("feature/ranking-experiments-with-a-long-name-for-checking-line-wrap"),
-  toCommit: isolate("fedcba0"),
-});
+const designComparison = (t: Translate) =>
+  comparisonWording(
+    t,
+    "release/november-2024-stabilisation-and-hotfix-candidates",
+    "1234567",
+    "feature/ranking-experiments-with-a-long-name-for-checking-line-wrap",
+    "fedcba0",
+  );
 const oldSession = text("src/session.ts", OLD_SESSION);
 const newSession = text("src/session.ts", NEW_SESSION);
 const before = binary("assets/logo.png", IMAGES.before_png);
@@ -674,12 +679,13 @@ function untrackedNotFile(path: string, kind: "symlink" | "submodule"): ViewerSu
 }
 
 /** A change opened from the Compare view: the comparison is the subtitle under the title. */
-function compared(): ViewerSubject {
+function compared(t: Translate): ViewerSubject {
+  const wording = comparisonWording(t, "main", "1234567", "feature", "fedcba0");
   return {
     key: "Compare:src/session.ts",
     path: "src/session.ts",
-    source: "main at 1234567 to feature at fedcba0",
-    sourceText: "main at 1234567 to feature at fedcba0",
+    source: wording,
+    sourceText: wording,
     content: { state: "change", change: { old: present("src/session.ts", oldSession), new: present("src/session.ts", newSession), patch: MODIFIED_PATCH } },
   };
 }
@@ -688,8 +694,9 @@ function compared(): ViewerSubject {
  * be: a Markdown file (the view choice, and the wrap choice once it is in source), an image (no
  * control left, so the group is empty) and a compared change (the layout and wrap choices, with the
  * subtitle). */
-async function withoutClipboard(): Promise<ViewerSubject[]> {
-  return [file("docs/guide.md", text("docs/guide.md", GUIDE)), file("assets/before.png", binary("assets/before.png", IMAGES.before_png)), compared()];
+async function withoutClipboard(language: Language): Promise<ViewerSubject[]> {
+  const t: Translate = (key, ...args) => format(language, key, ...args);
+  return [file("docs/guide.md", text("docs/guide.md", GUIDE)), file("assets/before.png", binary("assets/before.png", IMAGES.before_png)), compared(t)];
 }
 
 async function allChanges(language: Language): Promise<ViewerSubject[]> {
@@ -729,15 +736,15 @@ async function allChanges(language: Language): Promise<ViewerSubject[]> {
         body: text("src/merge.ts", "<<<<<<< ours\nconst a = 1;\n=======\nconst a = 2;\n>>>>>>> theirs\n"),
       },
     },
-    compared(),
+    compared(t),
     // A long comparison under the title, and a Markdown file shown alone from the Compare view, which
     // has the source / document choice and the wrap choice in source (a Markdown diff has the layout
     // and wrap choices and no document, so all three never show together).
     {
       key: "Compare:docs/guide.md",
       path: "docs/guide.md",
-      source: LONG_COMPARISON,
-      sourceText: LONG_COMPARISON,
+      source: longComparison(t),
+      sourceText: longComparison(t),
       content: { state: "change", change: { old: { state: "absent" }, new: present("docs/guide.md", text("docs/guide.md", GUIDE)) } },
     },
     change(
@@ -754,8 +761,8 @@ async function allChanges(language: Language): Promise<ViewerSubject[]> {
     {
       key: "Compare:docs/handbook/renamed-notes.md",
       path: "docs/handbook/engineering/onboarding/renamed-notes.md",
-      source: LONG_COMPARISON,
-      sourceText: LONG_COMPARISON,
+      source: longComparison(t),
+      sourceText: longComparison(t),
       content: {
         state: "change",
         change: {

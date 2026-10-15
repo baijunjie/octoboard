@@ -81,6 +81,7 @@ impl Fixture {
             project: project.to_string(),
             left: compared.left.clone(),
             right: compared.right.clone(),
+            base: compared.base.clone(),
             change: ComparedChangeRef {
                 old: present(path),
                 new: present(path),
@@ -92,13 +93,14 @@ impl Fixture {
             Event::ProjectComparisonChangeBodies {
                 left,
                 right,
+                base,
                 old,
                 new,
                 ..
             } => {
                 assert_eq!(
-                    (&left, &right),
-                    (&compared.left, &compared.right),
+                    (&left, &right, &base),
+                    (&compared.left, &compared.right, &compared.base),
                     "the echo"
                 );
                 Ok((*old, *new))

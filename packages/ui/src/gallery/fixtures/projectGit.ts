@@ -222,6 +222,8 @@ const FRESH_GIT: FixtureGit = {
 
 const MAIN_TIP = "4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39";
 const FEATURE_TIP = "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807";
+/** The tip of a branch that shares no commit with the others, as a `gh-pages` branch made from an empty tree. */
+const ORPHAN_TIP = "3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b";
 const LONG_BRANCH = "feature/rework-the-ranking-pipeline-so-that-boosts-are-applied-after-deduplication";
 
 const BRANCHES: BranchInfo[] = [
@@ -252,7 +254,8 @@ const at = (commit: string) => (blob: string) => ({ kind: "commit", commit, bran
 const onMain = at(MAIN_TIP);
 const onFeature = at(FEATURE_TIP);
 
-/** The changes from `main` to `feature/ranking-experiments`. */
+/** What `feature/ranking-experiments` changed since it forked from `main` (at `main`'s tip, the
+ * fork `forks` falls back to): the comparison a session's branch fills the Compare view with. */
 const FEATURE_COMPARISON: FixtureChange[] = [
   textChange("committed", "src/ranking.ts", onMain("3c4d5e6"), onFeature("7f8a9b0"), RANKING_EDIT),
   renamedTo("committed", "src/conf.ts", "src/config.ts", onMain("0f1e2d3"), onFeature("4c5b6a7"), CONF_RENAME),
@@ -262,32 +265,6 @@ const FEATURE_COMPARISON: FixtureChange[] = [
   deletion("committed", "docs/old-notes.md", onMain("7c6b5a4"), DELETED_NOTES),
   binaryChange("committed", "docs/logo.png", onMain("6a5b4c3"), onFeature("8b7c6d5"), LOGO_BODIES),
   typeChange("committed", "current", onMain("0d1c2b3"), onFeature("8d2f1a0"), CURRENT_AS_FILE, "releases/2.4"),
-];
-
-/** The changes from `feature/ranking-experiments` to `main`: what the Compare view shows once a
- * session that created the branch is selected, which sets From to its branch and To to `main`. The
- * reverse of `FEATURE_COMPARISON`, over the files it keeps in common with it. */
-const RANKING_EDIT_REVERSED: Versions = {
-  old: RANKING_EDIT.new,
-  new: RANKING_EDIT.old,
-  patch: [
-    "diff --git a/src/ranking.ts b/src/ranking.ts",
-    "index 7f8a9b0..3c4d5e6 100644",
-    "--- a/src/ranking.ts",
-    "+++ b/src/ranking.ts",
-    "@@ -1,4 +1,3 @@",
-    ' import type { Hit } from "./index";',
-    " ",
-    "-export const rank = (hits: Hit[], boost = 1) =>",
-    "-  hits.map((hit) => ({ ...hit, score: hit.score * boost })).sort((a, b) => b.score - a.score);",
-    "+export const rank = (hits: Hit[]) => hits.sort((a, b) => b.score - a.score);",
-    "",
-  ].join("\n"),
-};
-const FEATURE_TO_MAIN: FixtureChange[] = [
-  textChange("committed", "src/ranking.ts", onFeature("7f8a9b0"), onMain("3c4d5e6"), RANKING_EDIT_REVERSED),
-  addition("committed", "docs/old-notes.md", onMain("7c6b5a4"), DELETED_NOTES),
-  deletion("committed", "src/cache.ts", onFeature("5a6b7c8"), CACHE_BODY),
 ];
 
 /** The sample repository's branches and a dozen more, past what a selector's list shows without
@@ -325,11 +302,11 @@ export const SAMPLE_GIT: FixtureGit = {
     "main..feature/ranking-experiments": FEATURE_COMPARISON,
     // Two branches at different commits whose difference lies wholly outside the project's folder.
     "release/2.4..feature/ranking-experiments": [],
+    // `chore/update-dependencies` has commits of its own past the fork, which are not in the list.
+    "chore/update-dependencies..feature/ranking-experiments": FEATURE_COMPARISON,
   },
+  forks: { "chore/update-dependencies..feature/ranking-experiments": MAIN_TIP },
 };
-
-/** The sample repository with the comparison a session's branch fills the Compare view with. */
-const SESSION_GIT: FixtureGit = { ...SAMPLE_GIT, comparisons: { ...SAMPLE_GIT.comparisons, "feature/ranking-experiments..main": FEATURE_TO_MAIN } };
 
 const { console: console_, web, api, sessions } = SAMPLE;
 /** The session that created `feature/ranking-experiments`, checked out in the side worktree. The
@@ -513,14 +490,33 @@ const reviewScenarios: Scenario[] = [
     steps: compare("main", "release/2.4"),
   },
   {
-    id: "git-compare",
+    id: "git-compare-forked",
     group: GROUP,
     category: "normal",
-    title: "Branch comparison",
+    title: "A comparison from a fork",
+    description: "From has commits of its own after the fork. The header names the fork commit, not From's tip, and the list holds only what To changed since the fork.",
     state: state,
-    steps: [
-      ...compare("main", "feature/ranking-experiments"),
-    ],
+    steps: compare("chore/update-dependencies", "feature/ranking-experiments"),
+  },
+  {
+    id: "git-compare-no-common-commit",
+    group: GROUP,
+    category: "exceptional",
+    title: "Branches with no commit in common",
+    description: "The comparison failure names both branches and says there is nothing to compare from.",
+    state,
+    git: { ...SAMPLE_GIT, branches: [...BRANCHES, { name: "gh-pages", commit: ORPHAN_TIP }], forks: { "main..gh-pages": null } },
+    steps: compare("main", "gh-pages"),
+  },
+  {
+    id: "git-compare-no-common-commit-shallow",
+    group: GROUP,
+    category: "exceptional",
+    title: "No common commit found in a shallow clone",
+    description: "The comparison failure words it as missing history of a shallow clone rather than unrelated branches.",
+    state,
+    git: { ...SAMPLE_GIT, branches: [...BRANCHES, { name: "gh-pages", commit: ORPHAN_TIP }], forks: { "main..gh-pages": null }, shallow: true },
+    steps: compare("main", "gh-pages"),
   },
   {
     id: "git-compare-origins",
@@ -529,7 +525,6 @@ const reviewScenarios: Scenario[] = [
     title: "Branch creator indicators",
     state: state,
     description: "The selected, other and removed session origins are visible together; hover their rings for details.",
-    git: SESSION_GIT,
     steps: [
       ...openGitFor(rankingSession),
       (ui: Ui) => ui.press(ui.t("git.view.compare")),
@@ -551,10 +546,9 @@ const reviewScenarios: Scenario[] = [
     id: "git-session-compare",
     group: GROUP,
     category: "normal",
-    title: "The selected session's branch compared with main",
+    title: "The selected session's branch compared from main",
     state: state,
-    description: "From is the branch the selected session created and To the branch the main worktree has checked out.",
-    git: SESSION_GIT,
+    description: "From is the branch the main worktree has checked out and To the branch the selected session created: the list is what that branch changed since it forked from main.",
     steps: [
       ...openGitFor(rankingSession),
       (ui: Ui) => ui.press(ui.t("git.view.compare")),

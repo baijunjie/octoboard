@@ -15,7 +15,7 @@ it.each([
   ["a list asked for before the comparison says nothing", listed("c9", { sentAt: 5 }), []],
   ["a branch at the compared commit says nothing", listed("c2"), []],
   ["a branch at another commit has moved", listed("c9"), [{ kind: "moved", branch: "topic" }]],
-  ["a branch missing from a complete list is gone", listed(undefined), [{ kind: "deleted", branch: "topic", commit: "c2" }]],
+  ["a branch missing from a complete list is gone", listed(undefined), [{ kind: "deleted", branch: "topic" }]],
   ["a list cut short never says a branch is gone", listed(undefined, { complete: false }), []],
   ["no list says nothing", { state: "loading" } as BranchList, []],
   ["a branch compared with itself is named once", listed("c9"), [{ kind: "moved", branch: "topic" }], "topic"],

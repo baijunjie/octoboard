@@ -43,15 +43,16 @@ const READ_SLOT = "viewer";
 const BODIES_SLOT = "viewer-bodies";
 
 /** Where a change is read from: a worktree's uncommitted changes (`worktree` none for the one
- * holding the project's directory), or a comparison of two branches at the commits it resolved. */
+ * holding the project's directory), or a comparison of two branches at the commits it resolved:
+ * the old side from `base`, their merge base, the new side from `right`'s commit. */
 export type ChangeOrigin =
   | { kind: "worktree"; worktree: string | undefined }
-  | { kind: "comparison"; left: ComparisonEndpoint; right: ComparisonEndpoint };
+  | { kind: "comparison"; left: ComparisonEndpoint; right: ComparisonEndpoint; base: string };
 
 function sameOrigin(a: ChangeOrigin, b: ChangeOrigin): boolean {
   if (a.kind === "worktree") return b.kind === "worktree" && a.worktree === b.worktree;
   const same = (x: ComparisonEndpoint, y: ComparisonEndpoint) => x.branch === y.branch && x.commit === y.commit;
-  return b.kind === "comparison" && same(a.left, b.left) && same(a.right, b.right);
+  return b.kind === "comparison" && same(a.left, b.left) && same(a.right, b.right) && a.base === b.base;
 }
 
 /** A commit as the UI names it: the first seven characters of its id, as `git` abbreviates one. */
@@ -164,7 +165,7 @@ export function useChangeReader(project: string): ChangeReader {
   const subjectKey = (item: ChangeItem, origin: ChangeOrigin) =>
     origin.kind === "worktree"
       ? `${project}\0git\0${origin.worktree ?? ""}\0${item.key}`
-      : `${project}\0compare\0${origin.left.commit}\0${origin.right.commit}\0${item.key}`;
+      : `${project}\0compare\0${origin.base}\0${origin.right.commit}\0${item.key}`;
 
   const send = (item: ChangeItem, origin: ChangeOrigin): Promise<Event> => {
     const { entry } = item;
@@ -175,8 +176,8 @@ export function useChangeReader(project: string): ChangeReader {
       return request({ type: "read_project_change", project, ...where, change: { group: entry.group, ...sides }, slot: READ_SLOT });
     }
     if (origin.kind !== "comparison") return Promise.reject(new Error("a comparison's change is read from its two commits"));
-    const { left, right } = origin;
-    return request({ type: "read_project_comparison_change", project, left, right, change: sides, slot: READ_SLOT });
+    const { left, right, base } = origin;
+    return request({ type: "read_project_comparison_change", project, left, right, base, change: sides, slot: READ_SLOT });
   };
 
   /** Whether `reply` answers the read of `item` from `origin`. */
@@ -187,7 +188,7 @@ export function useChangeReader(project: string): ChangeReader {
       return (
         reply.type === "project_comparison_change" &&
         reply.project === project &&
-        sameOrigin({ kind: "comparison", left: reply.left, right: reply.right }, origin)
+        sameOrigin({ kind: "comparison", left: reply.left, right: reply.right, base: reply.base }, origin)
       );
     }
     return reply.type === "project_change" && reply.project === project && reply.group === entry.group;
@@ -226,8 +227,8 @@ export function useChangeReader(project: string): ChangeReader {
             slot: BODIES_SLOT,
           });
         } else if (origin.kind === "comparison") {
-          const { left, right } = origin;
-          bodies = await request({ type: "read_project_comparison_change_bodies", project, left, right, change: sides, ...versions, slot: BODIES_SLOT });
+          const { left, right, base } = origin;
+          bodies = await request({ type: "read_project_comparison_change_bodies", project, left, right, base, change: sides, ...versions, slot: BODIES_SLOT });
         } else {
           throw new ChangeBodiesError("unavailable");
         }
@@ -350,14 +351,15 @@ export function useChangeReader(project: string): ChangeReader {
   // in conflict). Only a comparison has a source to word.
   const { section } = opened.item;
   const stage = section === "staged" || section === "unstaged" ? t(SECTION_LABELS[section]) : undefined;
-  // A comparison's change says which branches, at which commits, it is read from.
+  // A comparison's change says which branch it is of, at which commit, and the branch it forked
+  // from, at the commit of the fork.
   const source =
     origin.kind === "comparison"
       ? createElement(Message<"git.compare.source">, {
         id: "git.compare.source",
         params: {
           from: createElement("bdi", { dir: "auto" }, displayWirePath(origin.left.branch)),
-          fromCommit: createElement("bdi", { dir: "auto" }, shortCommit(origin.left.commit)),
+          fromCommit: createElement("bdi", { dir: "auto" }, shortCommit(origin.base)),
           to: createElement("bdi", { dir: "auto" }, displayWirePath(origin.right.branch)),
           toCommit: createElement("bdi", { dir: "auto" }, shortCommit(origin.right.commit)),
         },
@@ -369,7 +371,7 @@ export function useChangeReader(project: string): ChangeReader {
     origin.kind === "comparison"
       ? t("git.compare.source", {
         from: isolatedWirePath(origin.left.branch),
-        fromCommit: isolate(shortCommit(origin.left.commit)),
+        fromCommit: isolate(shortCommit(origin.base)),
         to: isolatedWirePath(origin.right.branch),
         toCommit: isolate(shortCommit(origin.right.commit)),
       })

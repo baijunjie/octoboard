@@ -257,6 +257,7 @@ pub fn serve(
                 project,
                 left: comparison.left,
                 right: comparison.right,
+                base: comparison.base,
                 changes: comparison.changes,
                 complete: comparison.complete,
             })
@@ -265,16 +266,18 @@ pub fn serve(
             project,
             left,
             right,
+            base,
             change,
         } => {
             let record = stored_project(state, &project)?;
             let at = locate(&record, None, &git, cancel)?;
-            let read = compare::read(git.env()?, &at, &left, &right, &change, cancel)?;
+            let read = compare::read(git.env()?, &at, (&left, &right, &base), &change, cancel)?;
             Ok(Event::ProjectComparisonChange {
                 id,
                 project,
                 left,
                 right,
+                base,
                 old: Box::new(read.old),
                 new: Box::new(read.new),
                 patch: read.patch.map(file_content),
@@ -307,6 +310,7 @@ pub fn serve(
             project,
             left,
             right,
+            base,
             change,
             old,
             new,
@@ -317,13 +321,20 @@ pub fn serve(
                 old: &old,
                 new: &new,
             };
-            let read =
-                compare::read_bodies(git.env()?, &at, &left, &right, &change, &expected, cancel)?;
+            let read = compare::read_bodies(
+                git.env()?,
+                &at,
+                (&left, &right, &base),
+                &change,
+                &expected,
+                cancel,
+            )?;
             Ok(Event::ProjectComparisonChangeBodies {
                 id,
                 project,
                 left,
                 right,
+                base,
                 old: Box::new(read.old),
                 new: Box::new(read.new),
             })

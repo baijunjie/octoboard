@@ -124,12 +124,13 @@ Serves the project-browsing requests of the control socket (`get_project_source`
 project's files live (the directory itself, its repository and worktree, the same place in the repository's other
 worktrees), and then a bounded read of a directory listing or one file from the disk, the index, a branch or a commit,
 or of a worktree's uncommitted changes to the project and one change's diff, the repository's local branches, and the
-changes between two branches' tips and one of them as a diff. A request is re-resolved from the store and the repository
-each time; nothing a client names is used as a directory. The wire contract, the identities handed to clients, the Git
-invocation rules and the budget values are in "Browsing a project" in [`PROTOCOL.md`](PROTOCOL.md) and are not restated
-here. `mod.rs`'s `serve` is the entry point, called from `server.rs`, which also owns the connection's lane wiring, the
-retained-bytes reservation each request makes and the writer that puts control events before browse replies; `state.rs`
-holds the daemon-wide `Gate` (concurrent reads and retained bytes) the lanes draw on.
+changes one branch has made since it forked from another (from their merge base to its tip) and one of them as a diff. A
+request is re-resolved from the store and the repository each time; nothing a client names is used as a directory. The
+wire contract, the identities handed to clients, the Git invocation rules and the budget values are in "Browsing a
+project" in [`PROTOCOL.md`](PROTOCOL.md) and are not restated here. `mod.rs`'s `serve` is the entry point, called from
+`server.rs`, which also owns the connection's lane wiring, the retained-bytes reservation each request makes and the
+writer that puts control events before browse replies; `state.rs` holds the daemon-wide `Gate` (concurrent reads and
+retained bytes) the lanes draw on.
 
 | File | Role |
 |---|---|
@@ -140,7 +141,7 @@ holds the daemon-wide `Gate` (concurrent reads and retained bytes) the lanes dra
 | `blob.rs` | Reading a file's blob from the index or a commit, and resolving and verifying a branch (a broken one, naming no commit, refused) or commit, and checking a branch name without looking it up (`branch_refname`); the exact-path lookups of the index's entries and of a commit's tree entry, and a blob read by object id, that a change's two sides are read through |
 | `git.rs` | The one way browse runs `git`: isolated from the environment and configuration, bounded, output kept as bytes, and never writing to the repository (`GitEnv`); its exact-path runs (`run_exact`) and the predicate for paths that nest (`paths_nest`) |
 | `changes.rs` | A worktree's uncommitted changes scoped to a project and one change's diff: `list` (one `git status` of the whole worktree, kept to the entries with a side inside the project, a side outside it named by its repository path alone) and `read` (the `Reader`: one change read afresh at the paths it names from its group's two sources, its index entry and disk file re-checked after the patch is made, the change refused as `source_changed` when they moved; a change with a side outside the project gets no patch; the patch is made by one of two routes, the diff `git` computes between the change's two versions when its paths nest and both sides are a file or a symbolic link, otherwise one restricted to the change's own paths), `read_between`, the same read of a change between two commits, which nothing is re-checked after since neither moves, and `read_bodies` / `read_bodies_between`, the same read run without inline bodies and its sides compared with the versions a client names before each file's whole body is read from the matched blob or file version, a side on disk whose path has a clean filter in effect refused as `clean_filtered` before either body is read |
-| `compare.rs` | A repository's local branches (`branches`, one `for-each-ref`, broken branches listed as they are and cut at a budget) and the comparison of two of them: `list` (the changes between the two tips, one `diff-tree` of the whole tree kept to what touches the project like a worktree's change listing, falling back to the project's own directory when the output overflows for a project below the repository's root) and `read` (one change, read through `changes.rs`'s `read_between` from the two commits the comparison resolved, never from the branches again) and `read_bodies` (the same for a change's bodies) |
+| `compare.rs` | A repository's local branches (`branches`, one `for-each-ref`, broken branches listed as they are and cut at a budget) and the comparison of two of them: `list` (the changes from the two tips' merge base (`git merge-base`, refused as `no_merge_base` when there is none) to the right tip, one `diff-tree` of the whole tree kept to what touches the project like a worktree's change listing, falling back to the project's own directory when the output overflows for a project below the repository's root) and `read` (one change, read through `changes.rs`'s `read_between` from the merge base and the right commit the comparison resolved, never from the branches again) and `read_bodies` (the same for a change's bodies) |
 | `compare_tests.rs` | End-to-end tests of the three branch requests over real repositories (test-only; shares `tests.rs`'s `Fixture`) |
 | `nested_tests.rs` | End-to-end tests of a change whose two paths nest (a rename into or out of a path below itself) over real repositories, in the staged group and in a comparison (test-only; shares `tests.rs`'s `Fixture`) |
 | `body_tests.rs` | End-to-end tests of the two `…_change_bodies` requests over real repositories (test-only; shares `tests.rs`'s `Fixture`) |

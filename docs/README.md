@@ -113,10 +113,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Project pane: Git mode](product/project-pane-git-mode.md) — the project pane's read-only review of a repository in
   two views — Uncommitted (a worktree's uncommitted changes: the worktree selector and a worktree that goes away, the
   Conflicted, Staged, Unstaged and Untracked list, a subdirectory project and renames across its boundary, states and
-  refreshes) and Compare (a tip-to-tip comparison of two local branches: the From and To selectors, Swap, fixed
-  commits, when a comparison is made, a branch that moves or goes away) — that it never writes to the repository and
-  how it differs from the branch badge, folding a section of the list away and unfolding it, opening a change in the
-  file viewer and expanding the lines its diff collapses, errors, and what is kept for the window's lifetime.
+  refreshes) and Compare (what one local branch has changed since it forked from another (from their merge base): the
+  From and To selectors, Swap, fixed commits, when a comparison is made, a branch that moves or goes away) — that it
+  never writes to the repository and how it differs from the branch badge, folding a section of the list away and
+  unfolding it, opening a change in the file viewer and expanding the lines its diff collapses, errors, and what is kept
+  for the window's lifetime.
 - [Which session created a branch](product/branch-creator.md) — the creator badge on a branch's row in the Git mode's
   From and To lists: what it answers and what it never does, the title it names a session by (the session's own while
   it exists, the recorded one once it is gone) and the filled ring a branch of the selected session takes, when a

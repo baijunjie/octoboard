@@ -10,26 +10,28 @@ import { sendGitRequest } from "./gitRequests";
 
 /**
  * A comparison of two branches as the client holds it. Once loaded, `left` and `right` are the
- * branches with the commits they were resolved to, and every change in `items` is between exactly
- * those; `receivedAt` is when that pair was accepted. A comparison stays on screen while it is
+ * branches with the commits they were resolved to, `base` is the commit they forked at, and every
+ * change in `items` is between exactly `base` and `right`'s commit; `receivedAt` is when that
+ * comparison was accepted. A comparison stays on screen while it is
  * asked for again, and so does a failure while it is asked for in the background.
  */
 export type Comparison =
   | { state: "idle" }
   | { state: "loading" }
-  | { state: "loaded"; left: ComparisonEndpoint; right: ComparisonEndpoint; items: ChangeItem[]; complete: boolean; receivedAt: number }
+  | { state: "loaded"; left: ComparisonEndpoint; right: ComparisonEndpoint; base: string; items: ChangeItem[]; complete: boolean; receivedAt: number }
   | { state: "error"; message: string };
 
 /**
- * The comparison of branch `left` (the old side) with branch `right` (the new side) of a project,
- * asked of the daemon once both are chosen and the comparison is `active`, and again only on
- * `refresh`. The branches are resolved to their commits when it is asked for, and the pair it
- * answers with stays until it is asked for again: a branch that moves meanwhile never repoints it.
- * Choosing other branches is another comparison, whose state starts afresh; a reply is taken only
- * for the latest request and the branches it was asked for. A request lost with the connection is
- * sent again once the connection is back; a comparison already held is kept as it is. `refresh`
- * settles once the comparison has been answered or has failed, or when a newer request has taken
- * its place.
+ * The comparison of branch `right` (To) with branch `left` (From) of a project: what `right` has
+ * changed since it forked from `left`, from their merge base to `right`'s tip. It is asked of the
+ * daemon once both are chosen and the comparison is `active`, and again only on `refresh`. The
+ * branches are resolved to their commits, and those to their merge base, when it is asked for, and
+ * the commits it answers with stay until it is asked for again: a branch that moves meanwhile never
+ * repoints it. Choosing other branches is another comparison, whose state starts afresh; a reply is
+ * taken only for the latest request and the branches it was asked for. A request lost with the
+ * connection is sent again once the connection is back; a comparison already held is kept as it
+ * is. `refresh` settles once the comparison has been answered or has failed, or when a newer
+ * request has taken its place.
  */
 export function useBranchComparison(
   project: string,
@@ -65,7 +67,7 @@ export function useBranchComparison(
       .then((reply) => {
         if (!reply || !current() || reply.type !== "project_comparison" || reply.project !== project) return;
         if (reply.left.branch !== left || reply.right.branch !== right) return;
-        const accepted = { left: reply.left, right: reply.right, complete: reply.complete, receivedAt: performance.now() };
+        const accepted = { left: reply.left, right: reply.right, base: reply.base, complete: reply.complete, receivedAt: performance.now() };
         setComparison(() => ({ state: "loaded", ...accepted, items: changeItems(reply.changes) }));
       })
       .catch((err: unknown) => {
