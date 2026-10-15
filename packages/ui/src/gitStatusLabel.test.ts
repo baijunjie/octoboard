@@ -50,6 +50,8 @@ describe("gitBadgeAriaLabel", () => {
 
   it("names the in-flight phase instead of the idle wording", () => {
     expect(gitBadgeAriaLabel("en", t, status({ activity: "checking" }))).toBe(`Checking branch ${isolate("main")}`);
+    expect(gitBadgeAriaLabel("en", t, status({ activity: "pushing" }))).toBe(`Pushing branch ${isolate("main")}`);
+    expect(gitBadgeAriaLabel("en", t, status({ activity: "pushing", branch: null }))).toBe("Pushing the branch");
     expect(gitBadgeAriaLabel("en", t, status({ activity: "syncing" }))).toBe(`Fast-forwarding branch ${isolate("main")}`);
     expect(gitBadgeAriaLabel("en", t, status({ activity: "checking", branch: null }))).toBe("Checking the branch");
   });

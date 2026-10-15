@@ -414,6 +414,8 @@ export const en = {
   // No ellipsis, unlike this project's other in-progress wording: these four are only ever an
   // accessible name and the badge's tooltip (`gitBadgeAriaLabel` in `gitStatusLabel.ts` is both),
   // and a screen reader voicing a trailing "…" is worse than silence.
+  "sidebar.git.pushing": "Pushing branch {branch}",
+  "sidebar.git.pushingUnknown": "Pushing the branch",
   "sidebar.git.checking": "Checking branch {branch}",
   "sidebar.git.checkingUnknown": "Checking the branch",
   "sidebar.git.syncing": "Fast-forwarding branch {branch}",

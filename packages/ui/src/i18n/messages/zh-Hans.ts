@@ -363,6 +363,8 @@ export const zhHans: Translation<"other"> = {
   "sidebar.git.branch": "分支 {branch}",
   "sidebar.git.detachedBranch": "分离头指针位于 {branch}",
   "sidebar.git.noCommitsYet": "尚无提交",
+  "sidebar.git.pushing": "正在推送分支 {branch}",
+  "sidebar.git.pushingUnknown": "正在推送分支",
   "sidebar.git.checking": "正在检查分支 {branch}",
   "sidebar.git.checkingUnknown": "正在检查分支",
   "sidebar.git.syncing": "正在快进分支 {branch}",

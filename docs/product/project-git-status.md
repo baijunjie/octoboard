@@ -22,26 +22,36 @@ nothing when the project's directory is not a git repository.
 
 What it holds, in this order:
 
-- **A glyph for what is going on**: a branch glyph normally; a commit glyph when `HEAD` is detached; a spinning
-  refresh glyph while the remote is being checked; a download glyph bobbing up and down while the branch is being
-  fast-forwarded.
-  The four differ in shape, not in motion alone, and nothing animates where the system asks for reduced motion.
-- **A warning triangle**, in red, when the last check failed, standing in for the branch or commit glyph; the
-  refresh and download glyphs still take its place while a check or a fast-forward runs. The message `git` or the
-  operating system itself gave is then part of what the badge says — in its tooltip and in its name, shown as it came
-  inside localized wording (see "What follows the language" in `docs/product/language.md`) — and the triangle itself
-  carries nothing of its own. A failed check does not blank the rest of the badge: the branch and the counts are
-  still read from the repository and shown beside the warning.
+- **A glyph for what is going on**: a branch glyph normally; a commit glyph when `HEAD` is detached; a spinning refresh
+  glyph while the remote is being checked, the branch is being fast-forwarded or the current branch is being pushed.
+  Idle and in-flight states differ in shape, not in motion alone, and nothing animates where the system asks for reduced
+  motion.
+- **A warning triangle**, in red, when the last check failed, standing in for the branch or commit glyph; the refresh
+  glyph takes its place while a check, a fast-forward or a push runs. The message `git` or the operating system itself
+  gave is then part of what the badge says — in its tooltip and in its name, shown as it came inside localized wording
+  (see "What follows the language" in `docs/product/language.md`) — and the triangle itself carries nothing of its own.
+  A failed check does not blank the rest of the badge: the branch and the counts are still read from the repository and
+  shown beside the warning.
 - **The branch name** — or the short commit id, when `HEAD` is detached. A repository with no commit yet says so in its
   place, and nothing stands there when the branch could not be read at all, the warning carrying the reason instead.
 - **How far the branch is ahead of its upstream**, after an up arrow, and **how far behind**, after a down arrow, each
   shown only while it is not zero and each number written in the current language. A branch with no upstream shows
-  neither.
+  neither. During a push, the ahead count's arrow scrolls continuously upward; during a fast-forward, the behind count's
+  arrow scrolls continuously downward. Each scroll stays inside a fixed area the size of one count arrow; the other
+  arrow and both numbers stay still. A zero count still has no arrow, so the leading refresh glyph remains the in-flight
+  indication when the relevant count is zero. Reduced motion keeps the arrows still too.
 
 **While a check is in flight the badge keeps what the last check found** — the branch name (or short commit id), the
 counts and a failed check's message — and only its glyph turns into the spinning refresh glyph, the warning triangle
 included; the whole badge is replaced once the check finishes. A project's first check has nothing to keep, so until it
 finishes the badge shows the spinning glyph alone.
+
+**While a push is in flight the badge describes the push**, including over a check or fast-forward running at the same
+time. All three use the same leading refresh glyph; the tooltip, accessible name and animated count arrow follow the
+push state. The branch, counts and any failed check's message remain visible and can update during the push. Every
+window showing the project sees the pushing state, including one that connects while the push is running. Once all
+pushes of the project end, successfully or otherwise, the badge shows the latest check or fast-forward state, or its
+idle glyph if neither is running (see "Pushing the current branch" below).
 
 **As the row gets tight the branch and counts give way together**: the branch name (or short commit id) and both
 upstream counts form one line, showing its beginning and fading at its right edge. This line reads left to right
@@ -54,18 +64,19 @@ window's reading direction instead.
 **One tooltip for the whole badge.** Resting the mouse anywhere on the badge — the state glyph, the branch name or
 either count — shows one tooltip, after the window's usual wait and on pointer hover only, since the badge is no tab
 stop (see "How a tooltip behaves" in `docs/product/labels-and-tooltips.md`). It says the badge's whole state in one
-sentence, the same one assistive technology is given: the branch (or that a check or a fast-forward is in flight, or
-why there is no branch), the ahead and behind counts, each only while it is not zero, and a failed check's message.
-It is one tooltip in both placements, the sidebar row and focus mode's header, and it shows whether or not the badge's
-text is cut — so the branch name and the error can still be read once the row has squeezed the text away. The one
-state with no tooltip at all is the one saying in visible text that the repository has no commits yet, which a tooltip
-would only repeat; that text still runs as a marquee while the pointer is over the text itself (see "Names too long
-for their space" in `docs/product/labels-and-tooltips.md`).
+sentence, the same one assistive technology is given: the branch (or that a check, a fast-forward or a push is in
+flight, or why there is no branch), the ahead and behind counts, each only while it is not zero, and a failed check's
+message. It is one tooltip in both placements, the sidebar row and focus mode's header, and it shows whether or not the
+badge's text is cut — so the branch name and the error can still be read once the row has squeezed the text away. The
+one state with no tooltip at all is the one saying in visible text that the repository has no commits yet, which a
+tooltip would only repeat; that text still runs as a marquee while the pointer is over the text itself (see "Names too
+long for their space" in `docs/product/labels-and-tooltips.md`).
 
 **What assistive technology hears.** A project row announces itself as one control, so the badge's facts are folded
 into the row's own name instead of being announced separately: the branch (or why there is none), the ahead and behind
 counts, each only while it is not zero, and the error. In focus mode's header the badge is not inside such a row and
-carries its own name. The badge is deliberately not a live region, so a check starting or finishing is not announced.
+carries its own name. The badge is deliberately not a live region, so a check or push starting or finishing is not
+announced.
 
 ## When a project is checked
 
@@ -257,7 +268,8 @@ What is pushed, when both reads succeed:
 - A branch with no upstream is pushed to `origin` when the repository has that remote, otherwise to its only
   remote, and that push records the upstream under the local branch's own name.
 
-Nothing is pushed when the push is refused. A refused push publishes no status of its own:
+Nothing is pushed when the push is refused. A refusal itself does not change the badge's branch, counts or last
+check's error; the push failure is reported by its error toast:
 
 - The project directory is not a git repository when the push runs: `not_a_git_repository`. The rule is the badge's
   (see "What one check does" above): `.git` must be in the project directory itself. A subdirectory of a repository
@@ -278,18 +290,19 @@ Nothing is pushed when the push is refused. A refused push publishes no status o
 
 A project that no longer exists is `unknown_project`.
 
-The push does not take the claim a check uses, so the two are not ordered. **Sync repository**, or a scheduled
-check, that arrives during a push is handled as it would be with no push in flight: it is not queued behind the
-push. A push that finishes while a check is in flight publishes an idle status, which can replace the check's
-in-flight badge until the check publishes again. A second push of the same project is not refused while one is
-still running.
+The push and a check are not ordered. **Sync repository**, or a scheduled check, that arrives during a push is handled
+as it would be with no push in flight: it is not queued behind the push. The badge shows the push in flight while the
+check can still update its branch, counts and error. When the push ends, a check or fast-forward still in flight is
+shown again. A second push of the same project is not refused while one is still running; the pushing state stays until
+the last push ends. Once the directory has been confirmed as a repository, the state covers the branch and remote reads
+as well as `git push`, and ends on a refusal too.
 
 A successful push does not edit the project's files and does not move the working tree. It updates the remote, and
 in the repository it updates the remote-tracking refs `git` updates for that push. When the branch had no upstream,
 it also records one. The daemon then re-reads the local branch header and publishes the project's git status, with
-no fetch, so the badge's ahead count can drop. Every window showing the project sees that status. The badge does
-not show a check or a fast-forward in flight for the push itself. An error the last check left on the badge stays,
-unless that re-read fails, in which case the warning becomes the re-read's message and the branch and the counts
+no fetch, so the badge's ahead count can drop. Every window showing the project sees that status. This re-read does
+not end the badge's indication of an overlapping check or fast-forward. An error the last check left on the badge
+stays, unless that re-read fails, in which case the warning becomes the re-read's message and the branch and the counts
 stay as they were. A re-read that fails does not turn the notice into an error toast: the push was accepted.
 Turning **Automatically sync repositories** on never pushes.
 

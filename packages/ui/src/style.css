@@ -676,16 +676,16 @@ html.pane-resizing * {
   }
 }
 
-/* The syncing git badge's arrow (`GitBadge.tsx`): a small nudge down and back. Moves rather than
-   fades, so the glyph keeps its full contrast; applied through `motion-safe:` only. */
-@keyframes sync-nudge {
-  0%,
-  100% {
-    transform: translateY(-1px);
-  }
-  50% {
-    transform: translateY(1px);
-  }
+/* Paired glyphs in GitBadge's fixed clip make each directional loop continuous. The second
+   glyph takes the first one's place at the boundary; reduced motion leaves one static glyph. */
+@keyframes pull-scroll {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+@keyframes push-scroll {
+  from { transform: translateY(0); }
+  to { transform: translateY(-100%); }
 }
 
 @theme {
@@ -694,7 +694,8 @@ html.pane-resizing * {
      `animate-spin` is a shorthand that resets any duration set beside it. */
   --animate-spin-slow: spin 2s linear infinite;
   --animate-status-wave: status-wave 2.4s ease-in-out infinite;
-  --animate-sync-nudge: sync-nudge 1s ease-in-out infinite;
+  --animate-pull-scroll: pull-scroll 1.2s linear infinite;
+  --animate-push-scroll: push-scroll 1.2s linear infinite;
 }
 
 /* The sidebar's view changes (`Sidebar.tsx`, played with the Web Animations API so the view is

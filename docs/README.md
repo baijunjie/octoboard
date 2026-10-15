@@ -51,11 +51,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   move skips places that no longer exist and never resumes a session, what the history keeps, and the ⌘[ / ⌘]
   shortcuts in the macOS app.
 - [Project git status](product/project-git-status.md) — the branch badge on a project's row and in focus mode's header:
-  its glyphs for a branch, a detached `HEAD`, a check in flight and a fast-forward in flight, the ahead and behind
-  counts, the marker a failed check leaves and what it tells assistive technology; when and how often the current
-  console's projects are checked against their remotes, what one check runs and the remote URL it records for the
-  project; which of the user's own git settings a check's `git` is given and which are filtered out; and the
-  Automatically sync repositories switch — what it fast-forwards, what it never does, where it is kept, and the
+  its branch and detached `HEAD` glyphs, the shared in-flight spinner, the ahead and behind counts and their
+  directional arrow animations, the marker a failed check leaves and what it tells assistive technology; when and how
+  often the current console's projects are checked against their remotes, what one check runs and the remote URL it
+  records for the project; which of the user's own git settings a check's `git` is given and which are filtered out;
+  and the Automatically sync repositories switch — what it fast-forwards, what it never does, where it is kept, and the
   immediate fast-forward pass turning it on runs — and Push current branch: which branch is published, when an
   upstream is recorded, and what is refused; and Switch branch: the third-level local branch menu, immediate
   switching, and failures.

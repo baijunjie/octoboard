@@ -553,10 +553,11 @@ pub enum GitActivity {
     Idle,
     Checking,
     Syncing,
+    Pushing,
 }
 
 /// One project's live git state: its branch and how far it is from its upstream, and whether a
-/// check or a fast-forward sync is in flight right now. Derived from the project's working
+/// check, a fast-forward sync, or a push is in flight right now. Derived from the project's working
 /// directory on disk, never stored in SQLite; held in memory by `AppState` and (re)built only when
 /// `refresh_git_status` asks for it — the daemon keeps no timer of its own for this (see
 /// `apps/daemon/PROTOCOL.md`'s "Daemon behaviour, per project").

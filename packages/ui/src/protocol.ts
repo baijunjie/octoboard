@@ -201,9 +201,9 @@ export interface DirEntry {
 }
 
 /** `checking` while the remote is being contacted and the status read; `syncing` while the branch
- * is being fast-forwarded. A tri-state rather than a boolean so the two in-flight phases are told
- * apart in the UI's wording. */
-export type GitActivity = "idle" | "checking" | "syncing";
+ * is being fast-forwarded; `pushing` while at least one push is in flight, taking precedence over
+ * a simultaneous check or sync. */
+export type GitActivity = "idle" | "checking" | "syncing" | "pushing";
 
 /** A project's live git state: derived, never stored in SQLite, and held in memory by the daemon.
  * `repository` false means the project's directory is not a git repository, and every field below

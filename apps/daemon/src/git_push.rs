@@ -77,6 +77,7 @@ pub fn push_current_branch(state: &AppState, project: &Project) -> Result<(), an
             &[("project", &project.id)],
         ));
     }
+    let _activity = state.begin_git_push(&project.id);
     let output = git_status::run_git_read(path, git_status::BRANCH_HEADER_ARGS)
         .map_err(|detail| push_failed(&detail))?;
     let header = git_status::parse_branch_header(&output);

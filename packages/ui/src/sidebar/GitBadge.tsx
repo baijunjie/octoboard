@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowDown, ArrowDownToLine, ArrowUp, GitBranch, GitCommitHorizontal, RefreshCw } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, GitBranch, GitCommitHorizontal, RefreshCw } from "lucide-react";
 import React from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -7,6 +7,19 @@ import { gitBadgeAriaLabel } from "../gitStatusLabel";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { GitStatus } from "../protocol";
 
+function ScrollingCountArrow({ direction }: { direction: "up" | "down" }): React.ReactElement {
+  const up = direction === "up";
+  const Icon = up ? ArrowUp : ArrowDown;
+  return (
+    <span aria-hidden="true" className="relative size-3 shrink-0 overflow-clip">
+      <span className={`relative block size-full ${up ? "motion-safe:animate-push-scroll" : "motion-safe:animate-pull-scroll"}`}>
+        <Icon className="size-3" />
+        <Icon className={`absolute inset-x-0 size-3 ${up ? "top-full" : "-top-full"}`} />
+      </span>
+    </span>
+  );
+}
+
 /**
  * A project's branch and how far it is from its upstream, shown between the name and the row's
  * trailing controls (or, in focus mode, in the header). Renders nothing while there is no status
@@ -14,11 +27,12 @@ import type { GitStatus } from "../protocol";
  *
  * The glyph differs by `activity` and against the idle glyph, since motion alone is never the only
  * cue for a state: idle is a branch glyph (a commit glyph instead for a detached `HEAD`, so that is
- * told apart without reading the accessible name), `checking` a spinning `RefreshCw` (contacting
- * the remote), `syncing` a nudging `ArrowDownToLine` (fast-forwarding the branch, which is
- * specifically a pull). A failed check replaces the idle glyph with a red `AlertTriangle`; the
- * in-flight glyphs win over it while the next check runs. The ahead/behind counts and the error
- * glyph are likewise never colour alone.
+ * told apart without reading the accessible name), and every in-flight activity a spinning
+ * `RefreshCw`. The ahead count's arrow scrolls upward during a push; the behind count's arrow
+ * scrolls downward during a fast-forward. Both scroll inside a fixed count-arrow-sized clip.
+ * A failed check replaces the idle glyph with a red `AlertTriangle`; the in-flight glyph wins
+ * over it while the next operation runs. The ahead/behind counts and the error glyph are likewise
+ * never colour alone.
  *
  * The whole badge is one `IndicatorTooltip` (hover only, so it adds no tab stop to its row) whose
  * text is the accessible-name sentence itself: one tooltip for the glyph, the branch and both
@@ -61,10 +75,8 @@ export function GitBadge({ status, decorative }: { status: GitStatus | undefined
   const className = "flex min-w-0 items-center gap-1 overflow-hidden text-xs text-app-muted";
   const content = (
     <>
-      {status.activity === "checking" ? (
+      {status.activity !== "idle" ? (
         <RefreshCw aria-hidden="true" className="size-3.5 shrink-0 motion-safe:animate-spin-slow" />
-      ) : status.activity === "syncing" ? (
-        <ArrowDownToLine aria-hidden="true" className="size-3.5 shrink-0 motion-safe:animate-sync-nudge" />
       ) : status.error ? (
         <AlertTriangle aria-hidden="true" className="size-3.5 shrink-0 text-app-danger" />
       ) : status.detached ? (
@@ -78,13 +90,13 @@ export function GitBadge({ status, decorative }: { status: GitStatus | undefined
             {status.branch ? <span>{status.branch}</span> : noCommitsYet && <span dir="auto">{t("sidebar.git.noCommitsYet")}</span>}
             {status.ahead > 0 && (
               <span className="inline-flex shrink-0 items-center">
-                <ArrowUp aria-hidden="true" className="size-3 shrink-0" />
+                {status.activity === "pushing" ? <ScrollingCountArrow direction="up" /> : <ArrowUp aria-hidden="true" className="size-3 shrink-0" />}
                 {status.ahead.toLocaleString(language)}
               </span>
             )}
             {status.behind > 0 && (
               <span className="inline-flex shrink-0 items-center">
-                <ArrowDown aria-hidden="true" className="size-3 shrink-0" />
+                {status.activity === "syncing" ? <ScrollingCountArrow direction="down" /> : <ArrowDown aria-hidden="true" className="size-3 shrink-0" />}
                 {status.behind.toLocaleString(language)}
               </span>
             )}

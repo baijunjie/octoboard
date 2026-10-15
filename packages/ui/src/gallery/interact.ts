@@ -195,10 +195,9 @@ export interface Ui {
 }
 
 /** The icon the git badge draws for `status`, by the name lucide gives its class (`GitBadge.tsx`
- * chooses it: a check or a fast-forward in flight, a failed check, a detached `HEAD`, else a branch). */
+ * chooses it: a check, fast-forward or push in flight, a failed check, a detached `HEAD`, else a branch). */
 function gitGlyphOf(status: GitStatus): string {
-  if (status.activity === "checking") return "refresh-cw";
-  if (status.activity === "syncing") return "arrow-down-to-line";
+  if (status.activity !== "idle") return "refresh-cw";
   if (status.error) return "triangle-alert";
   return status.detached ? "git-commit-horizontal" : "git-branch";
 }
@@ -505,9 +504,9 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
           }
           const mark = trigger?.querySelector(glyph);
           if (!mark) return undefined;
-          // The glyph and the line are siblings: the trigger's own flex items, or, in a row, those of
-          // the `contents` box that keeps them out of the accessible tree.
-          const part = over === "glyph" ? mark : mark.nextElementSibling;
+          // The branch and counts share the LTR line even when the activity glyph is nested
+          // separate from the animated arrows inside that line.
+          const part = over === "glyph" ? mark : trigger?.querySelector("[dir=ltr]");
           // Found, so waiting would not change it: the badge has no line, only its glyph.
           if (!part) throw new Error(`The git badge has no ${over} to hover`);
           return part as HTMLElement;

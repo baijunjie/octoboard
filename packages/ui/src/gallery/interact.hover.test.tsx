@@ -336,26 +336,29 @@ it("hoverGitBadge puts the pointer on the line of a row's badge and puts up the 
   release(badge);
 });
 
-it("hoverGitBadge puts the pointer on the glyph or on the line, as asked", async () => {
+it.each(["idle", "checking", "syncing", "pushing"] as const)("hoverGitBadge puts the pointer on the glyph or line for %s, as asked", async (activity) => {
+  const status = { ...branchStatus, activity };
   const targets: Element[] = [];
   for (const over of ["glyph", "line"] as const) {
-    mountFocusBadge(branchStatus);
+    mountFocusBadge(status);
     const badge = document.querySelector("[role=img]")!;
     document.addEventListener("pointerover", (event) => targets.push(event.target as Element), { capture: true, once: true });
-    await settledLive(createUi(document, "en").hoverGitBadge(branchStatus, over));
-    expect(openTooltip()?.textContent).toBe(sentenceOf(branchStatus));
+    await settledLive(createUi(document, "en").hoverGitBadge(status, over));
+    expect(openTooltip()?.textContent).toBe(sentenceOf(status));
     release(badge);
     document.body.replaceChildren();
   }
   expect(targets.map((target) => target.tagName.toLowerCase())).toEqual(["svg", "span"]);
   expect(targets[1]!.textContent).toBe("main32");
+  expect(targets[1]!.getAttribute("dir")).toBe("ltr");
+  expect(targets[0]!.classList.contains(activity === "idle" ? "lucide-git-branch" : "lucide-refresh-cw")).toBe(true);
 });
 
-it("hoverGitBadge takes the badge of the glyph the status draws", async () => {
-  const checking = gitStatusOf("p-1", { activity: "checking", error: "fetch failed" });
-  mountFocusBadge(checking);
-  await settledLive(createUi(document, "en").hoverGitBadge(checking, "glyph"));
-  expect(openTooltip()?.textContent).toBe(sentenceOf(checking));
+it.each(["checking", "syncing", "pushing"] as const)("hoverGitBadge takes the badge of the %s glyph the status draws", async (activity) => {
+  const status = gitStatusOf("p-1", { activity, error: "fetch failed" });
+  mountFocusBadge(status);
+  await settledLive(createUi(document, "en").hoverGitBadge(status, "glyph"));
+  expect(openTooltip()?.textContent).toBe(sentenceOf(status));
   release(document.querySelector("[role=img]")!);
 });
 

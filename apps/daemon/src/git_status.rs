@@ -543,6 +543,7 @@ pub(crate) fn parse_branch_header(output: &str) -> BranchHeader {
 /// Re-reads the local branch header and publishes it. A push moves the ahead count without a
 /// fetch, and this is what the badge shows afterwards; nothing here goes to the remote. An
 /// `error` already on the status stays unless this read itself fails, which records its own.
+/// An overlapping check or sync keeps its current activity; the local read does not finish it.
 pub(crate) fn publish_reread(state: &AppState, project: &Project) {
     let path = PathBuf::from(&project.path);
     let mut status = state
@@ -560,9 +561,8 @@ pub(crate) fn publish_reread(state: &AppState, project: &Project) {
             error: None,
         });
     status.repository = true;
-    status.activity = GitActivity::Idle;
     read_branch_header(&path, &mut status);
-    state.publish_git_status(status);
+    state.publish_git_reread(status);
 }
 
 /// Parses `+<ahead> -<behind>` as printed after `# branch.ab `; a part that does not match reads

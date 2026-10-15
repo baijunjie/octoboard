@@ -18,7 +18,7 @@ use tokio::sync::broadcast;
 use crate::outbox::{Drain, Outbox};
 use crate::protocol::{
     error_code, notice_code, now_millis, Agent, AgentAvailability, Availability, CodedError, Event,
-    GitStatus, Notice, Session, SessionStatus,
+    GitActivity, GitStatus, Notice, Session, SessionStatus,
 };
 use crate::saved_output::SavedOutput;
 use crate::session::LiveSession;
@@ -63,8 +63,9 @@ pub struct AppState {
     /// through them; see `crate::outbox`.
     outbox: Outbox,
     /// Each project's live git status, broadcast as `project_git_status` on every change and
-    /// replayed in a `snapshot`. Derived, never stored in SQLite — see `GitStatus`.
-    git_statuses: RwLock<HashMap<String, GitStatus>>,
+    /// replayed in a `snapshot`, with a counter overlaying its activity while pushes run.
+    /// Derived, never stored in SQLite — see `GitStatus`.
+    git_statuses: RwLock<GitStatuses>,
     /// The ids of the projects whose git status is being checked right now, so
     /// `refresh_git_status` does not start a second check for one already in flight — a client
     /// polling faster than the checks finish, or several clients watching the same console, must
@@ -174,7 +175,7 @@ impl AppState {
             next_record_watch_generation: std::sync::atomic::AtomicU64::new(0),
             record_offsets: Mutex::new(HashMap::new()),
             outbox: Outbox::default(),
-            git_statuses: RwLock::new(HashMap::new()),
+            git_statuses: RwLock::new(GitStatuses::default()),
             git_checks: Mutex::new(HashMap::new()),
             git_check_completed: Mutex::new(HashMap::new()),
             branch_watch: Default::default(),
@@ -1174,34 +1175,97 @@ impl AppState {
     /// under one: either way nothing resurrects a status for a project that no longer exists, and
     /// `PROTOCOL.md` promises no `project_git_status` for one either.
     pub fn publish_git_status(&self, status: GitStatus) {
+        self.publish_git_status_with(status, false);
+    }
+
+    /// A local re-read changes the header without ending an overlapping check or sync.
+    pub(crate) fn publish_git_reread(&self, status: GitStatus) {
+        self.publish_git_status_with(status, true);
+    }
+
+    fn publish_git_status_with(&self, mut status: GitStatus, preserve_activity: bool) {
         // A store error says nothing about whether the project is actually gone, so this fails
         // open rather than risk dropping a status that is still perfectly valid.
         if let Ok(None) = self.store.get_project(&status.project) {
             self.remove_git_status(&status.project);
             return;
         }
-        self.git_statuses
+        let mut statuses = self
+            .git_statuses
             .write()
-            .expect("git statuses lock poisoned")
+            .expect("git statuses lock poisoned");
+        if preserve_activity {
+            if let Some(previous) = statuses.statuses.get(&status.project) {
+                status.activity = previous.activity;
+            }
+        }
+        statuses
+            .statuses
             .insert(status.project.clone(), status.clone());
-        self.broadcast(Event::ProjectGitStatus { status });
+        self.broadcast(Event::ProjectGitStatus {
+            status: statuses.visible(status),
+        });
     }
 
     /// Every git status the daemon currently holds, for `Event::Snapshot`.
     pub fn git_statuses(&self) -> Vec<GitStatus> {
-        self.git_statuses
+        let statuses = self
+            .git_statuses
             .read()
-            .expect("git statuses lock poisoned")
+            .expect("git statuses lock poisoned");
+        statuses
+            .statuses
             .values()
             .cloned()
+            .map(|status| statuses.visible(status))
             .collect()
     }
 
-    /// The git status the daemon currently holds for one project, if any.
+    /// Marks one push in flight, without excluding another push or a background check. The
+    /// guard restores the latest underlying check activity on every exit, including a failure.
+    pub(crate) fn begin_git_push(&self, project_id: &str) -> GitPushActivity<'_> {
+        if let Ok(None) = self.store.get_project(project_id) {
+            return GitPushActivity {
+                state: self,
+                project_id: project_id.to_string(),
+            };
+        }
+        let mut statuses = self
+            .git_statuses
+            .write()
+            .expect("git statuses lock poisoned");
+        *statuses.pushes.entry(project_id.to_string()).or_default() += 1;
+        let status = statuses
+            .statuses
+            .entry(project_id.to_string())
+            .or_insert_with(|| GitStatus {
+                project: project_id.to_string(),
+                repository: true,
+                branch: None,
+                detached: false,
+                upstream: None,
+                ahead: 0,
+                behind: 0,
+                activity: GitActivity::Idle,
+                error: None,
+            });
+        status.repository = true;
+        let status = status.clone();
+        self.broadcast(Event::ProjectGitStatus {
+            status: statuses.visible(status),
+        });
+        GitPushActivity {
+            state: self,
+            project_id: project_id.to_string(),
+        }
+    }
+
+    /// The underlying check status for one project, without the push overlay.
     pub fn git_status(&self, project_id: &str) -> Option<GitStatus> {
         self.git_statuses
             .read()
             .expect("git statuses lock poisoned")
+            .statuses
             .get(project_id)
             .cloned()
     }
@@ -1210,10 +1274,13 @@ impl AppState {
     /// console is — nothing else ever cleans up these entries, since the daemon keeps no timer of
     /// its own that would otherwise notice a project is gone.
     pub fn remove_git_status(&self, project_id: &str) {
-        self.git_statuses
+        let mut statuses = self
+            .git_statuses
             .write()
-            .expect("git statuses lock poisoned")
-            .remove(project_id);
+            .expect("git statuses lock poisoned");
+        statuses.statuses.remove(project_id);
+        statuses.pushes.remove(project_id);
+        drop(statuses);
         self.git_check_completed
             .lock()
             .expect("git check completed lock poisoned")
@@ -1309,6 +1376,50 @@ pub struct LaunchClaim {
 impl Drop for LaunchClaim {
     fn drop(&mut self) {
         self.state.release_launch(&self.id);
+    }
+}
+
+/// The base check status and its push overlay share a lock so an overlapping publication cannot
+/// briefly clear the pushing glyph, and broadcasts retain the same order as cached snapshots.
+#[derive(Default)]
+struct GitStatuses {
+    statuses: HashMap<String, GitStatus>,
+    pushes: HashMap<String, usize>,
+}
+
+impl GitStatuses {
+    fn visible(&self, mut status: GitStatus) -> GitStatus {
+        if status.repository && self.pushes.contains_key(&status.project) {
+            status.activity = GitActivity::Pushing;
+        }
+        status
+    }
+}
+
+pub(crate) struct GitPushActivity<'a> {
+    state: &'a AppState,
+    project_id: String,
+}
+
+impl Drop for GitPushActivity<'_> {
+    fn drop(&mut self) {
+        let mut statuses = self
+            .state
+            .git_statuses
+            .write()
+            .expect("git statuses lock poisoned");
+        let Some(count) = statuses.pushes.get_mut(&self.project_id) else {
+            return;
+        };
+        *count -= 1;
+        if *count == 0 {
+            statuses.pushes.remove(&self.project_id);
+        }
+        if let Some(status) = statuses.statuses.get(&self.project_id) {
+            self.state.broadcast(Event::ProjectGitStatus {
+                status: statuses.visible(status.clone()),
+            });
+        }
     }
 }
 
@@ -1773,6 +1884,148 @@ mod tests {
             "owed once, however many asked"
         );
         assert!(state.claim_git_check("p1").is_some(), "then it is released");
+    }
+
+    fn git_project(state: &AppState, dir: &std::path::Path) -> crate::protocol::Project {
+        insert_record(state, dir, "s", SessionStatus::Idle);
+        let project = serde_json::from_value(serde_json::json!({
+            "id": "p1", "console_id": "console-1", "host_id": LOCAL_HOST_ID,
+            "name": "Project", "path": dir, "source": "local",
+            "trust_consent": false, "pinned": false, "tags": [],
+        }))
+        .unwrap();
+        state.store.insert_project(&project).unwrap();
+        project
+    }
+
+    fn git_reading() -> GitStatus {
+        GitStatus {
+            project: "p1".to_string(),
+            repository: true,
+            branch: Some("main".to_string()),
+            detached: false,
+            upstream: Some("origin/main".to_string()),
+            ahead: 2,
+            behind: 1,
+            activity: GitActivity::Idle,
+            error: Some("fetch failed".to_string()),
+        }
+    }
+
+    #[test]
+    fn overlapping_pushes_overlay_checks_until_the_last_push_ends() {
+        let (state, dir) = app_state("state-git-push-overlap");
+        git_project(&state, &dir);
+        state.publish_git_status(git_reading());
+        let mut first_window = state.subscribe();
+        let mut second_window = state.subscribe();
+        let first = state.begin_git_push("p1");
+        let second = state.begin_git_push("p1");
+        state.publish_git_status(GitStatus {
+            activity: GitActivity::Checking,
+            ..git_reading()
+        });
+        state.publish_git_reread(GitStatus {
+            ahead: 0,
+            activity: GitActivity::Idle,
+            ..git_reading()
+        });
+        drop(first);
+        let status = state.git_statuses().pop().unwrap();
+        assert_eq!(status.activity, GitActivity::Pushing);
+        assert_eq!(status.branch.as_deref(), Some("main"));
+        assert_eq!((status.ahead, status.behind), (0, 1));
+        assert_eq!(status.error.as_deref(), Some("fetch failed"));
+        drop(second);
+        assert_eq!(state.git_statuses()[0].activity, GitActivity::Checking);
+        for window in [&mut first_window, &mut second_window] {
+            for expected in [
+                GitActivity::Pushing,
+                GitActivity::Pushing,
+                GitActivity::Pushing,
+                GitActivity::Pushing,
+                GitActivity::Pushing,
+                GitActivity::Checking,
+            ] {
+                let Event::ProjectGitStatus { status } = window.try_recv().unwrap() else {
+                    panic!("git status event")
+                };
+                assert_eq!(status.activity, expected);
+            }
+            assert!(window.try_recv().is_err());
+        }
+    }
+
+    #[test]
+    fn a_push_guard_restores_the_latest_status_even_on_unwind() {
+        let (state, dir) = app_state("state-git-push-unwind");
+        git_project(&state, &dir);
+        state.publish_git_status(git_reading());
+        let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _push = state.begin_git_push("p1");
+            state.publish_git_status(GitStatus {
+                activity: GitActivity::Syncing,
+                ..git_reading()
+            });
+            panic!("simulated push panic");
+        }));
+        assert!(unwound.is_err());
+        assert_eq!(state.git_statuses()[0].activity, GitActivity::Syncing);
+    }
+
+    #[test]
+    fn push_success_and_failure_both_clear_the_in_flight_activity() {
+        let (state, dir) = app_state("state-git-push-outcomes");
+        let repo = crate::test_support::repo_with("state-git-push-repo", &[(b"file", b"one")]);
+        let project = git_project(&state, &repo);
+        let remote = dir.join("remote.git");
+        crate::test_support::git(
+            &repo,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        );
+        state.publish_git_status(git_reading());
+        let mut events = state.subscribe();
+        assert!(crate::git_push::push_current_branch(&state, &project).is_err());
+        for expected in [GitActivity::Pushing, GitActivity::Idle] {
+            let Event::ProjectGitStatus { status } = events.try_recv().unwrap() else {
+                panic!("git status event")
+            };
+            assert_eq!(status.activity, expected);
+        }
+        assert_eq!(
+            state.git_statuses()[0].error.as_deref(),
+            Some("fetch failed")
+        );
+        crate::test_support::git(&dir, &["init", "--bare", remote.to_str().unwrap()]);
+        crate::git_push::push_current_branch(&state, &project).unwrap();
+        for expected in [
+            GitActivity::Pushing,
+            GitActivity::Pushing,
+            GitActivity::Idle,
+        ] {
+            let Event::ProjectGitStatus { status } = events.try_recv().unwrap() else {
+                panic!("git status event")
+            };
+            assert_eq!(status.activity, expected);
+        }
+        let status = state.git_statuses().pop().unwrap();
+        assert_eq!(status.upstream.as_deref(), Some("origin/main"));
+        assert_eq!((status.ahead, status.behind), (0, 0));
+        assert_eq!(status.error.as_deref(), Some("fetch failed"));
+    }
+
+    #[test]
+    fn a_push_finishing_after_its_project_is_removed_does_not_restore_a_status() {
+        let (state, dir) = app_state("state-git-push-removed");
+        git_project(&state, &dir);
+        let push = state.begin_git_push("p1");
+        state.remove_git_status("p1");
+        let mut events = state.subscribe();
+        drop(push);
+        assert!(state.git_statuses().is_empty());
+        assert!(events.try_recv().is_err());
+        let _missing = state.begin_git_push("ghost");
+        assert!(state.git_statuses().is_empty());
     }
 
     /// A status published for a project no longer in the store must be dropped rather than
