@@ -893,7 +893,8 @@ export const zhHans: Translation<"other"> = {
   "settings.language.label": "语言",
   "settings.language.description": "{appName} 界面的语言。首次打开时按系统语言选定。",
   "settings.cloneDir.label": "默认克隆目录",
-  "settings.cloneDir.description": "通过 git 仓库网址添加项目时，仓库默认克隆到的目录，除非另行选择目录。留空则使用 {defaultDir}。",
+  "settings.cloneDir.description.gitUrl":
+    "通过 Git 仓库网址添加项目时，默认克隆到此目录，也可另选目录。",
   "settings.cloneDir.placeholder": "~/Projects",
   "settings.background.label": "关闭窗口后在后台继续运行",
   "settings.background.description.off":

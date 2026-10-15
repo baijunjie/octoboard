@@ -995,8 +995,8 @@ export const en = {
   "settings.language.description":
     "The language of {appName}'s interface. It is picked from the system's languages the first time {appName} opens.",
   "settings.cloneDir.label": "Default clone directory",
-  "settings.cloneDir.description":
-    "Where a repository is cloned when adding a project from a git URL, unless another directory is chosen. Leave it empty to use {defaultDir}.",
+  "settings.cloneDir.description.gitUrl":
+    "Projects added from a Git URL are cloned into this directory unless you choose another.",
   "settings.cloneDir.placeholder": "~/Projects",
   "settings.background.label": "Keep running in the background when the window is closed",
   "settings.background.description.off":

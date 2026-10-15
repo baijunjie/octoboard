@@ -42,7 +42,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Browser General settings",
-    description: "The clone-directory explanation displays ~/Projects as selectable code. Other sections share the same mock data and can be explored manually.",
+    description: "The clone-directory explanation describes when the chosen directory is used; the path appears in the input.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -53,7 +53,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "General, run in the background offered (desktop app)",
-    description: "The clone-directory explanation displays ~/Projects as selectable code; the desktop app's extra background row starts off. Switch it on and off to read both descriptions.",
+    description: "The clone-directory explanation leaves the path in the input. The desktop app's background row starts off; switch it on and off to read both descriptions.",
     state,
     backgroundRun: true,
     steps: [
