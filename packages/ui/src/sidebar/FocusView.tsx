@@ -9,7 +9,7 @@ import { AgentAccountText } from "../components/AgentAccountText";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { RowControls, RowIconGroup, RowIconLine } from "../components/RowControls";
+import { RowControls, RowIconGroup, RowIconLine, RowIconSlot } from "../components/RowControls";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
 import { useFocusHandoff } from "../components/useFocusHandoff";
@@ -599,11 +599,12 @@ function SessionCard({
           <ActionMenu label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, session)) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
         </RowControls>
       </RowIconLine>
-      <RowIconLine icon={consoleOwner && <BindingBadge owner={consoleOwner} />}>
+      <div className="flex min-w-0 items-center gap-(--row-leading-icon-gap)">
+        {consoleOwner?.colour && <RowIconSlot placement="leading"><BindingBadge owner={consoleOwner} /></RowIconSlot>}
         <FadeOverflow as="span" titleWhenClipped={sessionDisplayTitle(t, session)} className="min-w-0 flex-1 text-sm font-medium">
           <bdi>{sessionDisplayTitle(t, session)}</bdi>
         </FadeOverflow>
-      </RowIconLine>
+      </div>
       <RowIconLine
         icon={<AgentIcon agent={session.agent} className="size-3.5" tooltip={sessionAccountTooltip(t, session, accounts)} />}
         className="text-xs text-app-muted"

@@ -25,9 +25,9 @@ fades" and "Scrolling a surface from the keyboard" in `docs/product/scrolling-su
 
 **Session cards**, in both: the status glyph with the status in words, the pin button when pinned (see "Pinning" in
 `docs/product/sidebar.md`), the session's action menu (always shown), its title on one line, its agent's icon
-and name with its account, and how long ago it was started at the trailing end of the agent line. The status, title
-and agent lines share aligned leading icons and text starts; a title with no binding badge keeps the empty icon space.
-Long titles follow "Names too long
+and name with its account, and how long ago it was started at the trailing end of the agent line. The status and agent
+lines share aligned leading icons and text starts. A title with a console-session colour dot shares that alignment;
+a title without one starts at the card’s leading content edge, with no empty icon space. Long titles follow "Names too long
 for their space" in `docs/product/labels-and-tooltips.md`. The agent's icon has a tooltip, as on a session row (see
 "Session rows" in `docs/product/sidebar.md`). Clicking a card selects the session. They are in the order of "Order of
 projects and sessions" in `docs/product/sidebar.md`. Cards have an opaque background distinct from the sidebar's,
