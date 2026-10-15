@@ -53,6 +53,18 @@ once, and do not assume the sender, or the surface the change replaces, is still
 happen exactly once after such a change, hold it as a debt — a ref set when the change is observed and cleared only once
 the work is actually done — so whichever side lands first, the other finishes the job.
 
+## Tell which of two events came first with a counter, never a clock
+
+Applies to `packages/ui` wherever one event must be known to have come after another: was this request sent after the
+session switch, is this reply newer than the one on screen. Do not compare `performance.now()` or `Date.now()`
+readings for it. The app's WebKit rounds `performance.now()` to whole milliseconds (as Playwright's WebKit shows), so
+two readings in one handler, or in handlers that run close together, are usually equal: a strict `>` then never holds
+and a `>=` cannot tell the two orders apart. jsdom's clock is sub-millisecond, so the component tests pass either way.
+
+Stamp such events from a counter that grows on every read instead — the Git mode's `gitMoment` in
+`packages/ui/src/browser/gitRequests.ts`, or one of the same shape outside it — and keep clocks for durations and
+wall-clock time only (refresh intervals, relative times, expiry).
+
 ## A session's terminal title is not steady text: key nothing disruptive off it as sent
 
 Agent CLIs animate a glyph at the start of their terminal title while they work (Claude Code cycles ◐◓◑◒ and shows ✳
