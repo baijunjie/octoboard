@@ -17,6 +17,7 @@ mod crash_cleanup;
 mod env_shell;
 mod git_env;
 mod git_push;
+mod git_ref_mode;
 mod git_remote;
 mod git_restore;
 mod git_status;
@@ -89,6 +90,17 @@ enum Command {
         #[arg(long)]
         port: u16,
     },
+    /// Report the branches a session's git has just created. This is what the session's
+    /// `reference-transaction` hook dispatcher starts; it is not meant to be run by hand.
+    GitRef {
+        #[arg(long)]
+        session: String,
+        #[arg(long)]
+        port: u16,
+        /// Each created reference's name followed by the object id it was created at.
+        #[arg(last = true)]
+        refs: Vec<std::ffi::OsString>,
+    },
     /// Serve the Octoboard MCP tools for one session over stdio. This is what the adapters
     /// register as the session's MCP server; it is not meant to be run by hand.
     Mcp {
@@ -130,6 +142,15 @@ fn main() -> Result<()> {
     // critical path, several times per turn.
     if let Some(Command::Hook { session, port }) = &cli.command {
         hook_mode::run(session, *port);
+        return Ok(());
+    }
+    if let Some(Command::GitRef {
+        session,
+        port,
+        refs,
+    }) = &cli.command
+    {
+        git_ref_mode::run(session, *port, refs);
         return Ok(());
     }
 

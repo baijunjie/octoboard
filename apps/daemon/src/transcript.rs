@@ -180,10 +180,6 @@ fn lower_the_hand(state: &Arc<AppState>, session_id: &str) {
                 session = %session_id,
                 "a transcript rejection was found; the agent is no longer waiting"
             );
-            // The declined call never ran, and the turn it was in is over, which no hook reports.
-            // Only while the session was still waiting: one that has moved on may have started
-            // calls since.
-            crate::branch_origin::calls_cancelled(state, session_id);
             // Mirrors the release the hook path pairs with every status change: a message queued
             // while the session was `WaitingUser` is still queued, and nothing else is coming to
             // release it. `flush_outbox`'s gate asks for a hook-reported state, which this `Idle`

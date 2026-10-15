@@ -811,7 +811,7 @@ SideRead          = { state: "present", path, kind, source: ContentSource, file:
                   | { state: "absent" }
                   | { state: "out_of_scope" }
 BranchInfo        { name, commit, origin? }
-BranchOriginInfo  { source: "hook_diff" | "reflog_match" | "worktree_cwd", session, title, created_at }
+BranchOriginInfo  { source: "ref_hook", session, title, created_at }
 ComparisonEndpoint { branch, commit }
 ```
 
@@ -1082,38 +1082,30 @@ listed as it is rather than looked into, since asking `git` what a missing objec
 comparison of it is refused with `unknown_branch`, as a branch read is. At most 10,000 branches, or 2 MiB of names as
 sent, are listed, the first in byte order; a list cut there carries `complete: false`.
 
-A branch the daemon can name the creating session of carries `origin`, a `BranchOriginInfo`: `session` is that
-session's id (the session may be gone), `title` is what it had when the attribution was made, and `created_at` is when
-the branch was created in milliseconds. `source` says how it was told: `hook_diff` for a branch that appeared while
-only that session of the repository had a tool call in flight — between a call's start and end hooks, its own or a
-subagent's; a session whose model is writing runs nothing and is not counted — and `reflog_match` for one that
-predates the daemon's look at it whose first reflog entry is one a branch's own creation writes
-(`branch: Created from …`) and falls inside only that session's lifetime. A first entry of any other shape — the default
-branch a `git init` leaves, a clone's, a bare `git update-ref` — says a reference was written rather than that a branch
-was made there, and is never backfilled, however clear the session. `worktree_cwd` is the fallback when neither names a
-session: the branch is checked out in a worktree, exactly one running session of the repository has its working
-directory inside that worktree (the innermost one, as a linked worktree can sit inside the main one) — the directory its
-agent last reported in one of the session's own hooks, or its project's directory while none has — its first reflog
-entry is a branch's creation, and that session was running when it was made. A `hook_diff` replaces a `worktree_cwd`,
-and neither of the creation sources is ever replaced. The tool-call source names the session whose call the branch
-appeared during, whatever command made it — a branch the user makes in their own terminal while exactly one session's
-tool call is in flight is attributed to that session. An agent's own ask-the-user tool is not counted as a tool call,
-but a call waiting at a permission prompt is. A new branch is decided only a few seconds after it was born, once every
-hook that could concern it has had time to arrive, so its `origin` can appear on a later listing than the branch itself.
-A branch whose creator cannot be told — several sessions could have made it, nothing was running for it, or the only
-candidate was not running when the branch was made — carries no `origin`. Listing the branches is
-also what removes the record of a branch that no longer exists, and at most 1,000 branches of a repository carry one:
-in a repository with more, the branches a listing reaches first, in the byte order of their names, are the ones
-attributed, and a record past the cap is dropped by the time its branch was created, oldest first. The record is kept
-in the daemon's database only; nothing is written to the repository.
+A branch the daemon can name the creating session of carries `origin`, a `BranchOriginInfo`: `session` is that session's
+id (the session may be gone), `title` is what it had when the attribution was made, and `created_at` is when the branch
+was created in milliseconds. `source` is `ref_hook`, the only source: the session's own git reported creating the
+branch. A project session's agent is started with `core.hooksPath` pointed, through `GIT_CONFIG_COUNT`, at hook
+dispatchers of the daemon's, and when a reference transaction of any git in that agent's process tree commits a branch
+that did not exist while the transaction was prepared, the `reference-transaction` dispatcher reports it to `POST
+/git-ref/:session` (below) — a forced update of an existing branch is not a creation; every other hook, and that one
+too, runs the hook the user's own configuration names. The report is recorded only for a repository the session's own
+project is in, and, where the repository keeps reflog files, only while the branch's reflog still begins with its
+creation at the reported commit. The command that made the branch is never read, so any command, alias or script counts
+alike; a branch no session's git reported — one made in the user's own terminal, a copy (`git branch -c`), one made
+while the daemon was not running — carries no `origin`. A branch renamed after it was recorded keeps its `origin` under
+the new name, which git's reflog records. Nothing is injected, and nothing attributed, where the user's `git` is older
+than 2.36. Listing the branches is also what removes the record of a branch that no longer exists, and at most 1,000
+branches of a repository carry one: past that, a record is dropped by the time its branch was created, oldest first. The
+record is kept in the daemon's database only; nothing is written to the repository.
 
-In a repository whose references are kept in reftable format there are no reflog files, so nothing is backfilled there
-and no record can be held against its branch's birth: a branch deleted and made again under the same name keeps the
-first one's `origin` until the name itself goes. That is the one place a record can outlive the branch it was made for
-by more than a second. The same holds anywhere for a branch deleted and made again at the same commit within the same
-second, whose first reflog entry is then identical. Nor does a record outlast its reflog: `git gc` drops reflog entries
-older than `gc.reflogExpire` (90 days by default), and a branch whose first entry has gone is recorded again with no
-`origin`, for good.
+In a repository whose references are kept in reftable format there are no reflog files, so a record is taken at the
+reported commit and time and cannot be held against its branch's birth: a branch deleted and made again under the same
+name between two listings keeps the first one's `origin` until the name itself goes, and a rename is not followed. That
+is the one place a record can outlive the branch it was made for by more than a second. The same holds anywhere for a
+branch deleted and made again at the same commit within the same second, whose first reflog entry is then identical. Nor
+does a record outlast its reflog: `git gc` drops reflog entries older than `gc.reflogExpire` (90 days by default), and a
+branch whose first entry has gone loses its `origin` for good.
 
 `compare_project_branches` compares the right branch's tip, as the new side, with the commit the two branches forked
 at, as the old side — their merge base, as `git diff left...right` takes it — so it lists what the right branch has
@@ -1273,6 +1265,21 @@ Codex derives a hook's trust hash from its handler definition, so a per-event co
 event as well. Answers `200` with an empty body as fast as it can and never
 steers the agent: the injected hook script is shaped to fail silently and fast, because every agent surfaces a
 failing hook to the user.
+
+## `POST /git-ref/:session` — a session's git reporting branches it created
+
+Not part of the application's interface. This is how `octoboardd git-ref`, which a project session's
+`reference-transaction` hook dispatcher starts in the background, reports a committed transaction's created branches:
+
+```
+{ cwd, git_dir?, refs: [{ name, oid }], unix_time }
+```
+
+`cwd` is the directory git ran the hook in and `git_dir` the `GIT_DIR` it set, if any (relative to `cwd` when
+relative), both wire paths; `refs` holds each created reference's full name (a wire path) and the object id it was
+created at; `unix_time` is when the report was made, in seconds. Answers `200` with an empty body, or `400` for a body
+that does not parse, and records the report afterwards as "Comparing two branches" describes; the reporter ignores the
+answer.
 
 ## `POST /mcp/:token` — Octoboard's MCP tools
 

@@ -555,21 +555,17 @@ export type ChangeEntry =
 export interface BranchInfo {
   name: string;
   commit: string;
-  /** The session that created the branch; absent when the daemon cannot name one: several sessions
-   * could have made it, or nothing was running for it. */
+  /** The session that created the branch; absent when the daemon cannot name one: no session's own
+   * git reported creating it. */
   origin?: BranchOrigin;
 }
 
 /** The session a branch is attributed to having created. `title` is what that session was called
  * when the attribution was made, since `session` may name one that no longer exists (a project's
- * deletion takes its sessions with it). `source` is how the daemon told: `hook_diff` for a branch
- * that appeared while only that session had a tool call in flight, `reflog_match` for one that
- * predates the daemon's look at it and whose first reflog entry falls inside only that session's
- * lifetime, `worktree_cwd` for one neither could tell, made while that session was running and
- * checked out in the worktree only that session is working in. `created_at` is milliseconds since
- * the epoch. */
+ * deletion takes its sessions with it). `source` is how the daemon told: `ref_hook`, the session's
+ * own git reporting the branch's creation. `created_at` is milliseconds since the epoch. */
 export interface BranchOrigin {
-  source: "hook_diff" | "reflog_match" | "worktree_cwd";
+  source: "ref_hook";
   session: string;
   title: string;
   created_at: number;

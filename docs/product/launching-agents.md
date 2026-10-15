@@ -63,7 +63,8 @@ both run, in the same session.
 
 ## What is injected on every launch
 
-Three things, and nothing else:
+Three things, and nothing else, besides the variables a project session's agent is given for its git (see "The launch
+environment" below):
 
 - **Status hooks** — the events the session statuses in `docs/product/sessions.md` are derived from.
 - **Octoboard's own MCP server** — the tools described in `docs/product/hub-orchestration.md`. It is
@@ -168,6 +169,10 @@ Besides the terminal type, the variables set over the snapshot are:
   else;
 - for every Grok Build session, `GROK_HOME`, set to the session's own Grok home (see "Per-agent specifics a user will
   notice" below). A Grok Build config directory is not passed as `GROK_HOME` itself.
+- for a project session, a `core.hooksPath` entry through `GIT_CONFIG_COUNT`, together with `OCTOBOARD_SESSION_ID` and
+  `OCTOBOARD_DAEMON_PORT`, which point every git in the agent's process tree at Octoboard's hook dispatchers; those
+  still run the user's own git hooks, and report the branches that git creates (see "The session's git hooks" and
+  "What attribution needs" in `docs/product/branch-creator.md`). A console session gets none of them.
 
 The agent binary is resolved from that same snapshot's `PATH`, which is that login + interactive shell's `PATH`, not the
 one a terminal happens to have. So when the shell lists an old install of an agent before a newer one, the old one is

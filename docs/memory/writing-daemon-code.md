@@ -26,14 +26,17 @@ defaults, and the store is a single `Connection` behind a mutex that every metho
 a transaction commits on its own — a rollback journal written and fsynced, the pages written and fsynced, the journal
 removed — while every other caller of the store waits on the mutex for it. A loop calling a one-row method is
 therefore the wrong shape wherever the number of rows follows a repository, a listing or anything else rather than
-the single thing the user did: reconciling a repository's branch records writes up to a thousand rows, from a hook
-callback and from inside a browse slot.
+the single thing the user did: reconciling a repository's branch records writes up to a thousand rows from inside a
+browse slot.
 
 So a store method that can write more than one row opens one `conn.transaction()` for the lot. When those writes
 follow from a read of the same rows, or the caller needs what the rows hold afterwards, do both reads inside that
-transaction instead of around the call: a method of this kind is reached from a hook callback and from the repeating
-refresh each connected client runs on its own phase, so a read-modify-write split across two takes of the mutex gets
-another caller's writes in between and one of the two is lost. `Store::apply_branch_origins` is the shape to copy.
+transaction instead of around the call: a method of this kind is reached by callers that run at the same time — the
+branch records from the `POST /git-ref/:session` route, which any number of a session's background reporter
+processes post to at once and which records each on the blocking pool, and from the Git mode's branch listing, a
+repeating refresh each connected client runs on its own phase — so a read-modify-write split across two takes of the
+mutex gets another caller's writes in between and one of the two is lost. `Store::apply_branch_origins` is the shape
+to copy.
 
 ## Time a repeating refresh from the client, and bound it in the daemon
 

@@ -387,7 +387,7 @@ function followHarness(id: string) {
         branches: branches.map((b) => ({
           name: b.name,
           commit: "c",
-          origin: b.session ? { source: "hook_diff" as const, session: b.session, title: "t", created_at: 1 } : undefined,
+          origin: b.session ? { source: "ref_hook" as const, session: b.session, title: "t", created_at: 1 } : undefined,
         })),
         complete: true,
       }),

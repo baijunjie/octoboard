@@ -204,9 +204,9 @@ impl Store {
             -- cascades its sessions away and the attribution outlives them, which is what the
             -- title snapshot is for. `repository` is the repository's canonical common directory,
             -- so a row belongs to the repository and not to any project.
-            -- `birth_commit` and `birth_time` are the first entry of the branch's reflog, which
-            -- tells a branch deleted and made again under the same name from the one the row was
-            -- made for; both are NULL for a branch with no reflog.
+            -- `birth_commit` and `birth_time` are the commit and the second the branch was created
+            -- at, which tell a branch deleted and made again under the same name from the one the
+            -- row was made for.
             CREATE TABLE IF NOT EXISTS branch_origins (
                 repository     TEXT NOT NULL,
                 branch         TEXT NOT NULL,
@@ -228,6 +228,15 @@ impl Store {
         )?;
         // Older milestone schemas are moved aside above. Compatible additions are migrated in
         // place so consoles, projects, accounts and sessions keep their stored state.
+        //
+        // Branch origins once came from heuristics as well as from the session's own git, and a
+        // row of one of those may name the wrong session; only the git's own report is kept, so
+        // that every origin shown is one the session's git made.
+        conn.execute(
+            "DELETE FROM branch_origins WHERE source <> 'ref_hook' OR session_id IS NULL
+                 OR session_title IS NULL OR birth_commit IS NULL OR birth_time IS NULL",
+            [],
+        )?;
         if !column_exists(&conn, "settings", "default_clone_dir")? {
             conn.execute("ALTER TABLE settings ADD COLUMN default_clone_dir TEXT", [])?;
         }
@@ -1211,12 +1220,6 @@ impl Store {
         )?;
         Ok(())
     }
-
-    /// The connection itself, for a test that has to make a read of the store fail.
-    #[cfg(test)]
-    pub(crate) fn connection(&self) -> std::sync::MutexGuard<'_, Connection> {
-        self.lock()
-    }
 }
 
 fn read_branch_origins(conn: &Connection, repository: &str) -> Result<Vec<BranchOrigin>> {
@@ -1242,21 +1245,22 @@ fn read_branch_origins(conn: &Connection, repository: &str) -> Result<Vec<Branch
     Ok(rows)
 }
 
-/// What the daemon knows of who created one branch. `session_id` and the title beside it are
-/// `None` exactly when `source` is [`BranchOriginSource::Unknown`].
+/// Which session created one branch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BranchOrigin {
     pub repository: String,
     /// The branch's name below `refs/heads/`, as a wire path.
     pub branch: String,
-    pub session_id: Option<String>,
-    pub session_title: Option<String>,
+    pub session_id: String,
+    /// The session's title when the attribution was made, so the row outlives the session.
+    pub session_title: String,
     pub source: BranchOriginSource,
     /// Milliseconds since the epoch.
     pub created_at: i64,
-    /// The commit and the second of the branch's first reflog entry.
-    pub birth_commit: Option<String>,
-    pub birth_time: Option<i64>,
+    /// The commit and the second the branch was created at: its first reflog entry, or in a
+    /// reftable repository, which has no reflog files, the report's commit and time.
+    pub birth_commit: String,
+    pub birth_time: i64,
 }
 
 /// Whether a table has a column of this name.
@@ -2206,12 +2210,12 @@ mod tests {
         let origin = BranchOrigin {
             repository: "/r/.git".to_string(),
             branch: "feature".to_string(),
-            session_id: Some("session-1".to_string()),
-            session_title: Some("Title".to_string()),
-            source: BranchOriginSource::HookDiff,
+            session_id: "session-1".to_string(),
+            session_title: "Title".to_string(),
+            source: BranchOriginSource::RefHook,
             created_at: 7,
-            birth_commit: Some("abc".to_string()),
-            birth_time: Some(7),
+            birth_commit: "abc".to_string(),
+            birth_time: 7,
         };
         let put = |store: &Store| {
             store

@@ -40,6 +40,7 @@ fn routes(state: Arc<AppState>) -> Router {
         .route("/ws/control", get(control_ws))
         .route("/ws/term/:session", get(term_ws))
         .route("/hook/:session", post(hook_callback))
+        .route("/git-ref/:session", post(git_ref_callback))
         .route("/mcp/:token", post(mcp_call))
         .with_state(state)
 }
@@ -439,10 +440,6 @@ async fn hook_callback(
         crate::trust::on_hook(&state, &live);
     }
 
-    // Whatever the agent ran in the repository may have made a branch, so every event prompts a
-    // look, a subagent's too: its tool calls run in the session's name.
-    crate::branch_origin::on_hook(&state, &session_id, &payload);
-
     // A subagent's events are the agent's internal business and carry the subagent's own ids.
     if hooks::is_subagent(&payload) {
         return axum::http::StatusCode::OK;
@@ -608,6 +605,25 @@ fn suppress_unanswerable_hand(
         Some(live) if live.resolves_approvals_itself => SessionStatus::Working,
         _ => status,
     }
+}
+
+// -- /git-ref/:session -------------------------------------------------------
+
+/// A session's git reporting the branches it created (`octoboardd git-ref`). Recorded on the
+/// blocking pool, since it reads the repository's files and writes the store; the reply carries
+/// nothing, and the process that posted it exits whatever it is.
+async fn git_ref_callback(
+    Path(session_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+    body: Bytes,
+) -> impl IntoResponse {
+    let Ok(report) = serde_json::from_slice::<crate::branch_origin::RefReport>(&body) else {
+        return axum::http::StatusCode::BAD_REQUEST;
+    };
+    tokio::task::spawn_blocking(move || {
+        crate::branch_origin::ref_created(&state, &session_id, &report);
+    });
+    axum::http::StatusCode::OK
 }
 
 // -- /mcp/:token -------------------------------------------------------------
@@ -915,6 +931,7 @@ mod tests {
                 "GET /ws/control",
                 "GET /ws/term/s",
                 "POST /hook/s",
+                "POST /git-ref/s",
                 "POST /mcp/x",
             ];
             for route in routes {

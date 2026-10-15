@@ -121,11 +121,13 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   unfolding it, opening a change in the file viewer and expanding the lines its diff collapses, errors, and what is kept
   for the window's lifetime.
 - [Which session created a branch](product/branch-creator.md) — the creator badge on a branch's row in the Git mode's
-  From and To lists: what it answers and what it never does, the title it names a session by (the session's own while
-  it exists, the recorded one once it is gone) and the filled ring a branch of the selected session takes, when a
-  branch gets a creator (a tool call in flight at its birth, its reflog, or the worktree a session works in) and when
-  it carries none, how a record is scoped to a repository and when it goes, the caps on
-  how many branches carry one, that nothing is written to the repository, and where a record can be missing or wrong.
+  From and To lists: the title it names a session by (the session's own while it exists, the recorded one once it is
+  gone) and the filled ring a branch of the selected session takes; the rule that a branch gets a creator only when a
+  project session's own git reported creating it through git's reference-transaction hook, or stays unmarked; what
+  counts as a creation (renames keep it, forced updates and copies do not, a report from an ended session's background
+  job counts); what it needs (git 2.36 or later); the hook dispatchers a session's git runs, which still run the user's
+  own hooks, and their visible effects and cost; how a record is scoped to a repository, when it goes and the 1,000 cap;
+  that nothing is written to the repository; and where a branch carries no creator.
 - [Empty states](product/empty-states.md) — the two shapes a view, list or panel with nothing to show takes: the full
   panel's glyph, title, explaining line and action, the compact row for a list nested in another, what each part says,
   and how each is announced.

@@ -1,23 +1,91 @@
-use super::watch::FLOOR;
+use std::collections::BTreeSet;
+use std::ffi::OsString;
+use std::os::unix::fs::PermissionsExt;
+use std::process::{Command, Output};
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, OnceLock};
+use std::time::Duration;
+
+use super::git_hooks::{injected, interpreter, render, write_dir, Rendering, BUILT_IN_HOOKS};
 use super::*;
+use crate::browse::compare;
+use crate::browse::git::GitEnv;
 use crate::protocol::{
-    Agent, Console, Origin, Project, ProjectAccount, ProjectSource, Role, SessionStatus,
+    now_millis, Agent, Console, Origin, Project, ProjectAccount, ProjectSource, Role, SessionStatus,
 };
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{
-    app_state, git, git_stdin_env, isolated_git_env, move_directory_time_back, repo_with,
-    ScratchDir, PATIENCE, SYSTEM_GIT,
+    app_state, fixture_git, git, isolated_git_env, repo_with, ScratchDir, ScratchFile, PATIENCE,
+    SYSTEM_GIT,
 };
-use serde_json::json;
 
-/// A session of the fixture's project, with a lifetime in milliseconds since the epoch.
-pub(super) fn session_record(id: &str, started_at: i64, ended_at: Option<i64>) -> Session {
+/// The dispatchers every test here runs git with, written once per test binary under a fixed
+/// name, as a fresh executable per test would pay macOS's first-exec cost each time. Their report
+/// goes to a stand-in for `octoboardd git-ref` that appends what it was started with — its
+/// directory, `GIT_DIR` and arguments — to the file `OCTOBOARD_TEST_REPORTS` names.
+fn dispatchers() -> &'static Path {
+    static DIR: OnceLock<PathBuf> = OnceLock::new();
+    DIR.get_or_init(|| dispatchers_for(&system_exec_path(), &[]))
+}
+
+/// What `git --exec-path` says for the git the tests run, which is what git exports to its hooks.
+fn system_exec_path() -> String {
+    let output = Command::new(SYSTEM_GIT)
+        .arg("--exec-path")
+        .output()
+        .unwrap();
+    String::from_utf8(output.stdout).unwrap().trim().to_string()
+}
+
+/// Dispatchers written as for a git with `exec_path` that reads `system_files`.
+fn dispatchers_for(exec_path: &str, system_files: &[PathBuf]) -> PathBuf {
+    let state = std::env::temp_dir().join("octoboardd-test-githooks/state");
+    std::fs::create_dir_all(&state).unwrap();
+    dispatchers_with(exec_path, system_files, &state)
+}
+
+/// [`dispatchers_for`] with a state directory of the caller's.
+fn dispatchers_with(exec_path: &str, system_files: &[PathBuf], state: &Path) -> PathBuf {
+    let temp = std::env::temp_dir();
+    let stand_in = installed(
+        "octoboardd-test-git-ref",
+        "#!/bin/sh\nprintf '%s\\t%s\\t%s\\n' \"$PWD\" \"${GIT_DIR-}\" \"$*\" >>\"$OCTOBOARD_TEST_REPORTS\"\n",
+        0o755,
+    );
+    let root = temp.join("octoboardd-test-githooks");
+    let names: BTreeSet<String> = BUILT_IN_HOOKS.iter().map(|n| n.to_string()).collect();
+    let script = render(&Rendering {
+        interpreter: interpreter(),
+        self_exe: &stand_in.to_string_lossy(),
+        exec_path,
+        state,
+        system_files,
+    });
+    write_dir(&root, &names, &script).unwrap()
+}
+
+/// A file of `body` under a fixed name in the temporary directory, written by renaming one of this
+/// process's own into place: a test binary of another worktree may be reading or running it.
+fn installed(name: &str, body: &str, mode: u32) -> PathBuf {
+    let temp = std::env::temp_dir();
+    let path = temp.join(name);
+    if std::fs::read_to_string(&path).ok().as_deref() != Some(body) {
+        let own = temp.join(format!("{name}.{}", std::process::id()));
+        std::fs::write(&own, body).unwrap();
+        std::fs::set_permissions(&own, std::fs::Permissions::from_mode(mode)).unwrap();
+        std::fs::rename(&own, &path).unwrap();
+    }
+    path
+}
+
+/// A session of `project` that started a minute ago and is still running.
+fn session_record(id: &str, project: &str) -> Session {
     Session {
         id: id.to_string(),
         agent: Agent::Claude,
         agent_session_id: None,
         console_id: "console".to_string(),
-        project_id: Some("project".to_string()),
+        project_id: Some(project.to_string()),
         host_id: LOCAL_HOST_ID.to_string(),
         role: Role::Project,
         origin: Origin::User,
@@ -35,16 +103,9 @@ pub(super) fn session_record(id: &str, started_at: i64, ended_at: Option<i64>) -
         account_id: None,
         config_dir: None,
         pinned: false,
-        started_at,
-        ended_at,
+        started_at: now_millis() - 60_000,
+        ended_at: None,
     }
-}
-
-struct Fixture {
-    state: Arc<AppState>,
-    repo: ScratchDir,
-    common_dir: PathBuf,
-    _dir: ScratchDir,
 }
 
 /// A project of the fixture's console at `path`.
@@ -71,6 +132,14 @@ fn project(id: &str, path: &Path) -> Project {
         pinned: false,
         tags: Vec::new(),
     }
+}
+
+struct Fixture {
+    state: Arc<AppState>,
+    repo: ScratchDir,
+    common_dir: PathBuf,
+    reports: ScratchFile,
+    dir: ScratchDir,
 }
 
 impl Fixture {
@@ -105,32 +174,88 @@ impl Fixture {
             .insert_project(&project("project", &repo))
             .unwrap();
         let common_dir = repository_of(&repo).unwrap();
-        Self {
+        let fixture = Self {
             state,
             repo,
             common_dir,
-            _dir: dir,
+            reports: ScratchFile::new("branch-origin-reports", "reports"),
+            dir,
+        };
+        fixture.session("a");
+        fixture.session("b");
+        fixture
+    }
+
+    fn session(&self, id: &str) {
+        self.state
+            .store
+            .insert_session(&session_record(id, "project"))
+            .unwrap();
+    }
+
+    /// `git <args>` in `dir` as the agent of `session` runs it: with the variables a project
+    /// session is launched with, after any `GIT_CONFIG_*` entries of the user's own in `user`.
+    fn session_git(&self, session: &str, dir: &Path, user: &[(&str, &str)]) -> Command {
+        self.session_git_with(dispatchers(), session, dir, user)
+    }
+
+    /// [`Fixture::session_git`] pointed at `hooks` rather than the usual dispatchers.
+    fn session_git_with(
+        &self,
+        hooks: &Path,
+        session: &str,
+        dir: &Path,
+        user: &[(&str, &str)],
+    ) -> Command {
+        let slot = user
+            .iter()
+            .find(|(key, _)| *key == "GIT_CONFIG_COUNT")
+            .map_or(0, |(_, count)| count.parse().unwrap());
+        let mut command = fixture_git(dir);
+        command
+            .envs(user.iter().copied())
+            .envs(injected(slot, hooks, session, 1))
+            .env("OCTOBOARD_TEST_REPORTS", &*self.reports);
+        command
+    }
+
+    /// Runs [`Fixture::session_git`] and fails the test on a non-zero exit.
+    fn as_session(&self, session: &str, args: &[&str]) {
+        let output = self
+            .session_git(session, &self.repo, &[])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    /// The reports the stand-in has received once there are `count` of them.
+    fn reports(&self, count: usize) -> Vec<(String, RefReport)> {
+        let deadline = std::time::Instant::now() + PATIENCE;
+        loop {
+            let text = std::fs::read_to_string(&*self.reports).unwrap_or_default();
+            let lines: Vec<&str> = text.lines().collect();
+            if lines.len() >= count {
+                return lines.into_iter().map(parse_report).collect();
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "{} of {count} reports arrived",
+                lines.len()
+            );
+            std::thread::sleep(Duration::from_millis(10));
         }
     }
 
-    /// A session of the project that started `started_secs` ago and is still running.
-    fn session(&self, id: &str, started_secs: i64, status: SessionStatus) {
-        self.session_between(id, now_millis() - started_secs * 1000, None, status);
-    }
-
-    /// A session of the project with a lifetime of its own, in milliseconds since the epoch.
-    fn session_between(
-        &self,
-        id: &str,
-        started_at: i64,
-        ended_at: Option<i64>,
-        status: SessionStatus,
-    ) {
-        let session = Session {
-            status,
-            ..session_record(id, started_at, ended_at)
-        };
-        self.state.store.insert_session(&session).unwrap();
+    /// Hands every report received, once there are `count`, to the daemon.
+    fn deliver(&self, count: usize) {
+        for (session, report) in self.reports(count) {
+            ref_created(&self.state, &session, &report);
+        }
     }
 
     fn env(&self) -> GitEnv {
@@ -141,105 +266,6 @@ impl Fixture {
         compare::branches_in(&self.env(), &self.common_dir, &AtomicBool::new(false)).unwrap()
     }
 
-    /// A hook of `session`'s arriving `ago_secs` ago, carrying `payload`.
-    fn hook(&self, session: &str, ago_secs: i64, payload: Value) {
-        self.state.branch_watch.activity().heard(
-            session,
-            Some(Agent::Claude),
-            &payload,
-            now_millis() - ago_secs * 1000,
-        );
-    }
-
-    /// A tool call of `session`'s that started just now and is still running.
-    fn calling(&self, session: &str) {
-        let call = json!({"hook_event_name": "PreToolUse", "tool_use_id": session});
-        self.hook(session, 0, call);
-    }
-
-    /// A look after a hook, with the previous one having found `known`, deciding late enough
-    /// that every hook concerning a branch made just now has landed.
-    fn hook_look(&self, known: &HashSet<String>) -> Vec<BranchOrigin> {
-        self.hook_look_at(known, &HashMap::new(), now_millis() + 60_000)
-            .rows
-    }
-
-    /// A look after a hook deciding at `now_ms`, with what an earlier one left `undecided`.
-    fn hook_look_at(
-        &self,
-        known: &HashSet<String>,
-        undecided: &HashMap<String, UndecidedBranch>,
-        now_ms: i64,
-    ) -> Reconciled {
-        let fresh = HashSet::new();
-        let window = Window {
-            known: Some(known),
-            fresh: &fresh,
-            undecided,
-            since_secs: Some(now_millis() / 1000 - 60),
-            listed_ms: now_millis(),
-            now_ms,
-        };
-        reconcile(&self.state, &self.common_dir, &self.list(), Some(&window)).unwrap()
-    }
-
-    /// The hook path's own look, driven through the watch so the window is the one the watch
-    /// hands out rather than one the test wrote. Far enough past the floor to run at once.
-    fn look_after_hook(&self) {
-        self.run_claim(Caller::Hook);
-    }
-
-    /// The look the floor held back, as `on_hook` runs it once its wait is over.
-    fn look_when_the_floor_is_over(&self) {
-        self.run_claim(Caller::Trailing);
-    }
-
-    /// Decides as late as [`Fixture::hook_look`] does.
-    fn run_claim(&self, caller: Caller) {
-        let stamp = RefsStamp::read(&self.common_dir);
-        let claim = self.state.branch_watch.claim(
-            &self.common_dir,
-            caller,
-            &stamp,
-            Instant::now() + FLOOR,
-            now_millis(),
-        );
-        let Claim::Run(look) = claim else {
-            panic!("the look is claimed");
-        };
-        look_with(&self.state, &self.env(), stamp, look, &|| {
-            now_millis() + 60_000
-        });
-    }
-
-    /// Moves `refs/heads` back in time, so a ref written after a look changes the stamp
-    /// whatever the filesystem's time resolution is. That directory only: a branch whose name
-    /// has a slash in it is written in one below it, which this leaves as it is.
-    fn age_the_refs(&self) {
-        move_directory_time_back(&self.common_dir.join("refs/heads"));
-    }
-
-    /// Branches at `HEAD`, each with the first reflog entry a branch's own creation writes,
-    /// carrying `at_secs` as its time. One `git` for the lot, where a `git branch` each would
-    /// be a thousand processes.
-    fn branches_at(&self, names: &[String], at_secs: i64) {
-        let head = String::from_utf8(git(&self.repo, &["rev-parse", "HEAD"])).unwrap();
-        let refs: String = names
-            .iter()
-            .map(|name| format!("create refs/heads/{name} {}\n", head.trim()))
-            .collect();
-        git_stdin_env(
-            &self.repo,
-            &["update-ref", "-m", "branch: Created from HEAD", "--stdin"],
-            &[("GIT_COMMITTER_DATE", &format!("{at_secs} +0000"))],
-            refs.as_bytes(),
-        );
-    }
-
-    fn names(&self) -> HashSet<String> {
-        self.list().branches.into_iter().map(|b| b.name).collect()
-    }
-
     fn rows(&self) -> Vec<BranchOrigin> {
         self.state
             .store
@@ -247,417 +273,557 @@ impl Fixture {
             .unwrap()
     }
 
-    fn row(&self, branch: &str) -> Option<BranchOrigin> {
-        self.rows().into_iter().find(|row| row.branch == branch)
+    fn creator(&self, branch: &str) -> Option<String> {
+        self.rows()
+            .into_iter()
+            .find(|row| row.branch == branch)
+            .map(|row| row.session_id)
     }
 
     fn reconcile_full(&self) -> Vec<BranchOrigin> {
-        let list = self.list();
-        reconcile(&self.state, &self.common_dir, &list, None)
-            .unwrap()
-            .rows
+        reconcile(&self.state, &self.common_dir, &self.list()).unwrap()
     }
 }
 
-/// Parallel sessions are nearly always mid-turn, so being mid-turn cannot block a branch: only
-/// a session running a tool when the branch was born could have made it.
-#[test]
-fn a_branch_belongs_to_the_only_session_with_a_tool_call_in_flight() {
-    let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Working);
-    fixture.session("b", 600, SessionStatus::Working);
-    // `b` is mid-turn too, but its last call ended well before the branch, past every slack.
-    let call = |event| json!({"hook_event_name": event, "tool_use_id": "b1"});
-    fixture.hook("b", 60, call("PreToolUse"));
-    fixture.hook("b", 30, call("PostToolUse"));
-    fixture.calling("a");
-    let known = fixture.names();
-    git(&fixture.repo, &["branch", "feature"]);
-
-    let rows = fixture.hook_look(&known);
-
-    let row = rows.iter().find(|row| row.branch == "feature").unwrap();
-    assert_eq!(row.source, BranchOriginSource::HookDiff);
-    assert_eq!(row.session_id.as_deref(), Some("a"));
-    assert_eq!(row.session_title.as_deref(), Some("Session a"));
-    assert!(row.birth_commit.is_some(), "held against the reflog");
-}
-
-#[test]
-fn tool_calls_of_two_sessions_in_flight_at_once_leave_the_branch_unknown() {
-    let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Working);
-    fixture.session("b", 600, SessionStatus::Working);
-    fixture.calling("a");
-    fixture.calling("b");
-    let known = fixture.names();
-    git(&fixture.repo, &["branch", "shared"]);
-
-    fixture.hook_look(&known);
-
-    let row = fixture.row("shared").unwrap();
-    assert_eq!(
-        (row.source, row.session_id),
-        (BranchOriginSource::Unknown, None)
-    );
-}
-
-/// The hooks are asynchronous, so the start of the call that made a branch can land after another
-/// session's end has prompted the look. Decided on what had landed by then, the branch would go to
-/// the other session for good.
-#[test]
-fn a_branch_waits_for_tool_call_starts_still_on_their_way() {
-    let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Working);
-    fixture.session("b", 600, SessionStatus::Working);
-    let call = |event| json!({"hook_event_name": event, "tool_use_id": "b1"});
-    fixture.hook("b", 1, call("PreToolUse"));
-    fixture.hook("b", 0, call("PostToolUse"));
-    let known = fixture.names();
-    git(&fixture.repo, &["branch", "feature"]);
-
-    let first = fixture.hook_look_at(&known, &HashMap::new(), now_millis());
-    assert!(fixture.row("feature").is_none(), "nothing is decided yet");
-    assert!(first.undecided.contains_key("feature"));
-
-    fixture.calling("a");
-    fixture.hook_look_at(&known, &first.undecided, now_millis() + 60_000);
-
-    let row = fixture.row("feature").unwrap();
-    assert_eq!(
-        (row.source, row.session_id),
-        (BranchOriginSource::Unknown, None),
-        "the call that landed late overlapped the other one"
-    );
-}
-
-/// The window begins at the previous look. With no look behind it, nothing says how long ago
-/// what a listing handed it appeared, so it names nobody.
-#[test]
-fn a_window_with_no_look_behind_it_attributes_nothing() {
-    let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Working);
-    // A second session alive at the branch's birth, so the reflog cannot name one either and
-    // the row left behind is the window's own answer.
-    fixture.session("b", 600, SessionStatus::Idle);
-    fixture.calling("a");
-    git(&fixture.repo, &["branch", "loose"]);
-    let known = fixture.names();
-    let fresh = HashSet::from(["loose".to_string()]);
-    let window = Window {
-        known: Some(&known),
-        fresh: &fresh,
-        undecided: &HashMap::new(),
-        since_secs: None,
-        listed_ms: now_millis(),
-        now_ms: now_millis() + 60_000,
-    };
-
-    reconcile(
-        &fixture.state,
-        &fixture.common_dir,
-        &fixture.list(),
-        Some(&window),
-    )
-    .unwrap();
-
-    let row = fixture.row("loose").unwrap();
-    assert_eq!(
-        (row.source, row.session_id),
-        (BranchOriginSource::Unknown, None)
-    );
-}
-
-/// When no tool call names a session, the one session working in the branch's worktree does,
-/// even from inside a worktree nested in the main one: that is the innermost holding it.
-#[test]
-fn a_branch_nobody_was_seen_making_belongs_to_the_only_session_in_its_worktree() {
-    let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Working);
-    fixture.session("b", 600, SessionStatus::Working);
-    let linked = fixture.repo.join(".worktrees/wt");
-    let path = linked.to_str().unwrap();
-    git(&fixture.repo, &["worktree", "add", "-q", "-b", "wt", path]);
-    std::fs::create_dir(linked.join("sub")).unwrap();
-    let cwd = |dir: &Path| json!({"hook_event_name": "Stop", "cwd": dir});
-    fixture.hook("a", 0, cwd(&linked.join("sub")));
-    fixture.hook("b", 0, cwd(&fixture.repo));
-
-    fixture.reconcile_full();
-
-    let row = fixture.row("wt").unwrap();
-    assert_eq!(
-        (row.source, row.session_id.as_deref()),
-        (BranchOriginSource::WorktreeCwd, Some("a"))
-    );
-    assert_eq!(
-        fixture.row("main").unwrap().source,
-        BranchOriginSource::Unknown,
-        "a branch no creation is recorded for is nobody's however alone its worker is"
-    );
-}
-
-#[test]
-fn two_sessions_in_a_branch_worktree_leave_it_unknown() {
-    let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Working);
-    fixture.session("b", 600, SessionStatus::Working);
-    let linked = fixture._dir.join("linked");
-    let path = linked.to_str().unwrap();
-    git(&fixture.repo, &["worktree", "add", "-q", "-b", "wt", path]);
-    for session in ["a", "b"] {
-        fixture.hook(
-            session,
-            0,
-            json!({"hook_event_name": "Stop", "cwd": linked}),
-        );
-    }
-
-    fixture.reconcile_full();
-
-    assert_eq!(
-        fixture.row("wt").unwrap().source,
-        BranchOriginSource::Unknown
-    );
-}
-
-/// One window writes no more rows than the cap. Past it the trim would drop most of them again
-/// in the same transaction, and by the branches' birth times rather than by what this window
-/// found.
-#[test]
-fn a_window_past_the_cap_writes_no_more_rows_than_it() {
-    let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Working);
-    fixture.calling("a");
-    let names: Vec<String> = (0..budget::MAX_BRANCH_ORIGINS)
-        .map(|n| format!("b{n:05}"))
-        .collect();
-    // Inside the window, and older than the branch made after them, which is what the trim
-    // would keep over them.
-    fixture.branches_at(&names, now_millis() / 1000 - 30);
-    git(&fixture.repo, &["branch", "zz-last"]);
-
-    fixture.hook_look(&HashSet::from(["main".to_string()]));
-
-    assert_eq!(fixture.rows().len(), budget::MAX_BRANCH_ORIGINS);
-    assert!(
-        fixture.row("zz-last").is_none(),
-        "the branches past the cap are the ones the listing reaches last"
-    );
-}
-
-/// A read of the store that fails is not "no session of this repository": recorded that way,
-/// the branch is stored as unattributable and the reflog is never consulted for it again.
-#[test]
-fn a_failed_read_of_the_sessions_fails_the_look() {
-    let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Idle);
-    git(&fixture.repo, &["branch", "earlier"]);
-    let list = fixture.list();
-    fixture
-        .state
-        .store
-        .connection()
-        .execute_batch("DROP TABLE sessions")
-        .unwrap();
-
-    assert!(reconcile(&fixture.state, &fixture.common_dir, &list, None).is_err());
-    assert!(fixture.rows().is_empty(), "nothing is recorded from it");
-}
-
-#[test]
-fn a_branch_the_panel_listed_first_is_still_the_next_look_to_attribute() {
-    let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Working);
-    fixture.session("b", 600, SessionStatus::Idle);
-    fixture.age_the_refs();
-    fixture.look_after_hook();
-    fixture.calling("a");
-    git(&fixture.repo, &["switch", "-q", "-c", "feature"]);
-
-    // The panel polls while the hook's own look is still held back by the floor: two sessions
-    // were alive at the branch's birth and both are in its worktree, so the listing can name
-    // none, and it moves the baseline of known branches on to what it found.
-    let mut list = fixture.list();
-    annotate(&fixture.state, &fixture.common_dir, &mut list);
-    assert_eq!(
-        fixture.row("feature").unwrap().source,
-        BranchOriginSource::Unknown
-    );
-
-    fixture.look_after_hook();
-
-    let row = fixture.row("feature").unwrap();
-    assert_eq!(
-        (row.source, row.session_id.as_deref()),
-        (BranchOriginSource::HookDiff, Some("a")),
-        "what the listing could not tell, the window still can"
-    );
-}
-
-#[test]
-fn the_look_the_floor_held_back_attributes_what_appeared_in_its_window() {
-    let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Working);
-    fixture.age_the_refs();
-    fixture.look_after_hook();
-    fixture.calling("a");
-    git(&fixture.repo, &["switch", "-q", "-c", "feature"]);
-
-    let (repo, wait) =
-        hook_arrived(&fixture.state, "a").expect("the look is held back, not dropped");
-    assert_eq!(repo, fixture.common_dir);
-    assert!(wait <= FLOOR);
-    assert!(fixture.row("feature").is_none(), "nothing looked yet");
-
-    fixture.look_when_the_floor_is_over();
-
-    let row = fixture.row("feature").unwrap();
-    assert_eq!(
-        (row.source, row.session_id.as_deref()),
-        (BranchOriginSource::HookDiff, Some("a"))
-    );
-}
-
-#[test]
-fn a_branch_with_no_session_to_name_is_not_sent() {
-    let fixture = Fixture::new();
-    git(&fixture.repo, &["branch", "mine"]);
-    let mut list = fixture.list();
-
-    annotate(&fixture.state, &fixture.common_dir, &mut list);
-
-    assert!(list.branches.iter().all(|branch| branch.origin.is_none()));
-    assert_eq!(
-        fixture.row("mine").unwrap().source,
-        BranchOriginSource::Unknown
-    );
-}
-
-#[test]
-fn a_branch_the_daemon_never_saw_appear_is_matched_by_its_reflog() {
-    let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Idle);
-    git(&fixture.repo, &["branch", "earlier"]);
-
-    let mut list = fixture.list();
-    annotate(&fixture.state, &fixture.common_dir, &mut list);
-
-    let origin = list
-        .branches
+/// One line of the stand-in's: the session it reported for and the report `octoboardd git-ref`
+/// would have posted.
+fn parse_report(line: &str) -> (String, RefReport) {
+    let mut fields = line.splitn(3, '\t');
+    let cwd = PathBuf::from(fields.next().unwrap());
+    let git_dir = fields.next().unwrap();
+    let args: Vec<&str> = fields.next().unwrap().split(' ').collect();
+    let session = args[args.iter().position(|a| *a == "--session").unwrap() + 1].to_string();
+    let refs: Vec<OsString> = args[args.iter().position(|a| *a == "--").unwrap() + 1..]
         .iter()
-        .find(|branch| branch.name == "earlier")
-        .and_then(|branch| branch.origin.clone())
-        .unwrap();
-    assert_eq!(
-        (origin.source, origin.session.as_str()),
-        (BranchOriginSource::ReflogMatch, "a")
-    );
+        .map(OsString::from)
+        .collect();
+    let git_dir = (!git_dir.is_empty()).then(|| std::ffi::OsStr::new(git_dir));
+    let report = crate::git_ref_mode::report_of(&cwd, git_dir, &refs, now_millis() / 1000);
+    (session, report)
+}
 
-    // With a second session alive at that second it cannot be told.
-    fixture.session("b", 600, SessionStatus::Idle);
-    git(&fixture.repo, &["branch", "later"]);
-    fixture.reconcile_full();
-    assert_eq!(
-        fixture.row("later").unwrap().source,
-        BranchOriginSource::Unknown
+/// Every line of a git trace2 event log naming a `git rev-parse` started. Traced rather than caught
+/// by a stand-in `git` on `PATH`: inside a hook git puts its own exec path first on `PATH`, so a
+/// stand-in is never reached.
+fn rev_parses(trace: &Path) -> usize {
+    std::fs::read_to_string(trace)
+        .unwrap_or_default()
+        .lines()
+        .filter(|line| line.contains("\"event\":\"start\"") && line.contains("\"rev-parse\""))
+        .count()
+}
+
+fn write_hook(path: &Path, body: &str) {
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+fn succeeds(output: Output) -> bool {
+    output.status.success()
+}
+
+// -- attribution --------------------------------------------------------------
+
+/// Two sessions working in one repository at the same moment, which no timing could tell apart.
+#[test]
+fn branches_two_sessions_create_at_once_go_each_to_its_own() {
+    let fixture = Fixture::new();
+    std::thread::scope(|scope| {
+        for session in ["a", "b"] {
+            let fixture = &fixture;
+            scope.spawn(move || {
+                for n in 0..4 {
+                    fixture.as_session(session, &["branch", &format!("{session}-{n}")]);
+                }
+            });
+        }
+    });
+
+    fixture.deliver(8);
+
+    let rows = fixture.rows();
+    assert_eq!(rows.len(), 8);
+    for row in rows {
+        assert_eq!(Some(row.session_id.as_str()), row.branch.split('-').next());
+        assert_eq!(row.source, BranchOriginSource::RefHook);
+        assert_eq!(row.session_title, format!("Session {}", row.session_id));
+    }
+}
+
+/// A clone has the same commits, and a branch of the same name made there at the same moment would
+/// match the project's own reflog: only the repository the report names tells them apart.
+#[test]
+fn a_report_about_a_repository_the_sessions_project_is_not_in_is_ignored() {
+    let fixture = Fixture::new();
+    let clone = ScratchDir::new("branch-origin-clone");
+    git(
+        &fixture.repo,
+        &[
+            "clone",
+            "-q",
+            &fixture.repo.to_string_lossy(),
+            &clone.to_string_lossy(),
+        ],
     );
+    let output = fixture
+        .session_git("a", &clone, &[])
+        .args(["branch", "elsewhere"])
+        .output()
+        .unwrap();
+    assert!(succeeds(output));
+    git(&fixture.repo, &["branch", "elsewhere"]);
+
+    fixture.deliver(1);
+
+    assert!(fixture.rows().is_empty());
+    let key = repo_key(&repository_of(&clone).unwrap());
+    assert!(fixture.state.store.branch_origins(&key).unwrap().is_empty());
 }
 
 #[test]
-fn a_session_that_ended_a_second_before_the_branch_still_counts_as_alive_for_it() {
+fn a_renamed_branch_keeps_its_creator_and_a_copy_gets_none() {
     let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Idle);
-    let ended = now_millis();
-    fixture.session_between("b", ended - 600_000, Some(ended), SessionStatus::Idle);
-    fixture.branches_at(&["close".to_string()], ended / 1000 + 1);
+    fixture.as_session("a", &["branch", "old"]);
+    fixture.deliver(1);
+    git(&fixture.repo, &["branch", "-m", "old", "new"]);
 
     fixture.reconcile_full();
+    assert_eq!(fixture.creator("old"), None);
+    assert_eq!(fixture.creator("new").as_deref(), Some("a"));
 
-    assert_eq!(
-        fixture.row("close").unwrap().source,
-        BranchOriginSource::Unknown,
-        "two sessions are within the clock's slack of the branch"
-    );
+    // git reports no transaction for a copy; a branch made after it shows the report would have
+    // arrived by then.
+    fixture.as_session("b", &["branch", "-c", "new", "copy"]);
+    fixture.as_session("b", &["branch", "after"]);
+    fixture.deliver(2);
+    assert_eq!(fixture.creator("copy"), None);
+    assert_eq!(fixture.creator("after").as_deref(), Some("b"));
+    assert_eq!(fixture.reports(2).len(), 2);
 }
 
 #[test]
 fn a_branch_made_again_under_the_same_name_does_not_inherit_the_attribution() {
     let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Idle);
-    fixture.calling("a");
-    let known = fixture.names();
-    git(&fixture.repo, &["branch", "topic"]);
-    fixture.hook_look(&known);
-    assert_eq!(
-        fixture.row("topic").unwrap().session_id.as_deref(),
-        Some("a")
-    );
+    fixture.as_session("a", &["branch", "topic"]);
+    fixture.deliver(1);
+    assert_eq!(fixture.creator("topic").as_deref(), Some("a"));
 
-    // A different tip, so the new reflog's first entry cannot equal the old one even within
-    // the same second.
+    // A different tip, so the new reflog's first entry cannot equal the old one even within the
+    // same second.
     git(&fixture.repo, &["branch", "-q", "-D", "topic"]);
     git(
         &fixture.repo,
         &["commit", "-q", "--allow-empty", "-m", "next"],
     );
     git(&fixture.repo, &["branch", "topic"]);
-    fixture.session("b", 600, SessionStatus::Idle);
-    let rows = fixture.reconcile_full();
+    fixture.reconcile_full();
 
-    let row = rows.iter().find(|row| row.branch == "topic").unwrap();
-    assert_ne!(row.session_id.as_deref(), Some("a"), "the old row is void");
+    assert_eq!(fixture.creator("topic"), None);
+}
+
+/// A report that comes after its branch was deleted and made again by someone else is about a
+/// branch that is no longer there.
+#[test]
+fn a_report_about_a_branch_since_made_again_is_ignored() {
+    let fixture = Fixture::new();
+    fixture.as_session("a", &["branch", "topic"]);
+    let reports = fixture.reports(1);
+    git(&fixture.repo, &["branch", "-q", "-D", "topic"]);
+    git(
+        &fixture.repo,
+        &["commit", "-q", "--allow-empty", "-m", "next"],
+    );
+    git(&fixture.repo, &["branch", "topic"]);
+
+    for (session, report) in reports {
+        ref_created(&fixture.state, &session, &report);
+    }
+
+    assert!(fixture.rows().is_empty());
+}
+
+/// `git branch -f`, `checkout -B` and `update-ref` without an old value name none for a branch
+/// that exists, just as a creation does.
+#[test]
+fn a_forced_update_of_an_existing_branch_is_not_a_creation() {
+    let fixture = Fixture::new();
+    git(
+        &fixture.repo,
+        &["commit", "-q", "--allow-empty", "-m", "next"],
+    );
+    git(&fixture.repo, &["branch", "theirs"]);
+    fixture.as_session("a", &["branch", "-f", "theirs", "HEAD~"]);
+    fixture.as_session("a", &["branch", "mine"]);
+
+    fixture.deliver(1);
+
+    assert_eq!(fixture.creator("theirs"), None);
+    assert_eq!(fixture.creator("mine").as_deref(), Some("a"));
     assert_eq!(
-        row.source,
-        BranchOriginSource::Unknown,
-        "two sessions were alive"
+        fixture.reports(1).len(),
+        1,
+        "the forced update was never reported"
     );
 }
+
+/// git reports no transaction for a rename or a copy today; should one ever be reported, the new
+/// name's reflog says where the branch came from. And a branch whose reflog `git gc` has emptied
+/// begins it again with whatever moves it next, which is no creation.
+#[test]
+fn a_branch_whose_reflog_does_not_begin_with_its_creation_has_no_birth() {
+    let fixture = Fixture::new();
+    let now = now_millis() / 1000;
+    let rev = |rev: &str| {
+        let out = String::from_utf8(git(&fixture.repo, &["rev-parse", rev])).unwrap();
+        out.trim().to_string()
+    };
+    git(
+        &fixture.repo,
+        &["commit", "-q", "--allow-empty", "-m", "next"],
+    );
+    git(&fixture.repo, &["branch", "made"]);
+    git(&fixture.repo, &["branch", "-m", "made", "renamed"]);
+    git(&fixture.repo, &["branch", "-c", "renamed", "copied"]);
+    git(&fixture.repo, &["branch", "expired"]);
+    git(
+        &fixture.repo,
+        &["reflog", "expire", "--expire=all", "refs/heads/expired"],
+    );
+    git(&fixture.repo, &["branch", "-f", "expired", "HEAD~"]);
+    git(&fixture.repo, &["branch", "fresh"]);
+
+    let birth = |branch: &str, at: &str| birth_of(&fixture.common_dir, branch, &rev(at), now);
+    assert_eq!(birth("renamed", "HEAD"), None);
+    assert_eq!(birth("copied", "HEAD"), None);
+    assert_eq!(birth("expired", "HEAD~"), None);
+    assert!(birth("fresh", "HEAD").is_some());
+}
+
+// -- the dispatcher -----------------------------------------------------------
+
+/// A user's `reference-transaction` hook can refuse a transaction while it is being prepared.
+#[test]
+fn a_users_reference_transaction_hook_still_aborts_and_nothing_is_reported() {
+    let fixture = Fixture::new();
+    let hook = fixture.common_dir.join("hooks/reference-transaction");
+    let seen = fixture.dir.join("seen");
+    write_hook(
+        &hook,
+        &format!(
+            "[ \"$1\" = prepared ] && grep -q refused && exit 1\n\
+             [ \"$1\" = committed ] && cat >>'{}'\nexit 0",
+            seen.display()
+        ),
+    );
+
+    let refused = fixture
+        .session_git("a", &fixture.repo, &[])
+        .args(["branch", "refused"])
+        .output()
+        .unwrap();
+    assert!(!succeeds(refused), "the user's hook refused it");
+    fixture.as_session("a", &["branch", "allowed"]);
+    fixture.deliver(1);
+
+    assert_eq!(fixture.creator("refused"), None);
+    assert_eq!(fixture.creator("allowed").as_deref(), Some("a"));
+    assert!(git(&fixture.repo, &["branch", "--list", "refused"]).is_empty());
+    assert_eq!(
+        fixture.reports(1).len(),
+        1,
+        "the refused branch was never reported"
+    );
+    let seen = std::fs::read_to_string(&seen).unwrap();
+    assert!(seen.contains(" refs/heads/allowed\n"), "{seen}");
+}
+
+/// A sandbox may refuse every write outside the workspace: the dispatcher then reports nothing,
+/// says nothing, and leaves the user's hook to run as it would.
+#[test]
+fn a_state_directory_that_cannot_be_written_costs_only_the_report() {
+    let fixture = Fixture::new();
+    let seen = fixture.dir.join("seen");
+    write_hook(
+        &fixture.common_dir.join("hooks/reference-transaction"),
+        &format!("echo \"$1\" >>'{}'\ncat >/dev/null", seen.display()),
+    );
+    let hooks = dispatchers_with(
+        &system_exec_path(),
+        &[],
+        Path::new("/nonexistent/octoboard-state"),
+    );
+
+    let output = fixture
+        .session_git_with(&hooks, "a", &fixture.repo, &[])
+        .args(["branch", "sandboxed"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+    assert_eq!(
+        std::fs::read_to_string(&seen).unwrap(),
+        "prepared\ncommitted\n"
+    );
+}
+
+/// A transaction of hundreds of references is spooled rather than read line by line, and the
+/// user's hook still gets every update.
+#[test]
+fn a_long_transaction_is_reported_and_handed_to_the_users_hook_whole() {
+    let fixture = Fixture::new();
+    let seen = fixture.dir.join("seen");
+    write_hook(
+        &fixture.common_dir.join("hooks/reference-transaction"),
+        &format!(
+            "[ \"$1\" = committed ] && cat >>'{}'\nexit 0",
+            seen.display()
+        ),
+    );
+    let head = String::from_utf8(git(&fixture.repo, &["rev-parse", "HEAD"])).unwrap();
+    let updates: String = (0..300)
+        .map(|n| format!("create refs/heads/bulk-{n:03} {}\n", head.trim()))
+        .collect();
+    let mut child = fixture
+        .session_git("a", &fixture.repo, &[])
+        .args(["update-ref", "--stdin"])
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    std::io::Write::write_all(&mut child.stdin.take().unwrap(), updates.as_bytes()).unwrap();
+    assert!(child.wait().unwrap().success());
+
+    fixture.deliver(1);
+
+    assert_eq!(fixture.rows().len(), 300);
+    assert_eq!(std::fs::read_to_string(&seen).unwrap().lines().count(), 300);
+}
+
+/// Husky and its like keep their hooks under the worktree and point `core.hooksPath` at them by a
+/// relative path; a user may also export an entry of their own.
+#[test]
+fn a_hooks_path_of_the_users_own_still_runs_its_hooks() {
+    let fixture = Fixture::new();
+    let marker = fixture.repo.join("ran");
+    write_hook(
+        &fixture.repo.join(".husky/_/pre-commit"),
+        &format!("echo husky >>'{}'", marker.display()),
+    );
+    git(&fixture.repo, &["config", "core.hooksPath", ".husky/_"]);
+    fixture.as_session("a", &["commit", "-q", "--allow-empty", "-m", "one"]);
+    assert_eq!(std::fs::read_to_string(&marker).unwrap(), "husky\n");
+
+    git(&fixture.repo, &["config", "--unset", "core.hooksPath"]);
+    let exported = fixture.dir.join("exported");
+    write_hook(
+        &exported.join("pre-commit"),
+        &format!("echo exported >>'{}'", marker.display()),
+    );
+    let exported = exported.to_string_lossy().into_owned();
+    let user = [
+        ("GIT_CONFIG_COUNT", "1"),
+        ("GIT_CONFIG_KEY_0", "core.hooksPath"),
+        ("GIT_CONFIG_VALUE_0", exported.as_str()),
+    ];
+    let output = fixture
+        .session_git("a", &fixture.repo, &user)
+        .args(["commit", "-q", "--allow-empty", "-m", "two"])
+        .output()
+        .unwrap();
+    assert!(succeeds(output));
+    assert_eq!(
+        std::fs::read_to_string(&marker).unwrap(),
+        "husky\nexported\n"
+    );
+}
+
+/// Every hook git looks for starts a dispatcher, several per commit, so one with nothing of the
+/// user's to run must not start a `git` of its own to find that out — and must still find a hook
+/// the user does have.
+#[test]
+fn the_fast_path_starts_no_git_and_still_runs_a_hook_the_user_has() {
+    let fixture = Fixture::new();
+    let trace = fixture.dir.join("trace");
+    let commit = |message: &str| {
+        let output = fixture
+            .session_git("a", &fixture.repo, &[])
+            .env("GIT_TRACE2_EVENT", &trace)
+            .args(["commit", "-q", "--allow-empty", "-m", message])
+            .output()
+            .unwrap();
+        assert!(succeeds(output));
+    };
+
+    commit("none");
+    assert_eq!(rev_parses(&trace), 0, "no hook of the user's");
+
+    let marker = fixture.repo.join("ran");
+    write_hook(
+        &fixture.common_dir.join("hooks/pre-commit"),
+        &format!("echo ran >>'{}'", marker.display()),
+    );
+    commit("own");
+    assert_eq!(std::fs::read_to_string(&marker).unwrap(), "ran\n");
+    assert_eq!(rev_parses(&trace), 0, "found without git");
+
+    // The control: configuration that could move the hooks has git asked.
+    git(&fixture.repo, &["config", "core.hooksPath", ".git/hooks"]);
+    commit("asked");
+    assert_eq!(std::fs::read_to_string(&marker).unwrap(), "ran\nran\n");
+    assert!(rev_parses(&trace) > 0);
+}
+
+/// Each place a `core.hooksPath` could come from that the dispatcher cannot read for itself sends
+/// it to git, the slow path, rather than to the repository's own hooks directory.
+#[test]
+fn anything_that_could_move_the_hooks_has_git_asked() {
+    let system = installed(
+        "octoboardd-test-system-gitconfig",
+        "[core]\n\thooksPath = .git/hooks\n",
+        0o644,
+    );
+    let other_build = dispatchers_for("/elsewhere/libexec/git-core", &[]);
+    let with_system = dispatchers_for(&system_exec_path(), std::slice::from_ref(&system));
+    type Setup = fn(&Fixture, &Path, &Path, &mut Command);
+    let cases: [(&str, Option<&Path>, Setup); 9] = [
+        ("an exported entry of the user's", None, |_, _, hooks, c| {
+            // The user's entry first, the injected one after it, as a launch lays them out.
+            c.env("GIT_CONFIG_COUNT", "2")
+                .env("GIT_CONFIG_KEY_0", "core.hooksPath")
+                .env("GIT_CONFIG_VALUE_0", ".git/hooks")
+                .env("GIT_CONFIG_KEY_1", "core.hooksPath")
+                .env("GIT_CONFIG_VALUE_1", hooks);
+        }),
+        ("git -c", None, |_, _, _, c| {
+            c.args(["-c", "include.path=/dev/null"]);
+        }),
+        ("GIT_CONFIG_GLOBAL", None, |_, moved, _, c| {
+            c.env("GIT_CONFIG_GLOBAL", moved);
+        }),
+        ("~/.gitconfig", None, |f, moved, _, c| {
+            std::fs::copy(moved, f.dir.join(".gitconfig")).unwrap();
+            c.env_remove("GIT_CONFIG_GLOBAL").env("HOME", &*f.dir);
+        }),
+        (
+            "an include in the repository's configuration",
+            None,
+            |f, _, _, _| {
+                git(&f.repo, &["config", "include.path", "/dev/null"]);
+            },
+        ),
+        ("config.worktree", None, |f, moved, _, _| {
+            std::fs::copy(moved, f.common_dir.join("config.worktree")).unwrap();
+        }),
+        ("GIT_CONFIG_SYSTEM", None, |_, moved, _, c| {
+            c.env_remove("GIT_CONFIG_NOSYSTEM")
+                .env("GIT_CONFIG_SYSTEM", moved);
+        }),
+        (
+            "a system file this git build reads",
+            Some(&with_system),
+            |_, _, _, _| {},
+        ),
+        ("another git build", Some(&other_build), |_, _, _, _| {}),
+    ];
+    for (source, hooks, setup) in cases {
+        let fixture = Fixture::new();
+        let moved = fixture.dir.join("moved");
+        std::fs::write(&moved, "[core]\n\thooksPath = .git/hooks\n").unwrap();
+        let trace = fixture.dir.join("trace");
+        let hooks = hooks.unwrap_or(dispatchers());
+        let mut command = fixture.session_git_with(hooks, "a", &fixture.repo, &[]);
+        setup(&fixture, &moved, hooks, &mut command);
+        let output = command
+            .env("GIT_TRACE2_EVENT", &trace)
+            .args(["commit", "-q", "--allow-empty", "-m", "m"])
+            .output()
+            .unwrap();
+        assert!(succeeds(output), "{source}");
+        assert!(rev_parses(&trace) > 0, "{source}");
+    }
+}
+
+/// A push into a non-bare repository's checked-out branch updates its worktree unless a
+/// push-to-checkout hook does, and the dispatcher's presence must not count as one. git clears
+/// `GIT_CONFIG_*` for the receiving end of a push it makes itself, so the dispatcher only meets
+/// this behind a server a session starts (`git daemon`, `git http-backend`); it is run here the
+/// way `receive-pack` runs it.
+#[test]
+fn a_push_to_checkout_with_no_hook_of_the_users_updates_the_worktree() {
+    let fixture = Fixture::new();
+    let theirs = ScratchDir::new("branch-origin-push-target");
+    git(
+        &fixture.repo,
+        &[
+            "clone",
+            "-q",
+            &fixture.repo.to_string_lossy(),
+            &theirs.to_string_lossy(),
+        ],
+    );
+    std::fs::write(fixture.repo.join("pushed"), "pushed").unwrap();
+    git(&fixture.repo, &["add", "pushed"]);
+    git(&fixture.repo, &["commit", "-q", "-m", "push"]);
+    let pushed = String::from_utf8(git(&fixture.repo, &["rev-parse", "HEAD"])).unwrap();
+    git(&theirs, &["fetch", "-q", "origin"]);
+
+    let git_dir = theirs.join(".git");
+    let output = Command::new(dispatchers().join("push-to-checkout"))
+        .arg(pushed.trim())
+        .current_dir(&git_dir)
+        .env_clear()
+        .envs(isolated_git_env())
+        .envs(injected(0, dispatchers(), "a", 1))
+        .env("GIT_DIR", &git_dir)
+        .env("GIT_WORK_TREE", &*theirs)
+        .output()
+        .unwrap();
+    assert!(succeeds(output));
+
+    assert_eq!(
+        std::fs::read_to_string(theirs.join("pushed")).unwrap(),
+        "pushed"
+    );
+}
+
+// -- the record's lifetime ----------------------------------------------------
 
 #[test]
 fn a_row_goes_with_its_branch_but_only_on_a_full_listing() {
     let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Idle);
-    git(&fixture.repo, &["branch", "gone"]);
-    fixture.reconcile_full();
-    assert!(fixture.row("gone").is_some());
+    fixture.as_session("a", &["branch", "gone"]);
+    fixture.deliver(1);
     git(&fixture.repo, &["branch", "-q", "-D", "gone"]);
 
     let cut = BranchList {
         complete: false,
         ..fixture.list()
     };
-    reconcile(&fixture.state, &fixture.common_dir, &cut, None).unwrap();
+    reconcile(&fixture.state, &fixture.common_dir, &cut).unwrap();
     assert!(
-        fixture.row("gone").is_some(),
+        fixture.creator("gone").is_some(),
         "a cut listing proves nothing"
     );
 
     fixture.reconcile_full();
-    assert!(fixture.row("gone").is_none());
+    assert!(fixture.creator("gone").is_none());
 }
 
 #[test]
 fn a_listing_older_than_the_last_record_does_not_remove_it() {
     let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Working);
-    // A reply listed before the branch was made, as a client's request that overlapped the
-    // hook's look carries.
+    // A reply listed before the branch was made, as a client's request that overlapped the report
+    // carries.
     let stale = fixture.list();
-    let known = fixture.names();
-    fixture.calling("a");
-    git(&fixture.repo, &["switch", "-q", "-c", "feature"]);
-    fixture.hook_look(&known);
-    assert_eq!(
-        fixture.row("feature").unwrap().source,
-        BranchOriginSource::HookDiff
-    );
+    fixture.as_session("a", &["switch", "-q", "-c", "feature"]);
+    fixture.deliver(1);
 
     let mut list = stale;
     annotate(&fixture.state, &fixture.common_dir, &mut list);
 
     assert!(
-        fixture.row("feature").is_some(),
+        fixture.creator("feature").is_some(),
         "the branch is missing from the listing because it was made after it"
     );
 }
@@ -665,7 +831,6 @@ fn a_listing_older_than_the_last_record_does_not_remove_it() {
 #[test]
 fn deleting_a_project_leaves_the_origins_of_another_in_the_same_repository() {
     let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Idle);
     let inner = fixture.repo.join("inner");
     std::fs::create_dir(&inner).unwrap();
     fixture
@@ -673,14 +838,13 @@ fn deleting_a_project_leaves_the_origins_of_another_in_the_same_repository() {
         .store
         .insert_project(&project("other", &inner))
         .unwrap();
-    git(&fixture.repo, &["branch", "topic"]);
-    fixture.reconcile_full();
-    assert!(fixture.row("topic").is_some());
+    fixture.as_session("a", &["branch", "topic"]);
+    fixture.deliver(1);
 
     fixture.state.store.delete_project("project").unwrap();
     project_deleted(&fixture.state, &fixture.repo.to_string_lossy());
     assert!(
-        fixture.row("topic").is_some(),
+        fixture.creator("topic").is_some(),
         "another project is still in the repository"
     );
 
@@ -689,18 +853,17 @@ fn deleting_a_project_leaves_the_origins_of_another_in_the_same_repository() {
     assert!(fixture.rows().is_empty(), "the last project's deletion");
 }
 
-/// The rows of a repository are written under its gate, a project's deletion included: a
-/// reconcile holding the gate has read the rows it is about to write, and would put back what
-/// the deletion just removed — leaving a repository with rows, no project to clear them and
-/// nothing that runs here for it again.
+/// The rows of a repository are written under its gate, a project's deletion included: a report
+/// holding the gate has read the rows it is about to write, and would put back what the deletion
+/// just removed — leaving a repository with rows, no project to clear them and nothing that runs
+/// here for it again.
 #[test]
-fn deleting_a_project_waits_for_a_reconcile_holding_the_gate() {
+fn deleting_a_project_waits_for_a_write_holding_the_gate() {
     let fixture = Fixture::new();
-    git(&fixture.repo, &["branch", "topic"]);
-    fixture.reconcile_full();
-    assert!(fixture.row("topic").is_some());
+    fixture.as_session("a", &["branch", "topic"]);
+    fixture.deliver(1);
 
-    let gate = fixture.state.branch_watch.gate(&fixture.common_dir);
+    let gate = fixture.state.branch_origins.gate(&fixture.common_dir);
     let held = gate.lock().unwrap();
     let (done, deleted) = std::sync::mpsc::channel();
     let state = Arc::clone(&fixture.state);
@@ -711,9 +874,9 @@ fn deleting_a_project_waits_for_a_reconcile_holding_the_gate() {
         done.send(()).unwrap();
     });
 
-    // The worker is at the gate once it is past the store's deletion; before that, nothing
-    // has been waited for.
-    let start = Instant::now();
+    // The worker is at the gate once it is past the store's deletion; before that, nothing has
+    // been waited for.
+    let start = std::time::Instant::now();
     while fixture
         .state
         .store
@@ -724,7 +887,7 @@ fn deleting_a_project_waits_for_a_reconcile_holding_the_gate() {
         assert!(start.elapsed() < PATIENCE, "the worker never started");
         std::thread::sleep(Duration::from_millis(5));
     }
-    assert!(fixture.row("topic").is_some());
+    assert!(fixture.creator("topic").is_some());
     assert!(
         deleted.try_recv().is_err(),
         "the deletion waits for the gate"
@@ -738,60 +901,19 @@ fn deleting_a_project_waits_for_a_reconcile_holding_the_gate() {
     assert!(fixture.rows().is_empty());
 }
 
-/// A reconcile that read its project before a deletion finished and takes the gate after it
-/// has nothing to name branches for, and nothing would clear what it wrote.
-#[test]
-fn a_reconcile_after_the_last_project_went_writes_nothing() {
-    let fixture = Fixture::new();
-    git(&fixture.repo, &["branch", "topic"]);
-    let list = fixture.list();
-    fixture.reconcile_full();
-    fixture.state.store.delete_project("project").unwrap();
-    project_deleted(&fixture.state, &fixture.repo.to_string_lossy());
-    assert!(fixture.rows().is_empty());
-
-    reconcile(&fixture.state, &fixture.common_dir, &list, None).unwrap();
-
-    assert!(fixture.rows().is_empty());
-}
-
-/// The same late listing must not set the in-memory record of the repository up again either:
-/// nothing is left to clear it, and it would hold every branch name until the daemon restarts.
+/// A late listing must not set the in-memory record of the repository up again either: nothing is
+/// left to clear it, and it would be held until the daemon restarts.
 #[test]
 fn a_listing_after_the_last_project_went_leaves_no_record_of_the_repository() {
     let fixture = Fixture::new();
     let mut list = fixture.list();
     fixture.state.store.delete_project("project").unwrap();
     project_deleted(&fixture.state, &fixture.repo.to_string_lossy());
-    assert!(fixture.state.branch_watch.holds_no_repository());
+    assert!(fixture.state.branch_origins.holds_no_repository());
 
     annotate(&fixture.state, &fixture.common_dir, &mut list);
 
-    assert!(fixture.state.branch_watch.holds_no_repository());
-}
-
-/// What the `list_project_branches` reply reserves room for (`budget::BRANCH_ORIGIN_BYTES`)
-/// holds only because one listing attaches no more origins than the cap.
-#[test]
-fn a_listing_attaches_no_more_origins_than_the_cap() {
-    let fixture = Fixture::new();
-    fixture.session("a", 600, SessionStatus::Idle);
-    let names: Vec<String> = (0..=budget::MAX_BRANCH_ORIGINS)
-        .map(|n| format!("b{n:05}"))
-        .collect();
-    fixture.branches_at(&names, now_millis() / 1000);
-
-    let mut list = fixture.list();
-    annotate(&fixture.state, &fixture.common_dir, &mut list);
-
-    assert!(list.complete, "the listing itself is not cut");
-    assert_eq!(
-        list.branches
-            .iter()
-            .filter(|branch| branch.origin.is_some())
-            .count(),
-        budget::MAX_BRANCH_ORIGINS
-    );
+    assert!(fixture.state.branch_origins.holds_no_repository());
 }
 
 #[test]
@@ -799,16 +921,15 @@ fn rows_past_the_cap_are_dropped_oldest_first() {
     let fixture = Fixture::new();
     let key = repo_key(&fixture.common_dir);
     let put: Vec<BranchOrigin> = (0..5)
-        .map(|n| {
-            let mut row = origin_of(
-                &key,
-                &format!("b{n}"),
-                None,
-                None,
-                BranchOriginSource::Unknown,
-            );
-            row.created_at = n;
-            row
+        .map(|n| BranchOrigin {
+            repository: key.clone(),
+            branch: format!("b{n}"),
+            session_id: "a".to_string(),
+            session_title: "Session a".to_string(),
+            source: BranchOriginSource::RefHook,
+            created_at: n,
+            birth_commit: "c".to_string(),
+            birth_time: n,
         })
         .collect();
     fixture

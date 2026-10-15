@@ -6,7 +6,7 @@ import { selectionForBranch, sessionBranch } from "./sessionBranch";
 const made = (name: string, session: string | undefined, created_at: number): BranchInfo => ({
   name,
   commit: "c",
-  origin: session === undefined ? undefined : { source: "hook_diff", session, title: "t", created_at },
+  origin: session === undefined ? undefined : { source: "ref_hook", session, title: "t", created_at },
 });
 const tree = (id: string, branch: string | null, main = false): WorktreeInfo => ({ id, root: `/${id}`, main, head: "c", branch, scope_present: true });
 

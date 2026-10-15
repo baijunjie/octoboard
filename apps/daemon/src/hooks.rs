@@ -249,51 +249,6 @@ pub fn task_notification_opening(task_id: &str) -> String {
     format!("<task-notification>\n<task-id>{task_id}</task-id>")
 }
 
-/// The agents' own ask-the-user tools: Claude Code's and Grok's. Codex has none in the builds
-/// measured.
-const QUESTION_TOOLS: &[&str] = &["AskUserQuestion", "ask_user_question"];
-
-/// What an event says about one of the session's tool calls, with the id the agent gave the call
-/// where the payload carries one.
-#[derive(Debug, PartialEq, Eq)]
-pub enum ToolCall<'a> {
-    Started(Option<&'a str>),
-    Ended(Option<&'a str>),
-}
-
-/// The tool call an event starts or ends. The three agents name these events alike. A call can end
-/// without its end event: Grok reports a call refused at its permission check as
-/// `PermissionDenied`, which is read as the end, while a Claude Code call the user declines or
-/// interrupts reports nothing at all, not even the end of its turn.
-///
-/// An agent's own ask-the-user tool is no call: it runs nothing while the question is up.
-pub fn tool_call<'a>(event: &str, payload: &'a Value) -> Option<ToolCall<'a>> {
-    let tool = ["tool_name", "toolName"]
-        .iter()
-        .find_map(|key| payload.get(*key).and_then(Value::as_str));
-    if tool.is_some_and(|tool| QUESTION_TOOLS.contains(&tool)) {
-        return None;
-    }
-    let id = ["tool_use_id", "toolUseId"]
-        .iter()
-        .find_map(|key| payload.get(*key).and_then(Value::as_str))
-        .filter(|id| !id.is_empty());
-    match event {
-        "PreToolUse" => Some(ToolCall::Started(id)),
-        "PostToolUse" | "PostToolUseFailure" | "PermissionDenied" => Some(ToolCall::Ended(id)),
-        _ => None,
-    }
-}
-
-/// The agent's working directory as the payload reports it. Every Claude Code and Codex payload
-/// carries it.
-pub fn working_directory(payload: &Value) -> Option<&str> {
-    payload
-        .get("cwd")
-        .and_then(Value::as_str)
-        .filter(|cwd| !cwd.is_empty())
-}
-
 /// The event name as the payload itself reports it. This is the only source: the hook script is
 /// argument-free and the callback URL carries the session, not the event.
 pub fn event_name(payload: &Value) -> Option<String> {

@@ -865,19 +865,9 @@ pub struct BranchInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BranchOriginSource {
-    /// The branch appeared while exactly one session of the repository had a tool call in flight.
-    HookDiff,
-    /// The branch predates the daemon's look at it; the first entry of its reflog falls inside the
-    /// lifetime of exactly one session of the repository.
-    ReflogMatch,
-    /// Neither of the above could name a session, and exactly one running session of the
-    /// repository is working in the worktree that has the branch checked out, and was running
-    /// when the branch was made.
-    WorktreeCwd,
-    /// No session can be named: several could have made it, or nothing was acting for it. Never
-    /// sent to a client, and kept so the branch is not held against its reflog again — a later
-    /// signal that does name one session replaces it.
-    Unknown,
+    /// The session's own git reported creating the branch, through the `reference-transaction`
+    /// hook Octoboard points it at.
+    RefHook,
 }
 
 /// The session a branch is attributed to having created, with the title that session had when the
@@ -885,14 +875,13 @@ pub enum BranchOriginSource {
 /// it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BranchOriginInfo {
-    /// `hook_diff`, `reflog_match` or `worktree_cwd`: a branch with no session to name carries no
-    /// origin at all.
+    /// `ref_hook`: a branch with no session to name carries no origin at all.
     pub source: BranchOriginSource,
     /// The creating session's id. It may name a session that no longer exists.
     pub session: String,
     pub title: String,
     /// When the branch was created (milliseconds since the epoch): its reflog's first entry where
-    /// it has one, else when the daemon noticed it.
+    /// it has one, else when the creation was reported.
     pub created_at: i64,
 }
 

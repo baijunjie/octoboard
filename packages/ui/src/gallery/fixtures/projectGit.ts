@@ -231,20 +231,20 @@ const BRANCHES: BranchInfo[] = [
     name: "feature/ranking-experiments",
     commit: FEATURE_TIP,
     // Created by a live session of the project, which the selected-session scenarios pick.
-    origin: { source: "hook_diff", session: "s-ranking", title: "Tune the ranking weights", created_at: 1_760_000_000_000 },
+    origin: { source: "ref_hook", session: "s-ranking", title: "Tune the ranking weights", created_at: 1_760_000_000_000 },
   },
   {
     name: LONG_BRANCH,
     commit: "5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a",
     // A session that has been removed since.
-    origin: { source: "reflog_match", session: "s-gone", title: "Review the deduplication pass", created_at: 1_759_000_000_000 },
+    origin: { source: "ref_hook", session: "s-gone", title: "Review the deduplication pass", created_at: 1_759_000_000_000 },
   },
   {
     name: "chore/update-dependencies",
     commit: "7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807e8d9",
     // A live session that is not the selected one: the plain ring. The title is the one the session
     // had when the attribution was made, and it has been renamed since.
-    origin: { source: "hook_diff", session: "s-web-2", title: "Bump the packages", created_at: 1_758_000_000_000 },
+    origin: { source: "ref_hook", session: "s-web-2", title: "Bump the packages", created_at: 1_758_000_000_000 },
   },
   { name: "main", commit: MAIN_TIP },
   { name: "release/2.4", commit: MAIN_TIP },

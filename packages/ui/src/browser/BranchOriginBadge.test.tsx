@@ -11,7 +11,7 @@ import { mountRows } from "./browserTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const origin = (session: string, title: string) => ({ source: "hook_diff" as const, session, title, created_at: 0 });
+const origin = (session: string, title: string) => ({ source: "ref_hook" as const, session, title, created_at: 0 });
 const branches: BranchInfo[] = [
   { name: "made-by-session", commit: "a".repeat(40), origin: origin("s-live", "Fix the layout") },
   { name: "made-by-archived", commit: "c".repeat(40), origin: origin("s-archived", "Old experiment") },

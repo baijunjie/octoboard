@@ -134,6 +134,8 @@ pub const INHERITED_SESSION_VARS: &[&str] = &[
     "GROK_HOOK_NAME",
     "GROK_SESSION_ID",
     "GROK_WORKSPACE_ROOT",
+    "OCTOBOARD_DAEMON_PORT",
+    "OCTOBOARD_SESSION_ID",
 ];
 
 /// True when a variable marks the daemon's own agent session rather than the user's environment.

@@ -472,15 +472,3 @@ pub(crate) fn move_modification_time_back(path: &Path) {
     file.set_modified(std::time::SystemTime::now() - Duration::from_secs(60))
         .expect("its modification time is settable");
 }
-
-/// Moves `dir`'s modification time a minute back, leaving what is in it alone: a directory that
-/// looks untouched since, which is what a stamp over a repository's refs is read from.
-///
-/// A minute rather than a sleep: on a filesystem keeping modification times to the whole second, a
-/// sleep short enough not to slow the suite down does not reach the next time the directory can
-/// record. Opened read-only, since a directory cannot be opened for writing.
-pub(crate) fn move_directory_time_back(dir: &Path) {
-    let dir = std::fs::File::open(dir).expect("the directory opens");
-    dir.set_modified(std::time::SystemTime::now() - Duration::from_secs(60))
-        .expect("its modification time is settable");
-}

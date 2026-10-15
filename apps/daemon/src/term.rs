@@ -9,6 +9,7 @@ use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use uuid::Uuid;
 
 use crate::adapter::{self, LaunchSpec};
+use crate::branch_origin;
 use crate::env_shell;
 use crate::paths;
 use crate::protocol::{error_code, Agent, CodedError, Notice, Role};
@@ -167,6 +168,15 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     }
     for (key, value) in &plan.env {
         cmd.env(key, value);
+    }
+    // A project session's git reports the branches it creates. A console session works in a
+    // directory of Octoboard's own and has no project a branch could be attributed in.
+    if role == Role::Project {
+        let report =
+            branch_origin::git_hooks::session_env(&shell_env, &self_exe, session_id, daemon_port);
+        for (key, value) in report {
+            cmd.env(key, value);
+        }
     }
     cmd.env("TERM", PTY_TERM);
     cmd.cwd(cwd);
