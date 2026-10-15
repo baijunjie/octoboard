@@ -4,30 +4,39 @@
   <img src="assets/branding/logo-brand-h.png" alt="Octoboard — The Programming Terminator" width="640" />
 </p>
 
-Octoboard is a local, open source command center for coding agents: it runs on your own machine, or on a server
-of yours, never as a service someone else hosts.
+<p align="center">Programming ends here. Power to rival the Terminator.</p>
 
-Octoboard is for large projects inside a company. One product is split across repositories, each
-with its own rules and often its own agent. A change rarely stays in one of them. Agent workspace tools
-today usually load every project's Skills and tools into a single session and develop all of those projects
-there. Their contexts get mixed, and the quality of the work becomes unpredictable. Even then, that session can
-miss another project's instructions. Split the work into one session per project instead, and you end up
-copying context and relaying results yourself.
+Octoboard is a local, open source command center for coding agents. It runs on your own machine and is built
+for products spanning multiple projects or repositories, each with its own development rules and tools.
 
-Octoboard starts a native session in each project directory, so that project keeps its own agent,
-instructions, and tools. A coordinating agent splits the work, hands each project its part, and brings the
-reports back together. You can still open any project conversation and work with its agent directly.
+A feature can touch server-side services, administration tools, merchant operations tools, staff operations
+tools, and customer-facing apps. Developing them all in one agent session mixes their contexts and can miss
+project-specific instructions. Separate sessions preserve that context, but leave you relaying tasks and results.
+Octoboard brings two goals together:
+
+- **Agent management across projects.** A coordinating agent breaks down requests, assigns tasks, tracks
+  dependencies, and brings project reports together.
+- **Quality in every project.** Each project runs an independent native session in its own directory, keeping
+  its instructions, Skills, hooks, and tools. Open any conversation to review the work, add context, or steer it.
+
+Choose **Claude Code**, **Codex**, or **Grok Build** independently for the coordinator and each project. Each
+keeps its own toolchain, while Octoboard passes tasks, relevant context, and reports between sessions. Individual
+steps within a project can also be delegated to an agent from another brand when needed.
+
+Octoboard stores its application data locally and does not upload your code or conversations to servers operated
+by its developer. Your configured agents and tools may send data to their providers, and collaboration may share
+task information with multiple providers. See the [privacy policy](https://octoboard.dev/privacy/) for details.
 
 The full introduction is on [octoboard.dev](https://octoboard.dev).
 
 **Status: early development.** The macOS app for Apple Silicon is still in development. Only the first
 prototype features are in place, and the details are still being refined.
 
-Octoboard comes in two forms. In the desktop app, the window, the daemon and the projects share one machine.
-On a server, the daemon alone runs on a machine without a display, and you reach the same interface from a
-browser on another machine over the network. Linux is the server form: there is no Linux desktop app. The
-server form is the same person reaching their own daemon from elsewhere — one user with a server of their
-own, not a team sharing one; several people on one daemon are outside this design.
+In the desktop app, the window, the daemon, and the projects share one machine. Linux is planned as a server
+form: the daemon would run on a headless machine you own, with the interface opened in a browser on another
+machine. There is no Linux desktop app planned. The server form is designed for one person accessing their own
+daemon; multiple users sharing one daemon are outside this design. Server deployment and remote host support
+are planned and are not available yet.
 
 | Form | Status |
 |---|---|
