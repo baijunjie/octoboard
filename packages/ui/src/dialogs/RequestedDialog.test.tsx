@@ -18,7 +18,12 @@ const owner = sessionOf("s-owner", console_.id, project.id, "Owner", "idle");
 const account: Account = { id: "a-1", agent: "claude", name: "Work", config_dir: "/home/dev/.claude-work" };
 
 /** Mounts the dialog for `dialog` over a store holding `sessions` and `accounts`. */
-function mount(dialog: DialogRequest, sessions: Session[], accounts: Account[] = []): { container: HTMLElement; daemon: Daemon } {
+function mount(
+  dialog: DialogRequest,
+  sessions: Session[],
+  accounts: Account[] = [],
+  callbacks: { onClose?: () => void; onSwitchAccount?: (sessionId: string, account: string | null) => Promise<void> } = {},
+): { container: HTMLElement; daemon: Daemon } {
   const daemon: Daemon = {
     store: createStateStore({
       sessions: new Map(sessions.map((s) => [s.id, s])),
@@ -34,7 +39,7 @@ function mount(dialog: DialogRequest, sessions: Session[], accounts: Account[] =
   };
   const container = mountForTooltip(
     <DaemonProvider value={daemon}>
-      <RequestedDialog dialog={dialog} onClose={() => {}} onSessionOpened={() => {}} onSwitchAccount={async () => {}} />
+      <RequestedDialog dialog={dialog} onClose={callbacks.onClose ?? (() => {})} onSessionOpened={() => {}} onSwitchAccount={callbacks.onSwitchAccount ?? (async () => {})} />
     </DaemonProvider>,
   );
   return { container, daemon };
@@ -143,4 +148,115 @@ it.each(["archive-session", "delete-session", "switch-account"] as const)("updat
   act(() => daemon.store.setState({ sessions: new Map([[session.id, { ...session, terminal_title: "Next task" }]]) }));
   expect(title()).toContain(`${isolate("Next task")}｜${isolate(session.title)}`);
   expect(title()).not.toContain("First task");
+});
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+async function confirmSwitch(): Promise<void> {
+  await act(async () => {
+    document.body.querySelector("[role=alertdialog] form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+}
+
+function checkAll(): void {
+  act(() => document.body.querySelector<HTMLInputElement>('[role=alertdialog] input[type="checkbox"]')!.click());
+}
+
+it("switches only the selected session to the default account unless the checkbox is selected", async () => {
+  const selected = { ...owner, account_id: account.id };
+  const waiting = deferred();
+  const onClose = vi.fn();
+  const onSwitchAccount = vi.fn(() => waiting.promise);
+  mount({ kind: "switch-account", session: selected, account: null, accountName: "Default" }, [selected, { ...selected, id: "s-other" }], [account], { onClose, onSwitchAccount });
+  expect(document.body.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked).toBe(false);
+  await confirmSwitch();
+  expect(onSwitchAccount).toHaveBeenCalledExactlyOnceWith(selected.id, null);
+  expect(document.body.querySelector('[role="progressbar"]')?.getAttribute("aria-valuemax")).toBe("1");
+  expect(onClose).not.toHaveBeenCalled();
+  await act(async () => waiting.resolve());
+  expect(onClose).toHaveBeenCalledOnce();
+});
+
+it("switches a console's same-agent console, project and bound sessions sequentially with progress and a fixed scope", async () => {
+  const hub = sessionOf("s-hub", console_.id, undefined, "Hub", "idle", { role: "console" });
+  const bound = sessionOf("s-bound", console_.id, project.id, "Bound", "idle", { bound_to: hub.id });
+  const excluded = [
+    { ...owner, id: "already", account_id: account.id },
+    { ...owner, id: "archived", status: "archived" as const },
+    { ...owner, id: "other-agent", agent: "codex" as const },
+    { ...owner, id: "other-console", console_id: "c-other" },
+  ];
+  const first = deferred();
+  const second = deferred();
+  const third = deferred();
+  const onClose = vi.fn();
+  const onSwitchAccount = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise).mockReturnValueOnce(third.promise);
+  const { daemon } = mount({ kind: "switch-account", session: owner, account: account.id, accountName: account.name }, [hub, owner, bound, ...excluded], [account], { onClose, onSwitchAccount });
+  checkAll();
+  await confirmSwitch();
+  expect(onSwitchAccount.mock.calls).toEqual([[hub.id, account.id]]);
+  const progress = () => document.body.querySelector('[role="progressbar"]')!;
+  expect(progress().getAttribute("aria-valuemax")).toBe("3");
+  expect(progress().getAttribute("aria-valuenow")).toBe("0");
+  expect(document.body.querySelector('input[type="checkbox"]')!.getAttribute("aria-readonly")).toBe("true");
+  act(() => {
+    const next = new Map(daemon.store.getState().sessions);
+    next.set("late", { ...owner, id: "late" });
+    daemon.store.setState({ sessions: next });
+    document.body.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click();
+    document.body.querySelector('[role="alertdialog"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  });
+  await confirmSwitch();
+  expect(onClose).not.toHaveBeenCalled();
+  expect(onSwitchAccount).toHaveBeenCalledTimes(1);
+  await act(async () => first.resolve());
+  expect(progress().getAttribute("aria-valuenow")).toBe("1");
+  expect(onSwitchAccount.mock.calls).toEqual([[hub.id, account.id], [owner.id, account.id]]);
+  await act(async () => second.resolve());
+  expect(progress().getAttribute("aria-valuenow")).toBe("2");
+  await act(async () => third.resolve());
+  expect(onSwitchAccount.mock.calls).toEqual([[hub.id, account.id], [owner.id, account.id], [bound.id, account.id]]);
+  expect(onClose).toHaveBeenCalledOnce();
+});
+
+it("continues after a failure and retries only failed sessions without relying on daemon events for successes", async () => {
+  const failed = { ...owner, id: "failed", title: "Needs attention" };
+  const last = { ...owner, id: "last" };
+  const onClose = vi.fn();
+  const onSwitchAccount = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("Copy failed")).mockResolvedValue(undefined);
+  const { daemon } = mount({ kind: "switch-account", session: owner, account: account.id, accountName: account.name }, [owner, failed, last], [account], { onClose, onSwitchAccount });
+  checkAll();
+  await confirmSwitch();
+  expect(onSwitchAccount.mock.calls).toEqual([[owner.id, account.id], [failed.id, account.id], [last.id, account.id]]);
+  expect(document.body.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("3");
+  expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("Needs attention");
+  expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("Copy failed");
+  expect(onClose).not.toHaveBeenCalled();
+  act(() => daemon.store.setState({ sessions: new Map([...daemon.store.getState().sessions, ["late", { ...owner, id: "late" }]]) }));
+  await confirmSwitch();
+  expect(onSwitchAccount.mock.calls).toEqual([[owner.id, account.id], [failed.id, account.id], [last.id, account.id], [failed.id, account.id]]);
+  expect(onClose).toHaveBeenCalledOnce();
+});
+
+it.each(["archived", "on-target", "removed"] as const)("skips a snapshotted session that becomes %s before its turn", async (change) => {
+  const next = { ...owner, id: "next" };
+  const first = deferred();
+  const onClose = vi.fn();
+  const onSwitchAccount = vi.fn(() => first.promise);
+  const { daemon } = mount({ kind: "switch-account", session: owner, account: account.id, accountName: account.name }, [owner, next], [account], { onClose, onSwitchAccount });
+  checkAll();
+  await confirmSwitch();
+  act(() => {
+    const sessions = new Map(daemon.store.getState().sessions);
+    if (change === "removed") sessions.delete(next.id);
+    else sessions.set(next.id, change === "archived" ? { ...next, status: "archived" } : { ...next, account_id: account.id });
+    daemon.store.setState({ sessions });
+  });
+  await act(async () => first.resolve());
+  expect(onSwitchAccount).toHaveBeenCalledExactlyOnceWith(owner.id, account.id);
+  expect(onClose).toHaveBeenCalledOnce();
 });

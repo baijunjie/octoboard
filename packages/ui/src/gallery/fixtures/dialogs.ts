@@ -192,7 +192,62 @@ const consoleSessionLaunchState = {
   }]]),
 };
 
+// Three eligible Claude sessions share a console: its hub, an independent project session,
+// and a bound child. Other-agent, archived, already-target and other-console sessions stay put.
+const switchAccountState = snapshotState({
+  consoles: [console_, consoleOf("c-other", "Personal")],
+  projects: [web, api],
+  sessions: [
+    sessionOf("s-switch-hub", console_.id, undefined, "Release coordinator", "idle"),
+    sessionOf("s-switch-work", console_.id, web.id, "Review the release checklist", "working"),
+    sessionOf("s-switch-bound", console_.id, api.id, "Verify deployment and database migration compatibility", "waiting_user", { bound_to: "s-switch-hub" }),
+    sessionOf("s-switch-already", console_.id, web.id, "Already on the work account", "idle", { account_id: "a-work", config_dir: "/Users/dev/.claude-work" }),
+    sessionOf("s-switch-codex", console_.id, api.id, "Codex deployment review", "idle", { agent: "codex" }),
+    sessionOf("s-switch-archived", console_.id, web.id, "Earlier release", "archived"),
+    sessionOf("s-switch-other", "c-other", undefined, "Personal coordinator", "idle"),
+  ],
+  settings: accountsState.settings,
+});
+const openSwitchAccount = [
+  (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
+  (ui: Ui) => ui.press(ui.t("sidebar.session.switchAccount")),
+  (ui: Ui) => ui.press(accountsState.settings!.accounts[0].name),
+];
+const submitConsoleSwitch = [
+  ...openSwitchAccount,
+  (ui: Ui) => ui.press(ui.t("dialog.switchAccount.all", { agent: "Claude Code" })),
+  (ui: Ui) => ui.confirm(),
+];
+
 export const dialogScenarios: Scenario[] = [
+  {
+    id: "dialog-switch-account",
+    group: GROUP,
+    title: "Switch account confirmation",
+    description: "The console-wide checkbox starts unchecked. Selecting it includes the console hub, independent project sessions and bound sessions of the same agent; archived sessions and sessions already on the target account are omitted.",
+    state: switchAccountState,
+    steps: openSwitchAccount,
+  },
+  {
+    id: "dialog-switch-account-progress",
+    group: GROUP,
+    title: "Console account switch in progress",
+    description: "Two of three sessions have finished; the determinate bar and current session remain visible while the third switch is pending. Controls stay locked until switching completes.",
+    state: switchAccountState,
+    sessionAccountSwitches: { "s-switch-bound": "pending" },
+    steps: submitConsoleSwitch,
+  },
+  {
+    id: "dialog-switch-account-partial-failure",
+    group: GROUP,
+    title: "Console account switch partial failure",
+    description: "The completed batch keeps each failed session and its cause visible beside the completion count. Retry targets only the failed sessions; successful switches are retained.",
+    state: switchAccountState,
+    sessionAccountSwitches: {
+      "s-switch-work": { code: "internal_error", params: { detail: "The agent exited before its account switch completed." }, message: "The agent exited before its account switch completed." },
+    },
+    steps: submitConsoleSwitch,
+  },
   {
     ...dialogFixture,
     state: consoleSessionLaunchState,

@@ -749,6 +749,27 @@ export const en = {
     "Its process restarts under the new account with a fresh conversation, as nothing has been typed into it yet. The session reads that account's configuration and keeps its explicit model and reasoning effort settings.",
   "dialog.switchAccount.pending": "Switching account…",
   "dialog.switchAccount.confirm": "Switch",
+  "dialog.switchAccount.all": "Switch every {agent} session in this console",
+  "dialog.switchAccount.scope": {
+    one: "Includes console and project sessions. {count} session can switch; archived sessions and sessions already on this account are skipped.",
+    other: "Includes console and project sessions. {count} sessions can switch; archived sessions and sessions already on this account are skipped.",
+  },
+  "dialog.switchAccount.messageAll":
+    "Each session's process restarts under the new account. Existing conversations continue there, with a copy kept in each current account. Sessions with no conversation start fresh. Each session reads the new account's configuration and keeps its explicit model and reasoning effort settings.",
+  "dialog.switchAccount.progress": {
+    one: "{completed} of {count} session processed",
+    other: "{completed} of {count} sessions processed",
+  },
+  "dialog.switchAccount.current": "Switching “{title}”…",
+  "dialog.switchAccount.progressLabel": "Account switch progress",
+  "dialog.switchAccount.progressCurrent": {
+    one: "{completed} of {count} session processed. Switching “{title}”…",
+    other: "{completed} of {count} sessions processed. Switching “{title}”…",
+  },
+  "dialog.switchAccount.failed": {
+    one: "{count} session could not be switched. Retry only attempts this session.",
+    other: "{count} sessions could not be switched. Retry only attempts these sessions.",
+  },
   "dialog.deleteSession.title": "Delete “{title}” permanently?",
   "dialog.deleteSession.message": "This deletes the session. The agent's own transcript and the project's files are kept.",
   "dialog.deleteSession.bound": {

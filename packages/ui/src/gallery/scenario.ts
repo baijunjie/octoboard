@@ -129,6 +129,9 @@ export interface Scenario {
   agentModels?: Partial<Record<Agent, { models: AgentModel[]; unavailable?: ModelsUnavailable } | "pending">>;
   /** A refused session launch, such as a shell environment that could not be read. */
   sessionOpenError?: FixtureError;
+  /** Per-session account-switch refusals or a request kept pending. Unlisted sessions switch
+   * normally, updating their account and recorded configuration directory. */
+  sessionAccountSwitches?: Record<string, FixtureError | "pending">;
   /** The files every project's browser shows (`list_project_dir`, `read_project_file`); without it,
    * `SAMPLE_FILES`. */
   files?: FixtureFiles;

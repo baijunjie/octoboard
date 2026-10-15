@@ -488,11 +488,26 @@ accounts. The submenu is offered only when the agent has more than one account, 
 to confirm. It is the user's action alone: Octoboard never switches a session on its own, and reads no sign that an
 account's usage has run out.
 
+The confirmation has an **unchecked by default** checkbox to switch every session of the same agent in that console
+to the selected account. It includes console sessions, project sessions and bound sessions, across all projects in
+the console; archived sessions and sessions already on the target account are excluded. The confirmation shows how
+many sessions are eligible. Leaving the checkbox unchecked switches only the selected session. Neither choice
+changes the console's or projects' account defaults for future sessions.
+
+Confirming fixes the set of sessions to process and locks the checkbox. Sessions opened afterwards do not join that
+set, including on a retry. Sessions are switched one at a time; one that has been removed, archived or moved to the
+target account before its turn is skipped. A progress bar shows the number processed out of the fixed total, counting
+failed and skipped sessions as processed, and the title of the session currently being switched is shown and
+announced to assistive technology. A failure does not stop the remaining sessions: the dialog lists each failed
+session and its reason, then offers Retry for those failures alone. Successful switches are kept and never repeated
+by Retry. The confirmation closes when the pass finishes without failures.
+
 A switch ends the session's process the way archiving does, copies the session's conversation into the target
 account's config directory, records the new account and directory on the session, and relaunches it as a resume does,
 with everything Octoboard injects reassembled. It archives nothing: while the process is down the session reads as
 *interrupted*, and it comes back in *awaiting instructions* like any resumed session. Ending an owner's process this
-way leaves the sessions bound to it as they are.
+way does not itself switch or archive the sessions bound to it; the console-wide choice switches each eligible bound
+session separately.
 
 - **The conversation continues** where the agent has one stored: the session's own record is copied — added to the
   target directory, or replacing an earlier copy there — and the original stays in the account it came from, so a

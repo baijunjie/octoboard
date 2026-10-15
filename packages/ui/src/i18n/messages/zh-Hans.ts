@@ -679,6 +679,22 @@ export const zhHans: Translation<"other"> = {
   "dialog.switchAccount.messageFresh": "会话进程将在新账户下重新启动，并开始一段新的对话，因为尚未向它输入过内容。会话将读取新账户的配置，并保留明确指定的模型和推理强度。",
   "dialog.switchAccount.pending": "正在切换账户…",
   "dialog.switchAccount.confirm": "切换",
+  "dialog.switchAccount.all": "同时切换此控制台的所有 {agent} 会话",
+  "dialog.switchAccount.scope": {
+    other: "包括控制台会话和项目会话，共 {count} 个可切换。已归档或已使用此账户的会话会跳过。",
+  },
+  "dialog.switchAccount.messageAll": "每个会话的进程将在新账户下重新启动。已有对话会在新账户中继续，各原账户会保留一份副本。尚无对话的会话将开始新的对话。每个会话将读取新账户的配置，并保留明确指定的模型和推理强度。",
+  "dialog.switchAccount.progress": {
+    other: "已处理 {completed} 个会话，共 {count} 个",
+  },
+  "dialog.switchAccount.current": "正在切换“{title}”…",
+  "dialog.switchAccount.progressLabel": "账户切换进度",
+  "dialog.switchAccount.progressCurrent": {
+    other: "已处理 {completed} 个会话，共 {count} 个。正在切换“{title}”…",
+  },
+  "dialog.switchAccount.failed": {
+    other: "有 {count} 个会话未能切换。重试仅处理这些会话。",
+  },
   "dialog.deleteSession.title": "确认永久删除“{title}”？",
   "dialog.deleteSession.message": "将删除此会话。智能体自己的对话记录和项目文件会保留。",
   "dialog.deleteSession.bound": {

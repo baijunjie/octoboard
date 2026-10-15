@@ -113,6 +113,21 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
       const fromConfiguration = configurationReply(body);
       if (fromConfiguration !== undefined) return fromConfiguration;
       switch (body.type) {
+        case "switch_session_account": {
+          const current = store.getState();
+          const session = current.sessions.get(body.session);
+          if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
+          if (session.status === "archived") return fail({ code: "session_archived", params: { session: body.session }, message: "An archived session cannot switch accounts" });
+          const account = body.account === null ? undefined : current.settings.accounts.find((account) => account.id === body.account && account.agent === session.agent);
+          if (body.account !== null && !account) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
+          if ((session.account_id ?? null) === body.account) return fail({ code: "session_already_on_account", params: { session: body.session }, message: "this session is on that account already" });
+          const reply = scenario.sessionAccountSwitches?.[body.session];
+          if (reply === "pending") return new Promise<Event>(() => {});
+          if (reply) return fail(reply);
+          const updated = { ...session, account_id: account?.id, config_dir: account?.config_dir };
+          store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, updated) }));
+          return { type: "ack" };
+        }
         case "set_session_pinned": {
           const session = store.getState().sessions.get(body.session);
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });

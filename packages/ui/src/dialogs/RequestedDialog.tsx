@@ -19,6 +19,7 @@ import type { DialogRequest } from "./dialogRequest";
 import { ProjectDialog } from "./ProjectDialog";
 import { RenameDialog } from "./RenameDialog";
 import { SessionDialog } from "./SessionDialog";
+import { SwitchAccountDialog } from "./SwitchAccountDialog";
 
 /** A warning callout for what a confirmation is about to take along, over the list of sessions when
  * there is one to show: each with its agent's icon and title, plus a status glyph for live sessions.
@@ -202,16 +203,12 @@ export function RequestedDialog({
     }
     case "switch-account":
       return (
-        <ConfirmDialog
-          title={t("dialog.switchAccount.title", { title: isolate(sessionDisplayTitle(t, dialog.session)), account: isolate(dialog.accountName) })}
-          message={t(dialog.session.has_conversation ? "dialog.switchAccount.message" : "dialog.switchAccount.messageFresh")}
-          confirmLabel={t("dialog.switchAccount.confirm")}
-          pendingLabel={t("dialog.switchAccount.pending")}
-          onCancel={onClose}
-          onConfirm={async () => {
-            await onSwitchAccount(dialog.session.id, dialog.account);
-            onClose();
-          }}
+        <SwitchAccountDialog
+          session={dialog.session}
+          account={dialog.account}
+          accountName={dialog.accountName}
+          onClose={onClose}
+          onSwitchAccount={onSwitchAccount}
         />
       );
     case "delete-session": {

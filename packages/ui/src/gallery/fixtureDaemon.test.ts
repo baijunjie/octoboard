@@ -109,3 +109,28 @@ describe("the fixture daemon's settings and trusted folders", () => {
     expect(daemon.store.getState().trustedDirectories).toEqual([]);
   });
 });
+
+
+describe("the fixture daemon's account switches", () => {
+  const work = { id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" };
+  const session = sessionOf("s", "c", "p", "Release", "working", { model: "opus", effort: "high", bound_to: "hub" });
+  const state = snapshotState({ sessions: [session, { ...session, id: "archived", status: "archived" }], settings: { auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts: [work, { ...work, id: "codex", agent: "codex" }] } });
+  const scenario = { id: "switch", title: "", group: "Dialogs" as const, state };
+
+  it("records the new account while keeping session launch settings, and clears it for the default account", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(daemon.request({ type: "switch_session_account", session: "s", account: "work" })).resolves.toEqual({ type: "ack" });
+    expect(daemon.store.getState().sessions.get("s")).toEqual({ ...session, account_id: work.id, config_dir: work.config_dir });
+    await expect(daemon.request({ type: "switch_session_account", session: "s", account: "work" })).rejects.toMatchObject({ code: "session_already_on_account" });
+    await daemon.request({ type: "switch_session_account", session: "s", account: null });
+    expect(daemon.store.getState().sessions.get("s")).toEqual({ ...session, account_id: undefined, config_dir: undefined });
+  });
+
+  it("refuses invalid targets and configured failures without changing the session", async () => {
+    const daemon = createFixtureDaemon({ ...scenario, sessionAccountSwitches: { s: { code: "internal_error", params: { detail: "Could not restart the agent" }, message: "Could not restart the agent" } } });
+    await expect(daemon.request({ type: "switch_session_account", session: "s", account: "codex" })).rejects.toMatchObject({ code: "unknown_account" });
+    await expect(daemon.request({ type: "switch_session_account", session: "archived", account: "work" })).rejects.toMatchObject({ code: "session_archived" });
+    await expect(daemon.request({ type: "switch_session_account", session: "s", account: "work" })).rejects.toMatchObject({ code: "internal_error", params: { detail: "Could not restart the agent" } });
+    expect(daemon.store.getState().sessions.get("s")).toEqual(session);
+  });
+});
