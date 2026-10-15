@@ -119,14 +119,14 @@ describe("a project's menu", () => {
     expect(handlers.onOpenProjectDirectory).toHaveBeenCalledExactlyOnceWith(project);
   });
 
-  it("puts sync and push under Git only for a git repository", () => {
+  it("puts pull and push under Git only for a git repository", () => {
     const git = (repository: boolean) => {
       const entry = projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], [], { gitRepository: repository }).find(
         (candidate) => typeof candidate === "object" && candidate.label === "Git",
       );
       return entry && typeof entry === "object" && "items" in entry ? entry.items.flatMap((item) => (typeof item === "object" ? [item.label] : [])) : undefined;
     };
-    expect(git(true)).toEqual(["Sync repository", "Push current branch", "Switch branch", "Restore file changes…"]);
+    expect(git(true)).toEqual(["Pull current branch", "Push current branch", "Switch branch", "Restore file changes…"]);
     expect(git(false)).toBeUndefined();
   });
 

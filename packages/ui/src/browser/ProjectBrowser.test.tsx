@@ -263,6 +263,6 @@ it.each(["files", "git"] as const)("refreshes the visible %s pane when a switche
   await publish("feature");
   const types = pending.map((request) => request.body.type);
   expect(types).toContain(mode === "files" ? "list_project_dir" : "get_project_source");
-  expect(types).not.toContain("sync_project_git");
+  expect(types).not.toContain("pull_project_branch");
   expect(types).not.toContain("refresh_git_status");
 });

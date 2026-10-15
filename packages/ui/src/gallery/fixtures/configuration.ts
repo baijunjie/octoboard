@@ -26,7 +26,7 @@ const accounts = [
 ];
 
 // Two consoles, so the export has something to choose between, one of them naming an account. The
-// inspections below say the application setting is off now; `syncing` is the machine where it is
+// inspections below say the application setting is off now; `autoPulling` is the machine where it is
 // on.
 const second = consoleOf("c-docs", "Documentation", { claude_account_id: "a-studio", created_at: console_.created_at + 1 });
 const layout = {
@@ -40,17 +40,17 @@ const layout = {
 };
 const state = snapshotState({
   ...layout,
-  settings: { auto_sync_repositories: false, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { auto_pull_repositories: false, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
-const syncing = snapshotState({
+const autoPulling = snapshotState({
   ...layout,
-  settings: { auto_sync_repositories: true, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { auto_pull_repositories: true, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 const noConsoleState = snapshotState({
   consoles: [],
   projects: [],
   sessions: [],
-  settings: { auto_sync_repositories: false, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { auto_pull_repositories: false, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 
 const openSettings = (ui: Ui) => ui.press(ui.t("rail.settings"));
@@ -86,7 +86,7 @@ const project = (extra: Partial<InspectedProject> & Pick<InspectedProject, "name
  * places (whose recorded path is long enough to break over lines), a second console whose only
  * project can be cloned, and one with no project. */
 export const REVIEW: Omit<Inspection, "type"> = {
-  settings: { auto_sync_repositories: true, current_auto_sync_repositories: false },
+  settings: { auto_pull_repositories: true, current_auto_pull_repositories: false },
   consoles: [
     {
       name: "Work laptop",
@@ -164,7 +164,7 @@ const SINGLE: Omit<Inspection, "type"> = {
  * on. */
 const WITH_SETTING_OFF: Omit<Inspection, "type"> = {
   ...SINGLE,
-  settings: { auto_sync_repositories: false, current_auto_sync_repositories: true },
+  settings: { auto_pull_repositories: false, current_auto_pull_repositories: true },
 };
 
 const failure = (code: string, params: Record<string, string>, message: string) => ({ code, params, message });
@@ -176,7 +176,7 @@ const LONG_CLONE_DETAIL = "unable to access 'https://github.com/acme/design-syst
  * placed, a console that could not be created with its project not tried, and the account
  * references that fell back. */
 export const MIXED_RESULT: Omit<Imported, "type"> = {
-  settings_applied: { auto_sync_repositories: true },
+  settings_applied: { auto_pull_repositories: true },
   consoles: [
     {
       name: "Work laptop",
@@ -469,7 +469,7 @@ export const configurationScenarios: Scenario[] = [
     category: "normal",
     title: "Import, a document whose setting is off where it is on here",
     description: "The checkbox is ticked, and its note says applying turns the setting off.",
-    state: syncing,
+    state: autoPulling,
     configuration: { file: FILE, inspection: WITH_SETTING_OFF },
     steps: [
       ...importFromSettings,
@@ -511,7 +511,7 @@ export const configurationScenarios: Scenario[] = [
     category: "exceptional",
     title: "Import, result where the settings could not be applied",
     description: "The settings failure is a line of its own above the table, beside a project that was left out.",
-    state: syncing,
+    state: autoPulling,
     configuration: { file: FILE, inspection: WITH_SETTING_OFF, imported: SETTINGS_FAILED_RESULT },
     steps: [
       ...importFromSettings,

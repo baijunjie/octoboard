@@ -267,11 +267,11 @@ export function ImportReview({
   const t = useT();
   const [announcement, setAnnouncement] = useState<string>();
   const settings = inspection.settings;
-  const setting = t("settings.git.autoSync.label");
+  const setting = t("settings.git.autoPull.label");
   const settingsNote = settings
-    ? settings.auto_sync_repositories === settings.current_auto_sync_repositories
-      ? t(settings.auto_sync_repositories ? "configuration.import.settings.alreadyOn" : "configuration.import.settings.alreadyOff", { setting })
-      : t(settings.auto_sync_repositories ? "configuration.import.settings.turnsOn" : "configuration.import.settings.turnsOff", { setting })
+    ? settings.auto_pull_repositories === settings.current_auto_pull_repositories
+      ? t(settings.auto_pull_repositories ? "configuration.import.settings.alreadyOn" : "configuration.import.settings.alreadyOff", { setting })
+      : t(settings.auto_pull_repositories ? "configuration.import.settings.turnsOn" : "configuration.import.settings.turnsOff", { setting })
     : undefined;
   const cloning = review.some((rows) => rows.some((row) => row.choice === "clone"));
 

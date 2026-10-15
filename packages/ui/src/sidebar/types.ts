@@ -42,9 +42,9 @@ export interface SidebarHandlers {
   onOpenProjectTerminal: (project: Project) => void;
   /** Copies the project name; absent without a clipboard capability. */
   onCopyProjectName?: (project: Project) => void;
-  /** Checks the project against its remote and fast-forwards it now, whatever the automatic sync
+  /** Checks the project against its remote and fast-forwards it now, whatever the automatic pull
    * setting says. */
-  onSyncProjectGit: (project: Project) => void;
+  onPullProjectBranch: (project: Project) => void;
   /** Loads the local branch choices for this project's Switch branch submenu. */
   onLoadProjectBranches: (project: Project) => Promise<ActionMenuEntry[]>;
   /** Pushes the project's current branch. */

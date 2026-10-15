@@ -7,7 +7,7 @@ control on the right; under a right-to-left language the sides swap (see "Right-
 folders**, **Permissions**, **Notifications** and **Configuration**; the dialog opens on General unless it was asked to
 open on another section.
 
-A console session can read the default clone directory, the automatic sync of repositories, the agent accounts (without
+A console session can read the default clone directory, the automatic pulling of repositories, the agent accounts (without
 their directories) and the trusted folders, and change the first two (see "Application settings: `get_settings` and
 `update_settings`" in `docs/product/agent-settings-tools.md`).
 
@@ -121,9 +121,9 @@ in `docs/product/application-lifecycle.md`.
 
 ## Git
 
-One row, **Automatically sync repositories**, a switch, off to begin with: whether a project's branch is
-fast-forwarded on its own when it is behind its upstream, rather than only reported as behind. What it does, what it
-never does and where the value is kept are in "Automatically syncing repositories" in
+One row, **Automatically pull repositories**, a switch, off to begin with: whether a project's branch is pulled
+(fast-forwarded) on its own when it is behind its upstream, rather than only reported as behind. What it does, what it
+never does and where the value is kept are in "Automatically pulling repositories" in
 `docs/product/project-git-status.md`.
 
 ## Agent accounts

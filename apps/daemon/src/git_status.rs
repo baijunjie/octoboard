@@ -4,11 +4,11 @@
 //! once at a time, concurrently with the others of its console, and at most once every
 //! `GIT_CHECK_MIN_INTERVAL`.
 //!
-//! `sync_project_now` is the manual entry point, driven by `sync_project_git`: one project's
+//! `pull_project_now` is the manual entry point, driven by `pull_project_branch`: one project's
 //! ordinary check, but past the floor above and fast-forwarding whatever the setting says.
 //!
-//! `sync_behind_projects` is the module's third entry point, driven by `update_settings` the
-//! moment **Automatically sync repositories** is turned on: it only fast-forwards branches already
+//! `pull_behind_projects` is the module's third entry point, driven by `update_settings` the
+//! moment **Automatically pull repositories** is turned on: it only fast-forwards branches already
 //! behind their upstream, goes nowhere near the remote, and is therefore outside the floor above —
 //! sharing the in-flight claim with the checks, but not their minimum interval.
 
@@ -60,7 +60,7 @@ pub fn refresh(state: &Arc<AppState>, projects: Vec<Project>) {
 /// closure itself and released by `release_unless_rerun_owed` after each check, or on drop if a
 /// step panics, so a panic still frees the project for the next sweep instead of excluding it
 /// forever. Unless `force`, the project must also be due (`GIT_CHECK_MIN_INTERVAL`), and the
-/// fast-forward follows the setting; `force` is the manual sync, which ignores both. A forced
+/// fast-forward follows the setting; `force` is the manual pull, which ignores both. A forced
 /// request that finds a check running leaves it to that check, which runs once more, forced,
 /// before releasing the claim.
 fn spawn_check(state: &Arc<AppState>, project: Project, force: bool) {
@@ -103,13 +103,13 @@ fn spawn_check(state: &Arc<AppState>, project: Project, force: bool) {
 }
 
 /// One project's check and fast-forward, started right now at the user's request: the same work
-/// `refresh` does, but it ignores `GIT_CHECK_MIN_INTERVAL` and the **Automatically sync
+/// `refresh` does, but it ignores `GIT_CHECK_MIN_INTERVAL` and the **Automatically pull
 /// repositories** setting — asking for it is the consent the setting would otherwise give. A
 /// project already being checked gets one more forced check once that one ends, so the request
-/// results in a fast-forward attempt, except while the settings-triggered `sync_behind_projects`
+/// results in a fast-forward attempt, except while the settings-triggered `pull_behind_projects`
 /// pass holds the claim: the request is left to that pass, which makes no rerun.
 /// Fire-and-forget, like `refresh`.
-pub fn sync_project_now(state: &Arc<AppState>, project: Project) {
+pub fn pull_project_now(state: &Arc<AppState>, project: Project) {
     spawn_check(state, project, true);
 }
 
@@ -126,8 +126,8 @@ fn due_for_check(last_completed: Option<Instant>, now: Instant, floor: Duration)
 /// One project's check, steps 1-6 of the daemon behaviour described in `PROTOCOL.md`. Never fails
 /// outright: every step that can fail records its message on `GitStatus.error` and the check
 /// continues, so a transient fetch failure still leaves the branch name and last known numbers
-/// showing. `force_sync` fast-forwards a syncable branch whether or not the setting is on.
-fn check_project(state: &AppState, project: &Project, force_sync: bool) {
+/// showing. `force_pull` fast-forwards a pullable branch whether or not the setting is on.
+fn check_project(state: &AppState, project: &Project, force_pull: bool) {
     let path = PathBuf::from(&project.path);
 
     // Checked before the first publish, not after it: publishing `repository: true` and only then
@@ -201,7 +201,7 @@ fn check_project(state: &AppState, project: &Project, force_sync: bool) {
     }
     read_branch_header(&path, &mut status);
 
-    if (force_sync || auto_sync_enabled(state)) && syncable(&status) {
+    if (force_pull || auto_pull_enabled(state)) && pullable(&status) {
         fast_forward(state, &path, &mut status);
     }
 
@@ -214,7 +214,7 @@ fn check_project(state: &AppState, project: &Project, force_sync: bool) {
 }
 
 /// Fast-forwards every project already behind its upstream, concurrently — what turning
-/// **Automatically sync repositories** on does right away, instead of leaving the branches to wait
+/// **Automatically pull repositories** on does right away, instead of leaving the branches to wait
 /// for the client's next five-minute sweep. The statuses held in `AppState` only pick which
 /// projects are worth visiting, and nothing here goes to the remote: a fetch would duplicate the
 /// one the next sweep makes anyway, and the branch is already behind refs that were fetched
@@ -224,9 +224,9 @@ fn check_project(state: &AppState, project: &Project, force_sync: bool) {
 ///
 /// Only the caller has established that the setting is on. The fast-forward writes to the
 /// repository, so a caller that has not must not call it.
-pub fn sync_behind_projects(state: &Arc<AppState>) {
+pub fn pull_behind_projects(state: &Arc<AppState>) {
     for status in state.git_statuses() {
-        if !syncable(&status) {
+        if !pullable(&status) {
             continue;
         }
         // Both an outright store error and a project that is genuinely gone mean skip: the branch
@@ -242,7 +242,7 @@ pub fn sync_behind_projects(state: &Arc<AppState>) {
         let state = state.clone();
         tokio::task::spawn_blocking(move || {
             let _claim = claim;
-            sync_project(&state, &project, status);
+            pull_project(&state, &project, status);
         });
     }
 }
@@ -253,7 +253,7 @@ pub fn sync_behind_projects(state: &Arc<AppState>) {
 /// `HEAD`, committed, or taken the directory out of git entirely, and `git merge --ff-only` acts on
 /// whatever `HEAD` is now rather than on the branch the cached status described. The re-read is a
 /// local `git status`, no network, so it costs nothing the next sweep would not pay anyway.
-fn sync_project(state: &AppState, project: &Project, mut status: GitStatus) {
+fn pull_project(state: &AppState, project: &Project, mut status: GitStatus) {
     let path = PathBuf::from(&project.path);
     if !hostfs::is_git_repo(&path) {
         // The directory has left git since its last check. Nothing is published: correcting the
@@ -268,7 +268,7 @@ fn sync_project(state: &AppState, project: &Project, mut status: GitStatus) {
     status.ahead = 0;
     status.behind = 0;
     read_branch_header(&path, &mut status);
-    if !syncable(&status) {
+    if !pullable(&status) {
         // Nothing to report, whether the branch genuinely moved on since its last check or the
         // re-read above failed and left the gate blank: either way that check's own numbers stay
         // on the badge until the next sweep replaces them.
@@ -285,32 +285,32 @@ fn sync_project(state: &AppState, project: &Project, mut status: GitStatus) {
     state.publish_git_status(status);
 }
 
-/// Whether the **Automatically sync repositories** setting is on; a store that cannot be read
+/// Whether the **Automatically pull repositories** setting is on; a store that cannot be read
 /// counts as off, the same as the default. The fast-forward writes to the repository, so it
 /// never happens on a guess.
-fn auto_sync_enabled(state: &AppState) -> bool {
+fn auto_pull_enabled(state: &AppState) -> bool {
     state
         .store
         .get_settings()
-        .map(|settings| settings.auto_sync_repositories)
+        .map(|settings| settings.auto_pull_repositories)
         .unwrap_or(false)
 }
 
-/// Whether `status` describes a branch the sync may fast-forward: one behind its upstream with no
-/// commits of its own (see "Automatically syncing repositories" in
+/// Whether `status` describes a branch the pull may fast-forward: one behind its upstream with no
+/// commits of its own (see "Automatically pulling repositories" in
 /// `docs/product/project-git-status.md`). Pure over the status so both callers decide alike and
 /// the rule is unit-tested without a repository.
-fn syncable(status: &GitStatus) -> bool {
+fn pullable(status: &GitStatus) -> bool {
     status.upstream.is_some() && status.behind > 0 && status.ahead == 0
 }
 
 /// Fast-forwards the branch onto its upstream and reads the branch header again, reporting the
-/// fast-forward in flight on `status` while it runs. `status` must have passed `syncable`. A
+/// fast-forward in flight on `status` while it runs. `status` must have passed `pullable`. A
 /// fast-forward `git` refuses records its message, as a failed fetch does.
 fn fast_forward(state: &AppState, path: &Path, status: &mut GitStatus) {
-    status.activity = GitActivity::Syncing;
+    status.activity = GitActivity::Pulling;
     state.publish_git_status(status.clone());
-    // `syncable` just checked `upstream` to be `Some`.
+    // `pullable` just checked `upstream` to be `Some`.
     let upstream = status.upstream.clone().expect("upstream is set");
     if let Err(err) = run_git_write(path, &["merge", "--ff-only", &upstream]) {
         tracing::debug!(%err, "fast-forwarding the branch failed");
@@ -350,7 +350,7 @@ pub(crate) const BRANCH_HEADER_ARGS: &[&str] = &[
 /// Runs `git status --porcelain=v2 --branch --untracked-files=no` and applies what it says to
 /// `status`; a failure to run it records `status.error` and leaves every other field of `status`
 /// exactly as it was. A caller that reads a `GitStatus` it did not just build must therefore blank
-/// whatever it is about to rely on before calling this, as `sync_project` does for the fields its
+/// whatever it is about to rely on before calling this, as `pull_project` does for the fields its
 /// gate reads; on a brand-new `GitStatus` the fields left behind are already the empty reading —
 /// `None` branch, no upstream, zero ahead and behind.
 /// `--untracked-files=no` skips enumerating the worktree's files, which `parse_branch_header`
@@ -543,7 +543,7 @@ pub(crate) fn parse_branch_header(output: &str) -> BranchHeader {
 /// Re-reads the local branch header and publishes it. A push moves the ahead count without a
 /// fetch, and this is what the badge shows afterwards; nothing here goes to the remote. An
 /// `error` already on the status stays unless this read itself fails, which records its own.
-/// An overlapping check or sync keeps its current activity; the local read does not finish it.
+/// An overlapping check or pull keeps its current activity; the local read does not finish it.
 pub(crate) fn publish_reread(state: &AppState, project: &Project) {
     let path = PathBuf::from(&project.path);
     let mut status = state
@@ -654,7 +654,7 @@ mod tests {
     }
 
     #[test]
-    fn only_a_branch_behind_its_upstream_with_no_commits_of_its_own_is_syncable() {
+    fn only_a_branch_behind_its_upstream_with_no_commits_of_its_own_is_pullable() {
         let status = |upstream: Option<&str>, ahead: u32, behind: u32| GitStatus {
             project: "project-1".to_string(),
             repository: true,
@@ -666,11 +666,11 @@ mod tests {
             activity: GitActivity::Idle,
             error: None,
         };
-        assert!(syncable(&status(Some("origin/main"), 0, 2)));
+        assert!(pullable(&status(Some("origin/main"), 0, 2)));
         // Up to date, ahead as well as behind, and no upstream at all: each left alone.
-        assert!(!syncable(&status(Some("origin/main"), 0, 0)));
-        assert!(!syncable(&status(Some("origin/main"), 1, 2)));
-        assert!(!syncable(&status(None, 0, 2)));
+        assert!(!pullable(&status(Some("origin/main"), 0, 0)));
+        assert!(!pullable(&status(Some("origin/main"), 1, 2)));
+        assert!(!pullable(&status(None, 0, 2)));
     }
 
     fn remotes(names: &[&str]) -> Vec<Remote> {

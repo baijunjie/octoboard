@@ -195,7 +195,7 @@ export interface Ui {
 }
 
 /** The icon the git badge draws for `status`, by the name lucide gives its class (`GitBadge.tsx`
- * chooses it: a check, fast-forward or push in flight, a failed check, a detached `HEAD`, else a branch). */
+ * chooses it: a check, pull or push in flight, a failed check, a detached `HEAD`, else a branch). */
 function gitGlyphOf(status: GitStatus): string {
   if (status.activity !== "idle") return "refresh-cw";
   if (status.error) return "triangle-alert";

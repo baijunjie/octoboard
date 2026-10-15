@@ -230,7 +230,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         name: "get_settings",
-        description: "The application-wide settings: `auto_sync_repositories`, \
+        description: "The application-wide settings: `auto_pull_repositories`, \
                       `default_clone_dir`, the `accounts` (each agent also has a default account, \
                       listed with the id `default`), and the `trusted_directories`. Accounts and \
                       trusted directories are read-only here.",
@@ -239,17 +239,17 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "update_settings",
         description: "Change application-wide settings; what is omitted is left as it is. \
-                      Returns them as `get_settings` gives them. Turning `auto_sync_repositories` \
+                      Returns them as `get_settings` gives them. Turning `auto_pull_repositories` \
                       on fast-forwards the projects already known to be behind at once, which \
                       changes files in the user's repositories. These are the user's settings: \
                       change one only when they asked you to.",
         schema: || {
             object_schema(
                 json!({
-                    "auto_sync_repositories": {
+                    "auto_pull_repositories": {
                         "type": "boolean",
-                        "description": "Whether projects behind their upstream are fast-forwarded \
-                                        automatically.",
+                        "description": "Whether projects behind their upstream are pulled \
+                                        (fast-forwarded) automatically.",
                     },
                     "default_clone_dir": {
                         "type": "string",

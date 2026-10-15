@@ -11,7 +11,7 @@ const console_ = consoleOf("c-1", "Main");
 const evenProject = projectOf("p-even", console_.id, "Even with upstream");
 const aheadBehindProject = projectOf("p-ahead-behind", console_.id, "Ahead and behind");
 const checkingProject = projectOf("p-checking", console_.id, "Checking now");
-const syncingProject = projectOf("p-syncing", console_.id, "Fast-forwarding now");
+const pullingProject = projectOf("p-pulling", console_.id, "Pulling now");
 const errorProject = projectOf("p-error", console_.id, "Fetch failed");
 const detachedProject = projectOf("p-detached", console_.id, "Detached HEAD");
 const noRepoProject = projectOf("p-no-repo", console_.id, "Not a git repository");
@@ -23,7 +23,7 @@ const projects = [
   evenProject,
   aheadBehindProject,
   checkingProject,
-  syncingProject,
+  pullingProject,
   errorProject,
   detachedProject,
   noRepoProject,
@@ -41,7 +41,7 @@ const gitStatuses = [
   gitStatusOf(evenProject.id),
   gitStatusOf(aheadBehindProject.id, { ahead: 3, behind: 2 }),
   gitStatusOf(checkingProject.id, { activity: "checking" }),
-  gitStatusOf(syncingProject.id, { activity: "syncing", behind: 2 }),
+  gitStatusOf(pullingProject.id, { activity: "pulling", behind: 2 }),
   errorStatus,
   gitStatusOf(detachedProject.id, { branch: "a1b2c3d", detached: true, upstream: null }),
   gitStatusOf(noRepoProject.id, { repository: false, branch: null, upstream: null }),
@@ -87,14 +87,14 @@ const squeezeStatuses = [squeezeStatus, regionalStatus, countsStatus];
 
 // Short branches and a wider sidebar keep both count arrows visible throughout a transfer.
 const pushPreview = projectOf("p-transfer-push", console_.id, "Pushing");
-const pullPreview = projectOf("p-transfer-pull", console_.id, "Pulling / fast-forwarding");
+const pullPreview = projectOf("p-transfer-pull", console_.id, "Pulling");
 const noCountsPreview = projectOf("p-transfer-no-counts", console_.id, "Pushing with no counts");
 const transferState = snapshotState({
   consoles: [console_],
   projects: [pushPreview, pullPreview, noCountsPreview],
   gitStatuses: [
     gitStatusOf(pushPreview.id, { branch: "main", activity: "pushing", ahead: 3, behind: 2 }),
-    gitStatusOf(pullPreview.id, { branch: "main", activity: "syncing", behind: 2 }),
+    gitStatusOf(pullPreview.id, { branch: "main", activity: "pulling", behind: 2 }),
     gitStatusOf(noCountsPreview.id, { branch: "main", activity: "pushing" }),
   ],
 });
@@ -154,7 +154,7 @@ export const gitScenarios: Scenario[] = [
   {
     id: "git-transfer-badges", group: GROUP, category: "normal",
     title: "Push and pull count indicators",
-    description: "Each transfer keeps a spinning loader on the left. On the right, pushing scrolls only ↑ beside 3 upward; pulling / fast-forwarding scrolls only ↓ beside 2 downward. The push’s opposite ↓ arrow and both numbers stay still; pull shows only ↓2 because it has no commits ahead of upstream. The zero-count push shows only the loader and branch.",
+    description: "Each transfer keeps a spinning loader on the left. On the right, pushing scrolls only ↑ beside 3 upward; pulling scrolls only ↓ beside 2 downward. The push’s opposite ↓ arrow and both numbers stay still; pull shows only ↓2 because it has no commits ahead of upstream. The zero-count push shows only the loader and branch.",
     state: transferState,
     preferences: { sidebarWidth: 480 },
   },
@@ -183,7 +183,7 @@ export const gitScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Project Git actions",
-    description: "Restore file changes is separated from Sync and Push and marked as destructive. Selecting it opens a confirmation before changing files.",
+    description: "Restore file changes is separated from Pull and Push and marked as destructive. Selecting it opens a confirmation before changing files.",
     ...restoreFixture,
     projectRestores: { [restoreProject.id]: RESTORED_PROJECT },
     steps: openGitSubmenu(restoreProject.name),

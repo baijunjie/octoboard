@@ -16,7 +16,7 @@ const state = snapshotState({
 const browserState: Scenario["state"] = {
   ...state,
   settings: {
-    auto_sync_repositories: false,
+    auto_pull_repositories: false,
     default_clone_dir: "/Users/dev/Projects",
     accounts: [
       { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },

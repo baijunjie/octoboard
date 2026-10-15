@@ -327,7 +327,7 @@ export const zhHans: Translation<"other"> = {
   "sidebar.project.branchesIncomplete": "部分分支未能列出",
   "daemon.git_switch_failed": "Git 无法切换分支：{detail}",
   "sidebar.project.git": "Git",
-  "sidebar.project.syncGit": "同步仓库",
+  "sidebar.project.pullBranch": "拉取当前分支",
   "sidebar.project.pushBranch": "推送当前分支",
   "sidebar.project.pushed": "已推送当前分支。",
   "sidebar.project.archive": "查看归档",
@@ -365,8 +365,8 @@ export const zhHans: Translation<"other"> = {
   "sidebar.git.pushingUnknown": "正在推送分支",
   "sidebar.git.checking": "正在检查分支 {branch}",
   "sidebar.git.checkingUnknown": "正在检查分支",
-  "sidebar.git.syncing": "正在快进分支 {branch}",
-  "sidebar.git.syncingUnknown": "正在快进分支",
+  "sidebar.git.pulling": "正在拉取分支 {branch}",
+  "sidebar.git.pullingUnknown": "正在拉取分支",
   "sidebar.git.ahead": {
     other: "领先 {count} 个提交",
   },
@@ -808,7 +808,7 @@ export const zhHans: Translation<"other"> = {
     other: "已将“{choice}”应用到 {count} 个项目。",
   },
   "configuration.import.settings.label": "同时应用应用设置",
-  "configuration.import.settings.turnsOn": "开启“{setting}”（目前为关闭）。之后 {appName} 会自动快进你的仓库。",
+  "configuration.import.settings.turnsOn": "开启“{setting}”（目前为关闭）。之后 {appName} 会自动拉取你的仓库。",
   "configuration.import.settings.turnsOff": "关闭“{setting}”（目前为开启）。",
   "configuration.import.settings.alreadyOn": "文件中“{setting}”为开启，当前也已开启，因此应用后不会有任何变化。",
   "configuration.import.settings.alreadyOff": "文件中“{setting}”为关闭，当前也已关闭，因此应用后不会有任何变化。",
@@ -900,9 +900,9 @@ export const zhHans: Translation<"other"> = {
     "开启后，关闭窗口时会话及其智能体会继续运行，通知也会照常送达。点按菜单栏图标即可重新打开窗口。",
   "settings.background.description.on":
     "关闭窗口后，会话及其智能体仍会继续运行，通知也会照常送达。点按菜单栏图标即可重新打开窗口。",
-  "settings.git.autoSync.label": "自动同步仓库",
-  "settings.git.autoSync.description":
-    "当项目分支落后于其上游且可以快进时，将其快进。从不推送，也不会改动有本地提交的分支。无论此设置如何，都会每隔几分钟检查一次远程，因此分支始终会显示领先或落后的提交数。",
+  "settings.git.autoPull.label": "自动拉取仓库",
+  "settings.git.autoPull.description":
+    "当项目分支落后于其上游且可以快进时，自动以快进方式拉取该分支。从不推送，也不会改动有本地提交的分支。无论此设置如何，都会每隔几分钟检查一次远程，因此分支始终会显示领先或落后的提交数。",
   "settings.trusted.description":
     "对于这些文件夹下的每个项目（包括之后添加的项目），{appName} 会直接按下每个智能体的信任确认，而不再询问。随后各智能体会在自己的配置中记录信任，并应用项目自身的权限规则和钩子。在会话的信任对话框中可以信任某个文件夹。只有当你信任文件夹内最终出现的所有内容时，才应信任该文件夹。",
   "settings.trusted.empty": "还没有受信任的文件夹",

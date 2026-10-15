@@ -133,8 +133,8 @@ pub struct InspectedProject {
 /// can show what applying them would change.
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedSettings {
-    pub auto_sync_repositories: bool,
-    pub current_auto_sync_repositories: bool,
+    pub auto_pull_repositories: bool,
+    pub current_auto_pull_repositories: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -465,8 +465,8 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
 
     let settings = match &document.settings {
         Some(settings) => Some(InspectedSettings {
-            auto_sync_repositories: settings.auto_sync_repositories,
-            current_auto_sync_repositories: state.store.auto_sync_repositories()?,
+            auto_pull_repositories: settings.auto_pull_repositories,
+            current_auto_pull_repositories: state.store.auto_pull_repositories()?,
         }),
         None => None,
     };
@@ -642,7 +642,7 @@ pub async fn apply(
 
     let (mut settings_applied, mut settings_error) = (None, None);
     if let Some(settings) = document.settings.filter(|_| apply_settings) {
-        match coordinator::update_settings(state, Some(settings.auto_sync_repositories), None) {
+        match coordinator::update_settings(state, Some(settings.auto_pull_repositories), None) {
             Ok(()) => settings_applied = Some(settings),
             Err(err) => settings_error = Some(ImportFailure::of(&err)),
         }
@@ -869,8 +869,8 @@ mod tests {
         Ok(apply(state, document, resolutions, false).await?.consoles)
     }
 
-    fn with_settings(mut document: serde_json::Value, auto_sync: bool) -> serde_json::Value {
-        document["settings"] = json!({ "auto_sync_repositories": auto_sync });
+    fn with_settings(mut document: serde_json::Value, auto_pull: bool) -> serde_json::Value {
+        document["settings"] = json!({ "auto_pull_repositories": auto_pull });
         document
     }
 
@@ -1546,13 +1546,13 @@ mod tests {
     async fn the_documents_settings_are_shown_by_inspecting_and_applied_only_when_asked_for() {
         let (state, _dir) = app_state("import-settings");
         let full = with_settings(document(vec![console("Hub", Vec::new())]), true);
-        assert!(!state.store.auto_sync_repositories().unwrap());
+        assert!(!state.store.auto_pull_repositories().unwrap());
 
         let inspection = inspect(&state, &full).await.unwrap();
         let settings = inspection.settings.expect("the document carries settings");
-        assert!(settings.auto_sync_repositories);
-        assert!(!settings.current_auto_sync_repositories);
-        assert!(!state.store.auto_sync_repositories().unwrap());
+        assert!(settings.auto_pull_repositories);
+        assert!(!settings.current_auto_pull_repositories);
+        assert!(!state.store.auto_pull_repositories().unwrap());
         assert!(inspect(&state, &document(Vec::new()))
             .await
             .unwrap()
@@ -1561,16 +1561,32 @@ mod tests {
 
         let imported = apply(&state, &full, Vec::new(), false).await.unwrap();
         assert_eq!(imported.settings_applied, None);
-        assert!(!state.store.auto_sync_repositories().unwrap());
+        assert!(!state.store.auto_pull_repositories().unwrap());
 
         let imported = apply(&state, &full, Vec::new(), true).await.unwrap();
         assert_eq!(
             imported.settings_applied,
             Some(DocumentSettings {
-                auto_sync_repositories: true
+                auto_pull_repositories: true
             })
         );
-        assert!(state.store.auto_sync_repositories().unwrap());
+        assert!(state.store.auto_pull_repositories().unwrap());
+    }
+
+    #[tokio::test]
+    async fn a_document_exported_with_the_older_setting_name_still_applies_it() {
+        let (state, _dir) = app_state("import-legacy-setting");
+        let mut older = document(vec![console("Hub", Vec::new())]);
+        older["settings"] = json!({ "auto_sync_repositories": true });
+
+        let imported = apply(&state, &older, Vec::new(), true).await.unwrap();
+        assert_eq!(
+            imported.settings_applied,
+            Some(DocumentSettings {
+                auto_pull_repositories: true
+            })
+        );
+        assert!(state.store.auto_pull_repositories().unwrap());
     }
 
     #[tokio::test]
@@ -1660,7 +1676,7 @@ mod tests {
         assert!(stored_projects(&state).is_empty());
         // The rest of the import still happens and is still reported.
         assert!(imported.settings_applied.is_some());
-        assert!(state.store.auto_sync_repositories().unwrap());
+        assert!(state.store.auto_pull_repositories().unwrap());
     }
 
     #[tokio::test]

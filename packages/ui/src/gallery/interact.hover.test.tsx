@@ -336,7 +336,7 @@ it("hoverGitBadge puts the pointer on the line of a row's badge and puts up the 
   release(badge);
 });
 
-it.each(["idle", "checking", "syncing", "pushing"] as const)("hoverGitBadge puts the pointer on the glyph or line for %s, as asked", async (activity) => {
+it.each(["idle", "checking", "pulling", "pushing"] as const)("hoverGitBadge puts the pointer on the glyph or line for %s, as asked", async (activity) => {
   const status = { ...branchStatus, activity };
   const targets: Element[] = [];
   for (const over of ["glyph", "line"] as const) {
@@ -354,7 +354,7 @@ it.each(["idle", "checking", "syncing", "pushing"] as const)("hoverGitBadge puts
   expect(targets[0]!.classList.contains(activity === "idle" ? "lucide-git-branch" : "lucide-refresh-cw")).toBe(true);
 });
 
-it.each(["checking", "syncing", "pushing"] as const)("hoverGitBadge takes the badge of the %s glyph the status draws", async (activity) => {
+it.each(["checking", "pulling", "pushing"] as const)("hoverGitBadge takes the badge of the %s glyph the status draws", async (activity) => {
   const status = gitStatusOf("p-1", { activity, error: "fetch failed" });
   mountFocusBadge(status);
   await settledLive(createUi(document, "en").hoverGitBadge(status, "glyph"));

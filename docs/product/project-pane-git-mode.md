@@ -15,7 +15,7 @@ timestamps moved while its content did not), and fetches nothing from a remote. 
 version 2.45: reading an object that a partial clone does not have yet can make such a Git fetch it.
 
 The project's **branch badge** in the sidebar is separate (see `docs/product/project-git-status.md`): its check fetches
-the remote's refs and, with Automatically sync repositories on or on Sync repository, may fast-forward the branch.
+the remote's refs and, with Automatically pull repositories on or on Pull current branch, may fast-forward the branch.
 Pushing the current branch is not that check and not this mode (see "Pushing the current branch" in
 `docs/product/project-git-status.md`). The Git mode does none of these and refreshes none of them. A change of the
 reported branch or detached state refreshes the visible mode

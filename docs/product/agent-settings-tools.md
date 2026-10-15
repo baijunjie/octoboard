@@ -116,14 +116,14 @@ avatar, and `workdir`, its working directory. The avatar itself is never returne
 
 | Field | Contents |
 |---|---|
-| `auto_sync_repositories` | Whether projects behind their upstream are fast-forwarded on their own (see "Automatically syncing repositories" in `docs/product/project-git-status.md`). |
+| `auto_pull_repositories` | Whether projects behind their upstream are pulled (fast-forwarded) on their own (see "Automatically pulling repositories" in `docs/product/project-git-status.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
 | `accounts` | Every account, each with `id`, `agent`, `name` and `default`. Each agent's default account is listed first among that agent's, with the id `default`. An account's directory is never given. |
 | `trusted_directories` | The trusted folders (see "Trusted folders" in `docs/product/folder-trust.md`). Read-only. |
 
-`update_settings` takes `auto_sync_repositories` and `default_clone_dir`, under the rules of the same settings in
+`update_settings` takes `auto_pull_repositories` and `default_clone_dir`, under the rules of the same settings in
 Settings: a clone directory must be absolute or start with `~/`, and a blank one goes back to the built-in default.
-A refused value leaves the other one unapplied too. Turning `auto_sync_repositories` on fast-forwards the projects
+A refused value leaves the other one unapplied too. Turning `auto_pull_repositories` on fast-forwards the projects
 already known to be behind at once, as turning the switch on in Settings does, which changes files in the user's
 repositories. The call answers as `get_settings` does.
 

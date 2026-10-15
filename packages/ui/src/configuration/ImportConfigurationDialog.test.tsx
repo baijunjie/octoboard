@@ -11,7 +11,7 @@ import { mountDialog, press } from "./testSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const DOCUMENT = { format: "octoboard-configuration", version: 1, settings: { auto_sync_repositories: true }, consoles: [{ name: "Work laptop" }] };
+const DOCUMENT = { format: "octoboard-configuration", version: 1, settings: { auto_pull_repositories: true }, consoles: [{ name: "Work laptop" }] };
 
 /** A daemon that inspects as `REVIEW` and imports as `MIXED_RESULT`, unless a test
  * says otherwise. */
@@ -170,7 +170,7 @@ it("tells each project's result in a table row, with the reason beside a failure
   const section = (title: string) => Array.from(document.body.querySelectorAll("section")).find((s) => s.querySelector(":scope > h3")?.textContent === title)?.textContent ?? "";
   expect(section("Accounts that fell back to the default account")).toContain("Claude Code account “Work”, named by the console Work laptop");
   expect(section("Accounts that fell back to the default account")).toContain("Codex account “Personal”, named by the project Search API in Work laptop");
-  expect(text()).toContain("“Automatically sync repositories” is now on.");
+  expect(text()).toContain("“Automatically pull repositories” is now on.");
 });
 
 // A browser without the file input's `cancel` event never answers for a dismissed picker.

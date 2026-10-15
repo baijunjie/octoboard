@@ -79,7 +79,7 @@ describe("the fixture daemon's session creation", () => {
     const project = projectOf("p", owner.id, "Website");
     const existing = sessionOf("hub", owner.id, undefined, "Renamed release coordinator", "archived", { ordinal: 6 });
     const accounts = [{ id: "work", agent: "codex" as const, name: "Work", config_dir: "/Users/dev/.codex-work" }];
-    const daemon = createFixtureDaemon({ id: "open", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ consoles: [owner], projects: [project], sessions: [existing], settings: { auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts } }) });
+    const daemon = createFixtureDaemon({ id: "open", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ consoles: [owner], projects: [project], sessions: [existing], settings: { auto_pull_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts } }) });
     const preview = { type: "preview_console_session_title" as const, console: owner.id };
     for (let read = 0; read < 2; read++) {
       await expect(daemon.request(preview)).resolves.toEqual({ type: "console_session_title", console: owner.id, title: owner.name });
@@ -179,13 +179,13 @@ describe("the fixture daemon's deletion of archived sessions", () => {
 describe("the fixture daemon's settings and trusted folders", () => {
   it("applies a settings request atomically, preserves accounts, and reaches an empty trust list by removal", async () => {
     const accounts = [{ id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }];
-    const daemon = createFixtureDaemon({ id: "settings-contract", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: { auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts }, trustedDirectories: ["/Users/dev/code"] }) });
-    await expect(daemon.request({ type: "update_settings", auto_sync_repositories: true, default_clone_dir: "relative" })).rejects.toThrow();
-    expect(daemon.store.getState().settings.auto_sync_repositories).toBe(false);
-    await daemon.request({ type: "update_settings", auto_sync_repositories: true, default_clone_dir: "~/work/../repos" });
-    expect(daemon.store.getState().settings).toEqual({ auto_sync_repositories: true, default_clone_dir: "/Users/dev/repos", accounts });
-    await daemon.request({ type: "update_settings", auto_sync_repositories: false, default_clone_dir: " " });
-    expect(daemon.store.getState().settings).toEqual({ auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts });
+    const daemon = createFixtureDaemon({ id: "settings-contract", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: { auto_pull_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts }, trustedDirectories: ["/Users/dev/code"] }) });
+    await expect(daemon.request({ type: "update_settings", auto_pull_repositories: true, default_clone_dir: "relative" })).rejects.toThrow();
+    expect(daemon.store.getState().settings.auto_pull_repositories).toBe(false);
+    await daemon.request({ type: "update_settings", auto_pull_repositories: true, default_clone_dir: "~/work/../repos" });
+    expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: true, default_clone_dir: "/Users/dev/repos", accounts });
+    await daemon.request({ type: "update_settings", auto_pull_repositories: false, default_clone_dir: " " });
+    expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts });
     await daemon.request({ type: "remove_trusted_directory", path: "~/work/../code" });
     expect(daemon.store.getState().trustedDirectories).toEqual([]);
   });
@@ -195,7 +195,7 @@ describe("the fixture daemon's settings and trusted folders", () => {
 describe("the fixture daemon's account switches", () => {
   const work = { id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" };
   const session = sessionOf("s", "c", "p", "Release", "working", { model: "opus", effort: "high", bound_to: "hub" });
-  const state = snapshotState({ sessions: [session, { ...session, id: "archived", status: "archived" }], settings: { auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts: [work, { ...work, id: "codex", agent: "codex" }] } });
+  const state = snapshotState({ sessions: [session, { ...session, id: "archived", status: "archived" }], settings: { auto_pull_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts: [work, { ...work, id: "codex", agent: "codex" }] } });
   const scenario = { id: "switch", title: "", group: "Sidebar sessions" as const, category: "normal" as const, state };
 
   it("records the new account while keeping session launch settings, and clears it for the default account", async () => {

@@ -228,7 +228,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
               cloneDir = `/${parts.join("/")}`;
             }
           }
-          store.setState({ settings: { ...current.settings, auto_sync_repositories: body.auto_sync_repositories ?? current.settings.auto_sync_repositories, default_clone_dir: cloneDir } });
+          store.setState({ settings: { ...current.settings, auto_pull_repositories: body.auto_pull_repositories ?? current.settings.auto_pull_repositories, default_clone_dir: cloneDir } });
           return { type: "ack" };
         }
         case "remove_trusted_directory": {

@@ -70,7 +70,7 @@ pub struct AppState {
     /// `refresh_git_status` does not start a second check for one already in flight — a client
     /// polling faster than the checks finish, or several clients watching the same console, must
     /// not pile up work. Claimed and released through [`AppState::claim_git_check`]. The value is
-    /// whether a manual sync (`sync_project_git`) arrived while the check ran and is owed a rerun.
+    /// whether a manual pull (`pull_project_branch`) arrived while the check ran and is owed a rerun.
     git_checks: Mutex<HashMap<String, bool>>,
     /// When each project's last check completed, for the minimum-interval floor in
     /// `git_status::due_for_check` — a second guard next to `git_checks` above, needed because that
@@ -1137,7 +1137,7 @@ impl AppState {
         self.claim_git_check_with(project_id, false)
     }
 
-    /// As [`Self::claim_git_check`], for a manual sync: when a check is already running, nothing
+    /// As [`Self::claim_git_check`], for a manual pull: when a check is already running, nothing
     /// is claimed, but the running check's claim is marked as owing a forced rerun, which
     /// [`GitCheckClaim::release_unless_rerun_owed`] hands back to it. The marking and the claim
     /// share one lock, so a request cannot slip in between the owner's last look and its release.
@@ -1179,7 +1179,7 @@ impl AppState {
         self.publish_git_status_with(status, false);
     }
 
-    /// A local re-read changes the header without ending an overlapping check or sync.
+    /// A local re-read changes the header without ending an overlapping check or pull.
     pub(crate) fn publish_git_reread(&self, status: GitStatus) {
         self.publish_git_status_with(status, true);
     }
@@ -1435,7 +1435,7 @@ pub struct GitCheckClaim {
 }
 
 impl GitCheckClaim {
-    /// Releases the claim, unless a manual sync arrived while it was held: then the claim is kept,
+    /// Releases the claim, unless a manual pull arrived while it was held: then the claim is kept,
     /// the owed rerun is cleared and `true` is returned, for the holder to run one more check that
     /// fast-forwards. Done under the lock `claim_git_check_forced` marks it under, so a request is
     /// either seen here or finds the project unclaimed.
@@ -1876,10 +1876,10 @@ mod tests {
         assert!(state.claim_git_check("p1").is_some());
     }
 
-    /// A manual sync that finds a check running must not be lost: it makes the holder run once
+    /// A manual pull that finds a check running must not be lost: it makes the holder run once
     /// more, once, and only then release.
     #[test]
-    fn a_manual_sync_during_a_check_is_owed_one_rerun() {
+    fn a_manual_pull_during_a_check_is_owed_one_rerun() {
         let (state, _dir) = app_state("state-git-claim-rerun");
         let mut claim = state.claim_git_check("p1").expect("the first claim");
         assert!(state.claim_git_check_forced("p1").is_none());
@@ -1978,13 +1978,13 @@ mod tests {
         let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let _push = state.begin_git_push("p1");
             state.publish_git_status(GitStatus {
-                activity: GitActivity::Syncing,
+                activity: GitActivity::Pulling,
                 ..git_reading()
             });
             panic!("simulated push panic");
         }));
         assert!(unwound.is_err());
-        assert_eq!(state.git_statuses()[0].activity, GitActivity::Syncing);
+        assert_eq!(state.git_statuses()[0].activity, GitActivity::Pulling);
     }
 
     #[test]

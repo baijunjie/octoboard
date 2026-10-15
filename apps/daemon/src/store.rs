@@ -220,7 +220,7 @@ impl Store {
             );
             CREATE TABLE IF NOT EXISTS settings (
                 id                     TEXT PRIMARY KEY,
-                auto_sync_repositories INTEGER NOT NULL DEFAULT 0,
+                auto_pull_repositories INTEGER NOT NULL DEFAULT 0,
                 -- NULL until the user sets one; see `Store::default_clone_dir`.
                 default_clone_dir      TEXT
             );
@@ -305,6 +305,15 @@ impl Store {
                 [],
             )?;
         }
+        // A database from an earlier build keeps this setting under its older name; renaming the
+        // column in place keeps the saved value.
+        if column_exists(&conn, "settings", "auto_sync_repositories")? {
+            conn.execute(
+                "ALTER TABLE settings \
+                 RENAME COLUMN auto_sync_repositories TO auto_pull_repositories",
+                [],
+            )?;
+        }
         let store = Self {
             conn: Mutex::new(conn),
         };
@@ -332,7 +341,7 @@ impl Store {
     /// The settings row, at its defaults, for a freshly created database.
     fn ensure_settings_row(&self) -> Result<()> {
         self.lock().execute(
-            "INSERT OR IGNORE INTO settings (id, auto_sync_repositories) VALUES (?1, 0)",
+            "INSERT OR IGNORE INTO settings (id, auto_pull_repositories) VALUES (?1, 0)",
             params![SETTINGS_ID],
         )?;
         Ok(())
@@ -711,25 +720,25 @@ impl Store {
 
     pub fn get_settings(&self) -> Result<Settings> {
         Ok(Settings {
-            auto_sync_repositories: self.auto_sync_repositories()?,
+            auto_pull_repositories: self.auto_pull_repositories()?,
             default_clone_dir: self.default_clone_dir()?,
             accounts: self.list_accounts()?,
         })
     }
 
-    pub fn auto_sync_repositories(&self) -> Result<bool> {
+    pub fn auto_pull_repositories(&self) -> Result<bool> {
         Ok(self.lock().query_row(
-            "SELECT auto_sync_repositories FROM settings WHERE id = ?1",
+            "SELECT auto_pull_repositories FROM settings WHERE id = ?1",
             params![SETTINGS_ID],
             |row| row.get(0),
         )?)
     }
 
     /// Whether the setting actually changed.
-    pub fn set_auto_sync_repositories(&self, value: bool) -> Result<bool> {
+    pub fn set_auto_pull_repositories(&self, value: bool) -> Result<bool> {
         let conn = self.lock();
         let current: bool = conn.query_row(
-            "SELECT auto_sync_repositories FROM settings WHERE id = ?1",
+            "SELECT auto_pull_repositories FROM settings WHERE id = ?1",
             params![SETTINGS_ID],
             |row| row.get(0),
         )?;
@@ -737,7 +746,7 @@ impl Store {
             return Ok(false);
         }
         conn.execute(
-            "UPDATE settings SET auto_sync_repositories = ?2 WHERE id = ?1",
+            "UPDATE settings SET auto_pull_repositories = ?2 WHERE id = ?1",
             params![SETTINGS_ID, value],
         )?;
         Ok(true)
@@ -1293,8 +1302,9 @@ const CURRENT_SHAPE_COLUMNS: [(&str, &str); 3] = [
 /// the two columns together tell an outdated table apart from a current one. A `pages` table that
 /// still names the console rather than the console session (milestone 9) is outdated the same way;
 /// see [`CURRENT_SHAPE_COLUMNS`]. A `projects` table whose trust permission column still has its
-/// older name is not: `Store::open` renames that column in place. Nor is a `consoles` or `projects`
-/// table without its per-agent launch or account columns: `Store::open` adds those in place
+/// older name is not: `Store::open` renames that column in place, as it does a `settings` table's
+/// automatic-pull column. Nor is a `consoles` or `projects` table without its per-agent launch or
+/// account columns: `Store::open` adds those in place
 /// (see [`CONSOLE_SESSION_LAUNCH_COLUMNS`] and [`PROJECT_SETTING_COLUMNS`]).
 ///
 /// The old file is renamed rather than deleted, so a user who needs what was in it still has it on
@@ -2589,14 +2599,14 @@ mod tests {
     fn the_settings_round_trip_and_a_repeat_write_changes_nothing() {
         let path = temp_db("settings");
         let store = Store::open(&path).expect("store");
-        assert!(!store.get_settings().unwrap().auto_sync_repositories);
+        assert!(!store.get_settings().unwrap().auto_pull_repositories);
 
-        assert!(store.set_auto_sync_repositories(true).unwrap());
+        assert!(store.set_auto_pull_repositories(true).unwrap());
         assert!(
-            !store.set_auto_sync_repositories(true).unwrap(),
+            !store.set_auto_pull_repositories(true).unwrap(),
             "a repeat write changes nothing"
         );
-        assert!(store.get_settings().unwrap().auto_sync_repositories);
+        assert!(store.get_settings().unwrap().auto_pull_repositories);
     }
 
     /// The default clone directory is the built-in one until set, a blank value goes back to it,
@@ -2627,6 +2637,29 @@ mod tests {
         }
         let store = Store::open(&path).expect("reopened");
         assert_eq!(store.default_clone_dir().unwrap(), built_in);
+    }
+
+    /// A database whose setting column still has its older name keeps the saved value under the
+    /// new one.
+    #[test]
+    fn the_older_auto_sync_column_is_renamed_in_place() {
+        let path = temp_db("auto-pull-rename");
+        {
+            let store = Store::open(&path).expect("store");
+            assert!(store.set_auto_pull_repositories(true).unwrap());
+        }
+        {
+            let conn = Connection::open(&path).expect("database");
+            conn.execute(
+                "ALTER TABLE settings \
+                 RENAME COLUMN auto_pull_repositories TO auto_sync_repositories",
+                [],
+            )
+            .expect("the older name");
+        }
+
+        let store = Store::open(&path).expect("reopened in place");
+        assert!(store.auto_pull_repositories().unwrap());
     }
 
     /// A project stored with the source's old name still reads, and is written back as `git`.

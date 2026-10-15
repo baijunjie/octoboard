@@ -1,4 +1,4 @@
-import { Archive, ArrowLeftRight, Copy, Focus, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Pencil, Pin, PinOff, RefreshCw, Settings2, Terminal, Trash2, Undo2, Upload } from "lucide-react";
+import { Archive, ArrowLeftRight, Copy, Download, Focus, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Pencil, Pin, PinOff, Settings2, Terminal, Trash2, Undo2, Upload } from "lucide-react";
 
 import { switchEntries } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/ActionMenu";
@@ -76,7 +76,7 @@ export type MenuPlacement = "list" | "focused" | "nested";
 /** The project's actions, opening its files first, in the project row and in a focus mode (the
  * project's own header, and a console session's project headings); `placement` says which.
  * Git is a submenu, offered only while the project is known to be a git repository
- * (`gitRepository`, from its git status): sync the repository, push the current branch, switch
+ * (`gitRepository`, from its git status): pull the current branch, push the current branch, switch
  * to a local branch through its own submenu, and restore tracked file changes after confirmation. */
 export function projectMenu(
   t: Translate,
@@ -98,7 +98,7 @@ export function projectMenu(
           label: t("sidebar.project.git"),
           icon: GitBranch,
           items: [
-            { label: t("sidebar.project.syncGit"), icon: RefreshCw, onClick: () => handlers.onSyncProjectGit(project) },
+            { label: t("sidebar.project.pullBranch"), icon: Download, onClick: () => handlers.onPullProjectBranch(project) },
             { label: t("sidebar.project.pushBranch"), icon: Upload, onClick: () => handlers.onPushProjectBranch(project) },
             { label: t("sidebar.project.switchBranch"), icon: ArrowLeftRight, items: [], loadItems: () => handlers.onLoadProjectBranches(project) },
             "separator" as const,

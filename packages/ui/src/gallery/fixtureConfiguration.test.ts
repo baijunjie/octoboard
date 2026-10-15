@@ -13,7 +13,7 @@ const project = (name: string, status: ImportedProject["status"], via: ImportedP
 });
 const result = (
   projects: ImportedProject[],
-  settings?: { settings_applied?: { auto_sync_repositories: boolean } },
+  settings?: { settings_applied?: { auto_pull_repositories: boolean } },
   status: "created" | "failed" = "created",
 ) => ({
   ...settings,
@@ -52,7 +52,7 @@ describe("importDisagreement", () => {
   });
 
   it("finds application settings reported that the request did not ask for", () => {
-    expect(importDisagreement(request([], false), result([], { settings_applied: { auto_sync_repositories: true } }))).toMatch(/did not ask/);
+    expect(importDisagreement(request([], false), result([], { settings_applied: { auto_pull_repositories: true } }))).toMatch(/did not ask/);
   });
 
   it("finds application settings asked for that the result does not report", () => {

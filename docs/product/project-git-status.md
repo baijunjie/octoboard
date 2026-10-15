@@ -2,8 +2,8 @@
 
 A project whose directory is a git repository carries its **current branch and how far that branch is from its
 upstream** in the sidebar. Octoboard checks those projects against their remotes by itself, on an interval, for the
-current console, and checks one project at once when asked to with **Sync repository**. What a check does beyond
-reporting depends on one setting, **Automatically sync repositories**, described in "Automatically syncing
+current console, and checks one project at once when asked to with **Pull current branch**. What a check does beyond
+reporting depends on one setting, **Automatically pull repositories**, described in "Automatically pulling
 repositories" below, and on whether the check was asked for by hand. Pushing the current branch is not a check
 (see "Pushing the current branch" below).
 
@@ -23,11 +23,11 @@ nothing when the project's directory is not a git repository.
 What it holds, in this order:
 
 - **A glyph for what is going on**: a branch glyph normally; a commit glyph when `HEAD` is detached; a spinning refresh
-  glyph while the remote is being checked, the branch is being fast-forwarded or the current branch is being pushed.
+  glyph while the remote is being checked, the branch is being pulled or the current branch is being pushed.
   Idle and in-flight states differ in shape, not in motion alone, and nothing animates where the system asks for reduced
   motion.
 - **A warning triangle**, in red, when the last check failed, standing in for the branch or commit glyph; the refresh
-  glyph takes its place while a check, a fast-forward or a push runs. The message `git` or the operating system itself
+  glyph takes its place while a check, a pull or a push runs. The message `git` or the operating system itself
   gave is then part of what the badge says — in its tooltip and in its name, shown as it came inside localized wording
   (see "What follows the language" in `docs/product/language.md`) — and the triangle itself carries nothing of its own.
   A failed check does not blank the rest of the badge: the branch and the counts are still read from the repository and
@@ -36,7 +36,7 @@ What it holds, in this order:
   place, and nothing stands there when the branch could not be read at all, the warning carrying the reason instead.
 - **How far the branch is ahead of its upstream**, after an up arrow, and **how far behind**, after a down arrow, each
   shown only while it is not zero and each number written in the current language. A branch with no upstream shows
-  neither. During a push, the ahead count's arrow scrolls continuously upward; during a fast-forward, the behind count's
+  neither. During a push, the ahead count's arrow scrolls continuously upward; during a pull, the behind count's
   arrow scrolls continuously downward. Each scroll stays inside a fixed area the size of one count arrow; the other
   arrow and both numbers stay still. A zero count still has no arrow, so the leading refresh glyph remains the in-flight
   indication when the relevant count is zero. Reduced motion keeps the arrows still too.
@@ -46,11 +46,11 @@ counts and a failed check's message — and only its glyph turns into the spinni
 included; the whole badge is replaced once the check finishes. A project's first check has nothing to keep, so until it
 finishes the badge shows the spinning glyph alone.
 
-**While a push is in flight the badge describes the push**, including over a check or fast-forward running at the same
+**While a push is in flight the badge describes the push**, including over a check or pull running at the same
 time. All three use the same leading refresh glyph; the tooltip, accessible name and animated count arrow follow the
 push state. The branch, counts and any failed check's message remain visible and can update during the push. Every
 window showing the project sees the pushing state, including one that connects while the push is running. Once all
-pushes of the project end, successfully or otherwise, the badge shows the latest check or fast-forward state, or its
+pushes of the project end, successfully or otherwise, the badge shows the latest check or pull state, or its
 idle glyph if neither is running (see "Pushing the current branch" below).
 
 **As the row gets tight the branch and counts give way together**: the branch name (or short commit id) and both
@@ -64,7 +64,7 @@ window's reading direction instead.
 **One tooltip for the whole badge.** Resting the mouse anywhere on the badge — the state glyph, the branch name or
 either count — shows one tooltip, after the window's usual wait and on pointer hover only, since the badge is no tab
 stop (see "How a tooltip behaves" in `docs/product/labels-and-tooltips.md`). It says the badge's whole state in one
-sentence, the same one assistive technology is given: the branch (or that a check, a fast-forward or a push is in
+sentence, the same one assistive technology is given: the branch (or that a check, a pull or a push is in
 flight, or why there is no branch), the ahead and behind counts, each only while it is not zero, and a failed check's
 message. It is one tooltip in both placements, the sidebar row and focus mode's header, and it shows whether or not the
 badge's text is cut — so the branch name and the error can still be read once the row has squeezed the text away. The
@@ -89,18 +89,18 @@ announced.
   "Losing the daemon connection" in `docs/product/application-lifecycle.md`);
 - when a project appears in that console — added, or moved in from another one — which checks it without waiting
   for the next round;
-- and when the user chooses **Sync repository** for it (see "Syncing one project by hand" below).
+- and when the user chooses **Pull current branch** for it (see "Pulling one project by hand" below).
 
 A console that is not current has none of its projects checked, including one the floating sidebar is only
 previewing (see "Previewing a console from the rail" in `docs/product/sidebar.md`); switching to it checks them.
 Nothing is checked while no client is connected either: the schedule belongs to the application's window, not to the
-daemon. Turning **Automatically sync repositories** on is not a check and is not limited this way; see "Turning the
+daemon. Turning **Automatically pull repositories** on is not a check and is not limited this way; see "Turning the
 switch on" below.
 
 The daemon will not start a second check of a project while one is already running, and skips a project whose last
 check finished less than a minute ago — so several open windows, each on its own interval, cannot multiply the work. A
-project skipped that way simply keeps the status it already had. Sync repository is the exception to both (see
-"Syncing one project by hand" below). **The five-minute interval and the one-minute floor are fixed**, not settings.
+project skipped that way simply keeps the status it already had. Pull current branch is the exception to both (see
+"Pulling one project by hand" below). **The five-minute interval and the one-minute floor are fixed**, not settings.
 
 A status is never stored: after a daemon restart there is none for any project, and a project's badge shows nothing
 again until its next check.
@@ -124,13 +124,13 @@ again until its next check.
 - Then the branch, its upstream and the ahead/behind counts are read from the repository. A fetch that failed —
   offline, authentication, a host key that has never been accepted — records its message for the badge but does not
   stop this read, so the branch and the counts still show.
-- Finally the branch may be fast-forwarded; see "Automatically syncing repositories" and "Syncing one project by
-  hand" below.
+- Finally the branch may be pulled; see "Automatically pulling repositories" and "Pulling one project by hand"
+  below.
 
 ## The environment a check runs `git` in
 
 Every `git` run for a project's git status — the remotes read, the fetch, the branch read, and a fast-forward, whether
-it comes from a check, from Sync repository or from the pass that turning the switch on starts — is the `git` on the
+it comes from a check, from Pull current branch or from the pass that turning the switch on starts — is the `git` on the
 user's `PATH`, started from the user's own login shell environment, but with that environment **filtered**. Their git
 configuration files and their credential helpers are used as they stand.
 
@@ -158,20 +158,21 @@ fails immediately instead — and every `git` call of a check is given at most t
 call that runs out reports only that it did not finish in time. A push's own bounds are in "Pushing the current
 branch" below.
 
-## Automatically syncing repositories
+## Automatically pulling repositories
 
-Settings' **Git** section (see "Git" in `docs/product/settings.md`) holds one switch, **Automatically sync
+Settings' **Git** section (see "Git" in `docs/product/settings.md`) holds one switch, **Automatically pull
 repositories**, **off** to begin with. It is stored by the daemon, so every window and every client sees the same
 value and it survives a restart.
 
 Off and on alike, the check above runs and the branch and the counts stay accurate. The switch governs what happens
-beyond reporting: with it on, a branch that is **behind its upstream and has no commits of its own** is
-fast-forwarded — at the end of each check, and once immediately when the switch is turned on (see "Turning the switch
-on" below) — and the badge shows the fast-forward in flight. With it off, only Sync repository fast-forwards (see
-"Syncing one project by hand" below), under the same rules:
+beyond reporting: with it on, a branch that is **behind its upstream and has no commits of its own** is pulled —
+at the end of each check, and once immediately when the switch is turned on (see "Turning the switch on" below) —
+and the badge shows the pull in flight. **Pulling** a branch here always means fast-forwarding it to its upstream,
+nothing more. With the switch off, only Pull current branch pulls (see "Pulling one project by hand" below), under
+the same rules:
 
 - It **never pushes**, and never merges anything that is not a fast-forward. A push happens only when the user
-  chooses **Push current branch**, and it is never part of this fast-forward (see "Pushing the current branch"
+  chooses **Push current branch**, and it is never part of this pull (see "Pushing the current branch"
   below).
 - A branch that is ahead of its upstream, whether or not it is also behind, is left alone. So are a branch with no
   upstream and a detached `HEAD`.
@@ -179,7 +180,7 @@ on" below) — and the badge shows the fast-forward in flight. With it off, only
   is working in that project.
 - A fast-forward `git` refuses records its message for the badge, as a failed fetch does.
 
-Fast-forwarding a branch — with the switch on, or by Sync repository — moves that branch's working tree. Pushing
+Pulling a branch — with the switch on, or by Pull current branch — moves that branch's working tree. Pushing
 the current branch does not: it updates the remote and, in the repository, the remote-tracking refs `git` updates
 for that push, and when the branch had no upstream it records one. It does not edit the project's files (see
 "Pushing the current branch" below). Switching to a local branch moves the project's own working tree
@@ -188,13 +189,13 @@ for that push, and when the branch had no upstream it records one. It does not e
 working tree or push (see "What one check does" above). The guarantee these qualify is in "What Octoboard never
 modifies" in `docs/product/launching-agents.md`.
 
-### Syncing one project by hand
+### Pulling one project by hand
 
-A project's action menu offers **Sync repository** under **Git** while the project's status says its directory is a
+A project's action menu offers **Pull current branch** under **Git** while the project's status says its directory is a
 git repository — so not before its first status has arrived (see "What one check does" above, and "Project rows" in
 `docs/product/sidebar.md` for where the menu is). It does not push. Choosing it closes the menu and starts the check
 without waiting; a success is not toasted. It runs that project's check right away and then fast-forwards the branch
-under exactly the rules above, whether or not **Automatically sync repositories** is on; choosing it is the consent
+under exactly the rules above, whether or not **Automatically pull repositories** is on; choosing it is the consent
 the switch would otherwise give. The one-minute floor does not apply.
 
 If a check of the project is already running, nothing starts alongside it: as soon as it ends, one more check runs,
@@ -202,11 +203,11 @@ with the fast-forward, so the request ends in a fast-forward attempt. However ma
 share that one extra check, and it does not run at all if the project has been removed in the meantime.
 
 The one exception is a request that arrives while the project is being visited by the pass that turning
-**Automatically sync repositories** on starts (see "Turning the switch on" below). The request is left to that pass:
+**Automatically pull repositories** on starts (see "Turning the switch on" below). The request is left to that pass:
 no check follows it and nothing is fetched, so the branch moves only if the pass's own local re-read finds it behind
 its upstream with no commits of its own.
 
-The badge shows the check and the fast-forward in flight as for any check, and a failed fetch or a fast-forward `git`
+The badge shows the check and the pull in flight as for any check, and a failed fetch or a fast-forward `git`
 refuses records its message for the badge the same way.
 
 ### Turning the switch on
@@ -229,7 +230,7 @@ The one-minute floor between checks (see "When a project is checked" above) does
 nowhere near the remote. A project whose check is in flight is skipped and left to that check, which reads the switch
 itself.
 
-The badge shows the fast-forward in flight exactly as during a check, and a fast-forward `git` refuses records its
+The badge shows the pull in flight exactly as during a check, and a fast-forward `git` refuses records its
 message for the badge the same way. A warning the last check left stays on the badge: it stands for that check
 against the remote, which a local fast-forward says nothing about. An error this pass records for a project of a
 console that is current in no window therefore stays on it until that console is current again and its projects are
@@ -244,7 +245,7 @@ that branch. It is offered only while the project's status says the directory is
 rows" in `docs/product/sidebar.md`). Choosing it closes the menu at once. The push is waited on until `git push` has
 exited. When the push is accepted, the window that asked shows a notice toast saying the current branch was pushed.
 A refusal is an error toast worded from the code below. Pushing does not fetch and does not fast-forward, and a
-fast-forward never pushes (see "Automatically syncing repositories" above). A local branch that is behind its
+pull never pushes (see "Automatically pulling repositories" above). A local branch that is behind its
 upstream stays behind; if the remote rejects the update, the push fails and the branch stays where it was.
 
 The push never uses `--force`, and it is never a bare `git push`, which would follow `push.default` and can publish
@@ -290,9 +291,9 @@ check's error; the push failure is reported by its error toast:
 
 A project that no longer exists is `unknown_project`.
 
-The push and a check are not ordered. **Sync repository**, or a scheduled check, that arrives during a push is handled
+The push and a check are not ordered. **Pull current branch**, or a scheduled check, that arrives during a push is handled
 as it would be with no push in flight: it is not queued behind the push. The badge shows the push in flight while the
-check can still update its branch, counts and error. When the push ends, a check or fast-forward still in flight is
+check can still update its branch, counts and error. When the push ends, a check or pull still in flight is
 shown again. A second push of the same project is not refused while one is still running; the pushing state stays until
 the last push ends. Once the directory has been confirmed as a repository, the state covers the branch and remote reads
 as well as `git push`, and ends on a refusal too.
@@ -301,10 +302,10 @@ A successful push does not edit the project's files and does not move the workin
 in the repository it updates the remote-tracking refs `git` updates for that push. When the branch had no upstream,
 it also records one. The daemon then re-reads the local branch header and publishes the project's git status, with
 no fetch, so the badge's ahead count can drop. Every window showing the project sees that status. This re-read does
-not end the badge's indication of an overlapping check or fast-forward. An error the last check left on the badge
+not end the badge's indication of an overlapping check or pull. An error the last check left on the badge
 stays, unless that re-read fails, in which case the warning becomes the re-read's message and the branch and the counts
 stay as they were. A re-read that fails does not turn the notice into an error toast: the push was accepted.
-Turning **Automatically sync repositories** on never pushes.
+Turning **Automatically pull repositories** on never pushes.
 
 ## Switching the local branch
 
@@ -319,7 +320,7 @@ branches, or as many as 2 MiB of encoded names hold, are listed; a truncated lis
 
 Selecting another branch closes the menus and switches immediately, without confirmation. It changes the project's
 own worktree, including a linked worktree, regardless of which worktree the Git pane is reviewing. It never creates
-a branch, guesses a remote branch, fetches, pushes or syncs. It does not force the switch or stash or discard local
+a branch, guesses a remote branch, fetches, pushes or pulls. It does not force the switch or stash or discard local
 changes: changes Git can carry safely stay, and a conflict, a branch checked out in another worktree, or another Git
 refusal fails with an error toast. Running agent sessions do not prevent a switch; the working tree can change
 underneath them. Other Git operations are not serialized with the switch.
@@ -364,5 +365,5 @@ subdirectory is refused. The other refusals are:
   before restoration.
 
 A restore failure does not promise rollback: Git can restore some paths before a later path fails. Running agent
-sessions do not prevent restoration, and their Git operations, checks, syncs, pushes and other restores are not
+sessions do not prevent restoration, and their Git operations, checks, pulls, pushes and other restores are not
 serialized with it. The files can change underneath a running agent.

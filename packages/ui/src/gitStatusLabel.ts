@@ -15,7 +15,7 @@ function branchPhrase(t: Translate, status: GitStatus): string | undefined {
   const branch = status.branch == null ? undefined : isolate(status.branch);
   if (status.activity === "pushing") return branch ? t("sidebar.git.pushing", { branch }) : t("sidebar.git.pushingUnknown");
   if (status.activity === "checking") return branch ? t("sidebar.git.checking", { branch }) : t("sidebar.git.checkingUnknown");
-  if (status.activity === "syncing") return branch ? t("sidebar.git.syncing", { branch }) : t("sidebar.git.syncingUnknown");
+  if (status.activity === "pulling") return branch ? t("sidebar.git.pulling", { branch }) : t("sidebar.git.pullingUnknown");
   if (branch) return status.detached ? t("sidebar.git.detachedBranch", { branch }) : t("sidebar.git.branch", { branch });
   return status.error ? undefined : t("sidebar.git.noCommitsYet");
 }

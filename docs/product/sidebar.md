@@ -237,10 +237,10 @@ offered, **Open in file manager**, **Open terminal** and, while the project's st
   `docs/product/project-terminal.md`). Opening it toasts nothing; a failure is an error toast.
 - **Git** — a submenu, only while the project's status says its directory is a git repository, so not before the
   first status and not when the directory is not one (see "What one check does" in
-  `docs/product/project-git-status.md`). It holds **Sync repository**, then **Push current branch**, then
-  **Switch branch**, then, after a separator, the destructive **Restore file changes…** action. Sync repository
+  `docs/product/project-git-status.md`). It holds **Pull current branch**, then **Push current branch**, then
+  **Switch branch**, then, after a separator, the destructive **Restore file changes…** action. Pull current branch
   checks the project against its remote and fast-forwards it right now, is not waited on, and toasts nothing when it
-  succeeds (see "Syncing one project by hand" in `docs/product/project-git-status.md`). Push current branch pushes
+  succeeds (see "Pulling one project by hand" in `docs/product/project-git-status.md`). Push current branch pushes
   that branch and is waited on until the push finishes; the window then shows a notice that the current branch was
   pushed, or an error toast if the push was refused (see "Pushing the current branch" in
   `docs/product/project-git-status.md`). Switch branch opens the third-level local branch menu; see "Switching the

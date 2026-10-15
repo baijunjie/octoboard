@@ -556,10 +556,10 @@ pub async fn handle(
         }
 
         RequestBody::UpdateSettings {
-            auto_sync_repositories,
+            auto_pull_repositories,
             default_clone_dir,
         } => {
-            update_settings(state, auto_sync_repositories, default_clone_dir)?;
+            update_settings(state, auto_pull_repositories, default_clone_dir)?;
             Ok(None)
         }
 
@@ -568,12 +568,12 @@ pub async fn handle(
             Ok(None)
         }
 
-        RequestBody::SyncProjectGit { project } => {
+        RequestBody::PullProjectBranch { project } => {
             let project = state
                 .store
                 .get_project(&project)?
                 .ok_or_else(|| CodedError::unknown_project(&project))?;
-            git_status::sync_project_now(state, project);
+            git_status::pull_project_now(state, project);
             Ok(None)
         }
 
@@ -2737,7 +2737,7 @@ fn normalize_account_name(name: &str) -> Result<String> {
 }
 
 /// Broadcasts the current settings record — the pattern every settings-shaped mutation (the
-/// trusted directories, `auto_sync_repositories`, and now the accounts) follows.
+/// trusted directories, `auto_pull_repositories`, and now the accounts) follows.
 fn broadcast_settings(state: &Arc<AppState>) -> Result<()> {
     state.broadcast(Event::SettingsUpdated {
         settings: state.store.get_settings()?,
@@ -2904,7 +2904,7 @@ fn normalize_icon(text: Option<&str>) -> Result<Option<String>> {
 /// trusted-directories pattern.
 pub(crate) fn update_settings(
     state: &Arc<AppState>,
-    auto_sync_repositories: Option<bool>,
+    auto_pull_repositories: Option<bool>,
     default_clone_dir: Option<String>,
 ) -> Result<()> {
     // Checked before anything is written, so a refused directory leaves the other field unapplied
@@ -2915,10 +2915,10 @@ pub(crate) fn update_settings(
         None => None,
     };
     let mut changed = false;
-    let mut sync_turned_on = false;
-    if let Some(value) = auto_sync_repositories {
-        let updated = state.store.set_auto_sync_repositories(value)?;
-        sync_turned_on = updated && value;
+    let mut pull_turned_on = false;
+    if let Some(value) = auto_pull_repositories {
+        let updated = state.store.set_auto_pull_repositories(value)?;
+        pull_turned_on = updated && value;
         changed |= updated;
     }
     if let Some(value) = default_clone_dir {
@@ -2930,11 +2930,11 @@ pub(crate) fn update_settings(
     state.broadcast(Event::SettingsUpdated {
         settings: state.store.get_settings()?,
     });
-    // Turning the sync on takes effect at once rather than at the client's next five-minute sweep:
-    // the branches already known to be behind are fast-forwarded now (see
-    // `git_status::sync_behind_projects`).
-    if sync_turned_on {
-        git_status::sync_behind_projects(state);
+    // Turning the automatic pull on takes effect at once rather than at the client's next
+    // five-minute sweep: the branches already known to be behind are fast-forwarded now (see
+    // `git_status::pull_behind_projects`).
+    if pull_turned_on {
+        git_status::pull_behind_projects(state);
     }
     Ok(())
 }
@@ -3003,7 +3003,7 @@ mod tests {
 
         // A refused directory leaves the other field of the same request unapplied too.
         assert!(update_settings(&state, Some(true), Some("relative".to_string())).is_err());
-        assert!(!state.store.get_settings().unwrap().auto_sync_repositories);
+        assert!(!state.store.get_settings().unwrap().auto_pull_repositories);
         assert_eq!(state.store.default_clone_dir().unwrap(), "/work/repos");
 
         update_settings(&state, None, Some("  ".to_string())).unwrap();

@@ -96,7 +96,7 @@ export function GitBadge({ status, decorative }: { status: GitStatus | undefined
             )}
             {status.behind > 0 && (
               <span className="inline-flex shrink-0 items-center">
-                {status.activity === "syncing" ? <ScrollingCountArrow direction="down" /> : <ArrowDown aria-hidden="true" className="size-3 shrink-0" />}
+                {status.activity === "pulling" ? <ScrollingCountArrow direction="down" /> : <ArrowDown aria-hidden="true" className="size-3 shrink-0" />}
                 {status.behind.toLocaleString(language)}
               </span>
             )}

@@ -38,7 +38,7 @@ const listing = (body: RequestBody, models: AgentModel[], unavailable: ModelsUna
 function render(editing?: Console, accounts: Account[] = [], respond?: (body: RequestBody) => Promise<Event>) {
   const request = vi.fn((body: RequestBody) => respond?.(body) ?? Promise.resolve(body.type === "list_agent_models" ? listing(body, MODELS) : ({ type: "ack" } as Event)));
   const daemon: Daemon = {
-    store: createStateStore({ settings: { auto_sync_repositories: false, default_clone_dir: "", accounts } }),
+    store: createStateStore({ settings: { auto_pull_repositories: false, default_clone_dir: "", accounts } }),
     request,
     toastError: vi.fn(),
     toastNotice: vi.fn(),

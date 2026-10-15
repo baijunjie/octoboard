@@ -103,7 +103,7 @@ pub(super) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
         })
         .collect();
     Ok(json!({
-        "auto_sync_repositories": state.store.auto_sync_repositories()?,
+        "auto_pull_repositories": state.store.auto_pull_repositories()?,
         "default_clone_dir": state.store.default_clone_dir()?,
         "accounts": listed,
         "trusted_directories": state.store.trusted_directories()?,
@@ -116,7 +116,7 @@ pub(super) fn update_settings(
 ) -> Result<Value> {
     coordinator::update_settings(
         state,
-        optional_bool(arguments, "auto_sync_repositories")?,
+        optional_bool(arguments, "auto_pull_repositories")?,
         raw_text(arguments, "default_clone_dir")?,
     )?;
     get_settings(state)

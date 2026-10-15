@@ -171,7 +171,7 @@ it("opens on a selectable agent, with the console's account for it, and sends bo
         ["grok", { agent: "grok", availability: "available" }],
       ]),
       settings: {
-        auto_sync_repositories: false, default_clone_dir: "/p",
+        auto_pull_repositories: false, default_clone_dir: "/p",
         accounts: [{ id: "a-1", agent: "codex", name: "Work", config_dir: "/home/me/.codex-work" }],
       },
     },
@@ -195,7 +195,7 @@ async function openedAccount(projectPin: Partial<typeof project>): Promise<unkno
     [],
     {
       settings: {
-        auto_sync_repositories: false, default_clone_dir: "/p",
+        auto_pull_repositories: false, default_clone_dir: "/p",
         accounts: [
           { id: "a-console", agent: "claude", name: "Console pick", config_dir: "/home/me/.claude-console" },
           { id: "a-project", agent: "claude", name: "Project pick", config_dir: "/home/me/.claude-project" },
@@ -285,7 +285,7 @@ it.each(["inherit", "pick", "clear"] as const)("opens with session launch settin
 
 it("queries the selected account and keeps overrides separate when changing agents", async () => {
   const { container, root, daemon } = renderDialog([], {
-    settings: { auto_sync_repositories: false, default_clone_dir: "", accounts: [
+    settings: { auto_pull_repositories: false, default_clone_dir: "", accounts: [
       { id: "a-work", agent: "claude", name: "Work", config_dir: "/accounts/work" },
     ] },
   }, { claude_account_id: "a-work" }, { kind: "unbound" }, { codex_session_model: "codex-project" });
@@ -321,7 +321,7 @@ it("queries the selected account and keeps overrides separate when changing agen
 
 it.each(["trigger", "popover"] as const)("keeps the selected agent and hands focus back when the last named account is removed from %s", async (focused) => {
   const { container, root, daemon } = renderDialog([], {
-    settings: { auto_sync_repositories: false, default_clone_dir: "", accounts: [
+    settings: { auto_pull_repositories: false, default_clone_dir: "", accounts: [
       { id: "a-work", agent: "claude", name: "Work", config_dir: "/accounts/work" },
     ] },
   }, { default_agent: "codex" });
@@ -337,7 +337,7 @@ it.each(["trigger", "popover"] as const)("keeps the selected agent and hands foc
     await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
     expect(document.activeElement?.getAttribute("role")).toBe("option");
   }
-  act(() => daemon.store.setState({ settings: { auto_sync_repositories: false, default_clone_dir: "", accounts: [] } }));
+  act(() => daemon.store.setState({ settings: { auto_pull_repositories: false, default_clone_dir: "", accounts: [] } }));
   expect(pickerNamed("Agent")).toBe(agentTrigger);
   expect(agentTrigger.textContent).toContain("Claude Code");
   await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
@@ -347,7 +347,7 @@ it.each(["trigger", "popover"] as const)("keeps the selected agent and hands foc
 
 it.each(["inherit", "pick", "clear"] as const)("opens console sessions with console launch settings: %s", async (mode) => {
   const { container, root, daemon } = renderDialog([hub1], {
-    settings: { auto_sync_repositories: false, default_clone_dir: "", accounts: [
+    settings: { auto_pull_repositories: false, default_clone_dir: "", accounts: [
       { id: "a-console", agent: "claude", name: "Console account", config_dir: "/accounts/console" },
       { id: "a-codex", agent: "codex", name: "Codex work", config_dir: "/accounts/codex" },
     ] },
@@ -407,7 +407,7 @@ it.each(["inherit", "pick", "clear"] as const)("opens console sessions with cons
 
 it("opens console sessions on the console's default agent and its account", async () => {
   const { container, root, daemon } = renderDialog([], {
-    settings: { auto_sync_repositories: false, default_clone_dir: "", accounts: [
+    settings: { auto_pull_repositories: false, default_clone_dir: "", accounts: [
       { id: "a-codex", agent: "codex", name: "Work", config_dir: "/accounts/codex" },
     ] },
   }, { default_agent: "codex", codex_account_id: "a-codex" }, undefined, null);

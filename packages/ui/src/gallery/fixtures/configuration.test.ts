@@ -65,7 +65,7 @@ it("reports the setting this machine has now as the scenario's own state has it"
   const withSettings = inspected.filter(({ inspection }) => inspection.settings);
   expect(withSettings.length).toBeGreaterThan(0);
   for (const { id, machine, inspection } of withSettings) {
-    expect(inspection.settings!.current_auto_sync_repositories, id).toBe(machine!.auto_sync_repositories);
+    expect(inspection.settings!.current_auto_pull_repositories, id).toBe(machine!.auto_pull_repositories);
   }
 });
 
@@ -139,7 +139,7 @@ it("reports application settings only for a document that carries them", () => {
       expect(result.settings_applied ?? null, id).toBeNull();
       expect(result.settings_error ?? null, id).toBeNull();
     } else if (result.settings_applied) {
-      expect(result.settings_applied.auto_sync_repositories, id).toBe(inspection.settings.auto_sync_repositories);
+      expect(result.settings_applied.auto_pull_repositories, id).toBe(inspection.settings.auto_pull_repositories);
     }
   }
 });

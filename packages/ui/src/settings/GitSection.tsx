@@ -7,19 +7,19 @@ import { useDaemon, useDaemonStore } from "../store";
 import { SettingRow } from "./SettingRow";
 
 /** Whether the daemon fast-forwards a project's branch on its own, rather than only reporting how
- * far ahead or behind it is (see `Settings.auto_sync_repositories` in protocol.ts). The row's
+ * far ahead or behind it is (see `Settings.auto_pull_repositories` in protocol.ts). The row's
  * control never unmounts on its own, so this needs no `useSectionRefocus`. */
 export function GitSection(): React.ReactElement {
   const t = useT();
   const { request, toastError } = useDaemon();
-  const autoSync = useDaemonStore((s) => s.settings.auto_sync_repositories);
+  const autoPull = useDaemonStore((s) => s.settings.auto_pull_repositories);
 
-  const setAutoSync = (value: boolean) =>
-    void request({ type: "update_settings", auto_sync_repositories: value }).catch((err) => toastError(errorPresentation(err as Error)));
+  const setAutoPull = (value: boolean) =>
+    void request({ type: "update_settings", auto_pull_repositories: value }).catch((err) => toastError(errorPresentation(err as Error)));
 
   return (
-    <SettingRow label={t("settings.git.autoSync.label")} description={t("settings.git.autoSync.description")}>
-      <Switch aria-label={t("settings.git.autoSync.label")} isSelected={autoSync} onChange={setAutoSync}>
+    <SettingRow label={t("settings.git.autoPull.label")} description={t("settings.git.autoPull.description")}>
+      <Switch aria-label={t("settings.git.autoPull.label")} isSelected={autoPull} onChange={setAutoPull}>
         <Switch.Content>
           <Switch.Control>
             <Switch.Thumb />

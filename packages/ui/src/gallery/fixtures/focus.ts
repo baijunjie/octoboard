@@ -17,7 +17,7 @@ const hub4 = sessionOf("s-console-4", console_.id, undefined, "Release notes", "
 
 // A named account exposed through agent icon tooltips and accessible session labels.
 const settings = {
-  auto_sync_repositories: false,
+  auto_pull_repositories: false,
   default_clone_dir: "/Users/dev/Projects",
   accounts: [{ id: "a-work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }],
 };

@@ -210,10 +210,10 @@ export interface DirEntry {
   is_git_repo: boolean;
 }
 
-/** `checking` while the remote is being contacted and the status read; `syncing` while the branch
+/** `checking` while the remote is being contacted and the status read; `pulling` while the branch
  * is being fast-forwarded; `pushing` while at least one push is in flight, taking precedence over
- * a simultaneous check or sync. */
-export type GitActivity = "idle" | "checking" | "syncing" | "pushing";
+ * a simultaneous check or pull. */
+export type GitActivity = "idle" | "checking" | "pulling" | "pushing";
 
 /** A project's live git state: derived, never stored in SQLite, and held in memory by the daemon.
  * `repository` false means the project's directory is not a git repository, and every field below
@@ -286,7 +286,7 @@ export interface Settings {
   /** Off (the default): the periodic check still runs `git fetch` so ahead/behind stays accurate,
    * but nothing in the repository changes. On: a branch that is behind and can fast-forward is
    * also fast-forwarded. Never pushes and never merges a non-fast-forward either way. */
-  auto_sync_repositories: boolean;
+  auto_pull_repositories: boolean;
   /** Where a `git` association clones into when no directory is named: the one the user set, or
    * `~/Projects` expanded while none is. Always an absolute path. */
   default_clone_dir: string;
@@ -344,7 +344,7 @@ export interface DocumentConsole {
 
 /** The application settings a full export carries. */
 export interface DocumentSettings {
-  auto_sync_repositories: boolean;
+  auto_pull_repositories: boolean;
 }
 
 /** What `export_configuration` answers and a user keeps as a file. The client saves it as it is
@@ -410,8 +410,8 @@ export interface InspectedConsole {
 
 /** The application settings a document carries beside what this machine has now. */
 export interface InspectedSettings {
-  auto_sync_repositories: boolean;
-  current_auto_sync_repositories: boolean;
+  auto_pull_repositories: boolean;
+  current_auto_pull_repositories: boolean;
 }
 
 /** An `error` reply's `code`, `params` and `message`, for something an import could not do. */
@@ -793,16 +793,16 @@ export type RequestBody =
   /** Each settable field is optional: absent means leave it as it is. Answered with `ack`;
    * broadcasts `settings_updated` only when something actually changed (the trusted-folders
    * pattern). */
-  | { type: "update_settings"; auto_sync_repositories?: boolean; default_clone_dir?: string }
+  | { type: "update_settings"; auto_pull_repositories?: boolean; default_clone_dir?: string }
   /** Answered with `ack` at once; the statuses arrive as `project_git_status` broadcasts as each
    * project finishes. Every project of `console` is checked, concurrently. A project whose check
    * is already in flight is not started again, so a client polling faster than the checks finish,
    * or several clients watching the same console, cannot pile work up. */
   | { type: "refresh_git_status"; console: string }
   /** Checks one project against its remote and fast-forwards it right now, ignoring the
-   * one-minute floor and the `auto_sync_repositories` setting. Answered with `ack`; the status
+   * one-minute floor and the `auto_pull_repositories` setting. Answered with `ack`; the status
    * follows as `project_git_status` broadcasts. */
-  | { type: "sync_project_git"; project: string }
+  | { type: "pull_project_branch"; project: string }
   /** Opens the system terminal at the project's directory, on the daemon's host. Answered with
    * `ack` once the terminal has been asked to open. */
   | { type: "open_project_terminal"; project: string }
@@ -813,7 +813,7 @@ export type RequestBody =
   /** Pushes the project's current branch and only that branch. Answered with `ack` once `git push`
    * has exited; a success is followed by `project_git_status` from a local re-read. */
   | { type: "push_project_branch"; project: string }
-  /** Switches to an existing local branch named in canonical wire form; never fetches or syncs. */
+  /** Switches to an existing local branch named in canonical wire form; never fetches or pulls. */
   | { type: "switch_project_branch"; project: string; branch: string }
   /** Restores staged and unstaged tracked changes to HEAD in the project worktree, preserving
    * untracked and ignored files. Answered with `ack` after the restore finishes. */

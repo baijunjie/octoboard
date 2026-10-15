@@ -32,7 +32,7 @@ const accountsState = snapshotState({
   projects: [web, api],
   sessions,
   settings: {
-    auto_sync_repositories: false,
+    auto_pull_repositories: false,
     default_clone_dir: "/Users/dev/Projects",
     accounts: [
       { id: "a-work", agent: "claude", name: "Work account for release coordination across all production services", config_dir: "/Users/dev/.claude-work" },

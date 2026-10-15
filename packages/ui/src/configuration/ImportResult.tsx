@@ -88,7 +88,7 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
   const failureText = useFailureText();
   const fallbacksId = useId();
   const outcome = outcomeOf(result.consoles);
-  const setting = t("settings.git.autoSync.label");
+  const setting = t("settings.git.autoPull.label");
   // Every project in the order of the document, under its console; a console is a line of its
   // own only when something came of it that its projects do not already say: it failed, or it was
   // created with nothing in it.
@@ -152,7 +152,7 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
       {result.settings_applied && (
         <p>
           {t(
-            result.settings_applied.auto_sync_repositories
+            result.settings_applied.auto_pull_repositories
               ? "configuration.import.result.settings.on"
               : "configuration.import.result.settings.off",
             { setting },

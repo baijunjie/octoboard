@@ -338,8 +338,8 @@ export function App(): React.ReactElement {
     panes.showAside();
   };
 
-  const syncProjectGit = (project: Project) => {
-    request({ type: "sync_project_git", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
+  const pullProjectBranch = (project: Project) => {
+    request({ type: "pull_project_branch", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
   };
 
   const openProjectDirectory = (project: Project) => {
@@ -648,7 +648,7 @@ export function App(): React.ReactElement {
                 onOpenProjectDirectory={openProjectDirectory}
                 onOpenProjectTerminal={openProjectTerminal}
                 onCopyProjectName={copyProjectName}
-                onSyncProjectGit={syncProjectGit}
+                onPullProjectBranch={pullProjectBranch}
                 onPushProjectBranch={pushProjectBranch}
                 onLoadProjectBranches={loadProjectBranches}
                 onSetPinned={setPinned}

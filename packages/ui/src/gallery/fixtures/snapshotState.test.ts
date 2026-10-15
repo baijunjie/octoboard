@@ -8,13 +8,13 @@ describe("snapshotState", () => {
     expect(snapshotState({ gitStatuses: [status] }).gitStatuses).toEqual(new Map([["p1", status]]));
   });
 
-  it("defaults to an empty git statuses map and auto-sync off, and threads a given settings object through", () => {
+  it("defaults to an empty git statuses map and auto-pull off, and threads a given settings object through", () => {
     const empty = snapshotState({});
     expect(empty.gitStatuses).toEqual(new Map());
-    expect(empty.settings).toEqual({ auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts: [] });
+    expect(empty.settings).toEqual({ auto_pull_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts: [] });
 
     expect(
-      snapshotState({ settings: { auto_sync_repositories: true, default_clone_dir: "/p", accounts: [] } }).settings,
-    ).toEqual({ auto_sync_repositories: true, default_clone_dir: "/p", accounts: [] });
+      snapshotState({ settings: { auto_pull_repositories: true, default_clone_dir: "/p", accounts: [] } }).settings,
+    ).toEqual({ auto_pull_repositories: true, default_clone_dir: "/p", accounts: [] });
   });
 });

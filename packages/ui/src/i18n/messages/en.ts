@@ -371,7 +371,7 @@ export const en = {
   "sidebar.project.branchesIncomplete": "Some branches could not be listed",
   "daemon.git_switch_failed": "Git could not switch branches: {detail}",
   "sidebar.project.git": "Git",
-  "sidebar.project.syncGit": "Sync repository",
+  "sidebar.project.pullBranch": "Pull current branch",
   "sidebar.project.pushBranch": "Push current branch",
   "sidebar.project.pushed": "Pushed the current branch.",
   "sidebar.project.archive": "View archive",
@@ -416,8 +416,8 @@ export const en = {
   "sidebar.git.pushingUnknown": "Pushing the branch",
   "sidebar.git.checking": "Checking branch {branch}",
   "sidebar.git.checkingUnknown": "Checking the branch",
-  "sidebar.git.syncing": "Fast-forwarding branch {branch}",
-  "sidebar.git.syncingUnknown": "Fast-forwarding the branch",
+  "sidebar.git.pulling": "Pulling branch {branch}",
+  "sidebar.git.pullingUnknown": "Pulling the branch",
   "sidebar.git.ahead": {
     one: "{count} commit ahead",
     other: "{count} commits ahead",
@@ -899,7 +899,7 @@ export const en = {
   },
   "configuration.import.settings.label": "Also apply the application settings",
   "configuration.import.settings.turnsOn":
-    "Turns on “{setting}”, which is currently off. {appName} then fast-forwards your repositories by itself.",
+    "Turns on “{setting}”, which is currently off. {appName} then pulls your repositories by itself.",
   "configuration.import.settings.turnsOff": "Turns off “{setting}”, which is currently on.",
   "configuration.import.settings.alreadyOn":
     "“{setting}” is on in the file and already on, so applying changes nothing.",
@@ -1003,9 +1003,9 @@ export const en = {
     "Once this is on, closing the window keeps sessions and their agents running and notifications arriving. The menu bar icon brings the window back.",
   "settings.background.description.on":
     "Sessions and their agents keep running with the window closed, and notifications keep arriving. The menu bar icon brings the window back.",
-  "settings.git.autoSync.label": "Automatically sync repositories",
-  "settings.git.autoSync.description":
-    "Fast-forwards a project's branch when it is behind its upstream and can be. It never pushes, and it leaves a branch that has commits of its own alone. The remote is checked every few minutes whichever way this is set, so the branch always shows how far ahead or behind it is.",
+  "settings.git.autoPull.label": "Automatically pull repositories",
+  "settings.git.autoPull.description":
+    "Pulls a project's branch when it is behind its upstream and can be fast-forwarded. It never pushes, and it leaves a branch that has commits of its own alone. The remote is checked every few minutes whichever way this is set, so the branch always shows how far ahead or behind it is.",
   "settings.trusted.description":
     "Under these folders, {appName} presses every agent's trust confirmation without asking, for every project, including projects added later. Each agent then records the trust in its own configuration and applies the project's own permission rules and hooks. A folder is trusted from a session's trust dialog. Trust a folder only if you trust everything that ends up inside it.",
   "settings.trusted.empty": "No trusted folders yet",

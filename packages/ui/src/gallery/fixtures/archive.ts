@@ -108,7 +108,7 @@ const preservedTaskTitles: Record<string, string> = {
 };
 const archiveState = {
   ...state,
-  settings: { auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts: [
+  settings: { auto_pull_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts: [
     { id: "a-long", agent: "claude" as const, name: "Release coordination across every production environment, regional deployment pipeline and supported customer account for the next scheduled release", config_dir: "/Users/dev/.claude-release" },
     { id: "a-release", agent: "claude" as const, name: "Production release coordination and regression review account for regional deployment pipelines and customer support, for the next scheduled regional release", config_dir: "/Users/dev/.claude-regression" },
   ] },

@@ -16,8 +16,8 @@ This is the guarantee the whole design rests on:
   Octoboard changes a project's files only through an authorized fast-forward, **Switch branch** or
   **Restore file changes…**, and does not push except at the user's word. A branch that is
   behind its upstream and has no commits of its own is fast-forwarded, which moves its working tree — on its own
-  once **Automatically sync repositories** has been turned on, or for one project when the user chooses **Sync
-  repository** (see "Automatically syncing repositories" and "Syncing one project by hand" in
+  once **Automatically pull repositories** has been turned on, or for one project when the user chooses **Pull
+  current branch** (see "Automatically pulling repositories" and "Pulling one project by hand" in
   `docs/product/project-git-status.md`). Separately, **Push current branch** pushes that one branch. That updates
   the remote and, in the repository, the remote-tracking refs `git` updates for that push; when the branch had no
   upstream, it records one. It does not edit the project's files and does not move the working tree (see "Pushing

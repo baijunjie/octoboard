@@ -30,7 +30,7 @@ function render(editing?: Project, accounts: Account[] = []) {
   const daemon: Daemon = {
     store: createStateStore({
       consoles: new Map([["c-1", consoleOf("c-1", "Main", { claude_account_id: accounts[0]?.id })]]),
-      settings: { auto_sync_repositories: false, default_clone_dir: "", accounts },
+      settings: { auto_pull_repositories: false, default_clone_dir: "", accounts },
     }),
     request: (body) => new Promise((resolve) => pending.push({ body, resolve })),
     toastError: vi.fn(),

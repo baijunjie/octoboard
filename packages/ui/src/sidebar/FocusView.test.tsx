@@ -47,7 +47,7 @@ const withTeams = [...sessions, lead, underLead, underFree];
 
 function mount(render: (handlers: SidebarHandlers) => React.ReactElement): { text: () => string; container: HTMLElement; handlers: SidebarHandlers; unmount: () => void } {
   const daemon: Daemon = {
-    store: createStateStore({ settings: { auto_sync_repositories: false, default_clone_dir: "/p", accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/w" }] } }),
+    store: createStateStore({ settings: { auto_pull_repositories: false, default_clone_dir: "/p", accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/w" }] } }),
     request: vi.fn(),
     toastError: vi.fn(),
     toastNotice: vi.fn(),

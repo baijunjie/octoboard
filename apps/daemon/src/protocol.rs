@@ -567,12 +567,12 @@ pub struct DirEntry {
 pub enum GitActivity {
     Idle,
     Checking,
-    Syncing,
+    Pulling,
     Pushing,
 }
 
 /// One project's live git state: its branch and how far it is from its upstream, and whether a
-/// check, a fast-forward sync, or a push is in flight right now. Derived from the project's working
+/// check, a fast-forward pull, or a push is in flight right now. Derived from the project's working
 /// directory on disk, never stored in SQLite; held in memory by `AppState` and (re)built only when
 /// `refresh_git_status` asks for it — the daemon keeps no timer of its own for this (see
 /// `apps/daemon/PROTOCOL.md`'s "Daemon behaviour, per project").
@@ -603,7 +603,7 @@ pub struct GitStatus {
 /// where the accounts belong too (see "Reusable capabilities" in `04-accounts-storage.md`).
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Settings {
-    pub auto_sync_repositories: bool,
+    pub auto_pull_repositories: bool,
     /// The directory a `git` association clones into when none is named: the one the user set, or
     /// `~/Projects` (expanded) while none is. Always an absolute, lexically normalised path.
     pub default_clone_dir: String,
@@ -1372,7 +1372,7 @@ pub enum RequestBody {
     /// Each settable field absent means "leave it alone". Broadcasts `settings_updated` only when
     /// something actually changed, as `remove_trusted_directory` does.
     UpdateSettings {
-        auto_sync_repositories: Option<bool>,
+        auto_pull_repositories: Option<bool>,
         /// A blank value goes back to the built-in default.
         default_clone_dir: Option<String>,
     },
@@ -1406,10 +1406,10 @@ pub enum RequestBody {
     },
     /// Checks one project against its remote and fast-forwards it right now, the same work
     /// `refresh_git_status` does for a console, but ignoring the one-minute floor and whether
-    /// `auto_sync_repositories` is on. Answered with `ack` at once; the status follows as
+    /// `auto_pull_repositories` is on. Answered with `ack` at once; the status follows as
     /// `project_git_status` broadcasts. A project already being checked gets one more forced check
     /// once that check ends.
-    SyncProjectGit {
+    PullProjectBranch {
         project: String,
     },
     /// Opens the system terminal at the project's directory, on the daemon's host. Answered with
@@ -2377,9 +2377,9 @@ mod tests {
                 },
             ),
             (
-                r#"{"type":"sync_project_git","id":"request-1","project":"project-7"}"#,
+                r#"{"type":"pull_project_branch","id":"request-1","project":"project-7"}"#,
                 |body| match body {
-                    RequestBody::SyncProjectGit { project } => Some(project),
+                    RequestBody::PullProjectBranch { project } => Some(project),
                     _ => None,
                 },
             ),

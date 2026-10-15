@@ -44,7 +44,9 @@ pub struct ConfigurationDocument {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentSettings {
-    pub auto_sync_repositories: bool,
+    /// Documents exported before the setting was renamed carry it as `auto_sync_repositories`.
+    #[serde(alias = "auto_sync_repositories")]
+    pub auto_pull_repositories: bool,
 }
 
 /// A reference to an account: its name, which is unique within its agent. The agent is the one
@@ -136,7 +138,7 @@ pub fn build(store: &Store, console: Option<&str>) -> Result<ConfigurationDocume
     let settings = match console {
         Some(_) => None,
         None => Some(DocumentSettings {
-            auto_sync_repositories: store.auto_sync_repositories()?,
+            auto_pull_repositories: store.auto_pull_repositories()?,
         }),
     };
 
@@ -325,7 +327,7 @@ mod tests {
             tied.created_at = 1000;
             store.insert_console(&tied).unwrap();
         }
-        store.set_auto_sync_repositories(true).unwrap();
+        store.set_auto_pull_repositories(true).unwrap();
 
         let mut cloned = project("project-1", "console-1", "cloned");
         cloned.source = ProjectSource::Git;
@@ -379,7 +381,7 @@ mod tests {
         assert_eq!(
             document.settings,
             Some(DocumentSettings {
-                auto_sync_repositories: true
+                auto_pull_repositories: true
             })
         );
         let names = |console: &DocumentConsole| {

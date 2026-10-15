@@ -128,8 +128,10 @@ machine's own to choose, and an import places what it clones under it (see "Defa
 
 ### The application setting a full export carries
 
-One: **Automatically sync repositories** (see "Automatically syncing repositories" in
-`docs/product/project-git-status.md`). A single console's document carries no application settings at all.
+One: **Automatically pull repositories** (see "Automatically pulling repositories" in
+`docs/product/project-git-status.md`), under the key `auto_pull_repositories`. An import also reads it from a document
+that carries it under the key `auto_sync_repositories`; an export writes only `auto_pull_repositories`. A single
+console's document carries no application settings at all.
 
 ### Versions
 
@@ -215,7 +217,7 @@ fills the window in as it goes.
 ### Application settings are left alone unless they are asked for
 
 A document's application settings are applied **only when the import is explicitly asked to apply them**, and are not
-applied by default. Automatically sync repositories makes the daemon fast-forward the user's own repositories by itself,
+applied by default. Automatically pull repositories makes the daemon fast-forward the user's own repositories by itself,
 so applying it changes how the daemon's host behaves rather than only adding to what it holds. The inspection says both
 what the document sets and what is set now, so what applying would change can be shown before anything is done. The
 settings are applied last, through the same path as a change made in Settings — so an import that turns the switch on
