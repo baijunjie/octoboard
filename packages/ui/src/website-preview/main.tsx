@@ -1,4 +1,5 @@
 import { installPreviewStorage } from "./storage";
+import { installPreviewKeyboardGuard } from "./keyboard";
 import { installPreviewScrollBridge, withReportScrollBridge } from "./scrollBridge";
 import { isLanguage, type Language } from "../i18n/languages";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
@@ -7,8 +8,12 @@ import { copyFor, createPreviewScenario, type PreviewScene } from "./scenarios";
 // No application modules may evaluate before this: preferences must never touch the host origin.
 installPreviewStorage();
 const removeScrollBridge = installPreviewScrollBridge();
+const removeKeyboardGuard = installPreviewKeyboardGuard();
 window.addEventListener("pagehide", (event) => {
-  if (!event.persisted) removeScrollBridge();
+  if (!event.persisted) {
+    removeScrollBridge();
+    removeKeyboardGuard();
+  }
 });
 const embedded = window.parent !== window;
 const reportDocument = embedded ? withReportScrollBridge : (source: string) => source;

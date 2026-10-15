@@ -287,6 +287,12 @@ border. Devices without hover show no fade.
 The standalone link opens the selected scene and language in a new tab at `preview/website-preview.html`, relative
 to the site's deployment root. The standalone preview displays its sample-data label above the application.
 
+On devices whose primary pointer is touch, both previews keep text-entry fields read-only so tapping or automatically focusing
+the terminal or another text field does not open the software keyboard. Buttons, menus, selection and scrolling
+remain interactive. Devices whose primary pointer is a mouse or trackpad retain keyboard text entry, including
+touchscreen desktops. This restriction applies only to
+the website previews, not to the application itself.
+
 Vertical mouse-wheel and trackpad gestures scroll the embedded list, terminal, code or report under the pointer
 while it has room to scroll in that direction. At its top or bottom boundary, continuing in the same direction
 scrolls the surrounding homepage. Horizontal gestures, gestures modified by Shift, Ctrl or Meta, and zoom retain
@@ -344,8 +350,9 @@ introduction and the same status for each row.
 
 ## Motion and accessibility
 
-The hero text and mascot enter with a short motion. The mascot's eight tentacles move independently, its body
-floats slightly, and its red eyes brighten and dim. Red and silver pixel particles move through the surrounding
+The hero text and mascot enter with a short motion. On both mobile and desktop, the mascot's eight tentacles
+swing independently, its body floats up and down and rocks from side to side, and its red eyes brighten and dim.
+Red and silver pixel particles move through the surrounding
 space without covering content or intercepting interaction. Sections reveal as they enter view.
 
 A control beside the mascot pauses and resumes the homepage's decorative animation, including the mascot,

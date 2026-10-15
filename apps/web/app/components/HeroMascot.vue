@@ -12,49 +12,49 @@ const arms = [
   {
     points: "0,0 280,0 230,145 192,218 207,332 124,334 0,280",
     origin: "194px 292px",
-    angle: "-2deg",
+    angle: "-8deg",
     delay: "-1s",
   },
   {
     points: "640,0 360,0 410,145 448,218 433,332 516,334 640,280",
     origin: "446px 292px",
-    angle: "2deg",
+    angle: "8deg",
     delay: "-3.5s",
   },
   {
     points: "0,280 123,280 209,327 258,380 205,419 0,419",
     origin: "224px 366px",
-    angle: "5deg",
+    angle: "15deg",
     delay: "-2.5s",
   },
   {
     points: "640,280 517,280 431,327 382,380 435,419 640,419",
     origin: "416px 366px",
-    angle: "-5deg",
+    angle: "-15deg",
     delay: "-0.5s",
   },
   {
     points: "0,419 170,410 231,365 277,411 221,492 170,509 164,640 0,640",
     origin: "244px 415px",
-    angle: "-4deg",
+    angle: "-12deg",
     delay: "-4.5s",
   },
   {
     points: "640,419 470,410 409,365 363,411 419,492 470,509 476,640 640,640",
     origin: "396px 415px",
-    angle: "4deg",
+    angle: "12deg",
     delay: "-2s",
   },
   {
     points: "164,640 164,511 232,491 259,415 320,415 320,640",
     origin: "286px 438px",
-    angle: "5deg",
+    angle: "15deg",
     delay: "-3s",
   },
   {
     points: "476,640 476,511 408,491 381,415 320,415 320,640",
     origin: "354px 438px",
-    angle: "-5deg",
+    angle: "-15deg",
     delay: "-5s",
   },
 ];
@@ -189,10 +189,10 @@ const arms = [
   background: #c5c5c5;
 }
 .mascot-float {
-  animation: mascot-float 7s ease-in-out infinite;
+  animation: mascot-float 5s ease-in-out infinite;
 }
 .mascot-arm {
-  animation: arm-articulation 5.7s ease-in-out infinite alternate;
+  animation: arm-articulation 3.8s ease-in-out infinite alternate;
 }
 .mascot-eyes {
   animation: eye-breathe 3.6s ease-in-out infinite;
@@ -219,10 +219,10 @@ const arms = [
 @keyframes mascot-float {
   0%,
   100% {
-    transform: translateY(3px) rotate(-0.4deg);
+    transform: translateY(14px) rotate(-2deg);
   }
   50% {
-    transform: translateY(-6px) rotate(0.4deg);
+    transform: translateY(-22px) rotate(2deg);
   }
 }
 @keyframes eye-breathe {
