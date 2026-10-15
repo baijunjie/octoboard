@@ -74,6 +74,17 @@ To recognise it: failures only under a parallel run, a run far slower than usual
 suite stalling for seconds in the same windows. That is the machine, not the code under test: do
 not raise production timeouts or serialize the suite over it.
 
+## Seed the agent's model list before a daemon test gives anything a model or an effort
+
+Applies to any daemon test — coordinator, control socket or console session tool — that creates or edits a console
+or a project, or opens a session, with a model or a reasoning effort in it. The daemon checks every such value
+against the list the agent offers, and for Codex and Grok that list comes from running the CLI installed on the
+machine; a list that cannot be read checks nothing. So an unseeded test passes on a machine without the CLI, or
+whose catalogue happens to hold the test's model, and fails on another — a made-up model id like `gpt-y` is refused
+wherever the CLI is installed. Call `test_support::offer_models` for that agent before the call under test, with the
+models and efforts the test uses. It seeds the default account only; a test that gives a model under another account
+is checked against that account's own list.
+
 ## Verify behaviour derived from an agent's output by replaying a committed capture
 
 Anything the daemon derives from what an agent CLI emits — a hook payload, the transcript it writes,

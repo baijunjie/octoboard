@@ -94,6 +94,7 @@ export const zhHans: Translation<"other"> = {
   "daemon.account_name_taken": "{agent} 已有名为“{name}”的账户。",
   "daemon.field_required": "必须提供 {field}。",
   "daemon.conflicting_fields": "不能同时提供 {first} 和 {second}。",
+  "daemon.invalid_launch_setting": "{agent} 不提供“{value}”。",
   "daemon.console_has_running_sessions": "此控制台仍有运行中或正在启动的会话。请先归档运行中的会话，或等待正在启动的会话完成。",
   "daemon.project_has_running_sessions": "此项目仍有运行中或正在启动的会话。请先归档运行中的会话，或等待正在启动的会话完成。",
   "daemon.path_not_absolute": "“{path}”不是绝对路径。请给出完整路径，或以 ~/ 开头。",

@@ -20,12 +20,22 @@ use uuid::Uuid;
 
 use crate::console_request;
 use crate::coordinator::{self, OpenRequest};
+use crate::git_remote;
 use crate::protocol::{
-    now_millis, Agent, Event, Origin, Page, Project, ProjectSource, Role, Session, SessionStatus,
+    error_code, now_millis, CodedError, Event, Origin, Page, ProjectSource, Role, Session,
+    SessionStatus,
 };
 use crate::reporting::{self, Delivery, Report, ReportStatus, WhenBlocked};
 use crate::sharing::{self, OwnerCopy};
 use crate::state::AppState;
+
+use super::args::{
+    console_projects, optional_agent, optional_bool, optional_string, optional_string_list,
+    own_console, own_project, present_text, raw_text, required_str, resolve_project, string_list,
+};
+use super::settings::{
+    self, describe_project, launch_argument, project_accounts_argument, resolve_account,
+};
 
 /// How much of a session's output `get_session` hands back. Enough to see what it is doing and how
 /// it got there, short of handing the caller a transcript to wade through.
@@ -47,15 +57,23 @@ pub async fn call(
     match tool {
         "list_projects" => list_projects(state, &session),
         "add_project" => add_project(state, &session, arguments).await,
+        "update_project" => settings::update_project(state, &session, arguments).await,
+        "get_console" => settings::get_console(state, &session),
+        "update_console" => settings::update_console(state, &session, arguments).await,
+        "get_settings" => settings::get_settings(state),
+        "update_settings" => settings::update_settings(state, arguments),
         "start_session" => start_session(state, &session, arguments).await,
         "send_message" => send_message(state, &session, arguments).await,
         "get_session" => get_session(state, &session, arguments).await,
+        "rename_session" => rename_session(state, &session, arguments),
+        "set_session_pinned" => set_session_pinned(state, &session, arguments),
         "archive_session" => archive_session(state, &session, arguments),
         "list_archived" => list_archived(state, &session, arguments),
         "reopen_session" => reopen_session(state, &session, arguments).await,
         "show_page" => show_page(state, &session, arguments),
         "report" => report(state, &session, arguments).await,
         "list_project_sessions" => list_project_sessions(state, &session),
+        "get_project" => settings::get_project(state, &session),
         "share_info" => share_info(state, &session, arguments).await,
         "request_console_session" => request_console_session(state, &session, arguments).await,
         // Unreachable while the catalogue and this dispatch agree; a tool added to one and not the
@@ -80,15 +98,9 @@ fn list_projects(state: &Arc<AppState>, console_session: &Session) -> Result<Val
                 })
                 .map(|session| describe_session(state, session, console_session))
                 .collect::<Result<Vec<Value>>>()?;
-            Ok(json!({
-                "project": project.id,
-                "name": project.name,
-                "host": project.host_id,
-                "path": project.path,
-                "default_agent": project.default_agent,
-                "tags": project.tags,
-                "sessions": live,
-            }))
+            let mut entry = describe_project(project);
+            entry["sessions"] = json!(live);
+            Ok(entry)
         })
         .collect::<Result<Vec<Value>>>()?;
     Ok(json!({ "projects": entries }))
@@ -107,31 +119,66 @@ async fn add_project(
         "git" | "github" => ProjectSource::Git,
         other => bail!("`{other}` is not one of `local`, `parent` or `git`"),
     };
+    let remote_url = optional_string(arguments, "remote_url");
+    if source == ProjectSource::Git {
+        check_clone_url(remote_url.as_deref())?;
+    }
+    let mut settings = coordinator::NewProjectSettings {
+        pinned: optional_bool(arguments, "pinned")?.unwrap_or(false),
+        ..Default::default()
+    };
+    for (agent, account) in project_accounts_argument(state, arguments)? {
+        *settings.account_mut(agent) = account;
+    }
+    for (agent, change) in launch_argument(arguments)? {
+        let (model, effort) = settings.launch_mut(agent);
+        *model = change.model.flatten();
+        *effort = change.effort.flatten();
+    }
     let added = coordinator::add_project(
         state,
         coordinator::AddProjectRequest {
             console_id: console_session.console_id.clone(),
             source,
             path: optional_string(arguments, "path"),
-            remote_url: optional_string(arguments, "remote_url"),
+            remote_url,
             name: optional_string(arguments, "name"),
             default_agent: optional_agent(arguments, "default_agent")?,
-            settings: coordinator::NewProjectSettings::default(),
+            settings,
             detect_default_agent: true,
-            tags: None,
+            check_launch: true,
+            tags: optional_string_list(arguments, "tags")?,
         },
     )
     .await?;
-    Ok(json!({
-        "projects": added
-            .iter()
-            .map(|project| json!({
-                "project": project.id,
-                "name": project.name,
-                "path": project.path,
-            }))
-            .collect::<Vec<_>>(),
-    }))
+    Ok(json!({ "projects": added.iter().map(describe_project).collect::<Vec<_>>() }))
+}
+
+/// Refuses a repository URL the console session may not clone from: one of a shape the import of a
+/// configuration document refuses too, so a tool call is no way to reach a path of this machine or
+/// run a helper transport, and one with a credential in it, which would be stored with the project
+/// and shown in every listing. The user's own git credentials are what a clone uses.
+fn check_clone_url(url: Option<&str>) -> Result<()> {
+    let Some(url) = url else { return Ok(()) };
+    let shown = git_remote::without_credentials(url);
+    if git_remote::has_credentials(url) {
+        return Err(CodedError::raised(
+            error_code::INVALID_REMOTE_URL,
+            format!(
+                "`{shown}` carries credentials, which are not accepted in a URL: give it without, \
+                 and the user's own git credentials are used"
+            ),
+            &[("url", &shown)],
+        ));
+    }
+    if !git_remote::is_clonable_url(url) {
+        return Err(CodedError::raised(
+            error_code::INVALID_REMOTE_URL,
+            format!("`{shown}` is not an http(s), ssh or git repository URL that can be cloned"),
+            &[("url", &shown)],
+        ));
+    }
+    Ok(())
 }
 
 async fn start_session(
@@ -164,17 +211,28 @@ async fn start_session(
         brief.get("constraints").and_then(Value::as_str),
     );
 
+    let agent = optional_agent(arguments, "agent")?;
+    // An account is one agent's, so it is read for the agent the session will be of: the one
+    // named, else the project's default, else the console's, as `open_session` settles it.
+    let account = match optional_string(arguments, "account") {
+        None => None,
+        Some(wanted) => {
+            let agent =
+                coordinator::session_agent(agent, Some(&project), &own_console(state, caller)?);
+            Some(resolve_account(state, agent, &wanted)?)
+        }
+    };
     let session = coordinator::open_session(
         state,
         OpenRequest {
             console_id: caller.console_id.clone(),
             project_id: Some(project.id),
-            agent: optional_agent(arguments, "agent")?,
-            // A session a session starts takes the project's account for its agent, else the
-            // console's.
-            account: None,
-            model: None,
-            effort: None,
+            agent,
+            // Without one, a session a session starts takes the project's account for its agent,
+            // else the console's; a blank model or effort is the agent's own default.
+            account,
+            model: present_text(arguments, "model")?,
+            effort: present_text(arguments, "effort")?,
             task: Some(task),
             // Named for the task, not the project: several sessions dispatched into one project
             // would otherwise all carry the project's name and be indistinguishable in the menu.
@@ -278,6 +336,33 @@ fn archive_session(
     let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
     coordinator::archive_session(state, &target.id)?;
     Ok(json!({ "session": target.id, "status": SessionStatus::Archived }))
+}
+
+fn rename_session(
+    state: &Arc<AppState>,
+    caller: &Session,
+    arguments: &Map<String, Value>,
+) -> Result<Value> {
+    let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
+    let title = raw_text(arguments, "title")?.ok_or_else(|| anyhow!("`title` is required"))?;
+    let renamed = coordinator::rename_session(state, &target.id, &title)?;
+    describe_session(state, &renamed, caller)
+}
+
+fn set_session_pinned(
+    state: &Arc<AppState>,
+    caller: &Session,
+    arguments: &Map<String, Value>,
+) -> Result<Value> {
+    let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
+    let pinned = arguments
+        .get("pinned")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| anyhow!("`pinned` is required and must be true or false"))?;
+    let updated = coordinator::set_session_pinned(state, &target.id, pinned)?;
+    let mut description = describe_session(state, &updated, caller)?;
+    description["pinned"] = json!(updated.pinned);
+    Ok(description)
 }
 
 fn list_archived(
@@ -457,105 +542,6 @@ async fn request_console_session(
 }
 
 // -- argument and record helpers ---------------------------------------------
-
-fn required_str<'a>(arguments: &'a Map<String, Value>, key: &str) -> Result<&'a str> {
-    arguments
-        .get(key)
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| anyhow!("`{key}` is required"))
-}
-
-/// The strings of an optional array argument; anything in it that is not a string is skipped.
-fn string_list(arguments: &Map<String, Value>, key: &str) -> Vec<String> {
-    arguments
-        .get(key)
-        .and_then(Value::as_array)
-        .map(|items| {
-            items
-                .iter()
-                .filter_map(Value::as_str)
-                .map(str::to_string)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-fn optional_string(arguments: &Map<String, Value>, key: &str) -> Option<String> {
-    arguments
-        .get(key)
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
-}
-
-fn optional_agent(arguments: &Map<String, Value>, key: &str) -> Result<Option<Agent>> {
-    match optional_string(arguments, key) {
-        None => Ok(None),
-        Some(value) => match value.as_str() {
-            "claude" => Ok(Some(Agent::Claude)),
-            "codex" => Ok(Some(Agent::Codex)),
-            "grok" => Ok(Some(Agent::Grok)),
-            other => bail!("`{other}` is not one of `claude`, `codex` or `grok`"),
-        },
-    }
-}
-
-fn console_projects(state: &Arc<AppState>, console_id: &str) -> Result<Vec<Project>> {
-    Ok(state
-        .store
-        .list_projects()?
-        .into_iter()
-        .filter(|project| project.console_id == console_id)
-        .collect())
-}
-
-/// Finds a project by id, or by name when that names exactly one. The console session works from
-/// what `list_projects` told it, which is both, and a name it half-remembers must not resolve to
-/// whichever project happens to sort first.
-fn resolve_project(state: &Arc<AppState>, console_id: &str, wanted: &str) -> Result<Project> {
-    let projects = console_projects(state, console_id)?;
-    if let Some(project) = projects.iter().find(|project| project.id == wanted) {
-        return Ok(project.clone());
-    }
-    let matches: Vec<&Project> = projects
-        .iter()
-        .filter(|project| project.name == wanted)
-        .collect();
-    match matches.as_slice() {
-        [project] => Ok((*project).clone()),
-        [] => bail!("this console has no project `{wanted}`"),
-        _ => bail!(
-            "`{wanted}` names {} projects in this console; use the project's id instead",
-            matches.len()
-        ),
-    }
-}
-
-/// The project an unbound project session starts sessions in: its own, always. A `project` it
-/// names must be that one, by id or by name, so a call aimed at another project is refused rather
-/// than quietly run in this one.
-fn own_project(state: &Arc<AppState>, caller: &Session, named: Option<String>) -> Result<Project> {
-    let project = caller
-        .project_id
-        .as_deref()
-        .map(|id| state.store.get_project(id))
-        .transpose()?
-        .flatten()
-        .ok_or_else(|| anyhow!("this session's project is no longer on record"))?;
-    if let Some(named) = named {
-        if named != project.id && named != project.name {
-            bail!(
-                "you can start sessions only in your own project, `{}` (\"{}\"), not in `{named}`",
-                project.id,
-                project.name
-            );
-        }
-    }
-    Ok(project)
-}
 
 /// Finds a session the caller is allowed to read: for a console session, any of its own console's;
 /// for a project session, any of its own project's. A session id from another console, or from
@@ -739,7 +725,7 @@ fn readable_output(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use crate::protocol::{
-        AgentAvailability, Availability, Console, ProjectAccount, ProjectSource,
+        Agent, AgentAvailability, Availability, Console, Project, ProjectAccount, ProjectSource,
     };
     use crate::store::LOCAL_HOST_ID;
     use crate::test_support::ScratchDir;
@@ -1588,6 +1574,401 @@ mod tests {
         .await
         .expect_err("not running");
         assert!(err.to_string().contains("not running"), "{err}");
+    }
+
+    /// `shared_console_state`, with the console's working directory somewhere a console's save
+    /// may write its instruction files, a codex account, and a remote URL carrying a token on the
+    /// console's project.
+    fn settings_state(name: &str) -> (Arc<AppState>, ScratchDir) {
+        let (state, dir) = shared_console_state(name);
+        let workdir = dir.join("workdir");
+        std::fs::create_dir(&workdir).unwrap();
+        state
+            .store
+            .update_console(&Console {
+                workdir: workdir.to_string_lossy().into_owned(),
+                ..console()
+            })
+            .unwrap();
+        state
+            .store
+            .insert_account(&crate::protocol::Account {
+                id: "acct-codex".to_string(),
+                agent: Agent::Codex,
+                name: "Work".to_string(),
+                config_dir: "/secret/codex".to_string(),
+            })
+            .unwrap();
+        git_remote::record_remote_url(
+            &state,
+            "project-1",
+            Some("https://user:token@example.com/r.git".to_string()),
+        );
+        (state, dir)
+    }
+
+    async fn refused(state: &Arc<AppState>, caller: &str, tool: &str, args: Value) -> String {
+        call(state, caller, tool, &arguments(args))
+            .await
+            .expect_err("refused")
+            .to_string()
+    }
+
+    /// `update_project` leaves what it is not given alone, adds and removes tags without caring
+    /// about case, resolves an account by name within the agent, and refuses what the shared
+    /// function refuses (a model the agent does not offer, another agent's account, a blank name)
+    /// without writing any of it; another console's project is out of reach.
+    #[tokio::test]
+    async fn update_project_changes_only_what_it_is_given() {
+        let (state, _dir) = settings_state("update-project");
+        let update = |args: Value| {
+            let state = state.clone();
+            async move { call(&state, "a", "update_project", &arguments(args)).await }
+        };
+
+        let first = update(json!({
+            "project": "project-1",
+            "tags": ["Backend", "api"],
+            "pinned": true,
+            "accounts": { "codex": "work", "grok": "default" },
+            "launch": { "claude": { "model": "opus", "effort": "high" } },
+        }))
+        .await
+        .unwrap();
+        assert_eq!(first["tags"], json!(["Backend", "api"]));
+        assert_eq!(first["accounts"]["codex"], "acct-codex");
+        assert_eq!(first["accounts"]["grok"], "default");
+        assert_eq!(first["accounts"]["claude"], "inherit");
+        assert_eq!(first["launch"]["claude"]["model"], "opus");
+
+        let second = update(json!({
+            "project": "project-1",
+            "add_tags": ["API", "docs"],
+            "remove_tags": ["backend"],
+        }))
+        .await
+        .unwrap();
+        assert_eq!(second["tags"], json!(["api", "docs"]));
+        assert_eq!(second["pinned"], true);
+        assert_eq!(second["launch"]["claude"]["effort"], "high");
+        assert_eq!(second["name"], "project-1");
+
+        // `null` is no list, so it does not empty the tags; a value that is not a list, or a
+        // boolean that is not one, is refused rather than ignored.
+        let kept = update(json!({ "project": "project-1", "tags": null }))
+            .await
+            .unwrap();
+        assert_eq!(kept["tags"], json!(["api", "docs"]));
+        for (args, expected) in [
+            (json!({ "tags": "api" }), "array of strings"),
+            (json!({ "add_tags": [1] }), "array of strings"),
+            (json!({ "pinned": "false" }), "true or false"),
+        ] {
+            let mut args = args;
+            args["project"] = json!("project-1");
+            let message = refused(&state, "a", "update_project", args).await;
+            assert!(message.contains(expected), "{message}");
+        }
+
+        let cleared = update(json!({ "project": "project-1", "default_agent": null }))
+            .await
+            .unwrap();
+        assert!(cleared["default_agent"].is_null());
+
+        for (args, expected) in [
+            (json!({ "tags": ["x"], "add_tags": ["y"] }), "cannot both"),
+            (json!({ "name": "  " }), "`name` is required"),
+            (
+                json!({ "launch": { "claude": { "model": "gpt-9" } } }),
+                "is not a model",
+            ),
+            (
+                json!({ "accounts": { "claude": "acct-codex" } }),
+                "unknown account",
+            ),
+            (
+                json!({ "accounts": { "claude": "Work" } }),
+                "unknown account",
+            ),
+        ] {
+            let mut args = args;
+            args["project"] = json!("project-1");
+            let message = refused(&state, "a", "update_project", args).await;
+            assert!(message.contains(expected), "{message}");
+        }
+        let stored = state.store.get_project("project-1").unwrap().unwrap();
+        assert_eq!(stored.tags, ["api", "docs"]);
+        assert_eq!(stored.claude_session_model.as_deref(), Some("opus"));
+
+        let message = refused(
+            &state,
+            "a",
+            "update_project",
+            json!({ "project": "project-2" }),
+        )
+        .await;
+        assert!(message.contains("no project"), "{message}");
+    }
+
+    /// Both listings carry the settings and show the remote without the token in it, and a project
+    /// session's `get_project` takes no project: whatever it names, it reads its own.
+    #[tokio::test]
+    async fn project_settings_are_listed_without_credentials_and_get_project_stays_in_its_own() {
+        let (state, _dir) = settings_state("get-project");
+        let listed = call(&state, "a", "list_projects", &Map::new())
+            .await
+            .unwrap();
+        let entry = &listed["projects"][0];
+        assert_eq!(entry["remote_url"], "https://example.com/r.git");
+        assert_eq!(entry["source"], "local");
+        assert_eq!(entry["trust_consent"], false);
+        assert_eq!(entry["accounts"]["claude"], "inherit");
+        assert!(entry["launch"]["grok"]["model"].is_null());
+        assert_eq!(entry["sessions"].as_array().unwrap().len(), 3);
+
+        for caller in ["of-a", "loose"] {
+            let own = call(
+                &state,
+                caller,
+                "get_project",
+                &arguments(json!({ "project": "project-2" })),
+            )
+            .await
+            .unwrap();
+            assert_eq!(own["project"], "project-1");
+            assert_eq!(own["remote_url"], "https://example.com/r.git");
+            assert!(own.get("sessions").is_none());
+        }
+        let other = call(&state, "foreign", "get_project", &Map::new())
+            .await
+            .unwrap();
+        assert_eq!(other["project"], "project-2");
+        // A console session reads projects through `list_projects`.
+        assert!(refused(&state, "a", "get_project", json!({}))
+            .await
+            .contains("not a tool"));
+    }
+
+    /// A session is retitled and pinned only by the session it reports to: not one bound to
+    /// another session, not an unbound one, not the caller itself, and a bound project session has
+    /// no such tools at all. A blank title is refused.
+    #[tokio::test]
+    async fn only_the_owner_renames_or_pins_a_session() {
+        let (state, _dir) = settings_state("rename-pin");
+        let renamed = call(
+            &state,
+            "a",
+            "rename_session",
+            &arguments(json!({ "session": "of-a", "title": " New title " })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(renamed["title"], "New title");
+        let pinned = call(
+            &state,
+            "a",
+            "set_session_pinned",
+            &arguments(json!({ "session": "of-a", "pinned": true })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(pinned["pinned"], true);
+        assert!(state.store.get_session("of-a").unwrap().unwrap().pinned);
+
+        let message = refused(
+            &state,
+            "a",
+            "rename_session",
+            json!({ "session": "of-a", "title": " " }),
+        )
+        .await;
+        assert!(message.contains("`title` is required"), "{message}");
+        for target in ["of-b", "loose", "a"] {
+            for (tool, args) in [
+                ("rename_session", json!({ "session": target, "title": "x" })),
+                (
+                    "set_session_pinned",
+                    json!({ "session": target, "pinned": true }),
+                ),
+            ] {
+                let message = refused(&state, "a", tool, args).await;
+                assert!(
+                    message.contains("leave it alone") || message.contains("your own"),
+                    "{message}"
+                );
+            }
+        }
+        assert_eq!(
+            state.store.get_session("of-b").unwrap().unwrap().title,
+            "Work of-b"
+        );
+        let message = refused(
+            &state,
+            "of-a",
+            "rename_session",
+            json!({ "session": "loose", "title": "x" }),
+        )
+        .await;
+        assert!(message.contains("not a tool"), "{message}");
+    }
+
+    /// The console session reads and changes its own console only, never sees the avatar, and an
+    /// account that does not belong to the agent is refused.
+    #[tokio::test]
+    async fn the_console_session_reads_and_changes_its_own_console() {
+        let (state, _dir) = settings_state("console-settings");
+        let mut with_icon = state.store.get_console("console-1").unwrap().unwrap();
+        with_icon.icon = Some("data:image/png;base64,AAAA".to_string());
+        state.store.update_console(&with_icon).unwrap();
+
+        let read = call(&state, "a", "get_console", &Map::new()).await.unwrap();
+        assert_eq!(read["console"], "console-1");
+        assert_eq!(read["has_icon"], true);
+        assert_eq!(read["accounts"]["claude"], "default");
+        assert!(!read.to_string().contains("AAAA"));
+
+        let updated = call(
+            &state,
+            "a",
+            "update_console",
+            &arguments(json!({
+                "name": "Renamed",
+                "default_agent": "codex",
+                "accounts": { "codex": "Work" },
+                "launch": { "claude": { "model": "sonnet" } },
+            })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated["name"], "Renamed");
+        assert_eq!(updated["default_agent"], "codex");
+        assert_eq!(updated["accounts"]["codex"], "acct-codex");
+        assert_eq!(updated["launch"]["claude"]["model"], "sonnet");
+        let stored = state.store.get_console("console-1").unwrap().unwrap();
+        assert_eq!(stored.icon, with_icon.icon);
+        assert_eq!(
+            state.store.get_console("console-2").unwrap().unwrap().name,
+            "Console"
+        );
+
+        for (args, expected) in [
+            (json!({ "name": " " }), "`name` is required"),
+            (
+                json!({ "accounts": { "claude": "acct-codex" } }),
+                "unknown account",
+            ),
+            (
+                json!({ "launch": { "claude": { "model": "gpt-9" } } }),
+                "is not a model",
+            ),
+        ] {
+            let message = refused(&state, "a", "update_console", args).await;
+            assert!(message.contains(expected), "{message}");
+        }
+    }
+
+    /// The settings listing names every agent's default account, never an account's directory, and
+    /// the only write is to the two settings a console session may change.
+    #[tokio::test]
+    async fn settings_are_listed_without_directories_and_two_of_them_are_writable() {
+        let (state, _dir) = settings_state("app-settings");
+        let updated = call(
+            &state,
+            "a",
+            "update_settings",
+            &arguments(json!({ "default_clone_dir": "/tmp/clones" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated["default_clone_dir"], "/tmp/clones");
+        let read = call(&state, "a", "get_settings", &Map::new())
+            .await
+            .unwrap();
+        assert_eq!(read["accounts"].as_array().unwrap().len(), 4);
+        assert_eq!(read["accounts"][0]["id"], "default");
+        assert_eq!(read["accounts"][0]["default"], true);
+        assert!(read["trusted_directories"].is_array());
+        assert!(!read.to_string().contains("/secret"));
+        let message = refused(
+            &state,
+            "a",
+            "update_settings",
+            json!({ "default_clone_dir": "relative" }),
+        )
+        .await;
+        assert!(message.contains("not an absolute path"), "{message}");
+    }
+
+    /// A clone URL with a credential in it is refused without echoing the credential, so is one
+    /// that is not a remote at all; a local association takes its settings and returns them.
+    #[tokio::test]
+    async fn add_project_refuses_a_credentialed_url_and_takes_its_settings() {
+        let (state, dir) = settings_state("add-project");
+        // Should the refusal ever fail, a clone lands in the scratch directory, not the user's.
+        let clones = dir.join("clones");
+        state
+            .store
+            .set_default_clone_dir(Some(&clones.to_string_lossy()))
+            .unwrap();
+        for (url, expected) in [
+            (
+                "https://user:token@example.com/r.git",
+                "carries credentials",
+            ),
+            ("https://token@example.com/r.git", "carries credentials"),
+            ("/etc/passwd", "can be cloned"),
+        ] {
+            let args = json!({ "source": "git", "remote_url": url });
+            let message = refused(&state, "a", "add_project", args).await;
+            assert!(message.contains(expected), "{message}");
+            assert!(
+                !message.contains("token@") && !message.contains("user:"),
+                "{message}"
+            );
+        }
+        assert_eq!(state.store.list_projects().unwrap().len(), 2);
+
+        let repo = dir.join("repo");
+        std::fs::create_dir(&repo).unwrap();
+        let added = call(
+            &state,
+            "a",
+            "add_project",
+            &arguments(json!({
+                "source": "local",
+                "path": repo.to_string_lossy(),
+                "tags": ["one"],
+                "pinned": true,
+                "accounts": { "codex": "acct-codex" },
+                "launch": { "claude": { "effort": "low" } },
+            })),
+        )
+        .await
+        .unwrap();
+        let project = &added["projects"][0];
+        assert_eq!(project["pinned"], true);
+        assert_eq!(project["tags"], json!(["one"]));
+        assert_eq!(project["accounts"]["codex"], "acct-codex");
+        assert_eq!(project["launch"]["claude"]["effort"], "low");
+    }
+
+    /// `start_session`'s account must belong to the session's agent, and its model must be one the
+    /// agent offers; both are refused before anything is launched.
+    #[tokio::test]
+    async fn start_session_refuses_another_agents_account_and_a_model_not_offered() {
+        let (state, _dir) = settings_state("start-session-overrides");
+        for (extra, expected) in [
+            (json!({ "account": "acct-codex" }), "unknown account"),
+            (json!({ "model": "gpt-9" }), "is not a model"),
+        ] {
+            let mut args = json!({ "project": "project-1", "brief": { "goal": "do it" } });
+            args.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            let message = refused(&state, "a", "start_session", args).await;
+            assert!(message.contains(expected), "{message}");
+        }
+        assert_eq!(state.store.list_sessions().unwrap().len(), 8);
     }
 
     #[test]

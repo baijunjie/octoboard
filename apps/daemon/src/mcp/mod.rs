@@ -1,7 +1,8 @@
-//! The Octoboard MCP server: the orchestration tools the console session drives Octoboard with, the
-//! narrower set an unbound project session drives its own project with and asks for a console
-//! session through, the reporting tool a bound project session answers through, and the two tools
-//! every project session shares information with its project's other sessions through.
+//! The Octoboard MCP server: the orchestration and settings tools the console session drives
+//! Octoboard with, the narrower set an unbound project session drives its own project with and asks
+//! for a console session through, the reporting tool a bound project session answers through, and
+//! the tools every project session shares information with its project's other sessions through and
+//! reads its own project's settings with.
 //!
 //! **Transport is a stdio child process, not an HTTP endpoint the agent connects to.** Each
 //! adapter registers `octoboardd mcp --session … --role … --port … --token …` as a `command`-type
@@ -19,8 +20,10 @@
 //! `docs/agent-cli-reference.md`), which is why [`qualified_tool_name`] exists rather than the
 //! role text spelling a prefix out.
 
+mod args;
 pub mod exec;
 pub mod role;
+mod settings;
 pub mod stdio;
 
 use serde_json::{json, Value};
@@ -86,9 +89,12 @@ pub fn qualified_tool_name(agent: Agent, tool: &str) -> String {
 const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "list_projects",
-        description: "List this console's projects: name, host, directory, the tags the user \
-                      gave each, and the sessions currently running in each — every session of \
-                      the console, whichever session owns it. Each carries `owner`, the \
+        description: "List this console's projects: name, host, directory, source, remote URL \
+                      (credentials removed), pin, the tags the user gave each, the settings \
+                      (`default_agent`, `accounts`, `launch`; see `update_project`), whether the \
+                      user has `trust_consent`ed to Octoboard pressing the agent's folder-trust \
+                      confirmation (read-only), and the sessions currently running in each — \
+                      every session of the console, whichever session owns it. Each carries `owner`, the \
                       session it reports to, `owner_kind` (a `console` or a `project` session) \
                       and `yours`; a project session with `owner: null` is unbound, which the user \
                       opened themselves and kept outside the orchestration. A session with \
@@ -102,7 +108,9 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       associate the clone. `source` is `local` for one directory, `parent` for \
                       every git repository directly beneath `path`, or `git` to clone \
                       `remote_url` into `path`, which defaults to the user's default clone \
-                      directory.",
+                      directory. Returns the settings of each project added, as `list_projects` \
+                      gives them. A `git` URL must be an http(s), ssh or git URL without \
+                      credentials in it: the user's own git credentials are used.",
         schema: || {
             object_schema(
                 json!({
@@ -137,8 +145,120 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                                         found and not known to be missing from PATH; \
                                         otherwise the project inherits the console's.",
                     },
+                    "tags": tags_schema("The project's tags."),
+                    "accounts": accounts_schema(true),
+                    "launch": launch_schema(),
+                    "pinned": {
+                        "type": "boolean",
+                        "description": "Pin the project to the top of the console's project list.",
+                    },
                 }),
                 &["source"],
+            )
+        },
+    },
+    ToolDef {
+        name: "update_project",
+        description: "Change settings of one of this console's projects; what is omitted is left \
+                      as it is. Returns the project's settings as `list_projects` gives them. \
+                      Sessions already running keep what they were started with; a change \
+                      reaches the ones opened or resumed afterwards. The project's directory, \
+                      source and remote cannot be changed, and a project cannot be deleted. \
+                      These are the user's settings: change one only when they asked you to.",
+        schema: || {
+            object_schema(
+                json!({
+                    "project": {
+                        "type": "string",
+                        "description": "The project's id, or its name when that is unambiguous.",
+                    },
+                    "name": { "type": "string", "description": "The display name. Not blank." },
+                    "tags": tags_schema("Replaces the project's whole tag list. Not to be \
+                                         combined with `add_tags` or `remove_tags`."),
+                    "add_tags": tags_schema("Tags to add to the ones the project has."),
+                    "remove_tags": tags_schema("Tags to remove, matched ignoring letter case."),
+                    "pinned": {
+                        "type": "boolean",
+                        "description": "Pin the project to the top of the console's project list.",
+                    },
+                    "default_agent": {
+                        "type": ["string", "null"],
+                        "enum": ["claude", "codex", "grok", null],
+                        "description": "The agent sessions in this project use by default; \
+                                        `null` goes back to inheriting the console's.",
+                    },
+                    "accounts": accounts_schema(true),
+                    "launch": launch_schema(),
+                }),
+                &["project"],
+            )
+        },
+    },
+    ToolDef {
+        name: "get_console",
+        description: "This console's own settings: `name`, `default_agent`, `accounts`, `launch` \
+                      (the model and effort of console sessions like this one), whether it has an \
+                      avatar (`has_icon`), and its working directory (`workdir`, read-only). \
+                      Only the console this session belongs to can be read.",
+        schema: || object_schema(json!({}), &[]),
+    },
+    ToolDef {
+        name: "update_console",
+        description: "Change this console's own settings; what is omitted is left as it is. \
+                      Returns them as `get_console` gives them. Sessions already running keep \
+                      what they were started with: a new account reaches only console sessions \
+                      opened afterwards, and a new model or effort reaches this console \
+                      session on its next launch unless it was given its own. Only this \
+                      console can be changed, and not its avatar. These are the user's \
+                      settings: change one only when they asked you to.",
+        schema: || {
+            object_schema(
+                json!({
+                    "name": { "type": "string", "description": "The display name. Not blank." },
+                    "default_agent": {
+                        "type": "string",
+                        "enum": ["claude", "codex", "grok"],
+                        "description": "The agent sessions use by default, console sessions \
+                                        included.",
+                    },
+                    "accounts": accounts_schema(false),
+                    "launch": launch_schema(),
+                }),
+                &[],
+            )
+        },
+    },
+    ToolDef {
+        name: "get_settings",
+        description: "The application-wide settings: `auto_sync_repositories`, \
+                      `default_clone_dir`, the `accounts` (each agent also has a default account, \
+                      listed with the id `default`), and the `trusted_directories`. Accounts and \
+                      trusted directories are read-only here.",
+        schema: || object_schema(json!({}), &[]),
+    },
+    ToolDef {
+        name: "update_settings",
+        description: "Change application-wide settings; what is omitted is left as it is. \
+                      Returns them as `get_settings` gives them. Turning `auto_sync_repositories` \
+                      on fast-forwards the projects already known to be behind at once, which \
+                      changes files in the user's repositories. These are the user's settings: \
+                      change one only when they asked you to.",
+        schema: || {
+            object_schema(
+                json!({
+                    "auto_sync_repositories": {
+                        "type": "boolean",
+                        "description": "Whether projects behind their upstream are fast-forwarded \
+                                        automatically.",
+                    },
+                    "default_clone_dir": {
+                        "type": "string",
+                        "description": "Where a `git` association clones into when no path is \
+                                        given. An absolute path or one starting with `~/`; blank \
+                                        goes back to the built-in default.",
+                    },
+                }),
+                &[],
             )
         },
     },
@@ -171,6 +291,8 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
             )
         },
     },
+    RENAME_SESSION,
+    SET_SESSION_PINNED,
     ARCHIVE_SESSION,
     ToolDef {
         name: "list_archived",
@@ -254,6 +376,37 @@ const ARCHIVE_SESSION: ToolDef = ToolDef {
                 "session": { "type": "string", "description": "The session's id." },
             }),
             &["session"],
+        )
+    },
+};
+
+const RENAME_SESSION: ToolDef = ToolDef {
+    name: "rename_session",
+    description: "Change the title of a session of yours. Refused for a session that is not \
+                  yours (`yours: false`): it is somebody else's, to be left alone.",
+    schema: || {
+        object_schema(
+            json!({
+                "session": { "type": "string", "description": "The session's id." },
+                "title": { "type": "string", "description": "The new title. Not blank." },
+            }),
+            &["session", "title"],
+        )
+    },
+};
+
+const SET_SESSION_PINNED: ToolDef = ToolDef {
+    name: "set_session_pinned",
+    description: "Pin a session of yours to the top of its list, or unpin it. Refused for a \
+                  session that is not yours (`yours: false`): it is somebody else's, to be \
+                  left alone.",
+    schema: || {
+        object_schema(
+            json!({
+                "session": { "type": "string", "description": "The session's id." },
+                "pinned": { "type": "boolean", "description": "Whether the session is pinned." },
+            }),
+            &["session", "pinned"],
         )
     },
 };
@@ -348,9 +501,22 @@ const SHARE_INFO: ToolDef = ToolDef {
     },
 };
 
-/// A project session that reports to another session has the one tool it answers through, and the
-/// two it shares information with.
-const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[REPORT, LIST_PROJECT_SESSIONS, SHARE_INFO];
+/// What every project session may read of its own project's settings: only its own, whatever the
+/// session's binding, and nothing it could change.
+const GET_PROJECT: ToolDef = ToolDef {
+    name: "get_project",
+    description:
+        "This project's settings in Octoboard, read-only: name, directory, source, remote \
+                  URL (credentials removed), pin, tags, `default_agent`, `accounts` and `launch` \
+                  (the model and effort sessions of each agent start with). Only this session's \
+                  own project can be read.",
+    schema: || object_schema(json!({}), &[]),
+};
+
+/// A project session that reports to another session has the one tool it answers through, the
+/// two it shares information with, and the read of its project.
+const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] =
+    &[REPORT, LIST_PROJECT_SESSIONS, SHARE_INFO, GET_PROJECT];
 
 /// A project session nobody dispatched drives its own project the way a console session drives
 /// its console's, and what it starts reports back to it. `report` is announced too, though a call
@@ -386,10 +552,13 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     },
     ARCHIVE_SESSION,
     REOPEN_SESSION,
+    RENAME_SESSION,
+    SET_SESSION_PINNED,
     REQUEST_CONSOLE_SESSION,
     REPORT,
     LIST_PROJECT_SESSIONS,
     SHARE_INFO,
+    GET_PROJECT,
 ];
 
 /// How a project session nobody dispatched reaches other projects: through a console session the
@@ -457,6 +626,24 @@ fn start_session_schema(with_project: bool) -> Value {
             "enum": ["claude", "codex", "grok"],
             "description": "Overrides the agent for this one session.",
         },
+        "account": {
+            "type": "string",
+            "description": format!(
+                "Overrides the account for this one session: an account's id or name{}, or \
+                 `default` for the agent's default account. It must belong to the session's agent.",
+                if with_project { " (see `get_settings`)" } else { "" }
+            ),
+        },
+        "model": {
+            "type": "string",
+            "description": "Overrides the model for this one session; blank is the agent's own \
+                            default.",
+        },
+        "effort": {
+            "type": "string",
+            "description": "Overrides the reasoning effort for this one session; blank is the \
+                            agent's own default.",
+        },
     });
     if !with_project {
         return object_schema(properties, &["brief"]);
@@ -466,6 +653,67 @@ fn start_session_schema(with_project: bool) -> Value {
         "description": "The project's id, or its name when that is unambiguous.",
     });
     object_schema(properties, &["project", "brief"])
+}
+
+fn tags_schema(description: &str) -> Value {
+    json!({
+        "type": "array",
+        "items": { "type": "string" },
+        "description": description,
+    })
+}
+
+/// The `accounts` argument and result: an object keyed by agent. A project's setting for an agent
+/// can also be `inherit`, which takes the console's; a console has no one to inherit from, so its
+/// `null` is the default account too.
+fn accounts_schema(project: bool) -> Value {
+    let (values, description) = if project {
+        (
+            "`inherit` (the console's account), `default` (the agent's default account), or an \
+             account's id or name (see `get_settings`)",
+            "Each agent's account for sessions opened here, keyed by agent (`claude`, `codex`, \
+             `grok`); an agent left out is left as it is.",
+        )
+    } else {
+        (
+            "`default` or `null` (the agent's default account), or an account's id or name (see \
+             `get_settings`)",
+            "Each agent's account for sessions opened in this console, keyed by agent (`claude`, \
+             `codex`, `grok`); an agent left out is left as it is.",
+        )
+    };
+    json!({
+        "type": "object",
+        "description": format!("{description} Each value is {values}. An account must belong to \
+                                that agent."),
+        "additionalProperties": { "type": if project { json!("string") } else { json!(["string", "null"]) } },
+    })
+}
+
+/// The `launch` argument and result: each agent's model and reasoning effort, `null` or blank for
+/// the agent's own default.
+fn launch_schema() -> Value {
+    json!({
+        "type": "object",
+        "description": format!(
+            "Each agent's model and reasoning effort, keyed by agent (`claude`, `codex`, `grok`) \
+             as `{{\"model\": ..., \"effort\": ...}}`; a field left out is left as it is, and \
+             `null` or blank is the agent's own default. They must be ones the agent offers; \
+             Claude Code's models are {}.",
+            crate::agent_models::claude_model_ids()
+                .iter()
+                .map(|id| format!("`{id}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        "additionalProperties": {
+            "type": "object",
+            "properties": {
+                "model": { "type": ["string", "null"] },
+                "effort": { "type": ["string", "null"] },
+            },
+        },
+    })
 }
 
 /// Wraps a property map as a tool input schema. Every tool takes an object, so the envelope is the
@@ -495,7 +743,12 @@ mod tests {
         };
         assert_eq!(
             names(Role::Project, true),
-            ["report", "list_project_sessions", "share_info"]
+            [
+                "report",
+                "list_project_sessions",
+                "share_info",
+                "get_project"
+            ]
         );
         assert_eq!(
             names(Role::Project, false),
@@ -505,10 +758,34 @@ mod tests {
                 "get_session",
                 "archive_session",
                 "reopen_session",
+                "rename_session",
+                "set_session_pinned",
                 "request_console_session",
                 "report",
                 "list_project_sessions",
-                "share_info"
+                "share_info",
+                "get_project"
+            ]
+        );
+        assert_eq!(
+            names(Role::Console, false),
+            [
+                "list_projects",
+                "add_project",
+                "update_project",
+                "get_console",
+                "update_console",
+                "get_settings",
+                "update_settings",
+                "start_session",
+                "send_message",
+                "get_session",
+                "rename_session",
+                "set_session_pinned",
+                "archive_session",
+                "list_archived",
+                "reopen_session",
+                "show_page"
             ]
         );
         // Console sessions are never bound, so the flag changes nothing for them.
@@ -521,6 +798,12 @@ mod tests {
         assert!(tool_by_name(Role::Project, true, "request_console_session").is_none());
         assert!(tool_by_name(Role::Console, false, "request_console_session").is_none());
         assert!(tool_by_name(Role::Project, false, "list_projects").is_none());
+        // Settings and other projects are the console session's; a project session reads only its
+        // own project, and a bound one cannot touch another session's title or pin.
+        assert!(tool_by_name(Role::Project, false, "update_project").is_none());
+        assert!(tool_by_name(Role::Project, false, "update_settings").is_none());
+        assert!(tool_by_name(Role::Project, true, "rename_session").is_none());
+        assert!(tool_by_name(Role::Console, false, "get_project").is_none());
         // Console sessions are outside every project, so they take no part in the exchange.
         assert!(tool_by_name(Role::Console, false, "share_info").is_none());
         assert!(tool_by_name(Role::Console, false, "list_project_sessions").is_none());

@@ -119,9 +119,8 @@ session; untouched values follow that parent, and changes apply only to this ses
 The choices, clearing and account-specific lists are described in "The Advanced section" in `docs/product/model-and-reasoning-effort.md`.
 
 A console session has no project or Report to field and is never bound to another session. Opening it with the daemon
-protocol's `open_session` accepts an explicit agent and account as the dialog does. Its `title` string is kept exactly
-as supplied, including an empty string; only an absent or `null` title requests the automatic Hub name. This differs
-from the dialog's trimming and omission of an empty name.
+protocol's `open_session` accepts an explicit agent and account as the dialog does. Its `title` is stored trimmed, and
+one that is absent, `null` or blank requests the automatic Hub name, as the dialog's empty name does.
 
 The dialog takes no task: a session the user opens by hand starts in *awaiting instructions*, sitting at the agent's
 prompt, and is given its work by typing into its terminal. Only a session started with `start_session` — by a console

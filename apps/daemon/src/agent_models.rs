@@ -72,6 +72,11 @@ const CLAUDE_MODELS: [(&str, &str); 4] = [
     ("haiku", "Haiku"),
 ];
 
+/// The ids Claude Code's aliases go by, for a tool description that tells a model what it may pick.
+pub fn claude_model_ids() -> Vec<&'static str> {
+    CLAUDE_MODELS.iter().map(|(id, _)| *id).collect()
+}
+
 /// What `--effort` takes. Claude Code lowers a level the chosen model does not support to `high`
 /// rather than refusing it, so it is offered for every alias. Measured on 2.1.296.
 const CLAUDE_EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];

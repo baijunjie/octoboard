@@ -110,6 +110,7 @@ export const en = {
   "daemon.account_name_taken": "{agent} already has an account named “{name}”.",
   "daemon.field_required": "{field} is required.",
   "daemon.conflicting_fields": "{first} and {second} cannot both be given.",
+  "daemon.invalid_launch_setting": "“{value}” is not a {field} that {agent} offers.",
   "daemon.console_has_running_sessions":
     "This console still has sessions that are running or starting. Archive the running ones, or wait for the ones that are starting to finish.",
   "daemon.project_has_running_sessions":

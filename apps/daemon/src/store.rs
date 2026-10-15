@@ -479,6 +479,15 @@ impl Store {
         Ok(account)
     }
 
+    /// The directory of the account `account_id` names, `None` for the default account, which pins
+    /// nothing, and for an id that is no longer on record.
+    pub fn account_dir(&self, account_id: &Option<String>) -> Result<Option<String>> {
+        Ok(match account_id {
+            None => None,
+            Some(id) => self.get_account(id)?.map(|account| account.config_dir),
+        })
+    }
+
     /// Every account of every agent, oldest first.
     pub fn list_accounts(&self) -> Result<Vec<Account>> {
         let conn = self.lock();

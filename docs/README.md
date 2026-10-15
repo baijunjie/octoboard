@@ -67,6 +67,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   console session with `request_console_session` and becomes a lead session: who is offered the tool, the call and its
   8-minute wait, how a request ends (approval, refusal, time limit, withdrawal), what approval does, and the
   confirmation dialog.
+- [Settings tools for agents](product/agent-settings-tools.md) — which settings a console session can read and change
+  through its tools (projects, its own console, the application-wide settings), the read-only `get_project` every
+  project session has, the `accounts` and `launch` argument shapes, when a change takes effect, and what is never
+  exposed to an agent.
 - [Report panel](product/report-panel.md) — what a console session shows in the right pane: pushing a page with
   `show_page` and what the page id is for, paging back through the kept history, why a history page is read-only and
   where that is enforced, why a page is a static document whose scripts never run and what is stripped from it, why it
@@ -329,8 +333,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Writing automated tests](memory/writing-automated-tests.md) — how lean unit tests are kept (one case per rule,
   table-driven), then the fixture conventions this project's tests need on macOS: why an executable written fresh per
   test flakes only under a parallel run, why every wait on a spawned process is bounded by the shared `PATIENCE`
-  (exec stalls of seconds on machines with endpoint-security software) and how to tell that stall apart, and how to
-  verify behaviour the daemon derives from an agent's own output by replaying a committed capture rather than staging
+  (exec stalls of seconds on machines with endpoint-security software) and how to tell that stall apart, why a daemon
+  test that gives anything a model or an effort seeds the agent's model list first, and how to verify behaviour the daemon derives from an agent's own output by replaying a committed capture rather than staging
   a live session, why a jsdom test must leave nothing running when it ends with the cleanup bound to the test that
   armed it, since stray work crashes a later file and the failure names the wrong one, how a test settles HeroUI's
   module-level toast queue and which two tempting fixes only mask it, why a test that fakes timers has to assert for

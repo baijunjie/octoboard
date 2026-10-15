@@ -24,6 +24,7 @@ mod hook_mode;
 mod hooks;
 mod hostfs;
 mod instance_lock;
+mod launch_settings;
 mod loopback;
 mod mcp;
 mod open_directory;

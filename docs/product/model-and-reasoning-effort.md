@@ -41,9 +41,15 @@ value is cleared by clicking the picker's × button, or by pressing Backspace or
 its trigger has keyboard focus. These keys do not clear the choice while focus is on an option in the open list.
 Clearing a value in the session dialog explicitly chooses the agent's own default for that value.
 
-Neither value is checked against any list, in the dialog or at launch. What is stored is whatever was given, trimmed,
-with a blank value treated as the agent's own default. A stored value the current list does not hold is kept, offered
-last and marked as not in the list, so the dialog never silently changes a setting.
+What is stored is what was given, trimmed, with a blank value treated as the agent's own default. A value is checked
+when it is saved for a console or a project, or given to a session as it is opened: a model must be one the list in
+"The models offered" holds, and an effort one of the levels "The reasoning effort offered" gives for the model the
+console, project or session ends up with, both read for the account that agent's sessions would run under there. A
+value the agent does not offer is refused, with a message naming it, whether it came from a dialog or from a console
+session's tool (see `docs/product/agent-settings-tools.md`). Only a value being changed is checked: one left as it is
+is never checked again, so a stored value the current list does not hold is kept, offered last and marked as not in the
+list, and the dialog never silently changes a setting. A list that could not be read (see the last section) checks
+nothing. Nothing is checked at launch, and a configuration import stores its document's values unchecked.
 
 ## The models offered
 

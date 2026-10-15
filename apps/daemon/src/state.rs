@@ -178,7 +178,7 @@ impl AppState {
             git_check_completed: Mutex::new(HashMap::new()),
             branch_watch: Default::default(),
             agent_availability: RwLock::new(
-                [Agent::Claude, Agent::Codex, Agent::Grok]
+                Agent::ALL
                     .into_iter()
                     .map(|agent| {
                         (
@@ -1229,7 +1229,7 @@ impl AppState {
             .agent_availability
             .read()
             .expect("agent availability lock poisoned");
-        [Agent::Claude, Agent::Codex, Agent::Grok]
+        Agent::ALL
             .into_iter()
             .map(|agent| map[&agent].clone())
             .collect()

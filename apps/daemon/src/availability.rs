@@ -48,7 +48,7 @@ fn apply_snapshot(state: &AppState, outcome: Result<HashMap<String, String>>) {
 /// and each agent's resolved default-account directory — are unit-tested without a real shell or
 /// the developer's own `PATH` and `HOME`.
 fn determine(shell_env: &HashMap<String, String>) -> Vec<AgentAvailability> {
-    [Agent::Claude, Agent::Codex, Agent::Grok]
+    Agent::ALL
         .into_iter()
         .map(|agent| {
             let binary = adapter::adapter_for(agent).binary();
@@ -159,7 +159,7 @@ mod tests {
 
         apply_snapshot(&state, Err(anyhow::anyhow!("the snapshot shell timed out")));
 
-        for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+        for agent in Agent::ALL {
             assert_eq!(
                 state.agent_availability_of(agent).availability,
                 Availability::NotDetermined
@@ -187,7 +187,7 @@ mod tests {
             "/availability-mints-no-account-home".to_string(),
         );
 
-        let seeded: Vec<crate::protocol::Account> = [Agent::Claude, Agent::Codex, Agent::Grok]
+        let seeded: Vec<crate::protocol::Account> = Agent::ALL
             .into_iter()
             .map(|agent| crate::protocol::Account {
                 id: format!("account-{agent:?}"),
@@ -203,7 +203,7 @@ mod tests {
         state.set_agent_availability(determine(&env));
 
         assert_eq!(state.store.list_accounts().unwrap(), seeded);
-        for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+        for agent in Agent::ALL {
             assert_eq!(
                 state.agent_availability_of(agent).availability,
                 Availability::Unavailable

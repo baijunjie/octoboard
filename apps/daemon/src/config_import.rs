@@ -22,6 +22,7 @@ use crate::config_export::{
     ProjectAccountRef,
 };
 use crate::coordinator::{self, AddProjectRequest, NewConsole, NewProjectSettings};
+use crate::git_remote;
 use crate::git_remote::read_bounded;
 use crate::hostfs;
 use crate::protocol::{
@@ -364,54 +365,11 @@ fn derived_directory(clone_dir: &str, recorded: &str) -> Option<PathBuf> {
     Some(clone_dir.join(exported_directory(recorded)?.file_name()?))
 }
 
-/// Whether `url` is one a clone may be made from: an `http(s)`, `ssh` (also as `git+ssh` and
-/// `ssh+git`) or `git` URL, or the `user@host:path` shape, with a host that cannot read as an
-/// option and no whitespace or control character anywhere in it. A local path, `file://`, the
-/// helper transports (`ext::`) and the obsolete `ftp` are not: a clone from a document's URL must
-/// reach a remote and never run a command or read a path of this machine. That is stricter than
-/// adding a project by hand, which leaves the choice to git.
-fn is_clonable_url(url: &str) -> bool {
-    if url.is_empty() || url.chars().any(|c| c.is_whitespace() || c.is_control()) {
-        return false;
-    }
-    let lowered = url.to_ascii_lowercase();
-    for scheme in [
-        "https://",
-        "http://",
-        "ssh://",
-        "git://",
-        "git+ssh://",
-        "ssh+git://",
-    ] {
-        if let Some(rest) = lowered.strip_prefix(scheme) {
-            let authority = rest.split('/').next().unwrap_or("");
-            return host_is_usable(authority);
-        }
-    }
-    // `[user@]host:path`: no `/` before the first `:`, and no `:` or `//` right after it (`ext::`,
-    // `file://`).
-    let Some((host, path)) = url.split_once(':') else {
-        return false;
-    };
-    host_is_usable(host)
-        && !host.contains('/')
-        && !path.is_empty()
-        && !path.starts_with(':')
-        && !path.starts_with("//")
-}
-
-/// Whether `authority` (`[user@]host[:port]`, the host being what follows the last `@`) has a host
-/// and cannot be read as an option by `ssh` or `git`, whole or by its host.
-fn host_is_usable(authority: &str) -> bool {
-    let host = authority.rsplit('@').next().unwrap_or("");
-    !host.is_empty() && !authority.starts_with('-') && !host.starts_with('-')
-}
-
 /// The directory a clone of `remote_url` into `clone_dir` would create, when the URL may be cloned
 /// from and names a repository.
 fn clone_directory(clone_dir: &str, remote_url: &str) -> Option<PathBuf> {
     let clone_dir = Path::new(clone_dir);
-    if !clone_dir.is_absolute() || !is_clonable_url(remote_url) {
+    if !clone_dir.is_absolute() || !git_remote::is_clonable_url(remote_url) {
         return None;
     }
     let name = hostfs::repo_name(remote_url)?;
@@ -785,6 +743,8 @@ async fn place_project(
                     // The document says what the project's default agent is, including none.
                     detect_default_agent: false,
                     tags: Some(project.tags),
+                    // The document's values were chosen on the machine it came from.
+                    check_launch: false,
                 },
             )
             .await
@@ -1008,51 +968,6 @@ mod tests {
     }
 
     #[test]
-    fn only_a_url_that_reaches_a_remote_may_be_cloned() {
-        for url in [
-            "https://github.com/o/r.git",
-            "HTTP://example.com/r",
-            "ssh://git@example.com/o/r.git",
-            "git://example.com/r.git",
-            "git+ssh://git@example.com/o/r.git",
-            "ssh+git://example.com/o/r.git",
-            "ssh://user@host:2222/o/r.git",
-            "git@github.com:o/r.git",
-            "host:path/r",
-        ] {
-            assert!(is_clonable_url(url), "{url}");
-        }
-        for url in [
-            "",
-            "/srv/git/r",
-            "file:///srv/git/r",
-            "ext::sh -c touch% /tmp/x",
-            "ext::sh",
-            "fd::3",
-            "--upload-pack=touch",
-            "-oProxyCommand=x:y",
-            "https://",
-            "https:///r",
-            "ssh://-oProxyCommand=x/r",
-            "https://example.com/r\n--upload-pack=x",
-            "https://example.com/a b",
-            "r.git",
-            ":path",
-            "host:",
-            "a/b:c",
-            "ftp://example.com/r.git",
-            "ftps://example.com/r.git",
-            // A leading `-` hidden behind the user part.
-            "ssh://user@-host/r",
-            "ssh://user@/r",
-            "user@-host:path/r",
-            "-user@host:path/r",
-        ] {
-            assert!(!is_clonable_url(url), "{url:?}");
-        }
-    }
-
-    #[test]
     fn a_documents_paths_are_taken_only_as_an_absolute_path_and_its_last_segment() {
         assert_eq!(
             exported_directory("/work/./a/../b/").as_deref(),
@@ -1200,6 +1115,9 @@ mod tests {
             .store
             .insert_account(&account("acct-1", Agent::Claude, "work"))
             .unwrap();
+        // The document's Codex models below are not ones Codex offers here; they are stored as they
+        // are all the same.
+        crate::test_support::offer_models(&state, Agent::Codex, &[("offered", &[])]);
         let repo = directory(&area, "repo");
         let mut hub = console("Hub", vec![project("renamed", &repo.to_string_lossy())]);
         hub.icon = Some("data:image/png;base64,AAAA".to_string());

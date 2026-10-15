@@ -1,8 +1,9 @@
 # Consoles and projects
 
 A **console** groups a set of projects and owns a working directory of its own. A **project** is a directory on a
-host, associated with one console. A console is created and managed by the user; a project is associated either by
-the user or by its console session. Sessions that run inside them are described in `docs/product/sessions.md`, and
+host, associated with one console. A console is created and deleted by the user; a project is associated either by
+the user or by its console session. Most of a console's and its projects' settings can be changed by its console
+session as well as by the user (see `docs/product/agent-settings-tools.md`). Sessions that run inside them are described in `docs/product/sessions.md`, and
 carrying consoles and the projects under them to another machine in
 `docs/product/configuration-export-and-import.md`.
 
@@ -144,7 +145,11 @@ session that already exists keeps the agent and the account and directory it was
 agent therefore changes the initial choice in the next console-session dialog, while existing console sessions keep
 the agent they were started with (see "Console sessions and project sessions" in
 `docs/product/sessions.md`); a changed model or effort reaches a console session's next launch only when that value
-is inherited (see `docs/product/model-and-reasoning-effort.md`).
+is inherited (see `docs/product/model-and-reasoning-effort.md`). The name cannot be cleared: saving an empty name is
+rejected.
+
+The console session can change the same settings of its own console except the avatar (see "The console's own settings:
+`get_console` and `update_console`" in `docs/product/agent-settings-tools.md`).
 
 An account, a model and an effort are saved only when they are changed: saving a console with a picker untouched
 succeeds regardless of what has happened to the account it refers to since. Removing an account in Settings puts every
@@ -252,7 +257,8 @@ slash — without resolving symbolic links, so a path through a link is kept as 
 what a trusted folder is compared against (see "Trusted folders" in `docs/product/folder-trust.md`).
 
 The console session can associate a project itself, from the same three sources and under all the
-rules in this section (see "The console session's tools" in `docs/product/hub-orchestration.md`).
+rules in this section, and a stricter one for a repository URL it clones (see "Adding a project with its settings" in
+`docs/product/agent-settings-tools.md`).
 
 The **default clone directory** is where a clone lands when no parent directory is named. It is `~/Projects` (expanded
 to the home directory) until the user sets one in Settings' General section (see "General" in
@@ -277,8 +283,9 @@ directory found is already associated, the request is refused and says so.
 
 ### Project names
 
-A name can be given only when a single project is being associated; it then overrides the derived name. Otherwise, and
-for every project a parent-directory association produces, the name is the directory's own name.
+A name can be given only when a single project is being associated; it then overrides the derived name. A blank name
+counts as none given. Otherwise, and for every project a parent-directory association produces, the name is the
+directory's own name.
 
 ### The project's default agent
 
@@ -340,9 +347,9 @@ While a new project on a **parent directory** is set to "Detect from files" neit
 section is shown, since no agent is settled — each repository found is detected on its own — and anything set in
 them before the source changed is not stored.
 
-A project the console session associates sets none of the three: it inherits its console's account for every agent and
-leaves every model and effort unset. A parent-directory association gives every project it creates the same values the
-form was filled in with.
+A project the console session associates takes the accounts, models and efforts its call gives, and otherwise inherits
+its console's account for every agent and leaves every model and effort unset. A parent-directory association gives
+every project it creates the same values the form, or the call, was filled in with.
 
 A changed account applies to sessions opened afterwards; a changed model or effort reaches a project session's next
 launch only when that value is inherited (see `docs/product/model-and-reasoning-effort.md`). Sessions already running
@@ -405,6 +412,9 @@ value in step with the repository itself (see "The project's remote URL" above).
 The name cannot be cleared: saving an empty name is rejected. The default agent can be cleared, which puts the project
 back to inheriting the console's default; the account can be put on any of its three states, inheriting the console's
 reference among them, and the model and the effort back to unset.
+
+The console session can make the same changes to its console's projects (see "Changing a project: `update_project`" in
+`docs/product/agent-settings-tools.md`).
 
 ### Removing a project
 

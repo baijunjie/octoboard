@@ -26,6 +26,25 @@ pub enum Agent {
 }
 
 impl Agent {
+    /// Every agent, in the order a per-agent listing keeps.
+    pub const ALL: [Agent; 3] = [Agent::Claude, Agent::Codex, Agent::Grok];
+
+    /// How the agent is named on the wire and in the console session's tools.
+    pub fn wire_name(self) -> &'static str {
+        match self {
+            Agent::Claude => "claude",
+            Agent::Codex => "codex",
+            Agent::Grok => "grok",
+        }
+    }
+
+    /// The agent [`Self::wire_name`] names.
+    pub fn from_wire_name(name: &str) -> Option<Agent> {
+        Agent::ALL
+            .into_iter()
+            .find(|agent| agent.wire_name() == name)
+    }
+
     /// How the agent is named in a message shown to the user.
     pub fn label(self) -> &'static str {
         match self {
@@ -163,6 +182,74 @@ pub struct Console {
     /// glyph.
     pub icon: Option<String>,
     pub created_at: i64,
+}
+
+impl Console {
+    /// The account this console references for `agent`; `None` is the agent's default account.
+    pub fn account(&self, agent: Agent) -> &Option<String> {
+        match agent {
+            Agent::Claude => &self.claude_account_id,
+            Agent::Codex => &self.codex_account_id,
+            Agent::Grok => &self.grok_account_id,
+        }
+    }
+
+    pub fn account_mut(&mut self, agent: Agent) -> &mut Option<String> {
+        match agent {
+            Agent::Claude => &mut self.claude_account_id,
+            Agent::Codex => &mut self.codex_account_id,
+            Agent::Grok => &mut self.grok_account_id,
+        }
+    }
+
+    /// `agent`'s console session model and effort.
+    pub fn launch(&self, agent: Agent) -> (&Option<String>, &Option<String>) {
+        match agent {
+            Agent::Claude => (
+                &self.claude_console_session_model,
+                &self.claude_console_session_effort,
+            ),
+            Agent::Codex => (
+                &self.codex_console_session_model,
+                &self.codex_console_session_effort,
+            ),
+            Agent::Grok => (
+                &self.grok_console_session_model,
+                &self.grok_console_session_effort,
+            ),
+        }
+    }
+
+    pub fn launch_mut(&mut self, agent: Agent) -> (&mut Option<String>, &mut Option<String>) {
+        match agent {
+            Agent::Claude => (
+                &mut self.claude_console_session_model,
+                &mut self.claude_console_session_effort,
+            ),
+            Agent::Codex => (
+                &mut self.codex_console_session_model,
+                &mut self.codex_console_session_effort,
+            ),
+            Agent::Grok => (
+                &mut self.grok_console_session_model,
+                &mut self.grok_console_session_effort,
+            ),
+        }
+    }
+
+    /// The account id a project's `setting` for `agent` resolves to under this console: its own
+    /// account, `None` for the agent's default, and this console's reference when it inherits.
+    pub fn resolve_project_account(
+        &self,
+        agent: Agent,
+        setting: &ProjectAccount,
+    ) -> Option<String> {
+        match setting {
+            ProjectAccount::Account { id } => Some(id.clone()),
+            ProjectAccount::Default => None,
+            ProjectAccount::Inherit => self.account(agent).clone(),
+        }
+    }
 }
 
 /// A named config directory of one agent, kept once for the whole application and referred to by
@@ -307,6 +394,48 @@ pub struct Project {
     /// tag registry: the tags in use are the distinct ones across projects. Stored trimmed,
     /// non-empty and without case-insensitive duplicates, in the order the user gave them.
     pub tags: Vec<String>,
+}
+
+impl Project {
+    /// The account setting for `agent`.
+    pub fn account(&self, agent: Agent) -> &ProjectAccount {
+        match agent {
+            Agent::Claude => &self.claude_account_id,
+            Agent::Codex => &self.codex_account_id,
+            Agent::Grok => &self.grok_account_id,
+        }
+    }
+
+    pub fn account_mut(&mut self, agent: Agent) -> &mut ProjectAccount {
+        match agent {
+            Agent::Claude => &mut self.claude_account_id,
+            Agent::Codex => &mut self.codex_account_id,
+            Agent::Grok => &mut self.grok_account_id,
+        }
+    }
+
+    /// `agent`'s session model and effort.
+    pub fn launch(&self, agent: Agent) -> (&Option<String>, &Option<String>) {
+        match agent {
+            Agent::Claude => (&self.claude_session_model, &self.claude_session_effort),
+            Agent::Codex => (&self.codex_session_model, &self.codex_session_effort),
+            Agent::Grok => (&self.grok_session_model, &self.grok_session_effort),
+        }
+    }
+
+    pub fn launch_mut(&mut self, agent: Agent) -> (&mut Option<String>, &mut Option<String>) {
+        match agent {
+            Agent::Claude => (
+                &mut self.claude_session_model,
+                &mut self.claude_session_effort,
+            ),
+            Agent::Codex => (
+                &mut self.codex_session_model,
+                &mut self.codex_session_effort,
+            ),
+            Agent::Grok => (&mut self.grok_session_model, &mut self.grok_session_effort),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1704,6 +1833,9 @@ fn detect_by_default() -> bool {
     true
 }
 
+/// A request field that is absent (`None`), cleared (`Some(None)`) or given.
+pub type Present<T> = Option<Option<T>>;
+
 /// Deserializes a present field — `null` included — as `Some`, leaving `None` to mean "the field
 /// was not sent at all". Used for the fields where clearing a value and leaving it alone are
 /// different requests.
@@ -1870,6 +2002,13 @@ pub mod error_code {
     pub const CONFLICTING_FIELDS: &str = "conflicting_fields";
     /// A request lacks a field its kind needs.
     pub const FIELD_REQUIRED: &str = "field_required";
+    /// A model or effort the agent does not offer. `params` names the `agent`, the `field`
+    /// (`model` or `effort`) and the `value`.
+    pub const INVALID_LAUNCH_SETTING: &str = "invalid_launch_setting";
+    /// A repository URL that a clone is refused from: not one of the transports Octoboard
+    /// clones over, or carrying credentials, which would be stored with the project. `params`
+    /// names the `url` with any credentials removed.
+    pub const INVALID_REMOTE_URL: &str = "invalid_remote_url";
     pub const CONSOLE_HAS_RUNNING_SESSIONS: &str = "console_has_running_sessions";
     pub const PROJECT_HAS_RUNNING_SESSIONS: &str = "project_has_running_sessions";
     pub const PATH_NOT_ABSOLUTE: &str = "path_not_absolute";

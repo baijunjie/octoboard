@@ -99,7 +99,8 @@ agent, not a capability Octoboard adds.
 Octoboard keeps both `CLAUDE.md` and `AGENTS.md` in the console's working directory: a Claude Code console session
 reads the former, a Codex console session the latter. Each holds the console session's role — decompose, dispatch,
 follow up, summarize, and make no change to a project itself, reading one being how it checks what its sessions report
-(see `docs/product/hub-orchestration.md`) — and how to use the orchestration tools, with that agent's own tool names.
+(see `docs/product/hub-orchestration.md`) — and how to use the orchestration and settings tools, with that agent's own
+tool names.
 Both files stay present so console sessions of different agents have their own guidance while running together.
 A Grok Build console session reads neither, because Grok reads no instructions in a directory that is not a git
 repository and a console's working directory is not one; its whole role travels in a launch flag instead.

@@ -7,6 +7,10 @@ control on the right; under a right-to-left language the sides swap (see "Right-
 folders**, **Permissions**, **Notifications** and **Configuration**; the dialog opens on General unless it was asked to
 open on another section.
 
+A console session can read the default clone directory, the automatic sync of repositories, the agent accounts (without
+their directories) and the trusted folders, and change the first two (see "Application settings: `get_settings` and
+`update_settings`" in `docs/product/agent-settings-tools.md`).
+
 ## In a narrow window
 
 Below 1148 px — the width under which the window's panes become drawers (see "Below 1148 px: the sidebar and the right

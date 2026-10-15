@@ -128,6 +128,26 @@ pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
     )
 }
 
+/// Seeds the models `agent` offers under its default account as `(id, efforts)`, so that a test that
+/// gives a model or an effort is checked against this list and not against the agent installed on
+/// the machine, which running its catalogue command would make it depend on.
+pub(crate) fn offer_models(state: &AppState, agent: Agent, models: &[(&str, &[&str])]) {
+    let models = models
+        .iter()
+        .map(|(id, efforts)| crate::protocol::AgentModel {
+            id: id.to_string(),
+            name: id.to_string(),
+            efforts: efforts.iter().map(|effort| effort.to_string()).collect(),
+        })
+        .collect();
+    state
+        .agent_models
+        .get_or_load(agent, None, || crate::agent_models::Listing {
+            models,
+            unavailable: None,
+        });
+}
+
 /// A stand-in live session that stays alive on a PTY (`sleep 30`) with nothing reading it.
 pub(crate) fn idle_stand_in(id: &str) -> StandIn {
     fake_live_session(id, Agent::Claude, 80, 24, "sleep 30")

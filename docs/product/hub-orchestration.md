@@ -24,11 +24,16 @@ and "Deleting archived sessions" in `docs/product/sessions.md`).
 Octoboard injects the tools into the session. A console session gets the full set (see "The console session's tools"
 below), an unbound project session a narrower set scoped to its own project, and a session bound to an owner gets one
 tool back the other way, `report`. Every project session, bound or not, also gets the two tools for sharing information
-with the other sessions of its project (see "Information between sessions of a project" below). **Which tools a session
+with the other sessions of its project (see "Information between sessions of a project" below) and `get_project`, a
+read-only view of its own project's settings (see `docs/product/agent-settings-tools.md`). **Which tools a session
 sees follows from its role and from whether it was opened bound**, both fixed for its lifetime: a session opened bound
 cannot start or archive sessions, and an owner cannot report to itself. A lead session keeps the tools of the unbound
 project session it was opened as. Orchestration is therefore at most two levels deep: a console session, a lead session
 bound to it, and the lead session's own sessions.
+
+A session is offered the tools of the Octoboard that launched it, for as long as that agent process runs: a tool
+Octoboard gains later reaches a running session only once it is next launched — resumed, reopened or moved to another
+account.
 
 ## Several console sessions per console
 
@@ -42,11 +47,16 @@ console sessions are listed, are in "Console sessions and project sessions" in
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `list_projects` | — | The console's projects: id, name, host, directory, default agent, tags (see "Tags" in `docs/product/consoles-and-projects.md`), and the sessions currently running in each — every session of the console, whichever console session owns it. |
-| `add_project` | `source` (`local` / `parent` / `git`), `path?`, `remote_url?`, `name?`, `default_agent?` | Associates one or more projects with this console, under the same rules as the user's own form (see "Associating a project" in `docs/product/consoles-and-projects.md`). Answers with the projects it added. |
-| `start_session` | `project`, `brief`, `agent?` | Starts a session in one of this console's projects, bound to the calling console session, and hands it the brief as its opening prompt. `agent` overrides the agent for that one session. Answers with the new session's id and its agent. Refused, with the reason in prose, when the session's resolved agent has been determined unavailable on this machine — never while that determination is still pending. |
+| `list_projects` | — | The console's projects, each with its settings (see "A project's settings" in `docs/product/agent-settings-tools.md`) and the sessions currently running in it — every session of the console, whichever console session owns it. |
+| `add_project` | `source` (`local` / `parent` / `git`), `path?`, `remote_url?`, `name?`, `default_agent?`, `tags?`, `accounts?`, `launch?`, `pinned?` | Associates one or more projects with this console, under the same rules as the user's own form (see "Associating a project" in `docs/product/consoles-and-projects.md`) and a stricter one for a URL to clone (see "Adding a project with its settings" in `docs/product/agent-settings-tools.md`). Answers with the settings of the projects it added. |
+| `update_project` | `project`, `name?`, `tags?`, `add_tags?`, `remove_tags?`, `pinned?`, `default_agent?`, `accounts?`, `launch?` | Changes one of this console's projects' settings. See "Changing a project: `update_project`" in `docs/product/agent-settings-tools.md`. |
+| `get_console`, `update_console` | — / `name?`, `default_agent?`, `accounts?`, `launch?` | Reads or changes the calling console session's own console. See "The console's own settings: `get_console` and `update_console`" in `docs/product/agent-settings-tools.md`. |
+| `get_settings`, `update_settings` | — / `auto_sync_repositories?`, `default_clone_dir?` | Reads or changes the application-wide settings. See "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`. |
+| `start_session` | `project`, `brief`, `agent?`, `account?`, `model?`, `effort?` | Starts a session in one of this console's projects, bound to the calling console session, and hands it the brief as its opening prompt. `agent`, `account`, `model` and `effort` override those for that one session, as the session dialog's choices do (see "Opening a session" in `docs/product/sessions.md`): `account` is an account by id or name, or `default` for the agent's default account, and must belong to the agent the session will run; a blank `model` or `effort` is the agent's own default, and any other must be one the agent offers (see "The Advanced section" in `docs/product/model-and-reasoning-effort.md`). Answers with the new session's id and its agent. Refused, with the reason in prose, when the session's resolved agent has been determined unavailable on this machine — never while that determination is still pending. |
 | `send_message` | `session`, `text` | Appends an instruction to a running session of the caller's. Answers with whether it was written or queued. |
 | `get_session` | `session` | The session's record — status, title, agent, project, which session owns it and whether that owner is a console session or a project session (or that it is unbound), whether it is a console session, whether it is the caller's, timestamps — plus a tail of what it has printed. |
+| `rename_session` | `session`, `title` | Changes the title of one of the caller's sessions, under the rules of "Renaming a session" in `docs/product/sessions.md`. Answers with the session's record. |
+| `set_session_pinned` | `session`, `pinned` | Pins or unpins one of the caller's sessions (see "Pinning" in `docs/product/sidebar.md`). Answers with the session's record. |
 | `archive_session` | `session` | Ends the process of one of the caller's sessions and archives it. |
 | `list_archived` | `project` | The archived sessions of one project, whoever owns them, each with its owner. |
 | `reopen_session` | `session`, `text?` | Relaunches an archived or interrupted session of the caller's, continuing its conversation, and optionally hands it an instruction, delivered once the relaunched session can take one. The caller is the console session the session is bound to and is running, so reopening one never brings a console session back. |
@@ -66,13 +76,14 @@ discarded it (see "`GET /ws/term/:session` — terminal stream" in `apps/daemon/
 session that is waiting for the user carries a note saying so.
 
 The console session reaches only its own console: a session or project id from another console is
-refused. So is `send_message`, `archive_session` or `reopen_session` aimed at a console session.
+refused. So is `send_message`, `rename_session`, `set_session_pinned`, `archive_session` or `reopen_session` aimed at a
+console session.
 
 **Reads are console-wide, writes are the caller's own.** `list_projects`, `get_session` and `list_archived`
 return every session of the console, each carrying `owner` (the id of the session it is bound to, or null when it is
 unbound), `owner_kind` (`console` or `project`, the kind of session that owner is; null when it is unbound) and
-`yours` (whether that owner is the caller). `send_message`, `archive_session` and `reopen_session` act only on a
-session bound to the caller; for any other — unbound, or bound to another console session or to a project session —
+`yours` (whether that owner is the caller). `send_message`, `rename_session`, `set_session_pinned`,
+`archive_session` and `reopen_session` act only on a session bound to the caller; for any other — unbound, or bound to another console session or to a project session —
 they refuse, with a reason naming who owns it, and change nothing. `start_session` always binds the new session to
 the caller, so a console session cannot start one on another's behalf. The reads are not narrowed because two console
 sessions can dispatch into the same project, and so the same working directory, at once; one that could not see the
@@ -90,26 +101,30 @@ way a console session drives its console's:
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `start_session` | `brief`, `agent?` | Starts a session in the caller's own project, bound to the caller, and hands it the brief as its opening prompt, exactly as the console session's `start_session` does (see "Handing out a task: the brief" below). There is no `project` argument; a call that names another project anyway is refused before anything is launched. `agent` may name any agent, not only the caller's own. Answers with the new session's id and its agent. Refused, with the reason in prose, when the session's resolved agent has been determined unavailable on this machine — never while that determination is still pending. |
+| `start_session` | `brief`, `agent?`, `account?`, `model?`, `effort?` | Starts a session in the caller's own project, bound to the caller, and hands it the brief as its opening prompt, exactly as the console session's `start_session` does, with the same overrides (see "Handing out a task: the brief" below). There is no `project` argument; a call that names another project anyway is refused before anything is launched. `agent` may name any agent, not only the caller's own. Answers with the new session's id and its agent. Refused, with the reason in prose, when the session's resolved agent has been determined unavailable on this machine — never while that determination is still pending. |
 | `send_message` | `session`, `text` | As the console session's. |
 | `get_session` | `session` | As the console session's, for any session of the caller's own project. |
 | `archive_session` | `session` | As the console session's. |
 | `reopen_session` | `session`, `text?` | As the console session's. |
+| `rename_session` | `session`, `title` | As the console session's. |
+| `set_session_pinned` | `session`, `pinned` | As the console session's. |
 | `request_console_session` | `request`, `summary`, `open_items?` | Asks the user for a console session to reach other projects through; on approval the caller becomes its lead session. Refused for a lead session. See `docs/product/requesting-a-console-session.md`. |
 | `report` | as in "Reporting" below | Offered, but refused while the session is unbound: it has nobody to report to. A lead session's `report` is accepted and goes to its console session (see "Lead sessions" below). |
 | `list_project_sessions`, `share_info` | as in "Information between sessions of a project" below | As for every project session. |
+| `get_project` | — | Its own project's settings, read-only, as for every project session (see "A project's settings" in `docs/product/agent-settings-tools.md`). |
 
-It has no `list_projects`, `list_archived`, `add_project` or `show_page`.
+It has no `list_projects`, `list_archived`, `add_project` or `show_page`, and none of the tools that change a setting:
+`update_project`, `get_console`, `update_console`, `get_settings` and `update_settings` are the console session's alone.
 
 **Reads are project-wide, writes are the caller's own** — the console session's rule, narrowed to one project.
 `get_session` reads any session of the caller's own project, carrying `owner`, `owner_kind` and `yours` as above; a
-session of another project, and any console session, is refused. `send_message`, `archive_session` and
-`reopen_session` act only on a session bound to the caller, and refuse, with a reason naming who owns it, and change
+session of another project, and any console session, is refused. `send_message`, `rename_session`,
+`set_session_pinned`, `archive_session` and `reopen_session` act only on a session bound to the caller, and refuse, with a reason naming who owns it, and change
 nothing, for any other: an unbound session, one bound to a console session or to another project session, the caller
 itself, or a session outside its project.
 
-A session an unbound project session starts is bound to it, so it is offered `report` and the two information tools and
-cannot start sessions of its own. It reports to the project session that started it exactly as a console session's
+A session an unbound project session starts is bound to it, so it is offered `report`, the two information tools and
+`get_project`, and cannot start sessions of its own. It reports to the project session that started it exactly as a console session's
 sessions report to their console session: see "Reporting" below.
 
 ## Lead sessions
@@ -130,8 +145,8 @@ starts a console session for it and binds it there (see `docs/product/requesting
 - **It reports to its console session**, as any session bound to one does: its `report` is accepted and delivered
   there. Its `done` report with no open items is refused while its own sessions are unfinished, and no report is
   synthesised for it while they run (see "Reporting" and "When a session does not report" below).
-- **Its sessions stay ordinary bound sessions.** A session bound to a lead session gets `report` and the information
-  tools and no `start_session`, and can never be an owner: naming one as the owner of a new session is refused. There
+- **Its sessions stay ordinary bound sessions.** A session bound to a lead session gets `report`, the information
+  tools and `get_project` and no `start_session`, and can never be an owner: naming one as the owner of a new session is refused. There
   is no third level and no cycle.
 
 A session is **under** an owner when it is bound to it, or bound to a lead session that is bound to it. Archiving,
@@ -141,7 +156,7 @@ reopening and deleting follow the bindings across both levels; see "Archiving, i
 **The console session sees the lead session's sessions but does not drive them.** A lead session's `owner_kind` reads
 `console`; its own sessions read `project`, with the lead session as their `owner`. The console session's reads stay
 console-wide, so those sessions appear in its `list_projects` and `get_session`, not as its own; `send_message`,
-`archive_session` and `reopen_session` aimed at one are refused, naming the lead session as its owner (see "Which
+`rename_session`, `set_session_pinned`, `archive_session` and `reopen_session` aimed at one are refused, naming the lead session as its owner (see "Which
 sessions an owner drives" below). The lead session itself is bound to the console session and is driven by it like any
 other session of its own.
 
