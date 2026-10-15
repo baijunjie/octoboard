@@ -5,13 +5,14 @@ import { FADE_SIZE } from "../components/scrollFade";
 import type { ComparisonEndpoint } from "../protocol";
 import type { ViewerSubject } from "../viewer/content";
 import type { ViewerNavigation } from "../viewer/FileViewer";
-import type { ProjectBrowserState } from "./browserState";
+import { sessionFollow, type ProjectBrowserState } from "./browserState";
 import { changeLayout, type ChangeLayout } from "./changeLayout";
 import { changeRowOffset } from "./ChangeList";
 import { HEADING_HEIGHT } from "./changeSectionHeading";
 import { changeEvidence, changeNeighbours, filterChanges, rereadChange, visibleChanges, type ChangeEvidence, type ChangeItem } from "./changes";
 import { focusFirst, focusRow } from "./focusRow";
 import type { GitView } from "./GitView";
+import { selectionForBranch, sessionBranch } from "./sessionBranch";
 import { ROW_HEIGHT } from "./treeRow";
 import { useBranchComparison } from "./useBranchComparison";
 import { useBranchList } from "./useBranchList";
@@ -22,8 +23,8 @@ import { useProjectSource } from "./useProjectSource";
 export interface GitReview {
   /** What the Git mode's view shows and does, but for asking again after a failure. */
   view: Omit<React.ComponentProps<typeof GitView>, "onRetry" | "selectedSessionId">;
-  /** Asks again for what the Git mode shows: the worktrees, and the view on screen. Settles once
-   * those have been answered or have failed. */
+  /** Asks again for what the Git mode shows: the worktrees, the branches, and the view on screen.
+   * Settles once those have been answered or have failed. */
   refresh: () => Promise<void>;
   /** The change the viewer shows, when one is open. */
   viewer?: { subject: ViewerSubject; onClose: () => void; navigation?: ViewerNavigation };
@@ -35,7 +36,7 @@ export interface GitReview {
  * The project pane's Git mode, as one project's browser holds it: the repository's source, the
  * chosen worktree's uncommitted changes, the branches and their comparison, and the change the
  * viewer shows from either. `active` is whether the Git mode is on screen; only the view on screen
- * is asked for.
+ * is asked for, bar the branch list, which both views need.
  *
  * The viewer moves through the change list's rows on screen, from one section into the next, and
  * stops at either end; the changes a file name filter hides have no row, nor do those in a folded
@@ -44,8 +45,13 @@ export interface GitReview {
  * it is open, a worktree's listings decide when it reads its change again (`rereadChange`); a
  * comparison's change is read from the commits the comparison on screen was made at, and follows
  * that comparison when it is made again.
+ *
+ * `session` is the selected session when it belongs to this project, none otherwise. Selecting one
+ * sets the selectors, once, from the branch it created (`selectionForBranch`), and from one that
+ * created none, to their defaults; no session leaves them as they are. Only what was read from
+ * the daemon after the selection is weighed, so what a pane held from before it is asked for again.
  */
-export function useGitReview(project: string, browser: ProjectBrowserState, active: boolean): GitReview {
+export function useGitReview(project: string, browser: ProjectBrowserState, active: boolean, session: string | undefined): GitReview {
   const source = useProjectSource(project, active);
   // Changes are listed only once the source says there is a repository with the chosen worktree in
   // it: a project in none, or a worktree that has gone, has nothing to ask for until that changes.
@@ -54,7 +60,9 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
   const gitView = browser.gitView;
   const changes = useChangeList(project, browser.worktree, active && gitView === "worktree" && listable);
   const comparing = active && gitView === "compare" && git !== null;
-  const branches = useBranchList(project, comparing);
+  // Either view needs the branch list: the Compare view for its selectors, and the session's
+  // branch is found in it for both.
+  const branches = useBranchList(project, active && git !== null);
   const comparison = useBranchComparison(project, browser.left, browser.right, comparing);
   const changeReader = useChangeReader(project);
   const changeListRef = useRef<HTMLDivElement>(null);
@@ -114,22 +122,68 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     if (key !== undefined) focusRow(list, key);
   };
 
-  const changeWorktree = (worktree: string | undefined) => {
+  const setWorktree = (worktree: string | undefined) => {
+    if (worktree === browser.worktree) return;
     browser.setSelectedChange(undefined);
     browser.setWorktree(worktree);
   };
-
   // Other branches are another comparison: nothing selected in the previous one stands.
-  const changeBranches = (left: string | undefined, right: string | undefined) => {
+  const setBranches = (left: string | undefined, right: string | undefined) => {
     if (left === browser.left && right === browser.right) return;
     browser.setSelectedComparedChange(undefined);
     browser.setBranches(left, right);
   };
+  // A choice the user makes in a selector settles what the selected session set: it is not set
+  // over it later.
+  const settle = () => {
+    if (session !== undefined) sessionFollow(project, session).settled = true;
+  };
+  const changeWorktree = (worktree: string | undefined) => {
+    settle();
+    setWorktree(worktree);
+  };
+  const changeBranches = (left: string | undefined, right: string | undefined) => {
+    settle();
+    setBranches(left, right);
+  };
+
+  // Selecting a session sets the selectors once the repository's worktrees and branches have been
+  // read since, whichever view is on screen. A session with no branch yet leaves them at their
+  // defaults, and one that shows up in a later branch list is set then, unless the user has chosen
+  // in the meantime. A branch no worktree has is asked for once more: the worktree may have been
+  // made after the list was read.
+  useEffect(() => {
+    if (session === undefined || source.source.state !== "loaded" || branches.branches.state === "loading") return;
+    const follow = sessionFollow(project, session);
+    if (follow.settled) return;
+    const { sentAt: sourceSentAt, source: info } = source.source;
+    const list = branches.branches;
+    const fresh = { source: sourceSentAt > follow.sourceSince, branches: list.state !== "loaded" || list.sentAt > follow.since };
+    if (active && !follow.asked) {
+      follow.asked = true;
+      if (!fresh.source) void source.refresh();
+      if (!fresh.branches || list.state === "error") void branches.refresh();
+    }
+    if (!fresh.source || !fresh.branches || info.git === null) return;
+    const branch = sessionBranch(list.state === "loaded" ? list.branches : [], session);
+    const next = selectionForBranch(branch, info.git.worktrees, info.git.worktree);
+    setBranches(next.left, next.right);
+    setWorktree(next.worktree);
+    if (branch === undefined) return;
+    if (info.git.worktrees.some((w) => w.branch === branch) || follow.retried) {
+      follow.settled = true;
+    } else {
+      follow.retried = true;
+      follow.sourceSince = performance.now();
+      void source.refresh();
+    }
+  }, [session, active, source.source, branches.branches]);
 
   const refresh = async () => {
     await Promise.all([
       source.refresh(),
-      ...(gitView === "worktree" ? [changes.refresh()] : [branches.refresh(), comparison.refresh()]),
+      branches.refresh(),
+      ...(gitView === "worktree" ? [changes.refresh()] : [comparison.refresh()]),
     ]);
   };
 

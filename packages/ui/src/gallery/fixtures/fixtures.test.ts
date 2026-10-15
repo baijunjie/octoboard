@@ -153,8 +153,12 @@ describe("gallery scenarios", () => {
     const recorded = (await matchersOf("zh-Hans")).filter(({ id }) => id.startsWith("git-"));
     const sessionMatchers = recorded.filter(({ matcher }) => String(matcher).startsWith("session("));
     expect(sessionMatchers.length).toBeGreaterThan(0);
+    const sessionLabels = [
+      t("sidebar.session.ariaLabel", { title: "Fix the summary layout", agent: "Claude Code", status: t("session.status.working") }),
+      t("sidebar.session.ariaLabel", { title: "Tune the ranking weights", agent: "Claude Code", status: t("session.status.idle") }),
+    ];
     for (const { matcher } of sessionMatchers) {
-      expect(typeof matcher === "function" && matcher(t("sidebar.session.ariaLabel", { title: "Fix the summary layout", agent: "Claude Code", status: t("session.status.working") }))).toBe(true);
+      expect(typeof matcher === "function" && sessionLabels.some(matcher)).toBe(true);
     }
     const changes = [...Object.values(SAMPLE_GIT.changes), ...Object.values(SAMPLE_GIT.comparisons ?? {})].flatMap((list) => Array.isArray(list) ? list.map(({ entry }) => entry) : []);
     const labels = changeItems(changes).flatMap((item) => [false, true].map((selected) => changeRowText(t, item, selected, false).ariaLabel.replace(/[\u2066-\u2069]/g, "")));

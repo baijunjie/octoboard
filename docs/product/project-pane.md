@@ -23,7 +23,9 @@ and nothing is staged, committed or checked out.
 - **Selecting a project session** shows its project's project pane.
 
 Moving between sessions of one project leaves its pane as it was: its mode, its expanded folders and selected file, and
-in Git its view, its chosen worktree, its chosen branches and its selected changes. Another project's session, or
+in Git its view and its selected changes — except that the Git mode's chosen worktree and branches are set from the
+session moved to, which clears the selected change of a view whose selector moves (see "Following the selected
+session" in `docs/product/project-pane-git-mode.md`). Another project's session, or
 another project's Browse files, shows that project's own pane.
 
 When a project's pane first appears or replaces another project's pane, its header and content fade in with a
@@ -44,8 +46,8 @@ Only the mode on screen is kept up to date on its own: the Files mode as "Keepin
 Git mode as "Uncommitted and Compare" in `docs/product/project-pane-git-mode.md` says. Switching to a mode counts as
 showing it again, so what it keeps up to date is refreshed when its last refresh is more than 5 seconds old. The
 header's **Refresh** refreshes the mode on screen: in Files every folder on screen is listed again, in Git the worktrees
-are read again, and so are the changes of the Uncommitted view, or the branches and their comparison in the Compare
-view, whichever is on screen. While a refresh the button started is out, its icon turns, slowly, and it keeps turning
+and the branches are read again, and so are the changes of the Uncommitted view, or the comparison in the Compare view,
+whichever is on screen. While a refresh the button started is out, its icon turns, slowly, and it keeps turning
 for at least a moment, so a refresh that finishes at once still shows it happened. It spins until the reads the press
 sent have been answered or have failed, or the connection drops; a folder that does not answer keeps it spinning,
 because a read from disk has no deadline. The periodic refreshes do not turn it, and the icon stays still under the

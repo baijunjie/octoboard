@@ -15,8 +15,8 @@ import { useStableHandler } from "../components/useLatest";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { AsidePane, type AsideLayout } from "../layout/AsidePane";
-import { useDaemonStore } from "../store";
 import type { Project } from "../protocol";
+import { useDaemonStore } from "../store";
 import { FileViewer } from "../viewer/FileViewer";
 import { useProjectBrowserState, type BrowserMode } from "./browserState";
 import { FileTree } from "./FileTree";
@@ -41,7 +41,8 @@ const MIN_SPIN_MS = 1000;
  * modes: Files, the project's files live from its directory, and Git, a worktree's uncommitted
  * changes to them or the changes between two of its repository's branches (`useGitReview`); the
  * read-only viewer opens over any of them. It reads only the project, bar the selected session,
- * which the Git mode marks the branches of that it created.
+ * which the Git mode marks the branches of that it created and, when it is one of this project's,
+ * follows in its selectors.
  * The caller mounts one per project (keyed by its id), so nothing read for one project can land in
  * another's; what belongs to the project across mounts — the mode, the expanded directories, the
  * selections — is in `browserState.ts`. Only the mode on screen is refreshed on its own.
@@ -62,8 +63,9 @@ export function ProjectBrowser({
   /** Whether the browser is on screen, docked, as an open drawer or floating in; only then is it
    * refreshed on its own. */
   active: boolean;
-  /** The session selected in the sidebar, which the Git mode's branch lists mark the branches of
-   * that it created. Nothing else here reads a session. */
+  /** The session selected in the sidebar: the Git mode's branch lists mark the branches it
+   * created, and its newest one fills the Git mode's selectors. Nothing else here reads a
+   * session. */
   selectedSessionId: string | undefined;
 }): React.ReactElement {
   const t = useT();
@@ -71,7 +73,9 @@ export function ProjectBrowser({
   const mode = browser.mode;
   const dirs = useDirectoryListings(project.id, active && mode === "files");
   const reader = useFileReader(project.id);
-  const git = useGitReview(project.id, browser, active && mode === "git");
+  // The selected session sets the Git mode's selectors, when it is one of this project's.
+  const sessionHere = useDaemonStore((s) => (selectedSessionId !== undefined && s.sessions.get(selectedSessionId)?.project_id === project.id ? selectedSessionId : undefined));
+  const git = useGitReview(project.id, browser, active && mode === "git", sessionHere);
   const treeRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
 

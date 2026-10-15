@@ -1,0 +1,31 @@
+import { expect, it } from "vitest";
+
+import type { BranchInfo, WorktreeInfo } from "../protocol";
+import { selectionForBranch, sessionBranch } from "./sessionBranch";
+
+const made = (name: string, session: string | undefined, created_at: number): BranchInfo => ({
+  name,
+  commit: "c",
+  origin: session === undefined ? undefined : { source: "hook_diff", session, title: "t", created_at },
+});
+const tree = (id: string, branch: string | null, main = false): WorktreeInfo => ({ id, root: `/${id}`, main, head: "c", branch, scope_present: true });
+
+it("takes the latest branch the session created", () => {
+  const branches = [made("old", "s", 1), made("new", "s", 5), made("other", "t", 9), made("bare", undefined, 0)];
+  expect(sessionBranch(branches, "s")).toBe("new");
+  expect(sessionBranch(branches, "nobody")).toBeUndefined();
+});
+
+it("follows the branch to its worktree and compares it with the main working copy", () => {
+  const worktrees = [tree("m", "main", true), tree("w", "topic")];
+  expect(selectionForBranch("topic", worktrees, "m")).toEqual({ worktree: "w", left: "topic", right: "main" });
+  // The holder is the default worktree: no explicit choice. Not checked out anywhere: default too.
+  expect(selectionForBranch("topic", [tree("m", "main", true), tree("w", "topic")], "w").worktree).toBeUndefined();
+  expect(selectionForBranch("gone", worktrees, "m")).toEqual({ worktree: undefined, left: "gone", right: "main" });
+});
+
+it("leaves To empty for a detached or same-branch main working copy, and restores defaults without a branch", () => {
+  expect(selectionForBranch("topic", [tree("m", null, true)], "m").right).toBeUndefined();
+  expect(selectionForBranch("main", [tree("m", "main", true)], "m").right).toBeUndefined();
+  expect(selectionForBranch(undefined, [tree("m", "main", true)], "m")).toEqual({ worktree: undefined, left: undefined, right: undefined });
+});

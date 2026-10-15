@@ -1,9 +1,11 @@
 # Which session created a branch
 
 Octoboard records which session a local branch of a project's repository was created by, and the project pane's Git
-mode marks the branches it can name a session for. The record names **the session that created the branch**, or, when
-that cannot be told, the one working in the branch's worktree — never merely whoever touches the branch later. A
-branch Octoboard cannot attribute to exactly one session carries none, which is no failure.
+mode marks the branches it can name a session for and follows the selected session's newest branch in its selectors
+(see "Following the selected session" in `docs/product/project-pane-git-mode.md`). The record names **the session
+that created the branch**, or, when that cannot be told, the one working in the branch's worktree — never merely
+whoever touches the branch later. A branch Octoboard cannot attribute to exactly one session carries none, which is no
+failure.
 
 ## The creator badge
 
@@ -59,7 +61,7 @@ A branch is attributed to a session when one of these holds:
   `AskUserQuestion`, Grok's `ask_user_question`) is not counted as a tool call. Sessions working in parallel therefore
   only collide when their tool calls overlap the branch's birth; when they do, the branch is left unattributed.
 - **Its creation falls inside exactly one session's lifetime.** For a branch with no record at all — one made before
-  Octoboard ran or kept these records, or a new one the Compare view lists before its tool-call answer is due (see
+  Octoboard ran or kept these records, or a new one the Git mode lists before its tool-call answer is due (see
   below) — the time the branch was created is read from the first entry of the branch's reflog, and the branch is
   attributed when exactly one session of the repository that has had a turn was running then. A session's lifetime is
   all this has to go on, not its tool calls, so it is the weaker signal and only ever fills in a branch that has no
@@ -78,9 +80,9 @@ A branch is attributed to a session when one of these holds:
 
 **A new branch is decided only a few seconds after its birth**, once every hook event that could bear on it has had
 time to arrive; Octoboard looks again by itself when that time is up. Until then the looks sessions prompt give it no
-creator, so its creator can show up on a later listing than the branch itself. Meanwhile a listing of the Compare view
-can give it one of the weaker answers — its reflog or its worktree — and the tool-call answer, when it comes, replaces
-that answer or not by the order below.
+creator, so its creator can show up on a later listing than the branch itself. Meanwhile a listing of the Git mode's
+branches can give it one of the weaker answers — its reflog or its worktree — and the tool-call answer, when it comes,
+replaces that answer or not by the order below.
 
 Later signals can improve on what an earlier look recorded:
 
@@ -108,7 +110,8 @@ nothing was running for it, or the only candidate was not running when the branc
   branch and does not inherit the old attribution.
 - **Nothing runs on a periodic timer.** The records of a repository are brought up to date whenever a session at work
   prompts a look at its branches, by one follow-up look a few seconds later when a look leaves something to catch up
-  on, and whenever the Compare view lists them — which is also what removes the record of a branch that is gone.
+  on, and whenever the Git mode lists them, in either of its views — which is also what removes the record of a
+  branch that is gone.
 - **Removing a project** clears the records of its repository, unless another project still points into that
   repository (see "Removing a project" in `docs/product/consoles-and-projects.md`). Deleting a console removes every
   project under it, so it clears theirs the same way.

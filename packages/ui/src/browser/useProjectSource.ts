@@ -9,7 +9,11 @@ import { sendGitRequest } from "./gitRequests";
 
 /** Where a project's files are read from, as far as the client knows: still asked for, known, or
  * failed with why. A known source stays while it is asked for again. */
-export type SourceState = { state: "loading" } | { state: "loaded"; source: ProjectSourceInfo } | { state: "error"; message: string };
+export type SourceState =
+  | { state: "loading" }
+  /** `sentAt` is when the request this answers was sent (`performance.now()`), so what was read can be told to be newer than something that happened before it. */
+  | { state: "loaded"; source: ProjectSourceInfo; sentAt: number }
+  | { state: "error"; message: string };
 
 /**
  * A project's source — whether it is in a Git repository, and that repository's worktrees — asked
@@ -32,10 +36,15 @@ export function useProjectSource(project: string, wanted: boolean): { source: So
     const sequence = ++s.sequence;
     const current = () => s.alive && s.sequence === sequence;
     const slot = `source:${project}`;
-    return sendGitRequest(slot, () => (current() ? request({ type: "get_project_source", project, slot }) : undefined))
+    let sentAt = 0;
+    return sendGitRequest(slot, () => {
+      if (!current()) return undefined;
+      sentAt = performance.now();
+      return request({ type: "get_project_source", project, slot });
+    })
       .then((reply) => {
         if (!reply || !current() || reply.type !== "project_source" || reply.source.project !== project) return;
-        setSource({ state: "loaded", source: reply.source });
+        setSource({ state: "loaded", source: reply.source, sentAt });
       })
       .catch((err: unknown) => {
         if (!current()) return;

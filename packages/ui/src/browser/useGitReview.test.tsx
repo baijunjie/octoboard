@@ -5,7 +5,7 @@ import { afterEach, expect, it } from "vitest";
 
 import type { ChangeEntry, Event, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
-import { useProjectBrowserState } from "./browserState";
+import { noteSessionSwitch, useProjectBrowserState } from "./browserState";
 import { changeLayout } from "./changeLayout";
 import { directoryKey, sectionKey } from "./changes";
 import { useGitReview } from "./useGitReview";
@@ -64,7 +64,7 @@ it("follows a comparison made again with the change still in it, and closes on o
   let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
   const Probe = () => {
     const browser = useProjectBrowserState("p");
-    latest = { browser, git: useGitReview("p", browser, true) };
+    latest = { browser, git: useGitReview("p", browser, true, undefined) };
     return null;
   };
   const root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -117,7 +117,7 @@ it("follows the list's status for an open worktree change whose key did not chan
   let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
   const Probe = () => {
     const browser = useProjectBrowserState("p");
-    latest = { browser, git: useGitReview("p", browser, true) };
+    latest = { browser, git: useGitReview("p", browser, true, undefined) };
     return null;
   };
   const root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -152,6 +152,7 @@ it("follows the list's status for an open worktree change whose key did not chan
       ],
       complete: true,
     }) satisfies Event;
+  await answer("list_project_branches", () => ({ type: "project_branches", project: "p", branches: [], complete: true }));
   await answer("list_project_changes", listed("file", "1"));
   const items = latest.git.view.worktree.list;
   if (items.state !== "loaded") throw new Error(items.state);
@@ -175,7 +176,7 @@ it("moves the viewer through the change tree's rows on screen, skipping a collap
   let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
   const Probe = () => {
     const browser = useProjectBrowserState("p");
-    latest = { browser, git: useGitReview("p", browser, true) };
+    latest = { browser, git: useGitReview("p", browser, true, undefined) };
     return null;
   };
   const root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -247,7 +248,7 @@ it("moves the viewer through the rows a file name filter leaves", async () => {
   let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
   const Probe = () => {
     const browser = useProjectBrowserState("p");
-    latest = { browser, git: useGitReview("p", browser, true) };
+    latest = { browser, git: useGitReview("p", browser, true, undefined) };
     return null;
   };
   const root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -301,7 +302,7 @@ it("moves the viewer through the rows a file name filter leaves", async () => {
 it("drops the filter text with the field, so no filter out of sight narrows a list", () => {
   let latest!: ReturnType<typeof useGitReview>;
   const Probe = () => {
-    latest = useGitReview("p", useProjectBrowserState("p"), true);
+    latest = useGitReview("p", useProjectBrowserState("p"), true, undefined);
     return null;
   };
   const root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -320,4 +321,186 @@ it("drops the filter text with the field, so no filter out of sight narrows a li
   expect(latest.view.changeView.filter).toBe("");
   act(() => latest.view.changeView.onFilterOpenChange(true));
   expect(latest.view.changeView.filter).toBe("");
+});
+
+type Tree = { id: string; branch: string | null; main?: boolean };
+type Made = { name: string; session?: string };
+
+/** The Git mode of project `id` with a selected session, as the app drives it: every change of the
+ * session is noted (`noteSessionSwitch`), a pane mounted again keeps the project's state. */
+function followHarness(id: string) {
+  let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
+  let root!: Root;
+  let selected: string | undefined;
+  const Probe = ({ session, active }: { session: string | undefined; active: boolean }) => {
+    const browser = useProjectBrowserState(id);
+    latest = { browser, git: useGitReview(id, browser, active, session) };
+    return null;
+  };
+  const render = (session: string | undefined, active: boolean) =>
+    act(() =>
+      root.render(
+        <DaemonProvider value={daemon}>
+          <Probe session={session} active={active} />
+        </DaemonProvider>,
+      ),
+    );
+  const mount = (session: string | undefined, active = true) => {
+    root = createRoot(document.body.appendChild(document.createElement("div")));
+    roots.push(root);
+    render(session, active);
+  };
+  const select = (session: string | undefined) => {
+    if (session !== selected) noteSessionSwitch();
+    selected = session;
+  };
+  const show = (session: string | undefined, active = true) => {
+    select(session);
+    render(session, active);
+  };
+  // Answers whatever the Git mode has asked for; the window's bound of two holds some requests
+  // back until others are answered, hence the second pass.
+  const settle = async (worktrees: Tree[], branches: Made[]) => {
+    const replies: Partial<Record<RequestBody["type"], () => Event>> = {
+      get_project_source: () => ({
+        type: "project_source",
+        source: {
+          project: id,
+          root: "/r",
+          resolved_root: "/r",
+          root_id: "r",
+          git_error: null,
+          git: {
+            repository: "repo",
+            common_dir: "/r/.git",
+            worktree: "m",
+            scope: "",
+            worktrees: worktrees.map((w) => ({ id: w.id, root: `/${w.id}`, main: w.main ?? false, head: "c1", branch: w.branch, scope_present: true })),
+          },
+        },
+      }),
+      list_project_changes: () => ({ type: "project_changes", project: id, worktree: null, head: "c1", changes: [], complete: true }),
+      list_project_branches: () => ({
+        type: "project_branches",
+        project: id,
+        branches: branches.map((b) => ({
+          name: b.name,
+          commit: "c",
+          origin: b.session ? { source: "hook_diff" as const, session: b.session, title: "t", created_at: 1 } : undefined,
+        })),
+        complete: true,
+      }),
+    };
+    for (let pass = 0; pass < 2; pass++) {
+      for (const [type, reply] of Object.entries(replies)) {
+        if (pending.some((request) => request.body.type === type)) await answer(type as RequestBody["type"], reply);
+      }
+    }
+  };
+  const selectors = () => ({ worktree: latest.browser.worktree, left: latest.browser.left, right: latest.browser.right });
+  return { mount, select, show, settle, selectors, get latest() { return latest; }, unmount: () => act(() => root.unmount()) };
+}
+const MAIN: Tree = { id: "m", branch: "main", main: true };
+const TOPIC: Tree = { id: "w", branch: "topic" };
+const NONE = { worktree: undefined, left: undefined, right: undefined };
+
+it("sets the selectors from the selected session's branch once it is known, unless the user chose first", async () => {
+  const h = followHarness("f1");
+  h.mount(undefined);
+  h.show("s1");
+  await h.settle([MAIN, TOPIC], [{ name: "main" }]);
+  expect(h.selectors()).toEqual(NONE);
+
+  // The attribution arrives in a later list: set.
+  act(() => void h.latest.git.refresh());
+  await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", session: "s1" }]);
+  expect(h.selectors()).toEqual({ worktree: "w", left: "topic", right: "main" });
+
+  // Another session with no branch restores the defaults; a choice made since settles it.
+  h.show("s2");
+  await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", session: "s1" }]);
+  expect(h.selectors()).toEqual(NONE);
+  act(() => h.latest.git.view.compare.onBranchesChange("main", undefined));
+  act(() => void h.latest.git.refresh());
+  await h.settle([MAIN, TOPIC], [{ name: "topic", session: "s2" }]);
+  expect(h.selectors()).toMatchObject({ left: "main", right: undefined });
+});
+
+it("sets the selectors again on switching between two sessions that each created a branch", async () => {
+  const h = followHarness("f2");
+  const branches = [{ name: "main" }, { name: "topic", session: "s1" }, { name: "other", session: "s2" }];
+  h.mount(undefined);
+  h.show("s1");
+  await h.settle([MAIN, TOPIC], branches);
+  expect(h.selectors()).toEqual({ worktree: "w", left: "topic", right: "main" });
+  h.show("s2");
+  await h.settle([MAIN, TOPIC], branches);
+  expect(h.selectors()).toEqual({ worktree: undefined, left: "other", right: "main" });
+});
+
+it("asks again for a worktree no listed one is, and sets it from the list that answers", async () => {
+  const h = followHarness("f3");
+  h.mount(undefined);
+  h.show("s1");
+  const branches = [{ name: "main" }, { name: "topic", session: "s1" }];
+  await h.settle([MAIN], branches);
+  // The list read so far has no worktree for the branch: the comparison is set, the worktree waits
+  // for the list asked for again.
+  expect(h.selectors()).toEqual({ worktree: undefined, left: "topic", right: "main" });
+  expect(pending.some((request) => request.body.type === "get_project_source")).toBe(true);
+  await h.settle([MAIN, TOPIC], branches);
+  expect(h.selectors()).toEqual({ worktree: "w", left: "topic", right: "main" });
+});
+
+it("weighs only what was read after the selection, asking again for what a pane held", async () => {
+  const h = followHarness("f4");
+  const branches = [{ name: "main" }, { name: "topic", session: "s1" }, { name: "other", session: "s2" }];
+  h.mount(undefined);
+  h.show("s1");
+  await h.settle([MAIN, TOPIC], branches);
+  expect(h.selectors().left).toBe("topic");
+  // Selected while the Git mode is off screen: the lists held name a branch for s2, but are from
+  // before the selection and are not weighed.
+  h.show("s2", false);
+  expect(h.selectors().left).toBe("topic");
+  expect(pending).toHaveLength(0);
+  h.show("s2", true);
+  expect(h.selectors().left).toBe("topic");
+  expect(pending.map((request) => request.body.type)).toEqual(expect.arrayContaining(["get_project_source", "list_project_branches"]));
+  await h.settle([MAIN, TOPIC], branches);
+  expect(h.selectors().left).toBe("other");
+});
+
+it("sets the selectors again on a new selection of the session, but not on a pane mounted under the same one", async () => {
+  const h = followHarness("f5");
+  const branches = [{ name: "main" }, { name: "topic", session: "s1" }];
+  h.mount(undefined);
+  h.show("s1");
+  await h.settle([MAIN, TOPIC], branches);
+  act(() => h.latest.git.view.compare.onBranchesChange("main", "topic"));
+
+  // The pane goes and comes back with the selection unchanged: the choice stands.
+  h.unmount();
+  h.mount("s1");
+  await h.settle([MAIN, TOPIC], branches);
+  expect(h.selectors()).toMatchObject({ left: "main", right: "topic" });
+
+  // Another selection in between, the pane away: the session is a new switch.
+  h.unmount();
+  h.select("other");
+  h.select("s1");
+  h.mount("s1");
+  await h.settle([MAIN, TOPIC], branches);
+  expect(h.selectors()).toEqual({ worktree: "w", left: "topic", right: "main" });
+});
+
+it("leaves the selectors as they are for a session that is not the project's", async () => {
+  const h = followHarness("f6");
+  h.mount(undefined);
+  h.show("s1");
+  await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", session: "s1" }]);
+  const before = h.selectors();
+  h.show(undefined);
+  expect(pending).toHaveLength(0);
+  expect(h.selectors()).toEqual(before);
 });

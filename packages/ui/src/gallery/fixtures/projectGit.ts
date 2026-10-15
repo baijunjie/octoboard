@@ -7,7 +7,7 @@ import { describing, type Matcher, type Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import type { FixtureChange, FixtureGit, Versions } from "./changeFixtures";
 import type { FixtureError } from "./projectFiles";
-import { SAMPLE, snapshotState } from "./builders";
+import { SAMPLE, sessionOf, snapshotState } from "./builders";
 import {
   EXPAND_DELAY_MS,
   addition,
@@ -228,18 +228,20 @@ const BRANCHES: BranchInfo[] = [
   {
     name: "feature/ranking-experiments",
     commit: FEATURE_TIP,
-    origin: { source: "hook_diff", session: "s-gone", title: "Tune the ranking weights", created_at: 1_760_000_000_000 },
+    // Created by a live session of the project, which the selected-session scenarios pick.
+    origin: { source: "hook_diff", session: "s-ranking", title: "Tune the ranking weights", created_at: 1_760_000_000_000 },
   },
   {
     name: LONG_BRANCH,
-    // The title is the one the session had when the attribution was made, not its live title.
     commit: "5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a",
-    origin: { source: "reflog_match", session: "s-web-1", title: "Review the deduplication pass", created_at: 1_759_000_000_000 },
+    // A session that has been removed since.
+    origin: { source: "reflog_match", session: "s-gone", title: "Review the deduplication pass", created_at: 1_759_000_000_000 },
   },
   {
     name: "chore/update-dependencies",
     commit: "7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807e8d9",
-    // A live session that is not the selected one: the plain ring. The session has been renamed since.
+    // A live session that is not the selected one: the plain ring. The title is the one the session
+    // had when the attribution was made, and it has been renamed since.
     origin: { source: "hook_diff", session: "s-web-2", title: "Bump the packages", created_at: 1_758_000_000_000 },
   },
   { name: "main", commit: MAIN_TIP },
@@ -260,6 +262,32 @@ const FEATURE_COMPARISON: FixtureChange[] = [
   deletion("committed", "docs/old-notes.md", onMain("7c6b5a4"), DELETED_NOTES),
   binaryChange("committed", "docs/logo.png", onMain("6a5b4c3"), onFeature("8b7c6d5"), LOGO_BODIES),
   typeChange("committed", "current", onMain("0d1c2b3"), onFeature("8d2f1a0"), CURRENT_AS_FILE, "releases/2.4"),
+];
+
+/** The changes from `feature/ranking-experiments` to `main`: what the Compare view shows once a
+ * session that created the branch is selected, which sets From to its branch and To to `main`. The
+ * reverse of `FEATURE_COMPARISON`, over the files it keeps in common with it. */
+const RANKING_EDIT_REVERSED: Versions = {
+  old: RANKING_EDIT.new,
+  new: RANKING_EDIT.old,
+  patch: [
+    "diff --git a/src/ranking.ts b/src/ranking.ts",
+    "index 7f8a9b0..3c4d5e6 100644",
+    "--- a/src/ranking.ts",
+    "+++ b/src/ranking.ts",
+    "@@ -1,4 +1,3 @@",
+    ' import type { Hit } from "./index";',
+    " ",
+    "-export const rank = (hits: Hit[], boost = 1) =>",
+    "-  hits.map((hit) => ({ ...hit, score: hit.score * boost })).sort((a, b) => b.score - a.score);",
+    "+export const rank = (hits: Hit[]) => hits.sort((a, b) => b.score - a.score);",
+    "",
+  ].join("\n"),
+};
+const FEATURE_TO_MAIN: FixtureChange[] = [
+  textChange("committed", "src/ranking.ts", onFeature("7f8a9b0"), onMain("3c4d5e6"), RANKING_EDIT_REVERSED),
+  addition("committed", "docs/old-notes.md", onMain("7c6b5a4"), DELETED_NOTES),
+  deletion("committed", "src/cache.ts", onFeature("5a6b7c8"), CACHE_BODY),
 ];
 
 /** The sample repository's branches and a dozen more, past what a selector's list shows without
@@ -300,14 +328,22 @@ export const SAMPLE_GIT: FixtureGit = {
   },
 };
 
+/** The sample repository with the comparison a session's branch fills the Compare view with. */
+const SESSION_GIT: FixtureGit = { ...SAMPLE_GIT, comparisons: { ...SAMPLE_GIT.comparisons, "feature/ranking-experiments..main": FEATURE_TO_MAIN } };
+
 const { console: console_, web, api, sessions } = SAMPLE;
-const state = snapshotState({ consoles: [console_], projects: [web, api], sessions });
-const openGit = [
-  (ui: Ui) => ui.press(ui.session(sessions[1].title)),
+/** The session that created `feature/ranking-experiments`, checked out in the side worktree. The
+ * other Git scenarios select `sessions[1]`, which created no branch, so that the selectors start at
+ * their defaults. */
+const rankingSession = sessionOf("s-ranking", console_.id, web.id, "Tune the ranking weights", "idle");
+const state = snapshotState({ consoles: [console_], projects: [web, api], sessions: [...sessions, rankingSession] });
+const openGitFor = (session: { title: string }) => [
+  (ui: Ui) => ui.press(ui.session(session.title)),
   (ui: Ui) => ui.wait(400),
   (ui: Ui) => ui.press(ui.t("browser.mode.git")),
   (ui: Ui) => ui.wait(400),
 ];
+const openGit = openGitFor(sessions[1]);
 /** Matches a branch's option in a selector: its name followed by the 7 characters of its short
  * commit id. */
 const branchOption = (name: string): Matcher => describing(`branchOption(${name})`, (n) => n.startsWith(name) && n.length === name.length + 7);
@@ -493,8 +529,36 @@ const reviewScenarios: Scenario[] = [
     title: "Branch creator indicators",
     state: state,
     description: "The selected, other and removed session origins are visible together; hover their rings for details.",
+    git: SESSION_GIT,
     steps: [
-      ...openToSelector,
+      ...openGitFor(rankingSession),
+      (ui: Ui) => ui.press(ui.t("git.view.compare")),
+      (ui: Ui) => ui.wait(300),
+      (ui: Ui) => ui.press("main"),
+      (ui: Ui) => ui.wait(400),
+    ],
+  },
+  {
+    id: "git-session-worktree",
+    group: GROUP,
+    category: "normal",
+    title: "The selected session's worktree",
+    state: state,
+    description: "The selected session created feature/ranking-experiments, which the side worktree has checked out: the Worktree selector is on that worktree and lists its changes, not the project folder's.",
+    steps: openGitFor(rankingSession),
+  },
+  {
+    id: "git-session-compare",
+    group: GROUP,
+    category: "normal",
+    title: "The selected session's branch compared with main",
+    state: state,
+    description: "From is the branch the selected session created and To the branch the main worktree has checked out.",
+    git: SESSION_GIT,
+    steps: [
+      ...openGitFor(rankingSession),
+      (ui: Ui) => ui.press(ui.t("git.view.compare")),
+      (ui: Ui) => ui.wait(600),
     ],
   },
   {

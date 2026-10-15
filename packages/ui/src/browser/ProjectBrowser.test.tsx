@@ -67,6 +67,7 @@ const source = (project: string): Event => ({
     },
   },
 });
+const branches = (project: string): Event => ({ type: "project_branches", project, branches: [], complete: true });
 const changes = (project: string): Event => ({ type: "project_changes", project, worktree: null, head: null, changes: [], complete: true });
 
 /** Mounts the browser of project `id` in `mode` and returns its Refresh button's icon. */
@@ -126,6 +127,7 @@ it("does not spin the icon for the periodic refresh", async () => {
 it("spins the Git refresh icon until the worktrees and the changes it asked for are answered", async () => {
   const icon = await mount("git-p", "git");
   await answer("get_project_source", source("git-p"));
+  await answer("list_project_branches", branches("git-p"));
   await answer("list_project_changes", changes("git-p"));
   expect(spinning(icon())).toBe(false);
 
@@ -133,6 +135,7 @@ it("spins the Git refresh icon until the worktrees and the changes it asked for 
   expect(spinning(icon())).toBe(true);
   await wait(1100);
   await answer("get_project_source", source("git-p"));
+  await answer("list_project_branches", branches("git-p"));
   expect(spinning(icon())).toBe(true);
   await answer("list_project_changes", changes("git-p"));
   expect(spinning(icon())).toBe(false);
@@ -154,12 +157,14 @@ it("stops the Files icon after the minimum when the listing it asked for fails",
 it("stops the Git icon after the minimum when the source request it asked for is rejected", async () => {
   const icon = await mount("git-fail", "git");
   await answer("get_project_source", source("git-fail"));
+  await answer("list_project_branches", branches("git-fail"));
   await answer("list_project_changes", changes("git-fail"));
 
   await press(icon());
   const index = pending.findIndex((request) => request.body.type === "get_project_source");
   const [request] = pending.splice(index, 1);
   await act(async () => request.reject(new Error("rejected")));
+  await answer("list_project_branches", branches("git-fail"));
   await answer("list_project_changes", changes("git-fail"));
   expect(spinning(icon())).toBe(true);
   await wait(1100);
@@ -251,6 +256,7 @@ it.each(["files", "git"] as const)("refreshes the visible %s pane when a switche
   else {
     await answer("get_project_source", source(project));
     await answer("list_project_changes", changes(project));
+    await answer("list_project_branches", branches(project));
   }
   if (pending.some((request) => request.body.type === "list_project_dir")) await answer("list_project_dir", dir(project));
   expect(pending).toHaveLength(0);

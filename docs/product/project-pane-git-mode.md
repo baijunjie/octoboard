@@ -31,10 +31,11 @@ end of the tabs' row are the two controls both views share: the one that shows a
 then **Group by folder** (see "Filtering by file name" and "Flat or grouped by folder" below).
 
 Each view reads the repository only while it is on screen: the Uncommitted view as "Keeping the list up to date"
-below says, the Compare view as "The branch selectors" and "When a comparison is made" below say. Switching views
-leaves the other view as it was. "The worktree selector" and "The change list" below are about the Uncommitted view,
-"Comparing two branches" below about the Compare view; "Folding a section", "Flat or grouped by folder", "Filtering by
-file name" and "Opening a change" are about both.
+below says, the Compare view as "When a comparison is made" below says. The repository's branches are read while
+either view is on screen (see "The branch selectors" below). Switching views leaves the other view as it was. "The
+worktree selector" and "The change list" below are about the Uncommitted view, "Comparing two branches" below about the
+Compare view; "Folding a section", "Flat or grouped by folder", "Filtering by file name", "Following the selected
+session" and "Opening a change" are about both.
 
 ## The repository and its worktrees
 
@@ -60,6 +61,7 @@ too long for its space fades out (see "Names too long for their space" in `docs/
 
 - The worktree holding the project's folder is marked as holding it, and is where the selector starts: the checkout
   the project's folder is in, which may be a linked worktree, never whichever worktree has some branch checked out.
+  Selecting one of the project's sessions can choose another (see "Following the selected session" below).
 - A worktree in which the project's folder is not a directory — missing there, or reached only through a symbolic
   link — says the project's folder is not in it, in the selector and above its changes.
 - **Choosing a worktree changes only where the uncommitted changes are read from.** It checks nothing out, moves no
@@ -70,7 +72,8 @@ too long for its space fades out (see "Names too long for their space" in `docs/
   one. Another worktree's changes are never shown in its place.
 
 The worktrees are read when the Git mode is first shown after the project pane is put in the right pane, on Refresh,
-after the connection to the daemon comes back, and when the chosen worktree is found gone. A worktree added in the
+after the connection to the daemon comes back, when the chosen worktree is found gone, and when one of the project's
+sessions is selected (see "Following the selected session" below). A worktree added in the
 meantime appears in the selector then.
 
 ## The change list
@@ -281,7 +284,7 @@ Nothing tells Octoboard when a repository changes, so the chosen worktree's chan
 - when the window comes back to the front or becomes visible again, with the Uncommitted view on screen, or when it
   comes back on screen — a hidden pane shown, the Git tab or the Uncommitted tab chosen — either one more than 5
   seconds after the last listing;
-- on the header's **Refresh**, which reads the worktrees again too;
+- on the header's **Refresh**, which reads the worktrees and the branches again too;
 - after the connection to the daemon comes back, while the Uncommitted view is on screen.
 
 While the pane is hidden, or shows the Files mode or the Compare view, nothing is listed on its own. When the
@@ -316,16 +319,19 @@ At the top of the Compare view are two branch selectors, each with its label bef
 - A broken branch — its reference names an object the repository does not have, or one that is not a commit — is
   offered with the id its reference names, and comparing it fails (see "What the view says" below).
 
-The branches are read when the Compare view is first shown after the project pane is put in the right pane, and then
-the way the Uncommitted view's changes are listed again (see "Keeping the list up to date" above), with the Compare
-view in place of the Uncommitted view: every 10 seconds while it is on screen and the window is visible, when it comes
-back more than 5 seconds after the last reading, on Refresh, and after the connection to the daemon comes back. A
-branch created, moved or deleted in the meantime shows in the selectors then.
+The branches are read while the Git mode is on screen in either view, once the repository is found — the Uncommitted
+view needs them too, to follow the selected session (see "Following the selected session" below). They are read when
+the Git mode is first shown after the project pane is put in the right pane, and then the way the Uncommitted view's
+changes are listed again (see "Keeping the list up to date" above), with the Git mode in place of the Uncommitted view:
+every 10 seconds while it is on screen and the window is visible, when it comes back more than 5 seconds after the
+last reading, on Refresh from either view, and after the connection to the daemon comes back; and, as the worktrees
+are, when one of the project's sessions is selected (see "Following the selected session" below). A branch created, moved
+or deleted in the meantime shows in the selectors then.
 
-When the branches cannot be read, the view says so with the reason: in place of the empty state asking for a branch on
-each side, with **Try again**, while a branch is missing on either side and no list of branches has been read yet;
-otherwise in a line under the selectors, announced to assistive technology, the branches already offered staying on
-offer, until the branches are read again.
+When the branches cannot be read, the Uncommitted view says nothing, and the Compare view says so with the reason: in
+place of the empty state asking for a branch on each side, with **Try again**, while a branch is missing on either side
+and no list of branches has been read yet; otherwise in a line under the selectors, announced to assistive technology,
+the branches already offered staying on offer, until the branches are read again.
 
 ### What is compared
 
@@ -393,6 +399,47 @@ assistive technology.
 Refresh then compares the branches as they are now, or, for a branch that no longer exists, fails saying there is no
 such branch. A change opened from the comparison still on screen reads from its commits for as long as the repository
 has them (see "Errors" below).
+
+## Following the selected session
+
+Selecting one of the project's sessions in the sidebar sets the Git mode's selectors from **the session's branch**: of
+the branches whose recorded creator is that session (see "When a branch has a creator" in
+`docs/product/branch-creator.md`), the one created last. The selectors of both views are set together, whichever view
+is on screen; the view shown does not change.
+
+- **The worktree selector** chooses the worktree that has the session's branch checked out, and the worktree holding
+  the project's folder when none has.
+- **From** takes the session's branch, and **To** the branch checked out in the repository's main working copy. With
+  the main working copy's `HEAD` detached, or on the session's branch itself, To is left with no branch chosen, so no
+  comparison is made until one is.
+- **A session with no branch of its own** sets the selectors back to where a project starts: the worktree holding the
+  project's folder, and neither From nor To chosen. A branch list that could not be read counts as naming no branch
+  for the session.
+- A selector set this way is as one chosen by the user (see "The worktree selector" and "The branch selectors" above):
+  moving it clears the selected change of its view, and setting it to what it already holds changes nothing.
+
+When the selectors are set:
+
+- **Once for each selection of one of the project's sessions.** Every change of the selected session is a new
+  selection, whether or not the project pane was in the right pane when it was made: selecting a session, then any
+  other session — of this project or another, or a console session — and then the first again sets them again. The
+  project pane put back in the right pane, or the Git mode shown again, while the same session stays selected does not
+  set them again: what the selectors hold stands, the user's choices included (see "What is remembered" below).
+- **Only from what is read after the selection.** The worktrees and branches the pane held from before the selection
+  are asked for again — at once while the Git mode is on screen, otherwise when it next comes on screen — and the
+  selectors are set once both have been read since, never from the earlier lists. Until then they hold what they held.
+- **A session's branch that no listed worktree has checked out** sets From and To at once, and the worktree selector
+  to the worktree holding the project's folder, and the worktrees are asked for once more: the reply that follows sets
+  the worktree selector to the worktree that has the branch checked out by then, provided the user has changed no
+  selector in the meantime. When still no worktree has it, the worktree holding the project's folder stays chosen.
+- **A choice made in a selector stands while the same session stays selected**: nothing sets the selectors again until
+  the next selection.
+- **A session's branch that turns up later** — in a branch list read after the selection, its creator having been
+  recorded only after the branch itself appeared, say — is followed then, once, provided the user has changed no
+  selector since the selection. Once a session's branch has been followed, later branch lists leave the selectors alone,
+  even one that names a newer branch for the session.
+- **Selecting any other session** — another project's, or a console session — or none leaves the selectors as they
+  are.
 
 ## Opening a change
 
@@ -645,9 +692,11 @@ in place of the diff, in the current language. The cases beyond those of a file 
 the Uncommitted view's selected change; the branches chosen for From and To and the Compare view's selected change;
 the sections folded away (see "Folding a section" above); and, grouped by folder, the folders folded away. Reloading
 the window, or restarting the application, starts every project on the Uncommitted view and the worktree holding its
-folder, with no branches chosen, no change selected and every section and folder unfolded. Change lists, branch lists, comparisons and their contents are never stored. Whether the filter
-field is on screen, and the text in it, last only while the project's pane stays in the right pane, and the text only
-until the field is closed (see "Filtering by file name" above).
+folder, with no branches chosen, no change selected and every section and folder unfolded. Selecting one of the
+project's sessions sets the worktree and the branches anew, once for that selection; the pane put back in the right
+pane while the same session stays selected keeps them as they are (see "Following the selected session" above). Change lists, branch lists, comparisons and their contents are never stored. Whether the
+filter field is on screen, and the text in it, last only while the project's pane stays in the right pane, and the
+text only until the field is closed (see "Filtering by file name" above).
 
 **Across projects and restarts**: whether the change lists are grouped by folder (see "Flat or grouped by folder"
 above), kept as the file viewer's document-or-source, unified-or-split and wrap choices are. The mode itself is kept

@@ -7,7 +7,7 @@ import { errorPresentation } from "./errorPresentation";
 import { flushSync } from "react-dom";
 
 import { ArchiveView } from "./archive/ArchiveView";
-import { forgetProjectsOtherThan, setProjectBrowserMode } from "./browser/browserState";
+import { forgetProjectsOtherThan, noteSessionSwitch, setProjectBrowserMode } from "./browser/browserState";
 import { LazyProjectBrowser } from "./browser/LazyProjectBrowser";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { ContentPanel } from "./components/ContentPanel";
@@ -71,7 +71,15 @@ export function App(): React.ReactElement {
   const accounts = useDaemonStore((s) => s.settings.accounts);
   // Keeps Settings out of the way of the question's dialog.
   const questionPending = usePendingQuestion();
-  const [selectedSessionId, setSelectedSessionId] = useState<string>();
+  const [selectedSessionId, setSelectedSessionIdState] = useState<string>();
+  // Every change of the selected session is noted for the project panes, which follow it even when
+  // one was not mounted while it changed (`browserState.ts`).
+  const selectedSessionRef = useRef<string>(undefined);
+  const setSelectedSessionId = (id: string | undefined) => {
+    if (id !== selectedSessionRef.current) noteSessionSwitch();
+    selectedSessionRef.current = id;
+    setSelectedSessionIdState(id);
+  };
   const [dialogRequest, setDialogRequest] = useState<DialogRequest>();
   const latestDialogRequest = useLatest(dialogRequest);
   const [archiveScope, setArchiveScope] = useState<ArchiveScope>();
