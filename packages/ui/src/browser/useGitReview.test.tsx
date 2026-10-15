@@ -526,7 +526,7 @@ it("sets the worktree of a branch that shows up later in a worktree made since, 
       project: "f7",
       branches: [
         { name: "main", commit: "c" },
-        { name: "topic", commit: "c", origin: { source: "hook_diff", session: "s1", title: "t", created_at: 1 } },
+        { name: "topic", commit: "c", origin: { source: "ref_hook", session: "s1", title: "t", created_at: 1 } },
       ],
       complete: true,
     }));
