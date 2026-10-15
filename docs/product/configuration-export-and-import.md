@@ -12,16 +12,15 @@ the window's own machine is only where a file is saved or picked.
 
 ## In the window
 
-Exporting is in two places: the **Export configuration…** item of a console's menu (the one in the sidebar's header
-and the one on the console's avatar in the rail), and the **Export…** button of Settings' **Configuration** section.
+Exporting is the **Export…** button of Settings' **Configuration** section, and nowhere else.
 Importing is the **Import…** button of that section, and the **Import configuration…** button of the welcome screen,
 which is what an installation with no console yet shows. Both go through the window's own file dialogs, so no place is
 imposed on the file: the desktop app raises its save and open dialogs, and a browser tab downloads the file and opens a
-file picker. Where the window can do neither, none of these entries is shown.
+file picker. Where the window can do neither, the welcome screen's button is not shown and the Configuration section
+says that exporting and importing are not available (see "Configuration" in `docs/product/settings.md`).
 
-**Exporting** opens a dialog that asks what to export: the console in hand, or everything. The console in hand is the
-one the menu was opened from, or, from Settings, the one the sidebar shows; with no console there is only everything.
-Under that choice, before anything is saved, the dialog says that the file contains the path of each project on the
+**Exporting** opens a dialog that asks what to export: the console the sidebar shows, or everything; with no console
+there is only everything. Under that choice, before anything is saved, the dialog says that the file contains the path of each project on the
 machine running Octoboard, which may not be the one the window is on, so sharing it is a choice made knowing so.
 **Export…** then asks the daemon for the document and opens the save dialog. In the desktop app a toast names the file
 it was saved as. A browser files a download itself, under its own name and wherever its settings say, and does not

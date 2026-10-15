@@ -9,9 +9,6 @@ export type NewSessionBinding = { kind: "choose" } | { kind: "unbound" } | { kin
 /** A dialog the sidebar's menus and the archive view ask the app to open. */
 export type DialogRequest =
   | { kind: "new-console" }
-  /** Exports configuration to a file: the console in hand and everything are offered, or only
-   * everything where there is no `console`. */
-  | { kind: "export-configuration"; console?: Console }
   /** Imports configuration from a file the user picks. */
   | { kind: "import-configuration" }
   | { kind: "edit-console"; console: Console }

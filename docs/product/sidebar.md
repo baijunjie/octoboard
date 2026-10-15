@@ -13,8 +13,8 @@ first console is made (see `docs/product/welcome-screen.md`).
 
 Archived sessions are never listed among a project's or a console's sessions. A project's are reached through its
 "View archive" submenu, through its focus mode, and through the archive view; the archived sessions bound to a console
-session through its focus mode and the archive view; a console's archived console sessions through the console
-sessions section's own menu and the archive view.
+session through its focus mode and the archive view; a console's archived console sessions through the console's
+own menu and the archive view.
 
 ## The console switcher
 
@@ -43,9 +43,8 @@ The name assistive technology announces for an avatar is the console's name toge
 and why a mouse user with the docked sidebar hidden does not get to read it, is in "Tooltips on icon-only controls" in
 `docs/product/labels-and-tooltips.md`.
 
-**Right-clicking** (or Control-clicking) an avatar opens that console's action menu at the pointer: **Add project**,
-**Edit console**, **Export configuration…** and, after a separator, **Delete console**, as in the sidebar's header
-below. It does not switch to the console.
+**Right-clicking** (or Control-clicking) an avatar opens that console's action menu at the pointer, the same menu as
+the sidebar's header carries (see "The console header" below). It does not switch to the console.
 
 **The current console is remembered per client**, in that client's own browser storage, as the panes' widths are
 (see "Resizing the sidebar and the right pane" in `docs/product/window-layout.md`). A remembered console that no
@@ -79,11 +78,13 @@ is a **preview**:
 ## The console header
 
 The top of the sidebar names the console being shown, with its action menu beside it: **Add project**, **Edit
-console**, **Export configuration…** and, after a separator, **Delete console** (see "Associating a project", "Editing
-a console" and "Deleting a console" in `docs/product/consoles-and-projects.md`, and "In the window" in
-`docs/product/configuration-export-and-import.md`; deleting asks for a typed confirmation first). Export
-configuration… is there only where the window can save a file, which the macOS application and a browser both can.
-The console's avatar is not repeated here; the rail marks it.
+console**, **Archived console sessions** and, after a separator, **Delete console** (see "Associating a project",
+"Editing a console" and "Deleting a console" in `docs/product/consoles-and-projects.md`; deleting asks for a typed
+confirmation first). **Archived console sessions** is a submenu of the console's newest archived console sessions, each
+with its agent's icon and its title; choosing one selects it (see "Selecting a session" below). After them, **View
+all** opens the archive view of all of them whenever the console has an archived console session (see "The archive
+view" below). A console with no archived console session shows only a disabled item saying so. The console's avatar is
+not repeated here; the rail marks it.
 
 ## The console sessions section and the project list
 
@@ -97,11 +98,9 @@ The console sessions heading appends the number of console sessions listed in pa
 sessions and excluding archived ones. It shows zero when none are listed.
 
 The section's own heading carries a **+** button, **New console session**, which opens the session dialog before
-launching anything (see "Opening a session" in `docs/product/sessions.md`), and, while the console has an archived
-console session, the section's action menu, whose only entry is **Archived console sessions** — a submenu of the console's newest archived console
-sessions, each of which can be selected, and the way to the archive view of all of them (see "The archive view" below).
-This is the one entry a console session's own row never carries: archived console sessions are reached from the section,
-not from a row. With no console session at all, the section shows an empty row saying so; the whole row is a button that
+launching anything (see "Opening a session" in `docs/product/sessions.md`), and no action menu. Archived console
+sessions are reached from the console's own menu (see "The console header" above), not from the section or from any
+one row. With no console session at all, the section shows an empty row saying so; the whole row is a button that
 does what the heading's **+** button does (see "Empty rows" below).
 
 With no agent available on the machine at all, the section instead carries an empty row saying that no agent was found
@@ -483,8 +482,8 @@ mirrored under a right-to-left language, and nothing moves where the system asks
 
 ## The archive view
 
-**View all** — in a project's "View archive" submenu, in a focus mode's archived list, or in the console sessions
-section's "Archived console sessions" submenu — opens the archive view: **every** archived session of that project,
+**View all** — in a project's "View archive" submenu, in a focus mode's archived list, or in a console's
+"Archived console sessions" submenu — opens the archive view: **every** archived session of that project,
 every archived session under that console session (bound to it, or bound to an archived lead session that is bound to
 it), or every archived console session of that console. A lead session's own archived sessions are in that console
 session's archive only while the lead session is archived too; while the lead session is still live they are in its

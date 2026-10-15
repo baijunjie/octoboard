@@ -55,8 +55,7 @@ const noConsoleState = snapshotState({
 
 const openSettings = (ui: Ui) => ui.press(ui.t("rail.settings"));
 const configurationSection = (ui: Ui) => ui.press(ui.t("settings.section.configuration"));
-const openConsoleMenu = (ui: Ui) => ui.press(ui.t("sidebar.console.actions", { name: console_.name }));
-const exportFromMenu = [openConsoleMenu, (ui: Ui) => ui.press(ui.t("sidebar.console.exportConfiguration"))];
+const exportFromSettings = [openSettings, configurationSection, (ui: Ui) => ui.press(ui.t("settings.configuration.export.button"))];
 const importFromSettings = [
   openSettings,
   configurationSection,
@@ -269,7 +268,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings, Configuration section where files cannot be saved or opened",
-    description: "The section only says it is not available here. Close Settings and open the console menu: Export configuration is absent there too.",
+    description: "The section only says it is not available here.",
     state,
     configuration: { unavailable: true },
     steps: [
@@ -290,23 +289,19 @@ export const configurationScenarios: Scenario[] = [
     id: "configuration-export-console",
     group: GROUP,
     category: "normal",
-    title: "Export, from a console's menu",
-    description: "Choose the console or everything, with the local-paths notice beneath. Export closes the dialog and raises a toast naming the saved file.",
+    title: "Export, from Settings with a console in the sidebar",
+    description: "Choose the console the sidebar shows or everything, with the local-paths notice beneath. Export closes the dialog and raises a toast naming the saved file.",
     state,
-    steps: exportFromMenu,
+    steps: exportFromSettings,
   },
   {
     id: "configuration-export-everything-only",
     group: GROUP,
     category: "normal",
     title: "Export, with no console to export on its own",
-    description: "Reached from Settings, since there is no console menu: only everything is offered.",
+    description: "Only everything is offered.",
     state: noConsoleState,
-    steps: [
-      openSettings,
-      configurationSection,
-      (ui) => ui.press(ui.t("settings.configuration.export.button")),
-    ],
+    steps: exportFromSettings,
   },
   {
     id: "configuration-export-downloaded",
@@ -317,7 +312,7 @@ export const configurationScenarios: Scenario[] = [
     state,
     configuration: { downloads: true },
     steps: [
-      ...exportFromMenu,
+      ...exportFromSettings,
       (ui) => ui.press(ui.t("configuration.export.submit")),
     ],
   },
@@ -329,7 +324,7 @@ export const configurationScenarios: Scenario[] = [
     state,
     configuration: { saveError: "Permission denied (os error 13)" },
     steps: [
-      ...exportFromMenu,
+      ...exportFromSettings,
       (ui) => ui.press(ui.t("configuration.export.submit")),
     ],
   },

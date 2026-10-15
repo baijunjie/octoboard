@@ -2,14 +2,12 @@ import { Badge, Button } from "@heroui/react";
 import { Hand, Plus, Settings } from "lucide-react";
 import React, { useMemo, useRef } from "react";
 
-import type { DialogRequest } from "../dialogs/dialogRequest";
 import { isolate } from "../i18n/isolate";
 import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
-import { usePlatform } from "../platform/react";
 import type { Console, Session } from "../protocol";
 import { activityLabelKey } from "../sessionLabel";
-import { consoleMenu } from "../sidebar/menus";
+import { consoleMenu, type ConsoleMenuHandlers } from "../sidebar/menus";
 import { type Activity, consoleActivity } from "../sidebar/order";
 import { ActionMenu } from "./ActionMenu";
 import { ActivityBadge } from "./ActivityMarker";
@@ -73,7 +71,8 @@ function ConsoleTile({
   onSelect,
   onHoverChange,
   hoverOpensSidebar,
-  onOpenDialog,
+  handlers,
+  sessions,
 }: {
   console: Console;
   activity: Activity;
@@ -86,10 +85,11 @@ function ConsoleTile({
    * name), so a mouse user with the docked sidebar hidden never reads those words; the activity
    * is reachable there only from the session rows' own status glyphs. */
   hoverOpensSidebar: boolean;
-  onOpenDialog: (dialog: DialogRequest) => void;
+  handlers: ConsoleMenuHandlers;
+  /** The console's own sessions, for the archived console sessions in its menu. */
+  sessions: Session[];
 }): React.ReactElement {
   const t = useT();
-  const { configurationFile } = usePlatform();
   const tileRef = useRef<HTMLDivElement>(null);
   const activityKey = activityLabelKey(activity);
   const label = activityKey ? t(activityKey, { name: isolate(thisConsole.name) }) : thisConsole.name;
@@ -122,14 +122,15 @@ function ConsoleTile({
         className="hidden"
         label={t("sidebar.console.actions", { name: isolate(thisConsole.name) })}
         tooltip={false}
-        items={consoleMenu(t, thisConsole, onOpenDialog, configurationFile !== undefined)}
+        items={consoleMenu(t, thisConsole, handlers, sessions)}
         contextTargetRef={tileRef}
       />
     </div>
   );
 }
 
-interface RailProps {
+/** The console menu's handlers serve the avatars' menus; `onOpenDialog` also opens New console. */
+interface RailProps extends ConsoleMenuHandlers {
   consoles: Console[];
   sessions: Session[];
   /** The current console, which the sidebar shows unless it is previewing another. */
@@ -141,7 +142,6 @@ interface RailProps {
   onConsoleLeave: () => void;
   /** Whether the hidden sidebar can float in on hovering an avatar right now. */
   hoverOpensSidebar: boolean;
-  onOpenDialog: (dialog: DialogRequest) => void;
   waitingCount: number;
   onNextWaiting: () => void;
   onOpenSettings: () => void;
@@ -165,6 +165,8 @@ export function Rail({
   onConsoleLeave,
   hoverOpensSidebar,
   onOpenDialog,
+  onSelectSession,
+  onOpenArchive,
   waitingCount,
   onNextWaiting,
   onOpenSettings,
@@ -173,15 +175,16 @@ export function Rail({
   const t = useT();
   const rtl = textDirection(useCurrentLanguage()) === "rtl";
   const overflow = waitingCount > 99;
-  const activities = useMemo(() => {
-    const byConsole = new Map<string, Session[]>();
+  const byConsole = useMemo(() => {
+    const groups = new Map<string, Session[]>();
     for (const session of sessions) {
-      const group = byConsole.get(session.console_id);
+      const group = groups.get(session.console_id);
       if (group) group.push(session);
-      else byConsole.set(session.console_id, [session]);
+      else groups.set(session.console_id, [session]);
     }
-    return new Map(consoles.map((c) => [c.id, consoleActivity(byConsole.get(c.id) ?? [])]));
-  }, [consoles, sessions]);
+    return groups;
+  }, [sessions]);
+  const activities = useMemo(() => new Map(consoles.map((c) => [c.id, consoleActivity(byConsole.get(c.id) ?? [])])), [consoles, byConsole]);
 
   return (
     <nav
@@ -204,7 +207,8 @@ export function Rail({
               onSelect={() => onSelectConsole(c.id)}
               hoverOpensSidebar={hoverOpensSidebar}
               onHoverChange={(hovered) => (hovered ? onConsoleEnter(c.id) : onConsoleLeave())}
-              onOpenDialog={onOpenDialog}
+              handlers={{ onOpenDialog, onSelectSession, onOpenArchive }}
+              sessions={byConsole.get(c.id) ?? []}
             />
           ))}
         </FadedScroller>

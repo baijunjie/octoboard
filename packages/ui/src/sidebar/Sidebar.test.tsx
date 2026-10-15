@@ -277,6 +277,8 @@ function mountPeeking() {
         onConsoleLeave={vi.fn()}
         hoverOpensSidebar
         onOpenDialog={vi.fn()}
+        onSelectSession={vi.fn()}
+        onOpenArchive={vi.fn()}
         waitingCount={0}
         onNextWaiting={vi.fn()}
         onOpenSettings={vi.fn()}

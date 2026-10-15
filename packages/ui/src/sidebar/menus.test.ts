@@ -158,22 +158,18 @@ describe("a console session's Pin entry", () => {
   });
 });
 
-describe("the Export configuration entry", () => {
-  const entries = (canExport: boolean, onOpenDialog = vi.fn()) =>
-    consoleMenu(t, consoleOf("c", "Main"), onOpenDialog, canExport).filter(
-      (entry): entry is Exclude<typeof entry, "separator"> => entry !== "separator",
-    );
-
-  it("is offered only where the platform can save a file", () => {
-    expect(entries(true).map((entry) => entry.label)).toContain("Export configuration…");
-    expect(entries(false).map((entry) => entry.label)).not.toContain("Export configuration…");
-  });
-
-  it("opens the export of this console", () => {
-    const onOpenDialog = vi.fn();
-    const exportItem = entries(true, onOpenDialog).find((entry) => entry.label === "Export configuration…") as { onClick: () => void };
-    exportItem.onClick();
-    expect(onOpenDialog).toHaveBeenCalledExactlyOnceWith({ kind: "export-configuration", console: consoleOf("c", "Main") });
+describe("a console's menu", () => {
+  it("lists Add project, Edit console, the archived console sessions and Delete console", () => {
+    const handlers = { onOpenDialog: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn() };
+    const hub = sessionOf("hub", "c", undefined, "Old hub", "archived", { role: "console" });
+    const projectSession = sessionOf("work", "c", "p", "Project work", "archived");
+    const menu = consoleMenu(t, consoleOf("c", "Main"), handlers, [hub, projectSession]);
+    const labels = menu.map((entry) => (entry === "separator" ? entry : entry.label));
+    expect(labels).toEqual(["Add project", "Edit console", "Archived console sessions", "separator", "Delete console"]);
+    const archive = menu[2] as { items: { label: string; onClick: () => void }[] };
+    expect(archive.items.map((item) => item.label)).toEqual(["Old hub", "View all"]);
+    archive.items[1].onClick();
+    expect(handlers.onOpenArchive).toHaveBeenCalledWith({ console: "c" });
   });
 });
 

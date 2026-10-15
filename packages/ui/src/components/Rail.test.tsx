@@ -28,6 +28,8 @@ function avatarOf(statuses: SessionStatus[], hoverOpensSidebar = false): HTMLBut
         onConsoleLeave={() => {}}
         hoverOpensSidebar={hoverOpensSidebar}
         onOpenDialog={() => {}}
+        onSelectSession={() => {}}
+        onOpenArchive={() => {}}
         waitingCount={0}
         onNextWaiting={() => {}}
         onOpenSettings={() => {}}

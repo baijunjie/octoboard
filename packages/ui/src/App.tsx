@@ -610,6 +610,8 @@ export function App(): React.ReactElement {
           onConsoleLeave={panes.sidebarPeek.leaveConsole}
           hoverOpensSidebar={panes.sidebarPeek.peekable}
           onOpenDialog={stableOpenDialog}
+          onSelectSession={stableSelectSession}
+          onOpenArchive={stableOpenArchive}
           waitingCount={waitingSessions.length}
           onNextWaiting={stableNextWaiting}
           onOpenSettings={openSettings}

@@ -1,15 +1,14 @@
-import { Archive, ArrowLeftRight, Copy, FileDown, Focus, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Pencil, Pin, PinOff, RefreshCw, Settings2, Terminal, Trash2, Undo2, Upload } from "lucide-react";
+import { Archive, ArrowLeftRight, Copy, Focus, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Pencil, Pin, PinOff, RefreshCw, Settings2, Terminal, Trash2, Undo2, Upload } from "lucide-react";
 
 import { switchEntries } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/ActionMenu";
 import { AgentIcon } from "../components/AgentIcon";
 import { PathText } from "../components/PathText";
 import type { Translate } from "../i18n/catalog";
-import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Account, Console, Project, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { FocusShortcutKbd } from "./focusShortcut";
-import { archivePreviewSessions } from "./order";
+import { archivedSessions, archivePreviewSessions } from "./order";
 import type { SidebarHandlers } from "./types";
 
 /** "View archive": the five newest archived parent sessions, each selecting its session, then
@@ -43,22 +42,27 @@ function pinItem(t: Translate, pinned: boolean, onToggle: () => void): ActionMen
     : { label: t("sidebar.pin"), icon: Pin, onClick: onToggle };
 }
 
-/** A console's actions, in the sidebar's header and on the console's avatar in the rail. "Export
- * configuration" is offered only where the platform can save a file (`canExport`). */
+/** What a console's menu acts through. */
+export type ConsoleMenuHandlers = Pick<SidebarHandlers, "onOpenDialog" | "onSelectSession" | "onOpenArchive">;
+
+/** A console's actions, in the sidebar's header and on the console's avatar in the rail: among
+ * them the console's archived console sessions, out of `sessions` (every session of the console,
+ * live owners included). */
 export function consoleMenu(
   t: Translate,
   console: Console,
-  onOpenDialog: (dialog: DialogRequest) => void,
-  canExport: boolean,
+  handlers: ConsoleMenuHandlers,
+  sessions: Session[],
 ): ActionMenuEntry[] {
+  const archived = archivedSessions(sessions.filter((s) => s.role === "console"));
   return [
-    { label: t("sidebar.console.addProject"), icon: FolderPlus, onClick: () => onOpenDialog({ kind: "new-project", console }) },
-    { label: t("sidebar.console.edit"), icon: Pencil, onClick: () => onOpenDialog({ kind: "edit-console", console }) },
-    ...(canExport
-      ? [{ label: t("sidebar.console.exportConfiguration"), icon: FileDown, onClick: () => onOpenDialog({ kind: "export-configuration", console }) }]
-      : []),
+    { label: t("sidebar.console.addProject"), icon: FolderPlus, onClick: () => handlers.onOpenDialog({ kind: "new-project", console }) },
+    { label: t("sidebar.console.edit"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "edit-console", console }) },
+    archiveSubmenu(t, t("sidebar.archive.consoleSessions"), archived, sessions, handlers.onSelectSession, () =>
+      handlers.onOpenArchive({ console: console.id }),
+    ),
     "separator",
-    { label: t("sidebar.console.delete"), icon: Trash2, onClick: () => onOpenDialog({ kind: "delete-console", console }), destructive: true },
+    { label: t("sidebar.console.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-console", console }), destructive: true },
   ];
 }
 

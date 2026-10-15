@@ -8,8 +8,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   per-agent config directories; the three ways a project is associated, what is editable afterwards, how the
   project's git remote URL is recorded and kept current, and what deleting either one does.
 - [Configuration export and import](product/configuration-export-and-import.md) — carrying configuration to another
-  machine as a versioned JSON document: where the window offers it (a console menu's Export configuration…, Settings'
-  Configuration section and the welcome screen's Import configuration…, all through the window's own file dialogs),
+  machine as a versioned JSON document: where the window offers it (Settings' Configuration section and the welcome
+  screen's Import configuration…, all through the window's own file dialogs),
   the export dialog's scope choice and its warning about the paths the file carries, the import dialog's three steps
   (the file, the review of every project with where it stands on the daemon's host and where it goes, the result by
   outcome); then the two export scopes, what a console and a project carry and what is deliberately left out, the

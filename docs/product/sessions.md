@@ -28,11 +28,10 @@ below.
 The console session cannot archive itself (see "The console session's tools" in
 `docs/product/hub-orchestration.md`), so the user archives it from its own row's menu, as any session
 is archived. Archiving it moves it among the console's archived console sessions; these are not reached
-from any one row, but from the console sessions section's own menu, which offers **Archived console
-sessions** — a submenu of the console's newest archived console sessions, each of which can be
-selected, and the way to the archive view of all of them (see "The archive view" in
-`docs/product/sidebar.md`). The section's own **New console session** button opens the session dialog described in
-"Opening a session" below — whereas resuming or reopening a console session keeps its
+from any one row, but from the console's own menu, which offers **Archived console sessions** — a
+submenu of the console's newest archived console sessions, each of which can be selected, and the way
+to the archive view of all of them (see "The console header" in `docs/product/sidebar.md`). The console sessions
+section's own **New console session** button opens the session dialog described in "Opening a session" below — whereas resuming or reopening a console session keeps its
 recorded agent and account; only switching accounts changes its account (see "Agent config directories" in
 `docs/product/consoles-and-projects.md` and "Switching a session's account" below).
 
@@ -542,8 +541,8 @@ session separately.
 A project's archived sessions, and a console's archived console sessions, stay until the user deletes them, the
 project is removed or the console is deleted. They are listed most recently archived first, and reached:
 
-- from the project's "View archive" submenu, or for console sessions the console sessions section's
-  "Archived console sessions" submenu, with the newest five;
+- from the project's "View archive" submenu, or for console sessions the console's "Archived console
+  sessions" submenu, with the newest five;
 - from the project's focus mode, with the newest ten, bound sessions included; from a console session's focus mode,
   the archived sessions under it, again the newest ten;
 - from the archive view, with all of them.

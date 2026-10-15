@@ -119,6 +119,13 @@ const archiveState = {
   ]),
 };
 
+// The console's menu with nothing archived under it.
+const emptyConsoleArchiveState = snapshotState({
+  consoles: [console_],
+  projects: [project],
+  sessions: [sessionOf("s-live", console_.id, project.id, "Live session", "idle")],
+});
+
 export const archiveScenarios: Scenario[] = [
   {
     id: "archive-project-preview",
@@ -159,6 +166,30 @@ export const archiveScenarios: Scenario[] = [
     ],
   },
   {
+    id: "archive-console-menu",
+    group: GROUP,
+    category: "normal",
+    title: "Console menu, archived console sessions",
+    description: "The console's menu (the same one opens from its avatar in the rail) lists Add project, Edit console, Archived console sessions and Delete console below a separator; there is no Export configuration. The submenu shows the five newest archived console sessions, retaining their last active task titles, then View all.",
+    state: archiveState,
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.console.actions", { name: console_.name })),
+      (ui) => ui.press(ui.t("sidebar.archive.consoleSessions")),
+    ],
+  },
+  {
+    id: "archive-console-menu-empty",
+    group: GROUP,
+    category: "normal",
+    title: "Console menu, no archived console sessions",
+    description: "The Archived console sessions submenu holds only a disabled empty entry, with no View all.",
+    state: emptyConsoleArchiveState,
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.console.actions", { name: console_.name })),
+      (ui) => ui.press(ui.t("sidebar.archive.consoleSessions")),
+    ],
+  },
+  {
     id: "archive-console-sessions",
     group: GROUP,
     category: "normal",
@@ -166,7 +197,7 @@ export const archiveScenarios: Scenario[] = [
     description: "Console sessions (2) counts the live sidebar rows; the eight archived console sessions appear in the archive view, retaining their last active task titles beside their original names.",
     state: archiveState,
     steps: [
-      (ui) => ui.press(ui.t("sidebar.consoleSessions.actions", { name: console_.name })),
+      (ui) => ui.press(ui.t("sidebar.console.actions", { name: console_.name })),
       (ui) => ui.press(ui.t("sidebar.archive.consoleSessions")),
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
     ],

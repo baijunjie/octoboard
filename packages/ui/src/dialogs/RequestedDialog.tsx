@@ -5,7 +5,6 @@ import { AgentIcon } from "../components/AgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { StatusIcon } from "../components/StatusIcon";
 import { TintedAlert } from "../components/TintedAlert";
-import { ExportConfigurationDialog } from "../configuration/ExportConfigurationDialog";
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
@@ -135,8 +134,6 @@ export function RequestedDialog({
       return <ConsoleDialog onClose={onClose} />;
     case "edit-console":
       return <ConsoleDialog console={dialog.console} onClose={onClose} />;
-    case "export-configuration":
-      return <ExportConfigurationDialog console={dialog.console} onClose={onClose} />;
     case "import-configuration":
       return <ImportConfigurationDialog onClose={onClose} />;
     case "delete-console":

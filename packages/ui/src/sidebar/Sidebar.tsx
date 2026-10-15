@@ -14,7 +14,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { noAgentAvailable } from "../agents";
-import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
+import { ActionMenu } from "../components/ActionMenu";
 import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
@@ -32,7 +32,6 @@ import type { PaneWidth } from "../layout/paneWidth";
 import { columnClipClass, useSidebarDockMotion } from "../layout/sidebarDockMotion";
 import type { DockPhase } from "../layout/paneDockMotion";
 import type { PanePeek } from "../layout/usePaneToggles";
-import { usePlatform } from "../platform/react";
 import { effectiveTags, matchesFilter, tagVocabulary, withoutTags } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
 import { activityLabelKey, sessionAccountTooltip, sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
@@ -41,7 +40,7 @@ import { BindingBadge } from "./BindingBadge";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
 import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterTag, ProjectFilterTags } from "./ProjectFilter";
-import { archiveSubmenu, consoleMenu, projectMenu, sessionMenu } from "./menus";
+import { consoleMenu, projectMenu, sessionMenu } from "./menus";
 import { archivedSessions, consoleActivity, hasBoundSessions, isInactiveProject, liveSessionRows, liveSessions, sortProjects } from "./order";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
 import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, PinButton, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
@@ -286,7 +285,7 @@ export function Sidebar({
     );
     content = (
       <>
-        <ConsoleHeader handlers={handlers} current={shownConsole} />
+        <ConsoleHeader handlers={handlers} current={shownConsole} sessions={consoleSessions} />
         <FadedScroller className="min-h-0 flex-1 px-2 pb-2">
           <ConsoleBody
             handlers={handlers}
@@ -383,9 +382,8 @@ export function Sidebar({
 /** The header naming the console shown, with the console's own actions beside it. Its name only:
  * the console's avatar is already marked as the current one on the rail (`Rail.tsx`), which also
  * switches consoles and carries what is going on in every console. */
-function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers; current: Console }): React.ReactElement {
+function ConsoleHeader({ handlers, current, sessions }: { handlers: SidebarHandlers; current: Console; sessions: Session[] }): React.ReactElement {
   const t = useT();
-  const { configurationFile } = usePlatform();
   const headerRef = useRef<HTMLDivElement>(null);
   return (
     // The list under this header is inset twice — the scroll area, then each heading and row — so
@@ -396,7 +394,7 @@ function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers; curre
       </RowLabel>
       <ActionMenu
         label={t("sidebar.console.actions", { name: isolate(current.name) })}
-        items={consoleMenu(t, current, handlers.onOpenDialog, configurationFile !== undefined)}
+        items={consoleMenu(t, current, handlers, sessions)}
         contextTargetRef={headerRef}
       />
     </div>
@@ -584,9 +582,9 @@ function ConsoleBody({
 }
 
 /** The console's console sessions, listed above the project list: every one that is not archived,
- * ordered the way a project's own sessions are (`liveSessions`), with an action to start a new one
- * and, reached from the section rather than from any one row, the console's archived console
- * sessions (see "The console sessions section and the project list" in `docs/product/sidebar.md`). */
+ * ordered the way a project's own sessions are (`liveSessions`), with an action to start a new one.
+ * The archived ones are reached from the console's own menu; see "The console
+ * sessions section and the project list" in `docs/product/sidebar.md`. */
 function ConsoleSessionsSection({
   handlers,
   console: thisConsole,
@@ -609,26 +607,14 @@ function ConsoleSessionsSection({
   const blocked = noAgentAvailable(agentAvailability);
   const consoleSessions = sessions.filter((s) => s.role === "console");
   const live = liveSessions(consoleSessions);
-  const archivedConsoleSessions = archivedSessions(consoleSessions);
   const openNew = () => handlers.onOpenConsoleSession(thisConsole);
   const listRef = useFlip<HTMLDivElement>();
-
-  const menu: ActionMenuEntry[] = [
-    archiveSubmenu(t, t("sidebar.archive.consoleSessions"), archivedConsoleSessions, sessions, handlers.onSelectSession, () =>
-      handlers.onOpenArchive({ console: thisConsole.id }),
-    ),
-  ];
 
   return (
     <>
       <SectionHeading
         action={
-          <>
-            <RowIconButton icon={Plus} label={t("sidebar.consoleSessions.new")} onPress={openNew} isDisabled={blocked} />
-            {archivedConsoleSessions.length > 0 && (
-              <ActionMenu label={t("sidebar.consoleSessions.actions", { name: isolate(thisConsole.name) })} items={menu} />
-            )}
-          </>
+          <RowIconButton icon={Plus} label={t("sidebar.consoleSessions.new")} onPress={openNew} isDisabled={blocked} />
         }
       >
         {t("sidebar.consoleSessions.headingWithCount", { count: live.length })}
