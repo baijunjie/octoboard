@@ -912,24 +912,23 @@ h3 {
   align-items: center;
   height: 38px;
 }
-.quality-symbol span {
+.quality-symbol svg {
   display: block;
-  width: 34px;
-  height: 34px;
-  border: 1px solid var(--red);
-  border-radius: 50%;
-  position: relative;
+  width: 42px;
+  height: 38px;
 }
-.quality-symbol span::after {
-  content: "";
-  position: absolute;
-  width: 6px;
-  height: 11px;
-  border-right: 2px solid var(--red);
-  border-bottom: 2px solid var(--red);
-  transform: rotate(45deg);
-  top: 8px;
-  left: 12px;
+.quality-symbol circle {
+  fill: #982a22;
+}
+.quality-symbol circle + circle {
+  fill: var(--red);
+}
+.quality-symbol path {
+  fill: none;
+  stroke: #f2f2f2;
+  stroke-width: 3.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .pain-resolution {
   display: flex;
@@ -1028,29 +1027,26 @@ h3 {
   color: #fff;
   background: #ffffff12;
 }
-.collaboration-scenarios {
+.brand-strengths {
   display: grid;
-  gap: 20px;
-  margin: 24px 0 0;
-  padding: 0;
-  padding-inline-start: 18px;
-  list-style: disc;
-}
-.collaboration-scenarios li {
-  padding-inline-start: 6px;
-}
-.collaboration-scenarios li::marker {
-  color: var(--red);
-}
-.collaboration-scenarios h4 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 64px;
   margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.6;
+  padding: 0;
+  list-style: none;
 }
-.collaboration-scenarios p {
-  margin-top: 4px;
-  line-height: 1.75;
+.brand-strengths li {
+  padding-block: 28px 4px;
+  border-top: 1px solid #363636;
+}
+.brand-strengths h3 {
+  font-size: 20px;
+}
+.brand-strengths p {
+  margin-top: 8px;
+  color: #aaa;
+  font-size: 15px;
+  line-height: 1.7;
 }
 .trust-grid {
   display: grid;
@@ -1252,9 +1248,16 @@ h3 {
 }
 .cta-brand-slogan {
   margin-top: 16px;
-  text-align: start;
+  text-align: center;
   font-size: 16px;
   color: #aaa;
+}
+.cta-brand-meaning {
+  margin: 28px auto 0;
+  max-width: 640px;
+  color: #aaa;
+  font-size: 16px;
+  line-height: 1.7;
 }
 .final-cta .eyebrow {
   margin-top: 40px;
@@ -1397,6 +1400,9 @@ h3 {
     gap: 24px;
   }
   .principle-grid {
+    gap: 0 32px;
+  }
+  .brand-strengths {
     gap: 0 32px;
   }
   .trust-grid {
@@ -1578,7 +1584,8 @@ h3 {
   .workflow-steps h3 {
     margin-top: 16px;
   }
-  .principle-grid {
+  .principle-grid,
+  .brand-strengths {
     grid-template-columns: 1fr;
   }
   .trust-grid {
@@ -1629,6 +1636,10 @@ h3 {
   }
   .cta-brand-slogan {
     font-size: 13px;
+  }
+  .cta-brand-meaning {
+    margin-top: 20px;
+    font-size: 15px;
   }
   .cta-description {
     font-size: 16px;

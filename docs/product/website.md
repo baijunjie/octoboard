@@ -81,7 +81,8 @@ Each language has one share image, 1200 by 630, at the deployment root as `og-im
 The route code is the URL code in "Pages and languages", so Simplified Chinese is `og-image-zh.png`,
 not `zh-Hans`. The image shows the mascot published as `logo.png` at the deployment root, the pixel
 wordmark published as `wordmark.png` at the deployment root, that language's brand slogan drawn as text
-under the wordmark (see "Brand slogan"), the three lines of the homepage title, and the hostname `octoboard.dev`.
+under the wordmark (see "Brand slogan"; the sentence that states the slogan's two meanings is not drawn),
+the three lines of the homepage title, and the hostname `octoboard.dev`.
 The wordmark, the slogan and the title lines share one start edge. Those lines are the title on the homepage,
 not the SEO title sentence. Arabic places the mascot on the right and aligns the text to that inner edge. Neither
 the mascot nor the wordmark is mirrored.
@@ -145,27 +146,32 @@ Working and Awaiting instructions labels. It does not include the embedded appli
 the releases links in "Homepage and navigation" and sit beside the statement that the macOS app is an
 early prototype still in development. The workflow is identified as an illustration. The copies omit
 the header, the footer, decorative art, the labels and numbers that mark a section, the scroll cue,
-the MIT badge, and interactive controls. The brand slogan, the privacy page's introductory line, and
-the workflow's participant labels stay.
+the MIT badge, and interactive controls. The brand slogan stays, and the homepage Markdown also includes
+the sentence that states the slogan's two meanings. The privacy page's introductory line and the workflow's
+participant labels stay.
 
 ## Homepage and navigation
 
 The homepage uses Octoboard's original silver mechanical octopus, red eyes, and pixel wordmark on a dark surface.
 The first screen introduces coordination across projects and offers links to download the app, visit its GitHub
 repository, and open the preview section. The second screen gives equal weight to two goals: delegating agent
-management across projects and keeping development quality in each project. The quality explanation ties this goal to independent native sessions that retain
-project instructions, Skills, hooks and tools, with the user able to inspect and steer any conversation.
+management across projects and keeping development quality in each project. The quality explanation states that
+even with coordinated management, each project still runs its own independent native session, which keeps that
+project's instructions, Skills, hooks and tools, and the user can open a conversation to review the work and
+steer it.
 
 The page continues through the product preview, the coordination illustration, four supporting principles, local data
 and open-source information, platform availability, and questions. These seven sections share a numbered heading,
 a short label marked by a red square, and a title. Section and workflow-step numbers are prominent visual markers.
 The four principles cover reducing manual coordination, keeping independent native project sessions with their own
-rules, retaining different agent brands and toolchains, and letting the user work directly with the project agent
-handling a task. The different-brands explanation has a short introduction and three titled scenarios, presented
-as a list in both the page and its Markdown version: Codex working on the admin project and Claude Code on the
-merchant project under their respective project rules; a Claude Code coordinator delegating promotion images to
-Codex and continuing after receiving the assets; and Codex checking ordering and redemption in an application or
-browser, then reporting results for the coordinator to follow up.
+rules, coordinating agents from different brands, and letting the user work directly with the project agent
+handling a task. The four principles are peers. Each is a title and one short paragraph, and the different-brands
+principle does not contain a list. Each project keeps the agent it already uses, and an individual step can be
+given to an agent from another brand when needed. Under the four principles, three equal columns state model-brand
+strengths, in order: Claude is strong at programming, GPT at image generation and device control, and Grok at copy
+and language. The names are Claude, GPT, and Grok, not the agent products Claude Code, Codex, and Grok Build. On a
+small screen the three columns stack into one. The homepage Markdown lists the same three strengths, in the same
+order, under that principle.
 
 The workflow illustration places Octoboard's mascot and coordinating agent at the center of eight distinct
 project-agent nodes: admin, merchant, customer, server, mobile, staff tablet, point of sale and kitchen. Every node
@@ -214,9 +220,9 @@ terms, and the operator's email address. The hero, open-source section and foote
 The footer forms a compact centered group: the wordmark and localized tagline, followed by navigation links and
 copyright. On small screens, the wordmark and tagline stack vertically.
 
-The closing section displays the mascot and the wordmark with the localized brand slogan as text under it: a
-horizontal arrangement on wider screens, with the slogan starting at the wordmark's start edge, and a centered
-vertical arrangement on small screens. Decorative graphics do not act as slide or pagination controls.
+The closing section displays the mascot beside the wordmark, with the localized brand slogan as text under the
+wordmark, centered on the wordmark. Under that group, centered, is the sentence that states the slogan's two
+meanings (see "Brand slogan"). Decorative graphics do not act as slide or pagination controls.
 
 The floating header stays visible while scrolling and links to the two goals, product preview, coordination
 explanation, and questions from either page. Following a section link leaves space for the header above the destination. Its inline links
@@ -232,23 +238,24 @@ destination or another language closes the dialog as well.
 
 The preview shows the actual application's interface populated with fictional data and identifies itself as a
 sample. Three buttons select project management, team reports, or code review; project management is the initial
-scene. All three scenes follow the restaurant meal deal promotion across four independent business projects: Admin,
-Merchant, Customer and Server. They show the coordinating and project sessions, a delivery report, and a selected
-order-validation diff. Choosing a scene resets the demonstration to that scene's prepared state.
+scene. All three scenes follow the restaurant meal deal promotion across eight independent example projects:
+admin, merchant, customer, server, mobile, staff tablet, point of sale and kitchen. They show the coordinating
+and project sessions, a delivery report, and a selected order-validation diff. Choosing a scene resets the
+demonstration to that scene's prepared state.
 
 Each project has its own sample repository, with a distinct root, feature branch, file tree and changes. Selecting
-another project shows that project's source and diffs. The three frontend projects include components, API clients,
+another project shows that project's source and diffs. The frontend projects include components, API clients,
 domain rules, tests and configuration for their respective restaurant roles; the server project includes order
 handling, HTTP validation, database queries and migrations, and tests. Files can be opened in the real viewer, and
 the source shown there agrees with the corresponding diff. All sample repositories exist only in memory; their
 displayed source is not executed.
 
-The delivery report summarizes each project's result and presents sample figures of four coordinated projects,
+The delivery report summarizes each project's result and presents sample figures of eight coordinated projects,
 48 passed checks and one decision awaiting confirmation: whether the meal deal can be combined with a member
-discount. The sample currently keeps the discounts separate. The code-review scene shows `src/meal-deal-orders.ts`,
-with changes that calculate prices from an eligible active offer, reserve available stock and prevent repeated
-requests from creating duplicate orders, alongside sample tests and promotion rules. These files and check counts
-are demonstration data.
+discount. The sample keeps the discounts separate. The code-review scene shows `src/meal-deal-orders.ts` on the
+server project, with changes that calculate prices from an eligible active offer, reserve available stock and
+prevent repeated requests from creating duplicate orders, alongside sample tests and promotion rules. These files
+and check counts are demonstration data.
 
 The homepage embeds a complete desktop viewport scaled to fit its available width. Once ready, the embedded
 application accepts pointer and keyboard interaction, including its report and project panes, and is available to
@@ -277,16 +284,21 @@ if its startup fails. JavaScript is required to load and operate either preview.
 
 ## Brand slogan
 
-The brand slogan is "The Programming Terminator" in English. Its two intended meanings are the ambition to hand
-programming work over to agents, and the image of a powerful Terminator in the programming world, reflected in the
-mechanical mascot. It is not a pun on "terminal". The slogan expresses a vision and a brand identity; it does not
-claim that fully autonomous development is already implemented.
+The brand slogan is "The Programming Terminator" in English. The sentence that states the slogan's two meanings
+carries both readings of the pun: programming ends here, and the programming itself is as formidable as the
+Terminator. It is not a pun on "terminal". The slogan expresses a vision and a brand identity; it does not claim
+that fully autonomous development is already implemented.
 
-Every language has its own translation, which keeps those meanings and uses the film's title in that language where
-one is established (Brazilian Portuguese "O Exterminador", Thai "คนเหล็ก", Vietnamese "Kẻ hủy diệt"). Translations use
-sentence case. The slogan appears as the eyebrow above the homepage title, as text under the wordmark in the closing
-section, under the wordmark on the share image, and in the language's Markdown page. On the website the slogan
-remains localized text rather than part of the wordmark artwork.
+Every language has its own slogan, which keeps those meanings and uses the film's title in that language where one
+is established (Brazilian Portuguese "O Exterminador", Thai "คนเหล็ก", Vietnamese "Kẻ hủy diệt"). Translations use
+sentence case. Simplified Chinese is 编程终结者, not 编程界的终结者. Each language also has a sentence that states
+the two meanings.
+
+The slogan appears as the eyebrow above the homepage title, as text under the wordmark in the closing section, under
+the wordmark on the share image, and in that language's homepage Markdown. The meaning sentence is shown under the
+wordmark in the closing section and is included in that homepage Markdown. It is not drawn on the share image,
+and the image's alt text uses the slogan rather than that sentence. On the website the slogan remains localized
+text rather than part of the wordmark artwork.
 
 ## Platform availability
 
@@ -297,13 +309,14 @@ development, that only the first prototype features are in place, and that the d
 The site does not describe the macOS app as finished and does not give an installer date.
 
 Status: not implemented — the Linux server and the Windows, iOS and Android apps. Each appears with a platform icon
-and a planned status, without a download or an availability date, and the platform answer repeats the same status.
+and no download or availability date.
 
-The Linux entry stands for the server form, not for a desktop app: the daemon alone on a server without a display,
-reached by its owner from a browser on another machine (see "Two deployment forms" in `docs/architecture.md`). The
-entry and the platform answer have to say so, so that the site never promises a Linux desktop app. The site's current
-copy does not yet: it lists Linux as one planned "version" beside the others and says nothing of what it is, wording
-that predates this positioning and is to be replaced.
+Linux is a planned server, not another app version beside Windows, iOS, and Android, and not a Linux desktop app.
+The section introduction and the platform question describe it as the background service on a machine without a
+display, opened in a browser on another machine (see "Two deployment forms" in `docs/architecture.md`). It is not
+available. The Linux row's status is its own label, "Server, planned" in English. Windows, iOS, and Android remain
+planned and not available, and those rows use the shared planned badge. The homepage Markdown includes the same
+introduction and the same status for each row.
 
 ## Motion and accessibility
 
@@ -348,7 +361,7 @@ The privacy page identifies BaiJunjie as the operator and gives `support@octoboa
 Its disclosures distinguish:
 
 - application configuration and session data stored locally, with no upload of code, conversations, or usage data
-  to developer-operated servers;
+  to servers operated by that operator;
 - third-party agents and tools, which can send data to their configured providers under those providers' policies;
 - repository operations, including remote status checks, which can contact configured Git remotes;
 - task information passed between agent sessions, which can consequently reach more than one provider;
@@ -368,8 +381,9 @@ a workflow. The homepage presents that status in a card beside the open-source i
 Remote host support runs in one direction only: the daemon the user is talking to reaching a second machine to run
 sessions there. The server form runs the other way — one daemon, on a server, with the user's browser on another
 machine (see "Two deployment forms" in `docs/architecture.md`) — and is not what this section, the planned-remote
-question or the privacy page's remote-host disclosure describe. Beyond the Linux entry in "Platform availability" the
-site says nothing of the server form today. Its local-data statements describe the machine the daemon runs on, which
+question or the privacy page's remote-host disclosure describe. The homepage's platform section and platform
+question describe that planned server (see "Platform availability"). The privacy page does not. The site's local-data
+statements describe the machine the daemon runs on, which
 in the server form is the server rather than the machine in front of the user, and a privacy page covering that form
 has to say that the interface then travels over the network between the server and the user's browser. That addition
 has not been written.

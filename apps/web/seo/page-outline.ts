@@ -10,11 +10,7 @@ export const homeFeatures = [
 
 export const homeSteps = ["One", "Two", "Three"] as const;
 
-export const collaborationScenarios = [
-  "Projects",
-  "Images",
-  "Browser",
-] as const;
+export const collaborationScenarios = ["Claude", "Gpt", "Grok"] as const;
 
 export const homeQuestions = [
   "One",
@@ -34,10 +30,10 @@ export const developedPlatform = {
 } as const;
 
 export const plannedPlatforms = [
-  { name: "Linux", icon: "linux-logo" },
-  { name: "Windows", icon: "windows-logo" },
-  { name: "iOS", icon: "apple-logo" },
-  { name: "Android", icon: "android-logo" },
+  { name: "Linux", icon: "linux-logo", status: "platformsLinuxStatus" },
+  { name: "Windows", icon: "windows-logo", status: "remoteBadge" },
+  { name: "iOS", icon: "apple-logo", status: "remoteBadge" },
+  { name: "Android", icon: "android-logo", status: "remoteBadge" },
 ] as const;
 
 // Names shown beside the mascot. They are product names, not translated labels.

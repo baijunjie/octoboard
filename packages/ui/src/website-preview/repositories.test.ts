@@ -14,9 +14,13 @@ const primaryFiles: Record<string, string> = {
   "preview-merchant": "src/domain/availability.ts",
   "preview-customer": "src/components/Checkout.tsx",
   "preview-server": "src/meal-deal-orders.ts",
+  "preview-mobile": "src/domain/role.ts",
+  "preview-tablet": "src/domain/role.ts",
+  "preview-pos": "src/domain/role.ts",
+  "preview-kitchen": "src/domain/role.ts",
 };
 
-describe("the website's four independent repository fixtures", () => {
+describe("the website's eight independent repository fixtures", () => {
   it.each([...previewRepositories])(
     "routes %s source, directories, files and Git to the same repository",
     async (id, repository) => {
@@ -139,13 +143,9 @@ describe("the website's four independent repository fixtures", () => {
 
   it("does not leak another project's files, worktrees or revisions after project switches", async () => {
     const api = daemon();
-    for (const id of [
-      "preview-admin",
-      "preview-server",
-      "preview-customer",
-      "preview-merchant",
-      "preview-admin",
-    ]) {
+    for (const id of [...previewRepositories.keys(), "preview-admin"]) {
+      const expected = previewRepositories.get(id)!.files[primaryFiles[id]];
+      if (!expected || !("text" in expected)) throw new Error("Missing source file");
       const current = await api.request({
         type: "read_project_file",
         project: id,
@@ -155,12 +155,14 @@ describe("the website's four independent repository fixtures", () => {
         type: "project_file",
         project: id,
         path: primaryFiles[id],
+        file: { text: expected.text },
       });
       for (const [other, path] of Object.entries(primaryFiles)) {
         if (other === id) continue;
-        await expect(
-          api.request({ type: "read_project_file", project: id, path }),
-        ).rejects.toMatchObject({ code: "file_not_found" });
+        if (!previewRepositories.get(id)!.files[path])
+          await expect(
+            api.request({ type: "read_project_file", project: id, path }),
+          ).rejects.toMatchObject({ code: "file_not_found" });
         await expect(
           api.request({
             type: "list_project_changes",

@@ -169,8 +169,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 
 - [Website](product/website.md) — the localized homepage and its two product goals, privacy and error pages, keyboard
   navigation, motion, interactive workflow illustration, sample application preview, release download links,
-  platform roadmap (the Linux entry standing for the server form, and
-  the site copy that still has to say so), privacy disclosures, planned remote host support and how the server form
+  platform roadmap (the Linux entry standing for the planned server form, which the homepage and the platform
+  question now describe), privacy disclosures, planned remote host support and how the server form
   differs from it, search indexing, and the agent-readable Markdown copies.
 
 ## Reference

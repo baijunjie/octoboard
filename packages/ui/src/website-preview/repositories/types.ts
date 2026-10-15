@@ -1,6 +1,6 @@
 /** Display-only repositories: source text is read by the real viewer, never executed. */
 export interface RepositoryExample {
-  id: "admin" | "merchant" | "customer" | "server";
+  id: "admin" | "merchant" | "customer" | "server" | "mobile" | "tablet" | "pos" | "kitchen";
   branch: string;
   files: Record<string, string>;
   edited: Record<string, string>;

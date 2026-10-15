@@ -8,6 +8,7 @@ import { admin } from "./admin";
 import { merchant } from "./merchant";
 import { customer } from "./customer";
 import { server } from "./server";
+import { kitchen, mobile, pos, tablet } from "./clients";
 import type { RepositoryExample } from "./types";
 
 /** Full-context patches keep the display fixture and its expandable whole-file bodies identical.
@@ -139,8 +140,10 @@ function repository(
 
 export const previewRepositories: ReadonlyMap<string, PreviewRepository> =
   new Map(
-    [admin, merchant, customer, server].map((example, index) => {
-      const built = repository(example, index + 1);
-      return [built.project, built];
-    }),
+    [admin, merchant, customer, server, mobile, tablet, pos, kitchen].map(
+      (example, index) => {
+        const built = repository(example, index + 1);
+        return [built.project, built];
+      },
+    ),
   );

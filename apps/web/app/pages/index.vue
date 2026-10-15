@@ -119,7 +119,11 @@ useSeoMeta({
         <span class="equation-plus" aria-hidden="true">+</span>
         <article class="pain-pillar">
           <div class="quality-symbol" aria-hidden="true">
-            <span />
+            <svg viewBox="0 0 42 38" width="42" height="38">
+              <circle cx="21" cy="19.5" r="15.5" />
+              <circle cx="21" cy="16.5" r="15.5" />
+              <path d="M10.2 17.2 17.6 25.1 32 9.6" />
+            </svg>
           </div>
           <h3>{{ t("painQualityTitle") }}</h3>
           <p>{{ t("painQualityDescription") }}</p>
@@ -182,14 +186,14 @@ useSeoMeta({
             </div>
             <h3>{{ t(`feature${feature.key}Title`) }}</h3>
             <p>{{ t(`feature${feature.key}Description`) }}</p>
-            <ul v-if="feature.key === 'Three'" class="collaboration-scenarios">
-              <li v-for="scenario in collaborationScenarios" :key="scenario">
-                <h4>{{ t(`featureThree${scenario}Title`) }}</h4>
-                <p>{{ t(`featureThree${scenario}Description`) }}</p>
-              </li>
-            </ul>
           </article>
         </div>
+        <ul class="brand-strengths">
+          <li v-for="brand in collaborationScenarios" :key="brand">
+            <h3>{{ t(`featureThree${brand}Title`) }}</h3>
+            <p>{{ t(`featureThree${brand}Description`) }}</p>
+          </li>
+        </ul>
       </div>
     </section>
 
@@ -253,7 +257,7 @@ useSeoMeta({
           <SiteIcon :name="platform.icon" />
           <div>
             <h3>{{ platform.name }}</h3>
-            <p>{{ t("remoteBadge") }}</p>
+            <p>{{ t(platform.status) }}</p>
           </div>
         </li>
       </ul>
@@ -301,6 +305,7 @@ useSeoMeta({
             <p class="cta-brand-slogan">{{ t("brandSlogan") }}</p>
           </div>
         </div>
+        <p class="cta-brand-meaning">{{ t("brandSloganMeaning") }}</p>
         <p class="eyebrow">
           <span class="red-square" aria-hidden="true" />{{ t("ctaEyebrow") }}
         </p>

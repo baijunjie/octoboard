@@ -119,6 +119,7 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     ),
     `Canonical: ${canonical}`,
     text("brandSlogan"),
+    text("brandSloganMeaning"),
     text("heroDescription"),
     text("heroStatus"),
     text("heroNote"),
@@ -198,7 +199,7 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     [
       `- ${developedPlatform.name}: ${text("platformsMacStatus")}`,
       ...plannedPlatforms.map(
-        (platform) => `- ${platform.name}: ${text("remoteBadge")}`,
+        (platform) => `- ${platform.name}: ${text(platform.status)}`,
       ),
     ].join("\n"),
     heading(2, text("faqTitle")),

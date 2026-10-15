@@ -48,7 +48,8 @@ public website's static output; the normal application build retains its own ent
   project browsing requests to independent gallery fixture daemons while keeping application state and terminals shared.
 - [`packages/ui/src/website-preview/repositories/index.ts`](src/website-preview/repositories/index.ts) exports
   `previewRepositories`, assembling file and Git fixtures from the separate Admin, Merchant, Customer and Server
-  examples in [`packages/ui/src/website-preview/repositories/`](src/website-preview/repositories/).
+  examples, plus the Mobile, Tablet, Point of sale and Kitchen apps in
+  [`packages/ui/src/website-preview/repositories/clients.ts`](src/website-preview/repositories/clients.ts).
   [`packages/ui/src/website-preview/repositories/types.ts`](src/website-preview/repositories/types.ts) defines
   `RepositoryExample` and the `webFiles` helper for shared example scaffolding.
 - [`packages/ui/src/website-preview/storage.ts`](src/website-preview/storage.ts) exports `installPreviewStorage`,

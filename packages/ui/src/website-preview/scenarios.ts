@@ -23,6 +23,10 @@ function report(copy: typeof english): string {
     [copy.projectMerchant, copy.merchantResult],
     [copy.projectCustomer, copy.customerResult],
     [copy.projectServer, copy.serverResult],
+    [copy.projectMobile, copy.mobileResult],
+    [copy.projectTablet, copy.tabletResult],
+    [copy.projectPos, copy.posResult],
+    [copy.projectKitchen, copy.kitchenResult],
   ];
   return `<!doctype html><html><head><title>${copy.promotionReportTitle}</title><style>
     body{font:14px/1.6 system-ui,sans-serif;margin:0;padding:24px;color:#253044;background:#fff}
@@ -34,7 +38,7 @@ function report(copy: typeof english): string {
     .decision{padding:14px;background:#fff6e5;border-radius:8px;color:#715014}
   </style></head><body data-website-preview-report><small>${copy.reportSubtitle}</small><h1>${copy.promotionReportTitle}</h1>
   <span class="status">${copy.ready}</span><p>${copy.promotionReportIntro}</p>
-  <div class="stats"><div><strong>4</strong><span>${copy.projects}</span></div><div><strong>48</strong><span>${copy.checks}</span></div><div><strong>1</strong><span>${copy.decision}</span></div></div>
+  <div class="stats"><div><strong>${rows.length}</strong><span>${copy.projects}</span></div><div><strong>48</strong><span>${copy.checks}</span></div><div><strong>1</strong><span>${copy.decision}</span></div></div>
   ${rows.map(([title, content]) => `<article><strong>${title}</strong><p>${content}</p></article>`).join("")}
   <h2>${copy.decision}</h2><p class="decision">${copy.stackingDecision}</p><h2>${copy.next}</h2><p>${copy.promotionNext}</p>
   </body></html>`;
@@ -53,6 +57,10 @@ export function createPreviewScenario(
     ["merchant", copy.projectMerchant],
     ["customer", copy.projectCustomer],
     ["server", copy.projectServer],
+    ["mobile", copy.projectMobile],
+    ["tablet", copy.projectTablet],
+    ["pos", copy.projectPos],
+    ["kitchen", copy.projectKitchen],
   ].map(([id, name]) =>
     projectOf(`preview-${id}`, workspace.id, name, {
       path: `/demo/bistro/${id}`,
@@ -114,6 +122,38 @@ export function createPreviewScenario(
       projects[3].id,
       copy.orderChecks,
       "waiting_user",
+      { agent: "claude", bound_to: coordinator.id },
+    ),
+    sessionOf(
+      "preview-mobile-session",
+      workspace.id,
+      projects[4].id,
+      copy.mobileTask,
+      scene === "overview" ? "working" : "idle",
+      { agent: "claude", bound_to: coordinator.id },
+    ),
+    sessionOf(
+      "preview-tablet-session",
+      workspace.id,
+      projects[5].id,
+      copy.tabletTask,
+      scene === "overview" ? "working" : "idle",
+      { agent: "grok", bound_to: coordinator.id },
+    ),
+    sessionOf(
+      "preview-pos-session",
+      workspace.id,
+      projects[6].id,
+      copy.posTask,
+      "idle",
+      { agent: "codex", bound_to: coordinator.id },
+    ),
+    sessionOf(
+      "preview-kitchen-session",
+      workspace.id,
+      projects[7].id,
+      copy.kitchenTask,
+      scene === "overview" ? "working" : "idle",
       { agent: "claude", bound_to: coordinator.id },
     ),
   ];
