@@ -25,18 +25,31 @@ From top to bottom:
      projects and sessions" in `docs/product/sidebar.md`). Every console is included, not only the one the sidebar
      shows.
    - Each session reads as its title and where it is — the project it runs in, or the console whose console session it
-     is — the same way its system notification names it (see "The raised hand" in `docs/product/sessions.md`). A
-     session titled after its project reads as the title alone rather than naming it twice.
+     is — worded as its system notification names it (see "The raised hand" in `docs/product/sessions.md`), except
+     that its terminal title is read without the activity glyphs described below. A session titled after its project
+     reads as the title alone rather than naming it twice.
+   - **Activity glyphs.** A run of the following characters at the very start of a session's terminal title is left
+     out of the menu, together with the whitespace after it: braille patterns (U+2800–U+28FF, the usual terminal
+     spinners ⠋⠙⠹…), the half-filled circles ◐◓◑◒ (U+25D0–U+25D3) and U+25F0–U+25F7, the stars and asterisks
+     U+2722–U+2727 and U+2729–U+273D (among them ✳ ✶ ✻ ✽ ✦), and · • ● ○ ◉ ◎ ◆ ◇. The run is left out only when the
+     title goes on after whitespace or ends there: a title that starts with such a character followed directly by
+     text keeps it, and such characters further into the title are kept. What remains is shown as described under
+     "Displayed names" in `docs/product/session-titles.md`, so a terminal title that is nothing but such glyphs reads
+     as the created name alone. Only this menu leaves them out; the sidebar, notifications and every other place show
+     the terminal title as the agent sent it.
    - A group names at most **10** sessions. Beyond that, a last line that cannot be chosen says how many more there are
      ("N more…"); the heading's number still counts them all.
    - With no session running at all, this part is a single line that cannot be chosen: **No sessions running**.
 2. **Open Octoboard**, which brings the window back as a left click on the icon does.
 3. **Quit Octoboard**, after a separator, described below.
 
-The menu follows the sessions as they change, including while the window is closed into the background. It is worded
-in the UI's current language (see "What follows the language" in `docs/product/language.md`). Until the window's UI
-has loaded and received the daemon's state — and throughout on the screen shown when the daemon failed to start — the
-menu holds only Open Octoboard and Quit Octoboard, in English.
+The menu follows the sessions as they change, including while the window is closed into the background. It is never
+replaced while open, though: while any of Octoboard's menus is open — this one or the application menu — changes
+wait, and once no menu is open the icon's menu takes on the latest of them, so an open menu stays open and unchanged
+until it is dismissed or an item is chosen. It is worded in the UI's current language (see
+"What follows the language" in `docs/product/language.md`). Until the window's UI has loaded and received the
+daemon's state — and throughout on the screen shown when the daemon failed to start — the menu holds only Open
+Octoboard and Quit Octoboard, in English.
 
 ### Choosing a session
 

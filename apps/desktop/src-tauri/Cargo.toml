@@ -80,15 +80,17 @@ notify-rust = "=4.11.7"
 image = { version = "=0.25.8", default-features = false }
 # For the `applicationShouldTerminate:` override in `exit.rs` that catches the Dock icon's own Quit
 # (see the comment there), in `background.rs` for hiding and unhiding the app, the Dock badge, the
-# window's Cmd+H and the notification that the app became active, and in `permissions.rs` for the
-# System Settings deep link `NSWorkspace` opens. Pinned to the exact versions
-# already resolved transitively through `tauri-runtime-wry`, so promoting them to direct
-# dependencies does not shift anything else this crate depends on.
+# window's Cmd+H and the notification that the app became active, in `permissions.rs` for the System
+# Settings deep link `NSWorkspace` opens, and in `tray.rs` for the notifications that a menu began
+# and ended tracking. Pinned to the exact versions already resolved transitively through
+# `tauri-runtime-wry`, so promoting them to direct dependencies does not shift anything else this
+# crate depends on.
 objc2 = "=0.6.4"
-objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSApplication", "NSDockTile", "NSResponder", "NSWindow", "NSWorkspace"] }
-# For the system's preferred languages in `lib.rs`, the notification observer in `background.rs`,
-# the content rule list in `page_isolation.rs`, and in `permissions.rs` the Accessibility prompt's
-# options dictionary and the System Settings URL, pinned like `objc2-app-kit` above.
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSApplication", "NSDockTile", "NSMenu", "NSResponder", "NSWindow", "NSWorkspace"] }
+# For the system's preferred languages in `lib.rs`, the notification observers in `background.rs`
+# and `tray.rs` (and the main queue the latter applies a held menu on), the content rule list in
+# `page_isolation.rs`, and in `permissions.rs` the Accessibility prompt's options dictionary and the
+# System Settings URL, pinned like `objc2-app-kit` above.
 objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSDictionary", "NSLocale", "NSNotification", "NSOperation", "NSString", "NSURL", "NSValue"] }
 # For the content rule list `page_isolation.rs` puts on the window's webview, and the block its
 # compile reports back through; `WebviewWindowBuilder::with_webview_configuration` takes this

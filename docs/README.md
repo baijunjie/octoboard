@@ -319,7 +319,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   empty collection stands for "nothing has arrived yet" until `hosts` is set, so a predicate meaning "the daemon has
   none of these" is gated on that rather than on the collection, and why no gallery scenario can catch a missing gate;
   and why the reply to a request arrives after the change it made is already in the store, so code after
-  `await request(...)` has to be correct under either order.
+  `await request(...)` has to be correct under either order; and why a session's terminal title is never steady text
+  (agents animate glyphs at its start), so nothing disruptive is keyed off it as sent.
 - [Sending browse requests from the UI](memory/sending-browse-requests-from-the-ui.md) — why the window's browse
   requests are bounded by one count shared across the window rather than one per component (the daemon's per-connection
   bound, and a sent request that is never timed out or cancelled when its component unmounts), sizing a new kind of
@@ -337,6 +338,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   it and why a clean whole-file run is no evidence that it was, why a jsdom test cannot tell where keyboard focus ends
   after a session is selected, and why it cannot tell what a selection over the viewer's code copies either, since the
   tests mock the renderer away and the real one draws into a shadow root.
+- [Writing desktop shell code](memory/writing-desktop-shell-code.md) — rules for the Tauri shell in
+  `apps/desktop/src-tauri/`: why work meant to run after the current AppKit callback returns is queued on the main
+  `NSOperationQueue`, since `run_on_main_thread` runs it at once when called on the main thread.
 - [Writing daemon code](memory/writing-daemon-code.md) — conventions for the Rust daemon: live state the daemon derives
   held on `AppState` and published by its own event rather than as a field on a stored record, with the cleanups that
   follow from there being no deletion event for it; why a repeating refresh is timed by the client and has to be bounded

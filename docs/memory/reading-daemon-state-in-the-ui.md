@@ -46,3 +46,14 @@ So write what follows an `await request(...)` to be correct under either order: 
 once, and do not assume the sender, or the surface the change replaces, is still there to act on. When something has to
 happen exactly once after such a change, hold it as a debt — a ref set when the change is observed and cleared only once
 the work is actually done — so whichever side lands first, the other finishes the job.
+
+## A session's terminal title is not steady text: key nothing disruptive off it as sent
+
+Agent CLIs animate a glyph at the start of their terminal title while they work (Claude Code cycles ◐◓◑◒ and shows ✳
+when idle; Codex and other terminal tools use braille spinners), and each frame reaches the UI as a new
+`terminal_title` on the session. So a working session's title changes continually even when nothing the user cares
+about has changed. Anything that treats a title change as a real change — rebuilding a native menu or other surface
+that resets when replaced, firing a notification, deduplicating by the title text, sending it on over IPC — churns at
+the spinner's rate. Where a derived value must stay put while the session works, strip the leading glyphs first with
+`withoutSpinnerGlyphs` (`packages/ui/src/lifecycle/statusItemMenu.ts`) rather than writing another pattern, and keep
+showing the title as sent wherever the product docs say it is shown as the agent sent it.

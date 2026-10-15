@@ -74,6 +74,7 @@ pub fn run() {
         .manage(ExitState::default())
         .manage(BackgroundState::default())
         .manage(DaemonState::default())
+        .manage(tray::TrayState::default())
         .invoke_handler(tauri::generate_handler![
             frontend_exit_heartbeat,
             confirm_quit,
