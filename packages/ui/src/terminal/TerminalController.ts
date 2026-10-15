@@ -79,6 +79,12 @@ const FOCUS_REPORT = /^\x1b\[[IO]$/;
  * xterm that does. */
 const RESET_REPORTING_MODES = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?1015l";
 
+/** The most a single `write` hands xterm. xterm parses one write as one task, and a session's whole
+ * replay arrives as one frame, which would hold the main thread for tens of milliseconds; between
+ * writes it yields, and its decoders keep their state across them, so a character or an escape
+ * sequence cut by a slice is still read whole. */
+const WRITE_SLICE_BYTES = 64 * 1024;
+
 /** How long the terminal's size must hold still before `syncSize` reports it to the daemon. */
 const RESIZE_SETTLE_MS = 120;
 
@@ -384,12 +390,12 @@ export class TerminalController {
       if (generation !== this.generation) return;
       if (!(ev.data instanceof ArrayBuffer)) return;
       if (this.painted) {
-        this.term.write(new Uint8Array(ev.data));
+        this.write(new Uint8Array(ev.data));
         return;
       }
       // The write callback fires once xterm has parsed the data; the frame after it is when the
       // renderer has drawn it.
-      this.term.write(new Uint8Array(ev.data), () =>
+      this.write(new Uint8Array(ev.data), () =>
         requestAnimationFrame(() => {
           if (generation === this.generation) this.setPainted(true);
         }),
@@ -464,11 +470,22 @@ export class TerminalController {
     socket.addEventListener("message", (ev) => {
       if (this.savedLoad !== socket || !(ev.data instanceof ArrayBuffer)) return;
       this.savedWritesInFlight++;
-      this.term.write(new Uint8Array(ev.data));
+      this.write(new Uint8Array(ev.data));
       // The process that left these modes on is gone, so anything xterm would report under them
       // could only wake the session by accident (see `armWake`).
       this.term.write(RESET_REPORTING_MODES, () => this.savedWritesInFlight--);
     });
+  }
+
+  /** Writes `data` to xterm in slices of at most `WRITE_SLICE_BYTES`, in order; `onParsed` is the last
+   * slice's write callback, so it fires once all of `data` has been parsed. */
+  private write(data: Uint8Array, onParsed?: () => void): void {
+    let start = 0;
+    do {
+      const end = start + WRITE_SLICE_BYTES;
+      this.term.write(data.subarray(start, end), end >= data.length ? onParsed : undefined);
+      start = end;
+    } while (start < data.length);
   }
 
   /** Tells the daemon the terminal's current size once it has settled for `RESIZE_SETTLE_MS`, and

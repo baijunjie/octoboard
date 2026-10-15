@@ -73,7 +73,8 @@
   background-color: var(--terminal-background);
 }
 
-@plugin "@tailwindcss/typography";
+/* The typography plugin with selectors WebKit can file by tag; `../typography.mjs` has the reason. */
+@plugin "../typography.mjs";
 
 @theme {
   /* The one named breakpoint this app has: the width at which the left rail, the sidebar, the

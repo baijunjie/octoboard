@@ -380,7 +380,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   `try/finally`, `??=`, a memo reading more than its deps, an `eslint-disable` of the two hook rules) and how to list
   bailouts with the compiler's logger; and what keeps a prop every row takes stable across daemon events.
 - [Keeping the UI responsive in WebKit](memory/keeping-the-ui-responsive-in-webkit.md) — why a style change on
-  `<html>`, `<body>` or `#root`, or one flipping `#root`'s `:last-child`, costs tens of milliseconds per interaction in
-  the app's WebKit and why each HTML entry keeps a sibling after `#root`; why every modal overlay still pays one such
-  restyle (React Aria's `inert` on `#root`; `isNonModal` is not the fix); and how to measure UI latency (Playwright
-  WebKit over the production build, ratios not absolute numbers, a live daemon only with outgoing frames dropped).
+  `<html>`, `<body>` or `#root`, or one flipping `#root`'s `:last-child`, is expensive per interaction in the app's
+  WebKit and why each HTML entry keeps a sibling after `#root`; why each synchronous layout read multiplies the
+  restyle cost; why every modal overlay still pays one whole-document restyle (React Aria's `inert` on `#root`;
+  `isNonModal` is not the fix); keeping a tag, class or id on the rightmost compound of every CSS rule (the
+  typography plugin only through `typography.mjs`, and checking the built CSS for rules WebKit cannot file); and
+  measuring UI latency in the system WKWebView, since Playwright's WebKit and Chrome under-report restyle cost.

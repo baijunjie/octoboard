@@ -188,6 +188,25 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("a live session's replay", () => {
+  it("is written to xterm in slices, in order, and the screen counts as painted once the last is parsed", async () => {
+    const write = vi.spyOn(term, "write");
+    controller.attach("a", url("a"), false);
+    lastSocket().open();
+    const replay = "abcdefghij".repeat(15_000);
+    lastSocket().receive(replay);
+
+    const slices = write.mock.calls.slice(1);
+    expect(slices.map(([data]) => (data as Uint8Array).length)).toEqual([65_536, 65_536, 18_928]);
+    expect(slices.map(([, callback]) => callback !== undefined)).toEqual([false, false, true]);
+    expect(painted).toEqual([]);
+
+    await settle();
+    expect(term.screen).toBe(replay);
+    expect(painted).toEqual([true]);
+  });
+});
+
 describe("a dormant session's saved output", () => {
   it("is loaded once, read-only, and only typing wakes the session", async () => {
     controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });

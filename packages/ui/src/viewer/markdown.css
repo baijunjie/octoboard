@@ -1,3 +1,6 @@
+/* Each rule keeps a tag or class on its rightmost compound, with no `:where()` around it, which
+   would leave WebKit nothing to file the rule under. Weighing 0,2,x, they beat the plugin's rules,
+   which weigh 0,1,x at most. */
 @layer utilities {
   .markdown-prose.prose {
     color: inherit;
@@ -16,7 +19,8 @@
     --tw-prose-td-borders: color-mix(in srgb, currentColor 25%, transparent);
   }
 
-  .markdown-prose.prose :where(h5, h6):not(:where(.not-prose, .not-prose *)) {
+  .markdown-prose.prose h5,
+  .markdown-prose.prose h6 {
     margin-block-start: 2em;
     margin-block-end: 1em;
     font-size: 1em;
@@ -24,27 +28,31 @@
     line-height: 1.5;
   }
 
-  .markdown-prose.prose :where(code, blockquote p):not(:where(.not-prose, .not-prose *))::before,
-  .markdown-prose.prose :where(code, blockquote p):not(:where(.not-prose, .not-prose *))::after {
+  .markdown-prose.prose code::before,
+  .markdown-prose.prose code::after,
+  .markdown-prose.prose blockquote p::before,
+  .markdown-prose.prose blockquote p::after {
     content: none;
   }
 
   /* A loose item's paragraph may read the other way; its box stays with the list's markers. */
-  .markdown-prose.prose :where(.task-list-item:dir(ltr) > input, .task-list-item:dir(ltr) > p > input) {
+  .markdown-prose.prose .task-list-item:dir(ltr) > input,
+  .markdown-prose.prose .task-list-item:dir(ltr) > p > input {
     direction: ltr;
   }
 
-  .markdown-prose.prose :where(.task-list-item:dir(rtl) > input, .task-list-item:dir(rtl) > p > input) {
+  .markdown-prose.prose .task-list-item:dir(rtl) > input,
+  .markdown-prose.prose .task-list-item:dir(rtl) > p > input {
     direction: rtl;
   }
 
   /* Task boxes occupy the marker gutter, including in right-to-left and loose lists. */
-  .markdown-prose.prose :where(.task-list-item):not(:where(.not-prose, .not-prose *)) {
+  .markdown-prose.prose .task-list-item {
     position: relative;
     list-style-type: none;
   }
 
-  .markdown-prose.prose :where(.task-list-item input[type="checkbox"]):not(:where(.not-prose, .not-prose *)) {
+  .markdown-prose.prose .task-list-item input[type="checkbox"] {
     position: absolute;
     inset-inline-start: -1.25em;
     top: 0.4em;

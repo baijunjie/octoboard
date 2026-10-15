@@ -45,7 +45,7 @@
   "devDependencies": {
     "@babel/core": "^7.29.7",
     "@rolldown/plugin-babel": "^0.2.4",
-    "@tailwindcss/typography": "^0.5.20",
+    "@tailwindcss/typography": "0.5.20",
     "@tailwindcss/vite": "^4.3.3",
     "@types/jsdom": "^30.0.0",
     "@types/katex": "^0.16.8",
