@@ -122,7 +122,7 @@ it("removing the last live console-bound session hides the switch, restores focu
   expect(localStorage.getItem(PREFERENCE_KEYS.projectFocusIncludeConsoleSessions)).toBe("true");
 });
 
-it("a console session's focus mode shows only its projects and sessions, naming each session's account", () => {
+it("a console session's focus mode shows only its projects and sessions without inline account names", () => {
   const { container, text, handlers, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions} />
   ));
@@ -130,7 +130,8 @@ it("a console session's focus mode shows only its projects and sessions, naming 
   expect(labels.filter((l) => l.includes(" session,") && !l.startsWith(isolate("Hub"))).map((l) => l.split(" session,")[0]).sort()).toEqual(
     ["Add idempotency keys", "An old bound spike", "Fix the layout"].map(isolate).sort(),
   );
-  expect(text()).toContain("Claude Code (Work)");
+  expect(text()).toContain("Claude Code");
+  expect(text()).not.toContain("(Work)");
   expect(text()).toContain("Website");
   expect(text()).toContain("Search API");
 
@@ -333,4 +334,24 @@ it.each(["idle", "archived"] as const)("runs only the hovered text of an %s focu
   const labels = Array.from(row.querySelectorAll<HTMLElement>(".overflow-hidden.whitespace-nowrap"));
   expect(labels).toHaveLength(status === "idle" ? 2 : 1);
   expectIndependentMarquees(labels, [row, ...row.querySelectorAll("button, svg")]);
+});
+
+it("updates recorded usage on active cards and keeps archived previews compact without dates", () => {
+  let update!: () => void;
+  const zeroUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+  const active = sessionOf("live-usage", main.id, web.id, "Live usage", "working", { usage: zeroUsage });
+  const archived = sessionOf("old-usage", main.id, web.id, "Old usage", "archived", { ended_at: 1000, usage: zeroUsage });
+  function View({ handlers }: { handlers: SidebarHandlers }) {
+    const [session, setSession] = useState(active);
+    update = () => setSession({ ...active, usage: { input_tokens: 1000, output_tokens: 200, total_tokens: 1200 } });
+    return <ProjectFocusView handlers={handlers} console={main} project={web} sessions={[session, archived]} owners={owners} />;
+  }
+  const { container } = mount((handlers) => <View handlers={handlers} />);
+  const row = (title: string) => Array.from(container.querySelectorAll<HTMLElement>('div[role="button"]')).find((element) => element.getAttribute("aria-label")?.startsWith(isolate(title)))!;
+  expect(row(active.title).getAttribute("aria-describedby")).toBeNull();
+  expect(row(archived.title).querySelector("time")).toBeNull();
+  expect(row(archived.title).getAttribute("aria-describedby")).toBeNull();
+  act(update);
+  const description = document.getElementById(row(active.title).getAttribute("aria-describedby")!);
+  expect(description?.querySelector('[role="img"]')?.getAttribute("aria-label")).toContain(`Tokens: ${isolate("1,200")}`);
 });

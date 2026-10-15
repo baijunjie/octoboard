@@ -1495,6 +1495,7 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
             SessionStatus::Idle
         },
         terminal_title: None,
+        usage: None,
         has_conversation: false,
         // Resolved now and kept: a resume must find the transcript where the first launch put it,
         // whatever the console's reference says by then.
@@ -1785,9 +1786,9 @@ async fn relaunch_session(
             // Back to where it was, archived included: a reopen that failed to launch must not
             // quietly move a session out of its project's Archive group. The recorded end time is
             // written back rather than left alone, since the relaunch above cleared it and
-            // persisted that before launching; the archive is ordered and labelled by it (see
+            // persisted that before launching; the archive is ordered and dated by it (see
             // "The archive view" in `docs/product/sidebar.md`), so a session this attempt did not
-            // change would otherwise jump to the top reading "archived now".
+            // change would otherwise jump to the top with an incorrect archive date.
             session.status = previous_status;
             session.ended_at = previous_ended_at;
             state.save_session(&session)?;
@@ -3179,6 +3180,7 @@ mod tests {
                     title: id.to_string(),
                     status,
                     terminal_title: None,
+                    usage: None,
                     model: None,
                     effort: None,
                     has_conversation: false,
@@ -3304,6 +3306,7 @@ mod tests {
                 title: "Project".to_string(),
                 status: SessionStatus::Archived,
                 terminal_title: None,
+                usage: None,
                 model: None,
                 effort: None,
                 has_conversation: false,
@@ -3848,6 +3851,7 @@ mod tests {
             title: "Session".to_string(),
             status: SessionStatus::Idle,
             terminal_title: None,
+            usage: None,
             model: None,
             effort: None,
             has_conversation: false,

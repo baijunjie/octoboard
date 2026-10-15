@@ -967,7 +967,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Files",
-    description: "Successful code, Markdown, images, inert repository markup, unsupported binary formats, large-file fallbacks and loading views. Previous / Next stays within normal subjects. Compare long paths, source/document and wrap controls, and scroll fades using the width and language controls.",
+    description: "Successful code, Markdown, images, inert repository markup, unsupported binary formats, large-file fallbacks and loading views. Dedicated internationalization subjects cover Arabic document direction and mixed-script source. Previous / Next stays within normal subjects. Compare long paths, source/document and wrap controls, and scroll fades using the width and language controls.",
     viewer: { subjects: files },
   },
   {

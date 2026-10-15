@@ -77,7 +77,7 @@ export const connectionScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
-      (ui) => ui.press("Archived and done"),
+      (ui) => ui.press((name) => name === "Archived and done"),
     ],
   },
   {

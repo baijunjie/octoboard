@@ -438,6 +438,18 @@ impl Project {
     }
 }
 
+/// Cumulative usage reported by the agent's own session record. Cache counts are subsets of input.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionUsage {
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub total_tokens: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cached_input_tokens: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_write_input_tokens: Option<u64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: String,
@@ -452,6 +464,9 @@ pub struct Session {
     /// Last title emitted by the terminal, retained when its process ends.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal_title: Option<String>,
+    /// Last known native cumulative usage, retained after archiving. Absent until reported.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<SessionUsage>,
     pub status: SessionStatus,
     /// Whether this session has ever had a turn. Until it has, the agent has stored no
     /// conversation to resume: `claude --resume` on such an id fails outright with "No conversation

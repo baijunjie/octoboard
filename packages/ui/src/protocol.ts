@@ -143,6 +143,15 @@ export interface Project {
   tags: string[];
 }
 
+/** The agent's recorded cumulative usage. Cache counts are subsets of input_tokens. */
+export interface SessionUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cached_input_tokens?: number;
+  cache_write_input_tokens?: number;
+  total_tokens: number;
+}
+
 export interface Session {
   id: string;
   agent: Agent;
@@ -180,6 +189,7 @@ export interface Session {
   pinned: boolean;
   started_at: number;
   ended_at?: number | null;
+  usage?: SessionUsage | null;
 }
 
 /** One page a console session pushed to its report panel; it belongs to that console session, not to its

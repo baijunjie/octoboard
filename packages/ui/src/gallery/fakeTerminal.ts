@@ -71,7 +71,7 @@ const SAMPLE = [
   `     ${ESC}32m+ .summary { width: 100%; max-width: 480px; }${ESC}0m`,
   "",
   `${ESC}32m●${ESC}0m The summary no longer overflows on a narrow screen.`,
-  `${ESC}2m  A long line that runs past the terminal's width to show how it wraps: ${"lorem ipsum dolor sit amet ".repeat(5)}${ESC}0m`,
+  `${ESC}2m  A long line that runs past the terminal's width to show how it wraps: ${"sample output wraps here. ".repeat(5)}${ESC}0m`,
   "",
   `${ESC}35m✻ Pondering…${ESC}0m ${ESC}2m(12s · esc to interrupt)${ESC}0m`,
   "",

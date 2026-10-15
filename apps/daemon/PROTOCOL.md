@@ -313,10 +313,11 @@ Project { id, console_id, host_id, name, path, default_agent?, source, remote_ur
           grok_session_model?, grok_session_effort?,
           trust_consent, pinned, tags: string[] }
 Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
-          role: "console"|"project", origin: "console"|"user", title, terminal_title?,
+          role: "console"|"project", origin: "console"|"user", title, terminal_title?, usage?: SessionUsage,
           status: "working"|"waiting_user"|"idle"|"interrupted"|"archived",
           has_conversation, bound_to?, colour?: "olive"|"jade"|"teal"|"azure"|"violet"|"rose", ordinal?,
           account_id?, config_dir?, model?: string|null, effort?: string|null, pinned, started_at, ended_at? }
+SessionUsage { input_tokens, output_tokens, total_tokens, cached_input_tokens?, cache_write_input_tokens? }
 Page    { id, console_session_id, html, anchor_message_id?, created_at }
 Settings  { auto_sync_repositories, default_clone_dir, accounts: Account[] }
 GitStatus { project, repository, branch?, detached, upstream?, ahead, behind,
@@ -342,6 +343,24 @@ archiving, process exit, daemon restart and resume until the next valid title, a
 and snapshots. Unsupported OSC commands and titles inside other control strings have no effect; raw terminal
 output is passed through unchanged. Repeated equal titles cause no store write or event. An older process cannot
 replace the title once a successor has been registered for the same session.
+
+`Session.usage` is the last valid cumulative token usage read from the agent's native records, persisted independently
+of other session changes and retained when archived or restarted. Missing usage means unknown, not zero. Input includes
+cached and cache-write input; the optional cache counts are subsets, and reasoning is already included in output. Clients
+must not add these subsets again. Native totals are used for Codex and Grok; Claude totals sum input, cache input and output
+once per native message id, including internal agents stored under that parent session's own `subagents` directory.
+Codex reads `event_msg.payload.info.total_token_usage` on `token_count` records; Grok reads the persisted `usage.json`
+ledger's `session` totals (the same ledger exposed by `grok usage`). These are usage counts, not current context size or
+billing estimates. Inherited usage follows each agent's own resume/fork records. A change of native conversation id clears
+the old usage; switching accounts with the same conversation preserves it.
+
+One daemon collector checks live sources at a one-second interval, reading only newly completed JSONL lines and skipping
+unchanged ledgers. Updates appear when the agent writes its own usage, which may be after a model call or turn completes;
+streaming tokens are not estimated. Existing archived records are read once at daemon start if still available, and a live
+session gets a final scan after its process exits. Missing, malformed or unsupported data leaves the last valid total intact.
+Filesystem work runs on one blocking worker, source paths are indexed once per account in a pass, line parsing is capped at
+8 MiB per record, and changed totals commit in one transaction before `session_upserted` events. Source identity is checked
+again under the store lock so a stale scan cannot write a previous conversation's usage after a resume or account switch.
 
 `Session.origin` is `console` for a session started by a session's `start_session` tool (a console session, or a
 project session that is unbound or a lead session) and `user` for one the user opened.

@@ -1,15 +1,15 @@
 import { Badge, Button, Switch, Tooltip } from "@heroui/react";
 import { ArrowLeft, FolderOpen, FolderPlus, List, MessageSquarePlus, Plus } from "lucide-react";
-import React, { useLayoutEffect, useRef } from "react";
+import React, { useId, useLayoutEffect, useRef } from "react";
 
 import { AGENT_LABEL } from "../agents";
 import { ActionMenu } from "../components/ActionMenu";
 import { ActivityMarker } from "../components/ActivityMarker";
-import { AgentAccountText } from "../components/AgentAccountText";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { RowControls, RowIconGroup, RowIconLine, RowIconSlot } from "../components/RowControls";
+import { hasVisibleUsage, SessionUsageLabel } from "../components/SessionMetadata";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
 import { useFocusHandoff } from "../components/useFocusHandoff";
@@ -19,7 +19,7 @@ import { joinPhrases } from "../i18n/joinPhrases";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
-import { activityLabelKey, sessionAccountName, sessionAccountTooltip, sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, statusLabel } from "../sessionLabel";
+import { activityLabelKey, sessionAccountTooltip, sessionAriaLabel, sessionDisplayTitle, statusLabel } from "../sessionLabel";
 import { useDaemonStore } from "../store";
 import { useNow } from "../useNow";
 import { BindingBadge } from "./BindingBadge";
@@ -580,6 +580,7 @@ function SessionCard({
   selected: boolean;
   consoleOwner?: Session;
 }): React.ReactElement {
+  const metadataId = useId();
   const t = useT();
   const language = useCurrentLanguage();
   const now = useNow();
@@ -590,6 +591,7 @@ function SessionCard({
   return (
     <TreeRow
       ref={rowRef}
+      describedBy={hasVisibleUsage(session.usage) ? metadataId : undefined}
       ariaLabel={under && consoleOwner ? joinPhrases(language, [label, t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, consoleOwner)) })]) : label}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
@@ -615,11 +617,17 @@ function SessionCard({
         <FadeOverflow
           as="span"
           className="min-w-0 flex-1"
-          titleWhenClipped={sessionAgentLabel(t, session, accounts)}
+          titleWhenClipped={AGENT_LABEL[session.agent]}
         >
-          <AgentAccountText agent={AGENT_LABEL[session.agent]} account={sessionAccountName(t, session, accounts)} />
+          {AGENT_LABEL[session.agent]}
         </FadeOverflow>
-        <span className="shrink-0">{formatRelativeTime(language, session.started_at, now)}</span>
+        <div className="flex shrink-0 items-center gap-1">
+          {hasVisibleUsage(session.usage) && <>
+            <div id={metadataId}><SessionUsageLabel usage={session.usage} /></div>
+            <span aria-hidden="true">·</span>
+          </>}
+          <span>{formatRelativeTime(language, session.started_at, now)}</span>
+        </div>
       </RowIconLine>
     </TreeRow>
   );
@@ -635,25 +643,24 @@ function ArchivedRow({
   session: Session;
   selected: boolean;
 }): React.ReactElement {
+  const metadataId = useId();
   const t = useT();
   const language = useCurrentLanguage();
-  const now = useNow();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const rowRef = useRef<HTMLDivElement>(null);
   return (
     <TreeRow
       ref={rowRef}
+      describedBy={hasVisibleUsage(session.usage) ? metadataId : undefined}
       ariaLabel={sessionAriaLabel(t, language, session, accounts)}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
     >
       <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
-      <RowLabel title={sessionDisplayTitle(t, session)}>
+      <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0 flex-1">
         <span className="text-app-muted">{sessionDisplayTitle(t, session)}</span>
       </RowLabel>
-      <span className="shrink-0 text-xs text-app-muted">
-        {formatRelativeTime(language, session.ended_at ?? session.started_at, now)}
-      </span>
+      {hasVisibleUsage(session.usage) && <span id={metadataId}><SessionUsageLabel usage={session.usage} /></span>}
       <RowControls>
         <ActionMenu label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, session)) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
       </RowControls>

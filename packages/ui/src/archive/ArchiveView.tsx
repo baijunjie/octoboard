@@ -3,22 +3,20 @@ import { Archive, RotateCcw, Trash2, X } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
-import { AgentAccountText } from "../components/AgentAccountText";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { ArchivedSessionMetadata, hasVisibleUsage, SessionUsageLabel } from "../components/SessionMetadata";
 import { TitledControl } from "../components/TitledControl";
 import { FadedScroller } from "../components/scrollFade";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen";
 import { isolate } from "../i18n/isolate";
-import { Message, useCurrentLanguage, useT } from "../i18n/react";
+import { useT } from "../i18n/react";
 import type { Account, Console, Project, Session } from "../protocol";
-import { formatRelativeTime } from "../relativeTime";
-import { sessionAccountName, sessionAccountTooltip, sessionAgentLabel, sessionDisplayTitle } from "../sessionLabel";
+import { sessionAccountTooltip, sessionAgentLabel, sessionDisplayTitle } from "../sessionLabel";
 import { archivedSessionRows, boundArchivedSessions } from "../sidebar/order";
 import { NESTED_ROW_CLASS } from "../sidebar/rows";
-import { useNow } from "../useNow";
 
 /** How many rows the list adds each time its end scrolls into view. */
 const PAGE = 30;
@@ -43,6 +41,7 @@ export function ArchiveView({
   onOpenDialog,
   dialogOpen,
   onClose,
+  active = true,
 }: {
   console: Console;
   project?: Project;
@@ -60,16 +59,15 @@ export function ArchiveView({
   /** Whether a dialog is open, which a deletion's confirmation is. */
   dialogOpen: boolean;
   onClose: () => void;
+  active?: boolean;
 }): React.ReactElement {
   const t = useT();
-  const language = useCurrentLanguage();
-  const now = useNow();
   const archived = archivedSessionRows(boundTo ? boundArchivedSessions(sessions, boundTo.id) : sessions);
   const [shown, setShown] = useState(PAGE);
   const sentinelRef = useRef<HTMLLIElement>(null);
   const rootRef = useRef<HTMLElement>(null);
   // The view's own Escape below is a React handler, which an open tooltip's takes the key from.
-  useEscapeWhileTooltipOpen(() => rootRef.current, onClose);
+  useEscapeWhileTooltipOpen(() => active ? rootRef.current : null, onClose);
   const more = shown < archived.length;
 
   useEffect(() => {
@@ -86,19 +84,21 @@ export function ArchiveView({
   // moment later rather than at once: the menu item that opened it hands focus back to where the
   // menu took it from (`ActionMenu`) a task after it closes, which would otherwise win.
   useEffect(() => {
+    if (!active) return;
     const timer = setTimeout(() => rootRef.current?.focus(), 50);
     return () => clearTimeout(timer);
-  }, []);
+  }, [active]);
 
   // Deleting a row, or all of them, unmounts the button the dialog would hand focus back to, which
   // drops it to `<body>`. The delay lets the dialog close and restore focus to a control that
   // still exists (a cancelled one) first; only a focus still lost then is brought back here.
   useEffect(() => {
+    if (!active) return;
     const timer = setTimeout(() => {
       if (document.activeElement === document.body) rootRef.current?.focus();
     }, 100);
     return () => clearTimeout(timer);
-  }, [archived.length, dialogOpen]);
+  }, [archived.length, dialogOpen, active]);
 
   const heading = project
     ? t("archive.title.project", { name: isolate(project.name) })
@@ -116,7 +116,7 @@ export function ArchiveView({
       aria-label={heading}
       className="absolute inset-0 z-10 flex flex-col bg-panel outline-none"
       onKeyDown={(e) => {
-        if (e.key === "Escape" && !e.defaultPrevented) {
+        if (active && e.key === "Escape" && !e.defaultPrevented) {
           e.preventDefault();
           onClose();
         }
@@ -155,39 +155,32 @@ export function ArchiveView({
             {archived.slice(0, shown).map(({ session, under }) => (
               <li
                 key={session.id}
-                className={`group flex min-h-12 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-panel-hover${
+                className={`group flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2 transition-colors hover:bg-panel-hover${
                   under ? ` ${NESTED_ROW_CLASS}` : ""
                 }`}
               >
                 <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
-                <div className="min-w-0 flex-1">
+                <div className="min-w-24 flex-1">
                   <FadeOverflow dir="auto" className="text-sm" titleWhenClipped={sessionDisplayTitle(t, session)}>
                     {sessionDisplayTitle(t, session)}
                   </FadeOverflow>
-                  <FadeOverflow
-                    className="text-xs text-app-muted"
-                    titleWhenClipped={t("archive.meta", {
-                      agent: sessionAgentLabel(t, session, accounts),
-                      archived: formatRelativeTime(language, session.ended_at ?? session.started_at, now),
-                    })}
-                  >
-                    <Message
-                      id="archive.meta"
-                      params={{
-                        agent: <AgentAccountText agent={AGENT_LABEL[session.agent]} account={sessionAccountName(t, session, accounts)} />,
-                        archived: formatRelativeTime(language, session.ended_at ?? session.started_at, now),
-                      }}
-                    />
-                  </FadeOverflow>
+                  <div className="flex min-w-0 items-center gap-1 text-xs text-app-muted">
+                    <FadeOverflow className="min-w-0" titleWhenClipped={AGENT_LABEL[session.agent]}>
+                      <span aria-hidden="true">{AGENT_LABEL[session.agent]}</span>
+                    </FadeOverflow>
+                    {hasVisibleUsage(session.usage) && <><span aria-hidden="true">·</span><SessionUsageLabel usage={session.usage} /></>}
+                  </div>
                   {/* The inset alone says which lead session a row was archived under, and a row
                       here is plain text rather than a button with a name of its own, so the fact is
                       put into words for assistive technology where the rest of the row is read. */}
                   {under && <span className="sr-only">{t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, under)) })}</span>}
+                  <span className="sr-only">{sessionAgentLabel(t, session, accounts)}</span>
                 </div>
+                <ArchivedSessionMetadata session={session} />
                 {/* Shown while the row is hovered or holds focus, like the sidebar rows' controls;
                     hidden by opacity, so they stay reachable with Tab. */}
-                <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                  <Button size="sm" variant="ghost" onPress={() => onReopen(session)}>
+                <div className="sidebar-fills flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                  <Button size="sm" variant="tertiary" onPress={() => onReopen(session)}>
                     <RotateCcw aria-hidden="true" className="size-4" />
                     {t("sidebar.session.reopen")}
                   </Button>
@@ -195,7 +188,7 @@ export function ArchiveView({
                     <Button
                       isIconOnly
                       size="sm"
-                      variant="ghost"
+                      variant="danger-soft"
                       aria-label={t("archive.delete", { title: isolate(sessionDisplayTitle(t, session)) })}
                       onPress={() => onOpenDialog({ kind: "delete-session", session })}
                       className="text-app-danger"

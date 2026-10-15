@@ -12,11 +12,18 @@ const archived = Array.from({ length: 70 }, (_, i) =>
   sessionOf(`s-a${i}`, console_.id, project.id, i % 7 === 3 ? `Audit the retry path ${i}` : i % 11 === 5 ? `A very long archived session title that does not fit one row ${i}` : `Archived session ${i}`, "archived", {
     agent: AGENTS[i % 3],
     ...(i === 0 ? { terminal_title: "Explain the differences between the three galleries" } : i === 1 ? { terminal_title: "Review a very long archived agent task title and preserve its original session name" } : {}),
+    started_at: minutesAgo(120 + i * 400),
     ended_at: minutesAgo(20 + i * 400),
+    ...(i === 0 ? { usage: { input_tokens: 1_280_000, output_tokens: 48_321, cached_input_tokens: 1_100_000, total_tokens: 1_328_321 } } : i === 1 ? { usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } } : {}),
   }),
 );
 const consoleSessions = Array.from({ length: 8 }, (_, i) =>
-  sessionOf(`s-c${i}`, console_.id, undefined, i === 0 ? "Hub" : `Hub ${i + 1}`, "archived", { ended_at: minutesAgo(60 * (i + 1)) }),
+  sessionOf(`s-c${i}`, console_.id, undefined, i === 0 ? "Hub" : `Hub ${i + 1}`, "archived", {
+    ...(i === 0 ? { terminal_title: "Coordinate the search service release" } : i === 1 ? { terminal_title: "Review release readiness across projects" } : {}),
+    started_at: minutesAgo(60 * (i + 2)),
+    ended_at: minutesAgo(60 * (i + 1)),
+    ...(i === 0 ? { usage: { input_tokens: 180_000, output_tokens: 12_345, cached_input_tokens: 120_000, cache_write_input_tokens: 25_000, total_tokens: 192_345 } } : {}),
+  }),
 );
 
 const state = snapshotState({
@@ -42,9 +49,11 @@ export const boundArchived = Array.from({ length: 3 }, (_, i) =>
 export const otherConsoleSession = sessionOf("s-other-console", console_.id, undefined, "Hub 2", "idle", { colour: "jade" });
 export const otherOwnerArchived = sessionOf("s-other-bound", console_.id, project.id, "Archived session bound elsewhere", "archived", {
   bound_to: otherConsoleSession.id,
+  usage: { input_tokens: 2_450_000, output_tokens: 75_320, cached_input_tokens: 2_100_000, cache_write_input_tokens: 250_000, total_tokens: 2_525_320 },
   ended_at: minutesAgo(5),
 });
 export const unboundArchived = sessionOf("s-unbound-archived", console_.id, project.id, "Unbound archived session", "archived", {
+  usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
   ended_at: minutesAgo(5),
 });
 
@@ -90,16 +99,23 @@ const deleteState = snapshotState({
 
 // A second project keeps the bound archive separate from the seventy-entry project archive.
 const boundProject = projectOf("p-bound", console_.id, "Bound archive for release coordination across all production services");
+const preservedTaskTitles: Record<string, string> = {
+  [otherOwnerArchived.id]: "Review deployment retry handling across production environments and regional release pipelines before the next search service rollout",
+  [unboundArchived.id]: "Review regional search releases and retry policies, and verify archived task titles remain readable after account migration",
+  [boundArchived[0].id]: "Fix search result pagination",
+  [boundArchived[1].id]: "Audit retry handling",
+  [boundArchived[2].id]: "Verify search index migration",
+};
 const archiveState = {
   ...state,
   settings: { auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts: [
     { id: "a-long", agent: "claude" as const, name: "Release coordination across every production environment, regional deployment pipeline and supported customer account for the next scheduled release", config_dir: "/Users/dev/.claude-release" },
-    { id: "a-cjk", agent: "claude" as const, name: "生产环境发布协调和回归检查专用账号用于确认所有地区的部署流水线以及支持客户账号的长说明仍然可以单独悬停阅读", config_dir: "/Users/dev/.claude-cjk" },
+    { id: "a-release", agent: "claude" as const, name: "Production release coordination and regression review account for regional deployment pipelines and customer support, for the next scheduled regional release", config_dir: "/Users/dev/.claude-regression" },
   ] },
   projects: new Map([...state.projects!, [boundProject.id, boundProject]]),
   sessions: new Map([
     ...state.sessions!,
-    ...Array.from(deleteState.sessions!, ([id, session]) => [id, { ...session, project_id: session.project_id === undefined ? undefined : boundProject.id, account_id: session.id === otherOwnerArchived.id ? "a-long" : session.id === unboundArchived.id ? "a-cjk" : session.account_id, title: session.id === otherOwnerArchived.id ? "Archived session bound elsewhere with a long title for the archive menu, covering release coordination across all production environments and regional deployment pipelines" : session.id === unboundArchived.id ? "归档会话长名称用于确认标题和账号时间说明分别独立滚动并且在各个地区的部署流水线以及支持客户账号的归档记录中仍然能够完整阅读" : session.title }] as const),
+    ...Array.from(deleteState.sessions!, ([id, session]) => [id, { ...session, terminal_title: preservedTaskTitles[session.id] ?? session.terminal_title, project_id: session.project_id === undefined ? undefined : boundProject.id, account_id: session.id === otherOwnerArchived.id ? "a-long" : session.id === unboundArchived.id ? "a-release" : session.account_id, title: session.id === otherOwnerArchived.id ? "Archived session bound elsewhere with a long title for the archive menu, covering release coordination across all production environments and regional deployment pipelines" : session.id === unboundArchived.id ? "Coordinate the next regional deployment across all production pipelines and review customer support migration records before the scheduled release" : session.title }] as const),
   ]),
 };
 
@@ -110,7 +126,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive menu, parents only",
     state: archiveState,
-    description: "The menu lists archived parents, including directly console-bound sessions, and View all. Children of live and archived leads stay out of this preview. Long archived names fade at the menu edge and run as a marquee when their row is hovered.",
+    description: "The menu retains the last active task titles, including distinct tasks created under generic session names, and View all. Children of live and archived leads stay out of this preview. Long archived names fade at the menu edge and run as a marquee when their row is hovered.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
@@ -122,7 +138,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive with live and archived owners",
     state: archiveState,
-    description: "The full project archive includes children omitted from the preview. Children of the archived lead nest under it; the archived child of the active lead appears as a standalone row. Long Latin and CJK session titles and account/time metadata fade separately; hover either text to scroll only that line. Archive count and heading also respond only to their own text hover. Hovering agent icons, Reopen, Delete or header controls leaves the text still.",
+    description: "The full project archive retains the last active task titles beside the original session names and includes children omitted from the preview. Children of the archived lead nest under it; the archived child of the active lead appears as a standalone row. Only dates sit on the right, with archived time above created time to match the archive ordering; bare native usage follows the agent name with a dot separator, showing substantial usage while recorded zero totals and absent records are hidden. Hover a row to compare the separately filled Reopen and Delete buttons against its background. Long session titles fade and scroll only on text hover. Agent names omit parenthesized accounts; hover agent icons for account details. Archive count and heading also respond only to their own text hover. Hovering agent icons, Reopen, Delete or header controls leaves the text still. Close the archive, then open it again through the project menu to review both transitions.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
@@ -135,7 +151,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive, many entries",
     state: archiveState,
-    description: "Seventy entries are loaded thirty at a time. The newest entries retain English agent task titles beside their original names, including a long title; other entries keep only their session names.",
+    description: "Seventy entries are loaded thirty at a time. The newest entries retain English agent task titles beside their original names, including a long title; other entries keep only their session names. Dates on the right cover recent and older archives; the first two cards show substantial usage and hide recorded zero usage.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
@@ -147,7 +163,7 @@ export const archiveScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Archived console sessions",
-    description: "Console sessions (2) counts the live sidebar rows; the eight archived console sessions appear in the archive view.",
+    description: "Console sessions (2) counts the live sidebar rows; the eight archived console sessions appear in the archive view, retaining their last active task titles beside their original names.",
     state: archiveState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.consoleSessions.actions", { name: console_.name })),

@@ -53,6 +53,7 @@ export function NestedBranch({ last, ancestor = false }: { last: boolean; ancest
  * is hovered, holds focus, is selected, or has its menu open. */
 export function TreeRow({
   ariaLabel,
+  describedBy,
   onActivate,
   selected,
   expanded,
@@ -61,6 +62,7 @@ export function TreeRow({
   ref,
 }: {
   ariaLabel: string;
+  describedBy?: string;
   onActivate: () => void;
   selected?: boolean;
   expanded?: boolean;
@@ -76,6 +78,7 @@ export function TreeRow({
       role="button"
       tabIndex={0}
       aria-label={ariaLabel}
+      aria-describedby={describedBy}
       aria-current={selected ? "true" : undefined}
       aria-expanded={expanded}
       data-selected={selected || undefined}

@@ -764,6 +764,7 @@ mod tests {
             title: "Hub".to_string(),
             status: SessionStatus::Idle,
             terminal_title: None,
+            usage: None,
             model: None,
             effort: None,
             has_conversation: false,

@@ -304,15 +304,13 @@ carries that console session's **binding badge**: a small dot in the console ses
 session instead (see "Project rows" above), with the owner named in the row's own accessible name. A console session's
 own row carries no *binding* badge — what it shows there instead is its own colour (see "The binding badge" below).
 Selecting a row resumes it when it is interrupted; no menu item does that. The row shows its agent as an icon alone;
-wherever the agent is named in words, the account the session runs under follows it in parentheses — "Claude Code
-(Work)" — as the account's name, "Default" for the agent's default account, or, for a session whose account has since
-been removed, the directory it recorded (or the agent's name alone when it recorded none). The agent's icon has that
-account, named the same way, as its tooltip, or the agent's name when there is no account to name; the tooltip shows on
-pointer hover only, and the icon adds no tab stop. The agent's icon carries the same tooltip on a focus mode's session
-cards and archived rows (see `docs/product/focus-mode.md`), on the archive view's rows (see "The archive view" below)
-and on each session a confirmation lists among the ones it affects, where the agent and that account are also written
-out beside the icon: no row name says them there, so that text, and not the tooltip, is how they reach assistive
-technology. Its action menu offers:
+wherever the agent is named in visible session metadata, its name appears without an account suffix. The agent's
+icon identifies the account in its tooltip: the account's name, the agent's default account, or, for a removed
+account, the directory the session recorded. With no account to name, the tooltip names the agent instead. The
+tooltip shows on pointer hover only, and the icon adds no tab stop. It is also available on focus mode's session
+cards and archived rows (see `docs/product/focus-mode.md`), the archive view's rows (see "The archive view" below),
+and sessions listed in a confirmation. Session rows and focus mode cards retain the account in their accessible
+names; confirmations provide the agent and account as hidden accessible text beside the icon. Its action menu offers:
 
 - **Pin** / **Unpin**.
 - **Rename** — see "Renaming a session" in `docs/product/sessions.md`.
@@ -507,9 +505,16 @@ scope and nesting are described below.
   while there is at least one, and a **Close** button. Which project, console session or console it is for is shown in
   the top bar's breadcrumb (see "The top bar" in `docs/product/window-layout.md`).
 - The list is in the order the sessions were archived, most recent first. It shows 30 rows and adds 30 more each time
-  its end is scrolled into view. Each row shows the session's agent's icon, its title, and its agent's name with its
-  account and how long ago it was archived. Its **Reopen** and **Delete** buttons show while the row is hovered or holds
-  keyboard focus, and are still reached with Tab.
+  its end is scrolled into view. Each row shows the session's agent's icon, its title, and its agent's name,
+  followed by a dot separator and native token usage when its total is positive (see "Native session usage" in
+  `docs/product/session-usage.md`). At the trailing end, a metadata block shows only dates: the archive date first,
+  when known, then the creation date, each identified by its meaning. These are absolute dates with year, month, day,
+  hour and minute, formatted in the current language and the client's local time zone. An unknown archive date is
+  omitted; the creation date never stands in for it. Archive previews show no dates: submenu previews keep their compact title-only presentation, and focus
+  mode's preview rows are described in "What both views show" in `docs/product/focus-mode.md`. The date block aligns
+  to the end of the reading direction, on the right in a left-to-right language. Its **Reopen** and **Delete** buttons
+  show while the row is hovered or holds keyboard focus, and are still reached with Tab. Both buttons have filled
+  backgrounds distinct from the hovered row; Delete uses a soft danger fill.
 - A session whose owner is **a project session listed here too** — an archived session of an archived lead session, or
   of any archived project session that had started sessions — is **inset under that owner**, with rounded connectors
   as in "Project rows" above, and follows it instead of being ranked against the rows beside it; one whose owner is
@@ -529,6 +534,10 @@ scope and nesting are described below.
 **It closes** on its Close button, on `Escape` while keyboard focus is in it, when a session is selected (from it or
 from anywhere else, as in "Selecting a session" above), when this window opens a new session, and by itself when its
 project, its console session or its console no longer exists. Closing it hands keyboard focus to the terminal.
+
+The view slides up from below on opening and slides down on closing, each over 240 ms. Closing takes effect at
+once: selection and navigation do not wait for the animation, and the departing view no longer accepts input or
+keyboard focus. With reduced motion requested by the system, the view opens and closes without animation.
 
 It takes keyboard focus as it opens, so keystrokes stop reaching the terminal it covers, and it keeps focus after a
 deletion. It is a region of its own in the `F6` cycle (see "Moving focus between regions with F6" in

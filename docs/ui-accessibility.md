@@ -261,8 +261,8 @@ tooltip withholds nothing the text around it would otherwise give.
 
 A clipped name, heading or detail scrolls only while the pointer is over its own text region. Independent labels
 within a row, card or header have independent hover regions; pointing at neighbouring text, an indicator, padding
-or an action button must not start their marquees. A branch and its upstream counts, or an agent and its account,
-may scroll together when they form one text line.
+or an action button must not start their marquees. A branch and its upstream counts may scroll together when they
+form one text line.
 
 An entire menu item, selector, fixed-owner indicator, picked tag or diff's collapsed-line text control may trigger
 its single text label as one interaction target. Such a scope must contain only that label; a picked tag's remove
@@ -290,8 +290,9 @@ as carrying it instead, and each leaves the mark without one:
 
 One mark keeps its tooltip beside a text that names it: the agent icon, whose tooltip means the account the session
 runs under wherever it carries one. A meaning the window has settled does not come and go placement by placement, so
-it stays on a focus mode's card and an archive view's row, where the agent and the account are also written out beside
-the icon.
+it stays on a focus mode's card and an archive view's row. The text beside the icon names the agent alone; the
+account remains in the icon's tooltip and in the session row's accessible name, or in visually hidden text where
+there is no row name.
 
 One gap is left open on purpose: no mark on a menu's transient surface carries a tooltip — a clipped path label in a
 menu item does carry its own through the anchored shape, as in the Switch account submenu, but no indicator there

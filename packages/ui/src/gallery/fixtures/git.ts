@@ -53,11 +53,10 @@ const gitStatuses = [
 // A long project name beside a long branch name with both counts non-zero, at the
 // sidebar's minimum docked width (`layout/paneWidth.ts`'s `PANES.sidebar.min`): the worst case for
 // the badge-versus-name squeeze (see the doc comment at `GitBadge.tsx`'s `min-w-0`) and for the
-// branch-and-count line's shared fade and marquee. The CJK branch also keeps its beginning on
-// the left in an RTL interface; the short branch exposes a fade falling within the counts. The long
-// Latin branch has a tail only the marquee and the tooltip reach; the Japanese branch exercises
-// wide characters and tooltip wrapping. The Latin branch is pushing, keeping its upward activity
-// spinner distinct from the scrolling ahead-count arrow in the row and focus header.
+// branch-and-count line's shared fade and marquee. Branches keep their beginning on the left
+// in an RTL interface; the short branch exposes a fade falling within the counts. Long branches
+// have a tail only the marquee and the tooltip reach. The first long branch is pushing, keeping
+// its upward activity spinner distinct from the scrolling ahead-count arrow in the row and focus header.
 const squeezeProject = projectOf(
   "p-squeeze",
   console_.id,
@@ -70,21 +69,21 @@ const squeezeStatus = gitStatusOf(squeezeProject.id, {
   ahead: 12,
   behind: 345,
 });
-const cjkProject = projectOf("p-cjk", console_.id, "日本語のプロジェクト名も長くなってサイドバーに収まらない");
-const cjkStatus = gitStatusOf(cjkProject.id, {
-  branch: "機能/日本語ブランチの表示確認",
+const regionalProject = projectOf("p-regional", console_.id, "Regional deployment coordination with a project name too long for the sidebar");
+const regionalStatus = gitStatusOf(regionalProject.id, {
+  branch: "feature/regional-deployment-status-and-tooltip-wrapping-verification",
   ahead: 12,
   behind: 345,
 });
 const countsProject = projectOf("p-counts", console_.id, "Counts at the fade");
 const countsStatus = gitStatusOf(countsProject.id, { branch: "main", ahead: 12345, behind: 67890 });
-const squeezeProjects = [squeezeProject, cjkProject, countsProject];
+const squeezeProjects = [squeezeProject, regionalProject, countsProject];
 const squeezeSessions = [
   squeezeSession,
-  sessionOf("s-cjk", console_.id, cjkProject.id, "Working on it", "idle"),
+  sessionOf("s-regional", console_.id, regionalProject.id, "Working on it", "idle"),
   sessionOf("s-counts", console_.id, countsProject.id, "Working on it", "idle"),
 ];
-const squeezeStatuses = [squeezeStatus, cjkStatus, countsStatus];
+const squeezeStatuses = [squeezeStatus, regionalStatus, countsStatus];
 
 // Short branches and a wider sidebar keep both count arrows visible throughout a transfer.
 const pushPreview = projectOf("p-transfer-push", console_.id, "Pushing");
@@ -137,7 +136,7 @@ const switchGit: FixtureGit = {
     { name: "feature/a-long-local-branch-name-to-check-menu-width-and-overflow", commit: "def123456789" },
     { name: switchBranch, commit: RESTORE_GIT.worktrees[0].head! },
     { name: "main", commit: RESTORE_GIT.worktrees[0].head! },
-    { name: "機能/日本語ブランチ", commit: "fed123456789" },
+    { name: "feature/regional-deployment", commit: "fed123456789" },
   ],
 };
 const switchFixture = {
@@ -192,7 +191,7 @@ export const gitScenarios: Scenario[] = [
   {
     id: "git-switch-branch", group: "Projects", category: "normal",
     title: "Local branch menu",
-    description: "The third menu lists local branches and checks the current one. Long Latin and Japanese branch names remain readable. Selecting feature/search-ranking switches immediately.",
+    description: "The third menu lists local branches and checks the current one. Long branch names remain readable. Selecting feature/search-ranking switches immediately.",
     ...switchFixture,
     steps: openSwitch,
   },
@@ -253,7 +252,7 @@ export const gitScenarios: Scenario[] = [
     title: "Branch badges",
     state: badgesState,
     preferences: { sidebarWidth: 200 },
-    description: "Remote counts, spinning checks and transfers, detached and missing branches, and long Latin and CJK labels. The left activity glyph spins while only the matching count arrow scrolls during a transfer. Hover a clipped Latin or CJK project name or branch to scroll only that text; counts move with their branch. Hovering row controls leaves both labels still. Hover badges for their full details; drag the sidebar wider to inspect clipping.",
+    description: "Remote counts, spinning checks and transfers, detached and missing branches, and long labels. The left activity glyph spins while only the matching count arrow scrolls during a transfer. Hover a clipped project name or branch to scroll only that text; counts move with their branch. Hovering row controls leaves both labels still. Hover badges for their full details; drag the sidebar wider to inspect clipping.",
   },
   {
     id: "git-badge-focus",

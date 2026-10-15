@@ -176,8 +176,8 @@ A console session carries no project, so after its own account choice its chain 
 reference. A project leaves the account to the console for every agent it inherits for, which is how every project starts (see "The project's account, model and
 reasoning effort" in `docs/product/consoles-and-projects.md`). A session opened without changing the account picker
 therefore runs under the project's account for its agent, or the console's, or the agent's default account when
-neither pins anything. Where a session's agent is named in the sidebar, its account is named with it (see "Session rows" in
-`docs/product/sidebar.md`).
+neither pins anything. The session's account is identified by its agent icon's tooltip and its accessible session
+name, without an account suffix in visible session metadata (see "Session rows" in `docs/product/sidebar.md`).
 
 A session that makes no choice of its own — one a console session or a project session starts with its own
 `start_session` tool — takes the project's setting. The dialog that opens a session by hand always makes a choice,

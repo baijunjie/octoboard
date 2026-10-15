@@ -34,6 +34,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   target tooltip), and the creation offer while a console has nothing in it.
 - [Session titles](product/session-titles.md) — agent terminal titles alongside created session names: where they
   are displayed, what renaming edits, how titles are retained, and the accepted terminal sequences.
+- [Session usage](product/session-usage.md) — native per-session token totals in focus mode and the archive, cache
+  accounting across agents, live refresh and retained historical usage, and what missing records mean.
 - [Sidebar](product/sidebar.md) — one console at a time, picked on the rail's console switcher with each console's
   activity badge, previewing another console from the rail while the sidebar is hidden, the console header, the
   console sessions section and the project list, project and session rows and their menus, the sessions bound to a

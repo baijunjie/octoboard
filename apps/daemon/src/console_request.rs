@@ -712,6 +712,7 @@ mod tests {
             title: format!("Work {id}"),
             status: SessionStatus::Idle,
             terminal_title: None,
+            usage: None,
             model: None,
             effort: None,
             has_conversation: true,

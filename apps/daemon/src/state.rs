@@ -82,6 +82,7 @@ pub struct AppState {
     /// session's hooks said about its tool calls and working directory: the attribution of a
     /// branch to the session that made it rests on both (`crate::branch_origin`).
     pub branch_watch: crate::branch_origin::Watch,
+    pub usage_watch: crate::usage::Watch,
     /// Each agent's availability and what its default account currently resolves to, derived once
     /// per daemon start (`crate::availability`) and broadcast by its own event on change; never a
     /// field of `Store`'s settings row, which only the user's own updates write. Always holds all
@@ -179,6 +180,7 @@ impl AppState {
             git_checks: Mutex::new(HashMap::new()),
             git_check_completed: Mutex::new(HashMap::new()),
             branch_watch: Default::default(),
+            usage_watch: Default::default(),
             agent_availability: RwLock::new(
                 Agent::ALL
                     .into_iter()
@@ -1484,6 +1486,7 @@ mod tests {
             title: "Session".to_string(),
             status,
             terminal_title: None,
+            usage: None,
             model: None,
             effort: None,
             has_conversation: false,
@@ -1587,6 +1590,18 @@ mod tests {
         archived.status = SessionStatus::Archived;
         state.save_session(&archived).unwrap();
         events.try_recv().unwrap();
+        for cleanup in [b"\x1b]2;\x07".as_slice(), b"\x1b]2;octoboard\x07"] {
+            successor.on_output(cleanup);
+            assert!(
+                events.try_recv().is_err(),
+                "shutdown titles are not published"
+            );
+            assert_eq!(
+                state.session_record("s").unwrap().terminal_title.as_deref(),
+                Some("Next task"),
+                "archiving preserves the active title through process cleanup"
+            );
+        }
         assert!(state.delete_if_archived("s").unwrap());
         assert!(matches!(
             events.try_recv().unwrap(),

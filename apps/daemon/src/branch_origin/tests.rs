@@ -24,6 +24,7 @@ pub(super) fn session_record(id: &str, started_at: i64, ended_at: Option<i64>) -
         title: format!("Session {id}"),
         status: SessionStatus::Working,
         terminal_title: None,
+        usage: None,
         model: None,
         effort: None,
         has_conversation: true,

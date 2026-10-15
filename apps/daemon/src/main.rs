@@ -53,6 +53,7 @@ mod terminal_title;
 mod test_support;
 mod transcript;
 mod trust;
+mod usage;
 
 use std::sync::Arc;
 
@@ -232,6 +233,7 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
     // put that cost on every application launch, and clients are served before it lands either way
     // (see `apps/daemon/src/availability.rs`).
     availability::spawn_determine(state.clone());
+    usage::spawn(&state);
     // Likewise off the runtime: it runs `git` in every project's directory, a few at a time.
     git_remote::reconcile_remote_urls(&state);
 

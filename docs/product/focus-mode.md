@@ -25,8 +25,13 @@ fades" and "Scrolling a surface from the keyboard" in `docs/product/scrolling-su
 
 **Session cards**, in both: the status glyph with the status in words, the pin button when pinned (see "Pinning" in
 `docs/product/sidebar.md`), the session's action menu (always shown), its title on one line, its agent's icon
-and name with its account, and how long ago it was started at the trailing end of the agent line. The status and agent
-lines share aligned leading icons and text starts. A title with a console-session colour dot shares that alignment;
+and name, and how long ago it was created at the trailing end of the agent line. Resuming or
+reopening does not reset that time. When native token usage has a positive total, it appears immediately before
+the creation time on that same agent line and updates while the session runs (see "Native session usage" in
+`docs/product/session-usage.md`). A dot separates usage from creation time; without visible usage, the trailing
+block contains creation time alone. The agent name has no adjacent separator or visible account suffix. The status
+and agent lines share aligned leading icons and text starts. A title with a console-session colour dot shares that
+alignment;
 a title without one starts at the card’s leading content edge, with no empty icon space. Long titles follow "Names too long
 for their space" in `docs/product/labels-and-tooltips.md`. The agent's icon has a tooltip, as on a session row (see
 "Session rows" in `docs/product/sidebar.md`). Clicking a card selects the session. They are in the order of "Order of
@@ -43,8 +48,9 @@ console session above them (see "A project's focus mode" below and "The binding 
 
 **Archived (n)**, in both, only while the view has archived sessions — with none, the section is not shown at all:
 the parent-session preview described in "The archive view" in `docs/product/sidebar.md`, each row showing its
-agent's icon, its title and how long ago it was archived. The heading counts every archived session in the view's
-scope, including children omitted from the preview. Clicking a row selects it. Its action menu offers **Rename**
+agent's icon and its title on one compact line, with native token usage at the trailing end when its total is positive (see
+"Native session usage" in `docs/product/session-usage.md`). These preview rows show no creation or archive time.
+The heading counts every archived session in the view's scope, including children omitted from the preview. Clicking a row selects it. Its action menu offers **Rename**
 and **Delete** (which asks for confirmation; see "Deleting archived sessions" in `docs/product/sessions.md`).
 Whenever any archived session is omitted — a child or a parent beyond the first five — **View all** follows the
 preview as a row with the same alignment, hover feedback and keyboard focus treatment as the session rows; it

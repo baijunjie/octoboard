@@ -79,12 +79,10 @@ export function sessionAccountTooltip(t: Translate, session: Session, accounts: 
   return account === undefined ? AGENT_LABEL[session.agent] : isolate(account);
 }
 
-/** A session's agent followed by the account it runs under, as plain text: for an accessible name
- * or a tooltip, where `AgentAccountText` is not needed. */
+/** A session's accessible agent label also exposes the account named by its icon's tooltip. */
 export function sessionAgentLabel(t: Translate, session: Session, accounts: Account[]): string {
   const agent = AGENT_LABEL[session.agent];
   const account = sessionAccountName(t, session, accounts);
-  // Isolated as `AgentAccountText` does, since the account is a name the user typed or a path.
   return account === undefined ? agent : t("session.agentAccount", { agent, account: isolate(account) });
 }
 

@@ -442,7 +442,13 @@ export const en = {
   },
   "archive.deleteAll": "Delete all",
   "archive.delete": "Delete {title}",
-  "archive.meta": "{agent} · archived {archived}",
+  "session.meta.created": "Created {time}",
+  "session.meta.archived": "Archived {time}",
+  "session.usage.total": "Tokens: {tokens}",
+  "session.usage.input": "Input: {tokens}",
+  "session.usage.output": "Output: {tokens}",
+  "session.usage.cached": "Cached input: {tokens}",
+  "session.usage.cacheWrite": "Cache write: {tokens}",
   "archive.loadingMore": "Loading more…",
 
   // What the content area shows while there is no console: the only thing to do is make one.

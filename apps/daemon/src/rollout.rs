@@ -310,6 +310,7 @@ mod tests {
             title: "Session".to_string(),
             status,
             terminal_title: None,
+            usage: None,
             model: None,
             effort: None,
             has_conversation: true,

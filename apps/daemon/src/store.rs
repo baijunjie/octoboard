@@ -153,6 +153,7 @@ impl Store {
                 origin           TEXT NOT NULL,
                 title            TEXT NOT NULL,
                 terminal_title   TEXT,
+                usage            TEXT,
                 status           TEXT NOT NULL,
                 has_conversation INTEGER NOT NULL DEFAULT 0,
                 -- The console session this (project) session reports to, or NULL outside the
@@ -235,6 +236,9 @@ impl Store {
                 "ALTER TABLE sessions ADD COLUMN lead INTEGER NOT NULL DEFAULT 0",
                 [],
             )?;
+        }
+        if !column_exists(&conn, "sessions", "usage")? {
+            conn.execute("ALTER TABLE sessions ADD COLUMN usage TEXT", [])?;
         }
         if !column_exists(&conn, "sessions", "terminal_title")? {
             conn.execute("ALTER TABLE sessions ADD COLUMN terminal_title TEXT", [])?;
@@ -898,7 +902,8 @@ impl Store {
     pub fn update_session(&self, session: &Session) -> Result<bool> {
         let changed = self.lock().execute(
             "UPDATE sessions SET agent = ?2, agent_session_id = ?3, title = ?4, status = ?5,
-                                 has_conversation = ?6, started_at = ?7, ended_at = ?8
+                                 has_conversation = ?6, started_at = ?7, ended_at = ?8,
+                                 usage = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN usage ELSE NULL END
              WHERE id = ?1",
             params![
                 session.id,
@@ -914,8 +919,46 @@ impl Store {
         Ok(changed > 0)
     }
 
-    /// Writes only the terminal title, and skips unchanged or deleted rows. The read and write
-    /// share the store lock so a concurrent rename or status update is preserved.
+    /// Persists usage only if the source still belongs to this session's current agent identity.
+    /// Unrelated session writes never overwrite this column.
+    pub fn set_session_usages(
+        &self,
+        updates: &[(Session, crate::protocol::SessionUsage)],
+    ) -> Result<Vec<Session>> {
+        let mut conn = self.lock();
+        let tx = conn.transaction()?;
+        let mut changed = Vec::new();
+        for (source, usage) in updates {
+            let session = tx
+                .query_row(
+                    &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
+                    params![source.id],
+                    read_session,
+                )
+                .optional()?;
+            let Some(mut session) = session else { continue };
+            if session.agent != source.agent
+                || session.agent_session_id != source.agent_session_id
+                || session.config_dir != source.config_dir
+                || session.usage.as_ref() == Some(usage)
+            {
+                continue;
+            }
+            tx.execute(
+                "UPDATE sessions SET usage = ?2 WHERE id = ?1",
+                params![source.id, serde_json::to_string(usage)?],
+            )?;
+            session.usage = Some(usage.clone());
+            changed.push(session);
+        }
+        tx.commit()?;
+        Ok(changed)
+    }
+
+    /// Writes only the terminal title, and skips unchanged, dormant or deleted rows. Shutdown
+    /// cleanup may still emit OSC titles after archiving or interruption; keep the last active
+    /// title instead. The read and write share the store lock with status updates, so that
+    /// boundary and concurrent renames are preserved.
     pub fn set_terminal_title(&self, id: &str, title: Option<&str>) -> Result<Option<Session>> {
         let conn = self.lock();
         let session = conn
@@ -928,7 +971,7 @@ impl Store {
         let Some(mut session) = session else {
             return Ok(None);
         };
-        if session.terminal_title.as_deref() == title {
+        if session.status.is_dormant() || session.terminal_title.as_deref() == title {
             return Ok(None);
         }
         conn.execute(
@@ -1332,7 +1375,7 @@ const PROJECT_SETTING_COLUMNS: [&str; 9] = [
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
                                role, origin, title, status, has_conversation, bound_to, colour,
                                ordinal, account_id, config_dir, pinned, started_at, ended_at,
-                               lead, terminal_title, model, effort, model_override, effort_override";
+                               lead, terminal_title, model, effort, model_override, effort_override, usage";
 
 const CONSOLE_COLUMNS: &str = "id, name, workdir, console_session_agent, default_agent,
                                claude_account_id, codex_account_id, grok_account_id,
@@ -1360,9 +1403,9 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
         "INSERT INTO sessions
             (id, agent, agent_session_id, console_id, project_id, host_id, role, origin, title,
              status, has_conversation, bound_to, colour, ordinal, account_id, config_dir, pinned,
-             started_at, ended_at, lead, terminal_title, model, effort, model_override, effort_override)
+             started_at, ended_at, lead, terminal_title, model, effort, model_override, effort_override, usage)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
+                 ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)",
         params![
             session.id,
             enum_to_text(&session.agent),
@@ -1389,6 +1432,7 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             session.effort.as_ref().and_then(|value| value.as_deref()),
             session.model.is_some(),
             session.effort.is_some(),
+            session.usage.as_ref().map(serde_json::to_string).transpose()?,
         ],
     )?;
     Ok(())
@@ -1519,6 +1563,9 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         ended_at: row.get(18)?,
         lead: row.get(19)?,
         terminal_title: row.get(20)?,
+        usage: row
+            .get::<_, Option<String>>(25)?
+            .and_then(|text| serde_json::from_str(&text).ok()),
         model: row.get::<_, bool>(23)?.then(|| row.get(21)).transpose()?,
         effort: row.get::<_, bool>(24)?.then(|| row.get(22)).transpose()?,
     })
@@ -1626,6 +1673,7 @@ mod tests {
             title: "Hub".to_string(),
             status: SessionStatus::Idle,
             terminal_title: None,
+            usage: None,
             model: None,
             effort: None,
             has_conversation: false,
@@ -2821,6 +2869,77 @@ mod tests {
     }
 
     #[test]
+    fn usage_migrates_survives_unrelated_writes_and_rejects_stale_sources() {
+        let path = temp_db("usage");
+        let store = Store::open(&path).unwrap();
+        store.insert_console(&console(None, None, None)).unwrap();
+        let mut source = session(Some("/account-a"));
+        source.agent_session_id = Some("native-1".to_owned());
+        store.insert_session(&source).unwrap();
+        drop(store);
+        Connection::open(&path)
+            .unwrap()
+            .execute("ALTER TABLE sessions DROP COLUMN usage", [])
+            .unwrap();
+        let store = Store::open(&path).unwrap();
+        let usage = crate::protocol::SessionUsage {
+            input_tokens: 100,
+            output_tokens: 20,
+            total_tokens: 120,
+            cached_input_tokens: Some(80),
+            cache_write_input_tokens: None,
+        };
+        assert_eq!(
+            store
+                .set_session_usages(&[(source.clone(), usage.clone())])
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(store
+            .set_session_usages(&[(source.clone(), usage.clone())])
+            .unwrap()
+            .is_empty());
+        source.title = "Renamed".to_owned();
+        source.status = SessionStatus::Archived;
+        store.update_session(&source).unwrap();
+        assert_eq!(
+            store.get_session(&source.id).unwrap().unwrap().usage,
+            Some(usage.clone())
+        );
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert_eq!(
+            store.get_session(&source.id).unwrap().unwrap().usage,
+            Some(usage.clone())
+        );
+        store
+            .set_session_account(&source.id, None, Some("/account-b"))
+            .unwrap();
+        let changed = crate::protocol::SessionUsage {
+            total_tokens: 999,
+            ..usage.clone()
+        };
+        assert!(store
+            .set_session_usages(&[(source.clone(), changed)])
+            .unwrap()
+            .is_empty());
+        let mut current = store.get_session(&source.id).unwrap().unwrap();
+        current.agent_session_id = Some("native-2".to_owned());
+        store.update_session(&current).unwrap();
+        assert!(store
+            .get_session(&source.id)
+            .unwrap()
+            .unwrap()
+            .usage
+            .is_none());
+        assert!(store
+            .set_session_usages(&[(source, usage)])
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
     fn terminal_titles_migrate_and_survive_unrelated_writes_and_reopening() {
         let path = temp_db("terminal-title");
         let store = Store::open(&path).unwrap();
@@ -2851,6 +2970,39 @@ mod tests {
         assert_eq!(stored.terminal_title.as_deref(), Some("Task title"));
         assert_eq!(stored.title, "Renamed");
         assert_eq!(stored.status, SessionStatus::Archived);
+        for status in [SessionStatus::Archived, SessionStatus::Interrupted] {
+            let mut dormant = store.get_session("session-1").unwrap().unwrap();
+            dormant.status = status;
+            store.update_session(&dormant).unwrap();
+            for title in [None, Some("Shutdown title")] {
+                assert!(store
+                    .set_terminal_title("session-1", title)
+                    .unwrap()
+                    .is_none());
+                assert_eq!(
+                    store
+                        .get_session("session-1")
+                        .unwrap()
+                        .unwrap()
+                        .terminal_title
+                        .as_deref(),
+                    Some("Task title"),
+                    "cleanup cannot replace a dormant session's title"
+                );
+            }
+        }
+        let mut resumed = store.get_session("session-1").unwrap().unwrap();
+        resumed.status = SessionStatus::Idle;
+        store.update_session(&resumed).unwrap();
+        assert_eq!(
+            store
+                .set_terminal_title("session-1", Some("Resumed task"))
+                .unwrap()
+                .unwrap()
+                .terminal_title
+                .as_deref(),
+            Some("Resumed task")
+        );
         assert!(store
             .set_terminal_title("session-1", None)
             .unwrap()

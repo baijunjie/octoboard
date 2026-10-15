@@ -349,6 +349,7 @@ mod tests {
             title: "Session".to_string(),
             status: SessionStatus::WaitingUser,
             terminal_title: None,
+            usage: None,
             model: None,
             effort: None,
             has_conversation: true,

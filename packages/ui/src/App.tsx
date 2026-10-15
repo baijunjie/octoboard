@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { errorPresentation } from "./errorPresentation";
 import { flushSync } from "react-dom";
 
-import { ArchiveView } from "./archive/ArchiveView";
+import { ArchiveLayer } from "./archive/ArchiveLayer";
 import { forgetProjectsOtherThan, noteSessionSwitch, setProjectBrowserMode } from "./browser/browserState";
 import { LazyProjectBrowser } from "./browser/LazyProjectBrowser";
 import { ConnectionBanner } from "./components/ConnectionBanner";
@@ -649,26 +649,24 @@ export function App(): React.ReactElement {
                     being usable at all, so `overflow-x-auto` on `main` scrolls rather than squeezing it
                     further. */}
                 <div className="relative flex min-h-0 min-w-[398px] flex-[1_1_398px] docked:min-w-[520px] docked:flex-[1_1_520px]">
-                  {archiveOpen && archiveConsole && (
-                    <ArchiveView
-                      key={`${archiveScope?.console}:${archiveProjectId ?? ""}:${archiveConsoleSessionId ?? ""}`}
-                      console={archiveConsole}
-                      project={archiveProject}
-                      boundTo={archiveBoundTo}
-                      sessions={
-                        archiveProject
-                          ? sessionList.filter((s) => s.project_id === archiveProject.id)
-                          : archiveBoundTo
-                            ? sessionList.filter((s) => s.console_id === archiveConsole.id)
-                            : sessionList.filter((s) => s.console_id === archiveConsole.id && s.role === "console")
-                      }
-                      accounts={accounts}
-                      onReopen={reopenSession}
-                      onOpenDialog={openDialog}
-                      dialogOpen={dialogRequest !== undefined}
-                      onClose={closeArchive}
-                    />
-                  )}
+                  <ArchiveLayer
+                    focusTerminal={focusTerminal}
+                    view={archiveOpen && archiveConsole ? {
+                      console: archiveConsole,
+                      project: archiveProject,
+                      boundTo: archiveBoundTo,
+                      sessions: archiveProject
+                        ? sessionList.filter((s) => s.project_id === archiveProject.id)
+                        : archiveBoundTo
+                          ? sessionList.filter((s) => s.console_id === archiveConsole.id)
+                          : sessionList.filter((s) => s.console_id === archiveConsole.id && s.role === "console"),
+                      accounts,
+                      onReopen: reopenSession,
+                      onOpenDialog: openDialog,
+                      dialogOpen: dialogRequest !== undefined,
+                      onClose: closeArchive,
+                    } : undefined}
+                  />
                   <TerminalPane
                     ref={terminalRef}
                     session={selectedSession}

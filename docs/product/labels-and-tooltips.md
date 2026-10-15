@@ -152,7 +152,7 @@ worktree selector, a branch's name in its branch selectors, a picked tag's label
 (see "Picked tags" in `docs/product/consoles-and-projects.md`) — fades out where it is cut off rather than ending in
 an ellipsis. The same holds for action-menu items and submenu names, a select's current choice or placeholder and
 its listed options, directory-picker rows, the console name above a focus view's title, the archive view's heading
-and count, and each archived session's agent, account and relative-time line. A fixed session-owner label and a
+and count, and the agent name on a focus mode card or full archive row. A fixed session-owner label and a
 diff's collapsed-line label follow the same fade and marquee rules.
 
 Except for the report timestamp, clipped text then has its full text as its tooltip, shown while the pointer is on
@@ -172,10 +172,10 @@ state, shown whether or not the line is cut (see "The branch badge" in `docs/pro
 
 - The pointer has to be over the label itself. In sidebar rows, focus headers and session cards, and archive headers
   and rows, each text label runs independently: a project's name and branch-and-count line, a console name and focus
-  title, a session title and agent/account line, or an archive heading and count do not start one another's marquee.
+  title, a session title and agent name, or an archive heading and count do not start one another's marquee.
   Pointing at a status or agent icon, a branch glyph, a row or header button, or the surrounding space starts none of
-  those labels. The branch and its counts remain one line and run together; an archive view row's agent, account and
-  relative time also run together as one metadata line.
+  those labels. The branch and its counts remain one line and run together; session usage and time fields remain
+  separate from the agent name's marquee.
 - An action-menu item or submenu item, a select's option or directory-picker row runs its one label while the pointer
   is anywhere over that item or row. A select's current choice or placeholder runs while the pointer is over its
   trigger, and a picked tag while it is over the tag. A fixed session-owner label and a diff's collapsed-line label
