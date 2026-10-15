@@ -334,6 +334,19 @@ describe("a dormant session's saved output", () => {
     expect(altClick()).toBe(false);
   });
 
+  it("asks again on the next input when an accepted wake left the session dormant", async () => {
+    controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
+    controller.armWake("a");
+    wakeStarts = true;
+    term.userTypes("x");
+    term.userTypes("y");
+    expect(wakes).toEqual(["a"]);
+
+    await settle();
+    term.userTypes("z");
+    expect(wakes).toEqual(["a", "a"]);
+  });
+
   it("does not pass on xterm's answer to a query that follows the user's typing", async () => {
     controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
     controller.armWake("a");

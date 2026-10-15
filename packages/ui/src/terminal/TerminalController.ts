@@ -90,9 +90,9 @@ export interface TerminalControllerHandlers {
    * first output after it has been written and drawn. Saved output (see `detach`) does not count:
    * it is not what a session being started is waiting for. */
   onPaintedChange?: (painted: boolean) => void;
-  /** The first input typed while armed for a session with no process (see `armWake`); resolves to
-   * whether the session was started. When it was not, the held input is dropped and the next
-   * input asks again. */
+  /** Input typed while armed for a session with no process (see `armWake`), at most one call in
+   * flight per session; resolves to whether the session was started. When it was not, the held
+   * input is dropped and the next input asks again. */
   onWake?: (sessionId: string) => Promise<boolean>;
   /** Opens a web address the user Cmd/Ctrl+clicked in the output, in their own browser; absent
    * where the platform has no way to, which leaves the links inert. */
@@ -156,6 +156,8 @@ export class TerminalController {
   private pendingInput: Uint8Array[] = [];
   /** The session whose process typing should start (an archived one on screen), if any. */
   private wakeFor: string | undefined;
+  /** The session an `onWake` is in flight for, so input typed meanwhile does not ask again. */
+  private waking: string | undefined;
   /** The pending trailing send of `syncSize`, and the size the daemon was last told. */
   private resizeTimer?: ReturnType<typeof setTimeout>;
   private sentSize?: { cols: number; rows: number };
@@ -533,8 +535,11 @@ export class TerminalController {
   }
 
   /** Makes the next input start `sessionId`'s process: it is held (`pendingInput`) and handed to
-   * the session once `attach` connects to it, and `onWake` is told once. Re-arming the same session
-   * keeps what is already held.
+   * the session once `attach` connects to it, and `onWake` is told whenever none is already in
+   * flight for it. A wake reported as started can still leave the session dormant: an "already
+   * running" refusal counts as started, and the daemon gives one to a wake that races the archive
+   * of a process still exiting; the next input then asks again rather than piling up behind it.
+   * Re-arming the same session keeps what is already held.
    *
    * The screen is kept, along with the modes the dead process left on it (mouse tracking, focus
    * reports), under which xterm would answer a click or a focus change with a report that is not
@@ -553,11 +558,12 @@ export class TerminalController {
   private sendInput(data: Uint8Array, fromUser = true): void {
     if (this.savedWritesInFlight > 0 && !fromUser) return;
     if (!this.socket && this.wakeFor !== undefined) {
-      const first = this.pendingInput.length === 0;
       this.pendingInput.push(data);
-      if (first) {
-        const sessionId = this.wakeFor;
-        void this.handlers.onWake?.(sessionId).then((started) => {
+      const sessionId = this.wakeFor;
+      if (this.handlers.onWake && this.waking !== sessionId) {
+        this.waking = sessionId;
+        void this.handlers.onWake(sessionId).then((started) => {
+          if (this.waking === sessionId) this.waking = undefined;
           // Still waiting on this very session: forget what was typed, so the next input tries again
           // instead of replaying stale keystrokes into whenever the session does start.
           if (!started && this.wakeFor === sessionId && !this.socket) this.pendingInput = [];
