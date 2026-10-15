@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useLayoutEffect, useRef } from "react";
 
 import { AsidePeekHotZone, drawerClass, PANE_ID, usePanePeekPointer } from "./paneOverlay";
+import { columnSpan, usePaneDockMotion, type DockPhase } from "./paneDockMotion";
 import type { PanePeek } from "./usePaneToggles";
 
 /** Where and how the aside is on screen right now; `App.tsx` builds it from `usePaneToggles` and
@@ -16,6 +17,8 @@ export interface AsideLayout {
    * overlay that floats in over the terminal, as a card with its shadow and rounded corners.
    * `undefined` while the docked aside is shown. */
   peek?: PanePeek;
+  /** Reports the column ease so its width clamp and resize handle follow the visible column. */
+  onColumnPhase?: (phase: DockPhase) => void;
 }
 
 /**
@@ -26,11 +29,13 @@ export interface AsideLayout {
  *
  * `drawerClass` fits the drawer between `--top-chrome-height` and `--bottom-chrome-height`, leaving
  * the window chrome (the top bar, with the aside's toggle, and the rail) and the connection banner
- * visible while it is open, and puts it back as a plain row sibling at or above the breakpoint — see
- * that function's own comment for the geometry. The drawer below the breakpoint is a fixed 420px,
- * capped at 92vw. The docked pane is `flex: 0 1` at `--aside-width`, the chosen width already held
- * back to what the row affords; the shrink and the 300px floor are only a safety net. With the
- * docked pane hidden, `drawerClass` instead keeps it the overlay at every width, floating in while
+ * visible while it is open, inset as a card, and puts it back as a plain row sibling at or above
+ * the breakpoint — see that function's own comment for the geometry. The drawer below the
+ * breakpoint is a fixed 420px, capped at 92vw and the space past the rail, with an 8px gap at
+ * either edge. The open docked pane shrinks to the row's available room, with a 300px floor.
+ * During its own toggle the pane keeps its rendered width inside a clip that eases to zero,
+ * so its content never reflows during the close. With the docked pane hidden,
+ * `drawerClass` keeps it an overlay, fading in while
  * `peek` is active at `--aside-width` (still capped at 92vw), as a rounded, bordered card like the
  * floating sidebar; `overflow-hidden` clips what it holds to the rounded edge. In every form the
  * pane is painted `--panel-sidebar`, the sidebar's colour, so a drawer or a floating pane keeps
@@ -55,26 +60,57 @@ export function AsidePane({
   className?: string;
   children?: React.ReactNode;
 }): React.ReactElement {
-  const { open, width, peek } = layout;
+  const { open, width, peek, onColumnPhase } = layout;
+  const dock = usePaneDockMotion(peek === undefined, peek?.active ?? false, onColumnPhase);
   usePanePeekPointer("aside", peek);
-  const overlay = peek
-    ? `docked:w-(--aside-width) docked:rounded-xl docked:border docked:overflow-hidden ${drawerClass("end", "floating", open, peek.active)}`
-    : `docked:w-auto docked:max-w-none docked:min-w-[300px] docked:flex-[0_1_var(--aside-width)] ${drawerClass("end", "drawer", open)}`;
+  const clipRef = useRef<HTMLDivElement>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (dock.phase !== "open") return;
+    const clip = clipRef.current;
+    const pane = paneRef.current;
+    if (!clip || !pane || typeof ResizeObserver === "undefined") return;
+    // A sibling's ease can temporarily constrain this column below its chosen width. Preserve
+    // that rendered width if this pane starts closing before the sibling has settled.
+    const measure = () => {
+      const renderedWidth = `${clip.getBoundingClientRect().width}px`;
+      // Flex basis keeps negotiating space while the width property tracks the actual size;
+      // a closing width transition must start from this size rather than the chosen basis.
+      clip.style.setProperty("--aside-rendered-width", renderedWidth);
+      pane.style.setProperty("--aside-close-width", renderedWidth);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(clip);
+    return () => observer.disconnect();
+  }, [dock.phase]);
+  const overlay = dock.inset
+    ? `docked:w-(--aside-width) docked:rounded-xl docked:border docked:overflow-hidden ${drawerClass("end", "floating", open, dock.insetShown)}${dock.preparingInset ? " docked:transition-none" : ""}`
+    : `${dock.phase === "open" ? "docked:w-full" : dock.phase === "closing" ? "docked:w-[var(--aside-close-width,var(--aside-width))]" : "docked:w-(--aside-width)"} docked:max-w-none docked:shrink-0 docked:h-full ${drawerClass("end", "drawer", open)}${dock.phase === "closed" ? " docked:invisible" : ""}`;
   return (
     <>
       <div
-        id={PANE_ID.aside}
-        data-pane="aside"
-        data-region="aside"
-        data-escape-scope
-        role={label ? "region" : undefined}
-        aria-label={label}
-        style={{ "--aside-width": `${width}px` } as React.CSSProperties}
-        onPointerEnter={peek?.keep}
-        onPointerLeave={peek?.leave}
-        className={`flex min-h-0 flex-col border-s border-separator bg-panel-sidebar w-[420px] max-w-[92vw] ${overlay} ${className}`}
+        ref={clipRef}
+        className={dock.inset ? "contents" : `contents docked:flex docked:justify-end docked:h-full docked:min-h-0 docked:overflow-hidden ${dock.phase === "open" ? "docked:w-[var(--aside-rendered-width,var(--aside-span))] docked:min-w-[300px] docked:flex-[0_1_var(--aside-span)]" : "docked:w-(--aside-span) docked:min-w-0 docked:shrink-0"} ${dock.phase === "opening" || dock.phase === "closing" ? " docked:transition-[width] docked:duration-200 docked:ease-in-out motion-reduce:transition-none" : ""}`}
+        style={{ "--aside-span": `${columnSpan(dock.phase, width)}px` } as React.CSSProperties}
+        onTransitionEnd={dock.onColumnTransitionEnd}
       >
-        {children}
+        <div
+          ref={paneRef}
+          id={PANE_ID.aside}
+          data-pane="aside"
+          data-region="aside"
+          data-escape-scope
+          role={label ? "region" : undefined}
+          aria-label={label}
+          style={{ "--aside-width": `${width}px` } as React.CSSProperties}
+          onTransitionEnd={dock.onInsetTransitionEnd}
+          onPointerEnter={peek?.keep}
+          onPointerLeave={peek?.leave}
+          className={`flex min-h-0 flex-col border-s border-separator bg-panel-sidebar w-[420px] max-w-[92vw] max-docked:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] ${overlay} ${className}`}
+        >
+          {children}
+        </div>
       </div>
       {peek && <AsidePeekHotZone peek={peek} />}
     </>

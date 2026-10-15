@@ -14,10 +14,14 @@ export const PANE_ID = { sidebar: "sidebar-pane", aside: "aside-pane" } as const
 /** The edge a pane sits on: the reading direction's start or end. */
 export type PaneEdge = "start" | "end";
 
-/** What a floating card has the same on both sides: its vertical inset, the header height inside it
- * and `--peek-away`. */
+/** The vertical inset and header height shared by both desktop floating cards. */
 const FLOATING_INSET =
-  "docked:top-[calc(var(--top-chrome-height)+var(--peek-gap))] docked:bottom-[calc(var(--bottom-chrome-height)+var(--peek-gap))] docked:[--pane-header-height:var(--pane-header-height-floating)] docked:[--peek-away:calc(100%+var(--peek-gap)+2rem)]";
+  "docked:top-[calc(var(--top-chrome-height)+var(--peek-gap))] docked:bottom-[calc(var(--bottom-chrome-height)+var(--peek-gap))] docked:[--pane-header-height:var(--pane-header-height-floating)]";
+
+/** Drawers use the same card geometry as desktop peeks. Scope it below the breakpoint so the
+ * docked sidebar can still ease as a full-height column without changing shape. */
+const DRAWER_FRAME =
+  "max-docked:top-[calc(var(--top-chrome-height)+var(--peek-gap))] max-docked:bottom-[calc(var(--bottom-chrome-height)+var(--peek-gap))] max-docked:[--pane-header-height:var(--pane-header-height-floating)] max-docked:rounded-xl max-docked:border max-docked:overflow-hidden max-docked:pointer-events-auto";
 
 /** The two sides are the reading direction's start and end, so under right-to-left the sidebar is on
  * the right. The classes that differ between them are written out in full: Tailwind emits a utility
@@ -25,34 +29,29 @@ const FLOATING_INSET =
  * `start-0`/`end-0` would compile to nothing and leave the pane unanchored. `translate-x-*` is
  * physical, so the slide direction under `rtl:` is the opposite one. The start side is anchored
  * past the rail (`--rail-width` in `style.css`), so below the breakpoint it slides that much
- * further to get off screen entirely instead of going over the rail. As a floating pane at and
- * above the breakpoint each side is a card inset by `--peek-gap` from the top bar and the bottom
- * chrome, and from the rail (start) or the window's edge (end). The start card slides under the
- * rail (`RailClip`) and both have to go a shadow's width further to be out of sight. A card's
+ * further, including the inset and shadow, to get off screen entirely. Every overlay is a card
+ * inset by `--peek-gap` from the top bar and the bottom chrome, and from the rail (start) or the
+ * window's edge (end). Mobile drawers clear the rail and their shadows while sliding away. A card's
  * headers take `--pane-header-height-floating` (`style.css`) so that their bottom border lines up
- * with the docked headers' in the same row; `floatingFrame` sets it for everything inside, and
- * `--peek-away` too, the distance a card slides to be out of sight, which differs between the sides
- * only in direction. */
+ * with the docked headers' in the same row; `floatingFrame` sets it for everything inside. */
 const SIDE_CLASSES = {
   start: {
-    anchor: "start-(--rail-width)",
-    closed: "-translate-x-[calc(100%+var(--rail-width))] rtl:translate-x-[calc(100%+var(--rail-width))]",
-    floatingFrame: `docked:pointer-events-auto docked:start-[calc(var(--rail-width)+var(--peek-gap))] ${FLOATING_INSET}`,
-    floatingAway: "docked:-translate-x-(--peek-away) docked:rtl:translate-x-(--peek-away) docked:invisible",
+    anchor: "start-(--rail-width) max-docked:start-[calc(var(--rail-width)+var(--peek-gap))]",
+    closed: "-translate-x-[calc(100%+var(--rail-width)+var(--peek-gap)+2rem)] rtl:translate-x-[calc(100%+var(--rail-width)+var(--peek-gap)+2rem)]",
+    floatingFrame: `docked:start-[calc(var(--rail-width)+var(--peek-gap))] ${FLOATING_INSET}`,
   },
   end: {
-    anchor: "end-0",
-    closed: "translate-x-full rtl:-translate-x-full",
+    anchor: "end-0 max-docked:end-(--peek-gap)",
+    closed: "translate-x-[calc(100%+var(--peek-gap)+2rem)] rtl:-translate-x-[calc(100%+var(--peek-gap)+2rem)]",
     floatingFrame: `docked:end-(--peek-gap) ${FLOATING_INSET}`,
-    floatingAway: "docked:translate-x-(--peek-away) docked:rtl:-translate-x-(--peek-away) docked:invisible",
   },
 };
 
 /**
  * The geometry shared by the sidebar's and the aside's overlay forms (`Sidebar.tsx`,
  * `AsidePane.tsx`): fixed between `style.css`'s `--top-chrome-height` and
- * `--bottom-chrome-height`, sliding in from `side`; the start side's edge is the rail's, and a pane
- * that floats is inset from all of those instead (`floatingFrame`).
+ * `--bottom-chrome-height`, with a card inset from the surrounding chrome. Drawers slide from `side`; desktop
+ * floating cards fade vertically. The start side is inset from the rail; the end side from the window edge.
  * `open` is whether the drawer is open below the breakpoint. Callers add their own
  * width/flex/border classes on top of this string; the slide direction and what "closed" means on
  * either side are this function's job, not theirs.
@@ -65,13 +64,15 @@ const SIDE_CLASSES = {
  * `rtl:` slide classes win over a plain `docked:` one, so the reset has an `rtl:` twin.
  *
  * In `floating` mode none of the `docked:` resets apply, and `peeking` takes the place of `open`
- * for whether the pane is on screen there. It is `invisible` while away, so a pane that slid out
- * stays out of the tab order, and only a floating pane carries the shadow, which would otherwise
- * bleed in from the screen edge. A floating start pane is a `RailClip`'s child.
+ * for whether the pane is on screen there. The card fades up from 6px below its resting position
+ * and fades down when dismissed, with the console-switch view's easing. It is `invisible` while
+ * away, so a faded card stays out of the tab order. Drawers are likewise invisible while away,
+ * and their translation clears the card's shadow from the screen edge. A floating start pane is a `RailClip`'s child.
  *
  * Tailwind 4's `translate-x-*` utilities set the CSS `translate` property, not `transform`, so the
- * floating form transitions `translate` (the drawer form's `transition-transform` already lists
- * it). Every form drops its transition under `prefers-reduced-motion: reduce`.
+ * overlays transition `translate` and `visibility`, and floating cards also transition opacity;
+ * visibility stays on until the exit finishes. Every form drops its transition under
+ * `prefers-reduced-motion: reduce`.
  *
  * HeroUI's `Drawer` is not used: it is modal (everything outside is inert, focus is trapped, its
  * content is portalled and unmounted while closed). The panes have to be non-modal row siblings
@@ -80,35 +81,35 @@ const SIDE_CLASSES = {
  * tree) staying mounted.
  */
 export function drawerClass(side: PaneEdge, mode: PaneMode, open: boolean, peeking = false): string {
-  const { anchor, closed, floatingFrame, floatingAway } = SIDE_CLASSES[side];
+  const { anchor, closed, floatingFrame } = SIDE_CLASSES[side];
   const dockedReset = "docked:static docked:z-auto docked:translate-none docked:rtl:translate-none docked:transition-none";
   const form =
     mode === "drawer"
-      ? `transition-transform ${dockedReset}`
-      : `transition-[translate,visibility] ${floatingFrame} ${peeking ? "docked:translate-x-0 docked:rtl:translate-x-0 docked:shadow-xl" : floatingAway}`;
+      ? `transition-[translate,visibility] ${dockedReset}`
+      : `transition-[translate,visibility] ${floatingFrame} docked:translate-x-0 docked:rtl:translate-x-0 docked:shadow-xl docked:transition-[translate,opacity,visibility] docked:duration-240 docked:ease-[cubic-bezier(0.2,0,0,1)] ${peeking ? "docked:translate-y-0 docked:opacity-100 docked:pointer-events-auto" : "docked:translate-y-1.5 docked:opacity-0 docked:pointer-events-none docked:invisible"}`;
   const base = "fixed bottom-(--bottom-chrome-height) top-(--top-chrome-height) z-40 duration-200 motion-reduce:transition-none";
-  return `${base} ${anchor} ${open ? "translate-x-0" : closed} ${form}`;
+  return `${base} ${DRAWER_FRAME} ${anchor} ${open ? "translate-x-0 max-docked:shadow-xl" : `${closed} max-docked:invisible`} ${form}`;
 }
 
 /**
- * What a floating start-side pane sits in, at and above the breakpoint: a zero-width fixed element
+ * What a start-side overlay sits in: a zero-width fixed element
  * at the rail's end edge, clipped to the content side of that edge only (`clip-path` reaches past
- * the other three sides, so the pane's shadow is not cut), so that the pane slides in from and out
- * to behind the rail instead of over it. The rail paints nothing of its own on the translucent
+ * the other three sides, so the pane's shadow is not cut), keeping the card and its shadow off the
+ * rail and letting mobile drawers slide behind it. The rail paints nothing of its own on the translucent
  * macOS window, so stacking the pane beneath it would show it through. The wrapper takes no pointer
- * events, the pane (`floatingFrame` in `drawerClass`) does, and the pane stays `fixed` itself:
- * a clip does not make its element a containing block. Below the breakpoint, and with the pane
- * docked (`floating` false), the wrapper is `display: contents` and so is not there. It is always
+ * events, the pane (`drawerClass`) does, and the pane stays `fixed` itself:
+ * a clip does not make its element a containing block. With the pane docked at the desktop
+ * breakpoint (`floating` false), the wrapper is `display: contents` and so is not there. It is always
  * rendered, so docking the pane does not remount what is in it.
  */
 export function RailClip({ floating, children }: { floating: boolean; children: React.ReactNode }): React.ReactElement {
   return (
     <div
-      className={
+      className={`contents max-docked:pointer-events-none max-docked:fixed max-docked:inset-y-0 max-docked:start-(--rail-width) max-docked:z-40 max-docked:block max-docked:w-0 max-docked:[clip-path:inset(-100vh_-100vw_-100vh_0)] max-docked:rtl:[clip-path:inset(-100vh_0_-100vh_-100vw)] ${
         floating
-          ? "contents docked:pointer-events-none docked:fixed docked:inset-y-0 docked:start-(--rail-width) docked:z-40 docked:block docked:w-0 docked:[clip-path:inset(-100vh_-100vw_-100vh_0)] docked:rtl:[clip-path:inset(-100vh_0_-100vh_-100vw)]"
-          : "contents"
-      }
+          ? "docked:pointer-events-none docked:fixed docked:inset-y-0 docked:start-(--rail-width) docked:z-40 docked:block docked:w-0 docked:[clip-path:inset(-100vh_-100vw_-100vh_0)] docked:rtl:[clip-path:inset(-100vh_0_-100vh_-100vw)]"
+          : ""
+      }`}
     >
       {children}
     </div>
@@ -141,9 +142,9 @@ function peekGapPx(): number {
   return raw;
 }
 
-/** Whether the pointer is off a pane at the place the pane is sliding to. The element under the
+/** Whether the pointer is off a pane at its resting position. The element under the
  * pointer cannot say, as the pane is still on its way in and the content shows where it is going to
- * be; `offsetLeft` is the layout position, which a `translate` does not move. It is a position in
+ * be; the offsets are layout positions, which a `translate` does not move. It is a position in
  * the viewport, comparable with `clientX`, only because a floating pane is `position: fixed` with no
  * transformed ancestor, so it has no offset parent.
  *
@@ -154,13 +155,14 @@ function peekGapPx(): number {
  * raises its `pointerleave` (see `usePanePeekPointer`). The top bar is outside it, as the halo's
  * upper edge is the bar's own; the toggle that floated the card in is not (see the hook).
  *
- * The start card's `offsetLeft` is the viewport position only once the sidebar's docked column has
+ * The start card's offsets are viewport positions only once the sidebar's docked column has
  * left the row (`sidebarDockMotion.ts`): while it eases out (`phase === "closing"`) the card is
- * not yet `fixed`, so `offsetLeft` is relative to an ancestor. The pointer is then resting on the
+ * not yet `fixed`, so its offsets are relative to an ancestor. The pointer is then resting on the
  * toggle that hid the column, which the hook counts as inside without asking this function. */
 function outsidePane(pane: Element | null, event: PointerEvent, gap: number): boolean {
   if (!(pane instanceof HTMLElement)) return true;
-  const { top, bottom } = pane.getBoundingClientRect();
+  const top = pane.offsetTop;
+  const bottom = top + pane.offsetHeight;
   return (
     event.clientX < pane.offsetLeft - gap ||
     event.clientX > pane.offsetLeft + pane.offsetWidth + gap ||
@@ -169,9 +171,8 @@ function outsidePane(pane: Element | null, event: PointerEvent, gap: number): bo
   );
 }
 
-/** How long after a pane floats in a `keep` is issued unconditionally: the `duration-200` of its
- * slide in (`drawerClass`) plus a margin. */
-const PEEK_SETTLE_MS = 250;
+/** The floating card's 240ms fade (`drawerClass`) plus a margin before its pointer watch settles. */
+const PEEK_SETTLE_MS = 290;
 
 /**
  * Tells a pane's `peek` where the pointer is relative to its card for as long as the card is
@@ -191,20 +192,20 @@ const PEEK_SETTLE_MS = 250;
  * halo and whose own enter and leave events do not cover a pointer moving about on one. A pointer
  * that leaves the window counts as leaving too, as no move follows to say so. `leave` is reported
  * once per excursion: a flag, which a move inside resets, stops every move outside from restarting
- * the slide-away's delay, and does not stop a later excursion from being reported.
+ * the dismissal delay, and does not stop a later excursion from being reported.
  *
  * A move inside the extent, the halo included, calls `keep`. This relies on the order of the events
  * a single move across the card's edge raises: the card's `pointerleave` comes before the
  * `pointermove` at the new place (out/leave, then over/enter, then move), so the card's `leave`
- * arms the slide-away first and the halo's `keep` cancels it. Nothing re-arms it: a pointer resting
+ * arms dismissal first and the halo's `keep` cancels it. Nothing re-arms it: a pointer resting
  * in the halo keeps the card up indefinitely. On the outer side, where the hot zone is, that is the
  * point; on the other three it means a pointer 1..`--peek-gap` px from the card does not let it go,
  * which is accepted as the direct consequence of the halo counting as the pane.
  *
- * The slide in itself can leave a `pointerleave` behind: the card's edge sweeps past a pointer
+ * The entry itself can leave a `pointerleave` behind: the card's edge moves past a pointer
  * resting on the hot zone before getting out of its way, and an engine that re-runs hit-testing
  * during the transition reports an enter and a leave. With the pointer still, no move would cancel
- * the slide-away that arms, so a `keep` after `PEEK_SETTLE_MS` does. No move in that time means the
+ * the dismissal that arms, so a `keep` after `PEEK_SETTLE_MS` does. No move in that time means the
  * last known place is still inside, so it cancels nothing that should have gone; a leave reported
  * in the meantime cancels it.
  */
@@ -267,7 +268,7 @@ export function usePanePeekPointer(
  * The pane waits `PEEK_DWELL_MS` before floating in, so a pointer passing along the edge does not
  * make it flicker in, one resting on the edge does. The toggle that floats a pane in does so at
  * once, as it is aimed at. Floating in arms no slide-away timer, since the pointer is expected to
- * be on the pane (which may not report entering it while the pointer is still, and slides in
+ * be on the pane (which may not report entering it while the pointer is still, and slides up
  * under it), whose leaving then starts the timer; where the pointer goes from then on is
  * `usePanePeekPointer`'s to watch, for either way of floating in.
  *

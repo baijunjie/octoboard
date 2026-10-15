@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { type DockEvent, initialDockMotion, reduceDockMotion } from "./sidebarDockMotion";
+import { type DockEvent, initialDockMotion, reduceDockMotion } from "./paneDockMotion";
 
 const open = initialDockMotion(true, false);
 const closed = initialDockMotion(false, false);

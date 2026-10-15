@@ -27,7 +27,8 @@ import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { drawerClass, PANE_ID, RailClip, usePanePeekPointer } from "../layout/paneOverlay";
 import type { PaneWidth } from "../layout/paneWidth";
-import { columnClipClass, type DockPhase, useSidebarDockMotion } from "../layout/sidebarDockMotion";
+import { columnClipClass, useSidebarDockMotion } from "../layout/sidebarDockMotion";
+import type { DockPhase } from "../layout/paneDockMotion";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { usePlatform } from "../platform/react";
 import { effectiveTags, matchesFilter, tagVocabulary, withoutTags } from "../projectFiltering";
@@ -175,7 +176,7 @@ export function Sidebar({
   // that; the inset card is a later state, only once the column is out of the row.
   const dock = useSidebarDockMotion(peek === undefined, peek?.active ?? false, sidebarWidth.width, onColumnPhase);
   const drawerClassName = dock.inset
-    ? `docked:rounded-xl docked:border ${drawerClass("start", "floating", open, dock.insetShown)}`
+    ? `docked:rounded-xl docked:border ${drawerClass("start", "floating", open, dock.insetShown)}${dock.preparingInset ? " docked:transition-none" : ""}`
     : `${drawerClass("start", "drawer", open)} docked:h-full docked:border-e-0`;
 
   const consoleSessions = sessions.filter((s) => s.console_id === shownConsole.id);
@@ -195,6 +196,8 @@ export function Sidebar({
     const previous = previousViewRef.current;
     previousViewRef.current = viewKey;
     if (previous === viewKey || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // The card owns its entry animation; animate content changes only once it is visible.
+    if (peek?.active && !dock.insetShown) return;
     // Going into or out of a focus mode slides sideways; between two views of the same level (two
     // focus modes, or two consoles) there is no level to go down or up, so the view rises in place.
     const enters = viewKey.startsWith("focus:");
@@ -291,7 +294,8 @@ export function Sidebar({
           // with `open`; at or above it the `docked:` variants in `drawerClass` put it back exactly
           // where it always was, a plain row sibling, regardless of `open`. With the docked sidebar
           // hidden, that column is clipped away; only a hover on a console's avatar (`dock.inset`)
-          // makes it the fixed card. Starting below `--top-chrome-height` leaves the top bar, and
+          // makes it the fixed card. Drawers share that card's inset from the chrome.
+          // Starting below `--top-chrome-height` leaves the top bar, and
           // with it the sidebar toggle, visible while the drawer is open; ending above
           // `--bottom-chrome-height` does the same for the connection banner.
           //
@@ -318,7 +322,7 @@ export function Sidebar({
           id={PANE_ID.sidebar}
           data-pane="sidebar"
           data-region="sidebar"
-          className={`flex w-70 flex-col overflow-hidden sidebar-fills border-e border-separator bg-panel-sidebar shrink-0 docked:w-(--sidebar-width) ${drawerClassName}${dock.phase === "closed" && !dock.inset ? " docked:invisible" : ""}`}
+          className={`flex w-70 max-docked:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] flex-col overflow-hidden sidebar-fills border-e border-separator bg-panel-sidebar shrink-0 docked:w-(--sidebar-width) ${drawerClassName}${dock.phase === "closed" && !dock.inset ? " docked:invisible" : ""}`}
           onPointerEnter={peek?.keep}
           onPointerLeave={peek?.leave}
           onPointerDownCapture={peek ? onPeekPress : undefined}

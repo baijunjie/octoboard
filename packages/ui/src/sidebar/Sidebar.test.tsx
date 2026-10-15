@@ -182,15 +182,37 @@ it.each([
 it("keeps the docked column while hidden, and uses the inset card only while a peek is up", () => {
   const hidden = mountSidebar({ open: false, peek: { active: false, keep: vi.fn(), leave: vi.fn() } });
   const hiddenClass = hidden.container.querySelector("nav")!.className;
-  expect(hiddenClass).not.toContain("rounded-xl");
-  expect(hiddenClass).not.toContain("peek-gap");
+  expect(hiddenClass.split(" ")).not.toContain("docked:rounded-xl");
+  expect(hiddenClass.split(" ")).not.toContain("docked:start-[calc(var(--rail-width)+var(--peek-gap))]");
   act(() => hidden.root.unmount());
 
   const peeking = mountSidebar({ open: false, peek: { active: true, keep: vi.fn(), leave: vi.fn() } });
   const peekClass = peeking.container.querySelector("nav")!.className;
-  expect(peekClass).toContain("rounded-xl");
-  expect(peekClass).toContain("peek-gap");
+  expect(peekClass.split(" ")).toContain("docked:rounded-xl");
+  expect(peekClass.split(" ")).toContain("docked:start-[calc(var(--rail-width)+var(--peek-gap))]");
   act(() => peeking.root.unmount());
+});
+
+it("positions a new hover card without motion, then enables its enter and leave transitions", () => {
+  const originalMatchMedia = window.matchMedia;
+  window.matchMedia = ((query: string) => ({ matches: false, media: query })) as unknown as typeof window.matchMedia;
+  onTestFinished(() => { window.matchMedia = originalMatchMedia; });
+  const peek = { active: false, keep: vi.fn(), leave: vi.fn() };
+  const { container, render } = mountSidebar({ open: false, peek });
+  render({ open: false, peek: { ...peek, active: true } });
+  const nav = container.querySelector("nav")!;
+  expect(nav.classList.contains("docked:transition-none")).toBe(true);
+  expect(nav.classList.contains("docked:invisible")).toBe(true);
+  // Fake timers run animation frames at 16ms intervals. The first paints the offscreen card;
+  // the next applies the destination with its transition enabled.
+  act(() => void vi.advanceTimersByTime(16));
+  expect(nav.classList.contains("docked:invisible")).toBe(true);
+  act(() => void vi.advanceTimersByTime(16));
+  expect(nav.classList.contains("docked:transition-none")).toBe(false);
+  expect(nav.classList.contains("docked:invisible")).toBe(false);
+  render({ open: false, peek });
+  expect(nav.classList.contains("docked:transition-none")).toBe(false);
+  expect(nav.classList.contains("docked:invisible")).toBe(true);
 });
 
 it("shows the console it is given, and a hover alone commits nothing", () => {
@@ -264,7 +286,7 @@ function mountPeeking() {
   );
   const { container } = mountSidebar({ open: false, peek }, beside);
   const pane = container.querySelector<HTMLElement>("[data-pane=sidebar]")!;
-  Object.defineProperties(pane, { offsetLeft: { value: 56 }, offsetWidth: { value: 280 } });
+  Object.defineProperties(pane, { offsetLeft: { value: 56 }, offsetWidth: { value: 280 }, offsetTop: { value: 48 }, offsetHeight: { value: 744 } });
   pane.getBoundingClientRect = () => ({ top: 48, bottom: 792, left: 56, right: 336 }) as DOMRect;
   const pointer = (type: string, init: MouseEventInit = {}) => {
     const event = new MouseEvent(type, { bubbles: true, ...init });
@@ -358,4 +380,32 @@ it("updates a session's visible and accessible name as the daemon title changes"
   render({ sessions: [hub1, { ...session, terminal_title: null }] });
   expect(row().textContent).toContain(session.title);
   expect(row().textContent).not.toContain("｜");
+});
+
+
+it("uses the card entry alone for a new console, then animates switches while the card is visible", () => {
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => setTimeout(() => callback(0), 16));
+  vi.stubGlobal("cancelAnimationFrame", clearTimeout);
+  const originalAnimate = HTMLElement.prototype.animate;
+  const animate = vi.fn();
+  HTMLElement.prototype.animate = animate;
+  onTestFinished(() => {
+    if (originalAnimate) HTMLElement.prototype.animate = originalAnimate;
+    else Reflect.deleteProperty(HTMLElement.prototype, "animate");
+    vi.unstubAllGlobals();
+  });
+  const peek = { active: false, keep: vi.fn(), leave: vi.fn() };
+  const other = consoleOf("c-2", "Other");
+  const { render } = mountSidebar({ peek, projects: [], sessions: [] });
+  render({ shownConsole: other, peek: { ...peek, active: true }, projects: [], sessions: [] });
+  expect(animate).not.toHaveBeenCalled();
+  act(() => void vi.advanceTimersByTime(16));
+  act(() => void vi.advanceTimersByTime(16));
+  render({ shownConsole: main, peek: { ...peek, active: true }, projects: [], sessions: [] });
+  expect(animate).toHaveBeenCalledOnce();
+  expect(animate).toHaveBeenCalledWith(
+    [{ transform: "translateY(6px)", opacity: 0 }, {}],
+    { duration: 240, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+  );
 });

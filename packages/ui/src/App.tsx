@@ -24,7 +24,7 @@ import { useT } from "./i18n/react";
 import type { AsideLayout } from "./layout/AsidePane";
 import { ASIDE_LABELS, liveOwner, ownerAfterMove, ownerForSession, ownerKey, sameOwner, type AsideOwner } from "./layout/asideOwner";
 import { usePaneWidth } from "./layout/paneWidth";
-import type { DockPhase } from "./layout/sidebarDockMotion";
+import type { DockPhase } from "./layout/paneDockMotion";
 import { useConsoleOwnerRule } from "./layout/useConsoleOwnerRule";
 import { usePaneToggles } from "./layout/usePaneToggles";
 import { useRegionCycle } from "./layout/useRegionCycle";
@@ -149,23 +149,23 @@ export function App(): React.ReactElement {
   // The handle sits at the column's settled edge. During the ease that edge is still moving, and
   // the handle's own position is the settled width, so it stays off until the ease has finished.
   const [sidebarColumnPhase, setSidebarColumnPhase] = useState<DockPhase>(panes.sidebarDocked ? "open" : "closed");
-  // Hiding takes the sidebar out of the row at once, which is also when `usePaneWidth` stops
-  // clamping it. With the aside docked, that clamp is what holds the sidebar under its chosen
-  // width, so the column would widen and reflow on the first frame of the close. It stays clamped
-  // until the column has left the row. The aside's width uses the real docked flags: holding it
-  // back for the ease would snap it when the column finishes. A hidden aside gives its width back.
+  const [asideColumnPhase, setAsideColumnPhase] = useState<DockPhase>(panes.asideDocked ? "open" : "closed");
+  // A closing column keeps its width clamp until it leaves the row, so its content cannot widen
+  // and reflow on the first frame. The sidebar also keeps reserving the aside's floor while the
+  // aside closes; otherwise a constrained sidebar would widen into the closing column.
   const sidebarWidth = usePaneWidth("sidebar", {
     sidebar: !noConsoles && (panes.sidebarDocked || sidebarColumnPhase !== "closed"),
-    aside: hasAside && panes.asideDocked,
+    aside: hasAside && (panes.asideDocked || asideColumnPhase !== "closed"),
   });
   const asideWidth = usePaneWidth("aside", {
     sidebar: !noConsoles && panes.sidebarDocked,
-    aside: hasAside && panes.asideDocked,
+    aside: hasAside && (panes.asideDocked || asideColumnPhase !== "closed"),
   });
   const asideLayout: AsideLayout = {
     open: panes.asideOpen,
     width: asideWidth.width,
     peek: panes.asideDocked ? undefined : panes.asidePeek,
+    onColumnPhase: setAsideColumnPhase,
   };
 
   // An owner that is gone leaves no aside, and is not brought back by anything that appears later.
@@ -599,7 +599,8 @@ export function App(): React.ReactElement {
                     aside beside it; the terminal fills it. Above the `docked` breakpoint the 520px basis
                     and floor are the aside's counterpart: with a 0 basis free space stays positive at any
                     window wider than the aside's own basis, flexbox never leaves the grow phase, and the
-                    aside's shrink factor is never consulted. 520px is about 53 columns at ~9.2px/column
+                    aside clip's shrink factor is never consulted. The open clip can shrink while the
+                    sidebar's width eases, keeping the report within the viewport. 520px is about 53 columns at ~9.2px/column
                     off a real agent CLI (the terminal's padding eats the rest). Below the breakpoint the
                     sidebar and the aside are overlays rather than row siblings (`usePaneToggles`), so
                     this is the row's only content and takes a much smaller floor: 398px is 40 columns at
@@ -672,7 +673,7 @@ export function App(): React.ReactElement {
                   />
                 )}
               </main>
-              {asideOwner && panes.asideDocked && (
+              {asideOwner && panes.asideDocked && asideColumnPhase === "open" && (
                 <PaneResizeHandle side="aside" paneWidth={asideWidth} label={t(ASIDE_LABELS[asideOwner.kind].resize)} />
               )}
               {asideOwner && panes.asideOpen && <Scrim label={t(ASIDE_LABELS[asideOwner.kind].close)} onClose={panes.closeAside} />}

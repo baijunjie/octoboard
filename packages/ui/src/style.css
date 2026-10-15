@@ -69,12 +69,11 @@
   /* The header of each pane in the content panel (the sidebar's console and focus headers, the
      archive view's, the project pane's, the report panel's): one height for all of them, so their
      bottom borders run on as one line across the panel. A second tier beside the top bar's 40px.
-     A floating pane is a card inset by `--peek-gap`, so its headers take the floating value
+     An overlay pane is a card inset by `--peek-gap`, so its headers take the floating value
      instead, which puts their bottom border at the same height as the docked ones'
      (`floatingFrame` in `layout/paneOverlay.tsx`). The gap comes off, and the card's own 1px top
-     border with it (`docked:border` on the cards in `sidebar/Sidebar.tsx` and
-     `layout/AsidePane.tsx`): the content panel's top border overlaps the top bar's last pixel
-     (`-mt-px` in `ContentPanel.tsx`), so a docked pane's header starts at `--top-chrome-height`
+     border with it: the content panel's top border overlaps the top bar's last pixel (`-mt-px`
+     in `ContentPanel.tsx`), so a docked pane's header starts at `--top-chrome-height`
      while the card's starts `--peek-gap` plus that border lower.
      The floating value is not a cycle although `floatingFrame` overrides `--pane-header-height`
      with it: a custom property is substituted where it is declared, so this one is already
@@ -89,10 +88,10 @@
   /* The left rail under the top bar (`Rail.tsx`): the window chrome's second half, at the reading
      direction's start. The content panel starts where it ends (the panel's own 1px start border
      overlaps the rail's last pixel, so that is also where the sidebar starts), which is what the
-     docked arithmetic above counts. Pane drawers start there too. */
+     docked arithmetic above counts. Pane drawers are inset from that edge. */
   --rail-width: 48px;
 
-  /* The gap a floating pane keeps from the window's edges and the top bar, and the sidebar from
+  /* The gap an overlay pane keeps from the window's edges and the top bar, and the sidebar from
      the rail (`drawerClass` in `layout/paneOverlay.tsx`). `peekGapPx` there reads it back with
      `parseFloat` and throws when that does not yield a number, so the `px` unit is load-bearing:
      `0.5rem` would be read as 0.5px. It reads it once, so declare it here only, never under a media
@@ -147,8 +146,8 @@
   --console-session-rose: oklch(0.56 0.19 342);
 }
 
-/* Eases `--sidebar-span` over the same 200ms as the drawer's `duration-200` (`SIDEBAR_SPAN_MS`
-   in `sidebarDockMotion.ts`). Only while the docked column is opening or closing; a drag of the
+/* Eases `--sidebar-span` over the same 200ms as the drawer's `duration-200` (`PANE_SPAN_MS`
+   in `layout/paneDockMotion.ts`). Only while the docked column is opening or closing; a drag of the
    pane's edge changes the length with no transition. Reduced motion never adds the class, and
    drops the transition anyway. */
 @media (width >= theme(--breakpoint-docked)) {

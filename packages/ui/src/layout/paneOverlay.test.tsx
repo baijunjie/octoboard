@@ -15,9 +15,11 @@ let container: HTMLElement | undefined;
 
 beforeEach(() => {
   vi.useFakeTimers();
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
   // Registered first, so it runs after the unmounts that `mount` and `mountToggle` register.
   onTestFinished(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
     root = container = undefined;
   });
   // jsdom loads no stylesheet, so the token `peekGapPx` reads is declared here.
@@ -29,10 +31,9 @@ beforeEach(() => {
  * connection banner), wherever it is on its way. */
 function placePane(): HTMLElement {
   const pane = container!.querySelector<HTMLElement>("[data-pane=aside]")!;
-  Object.defineProperties(pane, { offsetLeft: { value: 1152 }, offsetWidth: { value: 280 } });
-  // Where it is on its way in: translated off to the right, so only its layout position tells where
-  // it is going to be.
-  pane.getBoundingClientRect = () => ({ top: 48, bottom: 792, left: 1440, right: 1720 }) as DOMRect;
+  Object.defineProperties(pane, { offsetLeft: { value: 1152 }, offsetWidth: { value: 280 }, offsetTop: { value: 48 }, offsetHeight: { value: 744 } });
+  // The entry is still 6px below its final position; its layout offsets describe the final halo.
+  pane.getBoundingClientRect = () => ({ top: 54, bottom: 798, left: 1152, right: 1432 }) as DOMRect;
   return pane;
 }
 
@@ -170,7 +171,7 @@ it("keeps watching after the pointer went outside and came back onto the card, a
   expect(hide).not.toHaveBeenCalled();
 });
 
-it("slides the card away once the pointer moves from the gap to outside the card's extent", () => {
+it("dismisses the card once the pointer moves from the gap to outside the card's extent", () => {
   const { hide } = mount(true);
   const pane = placePane();
   leavePane(pane);
@@ -190,11 +191,11 @@ it("counts the pointer leaving the window, through the gap or not, as leaving th
   expect(hide).toHaveBeenCalledTimes(1);
 });
 
-it("keeps a pane whose slide in left a pointerleave behind, with the pointer still", () => {
+it("keeps a pane whose fade in left a pointerleave behind, with the pointer still", () => {
   const { hide } = mount(true);
   const pane = placePane();
-  // The card's edge clears the pointer as it arrives, near the end of the 200ms slide.
-  wait(190);
+  // The card's edge clears the pointer as it arrives, near the end of the 240ms fade.
+  wait(230);
   leavePane(pane);
   wait(1000);
   expect(hide).not.toHaveBeenCalled();
