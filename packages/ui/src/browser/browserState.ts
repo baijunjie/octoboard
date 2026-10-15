@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 
 import { createPersistedPreference } from "../persistedPreference";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { gitMoment } from "./gitRequests";
 
 /** What a project's browser shows: its files on disk, or Git review. */
 export type BrowserMode = "files" | "git";
@@ -71,8 +72,8 @@ export interface SessionFollow {
   session: string;
   /** The selection (`noteSessionSwitch`) this record is of: a later one makes it a new switch. */
   switchId: number;
-  /** When that switch was made, on the clock `performance.now()` reads: only what was read from the
-   * daemon after it is weighed. */
+  /** When that switch was made (`gitMoment`): only what was read from the daemon after it is
+   * weighed. */
   since: number;
   /** The same for the worktree list, moved forward when it is asked again for the worktree the
    * session's branch should be in. */
@@ -91,7 +92,7 @@ let lastSwitchAt = 0;
 /** Records that the selected session changed, so each project's selectors follow it afresh. */
 export function noteSessionSwitch(): void {
   switchCount += 1;
-  lastSwitchAt = performance.now();
+  lastSwitchAt = gitMoment();
 }
 
 /** The record of `session` being followed in `project`, new for each selection of it. */

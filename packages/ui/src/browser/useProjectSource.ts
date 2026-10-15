@@ -5,13 +5,13 @@ import { abbreviateHome } from "../pathDisplay";
 import type { ProjectSourceInfo } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { browseFailure } from "./browseError";
-import { sendGitRequest } from "./gitRequests";
+import { gitMoment, sendGitRequest } from "./gitRequests";
 
 /** Where a project's files are read from, as far as the client knows: still asked for, known, or
  * failed with why. A known source stays while it is asked for again. */
 export type SourceState =
   | { state: "loading" }
-  /** `sentAt` is when the request this answers was sent (`performance.now()`), so what was read can be told to be newer than something that happened before it. */
+  /** `sentAt` is when the request this answers was sent (`gitMoment`), so what was read can be told to be newer than something that happened before it. */
   | { state: "loaded"; source: ProjectSourceInfo; sentAt: number }
   | { state: "error"; message: string };
 
@@ -39,7 +39,7 @@ export function useProjectSource(project: string, wanted: boolean): { source: So
     let sentAt = 0;
     return sendGitRequest(slot, () => {
       if (!current()) return undefined;
-      sentAt = performance.now();
+      sentAt = gitMoment();
       return request({ type: "get_project_source", project, slot });
     })
       .then((reply) => {

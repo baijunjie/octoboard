@@ -6,14 +6,14 @@ import type { ComparisonEndpoint } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { browseFailure } from "./browseError";
 import { changeItems, type ChangeItem } from "./changes";
-import { sendGitRequest } from "./gitRequests";
+import { gitMoment, sendGitRequest } from "./gitRequests";
 
 /**
  * A comparison of two branches as the client holds it. Once loaded, `left` and `right` are the
  * branches with the commits they were resolved to, `base` is the commit they forked at, and every
  * change in `items` is between exactly `base` and `right`'s commit; `receivedAt` is when that
- * comparison was accepted. A comparison stays on screen while it is
- * asked for again, and so does a failure while it is asked for in the background.
+ * comparison was accepted (`gitMoment`). A comparison stays on screen while it is asked for
+ * again, and so does a failure while it is asked for in the background.
  */
 export type Comparison =
   | { state: "idle" }
@@ -67,7 +67,7 @@ export function useBranchComparison(
       .then((reply) => {
         if (!reply || !current() || reply.type !== "project_comparison" || reply.project !== project) return;
         if (reply.left.branch !== left || reply.right.branch !== right) return;
-        const accepted = { left: reply.left, right: reply.right, base: reply.base, complete: reply.complete, receivedAt: performance.now() };
+        const accepted = { left: reply.left, right: reply.right, base: reply.base, complete: reply.complete, receivedAt: gitMoment() };
         setComparison(() => ({ state: "loaded", ...accepted, items: changeItems(reply.changes) }));
       })
       .catch((err: unknown) => {

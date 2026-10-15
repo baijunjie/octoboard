@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 
 import type { ChangeEntry, Event, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
@@ -504,4 +504,36 @@ it("leaves the selectors as they are for a session that is not the project's", a
   h.show(undefined);
   expect(pending).toHaveLength(0);
   expect(h.selectors()).toEqual(before);
+});
+
+it("sets the worktree of a branch that shows up later in a worktree made since, on a clock that stands still", async () => {
+  const h = followHarness("f7");
+  h.mount(undefined);
+  h.show("s1");
+  await h.settle([MAIN], [{ name: "main" }]);
+  expect(h.selectors()).toEqual(NONE);
+
+  // WebKit rounds `performance.now()` to the millisecond: what one handler does reads one time.
+  const clock = vi.spyOn(performance, "now").mockReturnValue(performance.now() + 1000);
+  try {
+    // The session makes a worktree on a new branch; the branch list's own refresh, on coming back
+    // to the window, is the first to name it, beside a worktree list read before it was made.
+    const later = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 60_000);
+    act(() => void window.dispatchEvent(new Event("focus")));
+    later.mockRestore();
+    await answer("list_project_branches", () => ({
+      type: "project_branches",
+      project: "f7",
+      branches: [
+        { name: "main", commit: "c" },
+        { name: "topic", commit: "c", origin: { source: "hook_diff", session: "s1", title: "t", created_at: 1 } },
+      ],
+      complete: true,
+    }));
+    expect(h.selectors()).toEqual({ worktree: undefined, left: "main", right: "topic" });
+    await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", session: "s1" }]);
+    expect(h.selectors()).toEqual({ worktree: "w", left: "main", right: "topic" });
+  } finally {
+    clock.mockRestore();
+  }
 });

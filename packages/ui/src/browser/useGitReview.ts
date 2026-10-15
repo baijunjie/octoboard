@@ -12,6 +12,7 @@ import { HEADING_HEIGHT } from "./changeSectionHeading";
 import { changeEvidence, changeNeighbours, filterChanges, rereadChange, visibleChanges, type ChangeEvidence, type ChangeItem } from "./changes";
 import { focusFirst, focusRow } from "./focusRow";
 import type { GitView } from "./GitView";
+import { gitMoment } from "./gitRequests";
 import { selectionForBranch, sessionBranch } from "./sessionBranch";
 import { ROW_HEIGHT } from "./treeRow";
 import { useBranchComparison } from "./useBranchComparison";
@@ -175,7 +176,7 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
       follow.settled = true;
     } else {
       follow.retried = true;
-      follow.sourceSince = performance.now();
+      follow.sourceSince = gitMoment();
       void source.refresh();
     }
   }, [session, active, source.source, branches.branches]);

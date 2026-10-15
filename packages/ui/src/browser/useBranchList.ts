@@ -5,13 +5,13 @@ import { abbreviateHome } from "../pathDisplay";
 import type { BranchInfo } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { browseFailure } from "./browseError";
-import { sendGitRequest } from "./gitRequests";
+import { gitMoment, sendGitRequest } from "./gitRequests";
 import { AUTO_REFRESH_MS } from "./useDirectoryListings";
 
 /** A repository's local branches as the client holds them. `sentAt` is when the request this list
- * answers was sent, so a list can be told to be newer than something received before it. A list or
- * a failure stays on screen while a refresh is out, and a list stays through a refresh that fails,
- * with that failure beside it (`error`) until a refresh succeeds. */
+ * answers was sent (`gitMoment`), so a list can be told to be newer than something received
+ * before it. A list or a failure stays on screen while a refresh is out, and a list stays through
+ * a refresh that fails, with that failure beside it (`error`) until a refresh succeeds. */
 export type BranchList =
   | { state: "loading" }
   | { state: "loaded"; branches: BranchInfo[]; complete: boolean; sentAt: number; error?: string }
@@ -47,7 +47,7 @@ export function useBranchList(project: string, active: boolean): { branches: Bra
     let sentAt = 0;
     return sendGitRequest(slot, () => {
       if (!current()) return undefined;
-      sentAt = performance.now();
+      sentAt = gitMoment();
       return request({ type: "list_project_branches", project, slot });
     })
       .then((reply) => {
