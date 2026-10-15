@@ -999,13 +999,14 @@ impl Store {
     /// Binds the unbound project session `id` to `owner` and marks it a lead session, in one
     /// statement that only matches while it is still an unbound project session, so of two
     /// bindings racing for it only one lands. Returns the record as it now stands, or `None` when
-    /// nothing was bound: the session is gone, is a console session, or is already bound. What
-    /// `owner` may be is the caller's to check.
+    /// nothing was bound: the session is gone, is a console session, is already bound, or `owner`
+    /// is gone. What `owner` may be is the caller's to check.
     pub fn bind_session(&self, id: &str, owner: &str) -> Result<Option<Session>> {
         let conn = self.lock();
         let changed = conn.execute(
             "UPDATE sessions SET bound_to = ?2, lead = 1
-             WHERE id = ?1 AND role = ?3 AND bound_to IS NULL",
+             WHERE id = ?1 AND role = ?3 AND bound_to IS NULL
+               AND EXISTS (SELECT 1 FROM sessions WHERE id = ?2)",
             params![id, owner, enum_to_text(&Role::Project)],
         )?;
         if changed == 0 {
@@ -1039,6 +1040,19 @@ impl Store {
         let deleted = self.lock().execute(
             "DELETE FROM sessions WHERE id = ?1 AND status = ?2",
             params![id, enum_to_text(&SessionStatus::Archived)],
+        )?;
+        Ok(deleted > 0)
+    }
+
+    /// Deletes the session only while it is unused, and says whether it did: it has had no turn, is
+    /// bound to no owner and has no session bound to it, whatever its status. Checked and deleted
+    /// in one statement, so a turn that lands meanwhile wins.
+    pub fn delete_session_if_unused(&self, id: &str) -> Result<bool> {
+        let deleted = self.lock().execute(
+            "DELETE FROM sessions
+             WHERE id = ?1 AND has_conversation = 0 AND bound_to IS NULL
+               AND NOT EXISTS (SELECT 1 FROM sessions WHERE bound_to = ?1)",
+            params![id],
         )?;
         Ok(deleted > 0)
     }

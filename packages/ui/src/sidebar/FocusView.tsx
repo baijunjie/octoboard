@@ -25,7 +25,7 @@ import { useNow } from "../useNow";
 import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu, sessionMenu } from "./menus";
-import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroups, liveSessionRows, type NestedSession, notUnderConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
+import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroups, hasBoundSessions, liveSessionRows, type NestedSession, notUnderConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
 import { NESTED_INSET_CLASS, PinButton, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
@@ -275,7 +275,7 @@ export function ConsoleSessionFocusView({
           )}
           <ActionMenu
             label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, consoleSession)) })}
-            items={sessionMenu(t, handlers, consoleSession, accounts, { placement: "focused" })}
+            items={sessionMenu(t, handlers, consoleSession, accounts, { placement: "focused", hasBoundSessions: hasBoundSessions(sessions, consoleSession.id) })}
             contextTargetRef={headerRef}
           />
         </RowIconGroup>
@@ -584,6 +584,7 @@ function SessionCard({
   const language = useCurrentLanguage();
   const now = useNow();
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const hasBound = useDaemonStore((s) => hasBoundSessions(s.sessions.values(), session.id));
   const rowRef = useRef<HTMLDivElement>(null);
   const label = sessionAriaLabel(t, language, session, accounts, under ?? consoleOwner);
   return (
@@ -598,7 +599,7 @@ function SessionCard({
         <span className="text-xs font-medium text-app-muted">{statusLabel(t, session.status)}</span>
         <span className="flex-1" />
         <RowControls always fixed={session.pinned ? <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} /> : undefined}>
-          <ActionMenu label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, session)) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
+          <ActionMenu label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, session)) })} items={sessionMenu(t, handlers, session, accounts, { hasBoundSessions: hasBound })} contextTargetRef={rowRef} />
         </RowControls>
       </RowIconLine>
       <div className="flex min-w-0 items-center gap-(--row-leading-icon-gap)">

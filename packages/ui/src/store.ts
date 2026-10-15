@@ -277,7 +277,14 @@ function reducer(state: State, action: Action): State {
           // The daemon takes a console session's pages with it, and says so only through this event.
           const pages = new Map(state.pages);
           pages.delete(event.session);
-          return { ...state, sessions, pages };
+          // A session deleted while it ran leaves no confirmation or request that anyone can answer.
+          return {
+            ...state,
+            sessions,
+            pages,
+            trustPrompts: state.trustPrompts.filter((p) => p.session !== event.session),
+            consoleRequests: state.consoleRequests.filter((r) => r.session !== event.session),
+          };
         }
         case "trust_prompt": {
           if (state.trustPrompts.some((p) => p.session === event.session)) return state;

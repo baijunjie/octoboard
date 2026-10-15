@@ -37,7 +37,7 @@ use crate::protocol::{
 use crate::relocate;
 use crate::reporting;
 use crate::session::LiveSession;
-use crate::state::AppState;
+use crate::state::{AppState, Deletion};
 use crate::store::LOCAL_HOST_ID;
 use crate::term;
 use crate::trust;
@@ -1517,6 +1517,16 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         state.store.insert_console_session(session, title)?
     } else {
         state.store.insert_session(&session)?;
+        // `bound_to` was resolved before the launch check above awaited, so an unused owner may
+        // have been deleted since. Once this row exists the owner can no longer be deleted (it has
+        // a session bound to it), so one that is gone now is gone for good. Nothing has been
+        // launched yet.
+        if let Some(owner) = &session.bound_to {
+            if state.store.get_session(owner)?.is_none() {
+                state.store.delete_session(&session.id)?;
+                return Err(CodedError::unknown_session(owner));
+            }
+        }
         session
     };
     let claim = state.begin_launch(&session.id)?;
@@ -1574,8 +1584,12 @@ pub fn bind_to_console_session(
     let bound = state
         .store
         .bind_session(session_id, console_session_id)?
-        // Bound, or gone, since it was read just now.
-        .ok_or_else(|| anyhow::anyhow!("this session is already bound to a session, or is gone"))?;
+        // Bound, or either session gone, since they were read just now.
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "this session is already bound to a session, or it or its owner is gone"
+            )
+        })?;
     state.publish_session(&bound);
     Ok(bound)
 }
@@ -2387,20 +2401,41 @@ fn session_ids_where(
         .collect())
 }
 
-/// Removes Octoboard's record of one archived session, and with an archived owner (a console
-/// session, or a project session that started some) the archived sessions bound to it, at both
-/// levels: left behind, reopening one would have no owner to come back with. Deleting an archived
-/// bound session on its own leaves its owner alone.
+/// Removes Octoboard's record of one session: an archived one, and with an archived owner (a
+/// console session, or a project session that started some) the archived sessions bound to it, at
+/// both levels: left behind, reopening one would have no owner to come back with. Deleting an
+/// archived bound session on its own leaves its owner alone.
+///
+/// A session that is not archived is deleted only while it is unused: no turn yet, bound to no
+/// owner and with none bound to it. That is decided in the same step as the delete (see
+/// `Store::delete_session_if_unused`), so a turn racing the request wins and the request is
+/// refused. Its process is ended after the record is gone, and not before, so a refused delete
+/// never costs the session its process.
+///
 /// The record takes its saved terminal output with it. Nothing else of Octoboard's hangs off a
 /// session: its queue, MCP token and turn bookkeeping go when its process does, and so does its
 /// scratch directory (clearing the run directory at startup is only the fallback). The agent's own
 /// transcript and the project are never touched.
 fn delete_session(state: &Arc<AppState>, id: &str) -> Result<()> {
     let session = state.session_record(id)?;
-    if !delete_archived_group(state, &session)? {
+    let deleted = if session.status == SessionStatus::Archived {
+        delete_archived_group(state, &session)?
+    } else {
+        match state.delete_if_unused(id)? {
+            Deletion::Deleted { process } => {
+                if let Some(live) = process {
+                    stop_process(live);
+                }
+                true
+            }
+            Deletion::Refused => false,
+        }
+    };
+    if !deleted {
         return Err(CodedError::raised(
-            error_code::SESSION_NOT_ARCHIVED,
-            "only an archived session can be deleted",
+            error_code::SESSION_NOT_DELETABLE,
+            "only an archived session, or one that has never been used, can be deleted, and not \
+             while it is starting",
             &[("session", id)],
         ));
     }
@@ -3205,9 +3240,10 @@ mod tests {
         assert!(!state.delete_if_archived("project-archived").unwrap());
         drop(claim);
 
-        let refused = delete_session(&state, "project-idle").expect_err("not archived");
+        state.mark_conversation_started("project-idle").unwrap();
+        let refused = delete_session(&state, "project-idle").expect_err("in use");
         let coded = refused.downcast_ref::<CodedError>().expect("a coded error");
-        assert_eq!(coded.code, error_code::SESSION_NOT_ARCHIVED);
+        assert_eq!(coded.code, error_code::SESSION_NOT_DELETABLE);
 
         delete_archived_sessions(&state, "console-1", Some("project-1"), None).unwrap();
         assert_eq!(
@@ -5933,12 +5969,66 @@ mod tests {
             "the bound session alone leaves its console session"
         );
 
-        let err = delete_session(&state, "live-hub").expect_err("not archived");
-        assert_eq!(code_of(&err), error_code::SESSION_NOT_ARCHIVED);
+        let err = delete_session(&state, "live-hub").expect_err("sessions bound to it");
+        assert_eq!(code_of(&err), error_code::SESSION_NOT_DELETABLE);
         assert_eq!(
             session_ids(&state),
             ["d", "live-hub", "other-hub", "still-here", "unbound"]
         );
+    }
+
+    /// A session that is not archived is deleted only while it is unused: no turn yet, bound to no
+    /// owner and with none bound to it. Deleting one stops its process; any other is refused and
+    /// keeps both its record and its process.
+    #[tokio::test]
+    async fn deleting_a_session_that_is_not_archived_needs_it_to_be_unused() {
+        use SessionStatus::{Idle, Interrupted};
+        let (state, _dir) = switch_fixture("delete-unused");
+        for session in [
+            project_session("fresh", Agent::Claude, Idle),
+            project_session("never-used", Agent::Claude, Interrupted),
+            Session {
+                has_conversation: true,
+                ..project_session("used", Agent::Claude, Idle)
+            },
+            console_session("hub", Idle),
+            bound_session("worker", Idle, "hub"),
+        ] {
+            state.store.insert_session(&session).unwrap();
+        }
+        let fresh = idle_stand_in("fresh");
+        state.register_live(fresh.clone());
+        let used = idle_stand_in("used");
+        state.register_live(used.clone());
+        let mut events = state.subscribe();
+
+        delete_session(&state, "fresh").unwrap();
+        assert!(matches!(
+            events.try_recv().unwrap(),
+            Event::SessionDeleted { session } if session == "fresh"
+        ));
+        let deadline = Instant::now() + crate::test_support::PATIENCE;
+        while !fresh.poll_exit() {
+            assert!(Instant::now() < deadline, "the process was never stopped");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        let claim = state.begin_launch("never-used").unwrap();
+        let err = delete_session(&state, "never-used").expect_err("starting");
+        assert_eq!(code_of(&err), error_code::SESSION_NOT_DELETABLE);
+        drop(claim);
+        delete_session(&state, "never-used").unwrap();
+
+        for refused in ["used", "hub", "worker"] {
+            let err = delete_session(&state, refused).expect_err(refused);
+            assert_eq!(
+                code_of(&err),
+                error_code::SESSION_NOT_DELETABLE,
+                "{refused}"
+            );
+        }
+        assert_eq!(session_ids(&state), ["hub", "used", "worker"]);
+        assert!(!used.poll_exit());
     }
 
     /// Deleting every archived console session of a console takes their archived bound sessions

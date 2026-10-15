@@ -42,7 +42,7 @@ import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
 import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterTag, ProjectFilterTags } from "./ProjectFilter";
 import { archiveSubmenu, consoleMenu, projectMenu, sessionMenu } from "./menus";
-import { archivedSessions, consoleActivity, isInactiveProject, liveSessionRows, liveSessions, sortProjects } from "./order";
+import { archivedSessions, consoleActivity, hasBoundSessions, isInactiveProject, liveSessionRows, liveSessions, sortProjects } from "./order";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
 import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, PinButton, RowIconButton, RowLabel, SectionHeading, TreeRow } from "./rows";
 import { focusTargetId } from "./focus";
@@ -808,6 +808,7 @@ function SessionRow({
   const t = useT();
   const language = useCurrentLanguage();
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const hasBound = useDaemonStore((s) => hasBoundSessions(s.sessions.values(), session.id));
   const rowRef = useRef<HTMLDivElement>(null);
   const badgeOwner = session.role === "console" ? session : owner?.role === "console" ? owner : undefined;
   return (
@@ -829,7 +830,7 @@ function SessionRow({
           </>
         ) : undefined}
       >
-        <ActionMenu label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, session)) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
+        <ActionMenu label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, session)) })} items={sessionMenu(t, handlers, session, accounts, { hasBoundSessions: hasBound })} contextTargetRef={rowRef} />
       </RowControls>
     </TreeRow>
   );

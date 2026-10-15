@@ -138,7 +138,7 @@ export const zhHans: Translation<"other"> = {
   "daemon.session_did_not_stop": "{session} 未能及时停止，因此没有切换。它可能仍在运行。",
   "daemon.switch_did_not_come_up": "{session} 在新账户下重新启动后立即结束，因此仍在原账户上。",
   "daemon.session_not_running": "此会话未在运行。",
-  "daemon.session_not_archived": "只能删除已归档的会话。",
+  "daemon.session_not_deletable": "只能删除已归档或从未使用过的会话，且不能在会话启动期间删除。",
   "daemon.session_has_running_sessions": {
     other: "无法归档此会话：它名下的会话仍在运行，共 {count} 个（{sessions}）。请先归档运行中的会话，或等待其完成。",
   },

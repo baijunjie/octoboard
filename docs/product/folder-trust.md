@@ -104,9 +104,9 @@ or by Octoboard itself — closes the dialog without any message when the box wa
 with the box ticked it shows a message saying the folder was not trusted, because that choice was not carried out.
 
 Prompts are shown one at a time, oldest first; closing one brings up the next. A prompt still waiting is dropped,
-without being answered, when its session stops running. When a project gains the permission, or a folder becomes
-trusted, the prompts waiting for that project or for projects under that folder are dropped as well, because Octoboard
-presses those confirmations itself; prompts for other projects stay queued. Whenever the application reloads its state
+without being answered, when its session stops running or is deleted. When a project gains the permission, or a folder
+becomes trusted, the prompts waiting for that project or for projects under that folder are dropped as well, because
+Octoboard presses those confirmations itself; prompts for other projects stay queued. Whenever the application reloads its state
 (a connect, a reconnect, or catching up after falling behind), the daemon asks again about every confirmation still
 waiting, so a prompt the user never saw comes back; with no client connected the confirmation simply waits for the user
 to answer it in the terminal. Once one client has answered, a go-ahead from another changes nothing.

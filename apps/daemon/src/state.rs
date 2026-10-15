@@ -483,17 +483,34 @@ impl AppState {
     /// lock (`live`), so a resume cannot claim the session between the two. An archived session
     /// whose process is still exiting is deleted: its exit watcher finds no record and skips.
     pub fn delete_if_archived(&self, id: &str) -> Result<bool> {
+        let deletion = self.delete_where(id, |store| store.delete_session_if_archived(id))?;
+        Ok(matches!(deletion, Deletion::Deleted { .. }))
+    }
+
+    /// Deletes the session's record and its saved output if it is unused (see
+    /// `Store::delete_session_if_unused`), and broadcasts `session_deleted` when it was. It is
+    /// refused when the session is in use, is gone already, or is being launched right now.
+    pub fn delete_if_unused(&self, id: &str) -> Result<Deletion> {
+        self.delete_where(id, |store| store.delete_session_if_unused(id))
+    }
+
+    fn delete_where(
+        &self,
+        id: &str,
+        delete: impl FnOnce(&Store) -> Result<bool>,
+    ) -> Result<Deletion> {
         let live = self.live.read().expect("live sessions lock poisoned");
-        if live.launching.contains(id) || !self.store.delete_session_if_archived(id)? {
-            return Ok(false);
+        if live.launching.contains(id) || !delete(&self.store)? {
+            return Ok(Deletion::Refused);
         }
+        let process = live.sessions.get(id).cloned();
         drop(live);
         self.forget_saved_output(id);
         self.forget_request_hand(id);
         self.broadcast(Event::SessionDeleted {
             session: id.to_string(),
         });
-        Ok(true)
+        Ok(Deletion::Deleted { process })
     }
 
     /// Applies a status reported by a hook, unless a waiting console-session request is holding the
@@ -1269,6 +1286,16 @@ impl AppState {
 struct LiveSessions {
     sessions: HashMap<String, Arc<LiveSession>>,
     launching: HashSet<String>,
+}
+
+/// What a delete of a session came to.
+pub enum Deletion {
+    Refused,
+    /// The record is gone. `process` is the session's process, read under the lock that keeps a
+    /// resume from registering a new one, for the caller to end.
+    Deleted {
+        process: Option<Arc<LiveSession>>,
+    },
 }
 
 /// The right to start a process for one session, released on drop, and only then: it outlives

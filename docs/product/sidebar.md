@@ -333,6 +333,9 @@ technology. Its action menu offers:
   `docs/product/hub-orchestration.md`) — under a warning with their number, as the ones archived with it, and the
   archive is refused, with the sessions named, while any session under it has a process running. A project session that
   has started sessions is archived under the same rule, with the same confirmation.
+- **Delete**, in place of Archive for a session that has never been used — no turn yet, bound to no owner and with no
+  session bound to it; it asks for confirmation, then stops the session and deletes it outright, leaving nothing in the
+  archive (see "Deleting an unused session" in `docs/product/sessions.md`).
 
 ## The binding badge
 

@@ -147,8 +147,10 @@ carried out, with the reason, and the window that approved shows the reason as a
 - the caller's process ended before it could be bound — the same error as an approval after a withdrawal (see "The
   confirmation dialog" below);
 - the console session could not be launched — nothing is bound;
-- the caller could not be bound after the console session was launched — the new console session is archived, since it
-  was started for that binding alone.
+- the caller could not be bound after the console session was launched — among other reasons, because the user deleted
+  the new console session meanwhile, which they can while it has never been used (see "Deleting an unused session" in
+  `docs/product/sessions.md`) — the new console session, if it still exists, is archived, since it was started for that
+  binding alone.
 
 Once the caller is bound, the approval stands. If the first report could not be delivered, the note says so, with the
 reason, and tells the caller to send it to the console session itself with `report`.

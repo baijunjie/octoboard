@@ -67,6 +67,22 @@ describe("the Focus mode entry", () => {
   });
 });
 
+describe("the Archive and Delete entries", () => {
+  const entry = (session: Session, hasBoundSessions = false) =>
+    sessionMenu(t, {} as SidebarHandlers, session, [], { hasBoundSessions }).flatMap((item) => (typeof item === "object" && ["Archive", "Delete"].includes(item.label) ? [item.label] : []));
+  const session = (extra: Partial<Session>) => sessionOf("s", "c", "p", "Title", "idle", extra);
+
+  it.each([
+    ["a session that has had a turn", "Archive", session({}), false],
+    ["a session that has never been used", "Delete", session({ has_conversation: false }), false],
+    ["an unused session bound to an owner", "Archive", session({ has_conversation: false, bound_to: "h" }), false],
+    ["an unused owner with a bound session", "Archive", session({ has_conversation: false }), true],
+    ["an archived session", "Delete", session({ status: "archived" }), false],
+  ] as const)("%s gets %s", (_, label, target, hasBound) => {
+    expect(entry(target, hasBound)).toEqual([label]);
+  });
+});
+
 describe("a project's menu", () => {
   const labels = (placement: MenuPlacement, gitRepository = false) =>
     projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], [], { placement, gitRepository }).flatMap((entry) =>

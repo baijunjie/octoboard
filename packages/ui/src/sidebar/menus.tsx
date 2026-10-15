@@ -152,10 +152,19 @@ function switchAccountSubmenu(
   };
 }
 
+/** Whether a session has never been used: no turn yet, bound to no owner and no session bound to
+ * it. Such a session is deleted outright rather than archived. One bound to an owner keeps Archive
+ * even before its first prompt lands, since it reports to that owner, and so does an owner that
+ * already has a session under it. */
+function isUnused(session: Session, hasBoundSessions: boolean): boolean {
+  return !session.has_conversation && !session.bound_to && !hasBoundSessions;
+}
+
 /** A session's actions: pin, rename, focus mode, switch account and archive; an archived session
- * (listed in focus mode) offers deleting instead. Resuming or reopening is no item: selecting an
- * interrupted session resumes it, and an archived one is reopened by typing to it or from the
- * archive view. Shared by a project session's row and a console session's row
+ * (listed in focus mode) and one never used offer deleting instead. `hasBoundSessions` says
+ * whether any session is bound to this one, which makes it used. Resuming or reopening is no item:
+ * selecting an interrupted session resumes it, and an archived one is reopened by typing to it or
+ * from the archive view. Shared by a project session's row and a console session's row
  * (`ConsoleSessionsSection` in `Sidebar.tsx`) — a console session cannot archive itself (see "The
  * console session's tools" in `docs/product/hub-orchestration.md`), so this is the only way to
  * archive one, and the only place to switch its account. Focus mode is offered for a console
@@ -166,10 +175,11 @@ export function sessionMenu(
   handlers: SidebarHandlers,
   session: Session,
   accounts: Account[],
-  { placement = "list" }: { placement?: MenuPlacement } = {},
+  { placement = "list", hasBoundSessions = false }: { placement?: MenuPlacement; hasBoundSessions?: boolean } = {},
 ): ActionMenuEntry[] {
   const focused = placement === "focused";
   const archived = session.status === "archived";
+  const deletable = archived || isUnused(session, hasBoundSessions);
   const switchAccount = archived ? undefined : switchAccountSubmenu(t, handlers, session, accounts);
   const focusable = session.role === "console" && !archived && !focused;
   return [
@@ -178,7 +188,7 @@ export function sessionMenu(
     ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
     ...(switchAccount ? [switchAccount] : []),
     "separator",
-    archived
+    deletable
       ? { label: t("sidebar.session.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true }
       : { label: t("sidebar.session.archive"), icon: Archive, onClick: () => handlers.onOpenDialog({ kind: "archive-session", session }) },
   ];

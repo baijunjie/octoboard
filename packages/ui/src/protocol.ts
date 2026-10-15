@@ -749,8 +749,10 @@ export type RequestBody =
    * id, or `null` for the default account; it is always sent. Answered once the relaunched session
    * has stayed up, or with the reason it did not. */
   | { type: "switch_session_account"; session: string; account: string | null }
-  /** Removes Octoboard's record of one archived session; refused with `session_not_archived`
-   * otherwise. The agent's own transcript is never touched. */
+  /** Removes Octoboard's record of one session: an archived one, or one that has never been used
+   * (no turn, bound to no owner, none bound to it), whose process is stopped; refused with
+   * `session_not_deletable` otherwise, or while it is starting. The agent's own transcript is never
+   * touched. */
   | { type: "delete_session"; session: string }
   /** With `project`: every archived session of that project. With `console_session`: every
    * archived session under it (bound to it, or to an archived lead session bound to it). With

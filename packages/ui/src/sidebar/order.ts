@@ -128,6 +128,12 @@ export function boundSessions(sessions: Session[], ownerId: string): Session[] {
   return sessions.filter((s) => s.bound_to === ownerId).sort(compareSessions);
 }
 
+/** Whether any session is bound to the session `ownerId`, in any status. */
+export function hasBoundSessions(sessions: Iterable<Session>, ownerId: string): boolean {
+  for (const s of sessions) if (s.bound_to === ownerId) return true;
+  return false;
+}
+
 /** The archived sessions bound to `ownerId`, and those bound to an archived one of them (a lead
  * session's own sessions, two levels under a console session) — exactly what deleting an archived
  * owner takes with it. These are a third filter over the same session records the archive view

@@ -213,6 +213,18 @@ const switchAccountState = snapshotState({
   ],
   settings: accountsState.settings,
 });
+// A live session that has never had a turn beside one that has: only the first offers Delete in its
+// menu rather than Archive.
+const unusedSession = sessionOf("s-web-unused", console_.id, web.id, "Draft the migration notes", "idle", { has_conversation: false, started_at: minutesAgo(4) });
+const unusedState = snapshotState({
+  consoles: [console_],
+  projects: [web],
+  sessions: [
+    sessionOf("s-web-used", console_.id, web.id, "Fix the summary layout", "working"),
+    unusedSession,
+  ],
+});
+const openUnusedMenu = (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title: unusedSession.title }));
 const openSwitchAccount = [
   (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
   (ui: Ui) => ui.press(ui.t("sidebar.session.switchAccount")),
@@ -225,6 +237,24 @@ const submitConsoleSwitch = [
 ];
 
 export const dialogScenarios: Scenario[] = [
+  {
+    id: "sidebar-session-menu-unused",
+    group: "Sidebar sessions",
+    category: "normal",
+    title: "Menu of a session that was never used",
+    description: "The last entry is Delete, destructive, in place of Archive.",
+    state: unusedState,
+    steps: [openUnusedMenu],
+  },
+  {
+    id: "dialog-delete-unused-session",
+    group: "Sidebar sessions",
+    category: "normal",
+    title: "Delete a session that was never used",
+    description: "The confirmation of a live session, with no list of bound sessions below the message.",
+    state: unusedState,
+    steps: [openUnusedMenu, (ui) => ui.press(ui.t("sidebar.session.delete"))],
+  },
   {
     id: "dialog-switch-account",
     group: "Sidebar sessions",

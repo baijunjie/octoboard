@@ -167,7 +167,7 @@ export const en = {
   "daemon.switch_did_not_come_up":
     "{session} ended as soon as it was relaunched under the new account, so it stays on the account it had.",
   "daemon.session_not_running": "This session is not running.",
-  "daemon.session_not_archived": "Only an archived session can be deleted.",
+  "daemon.session_not_deletable": "Only an archived session, or one that has never been used, can be deleted, and not while it is starting.",
   "daemon.session_has_running_sessions": {
     one: "This session cannot be archived while {count} session under it is running: {sessions}. Archive that session or let it finish first.",
     other: "This session cannot be archived while {count} sessions under it are running: {sessions}. Archive those sessions or let them finish first.",

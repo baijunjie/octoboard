@@ -1291,8 +1291,9 @@ pub enum RequestBody {
         #[serde(default, deserialize_with = "present_option")]
         account: Option<Option<String>>,
     },
-    /// Removes Octoboard's record of one archived session; the agent's own transcript is never
-    /// touched.
+    /// Removes Octoboard's record of one session, archived or never used; the agent's own
+    /// transcript is never touched. A session that is not archived is deleted only while it has had
+    /// no turn and nothing is bound to it or from it, and its process is stopped.
     DeleteSession {
         session: String,
     },
@@ -2072,8 +2073,10 @@ pub mod error_code {
     pub const ICON_NOT_AN_IMAGE: &str = "icon_not_an_image";
     pub const ICON_TOO_LARGE: &str = "icon_too_large";
     pub const SESSION_NOT_RUNNING: &str = "session_not_running";
-    /// Only an archived session can be deleted.
-    pub const SESSION_NOT_ARCHIVED: &str = "session_not_archived";
+    /// Only an archived session, or one never used, can be deleted, and not while it is starting: a
+    /// session that is not archived is refused once it has had a turn, is bound to an owner or has
+    /// sessions bound to it.
+    pub const SESSION_NOT_DELETABLE: &str = "session_not_deletable";
     /// A session cannot be archived while a session under it (bound to it, or to a lead session
     /// bound to it) has a process running, whatever its status. `params` names the `count` of
     /// those sessions and their `sessions`, by title, comma separated.
