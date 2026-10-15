@@ -1,6 +1,7 @@
 import { type Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import { consoleOf, gitStatusOf, projectOf, sessionOf, snapshotState } from "./builders";
+import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./restore";
 
 const GROUP = "Branch badges";
 
@@ -107,6 +108,10 @@ const longFailureState = snapshotState({
   consoles: [console_], projects: [squeezeProject], sessions: [squeezeSession],
   gitStatuses: [{ ...squeezeStatus, error: "fetch: Could not resolve host 'origin'" }],
 });
+const restoreProject = projectOf("p-restore", console_.id, "Search API");
+const restoreState = snapshotState({ consoles: [console_], projects: [restoreProject], gitStatuses: [gitStatusOf(restoreProject.id)] });
+const restoreFixture = { state: restoreState, git: RESTORE_GIT, files: RESTORE_FILES };
+const openRestore = [...openGitSubmenu(restoreProject.name), (ui: Ui) => ui.press(ui.t("sidebar.project.restoreChanges"))];
 
 export const gitScenarios: Scenario[] = [
   {
@@ -121,6 +126,36 @@ export const gitScenarios: Scenario[] = [
     description: "The warning is deliberate: fetch cannot resolve origin. Hover it for the failure; long branch text and counts retain their marquee.",
     state: longFailureState,
     preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
+  },
+  {
+    id: "git-project-menu",
+    group: "Projects",
+    category: "normal",
+    title: "Project Git actions",
+    description: "Restore file changes is separated from Sync and Push and marked as destructive. Selecting it opens a confirmation before changing files.",
+    ...restoreFixture,
+    projectRestores: { [restoreProject.id]: RESTORED_PROJECT },
+    steps: openGitSubmenu(restoreProject.name),
+  },
+  {
+    id: "git-restore-confirm",
+    group: "Projects",
+    category: "normal",
+    title: "Restore file changes confirmation",
+    description: "The named project's warning distinguishes tracked edits and staged new files from untracked and ignored files. Cancel leaves the project intact; confirming restores the fixture's tracked file and retains its notes and ignored cache.",
+    ...restoreFixture,
+    projectRestores: { [restoreProject.id]: RESTORED_PROJECT },
+    steps: openRestore,
+  },
+  {
+    id: "git-restore-error",
+    group: "Projects",
+    category: "exceptional",
+    title: "Restore file changes failed",
+    description: "A failed restore stays in the confirmation with an inline error and enabled retry and cancel controls.",
+    ...restoreFixture,
+    projectRestores: { [restoreProject.id]: { code: "git_restore_failed", params: { detail: "fatal: Unable to create .git/index.lock: File exists" }, message: "Git restore failed" } },
+    steps: [...openRestore, (ui) => ui.confirm(), (ui) => ui.wait(300)],
   },
   {
     id: "git-badges",

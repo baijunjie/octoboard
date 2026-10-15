@@ -32,7 +32,7 @@ vi.mock("./terminal/TerminalController", () => ({
   },
 }));
 
-function mountApp(narrow = false) {
+function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Promise<void> }) {
   vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: !narrow && media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   document.documentElement.style.setProperty("--rail-width", "48px");
   document.documentElement.style.setProperty("--breakpoint-docked", "1148px");
@@ -50,7 +50,7 @@ function mountApp(narrow = false) {
     dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
   const container = mountForTooltip(
-    <PlatformProvider value={{ kind: "browser" }}>
+    <PlatformProvider value={{ kind: "browser", clipboard }}>
       <ThemeProvider><DaemonProvider value={daemon}><App /></DaemonProvider></ThemeProvider>
     </PlatformProvider>,
   );
@@ -100,4 +100,69 @@ it("sends the project directory request and reports a failure through the normal
   await press("Open in file manager");
   expect(daemon.request).toHaveBeenCalledWith({ type: "open_project_directory", project: project.id });
   expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith("The system file manager could not be opened.");
+});
+
+it("copies the project name unchanged and reports success", async () => {
+  const clipboard = { writeText: vi.fn(async () => {}) };
+  const { daemon, project } = mountApp(false, clipboard);
+  await openProjectMenu(project.name);
+  await press("Copy project name");
+  expect(clipboard.writeText).toHaveBeenCalledExactlyOnceWith(project.name);
+  expect(daemon.toastNotice).toHaveBeenCalledWith("Project name copied");
+});
+
+it("reports a clipboard failure", async () => {
+  const clipboard = { writeText: vi.fn(async () => { throw new Error("Denied"); }) };
+  const { daemon, project } = mountApp(false, clipboard);
+  await openProjectMenu(project.name);
+  await press("Copy project name");
+  expect(daemon.toastError).toHaveBeenCalledWith("Could not copy the project name");
+  expect(daemon.toastNotice).not.toHaveBeenCalled();
+});
+
+it("omits copying the project name without clipboard support", async () => {
+  const { project } = mountApp();
+  await openProjectMenu(project.name);
+  expect(menuHas("Copy project name")).toBe(false);
+});
+
+async function openRestoreConfirmation() {
+  const mounted = mountApp();
+  const { daemon, project } = mounted;
+  await act(async () => daemon.store.setState((state) => ({
+    gitStatuses: new Map(state.gitStatuses).set(project.id, {
+      project: project.id, repository: true, branch: "main", detached: false,
+      ahead: 0, behind: 0, activity: "idle",
+    }),
+  })));
+  await openProjectMenu(project.name);
+  await press("Git");
+  await press("Restore file changes…");
+  return mounted;
+}
+
+it("requires confirmation to restore file changes and permits cancelling", async () => {
+  const { daemon } = await openRestoreConfirmation();
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Staged new files will be deleted");
+  expect(daemon.request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "restore_project_changes" }));
+  await press("Cancel");
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(daemon.request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "restore_project_changes" }));
+});
+
+it("restores only the confirmed project and reports success", async () => {
+  const { daemon, project } = await openRestoreConfirmation();
+  const dialog = document.querySelector('[role="alertdialog"]')!;
+  await act(async () => dialog.querySelector("form")!.requestSubmit());
+  expect(daemon.request).toHaveBeenCalledWith({ type: "restore_project_changes", project: project.id });
+  expect(daemon.toastNotice).toHaveBeenCalledWith("File changes restored");
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+});
+
+it("keeps the restore confirmation open and displays a refusal", async () => {
+  const { daemon } = await openRestoreConfirmation();
+  vi.mocked(daemon.request).mockRejectedValueOnce(new Error("Finish the merge first."));
+  await act(async () => document.querySelector('[role="alertdialog"] form')!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Finish the merge first.");
+  expect(daemon.toastNotice).not.toHaveBeenCalled();
 });

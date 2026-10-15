@@ -803,6 +803,9 @@ export type RequestBody =
   /** Pushes the project's current branch and only that branch. Answered with `ack` once `git push`
    * has exited; a success is followed by `project_git_status` from a local re-read. */
   | { type: "push_project_branch"; project: string }
+  /** Restores staged and unstaged tracked changes to HEAD in the project worktree, preserving
+   * untracked and ignored files. Answered with `ack` after the restore finishes. */
+  | { type: "restore_project_changes"; project: string }
   /** Both fields are required: an account always has a name and a directory. Broadcasts
    * `settings_updated`. */
   | { type: "create_account"; agent: Agent; name: string; config_dir: string }

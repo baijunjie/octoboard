@@ -115,7 +115,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Project actions with its files already visible",
-    description: "Website's files are already visible, so its open actions menu omits Browse files. Open in file manager remains available; in the gallery it acknowledges the request without opening a host application.",
+    description: "Website's open actions menu offers Copy project name before Rename. Its files are already visible, so Browse files is omitted. Open in file manager remains available; in the gallery it acknowledges the request without opening a host application.",
     state,
     steps: [...openFiles, (ui) => ui.press(ui.t("sidebar.project.actions", { name: web.name }))],
   },

@@ -19,6 +19,7 @@ export type DialogRequest =
   | { kind: "new-project"; console: Console }
   | { kind: "edit-project"; project: Project }
   | { kind: "delete-project"; project: Project }
+  | { kind: "restore-project-changes"; project: Project }
   | { kind: "new-console-session"; console: Console }
   | { kind: "new-session"; console: Console; project: Project; binding: NewSessionBinding }
   | { kind: "rename-project"; project: Project }

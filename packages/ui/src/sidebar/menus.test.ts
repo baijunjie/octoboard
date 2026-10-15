@@ -110,7 +110,7 @@ describe("a project's menu", () => {
       );
       return entry && typeof entry === "object" && "items" in entry ? entry.items.flatMap((item) => (typeof item === "object" ? [item.label] : [])) : undefined;
     };
-    expect(git(true)).toEqual(["Sync repository", "Push current branch"]);
+    expect(git(true)).toEqual(["Sync repository", "Push current branch", "Restore file changes…"]);
     expect(git(false)).toBeUndefined();
   });
 
@@ -187,4 +187,13 @@ describe("archive previews in menus", () => {
     const items = archiveSubmenu(t, "Archive", archived as Session[], context as Session[], vi.fn(), vi.fn()).items;
     expect(items.map((item) => typeof item === "object" ? item.label : item)).toEqual(labels);
   });
+});
+
+it("asks for confirmation before restoring project changes", () => {
+  const project = { id: "p" } as Project;
+  const handlers = { onOpenDialog: vi.fn() } as unknown as SidebarHandlers;
+  const git = projectMenu(t, handlers, project, [], [], { gitRepository: true }).find((entry) => typeof entry === "object" && "items" in entry && entry.label === "Git");
+  const entry = (git as { items: { label: string; onClick: () => void }[] }).items.find((item) => item.label === "Restore file changes…");
+  entry!.onClick();
+  expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith({ kind: "restore-project-changes", project });
 });

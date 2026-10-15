@@ -1,4 +1,4 @@
-import { Archive, ArrowLeftRight, FileDown, Focus, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Pencil, Pin, PinOff, RefreshCw, Settings2, Terminal, Trash2, Upload } from "lucide-react";
+import { Archive, ArrowLeftRight, Copy, FileDown, Focus, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Pencil, Pin, PinOff, RefreshCw, Settings2, Terminal, Trash2, Undo2, Upload } from "lucide-react";
 
 import { switchEntries } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/ActionMenu";
@@ -72,7 +72,8 @@ export type MenuPlacement = "list" | "focused" | "nested";
 /** The project's actions, opening its files first, in the project row and in a focus mode (the
  * project's own header, and a console session's project headings); `placement` says which.
  * Git is a submenu, offered only while the project is known to be a git repository
- * (`gitRepository`, from its git status): sync the repository, and push the current branch. */
+ * (`gitRepository`, from its git status): sync the repository, push the current branch, and
+ * restore its tracked file changes after confirmation. */
 export function projectMenu(
   t: Translate,
   handlers: SidebarHandlers,
@@ -95,12 +96,17 @@ export function projectMenu(
           items: [
             { label: t("sidebar.project.syncGit"), icon: RefreshCw, onClick: () => handlers.onSyncProjectGit(project) },
             { label: t("sidebar.project.pushBranch"), icon: Upload, onClick: () => handlers.onPushProjectBranch(project) },
+            "separator" as const,
+            { label: t("sidebar.project.restoreChanges"), icon: Undo2, onClick: () => handlers.onOpenDialog({ kind: "restore-project-changes", project }), destructive: true },
           ],
         },
       ]
       : []),
     "separator",
     ...(placement === "focused" ? [] : [pinItem(t, project.pinned, () => handlers.onSetPinned({ project }, !project.pinned))]),
+    ...(handlers.onCopyProjectName
+      ? [{ label: t("sidebar.project.copyName"), icon: Copy, onClick: () => handlers.onCopyProjectName!(project) }]
+      : []),
     { label: t("sidebar.project.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-project", project }) },
     { label: t("sidebar.project.edit"), icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-project", project }) },
     ...(placement === "list" ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ project }) }] : []),

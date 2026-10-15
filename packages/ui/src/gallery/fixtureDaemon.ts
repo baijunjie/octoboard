@@ -9,6 +9,7 @@ import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
 import { createConfigurationReplies } from "./fixtureConfiguration";
 import { createGitReplies } from "./fixtureGit";
+import { refuseUnfillable } from "./banner";
 import { SAMPLE_MODELS } from "./fixtures/agentModels";
 import { SAMPLE_FILES, type FixtureError, type FixtureFile, type FixtureFiles } from "./fixtures/projectFiles";
 import { SAMPLE_GIT } from "./fixtures/projectGit";
@@ -84,7 +85,9 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
     }
   };
 
-  const projectFiles = (project: string) => scenario.filesByProject?.[project] ?? scenario.files ?? SAMPLE_FILES;
+  const restoredFiles = new Map<string, FixtureFiles>();
+  const restoredGit = new Map<string, ReturnType<typeof createGitReplies>>();
+  const projectFiles = (project: string) => restoredFiles.get(project) ?? scenario.filesByProject?.[project] ?? scenario.files ?? SAMPLE_FILES;
   const git = scenario.git === undefined ? SAMPLE_GIT : scenario.git;
   const fail = ({ code, params, message }: FixtureError): never => {
     throw new DaemonRequestError(daemonMessage(currentLanguage(), code, params, message, store.getState()), code, params);
@@ -108,11 +111,20 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
   return {
     store,
     request: async (body): Promise<Event> => {
-      const fromGit = gitReply(body);
+      const fromGit = ("project" in body && typeof body.project === "string" ? restoredGit.get(body.project) ?? gitReply : gitReply)(body);
       if (fromGit !== undefined) return fromGit;
       const fromConfiguration = configurationReply(body);
       if (fromConfiguration !== undefined) return fromConfiguration;
       switch (body.type) {
+        case "restore_project_changes": {
+          if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
+          const result = scenario.projectRestores?.[body.project];
+          if (!result) return refuseUnfillable(`restore_project_changes (${body.project}): no post-restore repository and files supplied`);
+          if ("code" in result) return fail(result);
+          restoredFiles.set(body.project, result.files);
+          restoredGit.set(body.project, createGitReplies(result.git, fail));
+          return { type: "ack" };
+        }
         case "switch_session_account": {
           const current = store.getState();
           const session = current.sessions.get(body.session);

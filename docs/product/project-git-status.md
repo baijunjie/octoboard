@@ -7,8 +7,10 @@ reporting depends on one setting, **Automatically sync repositories**, described
 repositories" below, and on whether the check was asked for by hand. Pushing the current branch is not a check
 (see "Pushing the current branch" below).
 
-A project's uncommitted changes are not part of this: they are in the project pane's Git mode (see
-`docs/product/project-pane-git-mode.md`), which only reads the repository and has no part in these checks.
+A project's uncommitted changes are inspected in the project pane's Git mode (see
+`docs/product/project-pane-git-mode.md`), which only reads the repository and has no part in these checks. The
+separate **Restore file changes…** action discards tracked changes after confirmation (see "Restoring file changes"
+below).
 
 ## The branch badge
 
@@ -169,7 +171,8 @@ on" below) — and the badge shows the fast-forward in flight. With it off, only
 Fast-forwarding a branch — with the switch on, or by Sync repository — moves that branch's working tree. Pushing
 the current branch does not: it updates the remote and, in the repository, the remote-tracking refs `git` updates
 for that push, and when the branch had no upstream it records one. It does not edit the project's files (see
-"Pushing the current branch" below). A check's fetch still updates remote refs only and still does not move the
+"Pushing the current branch" below). Restoring file changes discards tracked changes without moving the branch
+(see "Restoring file changes" below). A check's fetch still updates remote refs only and still does not move the
 working tree or push (see "What one check does" above). The guarantee these qualify is in "What Octoboard never
 modifies" in `docs/product/launching-agents.md`.
 
@@ -288,3 +291,36 @@ not show a check or a fast-forward in flight for the push itself. An error the l
 unless that re-read fails, in which case the warning becomes the re-read's message and the branch and the counts
 stay as they were. A re-read that fails does not turn the notice into an error toast: the push was accepted.
 Turning **Automatically sync repositories** on never pushes.
+
+## Restoring file changes
+
+**Restore file changes…**, under **Git** in every project's action-menu placement, follows Push current branch
+after a separator (see "Project rows" in `docs/product/sidebar.md`). It opens a destructive confirmation dialog
+explaining that staged and unstaged tracked changes will be discarded, staged new files deleted, and untracked and
+ignored files kept, and that the discard cannot be undone. Cancelling makes no restore request. Confirming waits
+for the restore; success closes the dialog and raises a notice toast. A failure stays in the dialog as an inline
+error, leaving it open.
+
+Restoration covers the project's own worktree: tracked files and the index are restored to the current commit,
+`HEAD`, including tracked deletions and renames. Staged additions absent from that commit are deleted. It leaves
+untracked and ignored files, submodule worktrees and their gitlinks in the index, commits, the branch, and other
+worktrees unchanged. It fetches and pushes nothing. A successful restore re-reads the local branch status for the
+badge; a failure publishes no such re-read.
+
+The project directory itself must contain `.git`, as for the branch badge; a project pointing at a repository's
+subdirectory is refused. The other refusals are:
+
+- A project that no longer exists: `unknown_project`; a directory that is not a repository under that rule:
+  `not_a_git_repository`.
+- Detached `HEAD`: `restore_not_on_branch`; a branch with no commit yet: `no_commits_to_restore`.
+- A merge, rebase, cherry-pick, revert or bisect in progress: `git_operation_in_progress`. Finish or abort it first.
+- A tracked path blocked by a directory, or an ancestor blocked by a file or symbolic link; or a path in `HEAD`
+  removed from the index but still present on disk: `git_restore_failed`. These collisions are refused before
+  restoration to preserve untracked or ignored content; move the obstruction aside first.
+- Git cannot inspect or restore the files: `git_restore_failed`, with the reason as `detail`. Each Git call has at
+  most two minutes, 16 MiB of standard output and 64 KiB of standard error; an inspection exceeding a bound fails
+  before restoration.
+
+A restore failure does not promise rollback: Git can restore some paths before a later path fails. Running agent
+sessions do not prevent restoration, and their Git operations, checks, syncs, pushes and other restores are not
+serialized with it. The files can change underneath a running agent.

@@ -72,7 +72,7 @@ export function RequestedDialog({
   onSwitchAccount: (sessionId: string, account: string | null) => Promise<void>;
 }): React.ReactElement {
   const t = useT();
-  const { request } = useDaemon();
+  const { request, toastNotice } = useDaemon();
   const sessions = useDaemonStore((s) => s.sessions);
   const dialog = "session" in requestedDialog && requestedDialog.kind !== "rename-session"
     ? { ...requestedDialog, session: sessions.get(requestedDialog.session.id) ?? requestedDialog.session }
@@ -106,6 +106,22 @@ export function RequestedDialog({
       return <ProjectDialog consoleId={dialog.console.id} onClose={onClose} />;
     case "edit-project":
       return <ProjectDialog consoleId={dialog.project.console_id} project={dialog.project} onClose={onClose} />;
+    case "restore-project-changes":
+      return (
+        <ConfirmDialog
+          title={t("dialog.restoreProjectChanges.title", { name: isolate(dialog.project.name) })}
+          message={t("dialog.restoreProjectChanges.message")}
+          confirmLabel={t("dialog.restoreProjectChanges.confirm")}
+          pendingLabel={t("dialog.restoreProjectChanges.pending")}
+          destructive
+          onCancel={onClose}
+          onConfirm={async () => {
+            await request({ type: "restore_project_changes", project: dialog.project.id });
+            toastNotice(t("sidebar.project.changesRestored"));
+            onClose();
+          }}
+        />
+      );
     case "delete-project": {
       const project = dialog.project;
       // Read live: a session that starts or stops while the dialog is open joins or leaves the list.

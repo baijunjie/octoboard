@@ -137,6 +137,9 @@ export interface Scenario {
   /** A refused request to open a project's directory in the host's file manager. The fixture
    * otherwise acknowledges the request without opening any host application. */
   projectDirectoryOpenError?: FixtureError;
+  /** A restore refusal or explicit post-restore repository and file tree, keyed by project.
+   * Without a result the fixture refuses to acknowledge a destructive change it cannot model. */
+  projectRestores?: Record<string, FixtureError | { git: FixtureGit; files: FixtureFiles }>;
   /** The files every project's browser shows (`list_project_dir`, `read_project_file`); without it,
    * `SAMPLE_FILES`. */
   files?: FixtureFiles;

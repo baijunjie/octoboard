@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createFixtureDaemon } from "./fixtureDaemon";
+import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 
 describe("the fixture daemon's system directory action", () => {
@@ -172,5 +173,32 @@ describe("the fixture daemon's account switches", () => {
     await expect(daemon.request({ type: "switch_session_account", session: "archived", account: "work" })).rejects.toMatchObject({ code: "session_archived" });
     await expect(daemon.request({ type: "switch_session_account", session: "s", account: "work" })).rejects.toMatchObject({ code: "internal_error", params: { detail: "Could not restart the agent" } });
     expect(daemon.store.getState().sessions.get("s")).toEqual(session);
+  });
+});
+
+describe("the fixture daemon's project restore", () => {
+  const project = projectOf("restore", "c", "Search API");
+  const other = projectOf("other", "c", "Other project");
+  const scenario = { id: "restore", group: "Projects" as const, category: "normal" as const, title: "", state: snapshotState({ projects: [project, other] }), git: RESTORE_GIT, files: RESTORE_FILES };
+
+  it("uses the restored snapshot for only the requested project and never mutates shared fixtures", async () => {
+    const daemon = createFixtureDaemon({ ...scenario, projectRestores: { [project.id]: RESTORED_PROJECT } });
+    await expect(daemon.request({ type: "restore_project_changes", project: "missing" })).rejects.toMatchObject({ code: "unknown_project" });
+    await expect(daemon.request({ type: "restore_project_changes", project: project.id })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "list_project_changes", project: project.id })).resolves.toMatchObject({ changes: [{ group: "untracked" }] });
+    await expect(daemon.request({ type: "read_project_file", project: project.id, path: "README.md" })).resolves.toMatchObject({ file: { text: "# Search API\n" } });
+    await expect(daemon.request({ type: "read_project_file", project: project.id, path: "new.txt" })).rejects.toMatchObject({ code: "file_not_found" });
+    for (const path of ["notes.txt", "cache/local.txt"]) {
+      await expect(daemon.request({ type: "read_project_file", project: project.id, path })).resolves.toMatchObject({ file: { text: (RESTORE_FILES[path] as { text: string }).text } });
+    }
+    await expect(daemon.request({ type: "read_project_file", project: other.id, path: "README.md" })).resolves.toMatchObject({ file: { text: "# Working edit\n" } });
+    expect(RESTORE_GIT.changes["restore-main"]).toHaveLength(4);
+  });
+
+  it("returns a configured error without changing the files", async () => {
+    const error = { code: "git_restore_failed", params: { detail: "index.lock exists" }, message: "Restore failed" };
+    const daemon = createFixtureDaemon({ ...scenario, projectRestores: { [project.id]: error } });
+    await expect(daemon.request({ type: "restore_project_changes", project: project.id })).rejects.toMatchObject({ code: error.code, params: error.params });
+    await expect(daemon.request({ type: "read_project_file", project: project.id, path: "new.txt" })).resolves.toMatchObject({ file: { text: "A staged new file.\n" } });
   });
 });

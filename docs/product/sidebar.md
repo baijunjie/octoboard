@@ -238,13 +238,18 @@ terminal** and, while the project's status says the directory is a git repositor
   `docs/product/project-terminal.md`). Opening it toasts nothing; a failure is an error toast.
 - **Git** — a submenu, only while the project's status says its directory is a git repository, so not before the
   first status and not when the directory is not one (see "What one check does" in
-  `docs/product/project-git-status.md`). It holds **Sync repository**, then **Push current branch**. Sync repository
+  `docs/product/project-git-status.md`). It holds **Sync repository**, then **Push current branch**, then, after a
+  separator, the destructive **Restore file changes…** action. Sync repository
   checks the project against its remote and fast-forwards it right now, is not waited on, and toasts nothing when it
   succeeds (see "Syncing one project by hand" in `docs/product/project-git-status.md`). Push current branch pushes
   that branch and is waited on until the push finishes; the window then shows a notice that the current branch was
   pushed, or an error toast if the push was refused (see "Pushing the current branch" in
-  `docs/product/project-git-status.md`).
+  `docs/product/project-git-status.md`). Restore file changes asks for confirmation before discarding tracked changes
+  (see "Restoring file changes" in `docs/product/project-git-status.md`).
 - **Pin** / **Unpin** — see "Pinning" below.
+- **Copy project name** — before Rename, copies the project's name exactly to the clipboard. Available in all the
+  project-menu placements above, including right-click menus, when the platform offers a clipboard; otherwise the
+  item is absent. Success raises a notice toast; a refused copy raises an error toast.
 - **Rename** — a dialog with the name alone; an empty name is rejected.
 - **Project settings** — the project dialog, see "Editing a project" in `docs/product/consoles-and-projects.md`.
 - **Focus mode** — see `docs/product/focus-mode.md`.

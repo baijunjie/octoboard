@@ -1287,6 +1287,12 @@ pub enum RequestBody {
     PushProjectBranch {
         project: String,
     },
+    /// Discards this project's staged and unstaged tracked changes against HEAD, including
+    /// staged additions. Untracked files, ignored files and submodules are preserved. Requires
+    /// client confirmation. Answered with `ack` after Git exits; commits and branch stay put.
+    RestoreProjectChanges {
+        project: String,
+    },
     Shutdown,
 }
 
@@ -1995,6 +2001,11 @@ pub mod error_code {
     /// `git push` failed, or the branch name cannot be placed in a refspec. `params` names
     /// `detail`, `git`'s own message when it ran.
     pub const GIT_PUSH_FAILED: &str = "git_push_failed";
+    pub const RESTORE_NOT_ON_BRANCH: &str = "restore_not_on_branch";
+    pub const NO_COMMITS_TO_RESTORE: &str = "no_commits_to_restore";
+    pub const GIT_OPERATION_IN_PROGRESS: &str = "git_operation_in_progress";
+    /// Restoring tracked changes failed. `params` names `detail`, Git's message when it ran.
+    pub const GIT_RESTORE_FAILED: &str = "git_restore_failed";
     /// A `read_project_change` whose change names no side its group can read.
     pub const INVALID_CHANGE: &str = "invalid_change";
     /// A body asked of a side on the disk whose path has a clean filter in effect: the patch was
@@ -2204,6 +2215,13 @@ mod tests {
                 r#"{"type":"push_project_branch","id":"request-1","project":"project-7"}"#,
                 |body| match body {
                     RequestBody::PushProjectBranch { project } => Some(project),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"restore_project_changes","id":"request-1","project":"project-7"}"#,
+                |body| match body {
+                    RequestBody::RestoreProjectChanges { project } => Some(project),
                     _ => None,
                 },
             ),

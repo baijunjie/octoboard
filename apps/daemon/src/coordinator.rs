@@ -20,6 +20,7 @@ use crate::config_import;
 use crate::env_shell;
 use crate::git_push;
 use crate::git_remote;
+use crate::git_restore;
 use crate::git_status;
 use crate::hostfs;
 use crate::mcp;
@@ -686,6 +687,17 @@ pub async fn handle(
                 .ok_or_else(|| CodedError::unknown_project(&project))?;
             let state = Arc::clone(state);
             tokio::task::spawn_blocking(move || git_push::push_current_branch(&state, &project))
+                .await??;
+            Ok(None)
+        }
+
+        RequestBody::RestoreProjectChanges { project } => {
+            let project = state
+                .store
+                .get_project(&project)?
+                .ok_or_else(|| CodedError::unknown_project(&project))?;
+            let state = Arc::clone(state);
+            tokio::task::spawn_blocking(move || git_restore::restore_project(&state, &project))
                 .await??;
             Ok(None)
         }

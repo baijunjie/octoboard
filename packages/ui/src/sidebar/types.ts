@@ -39,6 +39,8 @@ export interface SidebarHandlers {
   onOpenProjectDirectory: (project: Project) => void;
   /** Opens the system terminal at the project's directory. */
   onOpenProjectTerminal: (project: Project) => void;
+  /** Copies the project name; absent without a clipboard capability. */
+  onCopyProjectName?: (project: Project) => void;
   /** Checks the project against its remote and fast-forwards it now, whatever the automatic sync
    * setting says. */
   onSyncProjectGit: (project: Project) => void;

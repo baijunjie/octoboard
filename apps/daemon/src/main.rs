@@ -18,6 +18,7 @@ mod env_shell;
 mod git_env;
 mod git_push;
 mod git_remote;
+mod git_restore;
 mod git_status;
 mod hook_mode;
 mod hooks;

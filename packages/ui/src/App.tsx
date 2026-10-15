@@ -34,6 +34,7 @@ import { useStatusItemMenu } from "./lifecycle/useStatusItemMenu";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { isLive, type Location } from "./navigation/history";
 import { useNavigationHistory } from "./navigation/useNavigationHistory";
+import { usePlatform } from "./platform/react";
 import { ALREADY_RUNNING_CODES, type Console, type Project, type Session } from "./protocol";
 import { sessionDisplayTitle } from "./sessionLabel";
 import { ReportPanel } from "./report/ReportPanel";
@@ -54,6 +55,7 @@ import { WelcomeScreen, type WelcomeScreenHandle } from "./WelcomeScreen";
 
 export function App(): React.ReactElement {
   const t = useT();
+  const { clipboard } = usePlatform();
   const { request, toastError, toastNotice, reconnect, store } = useDaemon();
   const connectionState = useDaemonStore((s) => s.connectionState);
   const hosts = useDaemonStore((s) => s.hosts);
@@ -368,6 +370,15 @@ export function App(): React.ReactElement {
     request({ type: "open_project_directory", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
   };
 
+  const copyProjectName = clipboard
+    ? (project: Project) => {
+      clipboard.writeText(project.name).then(
+        () => toastNotice(t("sidebar.project.nameCopied")),
+        () => toastError(t("sidebar.project.copyNameFailed")),
+      );
+    }
+    : undefined;
+
   const openProjectTerminal = (project: Project) => {
     request({ type: "open_project_terminal", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
   };
@@ -585,6 +596,7 @@ export function App(): React.ReactElement {
                 onBrowseProject={browseProject}
                 onOpenProjectDirectory={openProjectDirectory}
                 onOpenProjectTerminal={openProjectTerminal}
+                onCopyProjectName={copyProjectName}
                 onSyncProjectGit={syncProjectGit}
                 onPushProjectBranch={pushProjectBranch}
                 onSetPinned={setPinned}
