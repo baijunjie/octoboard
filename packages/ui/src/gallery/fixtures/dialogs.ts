@@ -5,7 +5,6 @@ import { SAMPLE_CODEX_MODELS } from "./agentModels";
 import { IMAGES } from "./viewerImages";
 import { SHELL_TIMEOUT } from "./shellTimeout";
 
-const GROUP = "Dialogs";
 
 const { console: console_, web, api, sessions } = SAMPLE;
 
@@ -222,7 +221,8 @@ const submitConsoleSwitch = [
 export const dialogScenarios: Scenario[] = [
   {
     id: "dialog-switch-account",
-    group: GROUP,
+    group: "Sidebar sessions",
+    category: "normal",
     title: "Switch account confirmation",
     description: "The console-wide checkbox starts unchecked. Selecting it includes the console hub, independent project sessions and bound sessions of the same agent; archived sessions and sessions already on the target account are omitted.",
     state: switchAccountState,
@@ -230,7 +230,8 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     id: "dialog-switch-account-progress",
-    group: GROUP,
+    group: "Sidebar sessions",
+    category: "normal",
     title: "Console account switch in progress",
     description: "Two of three sessions have finished; the determinate bar and current session remain visible while the third switch is pending. Controls stay locked until switching completes.",
     state: switchAccountState,
@@ -239,7 +240,8 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     id: "dialog-switch-account-partial-failure",
-    group: GROUP,
+    group: "Sidebar sessions",
+    category: "exceptional",
     title: "Console account switch partial failure",
     description: "The completed batch keeps each failed session and its cause visible beside the completion count. Retry targets only the failed sessions; successful switches are retained.",
     state: switchAccountState,
@@ -252,7 +254,8 @@ export const dialogScenarios: Scenario[] = [
     ...dialogFixture,
     state: consoleSessionLaunchState,
     id: "dialog-new-console-session",
-    group: GROUP,
+    group: "Sidebar sessions",
+    category: "normal",
     title: "New console session",
     description: "The empty Name field previews Hub 5 from the console's next ordinal. Joined agent and inherited account pickers follow; Advanced starts collapsed and there is no report-to field.",
     steps: [
@@ -263,7 +266,8 @@ export const dialogScenarios: Scenario[] = [
     ...dialogFixture,
     state: consoleSessionLaunchState,
     id: "dialog-new-console-session-advanced",
-    group: GROUP,
+    group: "Sidebar sessions",
+    category: "normal",
     title: "New console session advanced settings",
     description: "Name previews Hub 5. Advanced shows the console's Opus model and high reasoning effort for Claude Code. Changes apply to this new session.",
     steps: [
@@ -274,7 +278,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-new-console-accounts",
-    group: GROUP,
+    group: "Consoles",
+    category: "normal",
     title: "New console with accounts",
     steps: [
       (ui) => ui.press(ui.t("rail.newConsole")),
@@ -284,7 +289,8 @@ export const dialogScenarios: Scenario[] = [
     ...dialogFixture,
     state: { ...dialogState, settings: { ...accountsState.settings!, accounts: [] } },
     id: "dialog-new-console-advanced",
-    group: GROUP,
+    group: "Consoles",
+    category: "normal",
     title: "New console advanced settings",
     description: "Without named accounts the agent picker fills the whole field; Advanced exposes the model and reasoning effort settings.",
     steps: [
@@ -295,7 +301,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-edit-console-launch-settings",
-    group: GROUP,
+    group: "Consoles",
+    category: "normal",
     title: "Edit console with avatar and stored launch settings",
     description: "The retired model is retained and marked; the avatar and its remove control are visible.",
     steps: [
@@ -307,7 +314,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-delete-console",
-    group: GROUP,
+    group: "Consoles",
+    category: "normal",
     title: "Delete console confirmation",
     steps: [
       consoleActions,
@@ -317,7 +325,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-add-project",
-    group: GROUP,
+    group: "Projects",
+    category: "normal",
     title: "Add project",
     steps: [
       consoleActions,
@@ -327,7 +336,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-add-project-invalid",
-    group: GROUP,
+    group: "Projects",
+    category: "exceptional",
     title: "Required project fields",
     steps: [
       consoleActions,
@@ -338,7 +348,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-new-session-shell-timeout",
-    group: GROUP,
+    group: "Sidebar sessions",
+    category: "exceptional",
     title: "Session launch, shell environment timed out",
     description: "The danger alert presents the failed shell command, cause, launch consequence and recovery as separate readable parts. Short shows the recovery at the bottom of the scrolling body.",
     sessionOpenError: SHELL_TIMEOUT,
@@ -353,7 +364,8 @@ export const dialogScenarios: Scenario[] = [
     ...dialogFixture,
     state: sessionLaunchState,
     id: "dialog-new-session-advanced",
-    group: GROUP,
+    group: "Sidebar sessions",
+    category: "normal",
     title: "New session advanced settings",
     description: "Name comes first. Claude Code and its inherited long account name share the joined field; expanded Advanced shows the project's Opus model and high reasoning effort. Changing either applies to this session.",
     steps: [
@@ -368,7 +380,8 @@ export const dialogScenarios: Scenario[] = [
       projects: new Map([...sessionLaunchState.projects].map(([id, project]) => [id, { ...project, default_agent: "codex" as const }])),
     },
     id: "dialog-new-session-agent-only",
-    group: GROUP,
+    group: "Sidebar sessions",
+    category: "normal",
     title: "New session without named agent accounts",
     description: "Codex has no named accounts, so the agent picker fills the whole field. Advanced shows its project model and xhigh reasoning effort; choosing Claude Code reveals its joined account picker.",
     steps: [
@@ -380,7 +393,8 @@ export const dialogScenarios: Scenario[] = [
     ...dialogFixture,
     state: sessionLaunchState,
     id: "dialog-new-session-owner",
-    group: GROUP,
+    group: "Sidebar sessions",
+    category: "normal",
     title: "New session owner choices",
     description: "Short and long owner names appear together below the joined agent and account field. Hover the long option to read it as a marquee; the selected long account label uses the same fade.",
     steps: [
@@ -391,7 +405,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-remove-project-running",
-    group: GROUP,
+    group: "Projects",
+    category: "normal",
     title: "Remove project with running sessions",
     description: "Default, named and removed-directory account cases coexist in the confirmation; hover each agent mark.",
     steps: [
@@ -402,7 +417,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-archive-console-session",
-    group: GROUP,
+    group: "Archive view",
+    category: "normal",
     title: "Archive console session and its bound sessions",
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),
@@ -412,7 +428,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-edit-project-tag-suggestions",
-    group: GROUP,
+    group: "Projects",
+    category: "normal",
     title: "Project tag suggestions",
     description: "Short and long tags share the field with the input. The short tag fits its content until hover or keyboard focus makes room for its remove button; unused project tags appear below.",
     steps: [
@@ -423,7 +440,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-edit-project-launch-settings",
-    group: GROUP,
+    group: "Projects",
+    category: "normal",
     title: "Stored project account and launch settings",
     description: "Long selected account and retained model labels fade at the field edge and scroll on hover. Open either picker to inspect the matching option labels.",
     steps: [
@@ -435,7 +453,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-edit-project-account-choices",
-    group: GROUP,
+    group: "Projects",
+    category: "normal",
     title: "Project account choices",
     description: "Inherited, default and long named accounts coexist. Hover a clipped account option to reveal its text as a marquee.",
     steps: [
@@ -447,7 +466,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-directory-picker",
-    group: GROUP,
+    group: "Projects",
+    category: "normal",
     title: "Directory picker",
     description: "Short directory names and a long directory row share the list; the long name fades and runs as a marquee on hover while its folder icon stays visible.",
     steps: [
@@ -459,7 +479,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-add-project-checking",
-    group: GROUP,
+    group: "Projects",
+    category: "normal",
     title: "Directory detection pending",
     steps: [
       consoleActions,
@@ -472,7 +493,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-add-project-detected",
-    group: GROUP,
+    group: "Projects",
+    category: "normal",
     title: "Detected project agent",
     steps: [
       consoleActions,
@@ -485,7 +507,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-add-project-path-refused",
-    group: GROUP,
+    group: "Projects",
+    category: "exceptional",
     title: "Project path refused",
     steps: [
       consoleActions,
@@ -498,7 +521,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-add-project-parent",
-    group: GROUP,
+    group: "Projects",
+    category: "normal",
     title: "Parent directory source",
     description: "Detect from files explains the recognized instruction files and directories as code; the agent picker is a single field.",
     steps: [
@@ -511,7 +535,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-add-project-parent-account",
-    group: GROUP,
+    group: "Projects",
+    category: "normal",
     title: "Parent directory with a chosen agent and account",
     description: "The instruction-file hint remains below the joined agent and account fields when Detect from files is replaced by a chosen agent.",
     steps: [
@@ -526,7 +551,8 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-add-project-git-unreachable",
-    group: GROUP,
+    group: "Projects",
+    category: "exceptional",
     title: "Unreadable Git source",
     steps: [
       consoleActions,
@@ -540,7 +566,8 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     id: "dialog-new-console-models-loading",
-    group: GROUP,
+    group: "Consoles",
+    category: "normal",
     title: "New console while the model list is out",
     description: "The model and effort pickers are locked and the model field says the list is loading.",
     state: dialogState,
@@ -552,7 +579,8 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     id: "dialog-edit-console-models-unavailable",
-    group: GROUP,
+    group: "Consoles",
+    category: "exceptional",
     title: "Edit a console whose agent cannot list its models",
     description: "The daemon found no binary for the agent, so the model picker offers the stored model alone and says why; the effort picker still works over what is stored.",
     state: dialogState,

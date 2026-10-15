@@ -5,7 +5,8 @@ import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import { LANGUAGES, LANGUAGE_NAMES, isLanguage, type Language } from "../i18n/languages";
-import { GROUPS, SCENARIOS } from "./fixtures";
+import { DEFAULT_SCENARIO, GROUPS, SCENARIOS } from "./fixtures";
+import { CATEGORIES } from "./fixtures/groups";
 import { DEFAULT_WIDTH, MIN_HEIGHT, type Scenario } from "./scenario";
 
 const WIDTHS = [
@@ -37,7 +38,7 @@ function readView(): View {
   const width = Number(params.get("width"));
   const height = Number(params.get("height"));
   return {
-    scenario: params.get("scenario") ?? SCENARIOS[0].id,
+    scenario: params.get("scenario") ?? DEFAULT_SCENARIO.id,
     theme: params.get("theme") === "dark" ? "dark" : "light",
     language: isLanguage(language) ? language : "en",
     width: Number.isFinite(width) && width > 0 ? width : undefined,
@@ -107,7 +108,8 @@ function viewOf(view: View, scenario: Scenario): View {
 function Gallery(): React.ReactElement {
   const [view, setView] = useState(readView);
   const [run, setRun] = useState(0);
-  const scenario = SCENARIOS.find((s) => s.id === view.scenario) ?? SCENARIOS[0];
+  const scenario = SCENARIOS.find((s) => s.id === view.scenario) ?? DEFAULT_SCENARIO;
+  const category = CATEGORIES.find(({ id }) => id === scenario.category)!;
   const width = view.width ?? scenario.width ?? DEFAULT_WIDTH;
   const height = view.height ?? scenario.height;
   const update = (patch: Partial<View>) => setView((current) => ({ ...current, ...patch }));
@@ -127,24 +129,39 @@ function Gallery(): React.ReactElement {
               <Icon aria-hidden size={14} />
               {title}
             </h2>
-            {SCENARIOS.filter((s) => s.group === title).map((s) => (
-              <a
-                key={s.id}
-                href={viewQuery(viewOf(view, s))}
-                aria-current={s.id === scenario.id ? "page" : undefined}
-                onClick={(e) => {
-                  e.preventDefault();
-                  setView((current) => viewOf(current, s));
-                }}
-              >
-                {s.title}
-              </a>
-            ))}
+            {CATEGORIES.map((category) => {
+              const scenarios = SCENARIOS.filter((s) => s.group === title && s.category === category.id);
+              return (
+                <div key={category.id} className="category-section" data-category={category.id}>
+                  <h3>{category.label} <span>{scenarios.length}</span></h3>
+                  {scenarios.length === 0 && <p className="no-scenarios">No previews in this section</p>}
+                  {scenarios.map((s) => (
+                    <a
+                      key={s.id}
+                      href={viewQuery(viewOf(view, s))}
+                      aria-current={s.id === scenario.id ? "page" : undefined}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setView((current) => viewOf(current, s));
+                      }}
+                    >
+                      {s.title}
+                    </a>
+                  ))}
+                </div>
+              );
+            })}
           </section>
         ))}
       </nav>
       <main>
-        <header>
+        <div className="preview-context" data-category={scenario.category}>
+          <div className="preview-location">{scenario.group} <span aria-hidden> / </span><strong className="category-badge">{category.label}</strong></div>
+          <h1>{scenario.title}</h1>
+          <p>{category.description}</p>
+          {scenario.description && <p className="description">{scenario.description}</p>}
+        </div>
+        <header aria-label="Preview controls">
           <div className="group">
             {(["light", "dark"] as const).map((theme) => (
               <button key={theme} aria-pressed={view.theme === theme} onClick={() => update({ theme })}>
@@ -187,7 +204,6 @@ function Gallery(): React.ReactElement {
             Open alone
           </a>
           <button onClick={() => setRun((n) => n + 1)}>Reload</button>
-          {scenario.description && <p className="description">{scenario.description}</p>}
         </header>
         <div className="stage">
           <iframe

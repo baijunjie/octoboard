@@ -40,6 +40,7 @@ export const settingsScenarios: Scenario[] = [
   {
     id: "settings-general",
     group: GROUP,
+    category: "normal",
     title: "Browser General settings",
     description: "The clone-directory explanation displays ~/Projects as selectable code. Other sections share the same mock data and can be explored manually.",
     state: browserState,
@@ -50,6 +51,7 @@ export const settingsScenarios: Scenario[] = [
   {
     id: "settings-general-background-run",
     group: GROUP,
+    category: "normal",
     title: "General, run in the background offered (desktop app)",
     description: "The clone-directory explanation displays ~/Projects as selectable code; the desktop app's extra background row starts off. Switch it on and off to read both descriptions.",
     state,
@@ -61,6 +63,7 @@ export const settingsScenarios: Scenario[] = [
   {
     id: "settings-permissions",
     group: GROUP,
+    category: "normal",
     title: "Permissions",
     description: "Neither Screen Recording nor Accessibility has been granted. Press each Grant to see the refused request point at System Settings; revisiting the section offers Grant again.",
     state,
@@ -73,6 +76,7 @@ export const settingsScenarios: Scenario[] = [
   {
     id: "settings-permissions-restart",
     group: GROUP,
+    category: "normal",
     title: "Permissions, granted since launch",
     description: "Screen Recording is granted but was not when the process started, so a restart is still owed.",
     state,
@@ -85,6 +89,7 @@ export const settingsScenarios: Scenario[] = [
   {
     id: "settings-permissions-unreadable",
     group: GROUP,
+    category: "exceptional",
     title: "Permissions, the shell cannot be asked",
     description: "What a broken IPC looks like: the grants could not be read, on the platform that has them.",
     state,
@@ -97,6 +102,7 @@ export const settingsScenarios: Scenario[] = [
   {
     id: "settings-git",
     group: GROUP,
+    category: "normal",
     title: "Settings: git",
     state: browserState,
     steps: [
@@ -107,6 +113,7 @@ export const settingsScenarios: Scenario[] = [
   {
     id: "settings-accounts",
     group: GROUP,
+    category: "normal",
     title: "Settings: accounts",
     description: "The introduction displays PATH as code above the configured accounts and unavailable agents.",
     state: browserState,
@@ -118,6 +125,7 @@ export const settingsScenarios: Scenario[] = [
   {
     id: "settings-trustedFolders",
     group: GROUP,
+    category: "normal",
     title: "Settings: trustedFolders",
     state: browserState,
     steps: [
@@ -128,6 +136,7 @@ export const settingsScenarios: Scenario[] = [
   {
     id: "settings-notifications",
     group: GROUP,
+    category: "normal",
     title: "Settings: notifications",
     state: browserState,
     steps: [
@@ -138,6 +147,7 @@ export const settingsScenarios: Scenario[] = [
   {
     id: "settings-configuration",
     group: GROUP,
+    category: "normal",
     title: "Settings: configuration",
     state: browserState,
     steps: [

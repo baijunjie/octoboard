@@ -92,6 +92,8 @@ export interface Scenario {
   id: string;
   /** The heading it is listed under. */
   group: GroupTitle;
+  /** Deliberately classified; empty, loading and constrained layouts can be normal. */
+  category: "normal" | "exceptional";
   title: string;
   /** Said under the title in the gallery; what to look at. */
   description?: string;

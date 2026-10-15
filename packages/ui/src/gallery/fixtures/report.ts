@@ -49,6 +49,7 @@ export const reportScenarios: Scenario[] = [
   {
     id: "report-two-console-sessions",
     group: GROUP,
+    category: "normal",
     title: "Latest interactive report",
     state: twoSessions,
     description: "The latest report is an interactive form; pagination belongs to the selected console session.",
@@ -59,6 +60,7 @@ export const reportScenarios: Scenario[] = [
   {
     id: "report-history",
     group: GROUP,
+    category: "normal",
     title: "Historical report",
     state: twoSessions,
     description: "The first page is read-only and its controls are disabled.",
@@ -70,6 +72,7 @@ export const reportScenarios: Scenario[] = [
   {
     id: "report-no-pages",
     group: GROUP,
+    category: "normal",
     title: "No reports",
     state: twoSessions,
     steps: [
@@ -79,6 +82,7 @@ export const reportScenarios: Scenario[] = [
   {
     id: "report-one-old-page",
     group: GROUP,
+    category: "normal",
     title: "One old report",
     state: twoSessions,
     steps: [

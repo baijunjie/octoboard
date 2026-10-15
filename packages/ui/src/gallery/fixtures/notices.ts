@@ -17,6 +17,7 @@ export const noticeScenarios: Scenario[] = [
   {
     id: "trust-prompt",
     group: TRUST,
+    category: "normal",
     title: "Queued trust prompts for all agents",
     description:
       "Claude Code and Codex offer their projects' parent folders; the Grok Build project is the home directory itself, whose parent is too broad to offer. The warning's configuration-file token takes its tone while the project path stays neutral. Each agent has its own caution and Codex names its repository-root trust. Not now advances through the three queued prompts.",
@@ -34,6 +35,7 @@ export const noticeScenarios: Scenario[] = [
   {
     id: "console-session-request",
     group: TRUST,
+    category: "normal",
     title: "Request for a console session, a second one queued",
     description:
       "A project session asking for a console session; a second request waits behind it.",
@@ -62,6 +64,7 @@ export const noticeScenarios: Scenario[] = [
   {
     id: "toast-error",
     group: TRUST,
+    category: "exceptional",
     title: "Error toasts",
     description:
       "Daemon error codes worded from the catalog, two naming a session (one an approval given after the session stopped waiting), one with a code the catalog lacks.",
@@ -76,6 +79,7 @@ export const noticeScenarios: Scenario[] = [
   {
     id: "toast-shell-timeout",
     group: TRUST,
+    category: "exceptional",
     title: "Shell environment timeout toast",
     description: "One error toast presents the shell command as selectable code, then the cause, launch consequence and recovery.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
@@ -84,9 +88,10 @@ export const noticeScenarios: Scenario[] = [
   {
     id: "toast-notice",
     group: TRUST,
-    title: "Notice toasts",
+    category: "exceptional",
+    title: "Warning notices and recovery",
     description:
-      "Session notices: a setting Octoboard had to work around, a failed press of a trust confirmation, a trust entry that could not be carried over, and a long text.",
+      "Deliberate warning notices: an untrusted workspace workaround, a failed trust confirmation, dropped queued messages and a trust entry blocked by a locked store. Session links identify where recovery is needed.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
       { kind: "notice", code: "claude_workspace_untrusted", params: {}, message: "", session: "s-web-1" },

@@ -15,7 +15,7 @@ describe("the sample repository's changes", () => {
   const pathOf = (side: ChangeSide) => (side.state === "present" ? side.path : "");
   const lines = (side: SideRead) => (side.state === "present" ? side.lines : null);
   /** The daemon only the `git` of a scenario is read from; the rest of the scenario is unused. */
-  const sampleDaemon = (git?: FixtureGit) => createFixtureDaemon({ id: "sample-git", group: "Project pane: Git", title: "", git });
+  const sampleDaemon = (git?: FixtureGit) => createFixtureDaemon({ id: "sample-git", group: "Project pane: Git", category: "normal", title: "", git });
   /** The version a request names a side at, which the daemon compares the side it finds against
    * before it reads any body: the one the diff reply reported, as the window names it back. */
   const versionOf = (side: ChangeSide): SideVersion => (side.state === "present" ? { state: "present", source: side.source } : { state: "absent" });

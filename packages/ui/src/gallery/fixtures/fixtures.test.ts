@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 
-import { GROUPS, SCENARIOS } from ".";
+import { DEFAULT_SCENARIO, GROUPS, SCENARIOS } from ".";
 import { CATALOGS, format, messageText, splitPlaceholders, type Message, type MessageKey } from "../../i18n/catalog";
 import type { Language } from "../../i18n/languages";
 import { en } from "../../i18n/messages/en";
@@ -68,6 +68,46 @@ function englishCopyIn(language: Language): (matcher: Matcher) => boolean {
 }
 
 describe("gallery scenarios", () => {
+  it("explicitly classifies every scenario under a functional group and defaults to normal", () => {
+    expect(DEFAULT_SCENARIO.category).toBe("normal");
+    for (const scenario of SCENARIOS) {
+      expect(["normal", "exceptional"]).toContain(scenario.category);
+      expect(GROUPS.some(({ title }) => title === scenario.group)).toBe(true);
+    }
+    expect(GROUPS.map(({ title }) => title)).not.toContain("Empty");
+    expect(GROUPS.map(({ title }) => title)).not.toContain("Dialogs");
+  });
+
+  it("keeps mocked Git warnings out of normal branch badge previews", () => {
+    const badges = SCENARIOS.filter(({ group }) => group === "Branch badges");
+    for (const scenario of badges.filter(({ category }) => category === "normal")) {
+      expect([...scenario.state!.gitStatuses!.values()].filter(({ error }) => error)).toEqual([]);
+    }
+    for (const id of ["git-badges-errors", "git-badge-focus", "git-badge-focus-long-error"]) {
+      const scenario = badges.find((scenario) => scenario.id === id)!;
+      expect(scenario.category).toBe("exceptional");
+      expect([...scenario.state!.gitStatuses!.values()].some(({ error }) => error)).toBe(true);
+    }
+  });
+
+  it("keeps failed reads and conflicts out of normal viewer navigation", async () => {
+    for (const scenario of viewerScenarios.filter(({ category }) => category === "normal")) {
+      const subjects = await scenario.viewer!.subjects("en");
+      expect(subjects.length).toBeGreaterThan(0);
+      expect(subjects.filter(({ content }) => ["error", "disconnected", "conflict"].includes(content.state))).toEqual([]);
+      expect(subjects.some(({ path }) => ["src/strange.brokengrammar", "assets/broken.svg", "src/garbled.ts"].includes(path))).toBe(false);
+    }
+  });
+
+  it("keeps conflicts and mocked read failures out of normal Git review navigation", () => {
+    for (const scenario of SCENARIOS.filter(({ category, git }) => category === "normal" && git)) {
+      for (const changes of Object.values(scenario.git!.changes)) {
+        expect(Array.isArray(changes)).toBe(true);
+        if (Array.isArray(changes)) expect(changes.filter(({ entry, error, expand }) => entry.group === "conflicted" || error || expand?.error || expand?.movedOn)).toEqual([]);
+      }
+    }
+  });
+
   it("have unique ids, which the URL names them by", () => {
     const ids = SCENARIOS.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -128,7 +168,7 @@ describe("gallery scenarios", () => {
   });
 
   it.each(["en", "zh-Hans", "ar"] as const)("viewer change stages follow the window language in %s", async (language) => {
-    const subjects = await viewerScenarios.find(({ id }) => id === "viewer-changes")!.viewer!.subjects(language);
+    const subjects = [...await viewerScenarios.find(({ id }) => id === "viewer-changes")!.viewer!.subjects(language), ...await viewerScenarios.find(({ id }) => id === "viewer-changes-errors")!.viewer!.subjects(language)];
     const stages = subjects.flatMap(({ stage }) => stage === undefined ? [] : [stage]);
     expect(new Set(stages)).toEqual(new Set([format(language, "git.group.staged"), format(language, "git.group.unstaged")]));
     expect(subjects.find(({ path, content }) => path === "src/offline.ts" && content.state === "disconnected")!.stage).toBe(format(language, "git.group.unstaged"));

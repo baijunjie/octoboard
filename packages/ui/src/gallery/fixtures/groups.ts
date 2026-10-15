@@ -1,5 +1,4 @@
 import {
-  AppWindow,
   Archive,
   FileCog,
   FileText,
@@ -26,7 +25,9 @@ import {
  * then what opens over them, and last the window itself. */
 export const GROUPS = [
   { title: "Startup and connection", icon: Plug },
-  { title: "Empty", icon: Inbox },
+  { title: "Welcome", icon: Inbox },
+  { title: "Consoles", icon: Rows3 },
+  { title: "Projects", icon: FolderTree },
   { title: "Sidebar sessions", icon: Rows3 },
   { title: "Branch badges", icon: GitBranch },
   { title: "Project filter", icon: Funnel },
@@ -38,7 +39,6 @@ export const GROUPS = [
   { title: "Project pane: Git", icon: GitCompare },
   { title: "File viewer", icon: FileText },
   { title: "Trust prompts and toasts", icon: MessageSquareWarning },
-  { title: "Dialogs", icon: AppWindow },
   { title: "Configuration", icon: FileCog },
   { title: "Settings", icon: Settings },
   { title: "Window layout", icon: PanelsTopLeft },
@@ -47,3 +47,9 @@ export const GROUPS = [
 
 /** What a scenario's `group` names. */
 export type GroupTitle = (typeof GROUPS)[number]["title"];
+
+/** Every function lists normal states first, then deliberate failures and conflicts. */
+export const CATEGORIES = [
+  { id: "normal", label: "Normal", description: "Expected UI, including empty, loading and constrained views." },
+  { id: "exceptional", label: "Exceptional", description: "Deliberate failures, validation errors, refusals and conflicts." },
+] as const;

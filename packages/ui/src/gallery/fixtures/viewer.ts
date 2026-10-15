@@ -566,12 +566,9 @@ const longPatch = () =>
   "diff --git a/data/rows.ts b/data/rows.ts\nindex 1111111..2222222 100644\n--- a/data/rows.ts\n+++ b/data/rows.ts\n@@ -1,150 +1,150 @@\n" +
   generated(150, (i) => `-export const row${i} = ${i};\n+export const row${i} = ${i + 1};`);
 
-/** The files, built when the scenario opens: the large ones take a moment to generate, and the
- * failing grammar is registered with the renderer library, which other scenarios do not load. */
-async function files(): Promise<ViewerSubject[]> {
-  const { registerCustomLanguage } = await import("@pierre/diffs");
-  // A grammar whose loader fails, standing in for a grammar chunk that cannot be fetched.
-  registerCustomLanguage("octoboard-broken-grammar", () => Promise.reject(new Error("Gallery: this grammar fails to load")), ["brokengrammar"]);
+/** Shared file subjects, built only when a viewer scenario opens; navigation selects its explicit
+ * normal or exceptional targets below. */
+async function allFiles(): Promise<ViewerSubject[]> {
   return [
     file("src/session.ts", text("src/session.ts", NEW_SESSION)),
     file("scripts/build.py", text("scripts/build.py", PYTHON)),
@@ -622,6 +619,19 @@ async function files(): Promise<ViewerSubject[]> {
       text("chunk.js", JSON_TEXT),
     ),
   ];
+}
+
+// Explicit confirmation targets, shared by normal and failure navigation without mixing them.
+const FAILED_FILE_PATHS = new Set(["assets/broken.svg", "src/strange.brokengrammar", "src/gone.ts", "src/offline.ts"]);
+async function files(): Promise<ViewerSubject[]> {
+  return (await allFiles()).filter(({ path }) => !FAILED_FILE_PATHS.has(path));
+}
+async function failedFiles(): Promise<ViewerSubject[]> {
+  const { registerCustomLanguage } = await import("@pierre/diffs");
+  registerCustomLanguage("octoboard-broken-grammar", () => Promise.reject(new Error("Gallery: this grammar fails to load")), ["brokengrammar"]);
+  const subjects = (await allFiles()).filter(({ path }) => FAILED_FILE_PATHS.has(path));
+  // Start with the failed read so the exceptional purpose is visible immediately.
+  return [subjects.find(({ path }) => path === "src/gone.ts")!, ...subjects.filter(({ path }) => path !== "src/gone.ts")];
 }
 
 const LONG_COMPARISON = "release/2024-11-stabilisation-and-hotfix-candidates at 1234567 to feature/ranking-experiments-with-a-long-name at fedcba0";
@@ -682,7 +692,7 @@ async function withoutClipboard(): Promise<ViewerSubject[]> {
   return [file("docs/guide.md", text("docs/guide.md", GUIDE)), file("assets/before.png", binary("assets/before.png", IMAGES.before_png)), compared()];
 }
 
-async function changes(language: Language): Promise<ViewerSubject[]> {
+async function allChanges(language: Language): Promise<ViewerSubject[]> {
   const t: Translate = (key, ...args) => format(language, key, ...args);
   return [
     change(t, "src/session.ts", present("src/session.ts", oldSession), present("src/session.ts", newSession), MODIFIED_PATCH),
@@ -808,6 +818,14 @@ function diagramPastBudget(): string {
 // One note that holds the document states that can be on screen together. The other file is only
 // there so a relative link has a subject to open, with lines above the heading the link names:
 // opening it on that heading is not the same as opening it at the top.
+const FAILED_CHANGE_KEYS = new Set(["Conflicted:docs/merge.md", "Conflicted:src/merge.ts", "unstaged:src/garbled.ts", "Unstaged:src/offline.ts"]);
+async function changes(language: Language): Promise<ViewerSubject[]> {
+  return (await allChanges(language)).filter(({ key }) => !FAILED_CHANGE_KEYS.has(key));
+}
+async function failedChanges(language: Language): Promise<ViewerSubject[]> {
+  return (await allChanges(language)).filter(({ key }) => FAILED_CHANGE_KEYS.has(key));
+}
+
 const NOTES =
   `# Notes
 
@@ -883,22 +901,72 @@ ${OTHER_LEAD}
 What the link from the first note opens this file on.
 `;
 
+const NORMAL_NOTES = `# A project note
+
+\`\`\`mermaid
+flowchart LR
+accTitle: Request flow
+accDescr: A request goes from the client to the index.
+  Client --> Index --> Reply
+\`\`\`
+
+\`\`\`mermaid
+flowchart LR
+  A --> B
+\`\`\`
+
+It costs $20 and $30, and $100/2$ of it, and $E=mc^2$.
+
+$$
+\\int_0^1 x^2 \\, dx
+$$
+
+مرحبا $E=mc^2$ بالعالم.
+
+![A small picture](picture.png)
+
+See [the other note](./other.md#kept) and [the heading below](#kept-aside).
+
+## Kept aside
+
+What the link in this note scrolls to.
+`;
 async function documentSubjects(): Promise<ViewerSubject[]> {
-  return [file("docs/notes.md", text("docs/notes.md", NOTES)), file("docs/other.md", text("docs/other.md", OTHER))];
+  return [file("docs/notes.md", text("docs/notes.md", NORMAL_NOTES)), file("docs/other.md", text("docs/other.md", OTHER))];
 }
 
 export const viewerScenarios: Scenario[] = [
   {
+    id: "viewer-files-errors", group: GROUP, category: "exceptional",
+    title: "Failed reads, disconnected files and renderer fallbacks",
+    description: "Starts on a failed read; Previous / Next also shows a disconnected read, malformed SVG and a grammar that fails to load.",
+    viewer: { subjects: failedFiles },
+  },
+  {
+    id: "viewer-changes-errors", group: GROUP, category: "exceptional",
+    title: "Merge conflicts, malformed patches and disconnected changes",
+    description: "Starts on a merge conflict; Previous / Next stays within conflicts and deliberately failing change subjects.",
+    viewer: { subjects: failedChanges },
+  },
+  {
+    id: "viewer-document-errors", group: GROUP, category: "exceptional",
+    title: "Document rendering failures and limits",
+    description: "A document with an invalid diagram, unfinished formulas, a missing image and a diagram past the render budget. Scroll to compare the inline notices and retained source; successful content provides context for each failure.",
+    files: { "docs/picture.png": { image: IMAGES.before_png } },
+    viewer: { subjects: async () => [file("docs/notes.md", text("docs/notes.md", NOTES)), file("docs/other.md", text("docs/other.md", OTHER))] },
+  },
+  {
     id: "viewer-files",
     group: GROUP,
+    category: "normal",
     title: "Files",
-    description:
-      "Code in several languages (one file with lines wider than the viewer), Markdown that opens as a document (headings, tight and loose lists with ordinary and task items sharing a text edge, nested tasks and continuation paragraphs, tables, fenced code, markup that must stay inert, and right-to-left text: in the guide, a list, quote and table that read from the right inside a left-to-right document; in the Arabic document, the same blocks in the other direction, with an English paragraph and an English-first list among them; the figures document has no letters, so with the ar language it reads from the right), every image format, an SVG and HTML whose scripts must not run, unsupported binary, a grammar that fails, files past the budgets, loading and failed reads. Previous / Next walks them in the same mounted viewer. On docs/guide.md or src/generated/table.ts, Tab into the reading surface for its focus ring and keyboard scrolling. In each header the path is followed by the size as a chip, and no subtitle row sits under the title. The path and metadata controls are inset to align with the ends of the reading frame’s rounded corners. Previous / Next sit to the left of the title, outside its accessible name, with no bottom navigation bar. Copy path leads the controls at the end of the metadata row, followed by the Markdown view choice and the word wrap choice (a Markdown file switched to source shows both choices). The title navigation keeps its place when a long name pushes the size chip, or in a narrow window the path itself, down to a row of its own. Every reading surface (highlighted code, plain text, a rendered document) fades at the edge it hides more behind and not at an edge with nothing past it, and shows no fade at all when its content fits: compare docs/guide.md, src/generated/table.ts and logs/server.log (each taller than the viewer) with README.md, scripts/build.py and src/strange.brokengrammar (each in view). docs/releases.md (a rendered table wider than the viewer) and logs/server.log (plain text, a few lines wider than the viewer) scroll both ways, at the window's own minimum width as well as the default: look at their bottom edge, where the fade meets the horizontal scrollbar, with the system's scrollbars set to show always; the wrap choice, off until chosen, takes the sideways scroll from the log.",
+    description: "Successful code, Markdown, images, inert repository markup, unsupported binary formats, large-file fallbacks and loading views. Previous / Next stays within normal subjects. Compare long paths, source/document and wrap controls, and scroll fades using the width and language controls.",
     viewer: { subjects: files },
   },
   {
     id: "viewer-files-delayed",
     group: GROUP,
+    category: "normal",
     title: "Files, each read taking a moment",
     description: "As Files, but each subject shows its loading state for 400 ms first, as a read from the daemon would.",
     viewer: { subjects: files, loadDelay: 400 },
@@ -906,23 +974,24 @@ export const viewerScenarios: Scenario[] = [
   {
     id: "viewer-document",
     group: GROUP,
+    category: "normal",
     title: "Rendered document",
-    description:
-      "The note opens as a document. The first diagram runs left to right, from Client to Reply, and is named Request flow; the theme control above the window switches its background and text with highlighted code (#f3f4f6 and #0e1116 in light, #0a0c10 and #f0f3f6 in dark). The next diagram has no title, so it uses the translated Diagram label for the current interface language. The one after that cannot be drawn: its source sits under the failure notice, and the sentence under it is still there. Diagram and block formula notices retain their status background with compact corners; their icon and source share a horizontal inset, and their outer edges align with the document. In the line about cost, $20 and $30 stay text, while $100/2$ and E=mc^2 are formulas, as is the formula on its own line. Unfinished inline and block formulas show their source, a math fence stays code, and the formula in the Arabic sentence stays left to right. The picture is shown and named by its description. The picture whose path leaves the project keeps only its description. The missing one keeps its description and says it could not be shown. Further down, a diagram is left as source under the notice that the document is large. The link to the other note opens that file on the heading Kept; Next opens the same file from the top. The link to the heading in this note scrolls to it.",
+    description: "Rendered diagrams and formulas, a project image, mixed text directions and links between documents. The named diagram is Request flow; the second uses the translated Diagram label. Follow the other-note link to its Kept heading or the local link to Kept aside.",
     files: { "docs/picture.png": { image: IMAGES.before_png } },
     viewer: { subjects: documentSubjects },
   },
   {
     id: "viewer-changes",
     group: GROUP,
+    category: "normal",
     title: "Changes",
-    description:
-      "Modified (one with lines wider than the viewer), added, deleted, renamed, type-changed and renamed-below-itself files, in both directions, from patches, sides outside the project, image changes, a binary change, an untracked symbolic link and repository of its own, a change whose two sides are the same, a patch past the budget, a patch that cannot be read and a change without a patch. In each title the name comes first, then the status chip, then the stage tag; a conflicted, untracked or compared change has no stage tag. A change from the Compare view has its comparison as a subtitle directly under the title, faded where clipped (the long comparisons), and the neighbouring changes show that a subject without one loses that row. Previous / Next sit to the left of the title, outside its accessible name; the comparison subtitle spans the header below them. Copy path leads the metadata controls, followed by the diff layout and word wrap choices (the Markdown diffs show all three). The metadata row is inset on both sides to align with the ends of the reading frame’s rounded corners. No navigation bar takes height below the diff; the rename with long branches and a long origin has the most rows once the window is narrow (the width controls above the window). A diff taller than the viewer (data/rows.ts) and a patch shown as plain text (data/table.ts) fade at the edge they hide more behind, as the diffs that fit (src/badge.ts, and plain, src/garbled.ts) show no fade.",
+    description: "Successful modified, added, deleted, renamed, type-changed, untracked and compared changes. Includes images, binary notices, large-patch fallbacks and empty diffs. Previous / Next stays within normal subjects; compare stage tags, long comparison subtitles and layout controls.",
     viewer: { subjects: changes },
   },
   {
     id: "viewer-no-clipboard",
     group: GROUP,
+    category: "normal",
     title: "Header on a platform with no clipboard",
     description:
       "A Markdown file, an image and a change from the Compare view on a platform with no clipboard: Previous / Next remain to the left of the title. The metadata controls start at the view choices with no copy button (switch the Markdown file to source for the wrap choice beside the view choice); the image has no metadata controls. The rest of the header (the size chip, the subtitle) is unchanged.",

@@ -338,19 +338,38 @@ const compare = (left: string, right: string) => [
   (ui: Ui) => ui.wait(600),
 ];
 
-export const projectGitScenarios: Scenario[] = [
+/** Successful review targets do not carry hidden conflicts or mocked failures in their navigation. */
+function normalRepository(repository: FixtureGit): FixtureGit {
+  const normal = (changes: FixtureChange[]) => changes.filter(({ entry, error, expand }) => entry.group !== "conflicted" && !error && !expand?.error && !expand?.movedOn);
+  return {
+    ...repository,
+    changes: Object.fromEntries(Object.entries(repository.changes).map(([id, changes]) => [id, Array.isArray(changes) ? normal(changes) : changes])),
+    comparisons: repository.comparisons && Object.fromEntries(Object.entries(repository.comparisons).map(([id, changes]) => [id, normal(changes)])),
+  };
+}
+
+const reviewScenarios: Scenario[] = [
+  {
+    id: "git-changes-conflicts", group: GROUP, category: "exceptional",
+    title: "Conflicted changes and read failures",
+    description: "Conflicted, staged, unstaged and untracked changes share the list. package.json is selected in Conflicted; open it for conflict markers. This repository deliberately includes read and expansion failures.",
+    state, git: SAMPLE_GIT,
+    steps: [...openGit, (ui) => ui.press(ui.changeRow("package.json", "conflicted")), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
+  },
   {
     id: "git-changes",
     group: GROUP,
+    category: "normal",
     title: "A worktree's uncommitted changes",
     description:
-      "Conflicted, staged, unstaged and untracked changes share the list. package.json is selected: its rounded highlight has space on all four sides, matching Files and folder-grouped Git rows. Its actions button has a muted resting glyph and the shared subtle tint when hovered or open, matching the selected sidebar session and console header. Open a file to inspect its viewer, or use the controls to explore filters, folders and status tooltips. The repository includes rename, expansion, budget and read-failure cases.",
+      "Staged, unstaged and untracked changes share the list. server.ts is selected: its rounded highlight has space on all four sides, matching Files and folder-grouped Git rows. Its actions button has a muted resting glyph and the shared subtle tint when hovered or open, matching the selected sidebar session and console header. Open a file to inspect its viewer, or use the controls to explore filters, folders and status tooltips. The repository includes successful rename, expansion and budget cases.",
     state,
-    steps: [...openGit, (ui) => ui.press(ui.changeRow("package.json", "conflicted")), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
+    steps: [...openGit, (ui) => ui.press(ui.changeRow("server.ts", "modified")), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
   },
   {
     id: "git-changes-sticky",
     group: GROUP,
+    category: "normal",
     title: "A section heading pinned above flat changes",
     description: "The list starts partway through Staged: its heading stays against the worktree selector's bottom border while rows scroll beneath it. The top fade begins below the pinned band; scrolling farther lets the next section replace it.",
     state,
@@ -359,6 +378,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-changes-tree-sticky",
     group: GROUP,
+    category: "normal",
     title: "A section heading pinned above grouped changes",
     description: "The folder-grouped list starts partway through Staged: its heading stays against the worktree selector's bottom border while directories and files scroll beneath it. The top fade starts below the pinned band; scrolling farther lets the next section replace it.",
     state,
@@ -368,6 +388,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-worktree-gone",
     group: GROUP,
+    category: "exceptional",
     title: "A worktree that has gone",
     state,
     git: {
@@ -382,6 +403,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-clean",
     group: GROUP,
+    category: "normal",
     title: "A worktree with no uncommitted changes",
     state,
     git: { ...SAMPLE_GIT, changes: { ...SAMPLE_GIT.changes, "wt-main": [] } },
@@ -390,6 +412,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-not-a-repository",
     group: GROUP,
+    category: "normal",
     title: "A project in no repository",
     state,
     git: null,
@@ -398,6 +421,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-unreadable",
     group: GROUP,
+    category: "exceptional",
     title: "A repository Git cannot read",
     description: "The standalone failure has a danger alert with a heading and Git's own diagnostic as selectable code. Narrow shows the same failure after opening the project pane drawer.",
     state,
@@ -407,6 +431,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-compare-many-branches",
     group: GROUP,
+    category: "normal",
     title: "More branches than the selector shows",
     description:
       "The To selector open over a repository with more branches than its list holds: the list scrolls and its rows fade at the bottom edge, where more are waiting, while the popover around it keeps its edges. The worktree scenario's Compare tab shows every branch in its selectors, with no fade.",
@@ -417,6 +442,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-compare-no-branches",
     group: GROUP,
+    category: "normal",
     title: "Comparing in a repository with no branches",
     description: "A repository with no commit yet has no branch to choose, so the Compare view says so instead of asking for two.",
     state,
@@ -430,6 +456,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-compare-moved",
     group: GROUP,
+    category: "normal",
     title: "A compared branch that has moved since",
     description: "The branch list read after the comparison says feature/ranking-experiments is at another commit now; the comparison stays on the commits it was made at until Refresh.",
     state,
@@ -442,6 +469,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-compare-gone",
     group: GROUP,
+    category: "exceptional",
     title: "A compared branch that no longer exists",
     description: "The comparison failure has a danger alert with a heading and a separate Try again control. Open the project pane drawer when using Narrow.",
     state,
@@ -451,6 +479,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-compare",
     group: GROUP,
+    category: "normal",
     title: "Branch comparison",
     state: state,
     steps: [
@@ -460,6 +489,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-compare-origins",
     group: GROUP,
+    category: "normal",
     title: "Branch creator indicators",
     state: state,
     description: "The selected, other and removed session origins are visible together; hover their rings for details.",
@@ -470,6 +500,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-changes-tree",
     group: GROUP,
+    category: "normal",
     title: "Changes grouped by folder",
     description: "Directories start expanded and config.ts is selected inside src. Its rounded highlight keeps the same space on all four sides as Files and the flat Git list, while file labels follow the folder indentation. Compare file actions buttons at rest, then hover or open their menus for the same subtle shared hover tint.",
     state: state,
@@ -483,7 +514,8 @@ export const projectGitScenarios: Scenario[] = [
   },
   {
     id: "git-change-viewer",
-    group: GROUP,
+    group: "File viewer",
+    category: "normal",
     title: "Change viewer with collapsed lines",
     state: state,
     description: "The staged tag and long expansion gaps accompany the diff; other change subjects remain available through navigation.",
@@ -496,6 +528,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-compare-same",
     group: GROUP,
+    category: "normal",
     title: "Branches at the same commit",
     state: state,
     steps: [
@@ -505,6 +538,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-compare-empty",
     group: GROUP,
+    category: "normal",
     title: "No changes inside the project",
     state: state,
     steps: [
@@ -514,6 +548,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-changes-filter",
     group: GROUP,
+    category: "normal",
     title: "Filtered changes",
     state: state,
     steps: [
@@ -525,6 +560,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-changes-filter-placeholder",
     group: GROUP,
+    category: "normal",
     title: "Changes with an empty filter field",
     description: "The focused, empty filter shows its placeholder above the unchanged list. Files/Git and Uncommitted/Compare tabs remain visible. Moving focus away closes the empty field.",
     state,
@@ -536,6 +572,7 @@ export const projectGitScenarios: Scenario[] = [
   {
     id: "git-changes-filter-empty",
     group: GROUP,
+    category: "normal",
     title: "No matching changes",
     state: state,
     steps: [
@@ -545,3 +582,7 @@ export const projectGitScenarios: Scenario[] = [
     ],
   },
 ];
+
+export const projectGitScenarios: Scenario[] = reviewScenarios.map((scenario) => scenario.category === "normal" && scenario.git !== null
+  ? { ...scenario, git: normalRepository(scenario.git ?? SAMPLE_GIT) }
+  : scenario);

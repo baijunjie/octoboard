@@ -43,6 +43,7 @@ export const consoleSessionsScenarios: Scenario[] = [
   {
     id: "console-sessions-section",
     group: GROUP,
+    category: "normal",
     title: "Console sessions, and project sessions bound, unbound and nested",
     description:
       "The section headings show Console sessions (4) and Projects (2), counting only the rows in each section. " +
@@ -61,6 +62,7 @@ export const consoleSessionsScenarios: Scenario[] = [
   {
     id: "session-rename-with-terminal-title",
     group: GROUP,
+    category: "normal",
     title: "Rename a session with an agent task title",
     description: "The sidebar keeps the agent task beside the session name. Rename edits only the original session name.",
     state,

@@ -71,6 +71,7 @@ export const busyScenarios: Scenario[] = [
   {
     id: "busy-many",
     group: GROUP,
+    category: "normal",
     title: "Many consoles, projects and sessions",
     description:
       "Twelve projects with long and pinned names and long paths, a pinned session, all three agents. Sessions in every status the list shows (Working, Waiting for you, Awaiting instructions, Interrupted), one of them waiting in another console. A session of Media gateway with a title far wider than the sidebar row is selected: the breadcrumb in the top bar and its row both have to fit it.",

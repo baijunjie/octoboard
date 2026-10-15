@@ -107,6 +107,7 @@ export const archiveScenarios: Scenario[] = [
   {
     id: "archive-project-preview",
     group: GROUP,
+    category: "normal",
     title: "Project archive menu, parents only",
     state: archiveState,
     description: "The menu lists archived parents, including directly console-bound sessions, and View all. Children of live and archived leads stay out of this preview. Long archived names fade at the menu edge and run as a marquee when their row is hovered.",
@@ -118,6 +119,7 @@ export const archiveScenarios: Scenario[] = [
   {
     id: "archive-project-family",
     group: GROUP,
+    category: "normal",
     title: "Project archive with live and archived owners",
     state: archiveState,
     description: "The full project archive includes children omitted from the preview. Children of the archived lead nest under it; the archived child of the active lead appears as a standalone row. Long Latin and CJK session titles and account/time metadata fade separately; hover either text to scroll only that line. Archive count and heading also respond only to their own text hover. Hovering agent icons, Reopen, Delete or header controls leaves the text still.",
@@ -130,6 +132,7 @@ export const archiveScenarios: Scenario[] = [
   {
     id: "archive-many",
     group: GROUP,
+    category: "normal",
     title: "Project archive, many entries",
     state: archiveState,
     description: "Seventy entries are loaded thirty at a time. The newest entries retain English agent task titles beside their original names, including a long title; other entries keep only their session names.",
@@ -142,6 +145,7 @@ export const archiveScenarios: Scenario[] = [
   {
     id: "archive-console-sessions",
     group: GROUP,
+    category: "normal",
     title: "Archived console sessions",
     description: "Console sessions (2) counts the live sidebar rows; the eight archived console sessions appear in the archive view.",
     state: archiveState,
@@ -154,6 +158,7 @@ export const archiveScenarios: Scenario[] = [
   {
     id: "archive-bound-sessions",
     group: GROUP,
+    category: "normal",
     title: "Bound archive with nested lead sessions",
     description: "The full console-session archive retains the archived lead and its nested children. The archived child of the active project lead belongs to that project's archive.",
     state: archiveState,
@@ -165,6 +170,7 @@ export const archiveScenarios: Scenario[] = [
   {
     id: "archive-delete-bound-sessions",
     group: GROUP,
+    category: "normal",
     title: "Delete an archived lead session",
     state: archiveState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
@@ -177,6 +183,7 @@ export const archiveScenarios: Scenario[] = [
   {
     id: "archive-emptied",
     group: GROUP,
+    category: "normal",
     title: "Archive emptied while open",
     state: archiveState,
     steps: [

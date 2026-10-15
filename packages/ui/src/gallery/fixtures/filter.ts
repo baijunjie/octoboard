@@ -40,6 +40,7 @@ export const filterScenarios: Scenario[] = [
   {
     id: "filter-popover",
     group: GROUP,
+    category: "normal",
     title: "Project filter",
     description: "Selected tags have checkmarks; the normal vocabulary fits without scrolling. The popover stays open as conditions are picked. After closing it, the heading's Funnel X clears all conditions.",
     state,
@@ -53,6 +54,7 @@ export const filterScenarios: Scenario[] = [
   {
     id: "filter-in-force",
     group: GROUP,
+    category: "normal",
     title: "Matching projects",
     description: "Projects (1) counts the single matching project. The heading's Funnel X clears the keyword and both tags together. The keyword, short tag and long tag fit their content at rest; each remains removable on its own. Hover a short tag to reveal its remove button and minimum width.",
     state: state,
@@ -68,6 +70,7 @@ export const filterScenarios: Scenario[] = [
   {
     id: "filter-no-match",
     group: GROUP,
+    category: "normal",
     title: "No matching projects",
     description: "Projects (0) appears above the no-match row while the filter remains active. The heading's Funnel X clears the keyword and restores every project.",
     state: state,
@@ -81,6 +84,7 @@ export const filterScenarios: Scenario[] = [
   {
     id: "filter-many-tags",
     group: GROUP,
+    category: "normal",
     title: "Scrollable tag picker",
     description: "The tag list scrolls at the popover edge while its tags keep the search field's inset.",
     state: state,
@@ -92,6 +96,7 @@ export const filterScenarios: Scenario[] = [
   {
     id: "filter-no-tags",
     group: GROUP,
+    category: "normal",
     title: "Empty tag picker",
     state: state,
     preferences: { sidebarConsole: plainConsole.id },

@@ -21,9 +21,7 @@ import { viewerScenarios } from "./viewer";
 
 export { GROUPS } from "./groups";
 
-/** Every scenario; within a group the gallery lists them in this order, and the first entry is
- * the one the gallery opens on when the URL names no scenario, which is why this order does not
- * follow `GROUPS`: an empty state makes a better landing page than a startup failure. */
+/** The catalog keeps stable deep links; navigation orders each function by category. */
 export const SCENARIOS: Scenario[] = [
   ...emptyScenarios,
   ...busyScenarios,
@@ -47,8 +45,12 @@ export const SCENARIOS: Scenario[] = [
   {
     id: "code-colors",
     group: "Component colors",
+    category: "normal",
     title: "Code colors and alert tones",
     description: "Six code colors outside alerts, all requested colors inside each alert tone, wrapping blocks, nested tone priority and a code token after the alerts. Scroll to compare the complete palette; theme and language controls show the same view in dark and right-to-left layouts.",
     codePalette: true,
   },
 ];
+
+/** A successful welcome view is the landing page, regardless of catalog ordering. */
+export const DEFAULT_SCENARIO = SCENARIOS.find(({ id }) => id === "empty-no-consoles")!;

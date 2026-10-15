@@ -160,6 +160,7 @@ export function createPreviewScenario(
   const scenario: Scenario = {
     id: `website-${scene}`,
     group: "Focus mode",
+    category: "normal",
     title: copy.demo,
     state: snapshotState({
       consoles: [workspace],

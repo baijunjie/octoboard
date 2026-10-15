@@ -83,8 +83,17 @@ const openFiles = [(ui: Ui) => ui.press(ui.session("Fix the summary layout")), (
 
 export const projectFilesScenarios: Scenario[] = [
   {
+    id: "files-viewer-error-toast", group: "File viewer", category: "exceptional",
+    title: "File viewer with an error toast",
+    description: "An unrelated path failure is deliberately raised over the viewer to confirm that toast placement leaves Previous / Next accessible.",
+    state,
+    toasts: [{ kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "" }],
+    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600)],
+  },
+  {
     id: "files-tree",
     group: GROUP,
+    category: "normal",
     title: "A project session's files",
     description:
       "Folders first, natural order, .git left out. src is expanded and main.ts is selected: its rounded highlight has space on all four sides, matching Git rows. Compare its actions button with the selected sidebar session and the console header: resting glyphs stay muted, while hovering or opening each menu gives it the shared subtle tint. Press a file for the viewer and Left/Right to visit visible files. Hover or focus file and folder rows for their Copy path actions. Switch between Website and Search API sessions to inspect the short file-pane entrance; Search API has its own routes and schema tree. Switching between the two Website sessions keeps the current tree steady. A project's actions offer Browse files when its pane is hidden or belongs to another project. Open in file manager is available independently. Narrow the window and open the project pane drawer to see the same tree over the terminal.",
@@ -104,6 +113,7 @@ export const projectFilesScenarios: Scenario[] = [
   {
     id: "files-project-menu",
     group: GROUP,
+    category: "normal",
     title: "Project actions with its files already visible",
     description: "Website's files are already visible, so its open actions menu omits Browse files. Open in file manager remains available; in the gallery it acknowledges the request without opening a host application.",
     state,
@@ -112,6 +122,7 @@ export const projectFilesScenarios: Scenario[] = [
   {
     id: "files-row-no-clipboard",
     group: GROUP,
+    category: "normal",
     title: "File and folder rows where nothing can be copied",
     description: "The current row, main.ts, on a platform with no clipboard: no actions button is drawn on files or folders, whether expanded or collapsed.",
     state,
@@ -120,17 +131,18 @@ export const projectFilesScenarios: Scenario[] = [
   },
   {
     id: "files-viewer",
-    group: GROUP,
-    title: "A file open from the tree, with a toast",
+    group: "File viewer",
+    category: "normal",
+    title: "A file open from the tree",
     description:
-      "The viewer opened over the project's files, on a file pressed in the tree. Previous file and Next file sit to the left of its title, leaving the bottom edge for content. A toast is raised while it is open without covering those navigation buttons.",
+      "The viewer opened over the project's files, on a file pressed in the tree. Previous file and Next file sit to the left of its title, leaving the bottom edge for content.",
     state,
-    toasts: [{ kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "" }],
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600)],
   },
   {
     id: "files-states",
     group: GROUP,
+    category: "exceptional",
     title: "Folders that are empty, unreadable or cut short",
     state,
     files: {
@@ -146,6 +158,7 @@ export const projectFilesScenarios: Scenario[] = [
   {
     id: "files-empty",
     group: GROUP,
+    category: "normal",
     title: "A project folder with nothing in it",
     state,
     files: { "": { dir: true } },
@@ -154,6 +167,7 @@ export const projectFilesScenarios: Scenario[] = [
   {
     id: "files-root-error",
     group: GROUP,
+    category: "exceptional",
     title: "A project folder that cannot be read",
     description: "The failure has a danger alert with a heading and a separate Try again control. Narrow shows the same failure after opening the project pane drawer.",
     state,

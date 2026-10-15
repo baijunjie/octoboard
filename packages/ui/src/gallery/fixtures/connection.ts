@@ -19,12 +19,14 @@ export const connectionScenarios: Scenario[] = [
   {
     id: "daemon-connecting",
     group: STARTUP_AND_CONNECTION,
+    category: "normal",
     title: "Connecting, no snapshot yet",
     state: { connectionState: "connecting" },
   },
   {
     id: "daemon-closed-before-snapshot",
     group: STARTUP_AND_CONNECTION,
+    category: "exceptional",
     title: "Never connected, attempts spent",
     description: "The banner with Try again over a window with nothing to show.",
     state: { connectionState: "closed" },
@@ -32,6 +34,7 @@ export const connectionScenarios: Scenario[] = [
   {
     id: "daemon-reconnecting",
     group: STARTUP_AND_CONNECTION,
+    category: "exceptional",
     title: "Reconnecting",
     description: "The connection banner along the bottom over the last known state.",
     state: connected("reconnecting"),
@@ -40,6 +43,7 @@ export const connectionScenarios: Scenario[] = [
   {
     id: "daemon-lost",
     group: STARTUP_AND_CONNECTION,
+    category: "exceptional",
     title: "Reconnect budget spent",
     description: "The banner offers Try again.",
     state: connected("closed"),
@@ -48,6 +52,7 @@ export const connectionScenarios: Scenario[] = [
   {
     id: "daemon-lost-behind-dialog",
     group: STARTUP_AND_CONNECTION,
+    category: "exceptional",
     title: "Reconnect budget spent with a dialog open",
     description:
       "Try again has keyboard focus while the file viewer stays open. F6 returns to the viewer; another F6 reaches the banner again, and Enter retries without dismissing the viewer. After returning, Tab stays inside the viewer and Escape still closes it. A pointer press on Try again also leaves the viewer open. Narrow the window too: the viewer ends above the banner with its bottom edge and rounded corners visible.",
@@ -65,6 +70,7 @@ export const connectionScenarios: Scenario[] = [
   {
     id: "terminal-output",
     group: TERMINAL,
+    category: "normal",
     title: "Archived terminal with readable output",
     description: "The read-only archived terminal retains readable coloured output, the prompt and follow-up instruction, and a long wrapping line. Its breadcrumb shows the archived status.",
     state: connected("open"),
@@ -77,6 +83,7 @@ export const connectionScenarios: Scenario[] = [
   {
     id: "terminal-reconnecting",
     group: TERMINAL,
+    category: "exceptional",
     title: "Terminal reconnecting",
     description: "The session is live but its terminal socket never connects: after the first failed attempt the terminal stays covered by the spinner and \"Reconnecting the terminal…\".",
     terminal: "refuse",
@@ -86,6 +93,7 @@ export const connectionScenarios: Scenario[] = [
   {
     id: "terminal-disconnected",
     group: TERMINAL,
+    category: "exceptional",
     title: "Terminal disconnected",
     description: "The automatic attempts are spent (run back to back here instead of over about 30 seconds): the terminal is covered by an unplugged icon, \"Terminal disconnected\" and a Reconnect button in the centre, reachable with F6; pressing it reconnects and puts focus on the terminal.",
     terminal: "refuse",

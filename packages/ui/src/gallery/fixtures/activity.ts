@@ -25,6 +25,7 @@ export const activityScenarios: Scenario[] = [
   {
     id: "collapsed-project-activity",
     group: GROUP,
+    category: "normal",
     title: "Collapsed project rows, by what is going on beneath them",
     description:
       "Each collapsed row's marker stands for the most pressing activity among its sessions: a waving hand for " +

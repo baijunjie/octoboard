@@ -48,7 +48,7 @@ const gitStatuses = [
   gitStatusOf(firstCheckProject.id, { branch: null, upstream: null, activity: "checking" }),
 ];
 
-// A long project name beside a long branch name with both counts non-zero and an error, at the
+// A long project name beside a long branch name with both counts non-zero, at the
 // sidebar's minimum docked width (`layout/paneWidth.ts`'s `PANES.sidebar.min`): the worst case for
 // the badge-versus-name squeeze (see the doc comment at `GitBadge.tsx`'s `min-w-0`) and for the
 // branch-and-count line's shared fade and marquee. The CJK branch also keeps its beginning on
@@ -65,7 +65,6 @@ const squeezeStatus = gitStatusOf(squeezeProject.id, {
   branch: "feature/ABC-1234-a-genuinely-long-branch-name-a-branch-title-that-will-not-fit-in-a-narrow-sidebar",
   ahead: 12,
   behind: 345,
-  error: "fetch: Could not resolve host 'origin'",
 });
 const cjkProject = projectOf("p-cjk", console_.id, "日本語のプロジェクト名も長くなってサイドバーに収まらない");
 const cjkStatus = gitStatusOf(cjkProject.id, {
@@ -90,41 +89,70 @@ const openGitSubmenu = (name: string) => [
   (ui: Ui) => ui.press(ui.t("sidebar.project.git")),
   (ui: Ui) => ui.wait(300),
 ];
+const failureState = snapshotState({
+  consoles: [console_],
+  projects: [errorProject, unreadableProject],
+  sessions: sessions.filter(({ project_id }) => project_id === errorProject.id || project_id === unreadableProject.id),
+  gitStatuses: [errorStatus, unreadableStatus],
+});
+
+const normalProjects = [...projects, ...squeezeProjects].filter(({ id }) => id !== errorProject.id && id !== unreadableProject.id);
 const badgesState = snapshotState({
   consoles: [console_],
-  projects: [...projects, ...squeezeProjects],
-  sessions: [...sessions, ...squeezeSessions],
-  gitStatuses: [...gitStatuses, ...squeezeStatuses],
+  projects: normalProjects,
+  sessions: [...sessions, ...squeezeSessions].filter(({ project_id }) => normalProjects.some(({ id }) => id === project_id)),
+  gitStatuses: [...gitStatuses, ...squeezeStatuses].filter(({ project }) => normalProjects.some(({ id }) => id === project)),
+});
+const longFailureState = snapshotState({
+  consoles: [console_], projects: [squeezeProject], sessions: [squeezeSession],
+  gitStatuses: [{ ...squeezeStatus, error: "fetch: Could not resolve host 'origin'" }],
 });
 
 export const gitScenarios: Scenario[] = [
   {
+    id: "git-badges-errors", group: GROUP, category: "exceptional",
+    title: "Fetch and branch-read failures",
+    description: "Deliberate fetch and HEAD errors replace the branch glyph with a warning. Hover warnings for their causes.",
+    state: failureState, preferences: { sidebarWidth: 200 },
+  },
+  {
+    id: "git-badge-focus-long-error", group: GROUP, category: "exceptional",
+    title: "Long branch with a fetch failure in project focus",
+    description: "The warning is deliberate: fetch cannot resolve origin. Hover it for the failure; long branch text and counts retain their marquee.",
+    state: longFailureState,
+    preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
+  },
+  {
     id: "git-badges",
     group: GROUP,
+    category: "normal",
     title: "Branch badges",
     state: badgesState,
     preferences: { sidebarWidth: 200 },
-    description: "Remote counts, in-flight work, failures, detached and missing branches, with long Latin and CJK labels. Hover a clipped Latin or CJK project name or branch to scroll only that text; counts move with their branch. Hovering row controls or warning glyphs leaves both labels still. Hover badges for their full details; drag the sidebar wider to inspect clipping.",
+    description: "Remote counts, in-flight work, detached and missing branches, with long Latin and CJK labels. Hover a clipped Latin or CJK project name or branch to scroll only that text; counts move with their branch. Hovering row controls leaves both labels still. Hover badges for their full details; drag the sidebar wider to inspect clipping.",
   },
   {
     id: "git-badge-focus",
     group: GROUP,
+    category: "exceptional",
     title: "Unreadable branch in project focus",
-    state: badgesState,
+    state: failureState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${unreadableProject.id}` },
     description: "The focus header has only a warning glyph; hover it for the unreadable-branch reason.",
   },
   {
     id: "git-badge-focus-long",
     group: GROUP,
+    category: "normal",
     title: "Long branch in project focus",
     state: badgesState,
     preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
-    description: "The long project name and branch fade separately. Hover either text to run only its marquee; hovering the console subtitle, warning glyph or header controls leaves both still. The branch and counts scroll together; hover the branch text or warning glyph for full details.",
+    description: "The long project name and branch fade separately. Hover either text to run only its marquee; hovering the console subtitle or header controls leaves both still. The branch and counts scroll together; hover the branch text for full details.",
   },
   {
     id: "git-push-accepted",
     group: GROUP,
+    category: "normal",
     title: "Push accepted",
     state: badgesState,
     description: "The acceptance notice appears after pushing the current branch.",

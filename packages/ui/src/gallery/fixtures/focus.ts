@@ -180,6 +180,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "sidebar-session-hierarchy",
     group: "Sidebar sessions",
+    category: "normal",
     title: "Project session hierarchy",
     state: hierarchyState,
     preferences: { sidebarConsole: console_.id },
@@ -188,6 +189,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-project",
     group: GROUP,
+    category: "normal",
     title: "Project focus",
     state: scrollingFocusState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
@@ -199,6 +201,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-project-console-sessions",
     group: GROUP,
+    category: "normal",
     title: "Project focus including console sessions",
     state: combinedState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
@@ -210,6 +213,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-console-session",
     group: GROUP,
+    category: "normal",
     title: "Console session focus",
     state: scrollingFocusState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
@@ -221,6 +225,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-console-session-long",
     group: GROUP,
+    category: "normal",
     title: "Long console session and project names",
     state: state,
     preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `consoleSession:${longHub.id}` },
@@ -229,6 +234,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-project-no-sessions",
     group: GROUP,
+    category: "normal",
     title: "Project archive preview, exactly five parents",
     state: archivePreviewFive,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}`, projectFocusIncludeConsoleSessions: true },
@@ -237,6 +243,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-project-archive-overflow",
     group: GROUP,
+    category: "normal",
     title: "Project archive preview, six parents with children",
     state: archivePreviewSix,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}` },
@@ -245,6 +252,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-console-archive-five",
     group: GROUP,
+    category: "normal",
     title: "Console archive preview, exactly five parents",
     state: archivePreviewFive,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
@@ -253,6 +261,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-console-archive-overflow",
     group: GROUP,
+    category: "normal",
     title: "Console archive preview, six parents with children",
     state: archivePreviewSix,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
@@ -261,6 +270,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-project-empty",
     group: GROUP,
+    category: "normal",
     title: "Project with no sessions yet",
     state,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${freshProject.id}` },
@@ -269,6 +279,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-console-session-empty",
     group: GROUP,
+    category: "normal",
     title: "No bound sessions or switch strip",
     state: state,
     preferences: { sidebarConsole: loneConsole.id, sidebarFocus: "consoleSession:s-lone" },
@@ -277,6 +288,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-console-session-no-projects",
     group: GROUP,
+    category: "normal",
     title: "Console session with no projects",
     state: state,
     preferences: { sidebarConsole: projectlessConsole.id, sidebarFocus: "consoleSession:s-projectless" },
@@ -285,6 +297,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-console-session-overflow",
     group: GROUP,
+    category: "normal",
     title: "Overflowing console session strip",
     state: state,
     preferences: { sidebarConsole: crowdedConsole.id, sidebarFocus: `consoleSession:${crowd[5].id}` },
@@ -292,6 +305,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-console-session-fit",
     group: GROUP,
+    category: "normal",
     title: "Console session strip that fits",
     state: state,
     preferences: { sidebarConsole: fittingConsole.id, sidebarFocus: "consoleSession:s-fitting-a" },
@@ -299,6 +313,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-project-new-session",
     group: GROUP,
+    category: "normal",
     title: "New session from project focus",
     state: state,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
@@ -310,6 +325,7 @@ export const focusScenarios: Scenario[] = [
   {
     id: "focus-console-new-session",
     group: GROUP,
+    category: "normal",
     title: "New session from console focus",
     state: state,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${longHub.id}` },

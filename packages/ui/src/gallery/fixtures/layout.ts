@@ -58,6 +58,7 @@ export const layoutScenarios: Scenario[] = [
   {
     id: "layout-rail-consoles",
     group: GROUP,
+    category: "normal",
     title: "Rail with five consoles",
     description:
       "Waiting, working, running and inactive avatars appear together, including a long name. Hover for activity details.",
@@ -69,6 +70,7 @@ export const layoutScenarios: Scenario[] = [
   {
     id: "layout-rail-crowded",
     group: GROUP,
+    category: "normal",
     title: "More consoles than the rail holds",
     description:
       "More consoles than the column holds, which scrolls with no scrollbar to say so: the avatars fade at the bottom edge, where more are waiting. Scroll it and both edges fade until the end, where that edge stops. Rail with five consoles shows the same column with everything in view, and no fade.",
@@ -77,6 +79,7 @@ export const layoutScenarios: Scenario[] = [
   {
     id: "layout-waiting-overflow",
     group: GROUP,
+    category: "normal",
     title: "More than 99 raised hands",
     description:
       "The rail's waiting count at its limit: a hundred and five sessions waiting in one console, so the count shows its overflow label and the glyph is cut out around the wider pill.",
@@ -91,6 +94,7 @@ export const layoutScenarios: Scenario[] = [
   {
     id: "layout-history",
     group: GROUP,
+    category: "normal",
     title: "Back and Forward available",
     state: railState,
     description: "History requires visiting locations before returning to the chosen view; no unrelated checks run during setup.",
@@ -105,6 +109,7 @@ export const layoutScenarios: Scenario[] = [
   {
     id: "layout-sidebar-hidden",
     group: GROUP,
+    category: "normal",
     title: "Hidden docked sidebar",
     state: railState,
     preferences: { sidebarVisible: false, sidebarConsole: main.id },
@@ -116,6 +121,7 @@ export const layoutScenarios: Scenario[] = [
   {
     id: "layout-report-hidden",
     group: GROUP,
+    category: "normal",
     title: "Hidden docked report",
     state: railState,
     preferences: { asideVisible: false },
@@ -127,6 +133,7 @@ export const layoutScenarios: Scenario[] = [
   {
     id: "layout-sidebar-drawer",
     group: GROUP,
+    category: "normal",
     title: "Mobile sidebar card",
     width: 390,
     state: railState,
@@ -139,6 +146,7 @@ export const layoutScenarios: Scenario[] = [
   {
     id: "layout-report-drawer",
     group: GROUP,
+    category: "normal",
     title: "Mobile report card",
     width: 390,
     state: railState,

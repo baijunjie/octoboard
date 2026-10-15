@@ -267,6 +267,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-settings-unavailable",
     group: GROUP,
+    category: "normal",
     title: "Settings, Configuration section where files cannot be saved or opened",
     description: "The section only says it is not available here. Close Settings and open the console menu: Export configuration is absent there too.",
     state,
@@ -279,6 +280,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-welcome-unavailable",
     group: GROUP,
+    category: "normal",
     title: "Welcome screen where files cannot be saved or opened",
     description: "The primary New console button is the only action: Import configuration is unavailable.",
     state: noConsoleState,
@@ -287,6 +289,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-export-console",
     group: GROUP,
+    category: "normal",
     title: "Export, from a console's menu",
     description: "Choose the console or everything, with the local-paths notice beneath. Export closes the dialog and raises a toast naming the saved file.",
     state,
@@ -295,6 +298,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-export-everything-only",
     group: GROUP,
+    category: "normal",
     title: "Export, with no console to export on its own",
     description: "Reached from Settings, since there is no console menu: only everything is offered.",
     state: noConsoleState,
@@ -307,6 +311,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-export-downloaded",
     group: GROUP,
+    category: "normal",
     title: "Export, handed to the browser",
     description: "A browser files the download itself and does not say as what, so the toast names no file.",
     state,
@@ -319,6 +324,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-export-save-failed",
     group: GROUP,
+    category: "exceptional",
     title: "Export, the file could not be written",
     state,
     configuration: { saveError: "Permission denied (os error 13)" },
@@ -330,6 +336,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-choose",
     group: GROUP,
+    category: "normal",
     title: "Import, choosing the file",
     description:
       "Opened from the welcome screen, where a new computer starts. The picker has been opened and is never reported dismissed, as in a browser without the file input's cancel event: Choose file shows that it is waiting and ignores another press, while Cancel, the close button and Escape still work.",
@@ -343,6 +350,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-read-failed",
     group: GROUP,
+    category: "exceptional",
     title: "Import, the file could not be read",
     description: "The plain file-read error appears in a danger alert without a heading.",
     state,
@@ -355,6 +363,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-file-too-large",
     group: GROUP,
+    category: "exceptional",
     title: "Import, a file too large to be a configuration",
     state,
     configuration: { readError: { kind: "too_large" } },
@@ -366,6 +375,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-file-not-text",
     group: GROUP,
+    category: "exceptional",
     title: "Import, a file that is not text",
     state,
     configuration: { readError: { kind: "not_text" } },
@@ -377,6 +387,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-not-json",
     group: GROUP,
+    category: "exceptional",
     title: "Import, a file that is not JSON",
     state,
     configuration: { file: { name: "photo.json", text: "not json at all" } },
@@ -388,6 +399,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-refused-format",
     group: GROUP,
+    category: "exceptional",
     title: "Import, not a configuration file",
     state,
     configuration: refusal("notes.json", JSON.stringify({ hello: "world" }), failure("configuration_not_recognised", {}, "not a configuration document")),
@@ -399,6 +411,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-refused-version",
     group: GROUP,
+    category: "exceptional",
     title: "Import, a version this one cannot read",
     state,
     configuration: refusal(
@@ -414,6 +427,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-refused-unreadable",
     group: GROUP,
+    category: "exceptional",
     title: "Import, a document that cannot be read",
     state,
     configuration: refusal(
@@ -429,6 +443,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-review",
     group: GROUP,
+    category: "normal",
     title: "Import, review",
     description:
       "Projects found at recorded or default paths, clone candidates, missing paths, account fallbacks and an empty console appear together; settings start unchecked.",
@@ -442,6 +457,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-review-single",
     group: GROUP,
+    category: "normal",
     title: "Import, review of one console's document",
     description:
       "A single console document has no application-settings checkbox; unavailable placement choices are disabled.",
@@ -455,6 +471,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-review-setting-off",
     group: GROUP,
+    category: "normal",
     title: "Import, a document whose setting is off where it is on here",
     description: "The checkbox is ticked, and its note says applying turns the setting off.",
     state: syncing,
@@ -468,6 +485,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-importing",
     group: GROUP,
+    category: "normal",
     title: "Import, applying",
     description: "The reply comes after the last clone; the dialog cannot be dismissed meanwhile.",
     state,
@@ -481,6 +499,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-refused-apply",
     group: GROUP,
+    category: "exceptional",
     title: "Import, refused before anything is created",
     description: "The daemon's reason stands in the footer beside the buttons, over the review, which stays as it was.",
     state,
@@ -494,6 +513,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-result-settings-failed",
     group: GROUP,
+    category: "exceptional",
     title: "Import, result where the settings could not be applied",
     description: "The settings failure is a line of its own above the table, beside a project that was left out.",
     state: syncing,
@@ -508,6 +528,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-review-directory",
     group: GROUP,
+    category: "exceptional",
     title: "Import placement validation",
     state: state,
     configuration: reviewing(),
@@ -525,6 +546,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-result",
     group: GROUP,
+    category: "exceptional",
     title: "Import result with failures and fallbacks",
     state: state,
     configuration: reviewing(),
@@ -539,6 +561,7 @@ export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-import-result-clean",
     group: GROUP,
+    category: "normal",
     title: "Successful import result",
     state: state,
     configuration: { file: FILE, inspection: SINGLE, imported: CLEAN_RESULT },

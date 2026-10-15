@@ -7,7 +7,7 @@ import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/build
 describe("the fixture daemon's system directory action", () => {
   const project = projectOf("p", "c", "Website");
   const state = snapshotState({ projects: [project] });
-  const scenario = { id: "directory-action", group: "Project pane: files" as const, title: "", state };
+  const scenario = { id: "directory-action", group: "Project pane: files" as const, category: "normal" as const, title: "", state };
 
   it("acknowledges a known project without opening a host application and refuses an unknown one", async () => {
     const daemon = createFixtureDaemon(scenario);
@@ -27,7 +27,7 @@ describe("the fixture daemon's system directory action", () => {
 describe("the fixture daemon's project file trees", () => {
   it("uses each project's tree for listings and reads, retaining the shared fallback", async () => {
     const daemon = createFixtureDaemon({
-      id: "project-trees", group: "Project pane: files", title: "",
+      id: "project-trees", group: "Project pane: files", category: "normal", title: "",
       files: { "": { dir: true }, "website.txt": { text: "Website" } },
       filesByProject: { api: { "": { dir: true }, "api.txt": { text: "Search API" } } },
     });
@@ -50,7 +50,7 @@ describe("the fixture daemon's session creation", () => {
     const project = projectOf("p", owner.id, "Website");
     const existing = sessionOf("hub", owner.id, undefined, "Renamed release coordinator", "archived", { ordinal: 6 });
     const accounts = [{ id: "work", agent: "codex" as const, name: "Work", config_dir: "/Users/dev/.codex-work" }];
-    const daemon = createFixtureDaemon({ id: "open", group: "Dialogs", title: "", state: snapshotState({ consoles: [owner], projects: [project], sessions: [existing], settings: { auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts } }) });
+    const daemon = createFixtureDaemon({ id: "open", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ consoles: [owner], projects: [project], sessions: [existing], settings: { auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts } }) });
     const preview = { type: "preview_console_session_title" as const, console: owner.id };
     for (let read = 0; read < 2; read++) {
       await expect(daemon.request(preview)).resolves.toEqual({ type: "console_session_title", console: owner.id, title: "Hub 7" });
@@ -82,7 +82,7 @@ describe("the fixture daemon's session pins", () => {
   it("updates only the requested session and refuses an unknown session", async () => {
     const first = sessionOf("first", "c-1", "p-1", "Pinned work", "working", { pinned: true, bound_to: "hub" });
     const second = sessionOf("second", "c-1", "p-1", "Other work", "idle");
-    const daemon = createFixtureDaemon({ id: "pins", group: "Sidebar sessions", title: "", state: snapshotState({ sessions: [first, second] }) });
+    const daemon = createFixtureDaemon({ id: "pins", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ sessions: [first, second] }) });
     await expect(daemon.request({ type: "set_session_pinned", session: first.id, pinned: false })).resolves.toEqual({ type: "ack" });
     expect(daemon.store.getState().sessions.get(first.id)).toEqual({ ...first, pinned: false });
     expect(daemon.store.getState().sessions.get(second.id)).toEqual(second);
@@ -113,7 +113,7 @@ describe("the fixture daemon's deletion of archived sessions", () => {
   const remaining = async (body: { console_session?: string; project?: string }) => {
     const daemon = createFixtureDaemon({
       id: "t",
-      group: "Archive view",
+      group: "Archive view", category: "normal",
       title: "",
       state: snapshotState({ consoles: [console_], projects: [project, other], sessions }),
     });
@@ -138,7 +138,7 @@ describe("the fixture daemon's deletion of archived sessions", () => {
 describe("the fixture daemon's settings and trusted folders", () => {
   it("applies a settings request atomically, preserves accounts, and reaches an empty trust list by removal", async () => {
     const accounts = [{ id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }];
-    const daemon = createFixtureDaemon({ id: "settings-contract", group: "Settings", title: "", state: snapshotState({ settings: { auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts }, trustedDirectories: ["/Users/dev/code"] }) });
+    const daemon = createFixtureDaemon({ id: "settings-contract", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: { auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts }, trustedDirectories: ["/Users/dev/code"] }) });
     await expect(daemon.request({ type: "update_settings", auto_sync_repositories: true, default_clone_dir: "relative" })).rejects.toThrow();
     expect(daemon.store.getState().settings.auto_sync_repositories).toBe(false);
     await daemon.request({ type: "update_settings", auto_sync_repositories: true, default_clone_dir: "~/work/../repos" });
@@ -155,7 +155,7 @@ describe("the fixture daemon's account switches", () => {
   const work = { id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" };
   const session = sessionOf("s", "c", "p", "Release", "working", { model: "opus", effort: "high", bound_to: "hub" });
   const state = snapshotState({ sessions: [session, { ...session, id: "archived", status: "archived" }], settings: { auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts: [work, { ...work, id: "codex", agent: "codex" }] } });
-  const scenario = { id: "switch", title: "", group: "Dialogs" as const, state };
+  const scenario = { id: "switch", title: "", group: "Sidebar sessions" as const, category: "normal" as const, state };
 
   it("records the new account while keeping session launch settings, and clears it for the default account", async () => {
     const daemon = createFixtureDaemon(scenario);
