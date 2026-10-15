@@ -163,10 +163,8 @@ export interface Session {
   /** A console session's badge colour, assigned on creation and fixed afterwards. Absent for a
    * project session, which carries no colour of its own. */
   colour?: ConsoleSessionColour | null;
-  /** A console session's place in its console's history — one past the highest ordinal ever used
-   * there, so a title is never reused after a console session is archived or deleted — and what
-   * gives it its default title ("Hub" for the first, "Hub `<ordinal>`" after). Absent for a project
-   * session. */
+  /** A console session's place in its console's history, one past the highest ordinal ever used
+   * there. Never reused after archiving or deletion. Absent for a project session. */
   ordinal?: number | null;
   /** The account this session's own agent reads, by id; absent means the default account. Written
    * when the session is opened and when its account is switched. */

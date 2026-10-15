@@ -263,7 +263,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "New console session",
-    description: "The empty Name field previews Hub 5 from the console's next ordinal. Joined agent and inherited account pickers follow; Advanced starts collapsed and there is no report-to field.",
+    description: "The empty Name field previews the console name without a numeric suffix. Joined agent and inherited account pickers follow; Advanced starts collapsed and there is no report-to field.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.consoleSessions.new")),
     ],
@@ -275,7 +275,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "New console session advanced settings",
-    description: "Name previews Hub 5. Advanced shows the console's Opus model and high reasoning effort for Claude Code. Changes apply to this new session.",
+    description: "Name previews the console name without a numeric suffix. Advanced shows the console's Opus model and high reasoning effort for Claude Code. Changes apply to this new session.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.consoleSessions.new")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),

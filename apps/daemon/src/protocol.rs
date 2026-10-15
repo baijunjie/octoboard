@@ -480,10 +480,8 @@ pub struct Session {
     /// A console session's badge colour, assigned on creation and fixed afterwards (see
     /// `ConsoleSessionColour`). `None` for a project session, which carries no colour of its own.
     pub colour: Option<ConsoleSessionColour>,
-    /// A console session's place in its console's history — one past the highest ordinal ever
-    /// used there, so a title is never reused after a console session is archived or deleted — and
-    /// what gives it its default title ("Hub" for the first, "Hub `<ordinal>`" after). `None` for a
-    /// project session.
+    /// A console session's place in its console's history, one past the highest ordinal ever
+    /// used there. Never reused after archiving or deletion. `None` for a project session.
     pub ordinal: Option<i64>,
     /// The account this session's own agent reads, by id: the one chosen for the session, else the
     /// project's reference for that agent, else the console's, as they stood when the session was
@@ -1246,7 +1244,7 @@ pub enum RequestBody {
         #[serde(default)]
         apply_settings: bool,
     },
-    /// Previews the next automatic title without reserving its ordinal.
+    /// Previews the current console name without allocating a session ordinal.
     PreviewConsoleSessionTitle {
         console: String,
     },

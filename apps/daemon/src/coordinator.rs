@@ -1425,9 +1425,7 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         }
         None => {
             let workdir = PathBuf::from(&console.workdir);
-            // Overwritten by `Store::insert_console_session` below, which decides the real default
-            // ("Hub" for the first, "Hub <ordinal>" after) once it knows the ordinal; nothing here
-            // reads this value.
+            // The store reads the current console name when inserting the session.
             (Role::Console, workdir, None, String::new())
         }
     };
@@ -2978,7 +2976,7 @@ mod tests {
                 .unwrap();
             assert!(
                 matches!(reply, Some(Event::ConsoleSessionTitle { id: Some(id), console, title })
-                if id == "req-1" && console == "console-1" && title == "Hub")
+                if id == "req-1" && console == "console-1" && title == "Console")
             );
         }
         let error = handle(

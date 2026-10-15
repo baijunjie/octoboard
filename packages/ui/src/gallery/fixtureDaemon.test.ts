@@ -60,6 +60,20 @@ describe("the fixture daemon's project file trees", () => {
 });
 
 describe("the fixture daemon's session creation", () => {
+  it("uses the console's current name while preserving existing session titles", async () => {
+    const owner = consoleOf("c", "Release");
+    const sessions = [
+      sessionOf("old", owner.id, undefined, "Hub 2", "idle", { ordinal: 2 }),
+      sessionOf("custom", owner.id, undefined, "Coordinate release", "idle", { ordinal: 3 }),
+    ];
+    const daemon = createFixtureDaemon({ id: "console-name", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ consoles: [owner], sessions }) });
+    const renamed = { ...owner, name: "Release planning" };
+    daemon.store.setState({ consoles: new Map([[owner.id, renamed]]) });
+    await expect(daemon.request({ type: "preview_console_session_title", console: owner.id })).resolves.toMatchObject({ title: renamed.name });
+    await expect(daemon.request({ type: "open_session", console_id: owner.id })).resolves.toMatchObject({ type: "session_opened", session: { title: renamed.name, ordinal: 4 } });
+    for (const session of sessions) expect(daemon.store.getState().sessions.get(session.id)).toEqual(session);
+  });
+
   it("honors a console session's explicit agent, account, name and launch overrides", async () => {
     const owner = consoleOf("c", "Release", { default_agent: "claude", codex_account_id: "work", codex_console_session_model: "inherited-model", codex_console_session_effort: "high" });
     const project = projectOf("p", owner.id, "Website");
@@ -68,11 +82,11 @@ describe("the fixture daemon's session creation", () => {
     const daemon = createFixtureDaemon({ id: "open", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ consoles: [owner], projects: [project], sessions: [existing], settings: { auto_sync_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts } }) });
     const preview = { type: "preview_console_session_title" as const, console: owner.id };
     for (let read = 0; read < 2; read++) {
-      await expect(daemon.request(preview)).resolves.toEqual({ type: "console_session_title", console: owner.id, title: "Hub 7" });
+      await expect(daemon.request(preview)).resolves.toEqual({ type: "console_session_title", console: owner.id, title: owner.name });
     }
     await daemon.request({ type: "delete_archived_sessions", console: owner.id });
     expect(daemon.store.getState().sessions.size).toBe(0);
-    await expect(daemon.request(preview)).resolves.toMatchObject({ title: "Hub 7" });
+    await expect(daemon.request(preview)).resolves.toMatchObject({ title: owner.name });
     const reply = await daemon.request({ type: "open_session", console_id: owner.id, agent: "codex", title: "Coordinate release", model: "chosen-model", effort: "xhigh", bound_to: "ignored-console-binding" });
     expect(reply.type).toBe("session_opened");
     if (reply.type !== "session_opened") throw new Error("Missing opened session");
@@ -80,16 +94,28 @@ describe("the fixture daemon's session creation", () => {
     expect(reply.session.bound_to).toBeUndefined();
     expect(daemon.store.getState().sessions.get(reply.session.id)).toEqual(reply.session);
     const defaults = await daemon.request({ type: "open_session", console_id: owner.id, agent: "codex", account: null, model: null, effort: null });
-    expect(defaults).toMatchObject({ type: "session_opened", session: { title: "Hub 8", ordinal: 8, model: null, effort: null } });
+    expect(defaults).toMatchObject({ type: "session_opened", session: { title: owner.name, ordinal: 8, model: null, effort: null } });
     if (defaults.type !== "session_opened") throw new Error("Missing default session");
     expect(defaults.session.account_id).toBeUndefined();
     const blank = await daemon.request({ type: "open_session", console_id: owner.id, title: "", task: "" });
-    expect(blank).toMatchObject({ type: "session_opened", session: { origin: "user", status: "working", title: "" } });
+    expect(blank).toMatchObject({ type: "session_opened", session: { origin: "user", status: "working", title: owner.name, ordinal: 9 } });
     const projectReply = await daemon.request({ type: "open_session", console_id: owner.id, project_id: project.id });
     expect(projectReply).toMatchObject({ type: "session_opened", session: { role: "project", origin: "user", status: "idle", title: project.name } });
-    await expect(daemon.request(preview)).resolves.toMatchObject({ title: "Hub 10" });
+    await expect(daemon.request(preview)).resolves.toMatchObject({ title: owner.name });
+    const repeated = await daemon.request({ type: "open_session", console_id: owner.id });
+    expect(repeated).toMatchObject({ type: "session_opened", session: { title: owner.name, ordinal: 10 } });
     await expect(daemon.request({ ...preview, console: "missing" })).rejects.toMatchObject({ code: "unknown_console" });
     expect(daemon.store.getState().consoles.get(owner.id)).toEqual(owner);
+  });
+
+  it("trims explicit names and falls back to owner names for whitespace-only names", async () => {
+    const owner = consoleOf("c", "Release");
+    const project = projectOf("p", owner.id, "Website");
+    const daemon = createFixtureDaemon({ id: "trimmed-names", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ consoles: [owner], projects: [project] }) });
+    for (const projectId of [undefined, project.id]) {
+      await expect(daemon.request({ type: "open_session", console_id: owner.id, project_id: projectId, title: " \t " })).resolves.toMatchObject({ type: "session_opened", session: { title: projectId ? project.name : owner.name } });
+      await expect(daemon.request({ type: "open_session", console_id: owner.id, project_id: projectId, title: "  Coordinate release  " })).resolves.toMatchObject({ type: "session_opened", session: { title: "Coordinate release" } });
+    }
   });
 });
 

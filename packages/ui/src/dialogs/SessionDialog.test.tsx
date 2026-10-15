@@ -360,7 +360,7 @@ it.each(["inherit", "pick", "clear"] as const)("opens console sessions with cons
   expect(document.body.querySelector('[role="dialog"] h2')?.textContent).toBe(`Open console session in ${isolate("Main")}`);
   expect(document.body.textContent).not.toContain("Report to");
   const name = document.body.querySelector<HTMLInputElement>('[role="dialog"] input')!;
-  expect(name.placeholder).toBe("Automatic name");
+  expect(name.placeholder).toBe(parentConsole.name);
   expect(pickerNamed("Agent").textContent).toContain("Claude Code");
   expect(pickerNamed("Claude Code account").textContent).toContain("Console account");
   expect(vi.mocked(daemon.request).mock.calls.some(([body]) => body.type === "list_agent_models")).toBe(false);
@@ -420,29 +420,13 @@ it("opens console sessions on the console's default agent and its account", asyn
 });
 
 
-it("previews the stored next console title without turning it into a custom title, and refreshes on creation", async () => {
+it("uses the console name as its placeholder without submitting it as a custom title", async () => {
   const { container, root, daemon } = renderDialog([], {}, {}, undefined, null);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
-  vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "preview_console_session_title"
-    ? { type: "console_session_title", console: body.console, title: "Hub 9" }
-    : { type: "ack" });
-  // A new session updates the preview even when earlier sessions have been deleted.
-  await act(async () => root.render(
-    <DaemonProvider value={daemon}>
-      <SessionDialog console={parentConsole} sessions={[hub1]} onClose={() => {}} onOpened={() => {}} />
-    </DaemonProvider>,
-  ));
   const name = document.body.querySelector<HTMLInputElement>('[role="dialog"] input')!;
-  expect(name.placeholder).toBe("Hub 9");
+  expect(name.placeholder).toBe(parentConsole.name);
   expect(name.value).toBe("");
-  expect(daemon.request).toHaveBeenCalledWith({ type: "preview_console_session_title", console: parentConsole.id });
-  vi.mocked(daemon.request).mockRejectedValueOnce(new Error("Disconnected"));
-  await act(async () => root.render(
-    <DaemonProvider value={daemon}>
-      <SessionDialog console={parentConsole} sessions={[hub1, hub2]} onClose={() => {}} onOpened={() => {}} />
-    </DaemonProvider>,
-  ));
-  expect(name.placeholder).toBe("Automatic name");
+  expect(daemon.request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "preview_console_session_title" }));
   await act(async () => buttons().find((button) => button.textContent === "Open")!.click());
   expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", title: undefined }));
 });

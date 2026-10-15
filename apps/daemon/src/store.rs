@@ -832,42 +832,19 @@ impl Store {
         insert_session_row(&self.lock(), session)
     }
 
-    /// Reads the persisted high-water mark without reserving it. Another open may advance it
-    /// before the caller submits; deleting sessions cannot move it backwards.
+    /// Reads the current console name without allocating a session ordinal.
     pub fn preview_console_session_title(&self, console_id: &str) -> Result<String> {
-        let ordinal: Option<i64> = self
-            .lock()
-            .query_row(
-                "SELECT next_console_session_ordinal FROM consoles WHERE id = ?1",
-                params![console_id],
-                |row| row.get(0),
-            )
-            .optional()?;
-        let ordinal = ordinal.ok_or_else(|| CodedError::unknown_console(console_id))?;
-        Ok(console_session_title(ordinal))
+        self.get_console(console_id)?
+            .map(|console| console.name)
+            .ok_or_else(|| CodedError::unknown_console(console_id).into())
     }
 
-    /// Inserts a freshly-opened console session, assigning its colour and its ordinal — and, with
-    /// no `title` given, the default title that ordinal spells out ("Hub", then "Hub 2", "Hub 3",
-    /// …) — in the same locked step as the row insert itself.
+    /// Inserts a freshly-opened console session, assigning its colour and ordinal under the same
+    /// lock as the row insert. With no explicit title, it uses the console's current name.
     ///
-    /// Fused into one critical section because both assignments are a read followed by a decision
-    /// that the insert must not be allowed to go stale between: the colour is the first palette
-    /// entry not already held by one of the console's other non-archived console sessions, and the
-    /// ordinal is a read-then-increment counter kept on the console record. Two concurrent opens
-    /// for the same console must not both read the same snapshot and pick the same colour, or both
-    /// consume the same ordinal — the shape of race the deleted one-live-console-session claim used
-    /// to guard against by a different means.
-    ///
-    /// `session.colour`, `session.ordinal` and `session.title` (when `title` is `None`) are
-    /// overwritten; every other field of `session` is inserted as given.
-    ///
-    /// The ordinal is consumed here, before the caller has launched the agent process, and is not
-    /// given back if that launch then fails: a console whose agent binary is missing hands out
-    /// "Hub 3" to its next successful open after a failed one at "Hub 2", with a gap in between.
-    /// This is the intended reading of "one past the highest ever used", not a bug to fix by
-    /// moving the increment into the same transaction as the launch: a title is never reused once
-    /// handed out, whether or not the session behind it ever came up.
+    /// The lock prevents concurrent opens from choosing the same available colour or ordinal.
+    /// Ordinals are consumed before launch and are not given back if the agent fails to start.
+    /// `session.colour`, `session.ordinal` and `session.title` are overwritten.
     pub fn insert_console_session(
         &self,
         mut session: Session,
@@ -896,16 +873,16 @@ impl Store {
             // Every entry is already in use: wrap back to the start rather than refuse, since the
             // badge is a convenience, not a uniqueness guarantee the user was ever promised.
             .unwrap_or(ConsoleSessionColour::PALETTE[0]);
-        let ordinal: i64 = conn.query_row(
+        let (ordinal, console_name): (i64, String) = conn.query_row(
             "UPDATE consoles SET next_console_session_ordinal = next_console_session_ordinal + 1
              WHERE id = ?1
-             RETURNING next_console_session_ordinal - 1",
+             RETURNING next_console_session_ordinal - 1, name",
             params![session.console_id],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
         session.colour = Some(colour);
         session.ordinal = Some(ordinal);
-        session.title = title.unwrap_or_else(|| console_session_title(ordinal));
+        session.title = title.unwrap_or(console_name);
         insert_session_row(&conn, &session)?;
         Ok(session)
     }
@@ -1361,13 +1338,6 @@ const CONSOLE_SESSION_LAUNCH_COLUMNS: [&str; 6] = [
     "grok_console_session_model",
     "grok_console_session_effort",
 ];
-
-fn console_session_title(ordinal: i64) -> String {
-    match ordinal {
-        1 => "Hub".to_string(),
-        _ => format!("Hub {ordinal}"),
-    }
-}
 
 /// Shared by [`Store::insert_session`] and [`Store::insert_console_session`], which differ only in
 /// how `colour`, `ordinal` and `title` are decided before this runs.
@@ -2698,11 +2668,11 @@ mod tests {
 
         assert_eq!(
             store.preview_console_session_title("console-1").unwrap(),
-            "Hub"
+            "Console"
         );
         assert_eq!(
             store.preview_console_session_title("console-1").unwrap(),
-            "Hub"
+            "Console"
         );
         let first = store
             .insert_console_session(console_session("session-0"), None)
@@ -2722,7 +2692,7 @@ mod tests {
 
         assert_eq!(
             store.preview_console_session_title("console-1").unwrap(),
-            "Hub 3"
+            "Console"
         );
         let third = store
             .insert_console_session(console_session("session-2"), None)
@@ -2734,10 +2704,9 @@ mod tests {
         );
     }
 
-    /// With no title given, a console session's default title spells out its ordinal, bare for the
-    /// first; an explicit title is kept instead.
+    /// Defaults use the console name, including for later sessions; an explicit title is kept.
     #[test]
-    fn a_console_sessions_default_title_names_its_ordinal() {
+    fn a_console_sessions_default_title_uses_its_console_name() {
         let path = temp_db("console-session-title");
         let store = Store::open(&path).expect("store");
         store
@@ -2747,12 +2716,28 @@ mod tests {
         let defaulted = store
             .insert_console_session(console_session("session-0"), None)
             .expect("inserted");
-        assert_eq!(defaulted.title, "Hub");
+        assert_eq!(defaulted.title, "Console");
 
         let second = store
             .insert_console_session(console_session("session-0b"), None)
             .expect("inserted");
-        assert_eq!(second.title, "Hub 2");
+        assert_eq!(second.title, "Console");
+
+        let mut renamed = console(None, None, None);
+        renamed.name = "Renamed console".to_string();
+        store.update_console(&renamed).expect("renamed");
+        assert_eq!(
+            store.preview_console_session_title("console-1").unwrap(),
+            "Renamed console"
+        );
+        let after_rename = store
+            .insert_console_session(console_session("session-0c"), None)
+            .expect("inserted");
+        assert_eq!(after_rename.title, "Renamed console");
+        assert_eq!(
+            store.get_session(&defaulted.id).unwrap().unwrap().title,
+            "Console"
+        );
 
         let named = store
             .insert_console_session(

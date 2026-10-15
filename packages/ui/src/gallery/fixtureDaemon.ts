@@ -65,13 +65,12 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
   let toastsRaised = false;
   let openedSessionCount = 0;
   // The daemon remembers its ordinal counter independently of session history. Seed it from
-  // fixture ordinals once, so renaming or deleting a session never makes a title reusable.
+  // fixture ordinals once, so renaming or deleting a session never reuses an ordinal.
   const initial = store.getState();
   const nextConsoleOrdinals = new Map([...initial.consoles.keys()].map((id) => {
     const sessions = [...initial.sessions.values()].filter((session) => session.console_id === id && session.role === "console");
     return [id, Math.max(0, ...sessions.map((session, index) => session.ordinal ?? index + 1)) + 1];
   }));
-  const consoleTitle = (ordinal: number) => ordinal === 1 ? "Hub" : `Hub ${ordinal}`;
 
   const raiseScenarioToasts = () => {
     if (toastsRaised) return;
@@ -158,8 +157,9 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           return { type: "ack" };
         }
         case "preview_console_session_title": {
-          if (!store.getState().consoles.has(body.console)) return fail({ code: "unknown_console", params: { console: body.console }, message: `unknown console ${body.console}` });
-          return { type: "console_session_title", console: body.console, title: consoleTitle(nextConsoleOrdinals.get(body.console) ?? 1) };
+          const owner = store.getState().consoles.get(body.console);
+          if (!owner) return fail({ code: "unknown_console", params: { console: body.console }, message: `unknown console ${body.console}` });
+          return { type: "console_session_title", console: body.console, title: owner.name };
         }
         case "open_session": {
           if (scenario.sessionOpenError) return fail(scenario.sessionOpenError);
@@ -183,7 +183,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
             host_id: project?.host_id ?? "local",
             role: project ? "project" : "console",
             origin: "user",
-            title: body.title ?? project?.name ?? consoleTitle(ordinal),
+            title: (body.title?.trim() || undefined) ?? project?.name ?? owner.name,
             status: body.task == null ? "idle" : "working",
             has_conversation: false,
             pinned: false,

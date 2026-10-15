@@ -77,16 +77,12 @@ New console session from the console sessions section, including its empty row, 
 same action open a dialog before anything is launched. New session under a project opens the same dialog for that
 project. Both offer these fields in this order:
 
-- **Name** (optional) — for a project session, the empty field shows the project's name as its placeholder and
-  leaving it empty uses that name. For a console session, the placeholder previews the next automatic name from the
-  daemon's persisted counter: "Hub" for ordinal 1 and "Hub `<ordinal>`" for any later one ("Hub 2", "Hub 3", …), where
-  the ordinal is one past the highest ever used in its console. Each console session consumes an ordinal even when given a custom name, and
-  automatic names are not reused after a console session is renamed, archived or deleted. The preview consumes no
-  ordinal and reserves no name; another creation can advance the final automatic name before this dialog is submitted.
-  It refreshes when console sessions are created or deleted while the dialog is open, and an outdated answer is ignored.
-  While the preview is being fetched or cannot be read, the placeholder indicates automatic naming instead. The field
-  stays empty: the preview is not a custom name. The dialog removes surrounding whitespace from an entered name and
-  uses automatic naming when nothing remains.
+- **Name** (optional) — the empty field shows the project's name for a project session, or the console's name for a
+  console session, as its placeholder. Leaving it empty uses that parent's current name when the session is created,
+  with no numeric suffix; multiple sessions can have the same name. The field stays empty until the user enters a
+  custom name. The dialog removes surrounding whitespace from an entered name and uses the parent name when nothing
+  remains. Renaming a console changes the default for future console sessions; existing sessions keep their created
+  names.
 - **Agent** — an agent picker joined to an account picker, as in the console and project dialogs. The agent picker
   lists all three agents with their icons and names. An agent Octoboard has determined unavailable (its binary does
   not resolve on the user's login shell `PATH`) is marked as not installed and cannot be selected; before that
@@ -120,7 +116,7 @@ The choices, clearing and account-specific lists are described in "The Advanced 
 
 A console session has no project or Report to field and is never bound to another session. Opening it with the daemon
 protocol's `open_session` accepts an explicit agent and account as the dialog does. Its `title` is stored trimmed, and
-one that is absent, `null` or blank requests the automatic Hub name, as the dialog's empty name does.
+one that is absent, `null` or blank uses the console's current name, as the dialog's empty name does.
 
 The dialog takes no task: a session the user opens by hand starts in *awaiting instructions*, sitting at the agent's
 prompt, and is given its work by typing into its terminal. Only a session started with `start_session` — by a console

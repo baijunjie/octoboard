@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 
 import { choiceGroups, choiceKey, currentChoice, findEntry, inheritedAccount, initialChoice } from "../accountChoices";
 import { AGENT_CONSOLE_EFFORT_FIELD, AGENT_CONSOLE_MODEL_FIELD, AGENT_LABEL, AGENT_PROJECT_EFFORT_FIELD, AGENT_PROJECT_MODEL_FIELD, noAgentAvailable } from "../agents";
@@ -65,27 +65,9 @@ export function SessionDialog({
   const [pickedAgent, setPickedAgent] = useState<Agent>();
   const [pickedAccounts, setPickedAccounts] = useState<Partial<Record<Agent, string | null>>>({});
   const [title, setTitle] = useState("");
-  const [automaticTitle, setAutomaticTitle] = useState<{ console: string; sessionIds: string; title: string }>();
   const [launchSettings, setLaunchSettings] = useState<Partial<Record<Agent, { model?: string | null; effort?: string | null }>>>({});
   const [pickedOwner, setPickedOwner] = useState(NO_OWNER);
   const { error, busy, run } = useDialogAction();
-
-  const consoleId = project ? undefined : parentConsole.id;
-  const consoleSessionIds = sessions.filter((session) => session.console_id === consoleId && !session.project_id)
-    .map((session) => session.id).sort().join(",");
-  useEffect(() => {
-    if (!consoleId) return;
-    let current = true;
-    void request({ type: "preview_console_session_title", console: consoleId }).then(
-      (event) => {
-        if (current && event.type === "console_session_title" && event.console === consoleId) {
-          setAutomaticTitle({ console: consoleId, sessionIds: consoleSessionIds, title: event.title });
-        }
-      },
-      () => {},
-    );
-    return () => { current = false; };
-  }, [consoleId, consoleSessionIds, request]);
 
   const groups = choiceGroups(accounts, agentAvailability, t("settings.accounts.defaultName"));
   const pickedAccount = pickedAgent ? pickedAccounts[pickedAgent] : undefined;
@@ -157,9 +139,8 @@ export function SessionDialog({
         label={t("common.name")}
         value={title}
         onChange={setTitle}
-        placeholder={project?.name ?? (automaticTitle && automaticTitle.console === consoleId && automaticTitle.sessionIds === consoleSessionIds
-          ? automaticTitle.title : t("dialog.consoleSession.namePlaceholder"))}
-        description={t(project ? "dialog.session.titleHint" : "dialog.consoleSession.titleHint")}
+        placeholder={project?.name ?? parentConsole.name}
+        description={t(project ? "dialog.session.titleHint" : "dialog.consoleSession.consoleNameHint")}
       />
       <AgentAccountField
         label={t("dialog.session.agent")}
