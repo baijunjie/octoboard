@@ -598,6 +598,14 @@
   top: calc(1rem + var(--top-chrome-height));
 }
 
+/* HeroUI tints a success, warning or danger toast's indicator to match its title, but leaves the
+   accent variant's, which a notice uses, in the plain foreground under an accent title (see
+   `docs/ui-accessibility.md`'s "Confirmed visual choices"). Unlayered, so it wins over HeroUI's
+   layered rule. */
+.toast--accent .toast__indicator {
+  color: var(--accent-soft-foreground);
+}
+
 /* The window is an application shell, not a document: the root is exactly the viewport and never
    scrolls itself, every pane scrolls inside its own region. `overscroll-behavior: none` on `html`
    (the one element it acts on: it is not inherited, and only a scroll container takes it) stops

@@ -25,6 +25,10 @@ Tabs in Settings, the project's Files / Git switch and the Git view's Uncommitte
 fully opaque on hover and use the foreground colour instead of dimming. Preserve this shared visual treatment as an
 explicit product choice, while retaining the component's layout, selection and keyboard behaviour.
 
+A notice toast (HeroUI's accent variant) tints its indicator with the title's `--accent-soft-foreground`, as HeroUI
+does itself for its success, warning and danger toasts, instead of leaving it in the plain foreground under an accent
+title.
+
 ## Keyboard
 
 Every interactive control is reachable from the keyboard and operable with Enter / Space, with one exception the
