@@ -38,6 +38,8 @@ Per-package commands are in that package's doc.
   env files and the small reader they share. `.env` (committed) holds non-secret configuration, read by the UI's dev
   server, with a gitignored `.env.local` overriding it; `.env.secret` (gitignored, template `.env.secret.example`) holds
   the release credentials, read by `apps/desktop/scripts/release.mjs` alone.
+  [`.env.install.example`](../.env.install.example) is the template for the gitignored `.env.install.local`, read
+  only by the desktop's `build:install` command for its installation directory and keychain signing identity.
   Root `scripts/` holds the helpers the build scripts share.
 
 ## Brand artwork
@@ -56,8 +58,8 @@ Per-package commands are in that package's doc.
 - [`apps/desktop/`](../apps/desktop/README.md) — `@octoboard/desktop`, the Tauri 2 shell of the macOS desktop
   application: window (with its overlay titlebar, translucent native material and remembered frame), native menu
   (labelled in the UI's language), `octoboardd` sidecar, exit flow, optional background running behind a menu bar icon
-  (a Settings choice, off by default), the macOS privacy-permission grants the Settings dialog offers, and release
-  scripts. It loads the UI from `packages/ui/` and has no UI of its own; a client of `apps/daemon/` over WebSocket
+  (a Settings choice, off by default), the macOS privacy-permission grants the Settings dialog offers, and build,
+  local-install and release scripts. It loads the UI from `packages/ui/` and has no UI of its own; a client of `apps/daemon/` over WebSocket
   only.
 - [`apps/ios/`](../apps/ios/README.md) — placeholder for the native iOS client; no content, not a workspace package.
 - [`apps/android/`](../apps/android/README.md) — placeholder for the native Android client; no content, not a

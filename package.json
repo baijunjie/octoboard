@@ -6,6 +6,7 @@
   "scripts": {
     "typecheck": "pnpm -r typecheck",
     "build": "pnpm -r build",
+    "build:install": "pnpm --filter @octoboard/desktop build:install",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "eslint . --fix --fix-type layout && cargo fmt --all",
