@@ -115,8 +115,8 @@ export interface Scenario {
   state?: Partial<State>;
   preferences?: Preferences;
   toasts?: ToastFixture[];
-  /** How a session's terminal behaves: `output` connects and draws a sample (default), `refuse`
-   * never connects, which is a terminal in trouble. */
+  /** How a session's terminal behaves: `output` draws scrolling sample output (default),
+   * `fullscreen` draws a response in the alternate screen, and `refuse` never connects. */
   terminal?: TerminalBehaviour;
   /** The terminal's automatic reconnect attempts follow one another at once, so a `refuse`d
    * terminal reaches its disconnected state without the backoff's wait. */

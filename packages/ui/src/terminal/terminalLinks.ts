@@ -1,4 +1,4 @@
-import type { IBufferRange, ILink, ILinkProvider, Terminal } from "@xterm/xterm";
+import type { IBufferCell, IBufferRange, ILink, ILinkProvider, Terminal } from "@xterm/xterm";
 
 import { isPrimaryModifier } from "../useWindowShortcut";
 
@@ -340,7 +340,49 @@ function terminalRowReader(term: Terminal): (y: number) => TerminalRow | undefin
 /** The cells to colour as links in the rows `term` is showing now. */
 export function visibleLinkSegments(term: Terminal): LinkSegment[] {
   const { viewportY } = term.buffer.active;
-  return linkSegmentsIn(terminalRowReader(term), viewportY + 1, viewportY + term.rows);
+  return mergeSegments([
+    ...linkSegmentsIn(terminalRowReader(term), viewportY + 1, viewportY + term.rows),
+    ...visibleOscLinkSegments(term),
+  ]);
+}
+
+
+/** xterm 6 returns its internal CellData through the public buffer API. Only this adapter reads
+ * its extended URL id and the OSC link service, which have no public equivalent. Missing internals
+ * leave OSC labels uncoloured while plain-text detection continues to work. */
+function visibleOscLinkSegments(term: Terminal): LinkSegment[] {
+  const service = (term as unknown as {
+    _core?: { _oscLinkService?: { getLinkData?: (id: number) => { uri: string } | undefined } };
+  })._core?._oscLinkService;
+  if (typeof service?.getLinkData !== "function") return [];
+  const buffer = term.buffer.active;
+  const cell = buffer.getNullCell();
+  const accepted = new Map<number, boolean>();
+  const segments: LinkSegment[] = [];
+  for (let y = buffer.viewportY; y < buffer.viewportY + term.rows; y++) {
+    const line = buffer.getLine(y);
+    if (!line) continue;
+    for (let col = 0; col < term.cols; col++) {
+      const current = line.getCell(col, cell) as (IBufferCell & { hasExtendedAttrs?: () => number; extended?: { urlId?: number } }) | undefined;
+      const id = current?.hasExtendedAttrs?.() ? current.extended?.urlId : undefined;
+      if (!id) continue;
+      if (!accepted.has(id)) {
+        const uri = service.getLinkData(id)?.uri;
+        let valid = false;
+        try {
+          valid = !!uri && ["http:", "https:"].includes(new URL(uri).protocol);
+        } catch {
+          // Match xterm's refusal to offer malformed OSC 8 targets as links.
+        }
+        accepted.set(id, valid);
+      }
+      if (!accepted.get(id)) continue;
+      const last = segments[segments.length - 1];
+      if (last?.y === y + 1 && last.col + last.width === col) last.width++;
+      else segments.push({ y: y + 1, col, width: 1 });
+    }
+  }
+  return segments;
 }
 
 /**

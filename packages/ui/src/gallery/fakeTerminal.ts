@@ -2,13 +2,13 @@
  * The terminal sockets of the gallery. A session's terminal URL points at `FIXTURE_ORIGIN`, which
  * `installFakeTerminal` answers in the page itself, so there is no daemon and no failed network
  * request to read off the console: `output` connects and draws a sample (for a dormant session, as
- * the output its last process left), `refuse` closes at once without ever opening, which is a live
- * session whose terminal cannot be reached.
+ * the output its last process left), `fullscreen` draws in the alternate screen, and `refuse`
+ * closes at once without ever opening, which is a live session whose terminal cannot be reached.
  */
 
 const FIXTURE_ORIGIN = "ws://gallery.invalid/";
 
-export type TerminalBehaviour = "output" | "refuse";
+export type TerminalBehaviour = "output" | "fullscreen" | "refuse";
 
 export function terminalFixtureUrl(behaviour: TerminalBehaviour, session: string): string {
   return `${FIXTURE_ORIGIN}${behaviour}/${session}`;
@@ -106,6 +106,22 @@ const sample = (cols: number) => [
   "",
 ].join("\r\n");
 
+/** A settled full-screen response, rather than the scrolling output used by the other fixtures. */
+const fullscreenSample = () => `${ESC}?1049h${ESC}H${ESC}2J` + [
+  `${ESC}1;38;5;208m ✻ Claude Code${ESC}0m`,
+  "",
+  "  The preview is ready. Open either link below.",
+  "",
+  `${ESC}2m  Preview: http://localhost:5176/gallery.html${ESC}0m`,
+  `${ESC}2m  Notes: ${OSC8}https://example.com/docs/summary-layout?section=breakpoints\x1b\\layout notes${OSC8}\x1b\\ for the breakpoints.${ESC}0m`,
+  "",
+  "  Both links remain visible without hovering.",
+  `${ESC}2m  The surrounding text keeps the agent's muted style.${ESC}0m`,
+  "",
+  `${ESC}2m  ────────────────────────────────────────────${ESC}0m`,
+  "  > ",
+].join("\r\n");
+
 class FakeTerminalSocket extends EventTarget {
   binaryType: BinaryType = "blob";
   readyState = 0;
@@ -115,16 +131,16 @@ class FakeTerminalSocket extends EventTarget {
   /** The width the output on screen was laid out for, once it has been written. */
   private drawnCols?: number;
 
-  /** Whether the output depends on the width, which only the default sample does. Supplied text is
-   * written once and left to the terminal's own reflow. */
+  /** Whether the output depends on the width, which only the scrolling sample does. Other text is
+   * written once and left to the terminal's own resize behavior. */
   private readonly sized: boolean;
   private readonly output: (cols: number) => string;
 
   constructor(readonly url: string, output?: () => string) {
     super();
-    this.sized = output === undefined;
-    this.output = output ?? sample;
     const behaviour = url.slice(FIXTURE_ORIGIN.length).split("/")[0];
+    this.sized = output === undefined && behaviour !== "fullscreen";
+    this.output = output ?? (behaviour === "fullscreen" ? fullscreenSample : sample);
     // A refusal takes a moment, as a real one does: closing in the same frame as the attempt would
     // batch the "connecting" and the failure into one render and the pane would never see either.
     setTimeout(() => {

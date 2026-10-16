@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
+import type { Terminal } from "@xterm/xterm";
 import { expect, it, vi } from "vitest";
 
 import { IS_MAC } from "../useWindowShortcut";
-import { brokenUrlsAt, linkBox, linkSegmentsIn, type TerminalRow, TERMINAL_URL_REGEX, terminalLinkHandler } from "./terminalLinks";
+import { brokenUrlsAt, linkBox, linkSegmentsIn, type TerminalRow, TERMINAL_URL_REGEX, terminalLinkHandler, visibleLinkSegments } from "./terminalLinks";
 
 it("opens a link only on the platform's shortcut modifier", () => {
   const open = vi.fn(async () => {});
@@ -114,4 +115,28 @@ it("segments an address the program broke, each row from its indent, once", () =
     { y: 2, col: 2, width: 22 },
     { y: 3, col: 2, width: 2 },
   ]);
+});
+
+
+it("colours OSC 8 labels by their cells and accepts only web targets, with a safe fallback", () => {
+  const cells = [
+    ["看", 2, 1], ["", 0, 1], [" ", 1, 1], ["x", 1, 1],
+    ["f", 1, 2], ["!", 1, 3], [" ", 1, 0],
+  ] as const;
+  const term = {
+    cols: cells.length,
+    rows: 1,
+    _core: { _oscLinkService: { getLinkData: (id: number) => ({ uri: ["", "https://example.com", "file:///tmp/x", "bad"][id] }) } },
+    buffer: { active: {
+      viewportY: 0,
+      getNullCell: () => ({}),
+      getLine: (y: number) => y === 0 ? {
+        isWrapped: false,
+        getCell: (x: number) => ({ getChars: () => cells[x][0], getWidth: () => cells[x][1], hasExtendedAttrs: () => cells[x][2], extended: { urlId: cells[x][2] || 1 } }),
+      } : undefined,
+    } },
+  };
+  expect(visibleLinkSegments(term as unknown as Terminal)).toEqual([{ y: 1, col: 0, width: 4 }]);
+  Object.assign(term, { _core: undefined });
+  expect(visibleLinkSegments(term as unknown as Terminal)).toEqual([]);
 });

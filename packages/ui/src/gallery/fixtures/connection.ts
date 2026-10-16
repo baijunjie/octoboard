@@ -83,6 +83,17 @@ export const connectionScenarios: Scenario[] = [
     ],
   },
   {
+    id: "terminal-fullscreen-links",
+    group: TERMINAL,
+    category: "normal",
+    title: "Links in a full-screen terminal response",
+    description: "The localhost address and the labelled \"layout notes\" hyperlink are blue without hovering, even inside muted output. The surrounding prose stays muted. Both links remain readable in light and dark themes; Cmd/Ctrl+click opens their addresses.",
+    terminal: "fullscreen",
+    preferences: { asideVisible: false },
+    state: connected("open"),
+    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(400)],
+  },
+  {
     id: "terminal-link-tooltip",
     group: TERMINAL,
     category: "normal",
