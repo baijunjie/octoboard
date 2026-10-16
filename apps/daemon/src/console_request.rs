@@ -715,6 +715,7 @@ mod tests {
             title: format!("Work {id}"),
             status: SessionStatus::Idle,
             terminal_title: None,
+            record_titles: Default::default(),
             usage: None,
             model: None,
             effort: None,

@@ -385,7 +385,9 @@ impl AppState {
 
     /// The live lock keeps registration/relaunch from replacing the process between checking its
     /// identity and storing its title. Only this column is written: status and user names may move
-    /// concurrently. A deleted record is never recreated.
+    /// concurrently. A deleted record is never recreated. An agent re-sends its title as often as
+    /// its spinner turns, so the title is always stored but published only when it changes what
+    /// clients are shown.
     pub(crate) fn record_terminal_title(&self, session: &LiveSession, title: Option<&str>) {
         let live = self.live.read().expect("live sessions lock poisoned");
         if !live
@@ -395,13 +397,68 @@ impl AppState {
         {
             return;
         }
+        let names = std::cell::OnceCell::new();
+        let before = match self.store.get_session(&session.id) {
+            Ok(Some(record)) => self.resolved_title(&record, &names),
+            Ok(None) => return,
+            Err(err) => {
+                tracing::warn!(session = %session.id, %err, "reading the session for its terminal title failed");
+                return;
+            }
+        };
         match self.store.set_terminal_title(&session.id, title) {
-            Ok(Some(record)) => self.publish_session(&record),
-            Ok(None) => {}
+            Ok(Some(record)) if self.resolved_title(&record, &names) != before => {
+                self.publish_session(&record)
+            }
+            Ok(_) => {}
             Err(err) => {
                 tracing::warn!(session = %session.id, %err, "storing the terminal title failed")
             }
         }
+    }
+
+    /// The title a client is shown for the session. `names` holds the project's names once asked.
+    fn resolved_title(
+        &self,
+        session: &Session,
+        names: &std::cell::OnceCell<Vec<String>>,
+    ) -> Option<String> {
+        crate::session_title::resolve(
+            session.agent,
+            session.terminal_title.as_deref(),
+            &session.record_titles,
+            || {
+                names
+                    .get_or_init(|| {
+                        let path = match &session.project_id {
+                            Some(project) => self
+                                .store
+                                .get_project(project)
+                                .ok()
+                                .flatten()
+                                .map(|p| p.path),
+                            None => self
+                                .store
+                                .get_console(&session.console_id)
+                                .ok()
+                                .flatten()
+                                .map(|console| console.workdir),
+                        };
+                        path.map(|path| {
+                            crate::session_title::project_names(std::path::Path::new(&path))
+                        })
+                        .unwrap_or_default()
+                    })
+                    .clone()
+            },
+        )
+    }
+
+    /// The session as a client receives it: the stored raw terminal title is replaced by the
+    /// resolved title.
+    pub(crate) fn wire_session(&self, mut session: Session) -> Session {
+        session.terminal_title = self.resolved_title(&session, &std::cell::OnceCell::new());
+        session
     }
 
     /// Drops a session from the live map — but only if it is still *this* session. Comparing by id
@@ -444,7 +501,9 @@ impl AppState {
         // Partial store writes preserve columns owned by other paths. Always publish the stored
         // row so a previously read record cannot blank a terminal title learned in the meantime.
         match self.store.get_session(&session.id) {
-            Ok(Some(session)) => self.broadcast_locked(Event::SessionUpserted { session }),
+            Ok(Some(session)) => self.broadcast_locked(Event::SessionUpserted {
+                session: self.wire_session(session),
+            }),
             Ok(None) => {}
             Err(err) => {
                 tracing::warn!(session = %session.id, %err, "reading the session for publication failed")
@@ -1599,6 +1658,7 @@ mod tests {
             title: "Session".to_string(),
             status,
             terminal_title: None,
+            record_titles: Default::default(),
             usage: None,
             model: None,
             effort: None,
@@ -1711,6 +1771,29 @@ mod tests {
         successor.on_output(b"\x1b]2;Deleted task\x07");
         assert!(events.try_recv().is_err());
         assert!(state.store.get_session("s").unwrap().is_none());
+    }
+
+    #[test]
+    fn decorations_that_leave_the_resolved_title_alone_are_not_published() {
+        let (state, dir) = app_state("state-title-decoration");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        let mut events = state.subscribe();
+        live.on_output(b"\x1b]2;\xe2\x9c\xb3 Claude Code\x07");
+        assert!(events.try_recv().is_err(), "the placeholder names nothing");
+        live.on_output("\x1b]2;◐ Task\x07".as_bytes());
+        let Event::SessionUpserted { session } = events.try_recv().unwrap() else {
+            panic!("expected a title update")
+        };
+        assert_eq!(session.terminal_title.as_deref(), Some("Task"));
+        live.on_output("\x1b]2;✳ Task\x07".as_bytes());
+        assert!(events.try_recv().is_err(), "a new glyph is not a new title");
+        assert_eq!(
+            state.session_record("s").unwrap().terminal_title.as_deref(),
+            Some("Task"),
+            "the title is stored without its leading glyph"
+        );
     }
 
     /// The output is saved before the live entry goes, so the moment the session stops being

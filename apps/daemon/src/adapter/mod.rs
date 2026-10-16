@@ -251,6 +251,19 @@ pub struct LaunchPlan {
     pub carried_trust: Option<crate::trust::CarriedTrust>,
 }
 
+/// A title an agent's own record gives its conversation. Of the titles one record gives, the
+/// highest `precedence` wins and the last of equal precedence wins.
+pub struct NamedTitle {
+    pub text: String,
+    pub precedence: u8,
+}
+
+/// Whether `text` is nothing but a spinner's glyphs, the braille patterns agents animate.
+pub fn is_spinner(text: &str) -> bool {
+    let mut glyphs = text.chars().filter(|c| !c.is_whitespace()).peekable();
+    glyphs.peek().is_some() && glyphs.all(|c| ('\u{2800}'..='\u{28ff}').contains(&c))
+}
+
 pub trait AgentAdapter {
     /// Binary name, resolved against the snapshotted shell `PATH`.
     fn binary(&self) -> &'static str;
@@ -273,6 +286,44 @@ pub trait AgentAdapter {
     /// endpoint security stalls every exec a `--version` probe costs seconds. `None` when this
     /// agent's launch does not depend on its version, or when the install does not tell it.
     fn installed_version(&self, _binary: &str) -> Option<AgentVersion> {
+        None
+    }
+
+    /// The task title a raw terminal title carries, or `None` when it carries none: agents decorate
+    /// their titles with status glyphs, activity and their own or the project's name.
+    /// `project_names` are the names the project may appear under, given only to an agent that
+    /// `names_project`. An agent nobody has taught the shape of gets the title as sent.
+    fn task_title(&self, raw: &str, _project_names: &[String]) -> Option<String> {
+        let title = raw.trim();
+        (!title.is_empty()).then(|| title.to_owned())
+    }
+
+    /// Whether the agent's terminal title carries the project's name, which `task_title` has to
+    /// know to take it off.
+    fn names_project(&self) -> bool {
+        false
+    }
+
+    /// The title one line of the conversation's own append-only record names it with, if it is
+    /// such a line.
+    fn named_title(&self, _line: &str) -> Option<NamedTitle> {
+        None
+    }
+
+    /// The conversation and its title named by one line of a file shared by all of an account's
+    /// conversations, if it is such a line.
+    fn indexed_title(&self, _line: &str) -> Option<(String, String)> {
+        None
+    }
+
+    /// The prompt the user typed, when one line of the conversation's own record is it. Only for an
+    /// agent that offers no title of its own to fall back on.
+    fn prompt_text(&self, _line: &str) -> Option<String> {
+        None
+    }
+
+    /// The title a conversation's summary file names it with.
+    fn summary_title(&self, _summary: &serde_json::Value) -> Option<String> {
         None
     }
 }

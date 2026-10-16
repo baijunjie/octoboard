@@ -25,6 +25,7 @@ use crate::protocol::{
     ConsoleSessionColour, Host, HostKind, Origin, Page, Project, ProjectAccount, ProjectSource,
     Role, Session, SessionStatus, Settings,
 };
+use crate::session_title::RecordTitles;
 
 /// The single local host record every project and session points at. There is no other host yet,
 /// but the column exists so that adding remote hosts needs no data migration ("Data model" in
@@ -156,6 +157,10 @@ impl Store {
                 origin           TEXT NOT NULL,
                 title            TEXT NOT NULL,
                 terminal_title   TEXT,
+                -- What the agent's own records call the session: a title it was named with, and a
+                -- stand-in from its first prompt.
+                record_title     TEXT,
+                record_prompt    TEXT,
                 usage            TEXT,
                 status           TEXT NOT NULL,
                 has_conversation INTEGER NOT NULL DEFAULT 0,
@@ -269,6 +274,14 @@ impl Store {
         }
         if !column_exists(&conn, "sessions", "terminal_title")? {
             conn.execute("ALTER TABLE sessions ADD COLUMN terminal_title TEXT", [])?;
+        }
+        for column in ["record_title", "record_prompt"] {
+            if !column_exists(&conn, "sessions", column)? {
+                conn.execute(
+                    &format!("ALTER TABLE sessions ADD COLUMN {column} TEXT"),
+                    [],
+                )?;
+            }
         }
         for column in ["model", "effort"] {
             if !column_exists(&conn, "sessions", column)? {
@@ -950,7 +963,9 @@ impl Store {
         let changed = self.lock().execute(
             "UPDATE sessions SET agent = ?2, agent_session_id = ?3, title = ?4, status = ?5,
                                  has_conversation = ?6, started_at = ?7, ended_at = ?8,
-                                 usage = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN usage ELSE NULL END
+                                 usage = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN usage ELSE NULL END,
+                                 record_title = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN record_title ELSE NULL END,
+                                 record_prompt = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN record_prompt ELSE NULL END
              WHERE id = ?1",
             params![
                 session.id,
@@ -966,16 +981,15 @@ impl Store {
         Ok(changed > 0)
     }
 
-    /// Persists usage only if the source still belongs to this session's current agent identity.
-    /// Unrelated session writes never overwrite this column.
-    pub fn set_session_usages(
-        &self,
-        updates: &[(Session, crate::protocol::SessionUsage)],
-    ) -> Result<Vec<Session>> {
+    /// Persists what the agent's records gave sessions, only while the source still belongs to the
+    /// session's current agent identity; unrelated session writes never overwrite these columns.
+    /// Returns the sessions that changed.
+    pub fn set_record_data(&self, updates: &[RecordUpdate]) -> Result<Vec<Session>> {
         let mut conn = self.lock();
         let tx = conn.transaction()?;
         let mut changed = Vec::new();
-        for (source, usage) in updates {
+        for update in updates {
+            let source = &update.session;
             let session = tx
                 .query_row(
                     &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
@@ -987,15 +1001,34 @@ impl Store {
             if session.agent != source.agent
                 || session.agent_session_id != source.agent_session_id
                 || session.config_dir != source.config_dir
-                || session.usage.as_ref() == Some(usage)
             {
                 continue;
             }
-            tx.execute(
-                "UPDATE sessions SET usage = ?2 WHERE id = ?1",
-                params![source.id, serde_json::to_string(usage)?],
-            )?;
-            session.usage = Some(usage.clone());
+            let usage = update
+                .usage
+                .as_ref()
+                .filter(|usage| session.usage.as_ref() != Some(*usage));
+            let titles = update
+                .titles
+                .as_ref()
+                .filter(|titles| &session.record_titles != *titles);
+            if usage.is_none() && titles.is_none() {
+                continue;
+            }
+            if let Some(usage) = usage {
+                tx.execute(
+                    "UPDATE sessions SET usage = ?2 WHERE id = ?1",
+                    params![source.id, serde_json::to_string(usage)?],
+                )?;
+                session.usage = Some(usage.clone());
+            }
+            if let Some(titles) = titles {
+                tx.execute(
+                    "UPDATE sessions SET record_title = ?2, record_prompt = ?3 WHERE id = ?1",
+                    params![source.id, titles.named, titles.prompt],
+                )?;
+                session.record_titles = titles.clone();
+            }
             changed.push(session);
         }
         tx.commit()?;
@@ -1463,10 +1496,19 @@ const PROJECT_SETTING_COLUMNS: [&str; 9] = [
     "grok_session_effort",
 ];
 
+/// What the agent's records gave a session, to be stored if it differs from what is.
+pub struct RecordUpdate {
+    /// The session as it was read, which says whose records these are.
+    pub session: Session,
+    pub usage: Option<crate::protocol::SessionUsage>,
+    pub titles: Option<RecordTitles>,
+}
+
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
                                role, origin, title, status, has_conversation, bound_to, colour,
                                ordinal, account_id, config_dir, pinned, started_at, ended_at,
-                               lead, terminal_title, model, effort, model_override, effort_override, usage";
+                               lead, terminal_title, model, effort, model_override, effort_override, usage,
+                               record_title, record_prompt";
 
 const CONSOLE_COLUMNS: &str = "id, name, workdir, console_session_agent, default_agent,
                                claude_account_id, codex_account_id, grok_account_id,
@@ -1523,9 +1565,10 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
         "INSERT INTO sessions
             (id, agent, agent_session_id, console_id, project_id, host_id, role, origin, title,
              status, has_conversation, bound_to, colour, ordinal, account_id, config_dir, pinned,
-             started_at, ended_at, lead, terminal_title, model, effort, model_override, effort_override, usage)
+             started_at, ended_at, lead, terminal_title, model, effort, model_override, effort_override, usage,
+             record_title, record_prompt)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)",
+                 ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
         params![
             session.id,
             enum_to_text(&session.agent),
@@ -1553,6 +1596,8 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             session.model.is_some(),
             session.effort.is_some(),
             session.usage.as_ref().map(serde_json::to_string).transpose()?,
+            session.record_titles.named,
+            session.record_titles.prompt,
         ],
     )?;
     Ok(())
@@ -1684,6 +1729,10 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         ended_at: row.get(18)?,
         lead: row.get(19)?,
         terminal_title: row.get(20)?,
+        record_titles: RecordTitles {
+            named: row.get(26)?,
+            prompt: row.get(27)?,
+        },
         usage: row
             .get::<_, Option<String>>(25)?
             .and_then(|text| serde_json::from_str(&text).ok()),
@@ -1795,6 +1844,7 @@ mod tests {
             title: "Hub".to_string(),
             status: SessionStatus::Idle,
             terminal_title: None,
+            record_titles: Default::default(),
             usage: None,
             model: None,
             effort: None,
@@ -3183,13 +3233,21 @@ mod tests {
         };
         assert_eq!(
             store
-                .set_session_usages(&[(source.clone(), usage.clone())])
+                .set_record_data(&[RecordUpdate {
+                    session: source.clone(),
+                    usage: Some(usage.clone()),
+                    titles: None
+                }])
                 .unwrap()
                 .len(),
             1
         );
         assert!(store
-            .set_session_usages(&[(source.clone(), usage.clone())])
+            .set_record_data(&[RecordUpdate {
+                session: source.clone(),
+                usage: Some(usage.clone()),
+                titles: None
+            }])
             .unwrap()
             .is_empty());
         source.title = "Renamed".to_owned();
@@ -3213,7 +3271,11 @@ mod tests {
             ..usage.clone()
         };
         assert!(store
-            .set_session_usages(&[(source.clone(), changed)])
+            .set_record_data(&[RecordUpdate {
+                session: source.clone(),
+                usage: Some(changed),
+                titles: None
+            }])
             .unwrap()
             .is_empty());
         let mut current = store.get_session(&source.id).unwrap().unwrap();
@@ -3226,9 +3288,65 @@ mod tests {
             .usage
             .is_none());
         assert!(store
-            .set_session_usages(&[(source, usage)])
+            .set_record_data(&[RecordUpdate {
+                session: source,
+                usage: Some(usage),
+                titles: None
+            }])
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn record_titles_migrate_persist_and_follow_the_agent_session() {
+        let path = temp_db("record-titles");
+        let store = Store::open(&path).unwrap();
+        store.insert_console(&console(None, None, None)).unwrap();
+        store.insert_session(&session(None)).unwrap();
+        drop(store);
+        let conn = Connection::open(&path).unwrap();
+        for column in ["record_title", "record_prompt"] {
+            conn.execute(&format!("ALTER TABLE sessions DROP COLUMN {column}"), [])
+                .unwrap();
+        }
+        drop(conn);
+        let store = Store::open(&path).unwrap();
+        let mut source = store.get_session("session-1").unwrap().unwrap();
+        assert_eq!(source.record_titles, RecordTitles::default());
+        let titles = RecordTitles {
+            named: Some("Named".to_owned()),
+            prompt: Some("Prompt".to_owned()),
+        };
+        let updates = [RecordUpdate {
+            session: source.clone(),
+            usage: None,
+            titles: Some(titles.clone()),
+        }];
+        assert_eq!(store.set_record_data(&updates).unwrap().len(), 1);
+        assert!(store.set_record_data(&updates).unwrap().is_empty());
+        source.title = "Renamed".to_owned();
+        store.update_session(&source).unwrap();
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert_eq!(
+            store
+                .get_session("session-1")
+                .unwrap()
+                .unwrap()
+                .record_titles,
+            titles
+        );
+        source.agent_session_id = Some("another".to_owned());
+        store.update_session(&source).unwrap();
+        assert_eq!(
+            store
+                .get_session("session-1")
+                .unwrap()
+                .unwrap()
+                .record_titles,
+            RecordTitles::default(),
+            "another conversation does not inherit the titles"
+        );
     }
 
     #[test]

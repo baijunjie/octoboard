@@ -81,6 +81,10 @@ const HOOK_EVENTS: &[&str] = &[
     "Notification",
 ];
 
+/// The status Grok shows after the spinner while it waits for the model, the only one seen with
+/// no title after it.
+const WAITING_STATUS: &str = "Waiting for response…";
+
 /// Grok's trust store, inside `GROK_HOME`.
 const TRUST_STORE: &str = "trusted_folders.toml";
 
@@ -104,6 +108,40 @@ impl AgentAdapter for GrokAdapter {
 
     fn uses_hook_script(&self) -> bool {
         true
+    }
+
+    /// Grok's title is its items joined by ` - `: while it works a spinner and a status ending in
+    /// an ellipsis, then the conversation's title, then its own name last. The item after the
+    /// spinner is a status when a title still follows it, or when it is the known wait status.
+    fn task_title(&self, raw: &str, _project_names: &[String]) -> Option<String> {
+        // The terminal title reaches here without the spinner it starts with, which leaves the
+        // separator after it at the front.
+        let (raw, mut spun) = match raw.strip_prefix("- ") {
+            Some(rest) => (rest, true),
+            None => (raw, false),
+        };
+        let mut items: Vec<&str> = raw.split(" - ").map(str::trim).collect();
+        if items.first().is_some_and(|first| super::is_spinner(first)) {
+            items.remove(0);
+            spun = true;
+        }
+        if spun {
+            let titled = items.iter().filter(|item| **item != "grok").count() > 1;
+            let status = |item: &&str| item.ends_with('…') && (titled || *item == WAITING_STATUS);
+            if items.first().is_some_and(status) {
+                items.remove(0);
+            }
+        }
+        if items.last() == Some(&"grok") {
+            items.pop();
+        }
+        items.retain(|item| !item.is_empty());
+        (!items.is_empty()).then(|| items.join(" - "))
+    }
+
+    /// `generated_title` of the session directory's `summary.json`.
+    fn summary_title(&self, summary: &serde_json::Value) -> Option<String> {
+        Some(summary.get("generated_title")?.as_str()?.to_owned())
     }
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
@@ -330,6 +368,40 @@ fn write_hooks(farm: &Path, hook_script: &Path) -> Result<()> {
 mod tests {
     use super::*;
     use crate::adapter::tests::{spec_fixture, SpecFixture};
+
+    #[test]
+    fn terminal_titles_lose_the_spinner_the_status_and_groks_own_name() {
+        let task = |raw: &str| GrokAdapter.task_title(raw, &[]);
+        for raw in [
+            "grok",
+            "⠋ - Waiting for response… - grok",
+            "- Waiting for response… - grok",
+            "",
+        ] {
+            assert_eq!(task(raw), None, "{raw}");
+        }
+        let title = "Explain in one sentence what a pseudo te…";
+        assert_eq!(
+            task(&format!("⠋ - Waiting for response… - {title} - grok")).as_deref(),
+            Some(title)
+        );
+        assert_eq!(
+            task(&format!("- Waiting for response… - {title} - grok")).as_deref(),
+            Some(title),
+            "the spinner may already be taken off"
+        );
+        assert_eq!(task(&format!("{title} - grok")).as_deref(), Some(title));
+        assert_eq!(
+            task("⠋ - Fix the build - grok").as_deref(),
+            Some("Fix the build"),
+            "an item that is no status stays"
+        );
+        assert_eq!(
+            task("⠋ - Explain what a pseudo te… - grok").as_deref(),
+            Some("Explain what a pseudo te…"),
+            "a lone truncated title is not a status"
+        );
+    }
 
     /// Stands a fake `~/.grok` up inside the fixture and points the launch environment at it.
     fn with_default_home(fixture: &mut SpecFixture) -> PathBuf {

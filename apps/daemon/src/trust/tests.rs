@@ -434,6 +434,7 @@ fn session(id: &str, agent: Agent, role: Role, project_id: Option<&str>) -> Sess
         title: "Session".to_string(),
         status: SessionStatus::Idle,
         terminal_title: None,
+        record_titles: Default::default(),
         usage: None,
         model: None,
         effort: None,

@@ -89,6 +89,85 @@ impl AgentAdapter for CodexAdapter {
         true
     }
 
+    /// Codex's title is a list of items joined by ` | `: a spinner, a status such as `[ ! ] Action
+    /// Required`, the conversation's title once it has one, and the project last. An unnamed
+    /// conversation is left with the project alone, which says nothing.
+    ///
+    /// The terminal title reaches here without the spinner it starts with, which leaves the
+    /// separator after it at the front.
+    fn task_title(&self, raw: &str, project_names: &[String]) -> Option<String> {
+        let raw = raw.strip_prefix('|').unwrap_or(raw);
+        let mut items: Vec<&str> = raw
+            .split(" | ")
+            .map(str::trim)
+            .filter(|item| {
+                !item.is_empty() && !super::is_spinner(item) && *item != "[ ! ] Action Required"
+            })
+            .collect();
+        if items
+            .last()
+            .is_some_and(|last| project_names.iter().any(|name| name == last))
+        {
+            items.pop();
+        }
+        (!items.is_empty()).then(|| items.join(" | "))
+    }
+
+    fn names_project(&self) -> bool {
+        true
+    }
+
+    /// A line of `session_index.jsonl`, which names every conversation of the account that has a
+    /// title, whether Codex generated it or the user renamed it.
+    fn indexed_title(&self, line: &str) -> Option<(String, String)> {
+        if !line.contains("\"thread_name\"") {
+            return None;
+        }
+        let value: serde_json::Value = serde_json::from_str(line).ok()?;
+        Some((
+            value.get("id")?.as_str()?.to_owned(),
+            value.get("thread_name")?.as_str()?.to_owned(),
+        ))
+    }
+
+    /// What the user typed, from the rollout's event of it: `user_message` in older Codex, an
+    /// `item_completed` of a `UserMessage` item in newer. The user-role response items beside them
+    /// include the environment context and `AGENTS.md` instructions Codex adds itself.
+    ///
+    /// TODO(openai/codex#53087, https://github.com/openai/codex/issues/53087): Codex's own thread
+    /// titles fail while an MCP server is supplied through `-c`, as Octoboard must, so its Codex
+    /// sessions stay unnamed and this first prompt is the only title they get. Once it is fixed,
+    /// Codex names threads again and the `session_index.jsonl` title (`indexed_title`) takes over;
+    /// then reconsider whether this fallback is still wanted.
+    fn prompt_text(&self, line: &str) -> Option<String> {
+        if !line.contains("\"user_message\"") && !line.contains("\"UserMessage\"") {
+            return None;
+        }
+        let value: serde_json::Value = serde_json::from_str(line).ok()?;
+        if value.get("type")?.as_str()? != "event_msg" {
+            return None;
+        }
+        let payload = value.get("payload")?;
+        match payload.get("type")?.as_str()? {
+            "user_message" => Some(payload.get("message")?.as_str()?.to_owned()),
+            "item_completed" => {
+                let item = payload.get("item")?;
+                if item.get("type")?.as_str()? != "UserMessage" {
+                    return None;
+                }
+                let text: Vec<&str> = item
+                    .get("content")?
+                    .as_array()?
+                    .iter()
+                    .filter(|part| part.get("type").and_then(|kind| kind.as_str()) == Some("text"))
+                    .filter_map(|part| part.get("text")?.as_str())
+                    .collect();
+                (!text.is_empty()).then(|| text.join("\n"))
+            }
+            _ => None,
+        }
+    }
+
     fn plan(&self, spec: &LaunchSpec<'_>) -> anyhow::Result<LaunchPlan> {
         let pinned = super::pinned_config_dir(spec, Agent::Codex)?;
         // Unlike Claude Code, Codex refuses a `CODEX_HOME` that does not exist rather than creating
@@ -266,6 +345,36 @@ fn toml_string(value: &str) -> String {
 mod tests {
     use super::*;
     use crate::adapter::tests::spec_fixture;
+
+    #[test]
+    fn terminal_titles_keep_only_the_task_between_the_spinner_and_the_project() {
+        let names = ["proj".to_owned()];
+        let task = |raw| CodexAdapter.task_title(raw, &names);
+        for raw in [
+            "proj",
+            "⠧ ⠧ | proj",
+            "⠙ | proj",
+            "| proj",
+            "[ ! ] Action Required | proj",
+            "",
+        ] {
+            assert_eq!(task(raw), None, "{raw}");
+        }
+        assert_eq!(
+            task("Explain pseudo terminal | proj").as_deref(),
+            Some("Explain pseudo terminal")
+        );
+        assert_eq!(
+            task("⠙ | Explain pseudo terminal | proj").as_deref(),
+            Some("Explain pseudo terminal")
+        );
+        assert_eq!(task("Fix a | b").as_deref(), Some("Fix a | b"));
+        assert_eq!(
+            task("[ x ] Fix it | proj").as_deref(),
+            Some("[ x ] Fix it"),
+            "only the known status items are dropped"
+        );
+    }
 
     fn overrides(args: &[String]) -> Vec<String> {
         args.windows(2)

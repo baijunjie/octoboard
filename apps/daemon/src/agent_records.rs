@@ -128,6 +128,31 @@ impl Locator {
     }
 }
 
+/// Where an agent keeps the titles of its conversations, besides the lines of the conversation's
+/// own record.
+#[derive(Default)]
+pub struct TitleFiles {
+    /// A file directly under the account's directory that names every conversation of the
+    /// account together.
+    pub shared: Option<&'static str>,
+    /// A file beside the record that names the conversation alone.
+    pub summary: Option<&'static str>,
+}
+
+pub fn title_files(agent: Agent) -> TitleFiles {
+    match agent {
+        Agent::Claude => TitleFiles::default(),
+        Agent::Codex => TitleFiles {
+            shared: Some("session_index.jsonl"),
+            summary: None,
+        },
+        Agent::Grok => TitleFiles {
+            shared: None,
+            summary: Some("summary.json"),
+        },
+    }
+}
+
 /// The directory of an account where an agent keeps its session records.
 fn records_dir(agent: Agent, root: &Path) -> PathBuf {
     root.join(match agent {

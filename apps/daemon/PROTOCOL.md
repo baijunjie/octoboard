@@ -344,15 +344,24 @@ with the checked-out branch. It is written when the project is associated, re-re
 start, and kept current by the git status check (step 3 of "Daemon behaviour, per project"); a change reaches
 clients as `project_upserted`.
 
-`Session.terminal_title` is the last valid UTF-8 terminal title emitted by the session's current process with
-OSC 0 or OSC 2, terminated by BEL or `ESC \`. The daemon observes the PTY independently of attached clients,
-keeps at most 4096 title bytes, trims surrounding whitespace, drops the animated activity glyphs it starts
-with (the set listed under "Leading activity glyphs" in `docs/product/session-titles.md`) and rejects control characters. A
-title left blank by that clears it; when absent, clients use `title` alone. It is stored independently of the user-managed `title`, retained across
-archiving, process exit, daemon restart and resume until the next valid title, and carried by `session_upserted`
-and snapshots. Unsupported OSC commands and titles inside other control strings have no effect; raw terminal
-output is passed through unchanged. Repeated equal titles cause no store write or event. An older process cannot
-replace the title once a successor has been registered for the same session.
+`Session.terminal_title` as a client receives it is the session's resolved title, not the terminal's own: the title the
+agent's own records name the conversation with, else the task in the last terminal title with the agent's decorations
+taken off (spinners, status glyphs, activity and approval markers, the agent's name, the project's name), else for Codex
+a stand-in from the conversation's first prompt. It is absent when none of them says anything, and then clients use
+`title` alone. So it can be set while the agent has sent no terminal title, and an empty or placeholder terminal title
+does not by itself leave it absent. The daemon sends a `session_upserted` for a title change only when the resolved
+title changes: a spinner turning or a status glyph switching in the terminal title changes nothing.
+
+The store keeps the terminal title as the agent sent it, and the record titles beside it (the name and the first prompt
+read from the agent's own files, which survive process exit, archiving and restart). The terminal title is the last
+valid UTF-8 one emitted by the session's current process with OSC 0 or OSC 2, terminated by BEL or `ESC \`. The daemon
+observes the PTY independently of attached clients, keeps at most 4096 title bytes, trims surrounding whitespace, drops the animated activity
+glyphs it starts with (the set listed under "Leading activity glyphs" in `docs/product/session-titles.md`) and rejects
+control characters. A title left blank by that clears it. It is stored independently of the user-managed `title`, retained
+across archiving, process exit, daemon restart and resume until the next valid title, and the resolved title is carried
+by `session_upserted` and snapshots. Unsupported OSC commands and titles inside other control strings have no effect;
+raw terminal output is passed through unchanged. A repeated equal title causes no event. An older process cannot replace
+the title once a successor has been registered for the same session.
 
 `Session.usage` is the last valid cumulative token usage read from the agent's native records, persisted independently
 of other session changes and retained when archived or restarted. Missing usage means unknown, not zero. Input includes

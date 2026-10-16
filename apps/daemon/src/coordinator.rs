@@ -490,7 +490,7 @@ async fn handle_inner(
             *followup = Some(launch);
             Ok(Some(Event::SessionOpened {
                 id: request_id,
-                session,
+                session: state.wire_session(session),
             }))
         }
 
@@ -632,7 +632,7 @@ async fn handle_inner(
             let started = crate::console_request::answer(state, &asked, approve).await?;
             Ok(started.map(|session| Event::SessionOpened {
                 id: request_id,
-                session,
+                session: state.wire_session(session),
             }))
         }
 
@@ -1887,6 +1887,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         // Until the process is up; `finish_open` moves it to what the launch implies.
         status: SessionStatus::Starting,
         terminal_title: None,
+        record_titles: Default::default(),
         usage: None,
         has_conversation: resume_agent_session_id.is_some(),
         // Resolved now and kept: a resume must find the transcript where the first launch put it,
@@ -3805,6 +3806,7 @@ mod tests {
                     title: id.to_string(),
                     status,
                     terminal_title: None,
+                    record_titles: Default::default(),
                     usage: None,
                     model: None,
                     effort: None,
@@ -3931,6 +3933,7 @@ mod tests {
                 title: "Project".to_string(),
                 status: SessionStatus::Archived,
                 terminal_title: None,
+                record_titles: Default::default(),
                 usage: None,
                 model: None,
                 effort: None,
@@ -4479,6 +4482,7 @@ mod tests {
             title: "Session".to_string(),
             status: SessionStatus::Idle,
             terminal_title: None,
+            record_titles: Default::default(),
             usage: None,
             model: None,
             effort: None,

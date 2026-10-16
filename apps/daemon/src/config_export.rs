@@ -521,6 +521,7 @@ mod tests {
             title: "Distinctive session title".to_string(),
             status: SessionStatus::Idle,
             terminal_title: None,
+            record_titles: Default::default(),
             usage: None,
             model: None,
             effort: None,

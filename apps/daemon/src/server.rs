@@ -332,7 +332,12 @@ fn snapshot(state: &Arc<AppState>) -> anyhow::Result<Event> {
         hosts: state.store.list_hosts()?,
         consoles: state.store.list_consoles()?,
         projects: state.store.list_projects()?,
-        sessions: state.store.list_sessions()?,
+        sessions: state
+            .store
+            .list_sessions()?
+            .into_iter()
+            .map(|session| state.wire_session(session))
+            .collect(),
         trusted_directories: state.store.trusted_directories()?,
         settings: state.store.get_settings()?,
         git_statuses: state.git_statuses(),

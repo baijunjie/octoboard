@@ -1,0 +1,23 @@
+{
+  "info": {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "cwd": "/work/grokproj"
+  },
+  "agent_id": "redacted",
+  "attempt_id": "redacted",
+  "session_summary": "Explain in one sentence what a pseudo terminal is. Do",
+  "created_at": "2026-10-16T09:26:23.772290Z",
+  "updated_at": "2026-10-16T09:26:35.325549Z",
+  "num_messages": 3,
+  "num_chat_messages": 5,
+  "current_model_id": "grok-4.7",
+  "next_trace_turn": 1,
+  "chat_format_version": 1,
+  "request_id": "redacted",
+  "grok_home": "/home/user/.grok",
+  "last_active_at": "2026-10-16T09:26:35.325549Z",
+  "generated_title": "Explain in one sentence what a pseudo terminal is. Do",
+  "agent_name": "grok-build-plan",
+  "sandbox_profile": "off",
+  "reasoning_effort": "high"
+}

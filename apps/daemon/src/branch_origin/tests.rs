@@ -92,6 +92,7 @@ fn session_record(id: &str, project: &str) -> Session {
         title: format!("Session {id}"),
         status: SessionStatus::Working,
         terminal_title: None,
+        record_titles: Default::default(),
         usage: None,
         model: None,
         effort: None,

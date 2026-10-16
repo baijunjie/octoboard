@@ -1,33 +1,42 @@
 //! Persisting native per-session token totals for live and archived cards. One collector reads
 //! append-only records incrementally; archived sources are read once, and get a final pass after
-//! their process exits. No conversation content is retained or published. Missing usage stays
+//! their process exits. No conversation content is retained or published here. Missing usage stays
 //! unknown. Cache and reasoning counts are subsets, never added to a native total twice. Where the
-//! records live is `agent_records.rs`'s business; this module scans and sums them.
+//! records live is `agent_records.rs`'s business; this module scans and sums them, and hands each
+//! line to `record_titles.rs` on the way, which keeps the titles the records give.
 
 use std::collections::{HashMap, HashSet};
-use std::io::{BufRead, Seek, SeekFrom};
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use serde_json::Value;
 
+use crate::adapter::adapter_for;
 use crate::agent_records::Locator;
+use crate::line_file::{Change, LineFile};
 use crate::protocol::{Agent, SessionUsage};
+use crate::record_titles::{SharedTitles, Titles};
 use crate::state::AppState;
+use crate::store::RecordUpdate;
 
 #[derive(Default)]
 struct Cursor {
     identity: Option<(Agent, Option<String>, Option<String>)>,
     path: Option<PathBuf>,
-    offset: u64,
-    file_identity: Option<(u64, u64)>,
+    file: LineFile,
     messages: HashMap<String, SessionUsage>,
     total: Option<SessionUsage>,
-    signature: Option<(u64, Option<SystemTime>)>,
     dormant: bool,
     children: HashMap<PathBuf, Cursor>,
+    titles: Titles,
+}
+
+#[derive(Default)]
+struct Cursors {
+    sessions: HashMap<String, Cursor>,
+    /// Each account's shared title file, by agent and account directory.
+    shared_titles: HashMap<(Agent, PathBuf), SharedTitles>,
 }
 
 /// One bounded blocking job owns all cursors, rather than starting a task per historical session.
@@ -35,7 +44,7 @@ struct Cursor {
 pub fn spawn(state: &Arc<AppState>) {
     let weak = Arc::downgrade(state);
     tokio::spawn(async move {
-        let mut cursors = HashMap::new();
+        let mut cursors = Cursors::default();
         loop {
             let Some(state) = weak.upgrade() else { return };
             let result = tokio::task::spawn_blocking(move || {
@@ -50,15 +59,51 @@ pub fn spawn(state: &Arc<AppState>) {
     });
 }
 
-fn collect(state: &AppState, cursors: &mut HashMap<String, Cursor>) {
+fn collect(state: &AppState, cursors: &mut Cursors) {
     let Ok(sessions) = state.store.list_sessions() else {
         return;
     };
     let ids: HashSet<_> = sessions.iter().map(|session| session.id.as_str()).collect();
-    cursors.retain(|id, _| ids.contains(id.as_str()));
+    cursors.sessions.retain(|id, _| ids.contains(id.as_str()));
     let hints = state.record_hints.retain(&ids);
     // Default homes resolve through the same login-shell snapshot as agent launches.
     let mut locator = Locator::default();
+    // The sessions each account's shared title file is read for.
+    let mut wanted: HashMap<(Agent, PathBuf), HashSet<String>> = HashMap::new();
+    let mut shared_keys: HashMap<String, (Agent, PathBuf)> = HashMap::new();
+    for session in &sessions {
+        let sleeping = cursors
+            .sessions
+            .get(&session.id)
+            .is_some_and(|cursor| cursor.dormant)
+            && state.live_session(&session.id).is_none();
+        if let (Some(_), Some(agent_id), false) = (
+            crate::agent_records::title_files(session.agent).shared,
+            session.agent_session_id.as_ref(),
+            sleeping,
+        ) {
+            if let Some(root) = locator.root(session.agent, session.config_dir.as_deref()) {
+                let key = (session.agent, root);
+                wanted
+                    .entry(key.clone())
+                    .or_default()
+                    .insert(agent_id.clone());
+                shared_keys.insert(session.id.clone(), key);
+            }
+        }
+    }
+    cursors
+        .shared_titles
+        .retain(|key, _| wanted.contains_key(key));
+    for ((agent, root), ids) in wanted {
+        if let Some(file) = crate::agent_records::title_files(agent).shared {
+            cursors
+                .shared_titles
+                .entry((agent, root.clone()))
+                .or_default()
+                .refresh(adapter_for(agent).as_ref(), &root.join(file), ids);
+        }
+    }
     let mut updates = Vec::new();
     for session in sessions {
         let identity = (
@@ -66,7 +111,7 @@ fn collect(state: &AppState, cursors: &mut HashMap<String, Cursor>) {
             session.agent_session_id.clone(),
             session.config_dir.clone(),
         );
-        let cursor = cursors.entry(session.id.clone()).or_default();
+        let cursor = cursors.sessions.entry(session.id.clone()).or_default();
         if cursor.identity.as_ref() != Some(&identity) {
             *cursor = Cursor {
                 identity: Some(identity),
@@ -95,19 +140,38 @@ fn collect(state: &AppState, cursors: &mut HashMap<String, Cursor>) {
                 .as_ref()
                 .and_then(|id| locator.newest(session.agent, &root, id));
         }
+        let mut usage = None;
         if let Some(path) = cursor.path.clone() {
             if scan(session.agent, &path, cursor).is_ok() {
-                if let Some(total) = &cursor.total {
-                    if session.usage.as_ref() != Some(total) {
-                        updates.push((session.clone(), total.clone()));
-                    }
-                }
+                usage = cursor
+                    .total
+                    .clone()
+                    .filter(|total| session.usage.as_ref() != Some(total));
+            }
+            if let Some(summary) = crate::agent_records::title_files(session.agent).summary {
+                cursor.titles.read_summary(
+                    adapter_for(session.agent).as_ref(),
+                    &path.with_file_name(summary),
+                );
             }
         }
+        let shared = shared_keys
+            .get(&session.id)
+            .zip(session.agent_session_id.as_deref())
+            .and_then(|(key, id)| cursors.shared_titles.get(key)?.name(id));
+        let titles = cursor.titles.merged(shared, &session.record_titles);
+        let titles = (titles != session.record_titles).then_some(titles);
         cursor.dormant = !live;
+        if usage.is_some() || titles.is_some() {
+            updates.push(RecordUpdate {
+                session,
+                usage,
+                titles,
+            });
+        }
     }
     if !updates.is_empty() {
-        if let Ok(changed) = state.store.set_session_usages(&updates) {
+        if let Ok(changed) = state.store.set_record_data(&updates) {
             for session in changed {
                 state.publish_session(&session);
             }
@@ -116,99 +180,41 @@ fn collect(state: &AppState, cursors: &mut HashMap<String, Cursor>) {
 }
 
 fn scan(agent: Agent, path: &Path, cursor: &mut Cursor) -> std::io::Result<()> {
-    let metadata = std::fs::metadata(path)?;
-    let file_identity = (metadata.dev(), metadata.ino());
-    if cursor
-        .file_identity
-        .is_some_and(|previous| previous != file_identity)
-    {
-        cursor.offset = 0;
+    let change = cursor.file.check(path)?;
+    if change == Change::Restarted {
         cursor.messages.clear();
         cursor.total = None;
-        cursor.signature = None;
         cursor.children.clear();
+        cursor.titles.clear();
     }
-    cursor.file_identity = Some(file_identity);
-    let signature = (metadata.len(), metadata.modified().ok());
-    if cursor.signature == Some(signature) {
-        if agent == Agent::Claude {
-            scan_children(path, cursor);
-        }
-        return Ok(());
-    }
-    if agent == Agent::Grok {
-        // An atomic JSON ledger is small and rewritten as native totals change. Guard its size
-        // before reading; malformed/transient writes leave the last valid native total intact.
-        if metadata.len() <= 8 * 1024 * 1024 {
-            if let Ok(value) = serde_json::from_slice::<Value>(&std::fs::read(path)?) {
-                cursor.total = grok_usage(&value).or_else(|| cursor.total.clone());
-            }
-        }
-    } else {
-        if metadata.len() < cursor.offset
-            || (metadata.len() == cursor.offset && cursor.signature != Some(signature))
-        {
-            cursor.offset = 0;
-            cursor.messages.clear();
-            cursor.total = None;
-        }
-        let offset = scan_lines(path, cursor.offset, |line| {
-            if agent == Agent::Codex {
-                if let Some(usage) = codex_usage(line) {
-                    cursor.total = Some(usage);
+    if change != Change::Unchanged {
+        if agent == Agent::Grok {
+            // An atomic JSON ledger is small and rewritten as native totals change. Guard its size
+            // before reading; malformed/transient writes leave the last valid native total intact.
+            if std::fs::metadata(path)?.len() <= 8 * 1024 * 1024 {
+                if let Ok(value) = serde_json::from_slice::<Value>(&std::fs::read(path)?) {
+                    cursor.total = grok_usage(&value).or_else(|| cursor.total.clone());
                 }
-            } else if let Some((id, usage)) = claude_usage(line) {
-                cursor.messages.insert(id, usage);
             }
-        })?;
-        cursor.offset = offset;
-        if agent == Agent::Claude {
-            scan_children(path, cursor);
+            cursor.file.settle();
+        } else {
+            let adapter = adapter_for(agent);
+            cursor.file.read(path, |line| {
+                if agent == Agent::Codex {
+                    if let Some(usage) = codex_usage(line) {
+                        cursor.total = Some(usage);
+                    }
+                } else if let Some((id, usage)) = claude_usage(line) {
+                    cursor.messages.insert(id, usage);
+                }
+                cursor.titles.fold_line(adapter.as_ref(), line);
+            })?;
         }
     }
-    cursor.signature = Some(signature);
+    if agent == Agent::Claude {
+        scan_children(path, cursor);
+    }
     Ok(())
-}
-
-/// Read complete lines with bounded memory even when a tool writes a very large body. A record
-/// larger than 8 MiB is not a supported usage record and is skipped, never deserialized. The
-/// offset still stops before an unfinished line, exactly as `record_watch::scan_lines` does.
-fn scan_lines(path: &Path, offset: u64, mut visit: impl FnMut(&str)) -> std::io::Result<u64> {
-    let mut file = std::fs::File::open(path)?;
-    file.seek(SeekFrom::Start(offset))?;
-    let mut reader = std::io::BufReader::new(file);
-    let mut complete = offset;
-    let mut position = offset;
-    let mut line = Vec::new();
-    let mut oversized = false;
-    loop {
-        let buffer = reader.fill_buf()?;
-        if buffer.is_empty() {
-            return Ok(complete);
-        }
-        let end = buffer.iter().position(|byte| *byte == b'\n');
-        let length = end.map_or(buffer.len(), |end| end + 1);
-        if !oversized {
-            if line.len() + length <= 8 * 1024 * 1024 {
-                line.extend_from_slice(&buffer[..length]);
-            } else {
-                line.clear();
-                oversized = true;
-            }
-        }
-        position += length as u64;
-        reader.consume(length);
-        if end.is_some() {
-            if !oversized {
-                if let Ok(line) = std::str::from_utf8(&line) {
-                    visit(line);
-                }
-            }
-            complete = position;
-            line.clear();
-            oversized = false;
-        }
-    }
 }
 
 /// Claude stores its internal agents beneath this exact parent session's record. Reading their
@@ -397,7 +403,7 @@ mod tests {
         let initial = capture.lines().take(3).collect::<Vec<_>>().join("\n") + "\n";
         std::fs::write(&record, initial).unwrap();
         let mut events = state.subscribe();
-        let mut cursors = HashMap::new();
+        let mut cursors = Cursors::default();
         collect(&state, &mut cursors);
         let before = state.session_record("s").unwrap().usage.unwrap();
         assert!(matches!(
@@ -434,6 +440,53 @@ mod tests {
         assert!(
             events.try_recv().is_err(),
             "unchanged usage emits no extra events"
+        );
+    }
+
+    #[test]
+    fn a_codex_sessions_indexed_name_reaches_the_store_and_the_clients() {
+        let (state, directory) = crate::test_support::app_state("usage-collector-title");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&directory))
+            .unwrap();
+        let root = directory.join("account");
+        std::fs::create_dir_all(&root).unwrap();
+        let console_id = state.store.list_consoles().unwrap()[0].id.clone();
+        let session: crate::protocol::Session = serde_json::from_value(json!({
+            "id":"s","agent":"codex","agent_session_id":"thread-1","console_id":console_id,
+            "host_id":"local","role":"console","origin":"user","title":"Session",
+            "status":"archived","has_conversation":true,"pinned":false,"started_at":0,
+            "config_dir":root.to_string_lossy()}))
+        .unwrap();
+        state.store.insert_session(&session).unwrap();
+        std::fs::write(
+            root.join("session_index.jsonl"),
+            concat!(
+                r#"{"id":"thread-1","thread_name":"Explain mutex briefly","updated_at":"t"}"#,
+                "\n",
+                r#"{"id":"thread-2","thread_name":"Another","updated_at":"t"}"#,
+                "\n"
+            ),
+        )
+        .unwrap();
+        let mut events = state.subscribe();
+        collect(&state, &mut Cursors::default());
+        let crate::protocol::Event::SessionUpserted { session } = events.try_recv().unwrap() else {
+            panic!("expected the session to be published")
+        };
+        assert_eq!(
+            session.terminal_title.as_deref(),
+            Some("Explain mutex briefly")
+        );
+        assert_eq!(
+            state
+                .session_record("s")
+                .unwrap()
+                .record_titles
+                .named
+                .as_deref(),
+            Some("Explain mutex briefly")
         );
     }
 

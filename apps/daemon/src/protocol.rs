@@ -491,9 +491,14 @@ pub struct Session {
     pub role: Role,
     pub origin: Origin,
     pub title: String,
-    /// Last title emitted by the terminal, retained when its process ends.
+    /// Last title emitted by the terminal, retained when its process ends. The store keeps it as
+    /// the agent sent it; the record a client receives carries the session's resolved title
+    /// instead, which may come from the agent's records and so be set while no terminal title is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal_title: Option<String>,
+    /// The titles the agent's own records give the session. Stored, never sent.
+    #[serde(skip)]
+    pub record_titles: crate::session_title::RecordTitles,
     /// Last known native cumulative usage, retained after archiving. Absent until reported.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage: Option<SessionUsage>,

@@ -27,7 +27,8 @@ use std::path::{Path, PathBuf};
 use serde_json::json;
 
 use super::{
-    hook_command, hook_url, AgentAdapter, AgentVersion, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS,
+    hook_command, hook_url, AgentAdapter, AgentVersion, LaunchPlan, LaunchSpec, NamedTitle,
+    HOOK_TIMEOUT_SECS,
 };
 use crate::mcp;
 use crate::protocol::{notice_code, Agent, Notice};
@@ -165,6 +166,36 @@ impl AgentAdapter for ClaudeAdapter {
             }
         }
         None
+    }
+
+    /// Claude Code leads its title with a status glyph that changes as it works, and shows its own
+    /// name until the conversation has a title.
+    fn task_title(&self, raw: &str, _project_names: &[String]) -> Option<String> {
+        let raw = raw.trim();
+        let mut chars = raw.chars();
+        let title = match chars.next() {
+            Some(glyph) if !glyph.is_ascii() && !glyph.is_alphanumeric() => chars.as_str().trim(),
+            _ => raw,
+        };
+        (!title.is_empty() && title != "Claude Code").then(|| title.to_owned())
+    }
+
+    /// The transcript's `custom-title` line is the user's own rename and outranks the `ai-title`
+    /// line Claude Code writes itself.
+    fn named_title(&self, line: &str) -> Option<NamedTitle> {
+        let (kind, key, precedence) = if line.contains("\"custom-title\"") {
+            ("custom-title", "customTitle", 2)
+        } else if line.contains("\"ai-title\"") {
+            ("ai-title", "aiTitle", 1)
+        } else {
+            return None;
+        };
+        let value: serde_json::Value = serde_json::from_str(line).ok()?;
+        (value.get("type")?.as_str()? == kind).then_some(())?;
+        Some(NamedTitle {
+            text: value.get(key)?.as_str()?.to_owned(),
+            precedence,
+        })
     }
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> anyhow::Result<LaunchPlan> {
@@ -389,6 +420,44 @@ fn untrusted_workspace_notice(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> O
 mod tests {
     use super::*;
     use crate::adapter::tests::spec_fixture;
+
+    #[test]
+    fn terminal_titles_lose_the_status_glyph_and_the_placeholder() {
+        let task = |raw| ClaudeAdapter.task_title(raw, &[]);
+        assert_eq!(task("✳ Claude Code"), None);
+        assert_eq!(task("◐ Claude Code"), None);
+        assert_eq!(
+            task("◐ Pseudo terminal explanation").as_deref(),
+            Some("Pseudo terminal explanation")
+        );
+        assert_eq!(
+            task("✳ Pseudo terminal explanation").as_deref(),
+            Some("Pseudo terminal explanation")
+        );
+        assert_eq!(task("Fix the build").as_deref(), Some("Fix the build"));
+        assert_eq!(task(""), None);
+    }
+
+    #[test]
+    fn the_transcripts_custom_title_outranks_its_ai_title() {
+        let title = |line| {
+            ClaudeAdapter
+                .named_title(line)
+                .map(|t| (t.precedence, t.text))
+        };
+        assert_eq!(
+            title(r#"{"type":"ai-title","aiTitle":"Generated","sessionId":"x"}"#),
+            Some((1, "Generated".to_owned()))
+        );
+        assert_eq!(
+            title(r#"{"type":"custom-title","customTitle":"Mine","sessionId":"x"}"#),
+            Some((2, "Mine".to_owned()))
+        );
+        assert_eq!(
+            title(r#"{"type":"user","message":"an ai-title mention"}"#),
+            None
+        );
+    }
 
     /// With no model or effort set, neither flag is passed, so Claude Code keeps its own choice.
     #[test]
