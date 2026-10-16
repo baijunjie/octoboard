@@ -170,6 +170,23 @@ const dialogFixture = { state: dialogState, directories: { "/Users/dev": HOME_LI
     },
   } } } satisfies Partial<Scenario>;
 
+// The user's own console session instructions, several paragraphs and a list, longer than the
+// field's six rows so that the field scrolls.
+const SESSION_INSTRUCTIONS = [
+  "Answer in Japanese unless asked otherwise.",
+  "",
+  "Before starting a project session, check the project's README for its test command and give it in the brief.",
+  "",
+  "When reporting back:",
+  "- lead with the outcome in one sentence",
+  "- list what changed, one line per file",
+  "- say what was not verified",
+  "",
+  "Never start a session on the production branch.",
+  "Ask me before deleting anything outside the project folder.",
+  "Keep the summary under ten lines.",
+].join("\n");
+
 // Session settings initially reflect the selected agent's project defaults. Both agents have
 // usable stored values so changing the agent lets the same view show either model list.
 const sessionLaunchState = {
@@ -328,7 +345,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "New console advanced settings",
-    description: "Without named accounts the agent picker fills the whole field; Advanced exposes the model and reasoning effort settings.",
+    description: "Without named accounts the agent picker fills the whole field. Advanced exposes the model and reasoning effort settings, and at its foot the empty Console session instructions field with its placeholder and note.",
     steps: [
       (ui) => ui.press(ui.t("rail.newConsole")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
@@ -336,11 +353,12 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
+    state: { ...dialogState, consoles: new Map([...dialogState.consoles, [console_.id, { ...dialogState.consoles.get(console_.id)!, console_session_prompt: SESSION_INSTRUCTIONS }]]) },
     id: "dialog-edit-console-launch-settings",
     group: "Consoles",
     category: "normal",
-    title: "Edit console with avatar and stored launch settings",
-    description: "The retired model is retained and marked; the avatar and its remove control are visible.",
+    title: "Edit console with avatar, stored launch settings and session instructions",
+    description: "The retired model is retained and marked; the avatar and its remove control are visible. At the foot of Advanced, the Console session instructions field holds the console's own multi-line text, longer than the field is tall, so it scrolls inside the field.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.edit")),

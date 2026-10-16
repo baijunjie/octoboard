@@ -71,6 +71,7 @@ export function exportedDocument(state: State, consoleId?: string): Configuratio
         codex_console_session_effort: console.codex_console_session_effort,
         grok_console_session_model: console.grok_console_session_model,
         grok_console_session_effort: console.grok_console_session_effort,
+        console_session_prompt: console.console_session_prompt,
         projects: Array.from(state.projects.values())
           .filter((project) => project.console_id === console.id)
           .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : 1))

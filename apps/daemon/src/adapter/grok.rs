@@ -26,7 +26,8 @@
 //!   the confirmation is accepted, by Octoboard's press or in the terminal, it is carried over,
 //!   unchanged, to the user's own store (`LaunchPlan::carried_trust`), and a later launch is
 //!   trusted from the start. Until a folder is trusted Grok silently loads none of the project's
-//!   own `AGENTS.md`, hooks or MCP servers.
+//!   own `AGENTS.md`, hooks or MCP servers. Folder trust, not a git repository, is what gates the
+//!   instruction files: outside one Grok reads only the working directory's own.
 //!
 //! A session pins its source home at creation, because the session records a resume looks for
 //! live in that home's `sessions/`; the farm is still what Grok runs against, so nothing changes
@@ -41,15 +42,17 @@
 //! trust entry above. Both are mitigated by rebuilding the farm on every launch.
 //!
 //! Two conditions come from Grok itself rather than from the mechanism: it locates a project by
-//! walking up for a `.git` directory and reads no project instructions *and* no project hooks
-//! without one; and its hooks must be `command` type, because HTTP hooks cannot reach the daemon at
-//! all — Grok's SSRF protection rejects both plain HTTP and private addresses. That same SSRF
-//! protection is why the injected MCP server is a child process here too.
+//! walking up for a `.git` directory and reads no project hooks without one; and its hooks must be
+//! `command` type, because HTTP hooks cannot reach the daemon at all — Grok's SSRF protection
+//! rejects both plain HTTP and private addresses. That same SSRF protection is why the injected
+//! MCP server is a child process here too.
 //!
-//! The first of those conditions also decides where the role description comes from: a console's
-//! working directory is not a repository, so a Grok console session reads no instruction file
-//! written there and its whole role has to travel in `--rules`, which Grok persists into the
-//! session record.
+//! A console's working directory is not a repository, but Grok still reads the instruction file
+//! written there once the folder is trusted, which Octoboard's confirmation presses for a console
+//! session. So a Grok console session gets the same short pointer in `--rules` as the other
+//! agents, and the role itself from that file. Grok freezes both `--rules` and the instruction
+//! files for a session, replaying them on a resume or a fork, so a change never reaches a session
+//! already begun.
 
 use std::path::{Path, PathBuf};
 
@@ -567,8 +570,7 @@ mod tests {
         assert_eq!(emitted, 660);
     }
 
-    /// Grok reads no project instruction file without a git root, so a console session's role can
-    /// only come from `--rules` — and the flag is passed for every session, not just a console
+    /// The role text travels in `--rules`, which is passed for every session, not just a console
     /// session's.
     #[test]
     fn the_role_text_travels_in_rules() {

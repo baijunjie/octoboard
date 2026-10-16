@@ -591,6 +591,7 @@ pub async fn apply(
             grok_console_session_model: document_console.grok_console_session_model,
             grok_console_session_effort: document_console.grok_console_session_effort,
             icon: document_console.icon,
+            console_session_prompt: document_console.console_session_prompt,
         };
         coordinator::check_new_console(state, &new)?;
         prepared.push((new, accounts.fallbacks, document_console.projects));
@@ -822,6 +823,7 @@ mod tests {
             codex_console_session_effort: None,
             grok_console_session_model: None,
             grok_console_session_effort: None,
+            console_session_prompt: None,
             projects,
         }
     }
@@ -1122,6 +1124,7 @@ mod tests {
         let mut hub = console("Hub", vec![project("renamed", &repo.to_string_lossy())]);
         hub.icon = Some("data:image/png;base64,AAAA".to_string());
         hub.codex_console_session_model = Some("gpt-x".to_string());
+        hub.console_session_prompt = Some("\n Be brief.\n".to_string());
         hub.claude_account = Some(AccountName {
             name: "WORK".to_string(),
         });
@@ -1155,6 +1158,10 @@ mod tests {
         assert_eq!(
             stored_console.codex_console_session_model.as_deref(),
             Some("gpt-x")
+        );
+        assert_eq!(
+            stored_console.console_session_prompt.as_deref(),
+            Some("Be brief.")
         );
         assert_eq!(stored_console.claude_account_id.as_deref(), Some("acct-1"));
         assert!(Path::new(&stored_console.workdir).is_dir());
@@ -1489,6 +1496,7 @@ mod tests {
             grok_console_session_model: None,
             grok_console_session_effort: None,
             icon: None,
+            console_session_prompt: None,
             created_at: 1,
         };
         source.store.insert_console(&exported_console).unwrap();
@@ -1587,6 +1595,20 @@ mod tests {
             })
         );
         assert!(state.store.auto_pull_repositories().unwrap());
+    }
+
+    #[tokio::test]
+    async fn a_document_without_a_console_session_prompt_imports_a_console_with_none() {
+        let (state, _dir) = app_state("import-no-prompt");
+        let mut older = document(vec![console("Hub", Vec::new())]);
+        older["consoles"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("console_session_prompt");
+
+        apply(&state, &older, Vec::new(), false).await.unwrap();
+        let stored = state.store.list_consoles().unwrap().remove(0);
+        assert_eq!(stored.console_session_prompt, None);
     }
 
     #[tokio::test]

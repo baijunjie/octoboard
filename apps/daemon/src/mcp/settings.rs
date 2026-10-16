@@ -70,6 +70,7 @@ pub(super) async fn update_console(
         accounts: console_accounts_argument(state, arguments)?,
         launch: launch_argument(arguments)?,
         icon: None,
+        console_session_prompt: None,
     };
     let updated = coordinator::update_console(state, &console_session.console_id, changes).await?;
     Ok(describe_console(&updated))

@@ -19,6 +19,7 @@ import { AgentAccountField } from "./AgentAccountField";
 import { AvatarField } from "./AvatarField";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
+import { TextAreaInput } from "./TextAreaInput";
 import { TextInput } from "./TextInput";
 
 /** Every per-agent field of a console: each agent's account, model and effort. */
@@ -53,6 +54,7 @@ export function ConsoleDialog({
   const [initial] = useState(() => readAgentFields(FIELDS, editing ?? {}));
   const [fields, setFields] = useState(initial);
   const [icon, setIcon] = useState<string | null>(editing?.icon ?? null);
+  const [sessionPrompt, setSessionPrompt] = useState(editing?.console_session_prompt ?? "");
   const { error, setError, busy, run } = useDialogAction();
 
   // While a picked image is being read, saving would send the old avatar.
@@ -92,6 +94,7 @@ export function ConsoleDialog({
   const submit = () => {
     if (decoding) return;
     if (!attempt(nameError)) return;
+    const prompt = sessionPrompt.trim();
     void run(async () => {
       if (editing) {
         await request({
@@ -102,6 +105,10 @@ export function ConsoleDialog({
           ...changedAgentFields("update", fields, initial),
           // The avatar is cleared the same way, with an explicit `null`.
           ...(icon !== (editing.icon ?? null) && { icon }),
+          // Cleared the same way, with an explicit `null`.
+          ...(prompt !== (editing.console_session_prompt ?? "") && {
+            console_session_prompt: prompt || null,
+          }),
         });
       } else {
         await request({
@@ -109,6 +116,7 @@ export function ConsoleDialog({
           name,
           default_agent: defaultAgent,
           ...(icon && { icon }),
+          ...(prompt && { console_session_prompt: prompt }),
           ...changedAgentFields("create", fields, initial),
         });
       }
@@ -157,7 +165,7 @@ export function ConsoleDialog({
             : undefined
         }
       />
-      {/* What is inside is the console session's launch settings alone. */}
+      {/* What is inside is the console session's alone: its launch settings and its instructions. */}
       <LaunchSettingsFields
         agent={defaultAgent}
         account={pickedAccount}
@@ -166,7 +174,15 @@ export function ConsoleDialog({
         onModelChange={(value) => setFields({ ...fields, [modelField]: value })}
         onEffortChange={(value) => setFields({ ...fields, [effortField]: value })}
         note={t("dialog.console.launchSettingsNote")}
-      />
+      >
+        <TextAreaInput
+          label={t("dialog.console.sessionInstructions")}
+          value={sessionPrompt}
+          onChange={setSessionPrompt}
+          placeholder={t("dialog.console.sessionInstructionsPlaceholder")}
+          description={t("dialog.console.sessionInstructionsNote")}
+        />
+      </LaunchSettingsFields>
       <DialogError message={error} />
     </Dialog>
   );

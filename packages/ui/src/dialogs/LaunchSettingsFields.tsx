@@ -29,8 +29,9 @@ function modelName(t: Translate, model: AgentModel): string {
  * value too, which a failure does not stop the user from clearing. A model that takes no effort
  * leaves the effort picker operable over an empty list, so a stored value stays clearable and
  * focus is never on a control that turns disabled under it. `isDisabled` locks the two
- * pickers; the trigger stays operable, as folding the section away changes nothing and disabling a
- * focused trigger would blur it. */
+ * pickers, not `children`; the trigger stays operable, as folding the section away changes nothing
+ * and disabling a focused trigger would blur it. `children` are further rarely set fields of the
+ * same dialog, placed below the two pickers. */
 export function LaunchSettingsFields({
   agent,
   account,
@@ -40,6 +41,7 @@ export function LaunchSettingsFields({
   onEffortChange,
   note,
   isDisabled,
+  children,
 }: {
   agent: Agent;
   account: string | null;
@@ -49,6 +51,7 @@ export function LaunchSettingsFields({
   onEffortChange: (value: string | null) => void;
   note: string;
   isDisabled?: boolean;
+  children?: React.ReactNode;
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
@@ -77,11 +80,11 @@ export function LaunchSettingsFields({
         </Disclosure.Trigger>
       </Disclosure.Heading>
       {/* HeroUI pads the body by 8px on every side and the content clips what overflows it, so that
-          padding is the room the pickers' focus rings need. Taking all of it out as a margin would
+          padding is the room the fields' focus rings need. Taking all of it out as a margin would
           reach past the dialog body, whose own slack is 4px, so the content takes 4px of it back
           and the body's inner element the other 4px, which lands the pickers in line with the
           fields above with 2px of ring to spare inside the clip. The padding left above the
-          first note and below the last picker is HeroUI's own, the same on both sides. */}
+          first note and below the last field is HeroUI's own, the same on both sides. */}
       <Disclosure.Content className="-mx-1">
         <Disclosure.Body className="-mx-1 flex flex-col gap-4">
           <Description>{note}</Description>
@@ -107,6 +110,7 @@ export function LaunchSettingsFields({
             isDisabled={isDisabled || loading}
             description={none ? t("dialog.agentSettings.noEffort") : undefined}
           />
+          {children}
         </Disclosure.Body>
       </Disclosure.Content>
     </Disclosure>

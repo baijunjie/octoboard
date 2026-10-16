@@ -25,7 +25,8 @@ use crate::git_status;
 use crate::git_switch;
 use crate::hostfs;
 use crate::launch_settings::{
-    self, normalize_launch_setting, normalize_session_launch_setting, LaunchChange, LaunchCheck,
+    self, normalize_launch_setting, normalize_session_launch_setting, trimmed_or_none,
+    LaunchChange, LaunchCheck,
 };
 use crate::mcp;
 use crate::open_directory;
@@ -63,6 +64,7 @@ pub async fn handle(
             grok_console_session_model,
             grok_console_session_effort,
             icon,
+            console_session_prompt,
         } => {
             let new = NewConsole {
                 name,
@@ -77,6 +79,7 @@ pub async fn handle(
                 grok_console_session_model,
                 grok_console_session_effort,
                 icon,
+                console_session_prompt,
             };
             // The refusals that need no wait first, so a console that would be refused for its
             // name or an account is not first held up asking an agent for its models.
@@ -100,6 +103,7 @@ pub async fn handle(
             grok_console_session_model,
             grok_console_session_effort,
             icon,
+            console_session_prompt,
         } => {
             let launch = launch_settings::changes_of([
                 (
@@ -134,6 +138,7 @@ pub async fn handle(
                     .collect(),
                     launch,
                     icon,
+                    console_session_prompt,
                 },
             )
             .await?;
@@ -174,7 +179,7 @@ pub async fn handle(
             }
             // The working directory is Octoboard's own, under `~/.octoboard/consoles/`; no project
             // directory is ever touched by this.
-            if let Err(err) = std::fs::remove_dir_all(&console.workdir) {
+            if let Err(err) = mcp::console_instructions::remove_console_workdir(&console.workdir) {
                 if err.kind() != std::io::ErrorKind::NotFound {
                     tracing::warn!(workdir = %console.workdir, %err, "removing the console working directory failed");
                 }
@@ -678,6 +683,7 @@ pub struct NewConsole {
     pub grok_console_session_model: Option<String>,
     pub grok_console_session_effort: Option<String>,
     pub icon: Option<String>,
+    pub console_session_prompt: Option<String>,
 }
 
 /// Every refusal `create_console` can make of `new`, with nothing written. The one place that
@@ -768,9 +774,12 @@ fn store_new_console(
             new.grok_console_session_effort.as_deref(),
         ),
         icon,
+        console_session_prompt: trimmed_or_none(new.console_session_prompt.as_deref()),
         created_at: now_millis(),
     };
-    mcp::role::write_console_session_instructions(&console)?;
+    // Written before the record is stored: nothing else can touch a console no one has been told
+    // of yet, and a failed write then leaves no console behind.
+    mcp::console_instructions::write_console_session_instructions(&console)?;
     state.store.insert_console(&console)?;
     state.broadcast(Event::ConsoleUpserted {
         console: console.clone(),
@@ -788,6 +797,8 @@ pub struct ConsoleChanges {
     pub launch: HashMap<Agent, LaunchChange>,
     /// `Some(None)` clears the avatar.
     pub icon: Present<String>,
+    /// `Some(None)` clears the user's addition to the console session's instructions.
+    pub console_session_prompt: Present<String>,
 }
 
 /// Applies `changes` to the console `id`, broadcasts it and returns it as stored. Every field is
@@ -813,6 +824,10 @@ pub async fn update_console(
         .as_ref()
         .map(|icon| normalize_icon(icon.as_deref()))
         .transpose()?;
+    let console_session_prompt = changes
+        .console_session_prompt
+        .as_ref()
+        .map(|prompt| trimmed_or_none(prompt.as_deref()));
     let mut accounts = HashMap::new();
     for (agent, reference) in &changes.accounts {
         accounts.insert(
@@ -861,8 +876,9 @@ pub async fn update_console(
         if let Some(icon) = &icon {
             console.icon = icon.clone();
         }
-        // Refresh both agents' instruction files so console sessions can use either agent.
-        mcp::role::write_console_session_instructions(&console)?;
+        if let Some(prompt) = &console_session_prompt {
+            console.console_session_prompt = prompt.clone();
+        }
         state.store.update_console(&console)?;
         // Read back rather than sent as `console`: the record is what clients are told it is.
         let stored = state
@@ -872,6 +888,15 @@ pub async fn update_console(
         state.broadcast(Event::ConsoleUpserted {
             console: stored.clone(),
         });
+        // After the record is stored, so the file never holds text that was not saved. Every
+        // agent's new console sessions read the change, and a resumed one does on Claude Code and
+        // Codex, never on Grok. A failure here is logged, not returned, since the change is saved
+        // and told to every client: the next launch's refresh writes the file.
+        if let Err(err) =
+            mcp::console_instructions::refresh_console_session_instructions(&state.store, id)
+        {
+            tracing::warn!(console = %id, %err, "refreshing the console's instruction file failed");
+        }
         return Ok(stored);
     }
 }
@@ -1882,14 +1907,13 @@ async fn start_process(
     resume_agent_session_id: Option<&str>,
     shell_env: Option<HashMap<String, String>>,
 ) -> Result<()> {
-    // Refresh both agents' files on every console launch, resume and account switch. A missing
-    // directory is left to the launch's refusal, rather than recreated by the instruction writer.
+    // Refresh the instruction file on every console launch, resume and account switch. A missing
+    // directory is left to the launch, whose refusal names it, rather than failing here on the write.
     if session.role == Role::Console && cwd.is_dir() {
-        let console = state
-            .store
-            .get_console(&session.console_id)?
-            .ok_or_else(|| CodedError::unknown_console(&session.console_id))?;
-        mcp::role::write_console_session_instructions(&console)?;
+        mcp::console_instructions::refresh_console_session_instructions(
+            &state.store,
+            &session.console_id,
+        )?;
     }
     let (model, effort) = launch_settings(state, session)?;
     let request = term::LaunchRequest {
@@ -2876,7 +2900,7 @@ pub fn set_session_pinned(state: &Arc<AppState>, id: &str, pinned: bool) -> Resu
 /// A console's avatar as it is stored. Blank means unset. Checked lightly: it has to be an image
 /// `data:` URL and not too long; whether it decodes is left to the client that draws it.
 fn normalize_icon(text: Option<&str>) -> Result<Option<String>> {
-    let Some(text) = text.map(str::trim).filter(|text| !text.is_empty()) else {
+    let Some(text) = trimmed_or_none(text) else {
         return Ok(None);
     };
     if !text.starts_with("data:image/") {
@@ -2896,7 +2920,7 @@ fn normalize_icon(text: Option<&str>) -> Result<Option<String>> {
             &[("limit_kib", &(MAX_ICON_BYTES / 1024).to_string())],
         ));
     }
-    Ok(Some(text.to_string()))
+    Ok(Some(text))
 }
 
 /// Applies the settable fields of `update_settings`: absent means "leave it alone", as in
@@ -3062,6 +3086,7 @@ mod tests {
             grok_console_session_model: None,
             grok_console_session_effort: None,
             icon: None,
+            console_session_prompt: None,
             created_at: 0,
         }
     }
@@ -3076,24 +3101,6 @@ mod tests {
 
     fn temp_dir(name: &str) -> ScratchDir {
         ScratchDir::new(&format!("coordinator-{name}"))
-    }
-
-    /// A console can run different agents together: refreshing its guidance keeps both exact
-    /// filenames, with each agent's own tool names, regardless of the console's default agent.
-    #[test]
-    fn a_console_keeps_each_agents_own_instruction_file() {
-        let workdir = temp_dir("console-session-instructions");
-        for default_agent in Agent::ALL {
-            mcp::role::write_console_session_instructions(&console(default_agent, &workdir))
-                .unwrap();
-            for (agent, filename) in [(Agent::Claude, "CLAUDE.md"), (Agent::Codex, "AGENTS.md")] {
-                assert_eq!(
-                    std::fs::read_to_string(workdir.join(filename)).unwrap(),
-                    mcp::role::console_session_instructions(agent)
-                );
-            }
-            assert_eq!(workdir.read_dir().unwrap().count(), 2);
-        }
     }
 
     /// An account directory is stored absolute and lexically normalised or not at all; unlike a
@@ -4313,6 +4320,7 @@ mod tests {
             grok_console_session_model: None,
             grok_console_session_effort: None,
             icon: None,
+            console_session_prompt: None,
         };
         edit(&mut request);
         request
@@ -4340,6 +4348,7 @@ mod tests {
                 grok_console_session_model: None,
                 grok_console_session_effort: None,
                 icon: None,
+                console_session_prompt: None,
             },
         )
         .await
@@ -4374,6 +4383,7 @@ mod tests {
                 grok_console_session_model: None,
                 grok_console_session_effort: None,
                 icon: None,
+                console_session_prompt: None,
             },
         )
         .await
@@ -4477,6 +4487,82 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(stored().claude_console_session_model, None);
+    }
+
+    /// The user's addition to the console session's instructions is left alone when absent, set
+    /// (trimmed) by a value, and cleared by `null` or a blank string, and the instruction file
+    /// holds it only while there is some.
+    #[tokio::test]
+    async fn a_console_session_prompt_is_left_set_or_cleared_by_an_update() {
+        let (state, dir) = crate::test_support::app_state("coordinator-update-console-prompt");
+        let workdir = console_workdir(&dir);
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &workdir))
+            .unwrap();
+        let stored = || {
+            state
+                .store
+                .get_console("console-1")
+                .unwrap()
+                .unwrap()
+                .console_session_prompt
+        };
+        let file = || std::fs::read_to_string(workdir.join("AGENTS.md")).unwrap();
+        let update = |prompt: Option<Option<&str>>| {
+            update_console_request("console-1", move |request| {
+                let RequestBody::UpdateConsole {
+                    console_session_prompt,
+                    ..
+                } = request
+                else {
+                    unreachable!()
+                };
+                *console_session_prompt = prompt.map(|text| text.map(str::to_string));
+            })
+        };
+
+        handle(&state, None, update(Some(Some("  Be brief.  "))))
+            .await
+            .unwrap();
+        assert_eq!(stored().as_deref(), Some("Be brief."));
+        assert_eq!(
+            file(),
+            mcp::console_instructions::console_session_instructions(Some("Be brief."))
+        );
+
+        handle(&state, None, update(None)).await.unwrap();
+        assert_eq!(stored().as_deref(), Some("Be brief."));
+        assert_eq!(
+            file(),
+            mcp::console_instructions::console_session_instructions(Some("Be brief."))
+        );
+
+        handle(&state, None, update(Some(None))).await.unwrap();
+        assert_eq!(stored(), None);
+        assert_eq!(
+            file(),
+            mcp::console_instructions::console_session_instructions(None)
+        );
+
+        handle(&state, None, update(Some(Some("Answer in French."))))
+            .await
+            .unwrap();
+        assert_eq!(stored().as_deref(), Some("Answer in French."));
+        assert_eq!(
+            file(),
+            mcp::console_instructions::console_session_instructions(Some("Answer in French."))
+        );
+
+        handle(&state, None, update(Some(Some("  \n "))))
+            .await
+            .unwrap();
+        assert_eq!(stored(), None);
+        assert_eq!(
+            file(),
+            mcp::console_instructions::console_session_instructions(None)
+        );
+        assert!(!file().contains("Answer in French."));
     }
 
     /// A name that is blank, and a model or effort the agent does not offer, are refused by the

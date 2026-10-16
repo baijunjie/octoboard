@@ -21,11 +21,16 @@ use crate::agent_models::Listing;
 use crate::protocol::{error_code, Agent, CodedError, Present};
 use crate::state::AppState;
 
-/// A model or effort as stored: trimmed, with blank read as unset.
-pub(crate) fn normalize_launch_setting(text: Option<&str>) -> Option<String> {
+/// Free text as stored: trimmed, with blank read as unset.
+pub(crate) fn trimmed_or_none(text: Option<&str>) -> Option<String> {
     text.map(str::trim)
         .filter(|text| !text.is_empty())
         .map(str::to_string)
+}
+
+/// A model or effort as stored.
+pub(crate) fn normalize_launch_setting(text: Option<&str>) -> Option<String> {
+    trimmed_or_none(text)
 }
 
 /// A session override keeps its presence even when blank means explicitly unset.

@@ -31,7 +31,9 @@ each agent does with one it cannot honour, is in "The model and reasoning effort
 
 The console dialog, project dialog and dialog that opens a console or project session hold an **Advanced** section,
 collapsed when the dialog opens. It holds a **Model** picker and a **Reasoning effort** picker for the agent the
-dialog's agent field currently settles on, and a note saying whose sessions they apply to. In the session dialog, untouched fields
+dialog's agent field currently settles on, and a note saying whose sessions they apply to. In the console dialog it
+also holds, below the two pickers, the console session instructions field (see "Console session instructions" in
+`docs/product/consoles-and-projects.md`). In the session dialog, untouched fields
 show that agent's current project defaults, or the console's console-session defaults for a console session, and keep
 following them; changing a field applies only to that session, including its later resumes. Switching agents shows the other agent's values and retains edits separately, but only
 the selected agent's edits apply to the opened session. Changing accounts keeps those edits.

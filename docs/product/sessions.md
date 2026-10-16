@@ -155,8 +155,9 @@ In descending priority:
 3. the console's default agent.
 
 A console session has no project, so it uses the agent chosen for that session, or the console's default agent when
-none is given. Console sessions of different agents can run alongside each other in the same console. Their
-instruction files are described in "The console session's instruction file" in `docs/product/launching-agents.md`.
+none is given. Console sessions of different agents can run alongside each other in the same console, and all
+read the same instruction file, described in "The console session's instruction file" in
+`docs/product/launching-agents.md`.
 
 A session's agent is fixed for its lifetime. Resuming or reopening a session always relaunches the same agent —
 session records belong to a specific agent and cannot be moved across agents.

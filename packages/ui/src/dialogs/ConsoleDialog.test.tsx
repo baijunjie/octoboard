@@ -125,7 +125,7 @@ it("shows an unset picker as its placeholder", async () => {
   expect(pickerNamed("Model").textContent).toContain(PLACEHOLDER);
   expect(pickerNamed("Reasoning effort").textContent).toContain(PLACEHOLDER);
   // The note renders outside a HeroUI field, which its `Description` has to cope with.
-  expect(document.body.textContent).toContain("Used by console sessions");
+  expect(document.body.textContent).toContain("Console sessions opened or resumed from now on use this model");
 });
 
 const stored = consoleOf("c-1", "Main", {
@@ -227,6 +227,43 @@ it("says so at the foot of the dialog when the picked file cannot be read, and k
   await pickFile();
   expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("could not be read as an image");
   expect(document.body.querySelector("img")?.getAttribute("src")).toBe(AVATAR);
+});
+
+function typeInstructions(value: string) {
+  const area = document.body.querySelector<HTMLTextAreaElement>("textarea")!;
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(area, value);
+    area.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+it("creates with the console session instructions that were written", async () => {
+  const request = render();
+  type("Name", "Main");
+  await openAdvanced();
+  typeInstructions("Be brief.\n");
+  await clickButton("Create");
+  expect(sent(request)).toEqual([
+    { type: "create_console", name: "Main", default_agent: "claude", console_session_prompt: "Be brief." },
+  ]);
+});
+
+it("sends the console session instructions only when they changed, and an explicit null once cleared", async () => {
+  const withInstructions = consoleOf("c-1", "Main", { console_session_prompt: "Be brief." });
+  const request = render(withInstructions);
+  await openAdvanced();
+  expect(document.body.querySelector("textarea")?.value).toBe("Be brief.");
+  await clickButton("Save");
+  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Main", default_agent: "claude" }]);
+  typeInstructions("  ");
+  await clickButton("Save");
+  expect(sent(request)[1]).toEqual({
+    type: "update_console",
+    console: "c-1",
+    name: "Main",
+    default_agent: "claude",
+    console_session_prompt: null,
+  });
 });
 
 const optionTexts = () => Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent);

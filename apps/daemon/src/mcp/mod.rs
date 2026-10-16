@@ -15,12 +15,15 @@
 //!
 //! The tool catalogue lives here, shared by both sides: the child announces it, the daemon
 //! dispatches against it, and the role descriptions name the tools, so all three cannot drift
-//! apart. The names an agent actually shows the model are prefixed per agent — `mcp__octoboard__x`
-//! on Claude Code and Codex, `octoboard__x` on Grok (see "Across the three agents" in
+//! apart. The console session's instruction file is held to it by a test in
+//! [`console_instructions`], which fails when a tool it names is not in the catalogue. The names
+//! an agent actually shows the model are prefixed per agent — `mcp__octoboard__x` on Claude Code
+//! and Codex, `octoboard__x` on Grok (see "Across the three agents" in
 //! `docs/agent-cli-reference.md`), which is why [`qualified_tool_name`] exists rather than the
 //! role text spelling a prefix out.
 
 mod args;
+pub mod console_instructions;
 pub mod exec;
 pub mod role;
 mod settings;

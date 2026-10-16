@@ -101,6 +101,9 @@ impl Store {
                 grok_console_session_model    TEXT,
                 grok_console_session_effort   TEXT,
                 icon          TEXT,
+                -- The user's own addition to the console session's instruction file; NULL means
+                -- none.
+                console_session_prompt TEXT,
                 -- The ordinal a console session created in this console is given next, one past
                 -- the highest ever used here. Kept on the console rather than derived from the
                 -- sessions in it, because a console session that is later deleted must not free its
@@ -276,6 +279,12 @@ impl Store {
                 )?;
             }
         }
+        if !column_exists(&conn, "consoles", "console_session_prompt")? {
+            conn.execute(
+                "ALTER TABLE consoles ADD COLUMN console_session_prompt TEXT",
+                [],
+            )?;
+        }
         for column in PROJECT_SETTING_COLUMNS {
             if !column_exists(&conn, "projects", column)? {
                 conn.execute(
@@ -373,8 +382,9 @@ impl Store {
                                    codex_account_id, grok_account_id, claude_console_session_model,
                                    claude_console_session_effort, codex_console_session_model,
                                    codex_console_session_effort, grok_console_session_model,
-                                   grok_console_session_effort, icon, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+                                   grok_console_session_effort, icon, console_session_prompt,
+                                   created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
             params![
                 console.id,
                 console.name,
@@ -391,6 +401,7 @@ impl Store {
                 console.grok_console_session_model,
                 console.grok_console_session_effort,
                 console.icon,
+                console.console_session_prompt,
                 console.created_at,
             ],
         )?;
@@ -406,7 +417,8 @@ impl Store {
                                  codex_console_session_model = ?10,
                                  codex_console_session_effort = ?11,
                                  grok_console_session_model = ?12,
-                                 grok_console_session_effort = ?13, icon = ?14
+                                 grok_console_session_effort = ?13, icon = ?14,
+                                 console_session_prompt = ?15
              WHERE id = ?1",
             params![
                 console.id,
@@ -423,6 +435,7 @@ impl Store {
                 console.grok_console_session_model,
                 console.grok_console_session_effort,
                 console.icon,
+                console.console_session_prompt,
             ],
         )?;
         Ok(())
@@ -1396,7 +1409,7 @@ const CONSOLE_COLUMNS: &str = "id, name, workdir, console_session_agent, default
                                claude_console_session_model, claude_console_session_effort,
                                codex_console_session_model, codex_console_session_effort,
                                grok_console_session_model, grok_console_session_effort, icon,
-                               created_at";
+                               console_session_prompt, created_at";
 
 /// The consoles columns holding the model and reasoning effort a console session is launched
 /// with. Added in place to a database that predates them, and deliberately absent from
@@ -1469,7 +1482,8 @@ fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
         grok_console_session_model: row.get(12)?,
         grok_console_session_effort: row.get(13)?,
         icon: row.get(14)?,
-        created_at: row.get(15)?,
+        console_session_prompt: row.get(15)?,
+        created_at: row.get(16)?,
     })
 }
 
@@ -1661,6 +1675,7 @@ mod tests {
             grok_console_session_model: None,
             grok_console_session_effort: None,
             icon: None,
+            console_session_prompt: None,
             created_at: 0,
         }
     }
@@ -1954,6 +1969,35 @@ mod tests {
             again.codex_console_session_effort.as_deref(),
             Some("codex-effort")
         );
+    }
+
+    /// A database from before a console could carry the user's own console session instructions
+    /// keeps its consoles, and gains the column in place.
+    #[test]
+    fn the_console_session_prompt_column_is_added_in_place() {
+        let path = temp_db("console-session-prompt-column");
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .insert_console(&console(None, None, None))
+                .expect("console");
+        }
+        {
+            let conn = Connection::open(&path).expect("database");
+            conn.execute(
+                "ALTER TABLE consoles DROP COLUMN console_session_prompt",
+                [],
+            )
+            .expect("the older shape");
+        }
+
+        let store = Store::open(&path).expect("reopened in place");
+        let mut kept = store.get_console("console-1").unwrap().expect("kept");
+        assert_eq!(kept.console_session_prompt, None);
+        kept.console_session_prompt = Some("Be brief.".to_string());
+        store.update_console(&kept).expect("writes the new column");
+        let reread = store.get_console("console-1").unwrap().expect("kept");
+        assert_eq!(reread.console_session_prompt.as_deref(), Some("Be brief."));
     }
 
     /// The three states of a project's account for an agent round-trip through insert, update and

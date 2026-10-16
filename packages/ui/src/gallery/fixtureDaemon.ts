@@ -3,7 +3,7 @@ import { consoleAccount, inheritedAccount } from "../accountChoices";
 import { daemonMessage } from "../daemonMessage";
 import { errorPresentation } from "../errorPresentation";
 import { currentLanguage } from "../i18n/language";
-import type { BrowseEntry, DirEntry, Event, Session } from "../protocol";
+import type { BrowseEntry, Console, DirEntry, Event, RequestBody, Session } from "../protocol";
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -19,6 +19,31 @@ import { SAMPLE_GIT } from "./fixtures/projectGit";
 const TOAST_DELAY_MS = 300;
 
 const HOME = "/Users/dev";
+
+/** A text as the daemon stores one that may be left blank: trimmed, and none when nothing is left
+ * (`trimmed_or_none` of `launch_settings.rs`). */
+const trimmedOrNull = (text: string | null | undefined): string | null => text?.trim() || null;
+
+/** What a `create_console` or `update_console` request sets of the console, each field only where
+ * the request names it; an `update_console` that leaves a field out leaves it alone, and one that
+ * names it as `null` clears it, as `update_console` of `coordinator.rs` does. Account and model
+ * references are taken as given, not checked against the settings or an agent's list. */
+function consoleFields(body: Extract<RequestBody, { type: "create_console" | "update_console" }>): Partial<Console> {
+  const fields: Partial<Console> = {};
+  if (body.name !== undefined) fields.name = body.name.trim();
+  if (body.default_agent !== undefined) fields.default_agent = body.default_agent;
+  for (const agent of ["claude", "codex", "grok"] as const) {
+    const account = body[`${agent}_account_id`];
+    if (account !== undefined) fields[`${agent}_account_id`] = account;
+    const model = body[`${agent}_console_session_model`];
+    if (model !== undefined) fields[`${agent}_console_session_model`] = trimmedOrNull(model);
+    const effort = body[`${agent}_console_session_effort`];
+    if (effort !== undefined) fields[`${agent}_console_session_effort`] = trimmedOrNull(effort);
+  }
+  if (body.icon !== undefined) fields.icon = body.icon;
+  if (body.console_session_prompt !== undefined) fields.console_session_prompt = trimmedOrNull(body.console_session_prompt);
+  return fields;
+}
 
 /** A listing for a path the scenario gave none for: a few directories, some of them repositories. */
 function genericListing(path: string): { path: string; entries: DirEntry[] } {
@@ -50,7 +75,7 @@ function entriesUnder(files: FixtureFiles, dir: string): BrowseEntry[] {
 /**
  * A `Daemon` with no connection behind it, for the gallery: the store holds the scenario's state as
  * it is, requests are answered from the scenario (`list_dir`, `list_pages`, the browse requests) or
- * accepted and ignored (settings and trusted folders are updated, a new console is added, and
+ * accepted and ignored (settings and trusted folders are updated, a console is added or saved, and
  * deleting a scope's archived sessions removes them), and the scenario's toasts are raised once the app is
  * listening.
  *
@@ -293,18 +318,24 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
         case "create_console": {
           // As the daemon does, the new console reaches the store before the request is answered
           // (`coordinator.rs` broadcasts first), so a scenario can reach the first console's arrival.
-          const { name, default_agent, icon } = body;
           const id = `console-${Date.now()}`;
           store.setState((state) => ({
             consoles: new Map(state.consoles).set(id, {
               id,
-              name,
               workdir: `${HOME}/.octoboard/consoles/${id}`,
-              default_agent,
-              icon,
               created_at: Date.now(),
+              ...consoleFields(body),
+              name: body.name.trim(),
+              default_agent: body.default_agent,
             }),
           }));
+          return { type: "ack" };
+        }
+        case "update_console": {
+          // Broadcast before the answer, as the daemon does, so a dialog reopened on the console
+          // reads what was saved.
+          const current = store.getState().consoles.get(body.console);
+          if (current) store.setState((state) => ({ consoles: new Map(state.consoles).set(current.id, { ...current, ...consoleFields(body) }) }));
           return { type: "ack" };
         }
         case "delete_archived_sessions": {

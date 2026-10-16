@@ -26,7 +26,7 @@ Build loads none of the project's instructions, hooks or MCP servers.
 
 | Session | What happens |
 |---|---|
-| Console session | Pressed at once, without a dialog and without recording anything: its working directory is the console's own, which holds the instruction files Octoboard writes there. |
+| Console session | Pressed at once, without a dialog and without recording anything: its working directory is the console's own, which holds the instruction file Octoboard writes there. |
 | Project session whose project has the trust permission, of its own or through a trusted folder | Pressed at once, without a dialog. |
 | Any other project session | The user is asked in a dialog; nothing is sent until they agree. |
 

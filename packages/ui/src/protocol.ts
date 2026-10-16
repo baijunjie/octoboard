@@ -62,6 +62,9 @@ export interface Console {
   grok_console_session_effort?: string | null;
   /** A custom avatar as an `image/*` `data:` URL of at most 256 KiB; unset shows the default glyph. */
   icon?: string | null;
+  /** The user's own text added after the console session's built-in instructions; unset adds
+   * nothing. */
+  console_session_prompt?: string | null;
   created_at: number;
 }
 
@@ -339,6 +342,8 @@ export interface DocumentConsole {
   codex_console_session_effort?: string | null;
   grok_console_session_model?: string | null;
   grok_console_session_effort?: string | null;
+  /** The console's own addition to its console session's instructions; absent is none. */
+  console_session_prompt?: string | null;
   projects: DocumentProject[];
 }
 
@@ -624,6 +629,8 @@ export type RequestBody =
     grok_console_session_model?: string;
     grok_console_session_effort?: string;
     icon?: string;
+    /** Absent or blank means no addition to the console session's instructions. */
+    console_session_prompt?: string;
   }
   | {
     type: "update_console";
@@ -645,6 +652,8 @@ export type RequestBody =
     grok_console_session_effort?: string | null;
     /** Absent leaves the avatar alone; an explicit `null` clears it back to the default glyph. */
     icon?: string | null;
+    /** Absent leaves the addition alone; an explicit `null` (or a blank string) clears it. */
+    console_session_prompt?: string | null;
   }
   | { type: "delete_console"; console: string }
   | {

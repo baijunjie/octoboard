@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 
+import type { RequestBody } from "../protocol";
+import { exportedDocument } from "./fixtureConfiguration";
 import { createFixtureDaemon } from "./fixtureDaemon";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore";
 import { consoleOf, gitStatusOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
@@ -265,5 +267,35 @@ describe("the fixture daemon's local branch switches", () => {
     await expect(daemon.request({ type: "switch_project_branch", project: project.id, branch: "feature/search" })).rejects.toMatchObject({ code: error.code, params: error.params });
     expect(daemon.store.getState().gitStatuses.has(project.id)).toBe(false);
     await expect(daemon.request({ type: "read_project_file", project: project.id, path: "README.md" })).resolves.toMatchObject({ file: { text: "# Working edit\n" } });
+  });
+});
+
+describe("the fixture daemon's console saving", () => {
+  const owner = consoleOf("c", "Release", { console_session_prompt: "Be brief.", codex_console_session_model: "gpt-x" });
+  const daemon = () => createFixtureDaemon({ id: "console-save", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ consoles: [owner] }) });
+
+  it("keeps what a created console is given, the instructions trimmed and a blank one as none", async () => {
+    const created = async (body: Extract<RequestBody, { type: "create_console" }>) => {
+      const d = daemon();
+      await d.request(body);
+      return Array.from(d.store.getState().consoles.values()).find((c) => c.id !== owner.id);
+    };
+    expect(await created({ type: "create_console", name: " Ops ", default_agent: "codex", codex_account_id: "work", codex_console_session_effort: "high", console_session_prompt: "  Answer in Japanese.  " })).toMatchObject({
+      name: "Ops", codex_account_id: "work", codex_console_session_effort: "high", console_session_prompt: "Answer in Japanese.",
+    });
+    expect((await created({ type: "create_console", name: "Plain", default_agent: "claude", console_session_prompt: "   " }))?.console_session_prompt).toBeNull();
+  });
+
+  it("leaves the instructions alone when absent, clears them with null or blank and exports what is saved", async () => {
+    const d = daemon();
+    await d.request({ type: "update_console", console: owner.id, name: "Renamed" });
+    expect(d.store.getState().consoles.get(owner.id)).toMatchObject({ name: "Renamed", console_session_prompt: "Be brief.", codex_console_session_model: "gpt-x" });
+    await d.request({ type: "update_console", console: owner.id, console_session_prompt: " Use tables. " });
+    expect(exportedDocument(d.store.getState()).consoles[0]?.console_session_prompt).toBe("Use tables.");
+    await d.request({ type: "update_console", console: owner.id, console_session_prompt: null });
+    expect(d.store.getState().consoles.get(owner.id)?.console_session_prompt).toBeNull();
+    await d.request({ type: "update_console", console: owner.id, console_session_prompt: "x" });
+    await d.request({ type: "update_console", console: owner.id, console_session_prompt: "  ", codex_console_session_model: null });
+    expect(d.store.getState().consoles.get(owner.id)).toMatchObject({ console_session_prompt: null, codex_console_session_model: null });
   });
 });

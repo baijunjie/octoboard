@@ -483,6 +483,7 @@ mod tests {
             grok_console_session_model: None,
             grok_console_session_effort: None,
             icon: None,
+            console_session_prompt: None,
             created_at: 0,
         };
         state.store.insert_console(&console).unwrap();

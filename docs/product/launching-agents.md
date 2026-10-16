@@ -71,8 +71,11 @@ environment" below):
   a child process of the agent, started fresh per session, and each session's tools are reachable
   only by that session. The agent's own and the project's own MCP servers keep working alongside it.
 - **A role description** — whether this session is a console session or a project session, and the reporting conventions
-  that go with that. A project session bound to a console session is told that console session is waiting on its result
-  and how to `report` to it; one bound to a project session is told which project session, by its id, dispatched it and
+  that go with that. A console session's is short: it is the console session, it decomposes, dispatches, follows up and
+  summarizes and does not change a project itself, and the rest is in its instruction file, which may end with the
+  user's own instructions, which take precedence over the rest of the file wherever they disagree but never change
+  what it does and does not do (see "The console session's instruction file" below). A project session bound to a console session is told that console session is waiting on its
+  result and how to `report` to it; one bound to a project session is told which project session, by its id, dispatched it and
   that it reports there. One the user opened without a console session to report to is told that it was opened directly,
   that nobody is waiting on it, and not to call `report`, and that it may start sessions in its own project and drive
   them, which report back to it. A lead session, bound to a console session only after it was opened, is given that
@@ -101,18 +104,42 @@ agent, not a capability Octoboard adds.
 
 ### The console session's instruction file
 
-Octoboard keeps both `CLAUDE.md` and `AGENTS.md` in the console's working directory: a Claude Code console session
-reads the former, a Codex console session the latter. Each holds the console session's role — decompose, dispatch,
-follow up, summarize, and make no change to a project itself, reading one being how it checks what its sessions report
-(see `docs/product/hub-orchestration.md`) — and how to use the orchestration and settings tools, with that agent's own
-tool names.
-Both files stay present so console sessions of different agents have their own guidance while running together.
-A Grok Build console session reads neither, because Grok reads no instructions in a directory that is not a git
-repository and a console's working directory is not one; its whole role travels in a launch flag instead.
+Octoboard writes one instruction file into the console's working directory, `AGENTS.md`, with `CLAUDE.md` beside it as
+a relative symbolic link to it; a regular `CLAUDE.md` found there is replaced by the link. Claude Code reads
+`CLAUDE.md`, Codex reads `AGENTS.md`, and Grok Build reads both and loads the linked pair once — a console's working
+directory is not a git repository, and Grok reads the instruction files there once the folder is trusted, which
+Octoboard's press of a console session's trust confirmation sees to (see `docs/product/folder-trust.md`). So console
+sessions of every agent, running together or not, read the same text, and the file names Octoboard's tools without any
+agent's prefix. Each console session's role description points it to the file by the name its own agent reads.
 
-Both files are written when the console is created or updated, and refreshed before every console session launch,
-including a resume or an account switch, so edits the user makes to them do not survive the next launch. A missing
-console working directory is still a launch failure, rather than being recreated by that refresh.
+The file holds the console session's role — decompose, dispatch, follow up, summarize, and make no change to a project
+itself, reading one being how it checks what its sessions report (see `docs/product/hub-orchestration.md`) — and how to
+use the orchestration and settings tools. When the console has console session instructions of the user's (see
+"Console session instructions" in `docs/product/consoles-and-projects.md`), they are the file's last section,
+held between a `<user_instructions>` and a `</user_instructions>` tag under a heading of the file's own.
+That heading's paragraph says the tags hold the user's own text, that any heading inside them belongs to that text and
+not to the file's sections, and that the console session follows the user's text wherever it disagrees with the
+built-in part, except that it cannot change what the console session does and does not do — the console session still
+never changes a project itself. The text is kept as written, except that a closing `</user_instructions` of its own, in
+any letter case, has its `<` written as `&lt;`, so it cannot end the user's part early. A console without any has no
+such section.
+
+The file is written:
+
+- **when the console is created** — a console whose file cannot be written is not created;
+- **after an edit to the console is saved** — a failure to write it is logged and leaves the saved edit standing, and
+  the next console session launch writes the file;
+- **before every console session launch**, a resume and an account switch included — a failure to write it fails the
+  launch.
+
+Edits made to the file by hand therefore do not survive the next write. None of these writes recreates a missing
+console working directory: a console session launch into one is refused instead.
+
+An edit to the console's console session instructions reaches every agent's console sessions begun after it. A Claude
+Code or Codex console session resumed after it reads it too (on Codex 0.142.5, only after a compaction), while a Grok Build
+console session never does within its life, resumed or not: only a new one does. Codex reads at most 32 KiB of a
+project's instruction files by default (its own `project_doc_max_bytes` setting), so a very long text can be cut off
+for Codex console sessions; Octoboard sets no limit on the text itself.
 
 ## The model and reasoning effort
 
@@ -275,10 +302,11 @@ to create should not be stopped. It is checked at **launch** instead, and a Grok
 that is not an initialized Grok home is refused there, naming the directory and what is wrong with it; a session on
 the default account is never held to this, since that directory is the user's own existing setup.
 
-Grok Build additionally **requires the project to be a git repository**: it locates a project by walking up for a
-`.git` directory, and in a directory without one it loads neither the project's instructions nor the project's hooks.
-A console's working directory is not a repository, so a Grok console session reads no instruction file from it and
-takes its role through a launch flag instead (see "The console session's instruction file" above).
+Grok Build loads **a project's own hooks only inside a git repository**: it locates a project by walking up for a
+`.git` directory, and in a directory without one it loads none of the project's hooks. Its instruction files need no
+repository — in a directory that is not one, Grok reads those in the working directory alone — but, like the project's
+hooks and MCP servers, they load only once the folder is trusted (see `docs/product/folder-trust.md`). That is how a
+Grok console session reads the console's instruction file (see "The console session's instruction file" above).
 
 ## Agent session data
 

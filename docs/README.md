@@ -159,8 +159,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   never writes the user's agent configuration (the two narrow exceptions being the conversation record a switch of a
   session's account copies and the Grok Build trust entry carried to the user's own store), and that a fast-forward
   and a push are the ways it changes a project repository, both only at the user's word; the three things injected
-  per launch and the console's generated instruction files for Claude Code and Codex, their refresh on each launch,
-  the launch environment, and the per-agent specifics.
+  per launch and the console's one generated instruction file shared by every agent, ending with the console's own
+  instructions, its refresh on each launch and which sessions an edit reaches, the launch environment, and the
+  per-agent specifics.
 - [Folder trust](product/folder-trust.md) — each agent's own folder-trust confirmation and where it records the trust,
   the one auto-trust permission Claude Code, Codex and Grok Build share (a project or a trusted folder), the trust
   dialog, how Octoboard presses each agent's confirmation, carrying Grok Build's trust entry into the user's store, and

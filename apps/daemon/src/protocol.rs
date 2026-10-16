@@ -181,6 +181,9 @@ pub struct Console {
     /// A custom avatar as an `image/*` `data:` URL of at most 256 KiB; unset shows the default
     /// glyph.
     pub icon: Option<String>,
+    /// The user's own text added after the console session's built-in instructions, inside user
+    /// tags; `None` adds nothing. Never reachable through the MCP tools.
+    pub console_session_prompt: Option<String>,
     pub created_at: i64,
 }
 
@@ -1076,6 +1079,9 @@ pub enum RequestBody {
         grok_console_session_effort: Option<String>,
         #[serde(default)]
         icon: Option<String>,
+        /// Absent or blank means no addition to the console session's instructions.
+        #[serde(default)]
+        console_session_prompt: Option<String>,
     },
     UpdateConsole {
         console: String,
@@ -1108,6 +1114,9 @@ pub enum RequestBody {
         /// to the default glyph.
         #[serde(default, deserialize_with = "present_option")]
         icon: Option<Option<String>>,
+        /// Absent leaves the addition alone; an explicit `null` (or a blank string) clears it.
+        #[serde(default, deserialize_with = "present_option")]
+        console_session_prompt: Option<Option<String>>,
     },
     DeleteConsole {
         console: String,

@@ -561,25 +561,71 @@ edit of the project's or the user's files, and was exercised against the version
   nowhere, so Codex's own confirmation is pressed instead (see "Folder-trust confirmations" below).
 - **Workspace trust gates the project's own configuration on Claude Code and Grok**, and fails silently. On Grok an
   untrusted folder makes the project's `AGENTS.md`, hooks and MCP servers not load; trust lives inside `GROK_HOME` (an
-  undocumented `--trust` flag also exists), and Grok also needs a recognized **git** root, since project hooks did not
-  load in a trusted non-git directory. Octoboard makes no trust decision of its own in either agent's store and passes
-  none for a launch; it presses the agent's own confirmation (see "Folder-trust confirmations" below). On Claude Code an
-  untrusted workspace makes the project's `allow` rules ignored (with a line on stderr) while `deny` still applies, so
-  the session is only ever more restrictive. Its trust lives in the global config file (`~/.claude.json`, or
-  `.claude.json` inside the config directory in effect), which Octoboard reads and never writes. It is read rather than
-  matching the stderr line because on a PTY stderr is the rendered UI, and matching rendered text would need a VT
-  emulator in the daemon; it warns only on an explicit negative, so a renamed key does not warn on every launch.
+  undocumented `--trust` flag also exists), and Grok's project hooks, unlike its instruction files, also need a
+  recognized **git** root, since they did not load in a trusted non-git directory. Octoboard makes no trust decision of
+  its own in either agent's store and passes none for a launch; it presses the agent's own confirmation (see
+  "Folder-trust confirmations" below). On Claude Code an untrusted workspace makes the project's `allow` rules ignored
+  (with a line on stderr) while `deny` still applies, so the session is only ever more restrictive. Its trust lives in
+  the global config file (`~/.claude.json`, or `.claude.json` inside the config directory in effect), which Octoboard
+  reads and never writes. It is read rather than matching the stderr line because on a PTY stderr is the rendered UI,
+  and matching rendered text would need a VT emulator in the daemon; it warns only on an explicit negative, so a renamed
+  key does not warn on every launch.
 - **Each agent reads a different instruction filename, matched by exact spelling.** Claude Code reads `CLAUDE.md` and
   `CLAUDE.local.md` and does **not** read `AGENTS.md`, and cannot be made to; where it must be shown a project's
   `AGENTS.md`, `--append-system-prompt-file` lands it in the system prompt. Codex reads `AGENTS.md`. Grok reads
   `AGENTS.md`, `Agents.md`, `CLAUDE.md`, `Claude.md` and `CLAUDE.local.md`, and on a case-sensitive volume loads every
-  matching spelling present. No agent accepts an all-lowercase name. Grok locates a project by walking up for `.git`,
-  and without one reads no project instructions and no project hooks, which is why a Grok console session's role cannot be an
-  instruction file in a console's working directory and travels in `--rules` instead.
+  matching spelling present. No agent accepts an all-lowercase name. Folder trust, not a git repository, is what
+  gates Grok's instruction files: in a trusted folder that is not a repository Grok reads `AGENTS.md` and `CLAUDE.md`
+  from the working directory alone (Grok's own guide says outside a repository only the working directory is read),
+  and an untrusted one loads neither (measured on Grok Build 1.0.52). Its project *hooks* are the part that still
+  needs a git root. Grok loads one file reached by two names once when the second is a symlink to the first, and a
+  pair of separate identical files twice, so a console's working directory holds one `AGENTS.md` and a relative
+  symlink `CLAUDE.md -> AGENTS.md`, and every agent's console session reads the same text. Claude Code follows the
+  symlink, and replacing the target by a temporary file and an atomic rename leaves the link working, with the next
+  launch seeing the new content (Claude Code 2.1.300). The file's text therefore names the tools without any agent's
+  prefix, since each agent shows them under its own.
+- **Each agent hands the instruction file to the model whole.** Custom tags and Markdown headings arrive intact, with
+  nothing escaped, reformatted or truncated; only the framing around the file differs. Claude Code puts it in the first
+  user message, inside a system reminder, after "Contents of …/CLAUDE.md (project instructions…)". Codex puts it in a
+  user message under "# AGENTS.md instructions for <dir>", inside `<INSTRUCTIONS>`. Grok puts it in the first user
+  message as `<always_applied_workspace_rule name=".../Agents.md">`, a spelling of its own for the name on a
+  case-insensitive volume. Measured on Claude Code 2.1.300, Codex 0.162.1 and Grok Build 1.0.52 by capturing the
+  requests against local stubs.
 - **Resume re-injects everything.** Hooks and the MCP server are resolved from the launch arguments every time and are
   lost on a resume that omits them, silently. The role description differs: Grok persists `--rules` into the session
   record, while Claude Code records its appended system prompt on the first request and replays it verbatim, so a
-  changed role text is ignored on resume. A session's role is immutable for its lifetime.
+  changed role text is ignored on resume. A session's role is immutable for its lifetime. Grok also freezes its
+  project instruction files per session: on a resume and on `--fork-session` it replays the stored original system
+  prompt and first-message instructions, so neither a new `--rules` nor an edited `AGENTS.md` reaches it, and only a
+  fresh session sees a change (Grok Build 1.0.52).
+- **An instruction file edited between launches reaches a resumed session differently on each agent.** Probed by
+  capturing the exact model requests against local stub servers (Claude Code 2.1.300, Codex 0.162.1, Grok Build
+  1.0.52).
+  - **Claude Code** keeps the old copy in the replayed history. When a file changed between launches, the resumed
+    session's new turn carries the whole new file with a note that it replaces the earlier copy ("Instruction files
+    were re-read when this session started; these differ from their earlier copies — each replaces its earlier
+    copy"); an unchanged file adds nothing, and each further change appends another full copy. A change made while
+    the process runs is announced on the next turn as "changed on disk", with the changed lines. A compaction drops
+    every earlier copy and re-injects one fresh block.
+  - **Codex** also keeps the old copy in the replayed history, on `exec resume` and on an interactive resume alike.
+    When `AGENTS.md` changed between launches, the resumed session's new turn carries the whole new file, opening with
+    "These AGENTS.md instructions replace all previously provided AGENTS.md instructions."; an unchanged file adds
+    nothing, and each further change appends another full copy on the next resume. Unlike Claude Code, it reads the
+    file once at process start, a resume launch included, and holds it in memory: a change made while the process runs
+    is not sent on later turns, and a compaction drops every earlier copy and re-injects that launch-time copy, not
+    what is on disk. Such a change reaches the session on its next resume.
+    Codex 0.142.5 behaved otherwise: a resume replayed only the stored copy, and a changed file reached the session
+    only through a compaction.
+  - **Grok Build** freezes the files per session, on a resume and on a fork (above).
+
+  So an edited console instruction reaches every agent's new sessions and a resumed Claude Code or Codex session as
+  well (Codex 0.142.5 excepted), and a Grok session never within its life.
+- **Codex truncates the project instruction files it reads at `project_doc_max_bytes`, 32 KiB by default**, so a long
+  user text in a console's `AGENTS.md` can be cut off for Codex alone: Claude Code and Grok have no such cap that
+  Octoboard knows of. Verified only partly on Codex 0.162.1: the binary's own default-config snapshot reads
+  `project_doc_max_bytes = 32768`, and the key is a documented `config.toml` setting. Whether the cap counts the
+  built-in guidance, a global `~/.codex/AGENTS.md` and the console's text together, and what exactly is cut, was not
+  measured, because that needs a model request. Octoboard sets no limit on the user's text.
 - **Hook scripts must fail silently and fast on all three.** Every agent surfaces a failing hook, and a hook with no
   timeout blocks the turn for its full duration. Octoboard's scripts exit 0 unconditionally, write nothing to stderr,
   set a short explicit timeout (Codex clamps some events to 3 s), are asynchronous where the agent allows it, and give
@@ -597,20 +643,22 @@ Octoboard recognizes it in the terminal output and presses it; what pressing it 
   exit" and "Yes, I trust this folder" below it; a Down and then an Enter accept. It records the trust in its global
   config file (above), and runs its first hook only after the screen is answered.
 - **Codex** shows its folder-trust confirmation only when the working directory is inside a git repository; outside
-  one it never asks. The screen reads "Trust this folder? Codex can read, edit, and run files here, …", then "› 1.
-  Trust and continue", "2. Quit" and "enter continue · esc quit". The cursor (`›`, U+203A) starts on option 1, and
-  Enter alone accepts; any carriage return reaching the screen accepts. Codex records `[projects."<repository root>"]
-  trust_level = "trusted"` in `$CODEX_HOME/config.toml`: from a subdirectory it records the repository root, and from
-  a linked worktree the main repository's root, so the record can cover more than the folder asked about. A trusted
-  parent directory in that file does not cover a repository below it. No hook fires before or right after the
-  confirmation, so only a bound on time and output can end a watch for it. Codex redraws only the cells that changed,
-  so text read off the screen can lose characters wherever the frame before held the same one; the confirmation's own
-  phrases came through intact in its first drawing, a path above it did not. The review Codex raises for new hooks
-  without `--dangerously-bypass-hook-trust` reads "Hooks need review … 2. Trust all and continue" and is a different
-  modal. On 0.161.0 a key the confirmation ignores (a letter, Right, Tab, `?`) draws nothing but a bare
-  synchronized-update frame (`ESC[?2026h ESC[39m ESC[49m ESC[0m ESC[?2026l`); accepting it clears the screen and
-  redraws it whole, starting with the ">_ OpenAI Codex (v…)" banner, which is how an answer given in the terminal is
-  told apart.
+  one it never asks and reads `AGENTS.md` all the same (measured on 0.161.0, and again on 0.162.1, where an interactive
+  launch in a fresh non-git directory drew no confirmation and its first request carried that directory's `AGENTS.md`,
+  while one in a fresh `git init` directory drew the confirmation below). The screen reads "Trust this folder? Codex can
+  read, edit, and run files here, …", then "› 1. Trust and continue", "2. Quit" and "enter continue · esc quit". The
+  cursor (`›`, U+203A) starts on option 1, and Enter alone accepts; any carriage return reaching the screen accepts.
+  Codex records `[projects."<repository root>"] trust_level = "trusted"` in `$CODEX_HOME/config.toml`: from a
+  subdirectory it records the repository root, and from a linked worktree the main repository's root, so the record can
+  cover more than the folder asked about. A trusted parent directory in that file does not cover a repository below it.
+  No hook fires before or right after the confirmation, so only a bound on time and output can end a watch for it. Codex
+  redraws only the cells that changed, so text read off the screen can lose characters wherever the frame before held
+  the same one; the confirmation's own phrases came through intact in its first drawing, a path above it did not. The
+  review Codex raises for new hooks without `--dangerously-bypass-hook-trust` reads "Hooks need review … 2. Trust all
+  and continue" and is a different modal. On 0.161.0 a key the confirmation ignores (a letter, Right, Tab, `?`) draws
+  nothing but a bare synchronized-update frame (`ESC[?2026h ESC[39m ESC[49m ESC[0m ESC[?2026l`); accepting it clears the
+  screen and redraws it whole, starting with the ">_ OpenAI Codex (v…)" banner, which is how an answer given in the
+  terminal is told apart.
 - **Grok Build** shows its confirmation only when the folder holds content its trust gates, such as an `AGENTS.md`,
   whether or not it is a git repository, so a console directory holding an instruction file is asked about too. The
   screen reads "Do you trust the contents of this directory?", "Grok Build may run or modify contents in this

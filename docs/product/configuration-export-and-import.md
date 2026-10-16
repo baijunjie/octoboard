@@ -78,9 +78,10 @@ travels, whether or not its directory is a git repository.
 
 ### What each console carries
 
-Its name, its avatar image if it has one, its default agent, the account it names for each agent, and the model and
-reasoning effort it sets for its own console sessions, one pair per agent (see "Consoles" in
-`docs/product/consoles-and-projects.md`).
+Its name, its avatar image if it has one, its default agent, the account it names for each agent, the model and
+reasoning effort it sets for its own console sessions, one pair per agent, and its console session instructions if it
+has any (see "Consoles" in `docs/product/consoles-and-projects.md`). An import restores the instructions trimmed, as
+saving them in the console dialog does, and a document that does not carry them gives the console none.
 
 A console's working directory is **not** in the document. It is no directory of the user's choosing: Octoboard creates
 it under its own data directory and names it after the console, so it would carry nothing another machine could use. An

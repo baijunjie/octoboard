@@ -115,7 +115,8 @@ details the settings tools.
 | File | Role |
 |---|---|
 | `mod.rs` | The tool catalogue, and which tools a session may see, by its role (`console` / `project`) and whether it has the bound role |
-| `role.rs` | The role description injected at launch, and `write_console_session_instructions`, which writes the agent-specific `CLAUDE.md` and `AGENTS.md` guidance into a console's working directory |
+| `role.rs` | The role description injected at launch; a console session's is only a short pointer to its instruction file |
+| `console_instructions.rs` | The console session's instruction file: `refresh_console_session_instructions` (serialized, from the stored console; the plain writer only at creation) writes `AGENTS.md` (the built-in guidance, then the console's own `console_session_prompt` when it has one) into a console's working directory, with `CLAUDE.md` a relative symlink to it |
 | `exec.rs` | Runs one tool call against the real consoles, projects and sessions, through the same coordinator/reporting functions the control socket uses; the project-scoped reads and `share_info` resolve their targets within the caller's own project |
 | `args.rs` | Reading a tool call's arguments (booleans, string lists and texts are refused with a reason when malformed rather than read as absent) and finding the records they name within the caller's reach: a project of the caller's console, the caller's own project and console |
 | `settings.rs` | The settings tools — reading and changing the console's own settings, its projects' and the application's, and a project session's read of its own project — with the parsing of their per-agent `accounts` and `launch` arguments and the shape their results share |

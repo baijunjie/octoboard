@@ -88,6 +88,8 @@ pub struct DocumentConsole {
     pub codex_console_session_effort: Option<String>,
     pub grok_console_session_model: Option<String>,
     pub grok_console_session_effort: Option<String>,
+    /// The user's own addition to the console session's instructions; absent is none.
+    pub console_session_prompt: Option<String>,
     pub projects: Vec<DocumentProject>,
 }
 
@@ -180,6 +182,7 @@ fn document_console(
         codex_console_session_effort: console.codex_console_session_effort.clone(),
         grok_console_session_model: console.grok_console_session_model.clone(),
         grok_console_session_effort: console.grok_console_session_effort.clone(),
+        console_session_prompt: console.console_session_prompt.clone(),
         projects: projects
             .into_iter()
             .map(|project| document_project(project, accounts))
@@ -252,6 +255,7 @@ mod tests {
             grok_console_session_model: None,
             grok_console_session_effort: None,
             icon: None,
+            console_session_prompt: None,
             created_at: 0,
         }
     }
@@ -320,6 +324,7 @@ mod tests {
         hub.grok_account_id = Some("acct-1".to_string());
         hub.claude_console_session_model = Some("opus".to_string());
         hub.claude_console_session_effort = Some("some-future-level".to_string());
+        hub.console_session_prompt = Some("Be brief.".to_string());
         store.insert_console(&hub).unwrap();
         // Created at the same instant as each other and before `hub`; the id breaks the tie.
         for id in ["console-3", "console-2"] {
@@ -411,6 +416,7 @@ mod tests {
         let hub = &document.consoles[2];
         assert_eq!(hub.icon.as_deref(), Some("data:image/png;base64,AAAA"));
         assert_eq!(hub.claude_console_session_model.as_deref(), Some("opus"));
+        assert_eq!(hub.console_session_prompt.as_deref(), Some("Be brief."));
         assert_eq!(
             hub.claude_console_session_effort.as_deref(),
             Some("some-future-level"),

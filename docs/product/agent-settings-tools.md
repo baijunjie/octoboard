@@ -14,8 +14,9 @@ tool is in the tool tables of `docs/product/hub-orchestration.md`; this document
 
 Never through these tools, by any session: changing a project's directory, source, host or remote URL; giving or
 taking away a project's trust permission; removing a project; creating or deleting a console; setting or removing a
-console's avatar; adding, editing or removing an account; adding or removing a trusted folder. Each of those stays the
-user's own, in the UI.
+console's avatar; reading, setting or clearing a console's console session instructions (see "Console session
+instructions" in `docs/product/consoles-and-projects.md`); adding, editing or removing an account; adding or removing
+a trusted folder. Each of those stays the user's own, in the UI.
 
 The console session's instructions tell it that projects, its console and the application settings belong to the
 user: it changes one only when asked to, says what it changed, and treats accounts and trusted folders as read-only.
@@ -105,7 +106,8 @@ settings as stored.
 
 `get_console` answers with the calling console session's own console: `console` (its id), `name`, `default_agent`,
 `accounts`, `launch` — the model and reasoning effort of the console's console sessions — `has_icon`, whether it has an
-avatar, and `workdir`, its working directory. The avatar itself is never returned.
+avatar, and `workdir`, its working directory. Neither the avatar itself nor the console's console session
+instructions are ever returned.
 
 `update_console` takes any of `name` (a blank one is refused), `default_agent` (an agent; it cannot be cleared),
 `accounts` and `launch`, leaves the rest as it is, and answers as `get_console` does.

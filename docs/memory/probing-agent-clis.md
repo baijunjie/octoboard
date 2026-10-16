@@ -27,6 +27,16 @@ reads exactly like filtering that broke the login (Claude Code 2.1.296, macOS; C
 With `USER` in place, a "Not logged in" result from a correctly filtered probe is a real finding, not an artefact of
 the filtering.
 
+## Find out which install of a CLI you are probing, and put its version on the finding
+
+The same agent CLI is often installed more than once at different versions — a package manager's copy that stays
+put beside a self-updating one, say — and the copies disagree on exactly the behaviour probes are run to settle: a
+resumed Codex session's handling of an edited `AGENTS.md` came out opposite on 0.142.5 and 0.162.1. Before a probe,
+list every install with `which -a <cli>` and run `--version` on each; probe by explicit path, and say which install
+the login shell resolves (`$SHELL -l -i -c 'command -v <cli>'`), since that is the one Octoboard launches, and it need
+not be the newest. Write the version into every finding that goes into `docs/agent-cli-reference.md`, and when the
+installs disagree, measure both and record the older behaviour as its own case rather than generalising from either.
+
 ## `--help` is not the authority on what a CLI supports
 
 Whole feature surfaces are missing from it. Claude Code's hook-event list does not appear in `--help` at all and has
@@ -101,9 +111,11 @@ cannot run in it and it is no route to testing mouse reporting.
 
 When the question is "does the agent read file X" and the result comes back negative, that negative is evidence only
 if the same run also shows the agent reading something you already know it reads. Discovery is gated on preconditions
-you may not have thought to control for — Grok locates a project by walking up for a `.git` directory and reads no
-project instructions without one, and folder trust and server-side feature flags gate other agents' discovery the same
-way — and each of them turns a whole matrix negative in a way indistinguishable from the thing being measured.
+you may not have thought to control for — Grok reads no project instruction file in a folder it has not been told to
+trust, and its project hooks also need a git root; server-side feature flags gate discovery the same way — and each of
+them turns a whole matrix negative in a way indistinguishable from the thing being measured. When the control fails
+too, vary the preconditions one at a time before naming which one is the gate: Grok's folder-trust gate on instruction
+files was once recorded here as a need for a git repository.
 
 A negative that is a *silence* — "no event fires on this path" — needs one thing more than the control: knowing what
 would have ended it. That becomes a finding only once you can say why waiting longer could never have produced the

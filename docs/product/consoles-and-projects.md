@@ -18,6 +18,7 @@ A console carries:
 | Agent accounts | the user, optional | One per agent: the account that agent's sessions in this console run under, the agent's default account when none is picked; see "Agent config directories" below. |
 | Console session model and reasoning effort | the user, optional | One pair of defaults per agent for the console's console sessions, the agent's own default when unset; session overrides and inheritance are in `docs/product/model-and-reasoning-effort.md`. |
 | Avatar | the user, optional | A custom image shown in place of the default avatar, in a circle; see "Avatar" below. |
+| Console session instructions | the user, optional | The user's own instructions for the console's console sessions, added after Octoboard's built-in ones and taking precedence over them, short of what a console session does; see "Console session instructions" below. |
 | Working directory | Octoboard | `~/.octoboard/consoles/<console id>/`, created when the console is created. Not settable and not changeable. |
 
 A console has a single default agent field. A console session can choose its own agent, and a project session can take
@@ -56,6 +57,30 @@ as described above wherever the console appears, and the dialog does not preview
 A chosen image is cropped to its centred square and scaled to 128 x 128 pixels in the window before it is saved, so
 any size or shape of picture is accepted; a file that is not a readable image is refused in the dialog. As with the
 other fields, an avatar that was not touched is left as it is when the console is saved.
+
+### Console session instructions
+
+A console can carry instructions of the user's own for its console sessions — how to work, report or phrase things —
+which Octoboard adds after its built-in instructions in the console session's instruction file. The user's text takes
+precedence over the built-in instructions wherever the two disagree, with one exception: it cannot change what a console
+session does and does not do, so a console session still never changes a project itself. Where the text goes and when a
+console session reads it is in "The console session's instruction file" in `docs/product/launching-agents.md`.
+
+The console dialog's **Console session instructions** field is a multi-line text field at the bottom of the dialog's
+collapsed Advanced section, below the console session's model and reasoning effort pickers (see "The Advanced section"
+in `docs/product/model-and-reasoning-effort.md`); Enter in it starts a new line rather than saving the dialog. It shows
+only the user's own text, never the built-in instructions. Empty, its placeholder says there are no additional
+instructions, and a note below it says the text comes after the built-in instructions and takes precedence over them
+where the two conflict, and that it applies to new console sessions. The Advanced section's own note, at its top,
+speaks only of the model and reasoning effort.
+
+The text is saved with surrounding whitespace trimmed, and a blank one means none; emptying the field of a console that
+had some removes them. There is no length limit, but Codex reads only part of a very long one (see "The console
+session's instruction file" in `docs/product/launching-agents.md`). As with the other fields, text that was not changed
+is left as it is when the console is saved.
+
+The console session itself can neither read nor change them (see "Who reads and changes what" in
+`docs/product/agent-settings-tools.md`).
 
 ### Agent config directories
 
@@ -138,18 +163,20 @@ directory would keep neither its login nor its conversation; see "Per-agent spec
 
 ### Editing a console
 
-The name, the default agent, the account the dialog shows, that agent's console session model and reasoning effort, and
-the avatar can be changed. The account can be put back on the agent's default account, and the model and the effort
-back to unset, the agent's own default. Changing the agent or an account affects sessions opened afterwards; a
-session that already exists keeps the agent and the account and directory it was started with. A change to the default
+The name, the default agent, the account the dialog shows, that agent's console session model and reasoning effort, the
+console session instructions and the avatar can be changed. The account can be put back on the agent's default
+account, and the model and the effort back to unset, the agent's own default. Changing the agent or an account affects
+sessions opened afterwards; a session that already exists keeps the agent and the account and directory it was started
+with. A change to the default
 agent therefore changes the initial choice in the next console-session dialog, while existing console sessions keep
 the agent they were started with (see "Console sessions and project sessions" in
 `docs/product/sessions.md`); a changed model or effort reaches a console session's next launch only when that value
 is inherited (see `docs/product/model-and-reasoning-effort.md`). The name cannot be cleared: saving an empty name is
 rejected.
 
-The console session can change the same settings of its own console except the avatar (see "The console's own settings:
-`get_console` and `update_console`" in `docs/product/agent-settings-tools.md`).
+The console session can change the same settings of its own console except the avatar and the console session
+instructions (see "The console's own settings: `get_console` and `update_console`" in
+`docs/product/agent-settings-tools.md`).
 
 An account, a model and an effort are saved only when they are changed: saving a console with a picker untouched
 succeeds regardless of what has happened to the account it refers to since. Removing an account in Settings puts every
