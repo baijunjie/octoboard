@@ -45,7 +45,10 @@ Spaces and invisible characters around the name, and whether accented letters we
 not change it. Each fill has its own light and dark value (see "What follows the choice" in
 `docs/product/appearance.md`).
 
-The console dialog's **Avatar** field is the dialog's first field, and is one round control the size of an avatar.
+The console dialog's **Avatar** field is one round control the size of an avatar. It opens the dialog's first row,
+beside the Name field and before it (mirrored under a right-to-left language), centred on the Name field's label and
+input together; it keeps that place when an error appears under the name. It has no visible label: assistive
+technology announces it as a group named "Avatar", and the console's name beside it says whose avatar it is.
 While no image is picked it shows an upload glyph, so an optional field shows nothing that looks already filled in;
 pressing it opens the file picker. Once an image is picked the control shows the image, and a delete button sits over
 its corner: hidden at rest, shown while the mouse pointer is over the control or anything in it has keyboard focus,

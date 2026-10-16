@@ -132,20 +132,29 @@ export function ConsoleDialog({
       busy={busy || decoding}
       onSubmit={submit}
     >
-      <AvatarField
-        icon={icon}
-        onPick={(file) => void chooseImage(file)}
-        onRemove={() => setIcon(null)}
-        isDisabled={busy}
-        isPending={decoding}
-      />
-      <TextInput
-        label={t("common.name")}
-        value={name}
-        onChange={setName}
-        errorMessage={shown(nameError)}
-        autoFocus
-      />
+      {/* The avatar is centred on the name's label and input by a fixed offset rather than by
+          alignment, so it stays put when the name's error appears under them. The two are 66px
+          together, and 62px from `sm` up, where HeroUI's input drops to a smaller text size. */}
+      <div className="flex items-start gap-3">
+        <div className="mt-2.25 sm:mt-1.75">
+          <AvatarField
+            icon={icon}
+            onPick={(file) => void chooseImage(file)}
+            onRemove={() => setIcon(null)}
+            isDisabled={busy}
+            isPending={decoding}
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <TextInput
+            label={t("common.name")}
+            value={name}
+            onChange={setName}
+            errorMessage={shown(nameError)}
+            autoFocus
+          />
+        </div>
+      </div>
       <AgentAccountField
         label={t("dialog.console.defaultAgent")}
         options={agentOptions}
