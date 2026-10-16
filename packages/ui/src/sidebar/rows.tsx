@@ -115,6 +115,7 @@ export const RowLabel = ({
 export function RowIconButton({
   icon: Icon,
   label,
+  ariaLabel = label,
   onPress,
   isDisabled,
   iconClassName,
@@ -122,6 +123,8 @@ export function RowIconButton({
 }: {
   icon: LucideIcon;
   label: string;
+  /** The accessible name, when it says more than the tooltip's bare verb (whose row it acts on). */
+  ariaLabel?: string;
   onPress: () => void;
   isDisabled?: boolean;
   /** Extra classes on the glyph itself, such as a right-to-left mirror. */
@@ -136,7 +139,7 @@ export function RowIconButton({
           isIconOnly
           size="sm"
           variant="ghost"
-          aria-label={label}
+          aria-label={ariaLabel}
           preventFocusOnPress
           onPress={onPress}
           isDisabled={isDisabled}
@@ -160,12 +163,10 @@ export function PinButton({
   name,
   onUnpin,
   returnFocusTo,
-  className = "",
 }: {
   name: string;
   onUnpin: () => void;
   returnFocusTo: RefObject<HTMLElement | null>;
-  className?: string;
 }): React.ReactElement {
   const t = useT();
   const holder = useRef<HTMLDivElement>(null);
@@ -174,7 +175,7 @@ export function PinButton({
     onUnpin();
   };
   return (
-    <div ref={holder} className={`flex shrink-0 ${className}`} onClick={(e) => e.stopPropagation()}>
+    <div ref={holder} className="flex shrink-0" onClick={(e) => e.stopPropagation()}>
       <TitledControl title={t("sidebar.unpin")}>
         <Button
           isIconOnly
@@ -185,8 +186,8 @@ export function PinButton({
           onPress={unpin}
           className="group/pin row-icon-control rounded-md text-app-muted hover:text-foreground"
         >
-          <Pin aria-hidden="true" className="size-3 group-hover/pin:hidden group-data-[focus-visible=true]/pin:hidden" />
-          <PinOff aria-hidden="true" className="hidden size-3 group-hover/pin:block group-data-[focus-visible=true]/pin:block" />
+          <Pin aria-hidden="true" className="size-4 group-hover/pin:hidden group-data-[focus-visible=true]/pin:hidden" />
+          <PinOff aria-hidden="true" className="hidden size-4 group-hover/pin:block group-data-[focus-visible=true]/pin:block" />
         </Button>
       </TitledControl>
     </div>

@@ -383,6 +383,7 @@ export const en = {
   "sidebar.session.reopen": "Reopen",
   "sidebar.session.rename": "Rename",
   "sidebar.session.archive": "Archive",
+  "sidebar.session.archiveItem": "Archive session {title}",
   "sidebar.session.delete": "Delete",
   "sidebar.session.switchAccount": "Switch account",
   "sidebar.session.manageAccounts": "Manage accounts…",

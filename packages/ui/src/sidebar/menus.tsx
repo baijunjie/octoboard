@@ -160,12 +160,12 @@ function switchAccountSubmenu(
   };
 }
 
-/** Whether a session has never been used: no turn yet, bound to no owner and no session bound to
- * it. Such a session is deleted outright rather than archived. One bound to an owner keeps Archive
- * even before its first prompt lands, since it reports to that owner, and so does an owner that
- * already has a session under it. */
-function isUnused(session: Session, hasBoundSessions: boolean): boolean {
-  return !session.has_conversation && !session.bound_to && !hasBoundSessions;
+/** Whether a session's menu offers Delete in place of Archive: it is archived already, or it has
+ * never been used — no turn yet, bound to no owner and no session bound to it — and is deleted
+ * outright. One bound to an owner keeps Archive even before its first prompt lands, since it
+ * reports to that owner, and so does an owner that already has a session under it. */
+export function offersDelete(session: Session, hasBoundSessions: boolean): boolean {
+  return session.status === "archived" || (!session.has_conversation && !session.bound_to && !hasBoundSessions);
 }
 
 /** The palette of a console session's colour, as a panel beside the menu. Choosing a swatch applies
@@ -207,7 +207,6 @@ export function sessionMenu(
 ): ActionMenuEntry[] {
   const focused = placement === "focused";
   const archived = session.status === "archived";
-  const deletable = archived || isUnused(session, hasBoundSessions);
   const switchAccount = archived ? undefined : switchAccountSubmenu(t, handlers, session, accounts);
   const focusable = session.role === "console" && !archived && !focused;
   return [
@@ -217,7 +216,7 @@ export function sessionMenu(
     ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
     ...(switchAccount ? [switchAccount] : []),
     "separator",
-    deletable
+    offersDelete(session, hasBoundSessions)
       ? { label: t("sidebar.session.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true }
       : { label: t("sidebar.session.archive"), icon: Archive, onClick: () => handlers.onArchiveSession(session) },
   ];

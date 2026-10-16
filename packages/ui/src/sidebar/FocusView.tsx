@@ -25,6 +25,7 @@ import { useNow } from "../useNow";
 import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu, sessionMenu } from "./menus";
+import { SessionActions } from "./SessionActions";
 import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroups, hasBoundSessions, liveSessionRows, type NestedSession, notUnderConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
 import { NESTED_INSET_CLASS, PinButton, RowIconButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
@@ -589,7 +590,7 @@ function SessionCard({
         <span className="text-xs font-medium text-app-muted">{statusLabel(t, session.status)}</span>
         <span className="flex-1" />
         <RowControls always fixed={session.pinned ? <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} /> : undefined}>
-          <ActionMenu label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, session)) })} items={sessionMenu(t, handlers, session, accounts, { hasBoundSessions: hasBound })} contextTargetRef={rowRef} />
+          <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={hasBound} rowRef={rowRef} />
         </RowControls>
       </RowIconLine>
       <div className="flex min-w-0 items-center gap-(--row-leading-icon-gap)">

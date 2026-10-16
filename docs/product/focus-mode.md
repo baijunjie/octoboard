@@ -24,7 +24,9 @@ view stays below both the heading and the fade. The other scrolling rules are in
 fades" and "Scrolling a surface from the keyboard" in `docs/product/scrolling-surfaces.md`.
 
 **Session cards**, in both: the status glyph with the status in words, the pin button when pinned (see "Pinning" in
-`docs/product/sidebar.md`), the session's action menu (always shown), its title on one line, its agent's icon
+`docs/product/sidebar.md`), the session's action menu and, just before it while archiving would go through without a
+confirmation, the Archive button (both always shown; see "Session rows" in `docs/product/sidebar.md` for when the
+button is there and what it does), its title on one line, its agent's icon
 and name, and how long ago it was created at the trailing end of the agent line. Resuming or
 reopening does not reset that time. When native token usage has a positive total, it appears immediately before
 the creation time on that same agent line and updates while the session runs (see "Native session usage" in

@@ -34,7 +34,7 @@ document" in `docs/product/project-pane.md`), and the separators standing for th
 
 A control shown only as an icon has a tooltip naming it, shown both when the mouse rests on it and when it receives
 keyboard focus. The tooltip's text is the same name assistive technology announces for the control, except on the ⋮
-buttons and the pin buttons below. These are:
+buttons, the pin buttons and the session Archive buttons below. These are:
 
 - the top bar's controls — Back, Forward, the sidebar toggle at its start and the right pane's toggle at its end;
   each pane toggle's tooltip follows its "Show …" / "Hide …" label, and the right pane's also names what the pane
@@ -54,6 +54,8 @@ buttons and the pin buttons below. These are:
   same doc), and focus mode's Leave focus mode;
 - the pin button of a pinned project or session, whose tooltip is a short "Unpin", while the name announced for it
   also names what it unpins (see "Pinning" in `docs/product/sidebar.md`);
+- the Archive button of a session row or a focus mode's session card, whose tooltip is a short "Archive", while the
+  name announced for it also names the session it archives (see "Session rows" in `docs/product/sidebar.md`);
 - the archive view's Close button and each of its rows' Delete button, whose tooltip names the session;
 - the three options of Settings' Appearance row — Light, Dark and System (see "Appearance" in
   `docs/product/settings.md`);

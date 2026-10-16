@@ -249,11 +249,11 @@ for the current scope (see "A console with nothing in it" in `docs/product/sessi
 
 ## Project rows
 
-A project row shows the project's name, its pin button when the project is pinned (see "Pinning" below), and a chevron
-after the name. Clicking the row, or Enter or Space on it, collapses or expands it. Projects start expanded; whether one
-is collapsed is kept per window and is not stored. The chevron always shows while the project is collapsed, and only
-while the row is hovered or focused while it is expanded, and while hidden it takes no room, so a long name runs as far
-as it would in a session row and ends sooner when the chevron appears. The hover chevron fades and opens out as it
+A project row shows the project's name and a chevron after the name. Clicking the row, or Enter or Space on it,
+collapses or expands it. Projects start expanded; whether one is collapsed is kept per window and is not stored. The
+chevron always shows while the project is collapsed, and only while the row is hovered or focused while it is
+expanded, and while hidden it takes no room, so a long name runs as far as it would in a session row and ends sooner
+when the chevron appears. The hover chevron fades and opens out as it
 appears, and back as it goes, briefly — at once where the system asks for reduced motion.
 
 After the name, before the activity marker below and the row's controls, comes the project's **branch badge** — its
@@ -266,8 +266,9 @@ project collapsed. The three glyphs being alike in size, **the marker carries a 
 stands for, in the same words the row's own name folds in beside the project's name (see "Tooltips on indicators" in
 `docs/product/labels-and-tooltips.md`).
 
-At the row's end are a **+** button, **New session**, which opens the new-session dialog for that project (see
-"Opening a session" in `docs/product/sessions.md`), and the project's action menu. The same menu is the focused
+At the row's end are its pin button while the project is pinned (see "Pinning" below), then a **+** button, **New
+session**, which opens the new-session dialog for that project (see "Opening a session" in
+`docs/product/sessions.md`), and the project's action menu. The same menu is the focused
 project's, and a project's heading in a console session's focus mode, apart from the items those views leave out
 (see "What both views show" and "A console session's focus mode" in `docs/product/focus-mode.md`). Choosing an action
 closes the menu at once; submenu entries open their next menu. Separators split it into four groups, in this order:
@@ -388,6 +389,17 @@ action menu offers:
   session bound to it; it asks for confirmation, then stops the session and deletes it outright, leaving nothing in the
   archive (see "Deleting an unused session" in `docs/product/sessions.md`).
 
+**The Archive button.** Just before its action-menu button, a session row — a console session's included — carries an
+Archive button, a one-click shortcut for the menu's **Archive**, while archiving would go through without a
+confirmation and the menu offers **Archive** rather than **Delete**: the session is at its prompt or interrupted, no
+unarchived session is bound to it or to a session bound to it, and it has been used. A pinned session's pin button
+stays before it. Pressing it does what the menu's **Archive** does — a session still being resumed asks for
+confirmation first there too — and when the row leaves with keyboard focus, focus goes to the terminal. A mouse press
+neither selects the row nor moves keyboard focus. Its tooltip is "Archive", while the name assistive technology
+announces for it also names the session ("Archive session …"). It shows with the row's other controls (see "Rows,
+names and keyboard focus" below). When the conditions stop holding — the session starts working or raises a hand, or
+a session becomes bound to it — the button goes away; when it held keyboard focus, focus goes to the row.
+
 ## The binding badge
 
 A project session **bound to a console session** — one carrying the id of the console session it reports to (see
@@ -451,7 +463,7 @@ project session has no colour to choose.
   marquee (see "Names too long for their space" in `docs/product/labels-and-tooltips.md`). When the sidebar's
   content is taller than the sidebar it scrolls, fading at the end that has more beyond it (see "The edge that hides
   content fades" in `docs/product/scrolling-surfaces.md`).
-- A row's **+** and action-menu buttons show while the row is hovered, holds keyboard focus, is the selected session,
+- A row's **+**, Archive (see "Session rows" above) and action-menu buttons show while the row is hovered, holds keyboard focus, is the selected session,
   or has its menu open; they are still reached with Tab when hidden, and show once one of them has focus. They fade
   and open out as they appear, and fade and close up as they go, briefly — at once where the system asks for reduced
   motion.
@@ -519,8 +531,11 @@ they survive a restart. A pinned session stays pinned when it is archived and wh
 session's menu offers no Pin or Unpin. The header of a focus mode offers no Pin or Unpin for what is in focus (see
 "What both views show" in `docs/product/focus-mode.md`).
 
-**The pin button.** A pinned project or session shows a pin button: after its name on its row in the sidebar and on a
-project's heading in a console session's focus mode, and on the status line of its card in a focus mode. It is always
+**The pin button.** A pinned project or session shows a pin button: on its row in the sidebar, after the row's markers
+(a project's branch badge and activity marker, a session's binding badge) and before the buttons that show only on
+hover, so that while those are hidden the pin buttons of project and session rows line up in one column at the rows'
+end; after the name on a project's heading in a console session's focus mode; and on the status line of its card in a
+focus mode. It is always
 shown while the item is pinned, and is reached with Tab like the row's other buttons. While the pointer is over it or it
 holds keyboard focus, its pin glyph turns into the unpin glyph. Its tooltip is "Unpin", while the name assistive
 technology announces for it also names the item ("Unpin …"). Pressing it unpins the item, as the menu's Unpin does; a

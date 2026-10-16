@@ -119,7 +119,7 @@ describe("archiveNeedsConfirmation", () => {
       session("lead-archived-child", "archived", 10, false, "lead"),
       session("lead-grandchild", "interrupted", 11, false, "lead-archived-child"),
     ];
-    const needs = (id: string) => archiveNeedsConfirmation(sessions, sessions.find((s) => s.id === id)!);
+    const needs = (id: string) => archiveNeedsConfirmation(sessions.values(), sessions.find((s) => s.id === id)!);
     expect(["idle", "interrupted", "waiting", "working", "owner", "owner-archived-child", "lead"].map(needs)).toEqual([false, false, true, true, true, false, true]);
   });
 });

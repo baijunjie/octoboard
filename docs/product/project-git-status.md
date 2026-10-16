@@ -16,8 +16,9 @@ in `docs/product/project-git-actions.md`).
 
 ## The branch badge
 
-At the end of a project's row — after the project's name, before the activity marker a collapsed project carries and
-the row's **+** and action-menu buttons (see "Project rows" in `docs/product/sidebar.md`) — sits a badge showing that
+At the end of a project's row — after the project's name, before the activity marker a collapsed project carries, a
+pinned project's pin button and the row's **+** and action-menu buttons (see "Project rows" in
+`docs/product/sidebar.md`) — sits a badge showing that
 project's git state. The same badge sits in focus mode's header, after the project's name (see "What both views
 show" in `docs/product/focus-mode.md`). It shows nothing at all while no status has arrived for the project yet, and
 nothing when the project's directory is not a git repository.

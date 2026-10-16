@@ -121,9 +121,11 @@ const scrollingFocusState = {
   sessions: new Map([
     ...state.sessions!,
     ...Array.from({ length: 6 }, (_, i) => {
-      const session = sessionOf(`s-scroll-unbound-${i}`, console_.id, project.id, `Review search improvement ${i + 1}`, "idle");
+      const session = sessionOf(`s-scroll-unbound-${i}`, console_.id, project.id, `Review search improvement ${i + 1}`, "idle", i === 0 ? { pinned: true } : {});
       return [session.id, session] as const;
     }),
+    // Nothing was ever said in it, so its menu offers Delete in place of Archive.
+    ["s-scroll-unused", sessionOf("s-scroll-unused", console_.id, project.id, "Draft the release notes", "idle", { has_conversation: false })] as const,
     ...Array.from({ length: 6 }, (_, i) => {
       const session = sessionOf(`s-scroll-bound-${i}`, console_.id, project.id, `Investigate ranking result ${i + 1}`, "idle", { bound_to: hub1.id });
       return [session.id, session] as const;
@@ -175,7 +177,11 @@ const combinedState = {
 const hierarchyState = {
   ...state,
   projects: new Map([...state.projects!].map(([id, item]) => [id, id === project.id ? { ...item, pinned: true } : item])),
-  sessions: new Map([...state.sessions!].map(([id, session]) => [id, id === "s-3" ? { ...session, pinned: true } : id === "s-2" ? { ...session, terminal_title: "Review search result accuracy and verify long session row titles scroll only while hovering their text" } : session])),
+  sessions: new Map([
+    ...[...state.sessions!].map(([id, session]) => [id, id === "s-3" || id === "s-3b" ? { ...session, pinned: true } : id === "s-2" ? { ...session, terminal_title: "Review search result accuracy and verify long session row titles scroll only while hovering their text" } : session] as const),
+    // Nothing was ever said in it, so its menu offers Delete in place of Archive.
+    ["s-unused", sessionOf("s-unused", console_.id, project.id, "Draft the release notes", "idle", { has_conversation: false })] as const,
+  ]),
 };
 
 export const focusScenarios: Scenario[] = [
@@ -186,7 +192,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project session hierarchy",
     state: hierarchyState,
     preferences: { sidebarConsole: console_.id },
-    description: "The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches connect each project session and its nested sessions; the final branch ends at the last child. Agent task titles and fallback session names appear together. Search API and its bound Add idempotency keys and unbound Write the migration are pinned. Binding dots and pins remain visible while action menus hide; hover or focus a row to compare the evenly spaced controls, then unpin either session to see the remaining controls close together. Long session names scroll only while their text is hovered; hovering row icons or controls leaves them still.",
+    description: "The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches connect each project session and its nested sessions; the final branch ends at the last child. Agent task titles and fallback session names appear together. Search API and its bound Add idempotency keys and unbound Write the migration and Profile the slow query are pinned. Binding dots and pins remain visible while action menus hide; hover or focus a row to compare the evenly spaced controls, then unpin a session to see the remaining controls close together. An Archive button precedes the menu only on a session that archives without a confirmation: an idle or interrupted one with no unarchived session bound to it or to one bound to it. Profile the slow query (its pin stays left of Archive) and Rework the retry loop have it; Write the migration and Compare ranking strategies (unarchived sessions are bound under them), the idle console sessions (which have bound sessions too), Add idempotency keys (working), Review search result accuracy (waiting) and Draft the release notes (unused, so its menu offers Delete) do not. Long session names scroll only while their text is hovered; hovering row icons or controls leaves them still.",
   },
   {
     id: "focus-project",
@@ -195,7 +201,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus",
     state: scrollingFocusState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    description: "Write the migration has one nested card: a rounded branch crosses the card gap and stops at that child’s centre, with no line below it or beside top-level cards. The branch mirrors in Arabic. Write the migration has recorded zero usage, so its usage value is hidden, as it is for sessions without an agent usage record. The switch beside the Sessions count starts off; hover or focus it for its Show all project sessions tooltip. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height, Archived pushes it away at the top; the preview hides child sessions and retains View all. Compare the selected session card and project header actions buttons at rest with muted glyphs, then hover or open each menu for the shared subtle tint.",
+    description: "Write the migration has one nested card: a rounded branch crosses the card gap and stops at that child’s centre, with no line below it or beside top-level cards. The branch mirrors in Arabic. Write the migration has recorded zero usage, so its usage value is hidden, as it is for sessions without an agent usage record. The switch beside the Sessions count starts off; hover or focus it for its Show all project sessions tooltip. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height, Archived pushes it away at the top; the preview hides child sessions and retains View all. Idle and interrupted cards show an Archive button beside the menu, the pinned Review search improvement 1 after its pin; Write the migration (an unarchived session is bound under it) and the unused Draft the release notes (its menu offers Delete) show none. Rework the result ranking and the working and waiting cards sit under console sessions, so they appear once the switch is on. Compare the selected session card and project header actions buttons at rest with muted glyphs, then hover or open each menu for the shared subtle tint.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Plan the database migration", name: "Write the migration" }))),
     ],

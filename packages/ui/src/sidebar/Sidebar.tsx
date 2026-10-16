@@ -40,7 +40,8 @@ import { BindingBadge } from "./BindingBadge";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
 import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterSummary } from "./ProjectFilter";
-import { consoleMenu, projectMenu, sessionMenu } from "./menus";
+import { consoleMenu, projectMenu } from "./menus";
+import { SessionActions } from "./SessionActions";
 import { archivedSessions, consoleActivity, hasBoundSessions, isInactiveProject, liveSessionRows, liveSessions, sortProjects } from "./order";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
 import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, PinButton, RowIconButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
@@ -688,9 +689,6 @@ function ProjectNode({
           <RowLabel title={project.name} className="min-w-0 shrink">
             <span className="font-medium">{project.name}</span>
           </RowLabel>
-          {project.pinned && (
-            <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={rowRef} className="ms-1" />
-          )}
           {/* After the name rather than before it: while expanded it shows only on hover, which a
               leading chevron could not do without the names jumping sideways. Two glyphs rather than
               one rotated: a rotated chevron that is already mirrored would point the wrong way under
@@ -704,7 +702,7 @@ function ProjectNode({
         </div>
         <GitBadge status={gitStatus} decorative />
         {isCollapsed && <ActivityMarker activity={activity} />}
-        <RowControls>
+        <RowControls fixed={project.pinned ? <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={rowRef} /> : undefined}>
           <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />
           <ActionMenu label={t("sidebar.project.actions", { name: isolate(project.name) })} items={projectMenu(t, handlers, project, archived, menuSessions, { gitRepository: gitStatus?.repository })} contextTargetRef={rowRef} />
         </RowControls>
@@ -798,7 +796,7 @@ function SessionRow({
           </>
         ) : undefined}
       >
-        <ActionMenu label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, session)) })} items={sessionMenu(t, handlers, session, accounts, { hasBoundSessions: hasBound })} contextTargetRef={rowRef} />
+        <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={hasBound} rowRef={rowRef} />
       </RowControls>
     </TreeRow>
   );
