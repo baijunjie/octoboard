@@ -43,13 +43,14 @@ application bundles. Running the UI against a daemon started by hand, without th
 
 `pnpm build:install` (`scripts/install-app.mjs`) builds, signs and installs the macOS `.app` using a certificate
 already in the keychain. The command is available from both the repository root and `apps/desktop/`. Its local
-configuration is the gitignored repo-root `.env.install.local`, copied from
-[`.env.install.example`](../../.env.install.example): `OCTOBOARD_INSTALL_DIR` names an absolute installation
-directory, and `OCTOBOARD_INSTALL_SIGNING_IDENTITY` names a valid keychain signing certificate. Environment variables
-take precedence over file values. The command takes no arguments.
+configuration uses the gitignored repo-root `.env.secret` for `APPLE_SIGNING_IDENTITY`, naming a valid keychain
+signing certificate, and `.env.install.local`, copied from
+[`.env.install.example`](../../.env.install.example), for `OCTOBOARD_INSTALL_DIR`, naming an absolute installation
+directory. It reads those files in that order; environment variables take precedence over file values. The command
+takes no arguments.
 
 This path builds only the `.app`, removes inherited `APPLE_*` variables and supplies only the configured signing
-identity. It never reads `.env.secret` or submits notarization. It verifies the built signature and a staged copy
+identity. It never submits notarization. It verifies the built signature and a staged copy
 before replacing the installed application, keeping the previous bundle available for rollback if replacement fails.
 It refuses to replace a running Octoboard; quit it before installation, which ends its active sessions.
 
@@ -259,6 +260,6 @@ any IPC call for it. The system's preferred languages travel the same way (`&lan
 | `src-tauri/Info.plist` | Merged by Tauri into the bundle's generated `Info.plist`; declares the 17 UI languages as `CFBundleLocalizations`, which is what makes VoiceOver speak the controls' roles in the system's language instead of English |
 | `scripts/build-daemon.mjs` | Builds `octoboardd` in release mode and copies it into `src-tauri/binaries/` under the target-triple name Tauri's `externalBin` requires |
 | `scripts/build-app.mjs` | Builds the app for local verification with every `APPLE_*` variable stripped, and fails if the result carries a Developer ID authority; see "Release builds" above |
-| `scripts/install-app.mjs` | `pnpm build:install`: signs the local app and installs it using the repo-root `.env.install.local`; see "Local installation" above |
+| `scripts/install-app.mjs` | `pnpm build:install`: signs the local app and installs it using the repo-root `.env.secret` and `.env.install.local`; see "Local installation" above |
 | `scripts/bundle.mjs` | Where `tauri build` puts its output, and the lookup for the bundle file a build produced; shared by the build scripts |
 | `scripts/release.mjs` | Builds the release `.app`/`.dmg` and verifies the result; see "Release builds" above |

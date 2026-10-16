@@ -7,15 +7,15 @@ import { appDir, bundleDir, findBundle, tauriBin } from "./bundle.mjs";
 
 if (process.platform !== "darwin") throw new Error("build:install requires macOS.");
 if (process.argv.length > 2) throw new Error("build:install takes no arguments; configure .env.install.local.");
-loadEnv(".env.install.local");
+loadEnv(".env.secret", ".env.install.local");
 
 const installDir = process.env.OCTOBOARD_INSTALL_DIR;
-const identity = process.env.OCTOBOARD_INSTALL_SIGNING_IDENTITY;
+const identity = process.env.APPLE_SIGNING_IDENTITY;
 if (!installDir || !path.isAbsolute(installDir)) {
   throw new Error("Set OCTOBOARD_INSTALL_DIR to an absolute directory in .env.install.local.");
 }
 if (!identity || identity === "-") {
-  throw new Error("Set OCTOBOARD_INSTALL_SIGNING_IDENTITY to a keychain certificate identity in .env.install.local.");
+  throw new Error("Set APPLE_SIGNING_IDENTITY to a keychain certificate identity in .env.secret.");
 }
 const identities = execFileSync("security", ["find-identity", "-v", "-p", "codesigning"], { encoding: "utf8" });
 if (!identities.includes(`"${identity}"`)) throw new Error(`No valid signing identity found: ${identity}`);

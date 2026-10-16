@@ -37,9 +37,10 @@ Per-package commands are in that package's doc.
 - [`.env`](../.env), [`.env.secret.example`](../.env.secret.example) and [`scripts/env.mjs`](../scripts/env.mjs) — the
   env files and the small reader they share. `.env` (committed) holds non-secret configuration, read by the UI's dev
   server, with a gitignored `.env.local` overriding it; `.env.secret` (gitignored, template `.env.secret.example`) holds
-  the release credentials, read by `apps/desktop/scripts/release.mjs` alone.
+  the release credentials, read by `apps/desktop/scripts/release.mjs` and by `apps/desktop/scripts/install-app.mjs`
+  for its signing identity.
   [`.env.install.example`](../.env.install.example) is the template for the gitignored `.env.install.local`, read
-  only by the desktop's `build:install` command for its installation directory and keychain signing identity.
+  only by the desktop's `build:install` command for its installation directory.
   Root `scripts/` holds the helpers the build scripts share.
 
 ## Brand artwork

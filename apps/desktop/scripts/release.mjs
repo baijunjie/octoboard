@@ -16,9 +16,8 @@ import path from "node:path";
 import { loadEnv } from "../../../scripts/env.mjs";
 import { appDir, bundleDir, findBundle, tauriBin } from "./bundle.mjs";
 
-// The only script that reads `.env.secret`, and nothing else: a `VITE_` entry in `.env` would
-// reach the bundle `tauri build` makes. The variables are then in the Tauri CLI's inherited
-// environment.
+// Read only `.env.secret`: a `VITE_` entry in `.env` would reach the bundle `tauri build` makes.
+// The variables are then in the Tauri CLI's inherited environment.
 loadEnv(".env.secret");
 
 // Three states, in increasing order of what Gatekeeper will accept:
