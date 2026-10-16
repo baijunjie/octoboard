@@ -37,8 +37,9 @@ The pane has **one header row**: a folder icon and the visible project name, thr
 **Uncommitted** and **Compare** — the controls for the chosen view, then **Refresh**. The project name fades when
 space is tight, and the tabs can shrink into a horizontally scrolling strip. The tabs are compact, with a pill behind
 the selected tab and muted labels on the others; the strip itself has no filled track. Every tab offers file-name
-filter and folder-grouping controls. These controls and Refresh stay together at the header's trailing
-end in loading, empty and error states too (see "Filtering by file name" and "Flat or grouped by folder" below). Pressing Refresh with
+filter and folder-grouping controls. The tabs sit immediately before these controls and Refresh, forming one group
+aligned to the header's trailing edge; spare width stays between the project name and this group. That alignment holds
+in loading, empty and error states too (see "Filtering by file name" and "Flat or grouped by folder" below). Pressing Refresh with
 the mouse leaves keyboard focus where it was.
 
 ## Files and Git

@@ -255,8 +255,8 @@ fn open_main_window(
     let builder = WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::App(url.into()))
         .title(menu::APP_NAME)
         .inner_size(initial.size.0, initial.size.1)
-        // 48 (the left rail) + 280 (sidebar) + 520 (the terminal pane's own floor) + 300 (the
-        // report panel's own floor) = 1148: at this minimum, both panes already sit on their
+        // 48 (the left rail) + 280 (sidebar) + 520 (the terminal pane's own floor) + 320 (the
+        // report panel's own floor) = 1168: at this minimum, both panes already sit on their
         // floors with nothing left to give up, so neither can be squeezed past usability by a
         // narrower window. Height 600 gives the terminal about 30 rows, which is comfortably
         // usable.

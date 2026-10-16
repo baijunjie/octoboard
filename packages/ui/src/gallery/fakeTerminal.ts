@@ -19,7 +19,7 @@ const ESC = "\x1b[";
 const OSC8 = "\x1b]8;;";
 
 /** The box's inner width in cells. The docked terminal pane keeps 520px, about 53 columns once its
- * padding is taken off (`docs/product/window-layout.md`, "Pane widths at 1148 px and wider"), so
+ * padding is taken off (`docs/product/window-layout.md`, "Pane widths at 1168 px and wider"), so
  * the box (this plus its two bars) is 48 and does not wrap there. That makes only the box safe,
  * and only while docked: below the breakpoint the floor is about 40 columns, and the sample's
  * plain lines already run to 53. */

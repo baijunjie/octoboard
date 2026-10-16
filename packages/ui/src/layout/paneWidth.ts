@@ -11,10 +11,10 @@ export type PaneSide = "sidebar" | "aside";
  * each is a fixed-width drawer instead. */
 const PANES = {
   sidebar: { key: PREFERENCE_KEYS.sidebarWidth, min: 200, default: 280, max: 480 },
-  aside: { key: PREFERENCE_KEYS.asideWidth, min: 300, default: 420, max: 720 },
+  aside: { key: PREFERENCE_KEYS.asideWidth, min: 320, default: 420, max: 720 },
 } satisfies Record<PaneSide, { key: string; min: number; default: number; max: number }>;
 
-/** The terminal pane's floor (the terminal's wrapper in `App.tsx`); the window's 1148px minimum is
+/** The terminal pane's floor (the terminal's wrapper in `App.tsx`); the window's 1168px minimum is
  * this plus the rail, the sidebar's default and the aside's minimum. */
 const TERMINAL_FLOOR = 520;
 
@@ -80,7 +80,7 @@ export interface DockedPanes {
  * width first, down to its minimum. The sidebar therefore only ever assumes the aside's
  * minimum (not its chosen width), and the aside gets what is left after the sidebar's
  * rendered width. A pane that is not docked is not limited by the viewport (it overlays the
- * terminal). At 1148px with both docked: rail 48, sidebar 280, terminal 520, aside 300.
+ * terminal). At 1168px with both docked: rail 48, sidebar 280, terminal 520, aside 320.
  */
 function maxWidthFor(side: PaneSide, docked: DockedPanes, chosenSidebar: number | undefined, railWidth: number): number {
   const { min, max } = PANES[side];

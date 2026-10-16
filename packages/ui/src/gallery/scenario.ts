@@ -101,7 +101,7 @@ export interface Scenario {
   /** Said under the title in the gallery; what to look at. */
   description?: string;
   /** The window width the gallery page opens it at, over a width chosen for an earlier scenario; the
-   * `docked` breakpoint is 1148. Left out for `DEFAULT_WIDTH`; see "The UI state gallery" in
+   * `docked` breakpoint is 1168. Left out for `DEFAULT_WIDTH`; see "The UI state gallery" in
    * `packages/ui/README.md` for when a scenario earns a width of its own. */
   width?: number;
   /** The window height the gallery page opens it at, as `width` is for the width; left out for a

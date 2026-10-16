@@ -225,7 +225,7 @@ that move is what makes the window zoom on its own display and un-zoom back to t
 - no saved state, or an unreadable or malformed one: 1200×760, placed (centred) by the OS — the first-launch behaviour;
 - the saved frame's top 40 points (the UI's top bar, where the window is grabbed) overlap some connected display by at
   least 200×20 points: restored, held inside the bounding box of all the connected displays' work areas — size first
-  (never below the 1148×600 minimum), then position — so a frame spanning displays that are all still connected comes
+  (never below the 1168×600 minimum), then position — so a frame spanning displays that are all still connected comes
   back unchanged, and one that reached onto a display since unplugged is pulled back onto the ones left;
 - otherwise (its display is gone, the bar is off every display, or the frame held inside the box no longer has its bar
   on a display): 1200×760, centred on the main display's work area.

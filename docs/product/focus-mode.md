@@ -169,7 +169,7 @@ selecting its row does, it resumes the console session when it is interrupted (s
 from the console session in focus. It exists only in the macOS application; a browser keeps the keys for its own
 tabs.
 
-- It works only while the sidebar is shown — docked, or as an open drawer below 1148 px; not while it is hidden or
+- It works only while the sidebar is shown — docked, or as an open drawer below 1168 px; not while it is hidden or
   only floating in (see "Hiding the sidebar and the right pane" in `docs/product/window-layout.md`) — in a console
   session's focus mode, with the strip there. Anywhere else the keys go on to the terminal as usual.
 - Where it works, the keys never reach the terminal, so the agent never receives them. It does nothing while a dialog

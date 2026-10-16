@@ -13,7 +13,7 @@ their directories) and the trusted folders, and change the first two (see "Appli
 
 ## In a narrow window
 
-Below 1148 px — the width under which the window's panes become drawers (see "Below 1148 px: the sidebar and the right
+Below 1168 px — the width under which the window's panes become drawers (see "Below 1168 px: the sidebar and the right
 pane become drawers" in `docs/product/window-layout.md`), so only a client with no window minimum of its own, such as a
 plain browser, gets here — the dialog fills the window inside a 16 px margin on every side, and the list of sections
 becomes a row of tabs along its top, above the selected section. When the tabs do not fit the row's width, the row

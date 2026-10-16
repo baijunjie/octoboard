@@ -73,7 +73,7 @@ buttons, the pin buttons and the session Delete or Archive shortcuts below. Thes
   and for replacing it once one is picked, and the delete button over its corner, named for removing the image;
 - the close button of every dialog, of Settings and of each toast ("Close").
 
-While the docked sidebar is hidden at 1148 px and wider, a console's avatar opens its tooltip on keyboard focus only:
+While the docked sidebar is hidden at 1168 px and wider, a console's avatar opens its tooltip on keyboard focus only:
 resting the mouse on it floats the sidebar in instead (see "Previewing a console from the rail" in
 `docs/product/sidebar.md`). That card names the console at its top but not what is going on in it, so **a mouse user
 with the docked sidebar hidden never reads the avatar's tooltip**; what is going on is then read from the sessions the

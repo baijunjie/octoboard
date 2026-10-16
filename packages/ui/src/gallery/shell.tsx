@@ -11,7 +11,7 @@ import { DEFAULT_WIDTH, MIN_HEIGHT, type Scenario } from "./scenario";
 
 const WIDTHS = [
   { label: "Wide", width: DEFAULT_WIDTH },
-  { label: "Docked", width: 1148 },
+  { label: "Docked", width: 1168 },
   { label: "Narrow", width: 800 },
   { label: "Phone", width: 420 },
 ];

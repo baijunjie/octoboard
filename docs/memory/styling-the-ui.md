@@ -52,7 +52,7 @@ twin wins and the `docked:` value never applies — with no build warning and no
 
 - Never pair an `sm:` / `md:` / `lg:` utility with a `docked:` one for the same property. Write the narrow side as
   `max-docked:` and leave the wide side to the inherited or the component's own value: `max-docked:` emits
-  `@media (width < 1148px)`, the exact complement of the `docked:` band, and being a Tailwind utility it also wins
+  `@media (width < 1168px)`, the exact complement of the `docked:` band, and being a Tailwind utility it also wins
   inside that band over HeroUI's own prebuilt responsive rules, which sit in HeroUI's components layer.
 - `rtl:` has no `max-` form, so a `docked:` value for a property also set under `rtl:` needs a `docked:rtl:` twin
   instead.

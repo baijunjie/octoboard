@@ -41,7 +41,7 @@ it.each([
  * query-blind (it answers `matches: !narrow` to every query), so the wide case does not exercise
  * the reduced-motion path. */
 function mountToggles(narrow: boolean) {
-  document.documentElement.style.setProperty("--breakpoint-docked", "1148px");
+  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
   vi.stubGlobal("matchMedia", (query: string) => ({
     matches: !narrow,
     media: query,

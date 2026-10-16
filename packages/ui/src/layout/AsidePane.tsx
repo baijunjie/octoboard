@@ -32,7 +32,7 @@ export interface AsideLayout {
  * visible while it is open, inset as a card, and puts it back as a plain row sibling at or above
  * the breakpoint — see that function's own comment for the geometry. The drawer below the
  * breakpoint is a fixed 420px, capped at 92vw and the space past the rail, with an 8px gap at
- * either edge. The open docked pane shrinks to the row's available room, with a 300px floor.
+ * either edge. The open docked pane shrinks to the row's available room, with a 320px floor.
  * During its own toggle the pane keeps its rendered width inside a clip that eases to zero,
  * so its content never reflows during the close. With the docked pane hidden,
  * `drawerClass` keeps it an overlay, fading in while
@@ -91,7 +91,7 @@ export function AsidePane({
     <>
       <div
         ref={clipRef}
-        className={dock.inset ? "contents" : `contents docked:flex docked:justify-end docked:h-full docked:min-h-0 docked:overflow-hidden ${dock.phase === "open" ? "docked:w-[var(--aside-rendered-width,var(--aside-span))] docked:min-w-[300px] docked:flex-[0_1_var(--aside-span)]" : "docked:w-(--aside-span) docked:min-w-0 docked:shrink-0"} ${isDockEasing(dock.phase) ? COLUMN_EASE_CLASS : ""}`}
+        className={dock.inset ? "contents" : `contents docked:flex docked:justify-end docked:h-full docked:min-h-0 docked:overflow-hidden ${dock.phase === "open" ? "docked:w-[var(--aside-rendered-width,var(--aside-span))] docked:min-w-[320px] docked:flex-[0_1_var(--aside-span)]" : "docked:w-(--aside-span) docked:min-w-0 docked:shrink-0"} ${isDockEasing(dock.phase) ? COLUMN_EASE_CLASS : ""}`}
         style={{ "--aside-span": `${columnSpan(dock.phase, width)}px` } as React.CSSProperties}
         onTransitionEnd={dock.onColumnTransitionEnd}
       >

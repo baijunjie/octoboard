@@ -33,7 +33,7 @@ action, which makes it a stop (see "A console with nothing in it" in `docs/produ
 archive view covers it.
 With no console the sidebar, the archive view, the terminal and the right pane are all skipped together, none of them
 being on screen, and the welcome screen is the only stop between the rail and the connection banner; with a console
-the welcome screen is the one skipped. A pane counts as shown when it is docked in the row at 1148 px and wider, or
+the welcome screen is the one skipped. A pane counts as shown when it is docked in the row at 1168 px and wider, or
 its drawer is open below that. A docked sidebar column that is still easing closed already counts as hidden, and one
 that is still easing open already counts as shown (see "The two pane toggles" in `docs/product/window-layout.md`).
 

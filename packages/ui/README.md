@@ -83,7 +83,7 @@ and Exceptional previews second, with counts and an explicit label when a subsec
 function, category and title remain visible above the preview. Opening without a scenario selects the normal welcome
 screen; existing scenario ids remain supported for deep links. Pick a scenario from the list; light/dark, any
 offered language (`ar` is the right-to-left one), the window width and the window height are controls above the
-window, and all of them are in the URL, so a link reproduces a view. The window is an iframe, so its width decides the `docked` breakpoint (1148px) for
+window, and all of them are in the URL, so a link reproduces a view. The window is an iframe, so its width decides the `docked` breakpoint (1168px) for
 real. The real `App` renders over a fixture daemon (`src/gallery/fixtureDaemon.ts`). A scenario's page writes its
 `octoboard.*` and `heroui-theme` entries into `localStorage` on every load; on port 5174 that origin is the dev app's
 own, so opening the gallery there resets the dev app's preferences, which `pnpm gallery`'s port avoids. A scenario's

@@ -35,7 +35,7 @@ it.each(["sidebar", "terminal"] as const)("opens console session settings from t
     document.documentElement.style.removeProperty("--breakpoint-docked");
   });
   document.documentElement.style.setProperty("--rail-width", "48px");
-  document.documentElement.style.setProperty("--breakpoint-docked", "1148px");
+  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
   const console_ = consoleOf("c-main", "Main");
   const daemon: Daemon = {
     store: createStateStore(snapshotState({ consoles: [console_] })),

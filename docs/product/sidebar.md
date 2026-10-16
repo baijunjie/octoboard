@@ -80,7 +80,7 @@ Forward moving to a place in another console likewise show that place's own sess
 
 ### Previewing a console from the rail
 
-While the docked sidebar is hidden, at 1148 px and wider, resting the mouse on a console's avatar floats the sidebar
+While the docked sidebar is hidden, at 1168 px and wider, resting the mouse on a console's avatar floats the sidebar
 in showing **that** console — when it comes up, how it looks and when it goes away are in "A hidden pane floats in on
 hover" in `docs/product/window-layout.md`. The sidebar's toggle in the top bar floats it in as well, but always
 showing the **current** console, so that way in is never a preview: a pointer moving from an avatar onto the toggle
@@ -663,5 +663,5 @@ keyboard focus. With reduced motion requested by the system, the view opens and 
 
 It takes keyboard focus as it opens, so keystrokes stop reaching the terminal it covers, and it keeps focus after a
 deletion. It is a region of its own in the `F6` cycle (see "Moving focus between regions with F6" in
-`docs/product/moving-focus-between-regions.md`). Below 1148 px, where the sidebar is a drawer, opening the archive
+`docs/product/moving-focus-between-regions.md`). Below 1168 px, where the sidebar is a drawer, opening the archive
 view closes the sidebar's drawer so that the view is not hidden behind it.

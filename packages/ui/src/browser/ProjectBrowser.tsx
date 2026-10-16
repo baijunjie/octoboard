@@ -249,7 +249,7 @@ export function ProjectBrowser({
             <h2 className="flex min-w-8 max-w-40 flex-1 font-medium">
               <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={project.name}>{project.name}</FadeOverflow>
             </h2>
-            <Tabs.ListContainer className="min-w-0 shrink rounded-none bg-transparent" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
+            <Tabs.ListContainer className="ms-auto min-w-0 shrink rounded-none bg-transparent" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
               {/* The scroller clips outside this padding; leave room for the focus ring and its offset. */}
               <Tabs.List aria-label={t("browser.modes")} className="w-max min-w-0 p-1.5">
                 <Tabs.Tab id="files" className="h-7 scroll-mx-1.5 px-1.5 whitespace-nowrap hover:text-foreground hover:opacity-100">{t("browser.mode.files")}<Tabs.Indicator /></Tabs.Tab>
@@ -257,7 +257,7 @@ export function ProjectBrowser({
                 <Tabs.Tab id="compare" className="h-7 scroll-mx-1.5 px-1.5 whitespace-nowrap hover:text-foreground hover:opacity-100">{t("git.view.compare")}<Tabs.Indicator /></Tabs.Tab>
               </Tabs.List>
             </Tabs.ListContainer>
-            <RowIconGroup className="ms-auto">
+            <RowIconGroup>
               <BrowserViewControls filter={activeFilter} layout={browser.layouts[tab]} onLayoutChange={(layout) => browser.setLayout(tab, layout)} />
               <TitledControl title={t("browser.refresh")}>
                 <Button ref={refreshRef} isIconOnly size="sm" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("browser.refresh")} preventFocusOnPress onPress={pressRefresh}>

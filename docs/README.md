@@ -104,8 +104,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   notifications bell, the right pane's toggle, Settings), the three panes and what each is allowed to give up, what the
   right pane shows (a console session's report or a project's files) and how that changes on selecting a session, Browse
   files, switching consoles, Back and Forward and deleting its owner, resizing the sidebar and the right pane, hiding
-  either and floating it back in on hover, the macOS window's 1148×600 minimum and the arithmetic behind it, the narrow
-  layout a plain browser gets below 1148 px, where the sidebar and the right pane become drawers over the terminal,
+  either and floating it back in on hover, the macOS window's 1168×600 minimum and the arithmetic behind it, the narrow
+  layout a plain browser gets below 1168 px, where the sidebar and the right pane become drawers over the terminal,
   which right-click menus the desktop app and a browser show, and how all of it mirrors under a right-to-left language
   (and what never does).
 - [Moving focus between regions](product/moving-focus-between-regions.md) — F6 and Shift+F6: the order of the window's

@@ -40,7 +40,7 @@ reachable. On narrow windows, the action row and tool row contents wrap rather t
 - **No sidebar and no right pane.** Neither is rendered: there is no console for the sidebar to show (see
   `docs/product/sidebar.md`) and nothing to own the right pane (see "What the right pane shows" in
   `docs/product/window-layout.md`). So there is no sidebar to float in on hover either, and no drawer to open below
-  1148 px.
+  1168 px.
 - **No terminal.** None of the terminal's empty states appears here: the panel asking for a session to be selected, or
   the panel offering **Add project**, **New session** or **New console session** for the current scope (see "With no session
   selected" and "A console with nothing in it" in `docs/product/session-terminal.md`).

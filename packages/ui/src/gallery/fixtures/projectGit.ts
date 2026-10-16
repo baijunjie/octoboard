@@ -374,7 +374,7 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "A worktree's uncommitted changes",
     description:
-      "Staged, unstaged and untracked changes share the list. server.ts is selected: its rounded highlight has space on all four sides, matching Files and folder-grouped Git rows. Its actions button has a muted resting glyph and the shared subtle tint when hovered or open, matching the selected sidebar session and console header. Open a file to inspect its viewer, or use the controls to explore filters, folders and status tooltips. The repository includes successful rename, expansion and budget cases.",
+      "Staged, unstaged and untracked changes share the list. server.ts is selected: its rounded highlight has space on all four sides, matching Files and folder-grouped Git rows. Its actions button has a muted resting glyph and the shared subtle tint when hovered or open, matching the selected sidebar session and console header. Open a file to inspect its viewer, or use the controls to explore filters, folders and status tooltips. The repository includes successful rename, expansion and budget cases. Choose Docked above the preview to inspect the 320px project pane at the 1168px minimum window width: tabs scroll horizontally when needed.",
     state,
     steps: [...openGit, (ui) => ui.press(ui.changeRow("server.ts", "modified")), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
   },

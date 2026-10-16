@@ -40,7 +40,7 @@ vi.mock("./terminal/TerminalController", () => ({
 function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Promise<void> }, withSession = false) {
   vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: !narrow && media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   document.documentElement.style.setProperty("--rail-width", "48px");
-  document.documentElement.style.setProperty("--breakpoint-docked", "1148px");
+  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
   onTestFinished(() => {
     vi.unstubAllGlobals();
     document.documentElement.style.removeProperty("--rail-width");
