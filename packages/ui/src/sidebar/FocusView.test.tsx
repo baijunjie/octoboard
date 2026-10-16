@@ -7,6 +7,7 @@ import { expectIndependentMarquees, stubMarquee } from "../components/marqueeTes
 import { isolate } from "../i18n/isolate";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { sessionColourHex } from "../sessionColours";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
@@ -24,8 +25,8 @@ const main = consoleOf("c-1", "Main");
 const web = projectOf("p-web", main.id, "Website");
 const api = projectOf("p-api", main.id, "Search API");
 const hub1 = sessionOf("s-hub-1", main.id, undefined, "Hub", "idle", { colour: "teal" });
-const hub2 = sessionOf("s-hub-2", main.id, undefined, "Hub 2", "idle", { colour: "rose" });
-const hub3 = sessionOf("s-hub-3", main.id, undefined, "Hub 3", "archived", { colour: "jade" });
+const hub2 = sessionOf("s-hub-2", main.id, undefined, "Hub 2", "idle", { colour: "pink" });
+const hub3 = sessionOf("s-hub-3", main.id, undefined, "Hub 3", "archived", { colour: "lime" });
 const sessions = [
   hub1,
   hub2,
@@ -264,12 +265,12 @@ it("combining project sessions replaces the console summary with cards carrying 
   expect(text()).toContain("Sessions (6)");
   const card = (title: string) => Array.from(container.querySelectorAll<HTMLElement>('div[role="button"]')).find((row) => row.getAttribute("aria-label")?.startsWith(isolate(title)))!;
   for (const session of [lead, underLead]) {
-    expect(card(session.title).querySelector('[style*="--console-session-teal"]')).not.toBeNull();
+    expect(card(session.title).querySelector(`[style*="--session-colour-light: ${sessionColourHex("teal", "light")}"]`)).not.toBeNull();
     expect(card(session.title).getAttribute("aria-label")).toContain(isolate(hub1.title));
   }
   expect(card(underLead.title).getAttribute("aria-label")).toContain(isolate(lead.title));
   expect(card(underLead.title).parentElement!.className).toContain("ms-[17px]");
-  expect(card("Tidy the changelog").querySelector('[style*="--console-session-"]')).toBeNull();
+  expect(card("Tidy the changelog").querySelector(".session-colour-dot")).toBeNull();
   expect(text()).toContain("An old bound spike");
   expect(text()).not.toContain(archivedChild.title);
   act(() => card(underLead.title).click());

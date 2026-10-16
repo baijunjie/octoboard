@@ -32,8 +32,9 @@ use crate::mcp;
 use crate::open_directory;
 use crate::open_terminal;
 use crate::protocol::{
-    error_code, now_millis, Account, Agent, Availability, CodedError, Console, Event, Origin,
-    Present, Project, ProjectAccount, ProjectSource, RequestBody, Role, Session, SessionStatus,
+    error_code, now_millis, Account, Agent, Availability, CodedError, Console,
+    ConsoleSessionColour, Event, Origin, Present, Project, ProjectAccount, ProjectSource,
+    RequestBody, Role, Session, SessionStatus,
 };
 use crate::relocate;
 use crate::reporting;
@@ -500,6 +501,14 @@ pub async fn handle(
             pinned,
         } => {
             set_session_pinned(state, &id, pinned)?;
+            Ok(None)
+        }
+
+        RequestBody::SetSessionColour {
+            session: id,
+            colour,
+        } => {
+            set_session_colour(state, &id, colour)?;
             Ok(None)
         }
 
@@ -2892,6 +2901,21 @@ pub fn rename_session(state: &Arc<AppState>, id: &str, title: &str) -> Result<Se
 /// Pins or unpins a session and broadcasts it.
 pub fn set_session_pinned(state: &Arc<AppState>, id: &str, pinned: bool) -> Result<Session> {
     state.store.set_session_pinned(id, pinned)?;
+    let session = state.session_record(id)?;
+    state.publish_session(&session);
+    Ok(session)
+}
+
+/// Sets a console session's badge colour and broadcasts it. A project session carries none.
+pub fn set_session_colour(
+    state: &Arc<AppState>,
+    id: &str,
+    colour: ConsoleSessionColour,
+) -> Result<Session> {
+    if state.session_record(id)?.role != Role::Console {
+        anyhow::bail!("only a console session has a colour");
+    }
+    state.store.set_session_colour(id, colour)?;
     let session = state.session_record(id)?;
     state.publish_session(&session);
     Ok(session)

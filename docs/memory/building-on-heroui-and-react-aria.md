@@ -7,8 +7,10 @@ rather than assembling a look-alike from other HeroUI parts or plain elements. T
 `packages/ui/node_modules/@heroui/react/dist/components/` is the authoritative list for the version in use (it
 includes less obvious ones such as `toast`, `drawer`, `disclosure`, `toolbar`, `empty-state`, `kbd`, `skeleton`);
 HeroUI's own docs are the reference for how to use each, but only a component's own file in that directory shows what
-it puts in the DOM — a hardcoded attribute, which child it treats as a given part, which props it drops — and a
-decision about wrapping or naming one usually turns on that, so read it rather than its typings. A hand-assembled
+it puts in the DOM — a hardcoded attribute, which child it treats as a given part, which props it drops, an element
+of its own around your children — and a decision about wrapping, naming or placing one usually turns on that, so read
+it rather than its typings: `Popover.Trigger` wraps what it is given in a `div role="button"` of its own, and that
+`div`, not your child, is what react-aria places the popover against. A hand-assembled
 stand-in looks and behaves unlike the rest of the UI and lacks what HeroUI's carries: the toast stack built from
 `Alert` + `CloseButton` with its own timers and stacking had none of `Toast`'s pause on hover and focus, queueing or
 ARIA region semantics.

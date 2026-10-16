@@ -41,7 +41,7 @@ import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { isLive, type Location } from "./navigation/history";
 import { useNavigationHistory } from "./navigation/useNavigationHistory";
 import { usePlatform } from "./platform/react";
-import { ALREADY_RUNNING_CODES, type Console, type Project, type Session } from "./protocol";
+import { ALREADY_RUNNING_CODES, type Console, type ConsoleSessionColour, type Project, type Session } from "./protocol";
 import { sessionDisplayTitle } from "./sessionLabel";
 import { ReportPanel } from "./report/ReportPanel";
 import { SettingsDialog } from "./settings/SettingsDialog";
@@ -487,6 +487,10 @@ export function App(): React.ReactElement {
     sidebarView.selectConsole(shownConsole.id);
   };
 
+  const setSessionColour = (session: Session, colour: ConsoleSessionColour) => {
+    request({ type: "set_session_colour", session: session.id, colour }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
+  };
+
   const setPinned = (target: { project: Project } | { session: Session }, pinned: boolean) => {
     const body =
       "project" in target
@@ -539,6 +543,7 @@ export function App(): React.ReactElement {
   const stableOpenConsoleSession = useStableHandler(openConsoleSession);
   const stableOpenDialog = useStableHandler(openDialog);
   const stableArchiveSession = useStableHandler(archiveSession);
+  const stableSetSessionColour = useStableHandler(setSessionColour);
   const stableOpenArchive = useStableHandler(openArchive);
   const stableBrowseProject = useStableHandler(browseProject);
   const stableCommitPreview = useStableHandler(commitPreview);
@@ -651,6 +656,7 @@ export function App(): React.ReactElement {
                 onPullProjectBranch={pullProjectBranch}
                 onPushProjectBranch={pushProjectBranch}
                 onLoadProjectBranches={loadProjectBranches}
+                onSetSessionColour={stableSetSessionColour}
                 onSetPinned={setPinned}
                 onArchiveSession={stableArchiveSession}
                 onOpenSettings={openSettingsAt}

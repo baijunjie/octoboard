@@ -11,10 +11,15 @@ export type SessionStatus = "working" | "waiting_user" | "idle" | "interrupted" 
 export type HostKind = "local" | "ssh";
 export type ProjectSource = "local" | "parent" | "git";
 
-/** A console session's badge colour (`Session.colour`), assigned once on creation from this fixed
- * palette and never changed afterwards. Each entry's light and dark CSS values live in the UI's
- * own colour system (`style.css`), not here. */
-export type ConsoleSessionColour = "olive" | "jade" | "teal" | "azure" | "violet" | "rose";
+/** A console session's badge colour (`Session.colour`): one of a fixed palette of sixteen, in hue
+ * order around the colour wheel and then the muted ones, assigned on creation and changed
+ * afterwards only by the user. The ids are never shown: the user sees the colour, not a name. What
+ * each one looks like in the light and the dark appearance is the UI's own (`sessionColours.ts`),
+ * not the daemon's. */
+export const CONSOLE_SESSION_COLOURS = [
+  "red", "orange", "amber", "yellow", "lime", "green", "teal", "cyan", "sky", "blue", "indigo", "violet", "fuchsia", "pink", "brown", "gray",
+] as const;
+export type ConsoleSessionColour = (typeof CONSOLE_SESSION_COLOURS)[number];
 
 /** Statuses meaning the session has a running process. The complement of `DORMANT_STATUSES`. */
 export const LIVE_STATUSES: ReadonlySet<SessionStatus> = new Set(["working", "waiting_user", "idle"]);
@@ -172,8 +177,8 @@ export interface Session {
    * Set when the session is created and never changed afterwards; a console session is never
    * bound, so this is always absent for one of those. Reports are routed by this field. */
   bound_to?: string | null;
-  /** A console session's badge colour, assigned on creation and fixed afterwards. Absent for a
-   * project session, which carries no colour of its own. */
+  /** A console session's badge colour, assigned on creation and changed afterwards only by
+   * `set_session_colour`. Absent for a project session, which carries no colour of its own. */
   colour?: ConsoleSessionColour | null;
   /** A console session's place in its console's history, one past the highest ordinal ever used
    * there. Never reused after archiving or deletion. Absent for a project session. */
@@ -777,6 +782,8 @@ export type RequestBody =
    * is broadcast as `session_deleted`. */
   | { type: "delete_archived_sessions"; console: string; project?: string; console_session?: string }
   | { type: "set_session_pinned"; session: string; pinned: boolean }
+  /** Refused for a project session. */
+  | { type: "set_session_colour"; session: string; colour: ConsoleSessionColour }
   | { type: "send_message"; session: string; text: string }
   | { type: "rename_session"; session: string; title: string }
   | { type: "list_pages"; console_session: string }

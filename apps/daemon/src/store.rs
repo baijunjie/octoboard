@@ -243,6 +243,21 @@ impl Store {
         if !column_exists(&conn, "settings", "default_clone_dir")? {
             conn.execute("ALTER TABLE settings ADD COLUMN default_clone_dir TEXT", [])?;
         }
+        // The first palette had six labels; a branch's first later palette added plain labels (all
+        // of them families now but `purple`), and its second wrote `<family>-<shade>`. Every label
+        // of those is rewritten to the family it is nearest to (by hue) once, so a stored label
+        // always reads.
+        for (old, new) in LEGACY_CONSOLE_SESSION_COLOURS {
+            conn.execute(
+                "UPDATE sessions SET colour = ?2 WHERE colour = ?1",
+                params![old, new],
+            )?;
+        }
+        conn.execute(
+            "UPDATE sessions SET colour = substr(colour, 1, length(colour) - 2)
+             WHERE colour GLOB '*-[123]'",
+            [],
+        )?;
         if !column_exists(&conn, "sessions", "lead")? {
             conn.execute(
                 "ALTER TABLE sessions ADD COLUMN lead INTEGER NOT NULL DEFAULT 0",
@@ -901,13 +916,13 @@ impl Store {
             )?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         drop(stmt);
-        let colour = ConsoleSessionColour::PALETTE
+        let held: Vec<ConsoleSessionColour> = used_colours
             .iter()
-            .find(|candidate| !used_colours.contains(&enum_to_text(*candidate)))
-            .copied()
-            // Every entry is already in use: wrap back to the start rather than refuse, since the
-            // badge is a convenience, not a uniqueness guarantee the user was ever promised.
-            .unwrap_or(ConsoleSessionColour::PALETTE[0]);
+            .filter_map(|text| enum_from_text(text).ok())
+            .collect();
+        // Every entry already held: pick among all rather than refuse, since the badge is a
+        // convenience, not a uniqueness guarantee the user was ever promised.
+        let colour = assign_console_session_colour(&held, uuid::Uuid::new_v4().as_u128() as usize);
         let (ordinal, console_name): (i64, String) = conn.query_row(
             "UPDATE consoles SET next_console_session_ordinal = next_console_session_ordinal + 1
              WHERE id = ?1
@@ -923,12 +938,13 @@ impl Store {
     }
 
     /// Writes back the fields that change over a session's life. Identity and placement
-    /// (`console_id`, `project_id`, `role`, `origin`, `colour`, `ordinal`, `model`, `effort`)
+    /// (`console_id`, `project_id`, `role`, `origin`, `ordinal`, `model`, `effort`)
     /// never change; `bound_to` and `lead` change only through [`Self::bind_session`], once, and `account_id` and
     /// `config_dir` change only through [`Self::set_session_account`], the one write path a switch
     /// of the session's account uses, so a record read before a switch can never write the old
     /// account back over it. `pinned` is the user's own statement ([`Self::set_session_pinned`]),
-    /// which a record read earlier must not overwrite.
+    /// which a record read earlier must not overwrite, and so is `colour`
+    /// ([`Self::set_session_colour`]).
     /// Returns whether a row was written: `false` means the session is gone (deleted meanwhile).
     pub fn update_session(&self, session: &Session) -> Result<bool> {
         let changed = self.lock().execute(
@@ -1099,6 +1115,16 @@ impl Store {
         self.lock().execute(
             "UPDATE sessions SET pinned = ?2 WHERE id = ?1",
             params![id, pinned],
+        )?;
+        Ok(())
+    }
+
+    /// Sets the colour of a console session. Like `pinned`, it is the user's own statement, which
+    /// [`Self::update_session`] never writes back.
+    pub fn set_session_colour(&self, id: &str, colour: ConsoleSessionColour) -> Result<()> {
+        self.lock().execute(
+            "UPDATE sessions SET colour = ?2 WHERE id = ?1 AND role = ?3",
+            params![id, enum_to_text(&colour), enum_to_text(&Role::Console)],
         )?;
         Ok(())
     }
@@ -1422,6 +1448,35 @@ const CONSOLE_SESSION_LAUNCH_COLUMNS: [&str; 6] = [
     "grok_console_session_model",
     "grok_console_session_effort",
 ];
+
+/// The labels of the first release's palette that no family is named after, with the family each
+/// is rewritten to when the store opens; its `teal` and `violet` are families too. `purple` only
+/// ever existed on a branch.
+const LEGACY_CONSOLE_SESSION_COLOURS: [(&str, &str); 5] = [
+    ("olive", "lime"),
+    ("jade", "green"),
+    ("azure", "sky"),
+    ("rose", "pink"),
+    ("purple", "fuchsia"),
+];
+
+/// The colour for a new console session: the entry `roll` selects among the palette entries not
+/// in `held` (the other non-archived console sessions of its console), or among the whole palette
+/// once every entry is held. `roll` is reduced modulo the number of candidates, so any uniformly
+/// random number gives a uniform pick; see `Store::insert_console_session`.
+fn assign_console_session_colour(
+    held: &[ConsoleSessionColour],
+    roll: usize,
+) -> ConsoleSessionColour {
+    let palette = ConsoleSessionColour::PALETTE;
+    let free: Vec<ConsoleSessionColour> = palette
+        .iter()
+        .copied()
+        .filter(|candidate| !held.contains(candidate))
+        .collect();
+    let candidates: &[ConsoleSessionColour] = if free.is_empty() { &palette } else { &free };
+    candidates[roll % candidates.len()]
+}
 
 /// Shared by [`Store::insert_session`] and [`Store::insert_console_session`], which differ only in
 /// how `colour`, `ordinal` and `title` are decided before this runs.
@@ -2724,49 +2779,73 @@ mod tests {
         built
     }
 
-    /// Each of a console's console sessions takes the first palette entry none of the others
-    /// already holds, in palette order — so with none yet live, six opens in a row take the whole
-    /// palette in sequence.
+    fn open_console_session(store: &Store, id: &str) -> ConsoleSessionColour {
+        store
+            .insert_console_session(console_session(id), None)
+            .expect("inserted")
+            .colour
+            .expect("a console session always gets a colour")
+    }
+
+    /// While a free palette entry remains, a new console session never takes one a live console
+    /// session of its console holds: opening as many as the palette has entries hands out each
+    /// entry exactly once, whatever the random picks were.
     #[test]
-    fn a_console_sessions_colour_is_the_first_palette_entry_not_already_held() {
+    fn a_console_sessions_colour_is_never_one_already_held_while_one_is_free() {
         let path = temp_db("colour-assignment");
         let store = Store::open(&path).expect("store");
         store
             .insert_console(&console(None, None, None))
             .expect("console");
 
-        let assigned: Vec<ConsoleSessionColour> = (0..ConsoleSessionColour::PALETTE.len())
-            .map(|i| {
-                store
-                    .insert_console_session(console_session(&format!("session-{i}")), None)
-                    .expect("inserted")
-                    .colour
-                    .expect("a console session always gets a colour")
-            })
+        let palette = ConsoleSessionColour::PALETTE;
+        let mut assigned: Vec<ConsoleSessionColour> = (0..palette.len())
+            .map(|i| open_console_session(&store, &format!("session-{i}")))
             .collect();
-        assert_eq!(assigned, ConsoleSessionColour::PALETTE);
+        assigned.sort_by_key(|colour| palette.iter().position(|entry| entry == colour));
+        assert_eq!(assigned, palette);
     }
 
-    /// Once every palette entry is already held by a live console session, assignment wraps back
-    /// to the first entry rather than refusing — the badge is a convenience, not a promise of
-    /// uniqueness once the console runs more console sessions at once than the palette has room for.
+    /// The pick is uniform over the free entries: every roll lands on a free entry, and the rolls
+    /// together reach each of them.
     #[test]
-    fn a_console_sessions_colour_wraps_back_to_the_start_once_every_entry_is_taken() {
+    fn assign_picks_only_among_the_free_entries() {
+        let palette = ConsoleSessionColour::PALETTE;
+        let held = [palette[0], palette[palette.len() - 1]];
+        let picks: Vec<ConsoleSessionColour> = (0..palette.len() * 3)
+            .map(|roll| assign_console_session_colour(&held, roll))
+            .collect();
+        assert!(picks.iter().all(|pick| !held.contains(pick)));
+        for entry in palette {
+            assert_eq!(
+                picks.contains(&entry),
+                !held.contains(&entry),
+                "{entry:?} is reachable exactly when it is free"
+            );
+        }
+    }
+
+    /// Once every palette entry is held, assignment picks among all of them rather than refusing
+    /// — the badge is a convenience, not a promise of uniqueness once the console runs more
+    /// console sessions at once than the palette has room for.
+    #[test]
+    fn assign_picks_among_the_whole_palette_once_every_entry_is_held() {
+        let held = ConsoleSessionColour::PALETTE;
+        let picks: Vec<ConsoleSessionColour> = (0..held.len())
+            .map(|roll| assign_console_session_colour(&held, roll))
+            .collect();
+        assert_eq!(picks, held);
+
         let path = temp_db("colour-wrap");
         let store = Store::open(&path).expect("store");
         store
             .insert_console(&console(None, None, None))
             .expect("console");
-        for i in 0..ConsoleSessionColour::PALETTE.len() {
-            store
-                .insert_console_session(console_session(&format!("session-{i}")), None)
-                .expect("inserted");
+        for i in 0..held.len() {
+            open_console_session(&store, &format!("session-{i}"));
         }
-
-        let wrapped = store
-            .insert_console_session(console_session("session-overflow"), None)
-            .expect("inserted");
-        assert_eq!(wrapped.colour, Some(ConsoleSessionColour::PALETTE[0]));
+        // With every entry held, the next open is still not refused and still gets a colour.
+        open_console_session(&store, "session-overflow");
     }
 
     /// Archiving a console session frees its colour for reuse — only a *non-archived* console
@@ -2779,22 +2858,116 @@ mod tests {
         store
             .insert_console(&console(None, None, None))
             .expect("console");
-        let first = store
-            .insert_console_session(console_session("session-0"), None)
-            .expect("inserted");
-        assert_eq!(first.colour, Some(ConsoleSessionColour::PALETTE[0]));
-
-        let mut archived = first.clone();
+        let mut sessions: Vec<Session> = (0..ConsoleSessionColour::PALETTE.len())
+            .map(|i| {
+                store
+                    .insert_console_session(console_session(&format!("session-{i}")), None)
+                    .expect("inserted")
+            })
+            .collect();
+        let mut archived = sessions.remove(0);
+        let freed = archived.colour.expect("a colour");
         archived.status = SessionStatus::Archived;
         store.update_session(&archived).expect("archived");
 
-        let next = store
-            .insert_console_session(console_session("session-1"), None)
-            .expect("inserted");
         assert_eq!(
-            next.colour,
-            Some(ConsoleSessionColour::PALETTE[0]),
-            "the archived console session's colour is free again, and is the first in palette order"
+            open_console_session(&store, "session-next"),
+            freed,
+            "the archived console session's colour is the only free entry, so it is the pick"
+        );
+    }
+
+    /// A label of an earlier palette is rewritten to its nearest family when the store opens, and
+    /// the store then reads it; a family name is left alone, and opening again changes nothing.
+    #[test]
+    fn colours_of_earlier_palettes_are_rewritten_on_opening() {
+        let path = temp_db("colour-legacy");
+        let earlier = [
+            ("olive", "lime"),
+            ("jade", "green"),
+            ("azure", "sky"),
+            ("rose", "pink"),
+            ("purple", "fuchsia"),
+            ("yellow-1", "yellow"),
+            ("gray-3", "gray"),
+            ("teal-2", "teal"),
+            ("violet", "violet"),
+            ("red", "red"),
+        ];
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .insert_console(&console(None, None, None))
+                .expect("console");
+            for (i, (old, _)) in earlier.iter().enumerate() {
+                store
+                    .insert_console_session(console_session(&format!("session-{i}")), None)
+                    .expect("inserted");
+                let conn = Connection::open(&path).expect("database");
+                conn.execute(
+                    "UPDATE sessions SET colour = ?2 WHERE id = ?1",
+                    params![format!("session-{i}"), old],
+                )
+                .expect("the earlier palette");
+            }
+        }
+
+        for _ in 0..2 {
+            let store = Store::open(&path).expect("reopened");
+            for (i, (_, family)) in earlier.iter().enumerate() {
+                let colour = store
+                    .get_session(&format!("session-{i}"))
+                    .unwrap()
+                    .unwrap()
+                    .colour;
+                assert_eq!(enum_to_text(&colour.unwrap()), *family);
+            }
+        }
+    }
+
+    /// A colour the user chose replaces the assigned one, survives a stale write-back of the
+    /// record, counts as held for the next console session, and is ignored for a project session.
+    #[test]
+    fn a_chosen_console_session_colour_is_kept_and_counts_as_held() {
+        let path = temp_db("colour-chosen");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        let first = store
+            .insert_console_session(console_session("session-0"), None)
+            .expect("inserted");
+        let chosen = ConsoleSessionColour::PALETTE
+            .into_iter()
+            .find(|entry| Some(*entry) != first.colour)
+            .unwrap();
+
+        store.set_session_colour("session-0", chosen).unwrap();
+        assert!(store.update_session(&first).unwrap());
+        let reread = store.get_session("session-0").unwrap().unwrap();
+        assert_eq!(reread.colour, Some(chosen));
+
+        // The other entries are all free but the chosen one: the next picks never take it.
+        for i in 1..ConsoleSessionColour::PALETTE.len() {
+            assert_ne!(
+                open_console_session(&store, &format!("session-{i}")),
+                chosen,
+                "the chosen colour is held"
+            );
+        }
+
+        let mut project_session = session(None);
+        project_session.id = "session-project".to_string();
+        project_session.role = Role::Project;
+        store.insert_session(&project_session).expect("insert");
+        store.set_session_colour("session-project", chosen).unwrap();
+        assert_eq!(
+            store
+                .get_session("session-project")
+                .unwrap()
+                .unwrap()
+                .colour,
+            None
         );
     }
 

@@ -502,6 +502,25 @@ Focus-mode session cards use the opaque `--panel` surface over the sidebar's `--
 hover and selected tints on top. Their titles use the shared single-line fading label, including its full-name
 tooltip and hover marquee, rather than an ellipsis or a line clamp.
 
+### A colour mark whose meaning is in words
+
+A colour mark that only echoes what words beside it, its tooltip or its row's accessible name already say is decorative,
+and is not held to the 3:1 bar for a state indicator. A console session's colour is the case: its dot on a row and the
+swatches it is chosen from carry each palette colour as its name suggests (yellow is yellow, not a darkened olive that
+would clear 3:1 against a light surface), since the session's name is always there to tell sessions apart. A pale entry
+still has to be seen: the dot and the swatches carry a faint inset ring of the foreground (`.session-colour-ring` in
+`packages/ui/src/style.css`), since the picker's swatch has no edge of its own. A mark that is the only carrier of a
+state stays at 3:1.
+
+The swatches sit in a submenu of the session's action menu, so the Colour item is announced as opening a submenu
+(`aria-haspopup` from react-aria's submenu trigger) while what it opens is a list box of swatches, named by that item.
+The mismatch is accepted rather than fought: overriding the trigger's popup type would mean replacing react-aria's
+submenu handling. Each swatch is named by the colour description react-aria generates in the window's language, so
+the palette is tuned to keep those names distinct in every offered language and both appearances, with the exceptions
+the hues cannot reach: react-aria's Arabic names give violet and fuchsia one name, and its Korean names give one word
+to green-cyan, cyan and cyan-blue (teal and cyan collide in light, teal and sky in dark). `sessionColours.test.ts`
+lists them and fails on any other.
+
 ### Row action menu buttons
 
 File, Git, project and session rows, focus cards and pane headers use `ActionMenu`'s shared trigger

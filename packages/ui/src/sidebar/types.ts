@@ -1,6 +1,6 @@
 import type { ActionMenuEntry } from "../components/ActionMenu";
 import type { DialogRequest } from "../dialogs/dialogRequest";
-import type { Console, Project, Session } from "../protocol";
+import type { Console, ConsoleSessionColour, Project, Session } from "../protocol";
 import type { SettingsSectionId } from "../settings/SettingsDialog";
 
 /** Which archive the archive view lists: a project's archived sessions, the archived sessions
@@ -49,6 +49,8 @@ export interface SidebarHandlers {
   onLoadProjectBranches: (project: Project) => Promise<ActionMenuEntry[]>;
   /** Pushes the project's current branch. */
   onPushProjectBranch: (project: Project) => void;
+  /** Sets the colour of a console session. */
+  onSetSessionColour: (session: Session, colour: ConsoleSessionColour) => void;
   onSetPinned: (target: { project: Project } | { session: Session }, pinned: boolean) => void;
   /** Archives the session, asking first unless nothing is cut short. */
   onArchiveSession: (session: Session) => void;

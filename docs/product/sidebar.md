@@ -92,7 +92,7 @@ not repeated here; the rail marks it.
 
 Under the header comes the **console sessions** section: every console session of the console that is not archived,
 each as a session row (see "Session rows" below, which a console session's row otherwise follows exactly — pin, rename,
-focus mode, switch account, archive), in the order of "Order of projects and sessions" below. What a console session is,
+colour, focus mode, switch account, archive), in the order of "Order of projects and sessions" below. What a console session is,
 what selecting one does, and what its row's menu offers are in "Console sessions and project sessions" in
 `docs/product/sessions.md`.
 
@@ -318,6 +318,9 @@ names; confirmations provide the agent and account as hidden accessible text bes
 
 - **Pin** / **Unpin**.
 - **Rename** — see "Renaming a session" in `docs/product/sessions.md`.
+- **Colour** — a console session's row only: a submenu of swatches where the user chooses the console session's colour
+  (see "The binding badge" below). A project session's row has no such entry, and neither has an archived console
+  session's.
 - **Focus mode** — a console session's row only: enters that console session's focus mode (see
   `docs/product/focus-mode.md`).
   A project session's row has no such entry, and neither has an archived console session's.
@@ -360,12 +363,42 @@ the console session above them, including cards inset under a lead session; the 
 that console session. The other focus views carry no binding badge on their cards. See "A project's focus mode" in
 `docs/product/focus-mode.md` for the switch and the card labels.
 
-**Where the colour comes from.** Octoboard gives each new console session a colour of its own from a fixed palette of
-six, taking the first the console's other console sessions that are not archived do not already have, and starting
-over from the first once all six are taken. A console session keeps its colour for its lifetime, archiving included,
-so with more than six at once — or with one reopened into a palette that filled up meanwhile — two console sessions
-of one console can share a colour, which is the other reason nothing is ever told apart by colour alone. Each colour
-has its own light and dark value (see "What follows the choice" in `docs/product/appearance.md`).
+**Where the colour comes from.** A console session's colour is one of a fixed palette of 16, one colour per family —
+red, orange, amber, yellow, lime, green, teal, cyan, sky, blue, indigo, violet, fuchsia, pink, brown and gray — each a
+vivid colour that looks like its name. Some of them lie near the colours that mark a status elsewhere; that is
+deliberate, since a console session's colour says nothing about its status, which its status glyph does. No colour is
+ever named in the interface. Octoboard gives each new console session a colour picked at random among the palette
+colours that none of the console's other console sessions that are not archived holds, or at random among all 16 once
+every one is held; an archived console session's colour is free for others. Afterwards only the user changes it (see
+**Choosing the colour** below); the console session's agent has no tool for it. A chosen colour counts as held for a
+later console session's colour as an assigned one does. A console session keeps its colour, assigned or chosen, when
+it is archived and when it is resumed, so with more than 16 at once, with one resumed after its colour has gone to
+another, or with a colour chosen that another already has, two console sessions of one console can share a colour,
+which is the other reason nothing is ever told apart by colour alone. A colour stored by an earlier version of
+Octoboard is moved onto the nearest family of this palette when the daemon opens its store — olive to lime, jade to
+green, azure to sky and rose to pink, while teal and violet stay as they are — so such a console session keeps much
+the same colour. Each colour has its own light and dark value (see "What follows the choice" in
+`docs/product/appearance.md`).
+
+**Choosing the colour.** **Colour** in a console session's action menu — wherever that menu is offered, its sidebar
+row and its focus mode's header among them, always right after **Rename** — is a submenu entry, marked with the same
+chevron as **Switch account**. Its submenu holds the palette as swatches in two rows of eight, in the order above. The
+console session's current colour is selected, marked with a check mark and a ring in its own colour. Pointing at
+**Colour** opens the submenu without moving keyboard focus; `ArrowRight` (`ArrowLeft` under a right-to-left language)
+or `Enter` on the entry opens it, or moves into it when it is already open, with focus on the current swatch, or the
+first one when the current colour is not in the palette. Inside it the arrow keys move focus between swatches;
+`ArrowLeft` from a swatch in the first column (`ArrowRight` under a right-to-left language), or `Escape`, closes the
+submenu and puts focus back on **Colour** in the menu, which stays open. Clicking a swatch, or pressing `Enter` or
+`Space` on the focused one, gives the console session that colour at once and closes the whole menu; choosing the
+current colour just closes it. A click outside closes the menu without a change. When the menu closes, keyboard
+focus goes where closing it always puts it (see "Rows, names and keyboard focus" below). For assistive technology
+the swatches are a list named by the **Colour** entry, and each swatch is announced by the colour description
+generated in the interface language; the palette keeps those descriptions distinct in every offered language and
+both appearances, except that in Arabic violet and fuchsia share one, and in Korean teal shares one with cyan in the
+light appearance and with sky in the dark one. The colour is stored by the daemon with the console session, so every
+window and every client sees it and it survives a restart. A change that fails is shown as an error toast, as a
+failed **Pin** is (see `docs/product/toasts.md`). An archived console session's menu has no **Colour** entry, and a
+project session has no colour to choose.
 
 ## Rows, names and keyboard focus
 

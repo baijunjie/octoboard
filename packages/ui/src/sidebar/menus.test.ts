@@ -45,6 +45,29 @@ describe("the Switch account entry", () => {
   });
 });
 
+describe("the Colour entry", () => {
+  const hub = sessionOf("h", "c", undefined, "Hub", "idle", { colour: "cyan" });
+  const entry = (session: Session, handlers = {} as SidebarHandlers) => sessionMenu(t, handlers, session, []).find((candidate) => typeof candidate === "object" && candidate.label === "Colour");
+
+  it.each([
+    ["a console session's row", hub, true],
+    ["an archived console session", { ...hub, status: "archived" as const }, false],
+    ["a project session", sessionOf("s", "c", "p", "Title", "idle"), false],
+  ] as const)("is offered for %s", (_, session, offered) => {
+    expect(entry(session) !== undefined).toBe(offered);
+  });
+
+  it("is a panel of swatches that sets the session's colour and closes the menu", () => {
+    const handlers = { onSetSessionColour: vi.fn() } as unknown as SidebarHandlers;
+    const close = vi.fn();
+    const panel = (entry(hub, handlers) as { panel: (context: object) => { props: { colour: string; onChoose: (colour: string) => void } } }).panel({ close });
+    expect(panel.props.colour).toBe("cyan");
+    panel.props.onChoose("red");
+    expect(close).toHaveBeenCalledOnce();
+    expect(handlers.onSetSessionColour).toHaveBeenCalledExactlyOnceWith(hub, "red");
+  });
+});
+
 describe("the Focus mode entry", () => {
   const hub = sessionOf("h", "c", undefined, "Hub", "idle");
   const labels = (session: Session, placement: MenuPlacement = "list") =>

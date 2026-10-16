@@ -76,6 +76,7 @@ the request id as if it were a record id.
 | `delete_session` | `session` | Removes Octoboard's record of one session and broadcasts `session_deleted`. Refused with `session_not_deletable` unless the session is archived or unused: no turn yet, bound to no owner and with no session bound to it. An unused session that is not archived has its process stopped once its record is gone; a turn landing at the same moment wins and the request is refused. So is a session being launched or resumed right now. Deleting an archived owner (a console session, or a project session that started some) deletes the archived sessions bound to it as well, at both levels — an archived lead session among them takes its own archived sessions along — each broadcast as `session_deleted` (a refusal deletes none); deleting an archived bound session leaves its owner alone. An archived session whose process is still ending can be deleted; one being resumed right now cannot. Only Octoboard's own record goes: the agent's transcript and the project's directory are never touched |
 | `delete_archived_sessions` | `console`, `project?`, `console_session?` | With `project` (which must belong to `console`), deletes every archived session of that project; with `console_session` (a console session of `console`, else `unknown_session`), every archived session bound to it, an archived lead session's own archived sessions included, leaving the console session itself; with neither, every archived console session of the console together with the archived sessions under them, at both levels. Naming both `project` and `console_session` is `conflicting_fields`. Broadcasts `session_deleted` for each. A session that stopped being archived meanwhile (a resume got there first) is skipped, not an error |
 | `set_session_pinned` | `session`, `pinned` | Pins or unpins a session; broadcasts `session_upserted` |
+| `set_session_colour` | `session`, `colour` | Sets a console session's badge colour to one of the palette (see `Session.colour`); persisted, and broadcasts `session_upserted`. A `colour` outside the palette is refused with `unreadable_request`, and a project session with `internal_error` (the coordinator's `bail!`, with the reason as `detail`). A chosen colour counts as held for the next console session's assignment, like an assigned one |
 | `send_message` | `session`, `text` | Writes a message into a running session. Refused while the session's own agent is waiting for the user: the message would be discarded and its trailing Enter would answer whatever dialog is up. A session that reads `waiting_user` only because a `request_console_session` call of its own is waiting takes a message as usual — that request is answered in its dialog, not at the terminal (see "The call" in `docs/product/requesting-a-console-session.md`). The console session's own `send_message` tool holds such a message instead of refusing it — the user can be told to answer the prompt first, the console session cannot. Refused too, with `session_trust_pending`, while the session's agent is showing, or may still show, its folder-trust confirmation, since the trailing Enter would answer it: for Claude Code and Grok Build from launch until their first hook, which may be after another startup screen; for Codex, which runs none until its first prompt, until Octoboard's press of the confirmation, a hook, the person's answer in the terminal being seen to replace the confirmation, or about 30 seconds passing with none shown; the console session's tool, and every other message Octoboard writes, holds it until then instead |
 | `rename_session` | `session`, `title` | The title is stored trimmed and cannot be blank (`field_required`) |
 | `list_pages` | `console_session` | The console session's report panel pages, oldest first. Answered with `page_list` on the asking socket. A `console_session` that does not name a console session (one that names a project session, say) is refused with `unknown_session` |
@@ -315,7 +316,7 @@ Project { id, console_id, host_id, name, path, default_agent?, source, remote_ur
 Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
           role: "console"|"project", origin: "console"|"user", title, terminal_title?, usage?: SessionUsage,
           status: "working"|"waiting_user"|"idle"|"interrupted"|"archived",
-          has_conversation, bound_to?, colour?: "olive"|"jade"|"teal"|"azure"|"violet"|"rose", ordinal?,
+          has_conversation, bound_to?, colour?: "<family>", ordinal?,
           account_id?, config_dir?, model?: string|null, effort?: string|null, pinned, started_at, ended_at? }
 SessionUsage { input_tokens, output_tokens, total_tokens, cached_input_tokens?, cache_write_input_tokens? }
 Page    { id, console_session_id, html, anchor_message_id?, created_at }
@@ -420,10 +421,16 @@ console; it keeps the sessions bound to it, so its own `bound_to` names a consol
 `request_console_session` call (`answer_console_session_request`). A session bound to a lead session owns none. `report`
 and the synthesised report both deliver to this session; see "Reporting" and "Lead sessions" in
 `docs/product/hub-orchestration.md`.
-`Session.colour` is a console session's badge colour, one of a fixed palette — `olive`, `jade`, `teal`, `azure`,
-`violet`, `rose` — assigned on creation and fixed afterwards; unset for a project session. `Session.ordinal` is a
-console session's place in its console's history —
-one past the highest ever used there, never reused after archiving or deletion; unset for a project session.
+`Session.colour` is a console session's badge colour, one entry of a fixed palette of sixteen, each written as its family
+name: `red`, `orange`, `amber`, `yellow`, `lime`, `green`, `teal`, `cyan`, `sky`, `blue`, `indigo`, `violet`,
+`fuchsia`, `pink`, `brown` and `gray`. The ids are never shown to the user; what each one looks like is the client's.
+A colour is assigned on creation (picked at random among the entries no other non-archived console session of its
+console holds, or among all of them when every entry is held) and changed afterwards only by `set_session_colour`;
+unset for a project session. The labels of the earlier palettes are rewritten when the store opens, so none is ever
+sent: `olive` to `lime`, `jade` to `green`, `azure` to `sky`, `rose` to `pink`, the branch-only `purple` to `fuchsia`,
+and every `<family>-<shade>` (`red-1` to `gray-3`) to its family.
+`Session.ordinal` is a console session's place in its console's history — one past the highest ever used there, never
+reused after archiving or deletion; unset for a project session.
 `Session.account_id` is the account this session's own agent reads, by id, resolved as above when
 the session is opened (unset means the default account), and changed afterwards only by a successful
 `switch_session_account`. `Session.config_dir` is that account's directory at the same moment, written with it and

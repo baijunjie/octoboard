@@ -44,7 +44,7 @@ Settings opens from:
 - the **Settings** button at the bottom of the rail (see "The rail" in `docs/product/window-layout.md`);
 - in the macOS application, the application menu's **Settings…** item, shortcut `Cmd+,`. The menu item does nothing
   while the window has nothing to show yet (before the daemon's state has first arrived), while Settings is already
-  open, and while another dialog or a row's action menu is open;
+  open, and while another dialog or an action menu — a row's or a header's, its submenus included — is open;
 - a session row's **Switch account** submenu, whose last entry, **Manage accounts…**, opens it on the Agent accounts
   section instead of the first (see "Session rows" in `docs/product/sidebar.md`).
 

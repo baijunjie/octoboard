@@ -342,6 +342,7 @@ export const zhHans: Translation<"other"> = {
   "sidebar.session.delete": "删除",
   "sidebar.session.switchAccount": "切换账户",
   "sidebar.session.manageAccounts": "管理账户…",
+  "sidebar.session.colour": "颜色",
   "sidebar.focus.enter": "专注模式",
   "sidebar.focus.exit": "退出专注模式",
   "sidebar.focus.newSession": "新建会话",

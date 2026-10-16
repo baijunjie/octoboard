@@ -32,6 +32,7 @@
 @import "@heroui/styles/components/menu-section.css" layer(components);
 @import "@heroui/styles/components/tag-group.css" layer(components);
 @import "@heroui/styles/components/tag.css" layer(components);
+@import "@heroui/styles/components/color-swatch-picker.css" layer(components);
 @import "@heroui/styles/components/switch.css" layer(components);
 @import "@heroui/styles/components/badge.css" layer(components);
 @import "@heroui/styles/components/chip.css" layer(components);
@@ -189,28 +190,26 @@
      invert them. */
   --z-index-banner: var(--z-index-overlay);
   --z-index-dialog-backdrop: calc(var(--z-index-overlay) - 1);
+}
 
-  /* The console session colour palette (`ConsoleSessionColour` in `protocol.ts`), light variant:
-     one token per entry, assigned to a console session on creation from the entries not already in
-     use in that console, and drawn by `BindingBadge`
-     (`packages/ui/src/sidebar/BindingBadge.tsx`). The six hues are spaced as far as
-     they fall from HeroUI's own `--accent`, `--success`, `--warning` and `--danger` (253.83°,
-     150.81°, 72.33° and 25.74° respectively), so a console session's badge never echoes a status
-     colour's meaning by coincidence. One lightness for the whole palette, picked against the
-     badge's 3:1 bar for a non-text graphic (WCAG 1.4.11) on the two surfaces a row sits on,
-     `--panel-sidebar` (L 0.965) and a selected row on it (`--panel-selected` over it): measured
-     4.15 / 3.55 olive, 4.03 / 3.45 jade, 3.63 / 3.11 teal, 3.67 / 3.14 azure, 4.52 / 3.87 violet,
-     4.67 / 4.00 rose. Teal and azure on a selected row are the floor, which is what fixes the
-     lightness; a lighter palette puts them under the bar. The badge also sits, as a decorative dot
-     beside the console session's name, on the fill of a BoundElsewhere chip (`FocusView.tsx`),
-     where light teal and azure measure 3.04:1 / 3.07:1 resting and 2.77:1 / 2.80:1 hovered: under
-     the bar, which a dot the name already labels does not need. */
-  --console-session-olive: oklch(0.56 0.15 98);
-  --console-session-jade: oklch(0.56 0.15 125);
-  --console-session-teal: oklch(0.56 0.15 185);
-  --console-session-azure: oklch(0.56 0.17 220);
-  --console-session-violet: oklch(0.56 0.17 298);
-  --console-session-rose: oklch(0.56 0.19 342);
+/* A console session's colour dot, drawn by `BindingBadge`. The colours are kept in one place,
+   `packages/ui/src/sessionColours.ts`, which also gives the dot its two custom properties: the
+   entry's colour for each appearance. */
+.session-colour-dot {
+  background-color: var(--session-colour-light);
+}
+
+.dark .session-colour-dot,
+[data-theme="dark"] .session-colour-dot {
+  background-color: var(--session-colour-dark);
+}
+
+/* A hairline ring of the foreground inside the dot and inside each swatch of the colour picker, so
+   a pale colour (yellow on the light sidebar, gray on the dark one) keeps an edge. The picker's
+   swatch has no edge of its own; this one follows the appearance. */
+.session-colour-dot,
+.session-colour-ring {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 22%, transparent);
 }
 
 /* Eases `--sidebar-span` over the same 200ms as the drawer's `duration-200` (`PANE_SPAN_MS`
@@ -547,22 +546,6 @@
 
 :root[data-window-material="translucent"] {
   --window-background: transparent;
-}
-
-/* The same palette, dark variant: lighter than the light theme's so each still shows up against
-   the dark surfaces, the way HeroUI's own `--warning` and `--danger` are each given their own
-   brighter dark-theme value rather than reusing the light one. Measured against the dark
-   `--panel-sidebar` (L 0.27) and a selected row on it, the same two surfaces: every entry is
-   between 8.03 / 6.41 (azure, the lightest against both) and 6.84 / 5.46 (rose, the darkest), so
-   the whole palette clears the 3:1 bar with room to spare. */
-.dark,
-[data-theme="dark"] {
-  --console-session-olive: oklch(0.78 0.14 98);
-  --console-session-jade: oklch(0.78 0.14 125);
-  --console-session-teal: oklch(0.78 0.14 185);
-  --console-session-azure: oklch(0.78 0.16 220);
-  --console-session-violet: oklch(0.78 0.16 298);
-  --console-session-rose: oklch(0.78 0.18 342);
 }
 
 /* A dialog's positioning container ends above the bottom chrome rather than at the window bottom, so the connection

@@ -4,6 +4,7 @@ import { IndicatorTooltip } from "../components/IndicatorTooltip";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Session } from "../protocol";
+import { sessionColourVars } from "../sessionColours";
 import { sessionDisplayTitle } from "../sessionLabel";
 
 /**
@@ -14,10 +15,9 @@ import { sessionDisplayTitle } from "../sessionLabel";
  * tooltip names (through `sidebar.session.boundTo`, the same message the row's own accessible name
  * folds the fact into), since the badge carries no information its tooltip does not: colour alone
  * never distinguishes two owners for a user who cannot tell the colours apart. A console session
- * normally has a `colour` assigned on creation and keeps it, but a `Session` carries
+ * normally has a `colour` (assigned on creation, changed only by the user), but a `Session` carries
  * `colour?: ConsoleSessionColour | null` (`protocol.ts`), so one built without it is reachable from
- * a fixture or a future caller; drawn with none, nothing renders, rather than a `background-color`
- * of `var(--console-session-undefined)` that WCAG would have no way to flag as missing.
+ * a fixture or a future caller; drawn with none, nothing renders.
  *
  * The tooltip is an `IndicatorTooltip`: the badge is a non-interactive dot, so it shows on pointer
  * hover only and adds no tab stop to the row; a screen-reader user has the row's own `aria-label`
@@ -31,12 +31,13 @@ import { sessionDisplayTitle } from "../sessionLabel";
  */
 export function BindingBadge({ owner, decorative }: { owner: Session; decorative?: boolean }): React.ReactElement | null {
   const t = useT();
-  if (!owner.colour) return null;
+  const vars = owner.colour ? sessionColourVars(owner.colour) : undefined;
+  if (!vars) return null;
   const dot = (
     <span
       aria-hidden="true"
-      className="inline-block size-2.5 shrink-0 rounded-full"
-      style={{ backgroundColor: `var(--console-session-${owner.colour})` }}
+      className="session-colour-dot inline-block size-2.5 shrink-0 rounded-full"
+      style={vars}
     />
   );
   if (decorative) return dot;

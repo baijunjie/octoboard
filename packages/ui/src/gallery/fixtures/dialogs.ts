@@ -21,8 +21,8 @@ const twoHubsState = snapshotState({
   projects: [web, api],
   sessions: [
     ...sessions.map((s) => (s.id === SAMPLE.consoleSession.id ? { ...s, title: "Hub", ordinal: 1 } : s)),
-    sessionOf("s-console-2", console_.id, undefined, "A release coordinator with a console session name too long for the owner picker", "working", { colour: "rose", ordinal: 2, started_at: minutesAgo(20) }),
-    sessionOf("s-console-old", console_.id, undefined, "Hub 3", "archived", { colour: "azure", ordinal: 3 }),
+    sessionOf("s-console-2", console_.id, undefined, "A release coordinator with a console session name too long for the owner picker", "working", { colour: "pink", ordinal: 2, started_at: minutesAgo(20) }),
+    sessionOf("s-console-old", console_.id, undefined, "Hub 3", "archived", { colour: "cyan", ordinal: 3 }),
   ],
 });
 
@@ -42,7 +42,7 @@ const accountsState = snapshotState({
 });
 
 // A console session whose bound sessions are all interrupted, so archiving it takes them along.
-const cascadeHub = sessionOf("s-hub-4", console_.id, undefined, "Hub 4", "idle", { colour: "azure", ordinal: 4 });
+const cascadeHub = sessionOf("s-hub-4", console_.id, undefined, "Hub 4", "idle", { colour: "cyan", ordinal: 4 });
 const cascadeState = snapshotState({
   consoles: [console_],
   projects: [web, api],

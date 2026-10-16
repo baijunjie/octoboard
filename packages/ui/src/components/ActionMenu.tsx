@@ -1,5 +1,6 @@
 import { Dropdown, Label, Separator } from "@heroui/react";
 import { EllipsisVertical, LoaderCircle, RefreshCw, TriangleAlert, type LucideIcon } from "lucide-react";
+import { MenuContext, useSlottedContext } from "react-aria-components";
 import React, { useEffect, useId, useRef, useState } from "react";
 
 import { isolate } from "../i18n/isolate";
@@ -43,6 +44,7 @@ export interface ActionMenuItem {
   /** Added to a lucide glyph's own classes (`rtl:-scale-x-100` for one whose meaning is a direction);
    * an element keeps the classes it was given. */
   iconClassName?: string;
+  /** Runs when the item is chosen. */
   onClick: () => void;
   destructive?: boolean;
   closeOnSelect?: boolean;
@@ -65,7 +67,28 @@ export interface ActionMenuSubmenu {
   loadItems?: () => Promise<ActionMenuEntry[]>;
 }
 
-export type ActionMenuEntry = ActionMenuItem | ActionMenuSubmenu | "separator";
+/** What a panel is given to be part of the menu it opens from. */
+export interface ActionMenuPanelContext {
+  /** Closes the whole menu, the submenu with it. */
+  close: () => void;
+  /** The id of the item that opened the panel, which names what the panel holds (the panel itself
+   * goes unnamed, so the name is not spoken twice). */
+  labelledBy: string | undefined;
+  /** Whether keyboard focus should move into the panel as it opens: it does for a submenu opened
+   * from the keyboard and not for one a hover opened. */
+  autoFocus: boolean;
+}
+
+/** An item that opens a panel of custom content beside the menu in place of a nested menu (a
+ * palette of swatches). The panel is part of the menu: arrow keys leave it towards the menu as they
+ * do a nested one, and it closes the whole menu to finish. */
+export interface ActionMenuPanel {
+  label: string;
+  icon: LucideIcon | React.ReactElement;
+  panel: (context: ActionMenuPanelContext) => React.ReactNode;
+}
+
+export type ActionMenuEntry = ActionMenuItem | ActionMenuSubmenu | ActionMenuPanel | "separator";
 
 /** A lucide glyph is drawn quieter than the label beside it, or in the danger colour with a
  * destructive item's label; an element (an agent's mark) keeps its own colours. */
@@ -83,8 +106,49 @@ function ItemIcon({
   return <Icon aria-hidden="true" className={`size-4 shrink-0 ${destructive ? "text-app-danger" : "text-app-muted"}${className ? ` ${className}` : ""}`} />;
 }
 
+function isLeaf(entry: ActionMenuEntry): entry is ActionMenuItem {
+  return entry !== "separator" && !("items" in entry) && !("panel" in entry);
+}
+
 function isChoice(entry: ActionMenuEntry): entry is ActionMenuItem {
-  return entry !== "separator" && !("items" in entry) && entry.selected !== undefined;
+  return isLeaf(entry) && entry.selected !== undefined;
+}
+
+/** What can take focus with the Tab key: the first such element of a panel receives focus as it opens. */
+const TABBABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** What a panel of custom content sits in. react-aria hands a submenu's props to its menu, which a
+ * panel is not, so the ones that make it part of the menu are applied here: the ref that keeps the
+ * pointer's way to it open, and the keys that leave it. Content that moves focus with the arrow
+ * keys marks the elements on its start edge `data-panel-edge="start"`: the key towards the menu
+ * leaves from one of those, where anywhere else it moves within the content. The values come from
+ * `SubmenuTrigger` through `MenuContext`: what to check again when react-aria is upgraded. */
+function PanelBody({ entry }: { entry: ActionMenuPanel }): React.ReactElement {
+  const context = useSlottedContext(MenuContext);
+  const { ref, id, "aria-labelledby": labelledBy, autoFocus, onClose } = context ?? {};
+  // The two key handlers are passed along but not part of `MenuProps`.
+  const { onKeyDown, onKeyUp } = (context ?? {}) as { onKeyDown?: React.KeyboardEventHandler; onKeyUp?: React.KeyboardEventHandler };
+  return (
+    <div
+      ref={ref}
+      id={id}
+      // Focusable so that the arrow key which opens a submenu a hover opened can land here (react-aria
+      // focuses this element); focus is passed on to the content's first tabbable element at once.
+      tabIndex={-1}
+      onFocus={(event) => {
+        if (event.target === event.currentTarget) event.currentTarget.querySelector<HTMLElement>(TABBABLE)?.focus();
+      }}
+      // react-aria's handler stops the key it acts on, which keeps the content from also moving
+      // focus; one it does not act on (the key away from the menu) goes on to the content.
+      onKeyDownCapture={(event) => {
+        if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && (event.target as Element).closest('[data-panel-edge="start"]')) onKeyDown?.(event);
+      }}
+      onKeyDown={onKeyDown}
+      onKeyUp={onKeyUp}
+    >
+      {entry.panel({ close: onClose ?? (() => {}), labelledBy, autoFocus: Boolean(autoFocus) })}
+    </div>
+  );
 }
 
 function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElement {
@@ -94,7 +158,7 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
   const run = (key: React.Key) => {
     if (typeof key !== "string" || !key.startsWith(`${prefix}:`)) return;
     const entry = entries[Number(key.slice(prefix.length + 1))];
-    if (entry && entry !== "separator" && !("items" in entry)) entry.onClick();
+    if (entry && isLeaf(entry)) entry.onClick();
   };
 
   const renderItem = (entry: ActionMenuItem, index: number) => (
@@ -140,7 +204,7 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
       );
     } else if (entry === "separator") {
       nodes.push(<Separator key={index} />);
-    } else if ("items" in entry) {
+    } else if ("items" in entry || "panel" in entry) {
       nodes.push(
         <Dropdown.SubmenuTrigger key={index}>
           <Dropdown.Item id={itemId(index)} textValue={entry.label} data-marquee-scope>
@@ -155,7 +219,7 @@ function MenuItems({ entries }: { entries: ActionMenuEntry[] }): React.ReactElem
           </Dropdown.Item>
           {/* The submenu's menu is named after its trigger item, so its dialog goes without. */}
           <Dropdown.Popover aria-labelledby="" className="max-w-72">
-            {entry.loadItems ? <LoadedMenuItems load={entry.loadItems} /> : <MenuItems entries={entry.items} />}
+            {"panel" in entry ? <PanelBody entry={entry} /> : entry.loadItems ? <LoadedMenuItems load={entry.loadItems} /> : <MenuItems entries={entry.items} />}
           </Dropdown.Popover>
         </Dropdown.SubmenuTrigger>,
       );

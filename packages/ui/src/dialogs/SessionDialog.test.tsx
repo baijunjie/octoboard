@@ -65,8 +65,8 @@ function renderDialog(
 }
 
 const hub1 = sessionOf("s-hub-1", parentConsole.id, undefined, "Hub", "idle", { colour: "teal", started_at: 100 });
-const hub2 = sessionOf("s-hub-2", parentConsole.id, undefined, "Hub 2", "working", { colour: "rose", started_at: 200 });
-const hubArchived = sessionOf("s-hub-3", parentConsole.id, undefined, "Hub 3", "archived", { colour: "azure" });
+const hub2 = sessionOf("s-hub-2", parentConsole.id, undefined, "Hub 2", "working", { colour: "pink", started_at: 200 });
+const hubArchived = sessionOf("s-hub-3", parentConsole.id, undefined, "Hub 3", "archived", { colour: "cyan" });
 
 const buttons = () => Array.from(document.body.querySelectorAll("button"));
 const optionElements = () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]'));

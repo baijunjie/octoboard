@@ -7,10 +7,10 @@ const console_ = consoleOf("c-1", "Main");
 const web = projectOf("p-web", console_.id, "Website");
 const api = projectOf("p-api", console_.id, "Search API");
 
-// Four console sessions, each its own colour from the palette (`style.css`), one of each status a
+// Four console sessions, each its own colour from the palette (`sessionColours.ts`), one of each status a
 // console session can be in while live.
-const hub1 = sessionOf("s-hub-1", console_.id, undefined, "Hub", "idle", { colour: "olive", terminal_title: "Review the release plan" });
-const hub2 = sessionOf("s-hub-2", console_.id, undefined, "Hub 2", "working", { colour: "jade" });
+const hub1 = sessionOf("s-hub-1", console_.id, undefined, "Hub", "idle", { colour: "yellow", terminal_title: "Review the release plan" });
+const hub2 = sessionOf("s-hub-2", console_.id, undefined, "Hub 2", "working", { colour: "lime" });
 const hub3 = sessionOf("s-hub-3", console_.id, undefined, "Hub 3", "waiting_user", { colour: "teal" });
 const hub4 = sessionOf("s-hub-4", console_.id, undefined, "Hub 4", "interrupted", { colour: "violet" });
 
@@ -58,6 +58,20 @@ export const consoleSessionsScenarios: Scenario[] = [
       "has one (Working, Waiting for you, Awaiting instructions, Interrupted), next to the agent mark's own.",
     state,
     steps: [(ui) => ui.hoverRowStatus(ui.session("Add idempotency keys"))],
+  },
+  {
+    id: "console-session-colour-submenu",
+    group: GROUP,
+    category: "normal",
+    title: "Choose a console session's colour",
+    description:
+      "The Colour submenu opens beside Hub 2's action menu, a grid of sixteen swatches in two rows, one per colour family. Hub 2's current colour carries the check mark and a ring in its own colour; " +
+      "no colour name is written out.",
+    state,
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 2" })),
+      (ui) => ui.press(ui.t("sidebar.session.colour")),
+    ],
   },
   {
     id: "session-rename-with-terminal-title",

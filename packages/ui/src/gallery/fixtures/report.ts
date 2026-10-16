@@ -25,9 +25,9 @@ const form = `<!doctype html><html><head><title>Choose a release</title></head><
 </body></html>`;
 
 // Four console sessions keep empty, old, historical and interactive reports independently.
-const hub1 = sessionOf("s-hub-1", console_.id, undefined, "Hub", "idle", { colour: "olive" });
-const hub2 = sessionOf("s-hub-2", console_.id, undefined, "Hub 2", "idle", { colour: "jade" });
-const emptyHub = sessionOf("s-hub-empty", console_.id, undefined, "No reports", "idle", { colour: "azure" });
+const hub1 = sessionOf("s-hub-1", console_.id, undefined, "Hub", "idle", { colour: "yellow" });
+const hub2 = sessionOf("s-hub-2", console_.id, undefined, "Hub 2", "idle", { colour: "lime" });
+const emptyHub = sessionOf("s-hub-empty", console_.id, undefined, "No reports", "idle", { colour: "cyan" });
 const oldHub = sessionOf("s-hub-old", console_.id, undefined, "Old report", "idle", { colour: "violet" });
 const twoSessions = snapshotState({
   consoles: [console_],

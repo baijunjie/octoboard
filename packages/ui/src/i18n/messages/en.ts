@@ -386,6 +386,7 @@ export const en = {
   "sidebar.session.delete": "Delete",
   "sidebar.session.switchAccount": "Switch account",
   "sidebar.session.manageAccounts": "Manage accounts…",
+  "sidebar.session.colour": "Colour",
   "sidebar.focus.enter": "Focus mode",
   "sidebar.focus.exit": "Leave focus mode",
   "sidebar.focus.newSession": "New session",

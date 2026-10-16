@@ -10,8 +10,8 @@ const third = projectOf("p-3", console_.id, "Docs");
 
 // The switch strip lists console sessions by when they started, in the order they are named here.
 const hub1 = sessionOf("s-console", console_.id, undefined, "Hub", "idle", { colour: "teal", started_at: minutesAgo(400) });
-const hub2 = sessionOf("s-console-2", console_.id, undefined, "Hub 2", "working", { colour: "rose", started_at: minutesAgo(300) });
-const hub3 = sessionOf("s-console-3", console_.id, undefined, "Hub 3", "idle", { colour: "jade", started_at: minutesAgo(200) });
+const hub2 = sessionOf("s-console-2", console_.id, undefined, "Hub 2", "working", { colour: "pink", started_at: minutesAgo(300) });
+const hub3 = sessionOf("s-console-3", console_.id, undefined, "Hub 3", "idle", { colour: "lime", started_at: minutesAgo(200) });
 // A fourth console session with nothing going on, even with an idle and an archived session bound to it.
 const hub4 = sessionOf("s-console-4", console_.id, undefined, "Release notes", "idle", { colour: "violet", started_at: minutesAgo(100) });
 
@@ -37,7 +37,7 @@ const sessions = [
   hub2,
   hub3,
   hub4,
-  sessionOf("s-console-old", console_.id, undefined, "Archived console session", "archived", { colour: "azure", started_at: minutesAgo(60 * 25), ended_at: minutesAgo(60 * 24) }),
+  sessionOf("s-console-old", console_.id, undefined, "Archived console session", "archived", { colour: "cyan", started_at: minutesAgo(60 * 25), ended_at: minutesAgo(60 * 24) }),
   sessionOf("s-1", console_.id, project.id, "Add idempotency keys", "working", { pinned: true, bound_to: hub1.id, account_id: "a-work", terminal_title: "Prevent duplicate API requests", usage: { input_tokens: 184_320, output_tokens: 16_384, cached_input_tokens: 147_456, cache_write_input_tokens: 8_192, total_tokens: 200_704 } }),
   sessionOf("s-2", console_.id, project.id, "Fix the rounding of partial results", "waiting_user", { bound_to: hub1.id }),
   sessionOf("s-3", console_.id, project.id, "Write the migration", "idle", { terminal_title: "Plan the database migration", usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } }),
@@ -69,8 +69,8 @@ const sessions = [
 ];
 
 // Names that test a narrow layout: a long console-session name and a redesign coordinator.
-const longHub = sessionOf("s-long-hub", console_.id, undefined, "A console session titled at a length no row fits", "idle", { colour: "azure", terminal_title: "Review a very long agent-generated task title across the entire release pipeline" });
-const redesignHub = sessionOf("s-redesign-hub", console_.id, undefined, "Website redesign coordinator", "idle", { colour: "olive" });
+const longHub = sessionOf("s-long-hub", console_.id, undefined, "A console session titled at a length no row fits", "idle", { colour: "cyan", terminal_title: "Review a very long agent-generated task title across the entire release pipeline" });
+const redesignHub = sessionOf("s-redesign-hub", console_.id, undefined, "Website redesign coordinator", "idle", { colour: "yellow" });
 const searchProject = projectOf("p-search", console_.id, "Search interface service");
 
 
@@ -79,11 +79,11 @@ const searchProject = projectOf("p-search", console_.id, "Search interface servi
 // order they are listed here, which is the strip's order.
 const crowd = [
   sessionOf("o-1", console_.id, undefined, "Website redesign", "working", { colour: "teal" }),
-  sessionOf("o-2", console_.id, undefined, "A console session titled at a length no chip fits", "idle", { colour: "azure" }),
-  sessionOf("o-3", console_.id, undefined, "Website redesign coordinator", "waiting_user", { colour: "olive" }),
-  sessionOf("o-4", console_.id, undefined, "Release notes", "idle", { colour: "rose" }),
+  sessionOf("o-2", console_.id, undefined, "A console session titled at a length no chip fits", "idle", { colour: "cyan" }),
+  sessionOf("o-3", console_.id, undefined, "Website redesign coordinator", "waiting_user", { colour: "yellow" }),
+  sessionOf("o-4", console_.id, undefined, "Release notes", "idle", { colour: "pink" }),
   sessionOf("o-5", console_.id, undefined, "Billing migration", "idle", { colour: "violet" }),
-  sessionOf("o-6", console_.id, undefined, "Docs", "idle", { colour: "jade" }),
+  sessionOf("o-6", console_.id, undefined, "Docs", "idle", { colour: "lime" }),
   sessionOf("o-7", console_.id, undefined, "Search tuning", "working", { colour: "teal" }),
 ].map((s, i) => ({ ...s, started_at: minutesAgo(700 - i * 10) }));
 

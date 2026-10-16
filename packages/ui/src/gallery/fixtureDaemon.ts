@@ -196,6 +196,13 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           store.setState((state) => ({ sessions: new Map(state.sessions).set(body.session, updated) }));
           return { type: "ack" };
         }
+        case "set_session_colour": {
+          const session = store.getState().sessions.get(body.session);
+          if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
+          const updated = { ...session, colour: body.colour };
+          store.setState((state) => ({ sessions: new Map(state.sessions).set(body.session, updated) }));
+          return { type: "ack" };
+        }
         case "preview_console_session_title": {
           const owner = store.getState().consoles.get(body.console);
           if (!owner) return fail({ code: "unknown_console", params: { console: body.console }, message: `unknown console ${body.console}` });

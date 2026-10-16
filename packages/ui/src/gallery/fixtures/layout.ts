@@ -28,7 +28,7 @@ const railState = snapshotState({
     sessionOf("s-web-1", main.id, website.id, "Fix the summary layout", "working"),
     sessionOf("s-web-2", main.id, website.id, "Update the dependencies", "idle"),
     sessionOf("s-web-3", main.id, website.id, "Asks which region to use", "waiting_user"),
-    sessionOf("s-ops-hub", operations.id, undefined, "Operations hub", "idle", { colour: "azure" }),
+    sessionOf("s-ops-hub", operations.id, undefined, "Operations hub", "idle", { colour: "cyan" }),
     sessionOf("s-ops-1", operations.id, deploys.id, "Roll back the last deploy", "working"),
     sessionOf("s-bill-1", billing.id, invoices.id, "Reconcile March", "idle"),
     sessionOf("s-docs-1", docs.id, manual.id, "Old draft", "archived"),

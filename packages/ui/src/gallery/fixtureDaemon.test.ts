@@ -41,6 +41,18 @@ describe("the fixture daemon's project removal", () => {
   });
 });
 
+describe("the fixture daemon's session colour", () => {
+  const owner = consoleOf("c", "Main");
+  const hub = sessionOf("hub", owner.id, undefined, "Hub", "idle", { colour: "lime" });
+  const scenario = { id: "colour", group: "Sidebar sessions" as const, category: "normal" as const, title: "", state: snapshotState({ consoles: [owner], sessions: [hub] }) };
+
+  it("acknowledges a colour for a known session and refuses an unknown one", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(daemon.request({ type: "set_session_colour", session: hub.id, colour: "blue" })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "set_session_colour", session: "missing", colour: "blue" })).rejects.toMatchObject({ code: "unknown_session" });
+  });
+});
+
 describe("the fixture daemon's project file trees", () => {
   it("uses each project's tree for listings and reads, retaining the shared fallback", async () => {
     const daemon = createFixtureDaemon({

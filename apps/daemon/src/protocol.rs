@@ -69,32 +69,53 @@ pub enum Origin {
     User,
 }
 
-/// A console session's badge colour, assigned once on creation from this fixed palette and never
-/// changed afterwards (see `Session.colour`). The daemon only ever hands the label around; each
-/// variant's light and dark CSS values live in the UI's own colour system
-/// (`packages/ui/src/style.css`), not here.
+/// A console session's badge colour, one of a fixed palette of sixteen colour families, in hue
+/// order around the colour wheel and then the muted ones, assigned on creation and changed
+/// afterwards only by the user (see `Session.colour`). The daemon only ever hands the label
+/// around; what each one looks like in the light and the dark appearance is the UI's own
+/// (`packages/ui/src/sessionColours.ts`), not here. The labels of the earlier palettes are
+/// rewritten when the store opens (`Store::open`); from this one on a label is never renamed or
+/// removed, so a database written under it stays readable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConsoleSessionColour {
-    Olive,
-    Jade,
+    Red,
+    Orange,
+    Amber,
+    Yellow,
+    Lime,
+    Green,
     Teal,
-    Azure,
+    Cyan,
+    Sky,
+    Blue,
+    Indigo,
     Violet,
-    Rose,
+    Fuchsia,
+    Pink,
+    Brown,
+    Gray,
 }
 
 impl ConsoleSessionColour {
-    /// The palette, in assignment order. A new console session takes the first entry not already
-    /// in use among its console's other non-archived console sessions, wrapping back to the start
-    /// only once every entry is taken — see `Store::insert_console_session`.
-    pub const PALETTE: [ConsoleSessionColour; 6] = [
-        ConsoleSessionColour::Olive,
-        ConsoleSessionColour::Jade,
+    /// The palette, in the order the UI lays it out.
+    pub const PALETTE: [ConsoleSessionColour; 16] = [
+        ConsoleSessionColour::Red,
+        ConsoleSessionColour::Orange,
+        ConsoleSessionColour::Amber,
+        ConsoleSessionColour::Yellow,
+        ConsoleSessionColour::Lime,
+        ConsoleSessionColour::Green,
         ConsoleSessionColour::Teal,
-        ConsoleSessionColour::Azure,
+        ConsoleSessionColour::Cyan,
+        ConsoleSessionColour::Sky,
+        ConsoleSessionColour::Blue,
+        ConsoleSessionColour::Indigo,
         ConsoleSessionColour::Violet,
-        ConsoleSessionColour::Rose,
+        ConsoleSessionColour::Fuchsia,
+        ConsoleSessionColour::Pink,
+        ConsoleSessionColour::Brown,
+        ConsoleSessionColour::Gray,
     ];
 }
 
@@ -495,8 +516,9 @@ pub struct Session {
     /// are sent.
     #[serde(skip)]
     pub lead: bool,
-    /// A console session's badge colour, assigned on creation and fixed afterwards (see
-    /// `ConsoleSessionColour`). `None` for a project session, which carries no colour of its own.
+    /// A console session's badge colour, assigned on creation and changed afterwards only by
+    /// `set_session_colour` (see `ConsoleSessionColour`). `None` for a project session, which
+    /// carries no colour of its own.
     pub colour: Option<ConsoleSessionColour>,
     /// A console session's place in its console's history, one past the highest ordinal ever
     /// used there. Never reused after archiving or deletion. `None` for a project session.
@@ -1332,6 +1354,11 @@ pub enum RequestBody {
     SetSessionPinned {
         session: String,
         pinned: bool,
+    },
+    /// Refused for a project session, which carries no colour.
+    SetSessionColour {
+        session: String,
+        colour: ConsoleSessionColour,
     },
     SendMessage {
         session: String,
@@ -2358,6 +2385,13 @@ mod tests {
                 },
             ),
             (
+                r#"{"type":"set_session_colour","id":"request-1","session":"session-7","colour":"pink"}"#,
+                |body| match body {
+                    RequestBody::SetSessionColour { session, .. } => Some(session),
+                    _ => None,
+                },
+            ),
+            (
                 r#"{"type":"submit_page","id":"request-1","page":"page-7","data":{}}"#,
                 |body| match body {
                     RequestBody::SubmitPage { page, .. } => Some(page),
@@ -2885,5 +2919,30 @@ mod tests {
         let json = serde_json::to_value(&determined).unwrap();
         assert_eq!(json["availability"], "unavailable");
         assert_eq!(json["default_account_dir"], "/home/user/.grok");
+    }
+
+    /// A colour is its snake_case family name on the wire, for each of the 16 entries and no other
+    /// text, whether from the palette of an earlier release or a shade of the one before.
+    #[test]
+    fn a_console_session_colour_is_its_family_name_on_the_wire() {
+        use super::ConsoleSessionColour;
+
+        for colour in ConsoleSessionColour::PALETTE {
+            let text = serde_json::to_string(&colour).unwrap();
+            assert_eq!(
+                serde_json::from_str::<ConsoleSessionColour>(&text).unwrap(),
+                colour
+            );
+        }
+        assert_eq!(
+            serde_json::to_string(&ConsoleSessionColour::Fuchsia).unwrap(),
+            r#""fuchsia""#
+        );
+        for text in [r#""olive""#, r#""purple""#, r#""red-2""#, r#""Red""#] {
+            assert!(
+                serde_json::from_str::<ConsoleSessionColour>(text).is_err(),
+                "{text}"
+            );
+        }
     }
 }

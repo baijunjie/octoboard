@@ -22,7 +22,7 @@ window.matchMedia = ((query: string) => ({ matches: true, media: query })) as un
 const main = consoleOf("c-1", "Main");
 const web = projectOf("p-web", main.id, "Website");
 const hub1 = sessionOf("s-hub-1", main.id, undefined, "Hub", "idle", { colour: "teal" });
-const hub2 = sessionOf("s-hub-2", main.id, undefined, "Hub 2", "idle", { colour: "rose" });
+const hub2 = sessionOf("s-hub-2", main.id, undefined, "Hub 2", "idle", { colour: "pink" });
 const sessions = [hub1, hub2, sessionOf("web-bound", main.id, web.id, "Fix the layout", "idle", { bound_to: hub1.id })];
 // A lead session (bound to a console session, with sessions of its own), its two sessions and an
 // unbound session beside it, to read the project list's three levels off.
@@ -241,7 +241,7 @@ it("lists a project session's own sessions under it, and the binding badge only 
     `${isolate("Measure the first paint")} session, Claude Code (${isolate("Default")}), Working, Bound to ${isolate("Rework the gallery")}`,
     `${isolate("Tidy the changelog")} session, Claude Code (${isolate("Default")}), Interrupted`,
   ]);
-  const badges = rows.map((row) => row.querySelector('[style*="--console-session"]') !== null);
+  const badges = rows.map((row) => row.querySelector(".session-colour-dot") !== null);
   expect(badges).toEqual([true, false, false, false]);
   // The two sessions of the team are inset under their owner, the other rows are not.
   expect(rows.map((row) => row.parentElement!.className.includes("ms-[17px]"))).toEqual([false, true, true, false]);

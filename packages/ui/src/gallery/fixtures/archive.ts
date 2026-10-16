@@ -46,7 +46,7 @@ export const boundArchived = Array.from({ length: 3 }, (_, i) =>
 // A second owner, an archived session bound to it instead of `boundConsoleSession`, and an
 // archived session with no owner at all — so `ArchiveView.test.tsx` can tell a real filter from
 // one that happens to pass everything through.
-export const otherConsoleSession = sessionOf("s-other-console", console_.id, undefined, "Hub 2", "idle", { colour: "jade" });
+export const otherConsoleSession = sessionOf("s-other-console", console_.id, undefined, "Hub 2", "idle", { colour: "lime" });
 export const otherOwnerArchived = sessionOf("s-other-bound", console_.id, project.id, "Archived session bound elsewhere", "archived", {
   bound_to: otherConsoleSession.id,
   usage: { input_tokens: 2_450_000, output_tokens: 75_320, cached_input_tokens: 2_100_000, cache_write_input_tokens: 250_000, total_tokens: 2_525_320 },
