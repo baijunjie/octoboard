@@ -160,6 +160,9 @@ reason, and tells the caller to send it to the console session itself with `repo
 A plain confirmation titled "Start a console session?", with one sentence naming the requesting session, its project
 and the console the console session would be started in, and two buttons: **Refuse** and **Start console session**.
 What the agent wrote in its request is not shown in the dialog; it reaches the console session as the first report.
+Keyboard focus starts on the dialog itself rather than on a button, for each request it shows, so Enter answers
+nothing until the user moves focus onto a control (see "Where keyboard focus starts in a confirmation" in
+`docs/product/window-layout.md`).
 
 - **One dialog at a time.** Requests are shown oldest first, after any waiting folder-trust prompts (see "The trust
   dialog" in `docs/product/folder-trust.md`). A request already on screen stays there when a trust prompt arrives; the

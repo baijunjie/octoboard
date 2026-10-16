@@ -92,6 +92,10 @@ Its buttons:
   confirmation is still up, and a later session of the project is asked about again, since the project still has no
   permission.
 
+Keyboard focus starts on the dialog itself rather than on a button, for each prompt it shows, so Enter answers
+nothing until the user moves focus onto a control (see "Where keyboard focus starts in a confirmation" in
+`docs/product/window-layout.md`).
+
 The box belongs to the one showing of the dialog: it is cleared when the dialog is dismissed with "Not now" and when a
 go-ahead is sent, so the next prompt in the queue starts unticked, and so does the same prompt asked about again after
 the application reloads its state.

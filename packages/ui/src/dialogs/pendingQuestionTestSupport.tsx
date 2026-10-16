@@ -64,8 +64,13 @@ export function mountPendingQuestionDialog(state: Partial<State>, reply: () => P
   };
 }
 
+/** The dialog's button with this label, if it is there. */
+export function findButton(label: string): HTMLButtonElement | undefined {
+  return Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === label);
+}
+
 /** Presses the dialog's button with this label, if it is there. */
 export async function pressButton(label: string): Promise<void> {
-  const button = Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === label);
+  const button = findButton(label);
   await act(async () => button?.click());
 }

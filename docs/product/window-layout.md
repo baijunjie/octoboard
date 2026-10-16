@@ -66,6 +66,23 @@ that could not start or a UI that failed — there is no rail: under the top bar
 overlay that covers the whole window: the top bar, the rail and the content panel are dimmed behind it and none of
 them can be used while it is open, and a press anywhere on the dimmed area dismisses the dialog.
 
+**Where keyboard focus starts in a confirmation.** A confirmation opens with keyboard focus on its confirm button, so
+Enter confirms at once. Three kinds start elsewhere:
+
+- **A destructive confirmation** — one whose confirm button is drawn in the danger colour, such as quitting with
+  sessions running, removing a project, deleting a session or removing an account — opens with focus on the dialog
+  itself, so Enter does nothing until the user moves focus onto a control.
+- **A confirmation that asks for a word to be typed** opens with focus in its text field.
+- **A question the user did not ask for** — a folder trust prompt (see "The trust dialog" in
+  `docs/product/folder-trust.md`) or a request for a console session (see "The confirmation dialog" in
+  `docs/product/requesting-a-console-session.md`) — opens with focus on the dialog itself as well, and focus is put
+  back on the dialog each time it moves on to the next waiting question, so an Enter held past one answer does not
+  answer the next.
+
+**A held Enter or Space does not confirm.** Every confirmation and every form dialog ignores the auto-repeats of a
+held Enter or Space, so the press that opened it (a menu item acts as the key goes down) cannot go on to confirm it; a
+fresh press still does. Where text is being typed the repeats stay: Space in any text field, Enter in a multi-line one.
+
 **A menu or a popover** — a row's, a header's or an avatar's action menu, the project filter's popover, a worktree or
 branch selector's list of choices, a selector's list inside a dialog — takes the window around it the same way: while
 one is open, nothing outside it can be used, and a press outside dismisses it. It has no dimmed overlay of its own, so

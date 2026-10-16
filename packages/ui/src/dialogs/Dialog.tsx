@@ -97,6 +97,15 @@ export function DialogError({ message }: { message: ErrorPresentation | undefine
  * satisfy. */
 type BodyChildren = React.ComponentProps<typeof Modal.Footer>["children"];
 
+const NOT_TYPED_INTO = new Set(["checkbox", "radio", "button", "submit", "image", "reset", "range", "color", "file"]);
+
+/** Whether `target` takes typed text, where a held key's repeats are what the user means. */
+function isTextEntry(target: EventTarget): boolean {
+  if (target instanceof HTMLTextAreaElement) return true;
+  if (target instanceof HTMLElement && target.isContentEditable) return true;
+  return target instanceof HTMLInputElement && !NOT_TYPED_INTO.has(target.type);
+}
+
 /** How many `Dialog`s are mounted, so a nested one can tell it is not the last to close. */
 let openDialogs = 0;
 
@@ -275,8 +284,18 @@ export function Dialog({
             <Frame.CloseTrigger aria-label={t("common.close")} />
           </TitledControl>
           {onSubmit ? (
+            // A key held down repeats: the press that opened the dialog (a menu item takes Enter and
+            // Space on keydown) would otherwise go on to submit it before the user has read it, Enter
+            // on a repeat, Space on its release. Caught on the way down, since react-aria's buttons
+            // stop the keydown from bubbling. Where text is typed the repeats are the user's own, so
+            // they stay: Space in any text field, Enter in a textarea.
             <form
               className="contents"
+              onKeyDownCapture={(e) => {
+                if (!e.repeat) return;
+                const enter = e.key === "Enter" && !(e.target instanceof HTMLTextAreaElement);
+                if (enter || (e.key === " " && !isTextEntry(e.target))) e.preventDefault();
+              }}
               onSubmit={(e) => {
                 e.preventDefault();
                 onSubmit();

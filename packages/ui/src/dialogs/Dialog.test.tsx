@@ -361,3 +361,16 @@ it("shows no fade when the body fits", async () => {
     expect(scroller.hasAttribute("data-top-bottom-scroll")).toBe(false);
   });
 });
+
+// The Enter or Space that opened a dialog (a menu item acts on keydown) can still be held down when
+// the dialog's confirm button takes focus; its repeats must not submit what the user has not read.
+it.each(["Enter", " "])("ignores a repeated %j on the submit button", (key) => {
+  withFooter({}, ({ submit }) => {
+    const repeat = new KeyboardEvent("keydown", { key, repeat: true, bubbles: true, cancelable: true });
+    const first = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    act(() => submit.dispatchEvent(repeat));
+    act(() => submit.dispatchEvent(first));
+    expect(repeat.defaultPrevented).toBe(true);
+    expect(first.defaultPrevented).toBe(false);
+  });
+});

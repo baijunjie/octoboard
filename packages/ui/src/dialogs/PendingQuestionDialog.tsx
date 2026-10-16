@@ -10,7 +10,8 @@ import { useTrustPromptDialogProps } from "./TrustPromptDialog";
  * The one dialog for what the daemon is waiting on the user for: the trust prompts, oldest first,
  * then the requests for a console session, oldest first. One `ConfirmDialog` serves them all and
  * stays mounted from one to the next, its `resetKey` naming the current one, because remounting the
- * modal would leave its focus scope restoring focus to an element no longer in the page.
+ * modal would leave its focus scope restoring focus to an element no longer in the page. Every
+ * one of them comes up unasked, so none of them takes an Enter before the user moves focus.
  *
  * A request for a console session already on screen stays there when a trust prompt arrives,
  * rather than being swapped for it under the user's pointer; the trust prompt follows it.
@@ -31,7 +32,7 @@ export function PendingQuestionDialog({
   const shownRequest = requestFirst ? consoleRequest?.requestId : undefined;
   useEffect(() => setOnScreen(shownRequest), [shownRequest]);
   const props = trust ?? request;
-  return props ? <ConfirmDialog {...props} /> : null;
+  return props ? <ConfirmDialog {...props} unprompted /> : null;
 }
 
 /** Whether `PendingQuestionDialog` shows anything, for whatever keeps out of a modal's way. */

@@ -4,7 +4,7 @@ import { expect, it } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
 import { type TrustPrompt } from "../store";
-import { mountPendingQuestionDialog, pressButton } from "./pendingQuestionTestSupport";
+import { findButton, mountPendingQuestionDialog, pressButton } from "./pendingQuestionTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -83,4 +83,19 @@ it("a refused folder keeps the dialog open", async () => {
   await confirm();
   expect(dialog.onScreen()).toBe(true);
   expect(checkbox()?.checked).toBe(true);
+});
+
+// A trust prompt comes up unasked, perhaps while the user is typing in a terminal: neither it nor the
+// next one in the queue takes an Enter until the user moves focus onto a control, even when focus was
+// left on the confirm button by the answer before.
+it("keeps focus off the confirm button for each prompt in the queue", async () => {
+  const second: TrustPrompt = { ...prompt, session: "s-2", path: "/Users/dev/code/api" };
+  mount([prompt, second]);
+  const dialog = () => document.body.querySelector("[role=alertdialog]");
+  expect(document.activeElement).toBe(dialog());
+  const button = findButton("Trust and continue");
+  expect(button).toBeDefined();
+  act(() => button?.focus());
+  await confirm();
+  expect(document.activeElement).toBe(dialog());
 });
