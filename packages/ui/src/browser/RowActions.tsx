@@ -1,32 +1,45 @@
-import { Copy } from "lucide-react";
-import React from "react";
+import { Copy, FolderOpen, SquareArrowOutUpRight } from "lucide-react";
+import React, { createContext, useContext } from "react";
 
-import { ActionMenu } from "../components/ActionMenu";
+import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
 import { RowControls } from "../components/RowControls";
 import { useCopyPath } from "../components/useCopyPath";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
+import { useDaemon } from "../store";
 
-/** The one button at the end of a row of the Files tree or of the Git mode's changes, opening the
- * menu of what can be done with that row's file or directory; Copy path is the only action so far. The button's
- * name says whose actions it opens, since the row does not add its own to it; its tooltip stays the
- * short "More actions". It is shown by the row's hover, focus and selection through `RowControls`. */
-export function RowActions({ path, name, directory = false }: { path: string; name: string; directory?: boolean }): React.ReactElement | null {
+/** The live directory behind the displayed rows. A branch comparison has no live directory. */
+export const RowPathScope = createContext<{ project: string; worktree?: string } | undefined>(undefined);
+
+/** The row's button and right-click share the same actions and focus handling. */
+export function RowActions({ path, name, directory = false, contextTargetRef }: {
+  path: string;
+  name: string;
+  directory?: boolean;
+  contextTargetRef?: React.RefObject<HTMLElement | null>;
+}): React.ReactElement | null {
   const t = useT();
   const copyPath = useCopyPath();
-  // No button where nothing can be done: a menu whose only item cannot act is worse than none.
-  if (!copyPath) return null;
+  const scope = useContext(RowPathScope);
+  const { request, toastError } = useDaemon();
+  const items: ActionMenuEntry[] = [];
+  if (scope) {
+    const run = (type: "open_project_path" | "reveal_project_path") => {
+      void request({ type, ...scope, path }).catch((error: Error) => toastError(error));
+    };
+    items.push(
+      { label: t("browser.row.open"), icon: SquareArrowOutUpRight, onClick: () => run("open_project_path") },
+      { label: t("browser.row.reveal"), icon: FolderOpen, onClick: () => run("reveal_project_path") },
+    );
+  }
+  if (copyPath) items.push({ label: t("common.copyPath"), icon: Copy, onClick: () => copyPath(path) });
+  if (items.length === 0) return null;
   return (
     <RowControls className="ms-auto">
       <ActionMenu
         label={t(directory ? "browser.directory.actions" : "browser.row.actions", { name: isolate(name) })}
-        items={[
-          {
-            label: t("common.copyPath"),
-            icon: Copy,
-            onClick: () => copyPath(path),
-          },
-        ]}
+        contextTargetRef={contextTargetRef}
+        items={items}
       />
     </RowControls>
   );

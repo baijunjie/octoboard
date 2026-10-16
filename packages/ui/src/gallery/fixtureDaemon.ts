@@ -212,6 +212,12 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, updated) }));
           return { type: "ack" };
         }
+        // Native path operations are acknowledged without launching anything on the host.
+        case "open_project_path":
+        case "reveal_project_path": {
+          if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
+          return { type: "ack" };
+        }
         case "open_project_directory": {
           if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
           if (scenario.projectDirectoryOpenError) return fail(scenario.projectDirectoryOpenError);

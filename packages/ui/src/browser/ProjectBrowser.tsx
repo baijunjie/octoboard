@@ -30,6 +30,7 @@ import { FileTree } from "./FileTree";
 import { focusRow } from "./focusRow";
 import { GitView } from "./GitView";
 import { buildTree, fileEvidence, listingSaysDirectory, neighbours, parentPath, rereadFor, rowKey, type DirListing, type FileEvidence } from "./tree";
+import { RowPathScope } from "./RowActions";
 import { ROW_HEIGHT } from "./treeRow";
 import { useDirectoryListings } from "./useDirectoryListings";
 import { useFileSearch } from "./useFileSearch";
@@ -294,31 +295,35 @@ export function ProjectBrowser({
                 </>
               ) : (
                 <>
-                  <FileTree
-                    nodes={tree.nodes}
-                    showPaths={listingFiles && browser.layouts.files === "flat"}
-                    expanded={expandedKeys}
-                    label={t("browser.tree.label")}
-                    onExpandedChange={onExpandedChange}
-                    onOpenFile={openFile}
-                    onRetry={(dir) => dirs.refresh([dir])}
-                    treeRef={treeRef}
-                  />
+                  <RowPathScope.Provider value={{ project: project.id }}>
+                    <FileTree
+                      nodes={tree.nodes}
+                      showPaths={listingFiles && browser.layouts.files === "flat"}
+                      expanded={expandedKeys}
+                      label={t("browser.tree.label")}
+                      onExpandedChange={onExpandedChange}
+                      onOpenFile={openFile}
+                      onRetry={(dir) => dirs.refresh([dir])}
+                      treeRef={treeRef}
+                    />
+                  </RowPathScope.Provider>
                   {(listingFiles ? search.result.state === "loaded" && !search.result.complete : root?.state === "loaded" && !root.complete) && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-app-muted">{t(listingFiles ? "browser.filter.partial" : "browser.partial")}</p>}
                 </>
               )}
             </div>
           </Tabs.Panel> : <Tabs.Panel id={browser.gitView} className="mt-0 flex min-h-0 flex-1 flex-col p-0">
-            <GitView
-              {...git.view}
-              selectedSessionId={selectedSessionId}
-              onRetry={(from) => {
-                // The failure and its button go as the request starts again; focus on it moves to
-                // the header's Refresh, which stays.
-                handFocusOff(from, refreshRef.current, true);
-                refresh();
-              }}
-            />
+            <RowPathScope.Provider value={browser.gitView === "worktree" ? { project: project.id, worktree: git.view.worktree.worktree } : undefined}>
+              <GitView
+                {...git.view}
+                selectedSessionId={selectedSessionId}
+                onRetry={(from) => {
+                  // The failure and its button go as the request starts again; focus on it moves to
+                  // the header's Refresh, which stays.
+                  handFocusOff(from, refreshRef.current, true);
+                  refresh();
+                }}
+              />
+            </RowPathScope.Provider>
           </Tabs.Panel>}
         </Tabs>
       </div>

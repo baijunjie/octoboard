@@ -1,5 +1,5 @@
 import { SearchX } from "lucide-react";
-import React, { useMemo } from "react";
+import React, { useMemo, useRef } from "react";
 import { Collection, GridList, GridListHeader, GridListItem, GridListSection, Virtualizer, type Key } from "react-aria-components";
 
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
@@ -191,13 +191,14 @@ function ChangeSectionView({
 
 function ChangeRow({ item, isSelected }: { item: ChangeItem; isSelected: boolean }): React.ReactElement {
   const t = useT();
+  const rowRef = useRef<HTMLDivElement>(null);
   const { name, detail, ariaLabel } = changeRowText(t, item, isSelected, false);
   // Marked `data-current`, not `data-selected`: react-aria-components writes the row's
   // `data-selected` itself, from a selection the list does not have.
   return (
-    <GridListItem id={item.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS}>
+    <GridListItem id={item.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS} ref={rowRef}>
       <RowContent flat>
-        <ChangeRowBody item={item} name={name} detail={detail} />
+        <ChangeRowBody contextTargetRef={rowRef} item={item} name={name} detail={detail} />
       </RowContent>
     </GridListItem>
   );

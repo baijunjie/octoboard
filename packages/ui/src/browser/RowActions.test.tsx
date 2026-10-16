@@ -4,6 +4,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 import { isolate } from "../i18n/isolate";
 import type { PlatformAdapter } from "../platform";
+import { RowActions, RowPathScope } from "./RowActions";
 import { ChangeList } from "./ChangeList";
 import { change, changeViewFixture, mountRows } from "./browserTestSupport";
 import { changeItems } from "./changes";
@@ -96,4 +97,40 @@ it("says so when the clipboard refuses", async () => {
 it("draws no button where the platform has no clipboard", () => {
   const { container } = render("flat", undefined);
   expect(container.querySelector("button[aria-haspopup]")).toBeNull();
+});
+
+
+it.each(["open_project_path", "reveal_project_path"] as const)("sends %s with the live scope and wire path even without a clipboard", async (type) => {
+  const request = vi.fn(async () => ({ type: "ack" as const }));
+  const container = mountRows(
+    <RowPathScope.Provider value={{ project: "p", worktree: "w" }}>
+      <RowActions path="src/caf%C3%A9.ts" name="café.ts" />
+    </RowPathScope.Provider>,
+    { request, toasts },
+  );
+  act(() => actionsOf(container).click());
+  const entries = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")];
+  expect(entries.map((entry) => entry.textContent)).toEqual(["Open", "Show in file manager"]);
+  act(() => entries[type === "open_project_path" ? 0 : 1].click());
+  await flush();
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type, project: "p", worktree: "w", path: "src/caf%C3%A9.ts" });
+});
+
+it("reports a system-open failure through the existing error toast", async () => {
+  const container = mountRows(
+    <RowPathScope.Provider value={{ project: "p" }}><RowActions path="gone.ts" name="gone.ts" /></RowPathScope.Provider>,
+    { request: async () => { throw new Error("File not found"); }, toasts },
+  );
+  act(() => actionsOf(container).click());
+  act(() => document.querySelector<HTMLElement>("[role=menuitem]")!.click());
+  await flush();
+  expect(toasts.error).toHaveBeenCalledWith("File not found");
+});
+
+it.each(["flat", "tree"] as const)("%s: opens a change row's menu on right-click without opening the change", (layout) => {
+  const { container, onOpen } = render(layout, { writeText: async () => {} });
+  const row = rowOf(container, "alpha.ts");
+  act(() => row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 20, clientY: 30 })));
+  expect(document.querySelector<HTMLElement>("[role=menuitem]")!.textContent).toBe("Copy path");
+  expect(onOpen).not.toHaveBeenCalled();
 });

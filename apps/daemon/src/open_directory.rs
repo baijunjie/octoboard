@@ -1,6 +1,6 @@
-//! Opening a project directory in the system file manager on the daemon's host. The launcher
-//! on macOS returns once the directory is accepted. Linux xdg-open may keep running for the
-//! file manager's lifetime, so it is detached and reaped in the background.
+//! Opening project directories and live paths with the daemon host's system applications, or
+//! revealing an entry in its file manager. macOS open and Linux ShowItems return once accepted;
+//! Linux xdg-open is detached and reaped because it may live as long as the application it opens.
 
 use std::path::Path;
 use std::process::Command;
@@ -24,7 +24,88 @@ pub fn open(directory: &Path) -> Result<(), anyhow::Error> {
             .map_err(|_| "xdg-open was not found".to_string())
     })
     .map_err(|detail| unavailable(&detail))?;
-    start(std::env::consts::OS, command).map_err(|detail| unavailable(&detail))
+    start(std::env::consts::OS == "linux", command).map_err(|detail| unavailable(&detail))
+}
+
+/// Opens a resolved live path, either with its default application or selected in its folder.
+pub fn open_path(path: &Path, reveal: bool) -> Result<(), anyhow::Error> {
+    let command = path_launch_for(std::env::consts::OS, path, reveal, |binary| {
+        let env = crate::env_shell::cached_snapshot().map_err(|err| format!("{err:#}"))?;
+        crate::env_shell::resolve_binary(binary, &env)
+            .map_err(|_| format!("{binary} was not found"))
+    })
+    .map_err(|detail| path_unavailable(reveal, &detail))?;
+    // ShowItems is a short D-Bus call whose failure must reach the client; xdg-open may instead
+    // live as long as the application it opens.
+    let detached = std::env::consts::OS == "linux" && !reveal;
+    start(detached, command).map_err(|detail| path_unavailable(reveal, &detail))
+}
+
+fn path_unavailable(reveal: bool, detail: &str) -> anyhow::Error {
+    if reveal {
+        return unavailable(detail);
+    }
+    CodedError::raised(
+        error_code::PATH_OPEN_FAILED,
+        format!("The file or folder could not be opened: {detail}"),
+        &[("detail", detail)],
+    )
+}
+
+fn path_launch_for(
+    os: &str,
+    path: &Path,
+    reveal: bool,
+    resolve: impl FnOnce(&str) -> Result<String, String>,
+) -> Result<Command, String> {
+    let mut command = match os {
+        "macos" => {
+            let mut command = Command::new("/usr/bin/open");
+            if reveal {
+                command.arg("-R");
+            }
+            command.arg("--");
+            command.arg(path);
+            command
+        }
+        "linux" if reveal => {
+            let mut command = Command::new(resolve("gdbus")?);
+            command.args([
+                "call",
+                "--session",
+                "--dest",
+                "org.freedesktop.FileManager1",
+                "--object-path",
+                "/org/freedesktop/FileManager1",
+                "--method",
+                "org.freedesktop.FileManager1.ShowItems",
+            ]);
+            command.arg(format!("['{}']", file_uri(path)));
+            command.arg("");
+            command
+        }
+        "linux" => {
+            let mut command = Command::new(resolve("xdg-open")?);
+            command.arg(path);
+            command
+        }
+        _ => return Err("this operating system has no supported system file manager".to_string()),
+    };
+    command.stdin(std::process::Stdio::null());
+    Ok(command)
+}
+
+fn file_uri(path: &Path) -> String {
+    use std::os::unix::ffi::OsStrExt;
+    let mut uri = String::from("file://");
+    for &byte in path.as_os_str().as_bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'_' | b'.' | b'~') {
+            uri.push(byte as char);
+        } else {
+            uri.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    uri
 }
 
 fn unavailable(detail: &str) -> anyhow::Error {
@@ -64,8 +145,8 @@ fn launch_for(
     Ok(command)
 }
 
-fn start(os: &str, mut command: Command) -> Result<(), String> {
-    if os == "linux" {
+fn start(detached: bool, mut command: Command) -> Result<(), String> {
+    if detached {
         return crate::subprocess::spawn_detached(command);
     }
     let output = run_bounded(&mut command, &OPEN_BOUNDS, &AtomicBool::new(false))
@@ -87,6 +168,57 @@ mod tests {
     use super::*;
     use crate::protocol::error_parts;
     use crate::test_support::ScratchDir;
+
+    #[test]
+    fn open_and_reveal_failures_name_the_action_that_failed() {
+        for (reveal, expected) in [
+            (false, error_code::PATH_OPEN_FAILED),
+            (true, error_code::DIRECTORY_UNAVAILABLE),
+        ] {
+            let error = path_unavailable(reveal, "no default application");
+            let (code, params, _) = error_parts(&error);
+            assert_eq!(code, expected);
+            assert_eq!(
+                params.get("detail").map(String::as_str),
+                Some("no default application")
+            );
+        }
+    }
+
+    #[test]
+    fn path_actions_keep_paths_literal_and_reveal_selects_the_item() {
+        let path = Path::new("/work/a '$(file)%é");
+        for reveal in [false, true] {
+            let command = path_launch_for("macos", path, reveal, |_| panic!("no lookup")).unwrap();
+            assert_eq!(command.get_program(), "/usr/bin/open");
+            let expected = if reveal {
+                vec![
+                    std::ffi::OsStr::new("-R"),
+                    std::ffi::OsStr::new("--"),
+                    path.as_os_str(),
+                ]
+            } else {
+                vec![std::ffi::OsStr::new("--"), path.as_os_str()]
+            };
+            assert_eq!(command.get_args().collect::<Vec<_>>(), expected);
+        }
+        let command = path_launch_for("linux", path, true, |binary| {
+            assert_eq!(binary, "gdbus");
+            Ok("/usr/bin/gdbus".into())
+        })
+        .unwrap();
+        let args = command.get_args().collect::<Vec<_>>();
+        assert_eq!(args[7], "org.freedesktop.FileManager1.ShowItems");
+        assert_eq!(args[8], "['file:///work/a%20%27%24%28file%29%25%C3%A9']");
+        assert_eq!(args[9], "");
+        let command = path_launch_for("linux", path, false, |binary| {
+            assert_eq!(binary, "xdg-open");
+            Ok("/usr/bin/xdg-open".into())
+        })
+        .unwrap();
+        assert_eq!(command.get_args().collect::<Vec<_>>(), [path.as_os_str()]);
+        assert!(path_launch_for("linux", path, true, |_| Err("missing gdbus".into())).is_err());
+    }
 
     #[test]
     fn macos_uses_open_without_resolving_a_shell_and_keeps_the_path_as_one_argument() {
@@ -138,7 +270,7 @@ mod tests {
     fn launcher_failures_include_the_process_diagnostic() {
         let mut command = Command::new("/bin/sh");
         command.args(["-c", "printf 'no desktop session' >&2; exit 1"]);
-        assert_eq!(start("macos", command).unwrap_err(), "no desktop session");
+        assert_eq!(start(false, command).unwrap_err(), "no desktop session");
     }
 
     #[test]
@@ -162,7 +294,7 @@ mod tests {
         let mut command = Command::new("/bin/sh");
         command.args(["-c", "echo $$ > \"$1\"; exec /bin/sleep 30", "launcher"]);
         command.arg(&pid_file);
-        start("linux", command).expect("the request finishes while the launcher is running");
+        start(true, command).expect("the request finishes while the launcher is running");
         let deadline = Instant::now() + PATIENCE;
         let pid = loop {
             if let Some(pid) = read_pid_file(&pid_file) {
@@ -183,6 +315,6 @@ mod tests {
             "ack did not wait for exit"
         );
         drop(launcher);
-        assert!(start("linux", Command::new(dir.join("missing-launcher"))).is_err());
+        assert!(start(true, Command::new(dir.join("missing-launcher"))).is_err());
     }
 }

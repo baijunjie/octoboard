@@ -354,6 +354,35 @@ pub fn serve(
     }
 }
 
+/// Resolves a live path for a host action under the same scope as live browsing.
+pub fn resolve_project_path(
+    state: &AppState,
+    project: &str,
+    worktree: Option<&str>,
+    path: &str,
+    git: &dyn Fn() -> Result<GitEnv>,
+) -> Result<std::path::PathBuf> {
+    let rel = parse_path(path)?;
+    let record = stored_project(state, project)?;
+    let git = Git::new(git);
+    let scope = scope_for(&record, worktree, &git, &AtomicBool::new(false))?;
+    live::resolve(&scope.canonical, &rel)?;
+    if rel.is_root() {
+        return Ok(scope.canonical);
+    }
+    // Keep the final entry's name so revealing a symlink selects that entry, while both its
+    // target and its containing directory must stay inside the project scope.
+    let lexical = scope.canonical.join(rel.as_path());
+    let parent = rel
+        .as_path()
+        .parent()
+        .expect("a relative entry has a parent");
+    let parent = RelPath::from_bytes(parent.as_os_str().as_bytes().to_vec())
+        .expect("a validated path has a valid parent");
+    let directory = live::resolve(&scope.canonical, &parent)?;
+    Ok(directory.join(lexical.file_name().expect("a non-root entry has a name")))
+}
+
 fn parse_path(path: &str) -> Result<RelPath> {
     RelPath::parse(path).ok_or_else(|| {
         CodedError::raised(

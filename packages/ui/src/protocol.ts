@@ -838,6 +838,10 @@ export type RequestBody =
    * with `ack` once `open` succeeds on macOS, or `xdg-open` is spawned on Linux; later Linux
    * launcher failures are not observed. */
   | { type: "open_project_directory"; project: string }
+  /** Reveals a live project-relative wire path in the host file manager, selecting it. */
+  | { type: "reveal_project_path"; project: string; path: string; worktree?: string }
+  /** Opens a live project-relative wire path with the host's default application. */
+  | { type: "open_project_path"; project: string; path: string; worktree?: string }
   /** Pushes the project's current branch and only that branch. Answered with `ack` once `git push`
    * has exited; a success is followed by `project_git_status` from a local re-read. */
   | { type: "push_project_branch"; project: string }

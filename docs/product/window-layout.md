@@ -449,7 +449,8 @@ the terminal's area **scrolls horizontally** rather than squeezing the terminal 
 or editable text, and in the terminal, where it is how text is copied and pasted. Anywhere else it shows nothing, unless
 what was clicked offers its own action menu: the sidebar's rows and headers open theirs at the pointer (see "Rows, names
 and keyboard focus" in `docs/product/sidebar.md`), and so do the consoles' avatars on the rail (see "The console
-switcher" in `docs/product/sidebar.md`). A report page follows the same rule (see "Right-click inside a page"
+switcher" in `docs/product/sidebar.md`). The project pane's file and change rows also open their own menu (see
+"A row's actions" in `docs/product/project-pane.md`). A report page follows the same rule (see "Right-click inside a page"
 in `docs/product/report-panel.md`).
 
 **In a browser** the browser's own menu stays everywhere except over the rows, headers and avatars that open an action

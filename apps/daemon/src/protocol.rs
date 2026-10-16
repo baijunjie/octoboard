@@ -1514,6 +1514,21 @@ pub enum RequestBody {
     OpenProjectDirectory {
         project: String,
     },
+    /// Reveals an existing live path in the daemon host's file manager, selecting it.
+    /// Uses the same canonical wire path and optional worktree identity as live browsing.
+    RevealProjectPath {
+        project: String,
+        path: String,
+        #[serde(default)]
+        worktree: Option<String>,
+    },
+    /// Opens an existing live path with its default application on the daemon host.
+    OpenProjectPath {
+        project: String,
+        path: String,
+        #[serde(default)]
+        worktree: Option<String>,
+    },
     /// Pushes the project's current branch, and only that branch, never with `--force`. Answered
     /// with `ack` once `git push` has exited; a success is followed by `project_git_status` from a
     /// local re-read, with no fetch. Refused with `not_a_git_repository`, `not_on_a_branch`,
@@ -2301,6 +2316,7 @@ pub mod error_code {
     pub const TERMINAL_UNAVAILABLE: &str = "terminal_unavailable";
     /// The system file manager could not open a project directory. `params` names `detail`.
     pub const DIRECTORY_UNAVAILABLE: &str = "directory_unavailable";
+    pub const PATH_OPEN_FAILED: &str = "path_open_failed";
     /// A push was asked for while `HEAD` is detached. Nothing was pushed.
     pub const NOT_ON_A_BRANCH: &str = "not_on_a_branch";
     /// A push was asked for on a branch that has no commit yet. Nothing was pushed.
@@ -2523,6 +2539,30 @@ mod tests {
                 r#"{"type":"open_project_terminal","id":"request-1","project":"project-7"}"#,
                 |body| match body {
                     RequestBody::OpenProjectTerminal { project } => Some(project),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"reveal_project_path","id":"request-1","project":"project-7","path":"src/a%25.txt","worktree":"tree-1"}"#,
+                |body| match body {
+                    RequestBody::RevealProjectPath {
+                        project,
+                        path,
+                        worktree,
+                    } if path == "src/a%25.txt" && worktree.as_deref() == Some("tree-1") => {
+                        Some(project)
+                    }
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"open_project_path","id":"request-1","project":"project-7","path":"src/a%25.txt"}"#,
+                |body| match body {
+                    RequestBody::OpenProjectPath {
+                        project,
+                        path,
+                        worktree,
+                    } if path == "src/a%25.txt" && worktree.is_none() => Some(project),
                     _ => None,
                 },
             ),

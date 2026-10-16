@@ -212,6 +212,7 @@ export const en = {
     "{path} passes through the {filter} clean filter, so the content this change was made from cannot be read.",
   "daemon.git_failed": "Git could not read this: {detail}",
   "daemon.terminal_unavailable": "The system terminal could not be opened: {detail}",
+  "daemon.path_open_failed": "The file or folder could not be opened: {detail}",
   "daemon.directory_unavailable": "The system file manager could not be opened: {detail}",
   "daemon.not_on_a_branch": "This project is not on a branch, so there is nothing to push.",
   "daemon.no_commits_to_push": "This branch has no commits to push yet.",
@@ -617,6 +618,8 @@ export const en = {
   "browser.tree.row.selected": "{name}, selected",
   "browser.tree.row.removed": "{name}, removed, selected",
   "browser.tree.row.unlisted": "{name}, not in the listing, selected",
+  "browser.row.open": "Open",
+  "browser.row.reveal": "Show in file manager",
   "browser.row.actions": "Actions for file {name}",
   "browser.directory.actions": "Actions for folder {name}",
 

@@ -1053,3 +1053,81 @@ fn a_body_is_text_only_when_json_escaping_at_most_doubles_it() {
     assert_eq!(bytes_of(&binary), controls);
     assert_eq!(file_content(b"caf\xe9".to_vec()).kind, ContentKind::Binary);
 }
+
+#[test]
+fn host_path_actions_validate_wire_paths_and_recheck_worktree_scopes() {
+    let fixture = Fixture::new();
+    let repo = repo_with(
+        "host-path-actions",
+        &[(b"sub/a%.txt", b"main"), (b"top.txt", b"top")],
+    );
+    let linked = ScratchDir::new("host-path-linked");
+    let other = linked.join("other");
+    git(
+        &repo,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "other",
+            other.to_str().unwrap(),
+        ],
+    );
+    let project = fixture.project("sub", &repo.join("sub"));
+    let source = fixture.source(&project).git.unwrap();
+    let worktree = source
+        .worktrees
+        .iter()
+        .find(|entry| !entry.main)
+        .unwrap()
+        .id
+        .clone();
+    let resolve = |tree: Option<&str>, path: &str| {
+        resolve_project_path(&fixture.state, &project, tree, path, &git_env)
+    };
+    assert_eq!(
+        resolve(None, "a%25.txt").unwrap(),
+        std::fs::canonicalize(repo.join("sub/a%.txt")).unwrap()
+    );
+    assert_eq!(
+        resolve(Some(&worktree), "a%25.txt").unwrap(),
+        std::fs::canonicalize(other.join("sub/a%.txt")).unwrap()
+    );
+    std::os::unix::fs::symlink("a%.txt", repo.join("sub/link")).unwrap();
+    assert_eq!(
+        resolve(None, "link").unwrap(),
+        std::fs::canonicalize(repo.join("sub"))
+            .unwrap()
+            .join("link")
+    );
+    std::os::unix::fs::symlink(repo.join("top.txt"), repo.join("sub/escape")).unwrap();
+    for (path, code) in [
+        ("../top.txt", error_code::INVALID_PATH),
+        ("/etc/passwd", error_code::INVALID_PATH),
+        ("a%.txt", error_code::INVALID_PATH),
+        ("missing", error_code::FILE_NOT_FOUND),
+        ("escape", error_code::OUTSIDE_SCOPE),
+    ] {
+        let error = resolve(None, path).unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<CodedError>().unwrap().code,
+            code,
+            "{path}"
+        );
+    }
+    let error = resolve(Some("unknown-worktree"), "a%25.txt").unwrap_err();
+    assert_eq!(
+        error.downcast_ref::<CodedError>().unwrap().code,
+        error_code::WORKTREE_UNAVAILABLE
+    );
+    git(
+        &repo,
+        &["worktree", "remove", "--force", other.to_str().unwrap()],
+    );
+    let error = resolve(Some(&worktree), "a%25.txt").unwrap_err();
+    assert_eq!(
+        error.downcast_ref::<CodedError>().unwrap().code,
+        error_code::WORKTREE_UNAVAILABLE
+    );
+}

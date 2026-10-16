@@ -9,8 +9,9 @@ the window's right pane, in the place a console session's report panel takes (se
 the project is all it reads from. How wide the right pane is, how it is hidden, floats in and becomes a drawer is in
 `docs/product/window-layout.md`, and where `F6` lands in it in `docs/product/moving-focus-between-regions.md`.
 
-Nothing in the project pane changes anything: there is no editing, saving, creating, renaming or deleting of files,
-and nothing is staged, committed or checked out.
+The project pane itself is read-only: there is no editing, saving, creating, renaming or deleting of files, and
+nothing is staged, committed or checked out. A row can open its live file or folder in an external application
+(see "A row's actions" below).
 
 ## Opening a project's files
 
@@ -153,8 +154,9 @@ full relative path; grouped rows show names under their folders. Clearing the te
   inside the project can match under the link's own name; symbolic links to directories are not traversed, and links
   outside the project are excluded.
 - Results follow the tree's path order: directory branches before files at each level, with names compared
-  case-insensitively and in natural order (see "Order" above). Their rows open the file viewer and offer Copy path
-  as tree rows do (see "A row's actions" below). The viewer's Previous/Next controls follow the visible result rows in this order, skipping folded folders.
+  case-insensitively and in natural order (see "Order" above). Their rows open the file viewer and offer the
+  same actions as tree rows do (see "A row's actions" below). The viewer's Previous/Next controls follow the
+  visible result rows in this order, skipping folded folders.
 - Typing waits **250 ms** before searching. A changed query shows a searching state until its own results arrive;
   a reply to an earlier query never replaces them. A failure shows its reason and a retry action. No matches has a
   distinct empty state, leaving the field available to change or clear.
@@ -213,11 +215,17 @@ afresh.
 
 ## A row's actions
 
-Every file and folder row in the Files mode's tree ends with an icon button that opens a **menu of what can be done with
-that entry**, whether the folder is collapsed or expanded. Every file's row in the Git mode's change list has the same
-button in both its views and both forms of the list, flat or grouped by folder (see "Rows and the keyboard" in
-`docs/product/project-pane-git-mode.md`). **Copy path** is its only action so far.
+Every file and folder row in Files ends with an icon button that opens a **menu of what can be done with that
+entry**, whether the folder is collapsed or expanded. Every file's row in the Git mode's change list has the same
+button in both its views. This applies to flat and grouped layouts and filtered results. **Right-clicking a row
+opens the same menu at the pointer** (Control-click also works in the desktop app).
 
+- **Open** opens the live file or folder with the operating system's default application. **Show in file manager**,
+  immediately after it, opens the containing folder and selects that entry, including when the entry is a folder.
+  Both act on the machine running the daemon, including when the client is a browser on another machine. Files uses
+  the project directory; Uncommitted uses the selected worktree and the project's directory within it. They act on
+  what is on disk now, including for a staged change. **Compare offers neither action**, since its changes name
+  committed versions rather than a live worktree.
 - **Copy path** puts the file or folder's path on the clipboard, slash separated, as a path within the project. For a
   change it is the path the row names, which for a rename is its new path — the old one only where the new side is
   absent (a deletion) or outside the project (see "What is listed" in `docs/product/project-pane-git-mode.md`). The path
@@ -237,17 +245,30 @@ button in both its views and both forms of the list, flat or grouped by folder (
   first key expands it, and a second press reaches the button. On an expanded folder the opposite key still collapses it
   while focus is on the row.
 - **The row keeps its own action**: a click or Enter on the row opens the file or the change in the file viewer, or
-  opens or closes a folder. Pressing the button or copying a path does none of those. The button is the only way to the
-  menu — a right-click on a row opens none, unlike a sidebar row (see "Right-click menus" in
-  `docs/product/window-layout.md`). A menu opened from the keyboard hands keyboard focus back to the button when it
-  closes; one opened with the pointer hands it back to whatever had it before, as a sidebar row's menu does.
+  opens or closes a folder. Opening the menu or choosing one of its actions does none of those. A menu opened from
+  the keyboard hands keyboard focus back to the button when it closes; one opened with the pointer hands it back to
+  whatever had it before, as a sidebar row's menu does.
 - Its **accessible name names the file or folder** — "Actions for file server.ts" or "Actions for folder src" — so each
   row's button is told apart, while its tooltip is the short one every such button has (see "Tooltips on icon-only
   controls" in `docs/product/labels-and-tooltips.md`).
-- **Where the platform has no clipboard there is no button on the row at all**, rather than a menu whose only action
-  cannot act: Copy path being the only action, nothing is left to offer. That is the case in a plain browser whose page
-  is not a secure context — served over `http` from anywhere but `localhost`. The packaged desktop app always has a
-  clipboard.
+- **Where the platform has no clipboard, Copy path is omitted**. Open and Show in file manager remain available in
+  Files and Uncommitted. Compare then has no row button or action menu. A plain browser whose page is not a secure
+  context — served over `http` from anywhere but `localhost` — has no clipboard; the packaged desktop app always does.
+
+Open and Show in file manager raise no success toast; failures raise an error toast with the reason. A missing
+live entry, such as a deleted file that is still absent on disk, is refused with `file_not_found`; an entry or
+symbolic-link target outside the project's directory in the chosen worktree is refused with `outside_scope`. A
+worktree that no longer exists is refused with `worktree_unavailable`. Revealing a symbolic link selects the
+link itself.
+
+On macOS the system opener handles Open and asks Finder to reveal the entry for Show in file manager. On Linux Open
+uses `xdg-open`; Show in file manager requires `gdbus` and a desktop file manager providing
+`org.freedesktop.FileManager1.ShowItems`. The Linux tools are looked up in the user's login-shell environment.
+On macOS, and for Linux Show in file manager, the request waits for the launcher to finish, at most **15 seconds**
+with at most **16 KiB** each of output and error, rather than waiting for the application window to close. Linux
+Open succeeds once its launcher starts; a later launcher failure is not reported. Unsupported operating systems,
+unavailable launchers or desktop services, and launcher failures are reported as `path_open_failed` for Open and
+`directory_unavailable` for Show in file manager, carrying the reason as `detail`.
 
 
 ## What is remembered

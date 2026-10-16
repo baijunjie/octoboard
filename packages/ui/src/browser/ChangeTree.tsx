@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useRef } from "react";
 import { Collection, Tree, TreeHeader, TreeItem, TreeItemContent, TreeSection, Virtualizer, type Key } from "react-aria-components";
 
 import { useStickyScrollFade } from "../components/scrollFade";
@@ -125,14 +125,15 @@ export function ChangeTree({
 
 function ChangeTreeRow({ item, isSelected }: { item: ChangeItem; isSelected: boolean }): React.ReactElement {
   const t = useT();
+  const rowRef = useRef<HTMLDivElement>(null);
   const { name, detail, ariaLabel } = changeRowText(t, item, isSelected, true);
   // Marked `data-current`, not `data-selected`: react-aria-components writes the row's
   // `data-selected` itself, from a selection the tree does not have.
   return (
-    <TreeItem id={item.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS}>
+    <TreeItem id={item.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS} ref={rowRef}>
       <TreeItemContent>
         <RowContent>
-          <ChangeRowBody item={item} name={name} detail={detail} />
+          <ChangeRowBody contextTargetRef={rowRef} item={item} name={name} detail={detail} />
         </RowContent>
       </TreeItemContent>
     </TreeItem>

@@ -64,7 +64,7 @@ export function changeRowText(
 
 /** What a change's row shows: its status mark, its file's name and the detail beside it, and at its
  * end the button of the row's actions. */
-export function ChangeRowBody({ item, name, detail }: { item: ChangeItem; name: string; detail: string }): React.ReactElement {
+export function ChangeRowBody({ item, name, detail, contextTargetRef }: { item: ChangeItem; name: string; detail: string; contextTargetRef: React.RefObject<HTMLElement | null> }): React.ReactElement {
   return (
     <>
       <ChangeStatusChip status={item.status} />
@@ -76,7 +76,7 @@ export function ChangeRowBody({ item, name, detail }: { item: ChangeItem; name: 
           {detail}
         </FadeOverflow>
       )}
-      <RowActions path={item.path} name={name} />
+      <RowActions contextTargetRef={contextTargetRef} path={item.path} name={name} />
     </>
   );
 }

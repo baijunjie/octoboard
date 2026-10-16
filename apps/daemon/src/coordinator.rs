@@ -78,6 +78,7 @@ async fn handle_inner(
     body: RequestBody,
     followup: &mut Option<Followup>,
 ) -> Result<Option<Event>> {
+    let reveal = matches!(&body, RequestBody::RevealProjectPath { .. });
     match body {
         RequestBody::CreateConsole {
             name,
@@ -676,6 +677,31 @@ async fn handle_inner(
                 .ok_or_else(|| CodedError::unknown_project(&project))?;
             let path = project.path;
             tokio::task::spawn_blocking(move || open_directory::open(Path::new(&path))).await??;
+            Ok(None)
+        }
+
+        RequestBody::RevealProjectPath {
+            project,
+            path,
+            worktree,
+        }
+        | RequestBody::OpenProjectPath {
+            project,
+            path,
+            worktree,
+        } => {
+            let state = Arc::clone(state);
+            tokio::task::spawn_blocking(move || {
+                let path = crate::browse::resolve_project_path(
+                    &state,
+                    &project,
+                    worktree.as_deref(),
+                    &path,
+                    &crate::browse::git::GitEnv::from_shell,
+                )?;
+                open_directory::open_path(&path, reveal)
+            })
+            .await??;
             Ok(None)
         }
 

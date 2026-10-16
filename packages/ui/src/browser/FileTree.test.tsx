@@ -142,3 +142,19 @@ it.each([false, true])("copies a directory path without toggling it (expanded: %
   expect(onExpandedChange).not.toHaveBeenCalled();
   expect(onOpenFile).not.toHaveBeenCalled();
 });
+
+
+it.each(["file", "directory"] as const)("opens a %s row's context menu without activating or expanding it", (kind) => {
+  const onOpenFile = vi.fn();
+  const onExpandedChange = vi.fn();
+  const node: TreeNode = kind === "file" ? fileNode("a.ts", false) : {
+    type: "directory", key: rowKey("src"), path: "src",
+    entry: { name: "src", kind: "directory", size: 0, version: "v1", target: null }, children: [],
+  };
+  const container = render([node], { clipboard: { writeText: async () => {} }, onOpenFile, onExpandedChange });
+  const row = container.querySelector<HTMLElement>("[role=row]")!;
+  act(() => row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 30, clientY: 40 })));
+  expect(document.querySelector<HTMLElement>("[role=menuitem]")!.textContent).toBe("Copy path");
+  expect(onOpenFile).not.toHaveBeenCalled();
+  expect(onExpandedChange).not.toHaveBeenCalled();
+});

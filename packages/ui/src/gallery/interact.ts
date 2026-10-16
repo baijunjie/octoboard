@@ -84,6 +84,8 @@ export interface Ui {
    * on the sidebar's heading row (earlier in the DOM) and in the filter picker, so pressing it
    * again to unpick it would hit the sidebar row. */
   press: (matcher: Matcher) => Promise<void>;
+  /** Opens a row’s context menu at a point within the named control. */
+  contextMenu: (matcher: Matcher) => Promise<void>;
   /** Presses the button that submits the open dialog, waiting for it to appear and be enabled: for a
    * dialog whose confirming button is named as a control behind it, which `press` would find first.
    * A disabled button (`isDisabled`, such as Confirm before a `typeToConfirm` word is typed) is
@@ -597,6 +599,15 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       if (shown !== sentence) {
         throw new Error(`The git badge's tooltip is not its sentence "${sentence}": the last tooltip is ${shown ? `"${shown}"` : "none"}`);
       }
+    },
+    async contextMenu(matcher) {
+      const control = await waitFor(() => find(matcher), `Nothing to right-click matching ${String(matcher)}`);
+      const box = control.getBoundingClientRect();
+      control.dispatchEvent(new MouseEvent("contextmenu", {
+        bubbles: true, cancelable: true, button: 2,
+        clientX: box.x + box.width / 2, clientY: box.y + box.height / 2,
+      }));
+      await wait(300);
     },
     async press(matcher) {
       await clickWhenFound(() => find(matcher), `Nothing to press matching ${String(matcher)}`);

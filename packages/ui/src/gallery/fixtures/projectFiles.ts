@@ -102,7 +102,7 @@ export const projectFilesScenarios: Scenario[] = [
     category: "normal",
     title: "A project session's files",
     description:
-      "Folders first, natural order, .git left out. src is expanded and main.ts is selected: its rounded highlight has space on all four sides, matching Git rows. Compare its actions button with the selected sidebar session and the console header: resting glyphs stay muted, while hovering or opening each menu gives it the shared subtle tint. Press a file for the viewer and Left/Right to visit visible files. Hover or focus file and folder rows for their Copy path actions. Switch between Website and Search API sessions to inspect the short file-pane entrance; Search API has its own routes and schema tree. Switching between the two Website sessions keeps the current tree steady. A project's actions offer Browse files when its pane is hidden or belongs to another project. Open in file manager is available independently. Narrow the window and open the project pane drawer to see the same tree over the terminal.",
+      "Folders first, natural order, .git left out. src is expanded and main.ts is selected: its rounded highlight has space on all four sides, matching Git rows. Compare its actions button with the selected sidebar session and the console header: resting glyphs stay muted, while hovering or opening each menu gives it the shared subtle tint. Press a file for the viewer and Left/Right to visit visible files. Right-click file and folder rows, or use their actions button, for Open, Show in file manager and Copy path. Switch between Website and Search API sessions to inspect the short file-pane entrance; Search API has its own routes and schema tree. Switching between the two Website sessions keeps the current tree steady. A project's actions offer Browse files when its pane is hidden or belongs to another project. Open in file manager is available independently. Narrow the window and open the project pane drawer to see the same tree over the terminal.",
     state,
     filesByProject: {
       [api.id]: {
@@ -170,14 +170,23 @@ export const projectFilesScenarios: Scenario[] = [
     steps: [...openFiles, (ui) => ui.press(ui.t("sidebar.project.actions", { name: web.name }))],
   },
   {
+    id: "files-row-menu",
+    group: GROUP,
+    category: "normal",
+    title: "A file’s context menu",
+    description: "Right-clicking main.ts opens its menu at the pointer without opening the viewer. Open uses the system’s default application; Show in file manager reveals and selects the file; Copy path copies its project-relative path. Native actions are acknowledged without opening a host application in the gallery. Folder rows offer the same actions.",
+    state,
+    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.contextMenu("main.ts")],
+  },
+  {
     id: "files-row-no-clipboard",
     group: GROUP,
     category: "normal",
-    title: "File and folder rows where nothing can be copied",
-    description: "The current row, main.ts, on a platform with no clipboard: no actions button is drawn on files or folders, whether expanded or collapsed.",
+    title: "File actions without a clipboard",
+    description: "The file’s menu keeps Open and Show in file manager on a platform without clipboard access. Copy path is absent; folder rows retain the same two native actions.",
     state,
     clipboard: "unavailable",
-    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600), (ui) => ui.key("Escape"), (ui) => ui.wait(300)],
+    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.contextMenu("main.ts")],
   },
   {
     id: "files-viewer",

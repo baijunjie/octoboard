@@ -6,9 +6,8 @@ import {
   FileSymlink,
   RotateCw,
   TriangleAlert,
-  type LucideIcon,
 } from "lucide-react";
-import React, { useMemo } from "react";
+import React, { useMemo, useRef } from "react";
 import { Collection, ListLayout, Tree, TreeItem, TreeItemContent, Virtualizer, type Key } from "react-aria-components";
 
 import { CodeToneContext } from "../components/codeTone";
@@ -27,11 +26,9 @@ import { DirectoryRow, ROW_CLASS, ROW_HEIGHT, RowContent, RowName } from "./tree
 
 const IMAGE_NAME = /\.(png|jpe?g|gif|webp|bmp|ico|avif|svg)$/i;
 
-function fileIcon(entry: BrowseEntry | undefined, name: string): LucideIcon {
-  if (!entry) return FileQuestion;
-  if (entry.kind === "symlink") return FileSymlink;
-  if (entry.kind === "other") return FileQuestion;
-  return IMAGE_NAME.test(name) ? FileImage : File;
+function FileIcon({ entry, name }: { entry: BrowseEntry | undefined; name: string }): React.ReactElement {
+  const Icon = !entry ? FileQuestion : entry.kind === "symlink" ? FileSymlink : entry.kind === "other" ? FileQuestion : IMAGE_NAME.test(name) ? FileImage : File;
+  return <Icon aria-hidden="true" className="size-4 shrink-0 text-app-muted" />;
 }
 
 /** The rows of the tree with their rendering kept for every row whose content did not change: the
@@ -113,7 +110,6 @@ export function FileTree({
   onRetry: (dir: string) => void;
   treeRef: React.Ref<HTMLDivElement>;
 }): React.ReactElement {
-  const t = useT();
   const language = useCurrentLanguage();
   const items = useStableNodes(nodes);
   const fade = useScrollFade({ ref: treeRef, className: "min-h-0 flex-1 overflow-auto py-1 outline-none" });
@@ -160,48 +156,10 @@ export function FileTree({
 
   const renderNode = (node: TreeNode): React.ReactElement => {
     if (node.type === "status") return <StatusItem node={node} />;
-    const name = showPaths ? displayWirePath(node.path) : wireBaseName(node.path);
-    if (node.type === "directory") {
-      const link = node.entry.kind === "symlink";
-      return (
-        <TreeItem id={node.key} textValue={name} hasChildItems className={ROW_CLASS}>
-          <TreeItemContent>
-            {({ isExpanded }) => (
-              <DirectoryRow name={name} isExpanded={isExpanded} link={link}>
-                <RowActions path={node.path} name={name} directory />
-              </DirectoryRow>
-            )}
-          </TreeItemContent>
-          <Collection items={childrenOf(node)} dependencies={[language, showPaths]}>
-            {renderNode}
-          </Collection>
-        </TreeItem>
-      );
-    }
-    const isSelected = node.selected;
-    const Icon = fileIcon(node.entry, name);
-    const missing = node.missing === "removed" ? t("browser.tree.removed") : node.missing === "unlisted" ? t("browser.tree.unlisted") : undefined;
-    const ariaLabel =
-      node.missing === "removed"
-        ? t("browser.tree.row.removed", { name: isolate(name) })
-        : node.missing === "unlisted"
-          ? t("browser.tree.row.unlisted", { name: isolate(name) })
-          : isSelected
-            ? t("browser.tree.row.selected", { name: isolate(name) })
-            : name;
-    // Marked `data-current`, not `data-selected`: react-aria-components writes the row's
-    // `data-selected` itself, from a selection the tree does not have.
     return (
-      <TreeItem id={node.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS}>
-        <TreeItemContent>
-          <RowContent>
-            <Icon aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
-            <RowName name={name} className={missing ? "text-app-muted line-through" : undefined} />
-            {missing && <span className="shrink-0 text-xs text-app-muted">{missing}</span>}
-            <RowActions path={node.path} name={name} />
-          </RowContent>
-        </TreeItemContent>
-      </TreeItem>
+      <FileNodeRow node={node} showPaths={showPaths}>
+        {node.type === "directory" && <Collection items={childrenOf(node)} dependencies={[language, showPaths]}>{renderNode}</Collection>}
+      </FileNodeRow>
     );
   };
 
@@ -219,6 +177,55 @@ export function FileTree({
         {renderNode}
       </Tree>
     </Virtualizer>
+  );
+}
+
+function FileNodeRow({ node, showPaths, children }: {
+  node: Exclude<TreeNode, { type: "status" }>;
+  showPaths: boolean;
+  children?: React.ReactNode;
+}): React.ReactElement {
+  const t = useT();
+  const rowRef = useRef<HTMLDivElement>(null);
+  const name = showPaths ? displayWirePath(node.path) : wireBaseName(node.path);
+  if (node.type === "directory") {
+    const link = node.entry.kind === "symlink";
+    return (
+      <TreeItem id={node.key} textValue={name} hasChildItems className={ROW_CLASS} ref={rowRef}>
+        <TreeItemContent>
+          {({ isExpanded }) => (
+            <DirectoryRow name={name} isExpanded={isExpanded} link={link}>
+              <RowActions contextTargetRef={rowRef} path={node.path} name={name} directory />
+            </DirectoryRow>
+          )}
+        </TreeItemContent>
+        {children}
+      </TreeItem>
+    );
+  }
+  const isSelected = node.selected;
+  const missing = node.missing === "removed" ? t("browser.tree.removed") : node.missing === "unlisted" ? t("browser.tree.unlisted") : undefined;
+  const ariaLabel =
+    node.missing === "removed"
+      ? t("browser.tree.row.removed", { name: isolate(name) })
+      : node.missing === "unlisted"
+        ? t("browser.tree.row.unlisted", { name: isolate(name) })
+        : isSelected
+          ? t("browser.tree.row.selected", { name: isolate(name) })
+          : name;
+  // Marked `data-current`, not `data-selected`: react-aria-components writes the row's
+  // `data-selected` itself, from a selection the tree does not have.
+  return (
+    <TreeItem id={node.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS} ref={rowRef}>
+      <TreeItemContent>
+        <RowContent>
+          <FileIcon entry={node.entry} name={name} />
+          <RowName name={name} className={missing ? "text-app-muted line-through" : undefined} />
+          {missing && <span className="shrink-0 text-xs text-app-muted">{missing}</span>}
+          <RowActions contextTargetRef={rowRef} path={node.path} name={name} />
+        </RowContent>
+      </TreeItemContent>
+    </TreeItem>
   );
 }
 

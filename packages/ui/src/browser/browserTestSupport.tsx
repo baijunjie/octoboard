@@ -43,6 +43,7 @@ interface ToastSpies {
 }
 
 interface MountRowsOptions {
+  request?: Daemon["request"];
   /** The platform the rows render on; without a `clipboard` they offer no Copy path. */
   clipboard?: PlatformAdapter["clipboard"];
   /** Where the daemon's toasts go. */
@@ -63,7 +64,7 @@ interface MountRowsOptions {
  * is being torn down: the scheduler then dies on the missing `window`, as an unhandled error the
  * whole run is blamed for.
  */
-export function mountRows(children: React.ReactNode, { clipboard, toasts = { notice: () => {}, error: () => {} }, state }: MountRowsOptions = {}): HTMLElement {
+export function mountRows(children: React.ReactNode, { request = () => Promise.reject(new Error("no daemon")), clipboard, toasts = { notice: () => {}, error: () => {} }, state }: MountRowsOptions = {}): HTMLElement {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -72,7 +73,7 @@ export function mountRows(children: React.ReactNode, { clipboard, toasts = { not
   });
   const daemon: Daemon = {
     store: createStateStore(state),
-    request: () => Promise.reject(new Error("no daemon")),
+    request,
     toastError: (message) => toasts.error(errorText(message)),
     toastNotice: toasts.notice,
     onToast: () => () => {},

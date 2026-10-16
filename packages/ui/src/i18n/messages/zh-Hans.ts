@@ -176,6 +176,7 @@ export const zhHans: Translation<"other"> = {
   "daemon.clean_filtered": "{path} 经过 {filter} clean 过滤器处理，因此无法读取此更改所依据的内容。",
   "daemon.git_failed": "Git 无法读取：{detail}",
   "daemon.terminal_unavailable": "无法打开系统终端：{detail}",
+  "daemon.path_open_failed": "无法打开文件或文件夹：{detail}",
   "daemon.directory_unavailable": "无法打开系统文件管理器：{detail}",
   "daemon.not_on_a_branch": "此项目不在分支上，因此没有可推送的内容。",
   "daemon.no_commits_to_push": "此分支还没有可推送的提交。",
@@ -556,6 +557,8 @@ export const zhHans: Translation<"other"> = {
   "browser.tree.row.selected": "{name}，已选中",
   "browser.tree.row.removed": "{name}，已移除，已选中",
   "browser.tree.row.unlisted": "{name}，未列出，已选中",
+  "browser.row.open": "打开",
+  "browser.row.reveal": "在文件管理器中显示",
   "browser.row.actions": "文件 {name} 的操作",
   "browser.directory.actions": "文件夹 {name} 的操作",
 
