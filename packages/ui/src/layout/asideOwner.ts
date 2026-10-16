@@ -30,7 +30,7 @@ export function liveOwner(
 }
 
 /** What is left of `owner` once `consoleId` is the current console: a browser of a project of
- * another console is closed. A report stays with the console session that is selected, as before. */
+ * another console is closed; a report is left as it is. */
 export function ownerAfterConsoleSwitch(
   owner: AsideOwner | undefined,
   consoleId: string | undefined,
@@ -42,7 +42,7 @@ export function ownerAfterConsoleSwitch(
 
 /**
  * What owns the aside once `consoleId` is the current console with `selected` selected, after
- * anything that may have moved either (another console made current on the rail, Back and Forward):
+ * anything that may have moved either (another console made current, Back and Forward):
  * `owner` with a browser of another console's project closed, and when that leaves nothing, the
  * selected session's own owner: a console session's report whichever console is current, as making
  * another console current never closes one, and a project session's browser while its console is

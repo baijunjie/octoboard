@@ -229,17 +229,19 @@ pane.
 - **Browse files while a console session's report panel is shown** puts the project pane in its place. Selecting the
   console session again brings the report panel back, on its newest page; anything typed into a page's form and not
   submitted is gone (see "Paging through the history" in `docs/product/report-panel.md`).
-- **Making another console the current one** on the rail — pressing its avatar, or pressing inside the floating
-  sidebar while it previews that console (see "Previewing a console from the rail" in `docs/product/sidebar.md`) —
-  closes the project pane of a project of the console left behind; only previewing a console changes nothing here. A
-  report panel stays, since its console session is still the one selected. When that leaves the right pane with no
-  owner, the selected session's own pane comes back: a console session's report panel at once, a project session's
-  project pane once that session's console is the current one again, on the rail or by Back and Forward.
+- **Making another console the current one** — pressing its avatar on the rail, pressing inside the floating sidebar
+  while it previews that console, or a console created from this window appearing — puts in the right pane the own
+  pane of the session the switch shows, the one last selected in that console; with no session shown there is no
+  right pane (see "What switching console shows" in `docs/product/sidebar.md`). A press inside the floating sidebar
+  that gives the right pane to something itself, as Browse files does, keeps what it gave it. Only previewing a
+  console changes nothing here.
 - **Back and Forward** do not record the owner, which is not part of a place (see "What counts as a place" in
   `docs/product/navigation-history.md`). A move to another session puts that session's own pane in the right pane, as
-  selecting it would; a move that keeps the selected session leaves the owner as it is. Either way the rule of making
-  another console the current one then applies, since the place moved to can have another current console than its
-  session's.
+  selecting it would; a move that keeps the selected session leaves the owner as it is. Either way, since the place
+  moved to can have another current console than its session's, a project pane of a project of any console other
+  than the current one is then closed; when that leaves the right pane with no owner, the selected session's own pane
+  comes back: a console session's report panel at once, a project session's project pane only while that session's
+  console is the current one.
 - **When the owner stops existing** — its project removed, its console session deleted — there is no right pane.
   Nothing takes its place: not another project, and not the selected session's own pane.
 

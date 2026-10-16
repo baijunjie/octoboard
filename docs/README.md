@@ -37,13 +37,13 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Session usage](product/session-usage.md) — native per-session token totals in focus mode and the archive, cache
   accounting across agents, live refresh and retained historical usage, and what missing records mean.
 - [Sidebar](product/sidebar.md) — one console at a time, picked on the rail's console switcher with each console's
-  activity badge, previewing another console from the rail while the sidebar is hidden, the console header, the
-  console sessions section and the project list, project and session rows and their menus, the sessions bound to a
-  project session listed under it, the binding badge a bound session carries, keyboard focus on rows, the order of
-  projects and sessions and pinning, filtering the project list and folding every project from its heading, how the
-  sidebar follows the selected session, how its view changes are animated, the shared shape of the empty row a section
-  with nothing to list takes, the archive view, and right-clicking a row, header or rail avatar for its action menu
-  (and where focus goes when the menu closes).
+  activity badge and the session a switch brings back into the terminal, previewing another console from the rail
+  while the sidebar is hidden, the console header, the console sessions section and the project list, project and
+  session rows and their menus, the sessions bound to a project session listed under it, the binding badge a bound
+  session carries, keyboard focus on rows, the order of projects and sessions and pinning, filtering the project list
+  and folding every project from its heading, how the sidebar follows the selected session, how its view changes are
+  animated, the shared shape of the empty row a section with nothing to list takes, the archive view, and
+  right-clicking a row, header or rail avatar for its action menu (and where focus goes when the menu closes).
 - [Focus mode](product/focus-mode.md) — a project's and a console session's focus mode: what each view lists, where a
   lead session and the sessions under it are listed and where they are only counted, the switch strip of a console
   session's focus mode (its fixed chip order, the activity each chip carries, a click versus ⌃Tab / ⌃⇧Tab and which

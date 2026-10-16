@@ -28,8 +28,9 @@ export interface Navigation {
   /** The console is about to change because a press inside the previewing sidebar committed it, and
    * that press may go on to select something in it: the visit the console change makes and the one
    * the selection makes are then recorded as one, so Back does not stop between them. Only a change
-   * before the pointer is released joins it. */
-  joinPressVisits: () => void;
+   * before the pointer is released joins it. `beforeEnd` runs once the press has ended, just before
+   * the join does, so a change it makes (rendered at once) is still part of the visit. */
+  joinPressVisits: (beforeEnd?: () => void) => void;
 }
 
 /**
@@ -112,7 +113,7 @@ export function useNavigationHistory({
 
   const endJoin = useRef<(() => void) | undefined>(undefined);
   const joinTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const joinPressVisits = () => {
+  const joinPressVisits = (beforeEnd?: () => void) => {
     endJoin.current?.();
     clearTimeout(joinTimer.current);
     announced.current = true;
@@ -126,7 +127,10 @@ export function useNavigationHistory({
     const release = () => {
       stop();
       // After the press's own handlers have run, which is where a selection is made.
-      joinTimer.current = setTimeout(() => (announced.current = joining.current = false), 50);
+      joinTimer.current = setTimeout(() => {
+        beforeEnd?.();
+        announced.current = joining.current = false;
+      }, 50);
     };
     for (const type of ["pointerup", "pointercancel"]) window.addEventListener(type, release, true);
     window.addEventListener("blur", release);

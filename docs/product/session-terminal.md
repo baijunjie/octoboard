@@ -179,9 +179,9 @@ The sidebar's empty lists stay compact alongside this panel (see "Empty rows" in
 
 - An **archived console session** does not satisfy the console-session condition outside focus mode; an interrupted
   console session does. Archived project sessions do not fill a project's focus-mode live list.
-- A selected session suppresses the panel. The selection survives a console switch, so immediately after switching
-  to an empty console, or creating one, the terminal may still show the previous console's selected session; the
-  sidebar's compact row carries the offer then.
+- A selected session suppresses the panel. Switching console shows the session last selected in the console switched
+  to, or none (see "What switching console shows" in `docs/product/sidebar.md`), so a console with no remembered
+  session, a console just created among them, shows this panel for itself.
 - The console read is the **current** one, not the one the sidebar is previewing while the pointer rests on another
   console's avatar on the rail (see "Previewing a console from the rail" in `docs/product/sidebar.md`).
 - **The archive view covering the terminal suppresses the creation offer**: while it is open, the underlying area

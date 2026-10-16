@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, useState } from "react";
+import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
@@ -240,7 +241,7 @@ describe("joinPressVisits", () => {
     container = document.body.appendChild(document.createElement("div"));
     root = createRoot(container);
     act(() => root!.render(<PlatformProvider value={{ kind: "browser" }}><Host /></PlatformProvider>));
-    return { navigation: () => navigation, setConsole: (id: string) => act(() => setConsole(id)), setSession: (id: string) => act(() => setSession(id)) };
+    return { navigation: () => navigation, setConsole: (id: string) => act(() => setConsole(id)), setSession: (id: string) => act(() => setSession(id)), setSessionNow: (id: string) => setSession(id) };
   }
   const release = (type = "pointerup") => {
     window.dispatchEvent(new MouseEvent(type));
@@ -260,6 +261,15 @@ describe("joinPressVisits", () => {
     expect(ui.navigation().canGoBack).toBe(false);
     act(() => ui.navigation().forward());
     expect(ui.navigation().canGoForward).toBe(false);
+  });
+
+  it("records a change made by `beforeEnd` in the visit the press made", () => {
+    const ui = mountConsoles();
+    ui.navigation().joinPressVisits(() => flushSync(() => ui.setSessionNow("s-3")));
+    ui.setConsole("c-2");
+    release();
+    act(() => ui.navigation().back());
+    expect(ui.navigation().canGoBack).toBe(false);
   });
 
   it("keeps joining when a second press is announced just after the first one's release, and drops the first one's listeners", () => {

@@ -22,10 +22,15 @@ leaving focus mode, a chip in a focus mode, the archive view opening or closing,
 menu, a session this window opened being selected, a keyboard shortcut. A change that leaves the window where it already
 was is not recorded again.
 
-One press can make two changes and still be one visit: a press inside the floating sidebar that makes the console it
-previews the current one and goes on to select a session there (see "Previewing a console from the rail" in
-`docs/product/sidebar.md`). Back from it returns to where the window was before the press. A selection made after that
-press has ended is a visit of its own.
+**Switching console is one visit**: the new current console together with the session it shows, the one last
+selected there or none (see "What switching console shows" in `docs/product/sidebar.md`). Back from it returns to the
+console before and the session that was selected there.
+
+A press inside the floating sidebar that makes the console it previews the current one (see "Previewing a console
+from the rail" in `docs/product/sidebar.md`) is one visit too: the console change together with the session the press
+goes on to select there, or, when it selects none, with the console's remembered session shown once the press has
+ended. Back from it returns to where the window was before the press. A selection made after that press has ended is
+a visit of its own.
 
 The history starts once the daemon's state has first arrived. It is kept in memory for the window alone: it is not
 stored, so reloading the window or restarting the application starts it empty, and every client has its own. It holds

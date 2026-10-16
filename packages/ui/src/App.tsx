@@ -31,7 +31,7 @@ import type { AsideLayout } from "./layout/AsidePane";
 import { ASIDE_LABELS, liveOwner, ownerAfterMove, ownerForSession, ownerKey, sameOwner, type AsideOwner } from "./layout/asideOwner";
 import { usePaneWidth } from "./layout/paneWidth";
 import type { DockPhase } from "./layout/paneDockMotion";
-import { useConsoleOwnerRule } from "./layout/useConsoleOwnerRule";
+import { type HeldChoices, useConsoleSwitchFollowUp } from "./layout/useConsoleSwitchFollowUp";
 import { usePaneToggles } from "./layout/usePaneToggles";
 import { useRegionCycle } from "./layout/useRegionCycle";
 import { useAppExit } from "./lifecycle/useAppExit";
@@ -48,6 +48,7 @@ import { SettingsDialog } from "./settings/SettingsDialog";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
 import { belongsToFocus, focusAfterSelect, focusFor, focusKey, followsStartedConsoleSession, KEY_SWITCH_SELECTION, resolveFocus, shortcutOutcome } from "./sidebar/focus";
 import { useFocusShortcut } from "./sidebar/focusShortcut";
+import { useLastSessionPerConsole } from "./sidebar/lastSessionPerConsole";
 import { archiveNeedsConfirmation, consoleSessionAbove, switchStrip } from "./sidebar/order";
 import { Sidebar } from "./sidebar/Sidebar";
 import { useSidebarView } from "./sidebar/sidebarView";
@@ -187,17 +188,47 @@ export function App(): React.ReactElement {
   useEffect(() => {
     if (asideOwnerState && !asideOwner && hosts) setAsideOwner(undefined);
   }, [asideOwnerState, asideOwner, hosts]);
+  const lastSessionIn = useLastSessionPerConsole(selectedSession, sessions);
+  /** Shows the session last selected in `consoleId`, if it is still there, and the aside of that
+   * session; each part only where `choices` says so. Like Back and Forward it only shows it: an
+   * interrupted session is not resumed, an archived one not reopened. */
+  const showLastSession = (consoleId: string | undefined, { selection, owner }: HeldChoices) => {
+    const session = consoleId ? lastSessionIn(consoleId) : undefined;
+    if (selection) setSelectedSessionId(session?.id);
+    if (owner) setAsideOwner(ownerForSession(session));
+  };
   // Making another console current closes a browser of a project of the console left behind (a
   // console the floating sidebar only previews is not current), and coming back to the selected
-  // session's console gives the aside back to the session's own owner.
-  const ownerRule = useConsoleOwnerRule(sidebarView.currentConsole?.id, () => {
-    const next = ownerAfterMove(asideOwnerState, selectedSession, sidebarView.currentConsole?.id, projects);
-    if (!sameOwner(next, asideOwnerState)) setAsideOwner(next);
-  });
+  // session's console gives the aside back to the session's own owner. A console made current by a
+  // press in the previewing sidebar then shows its last session and that session's aside once the
+  // press has ended, except what the press chose itself (`commitPreview`).
+  const followUp = useConsoleSwitchFollowUp(
+    sidebarView.currentConsole?.id,
+    () => {
+      const next = ownerAfterMove(asideOwnerState, selectedSession, sidebarView.currentConsole?.id, projects);
+      if (!sameOwner(next, asideOwnerState)) setAsideOwner(next);
+    },
+    // Rendered at once: the history's recording effect has to run before the navigation join ends
+    // (`commitPreview`), or the restore would be a visit of its own.
+    (choices) => flushSync(() => showLastSession(sidebarView.currentConsole?.id, choices)),
+  );
   /** The owner as the user just set it, which settles a console change held for the same press. */
   const setOwnerByUser = (owner: AsideOwner | undefined) => {
-    ownerRule.ownerSet();
+    followUp.claim("owner");
     setAsideOwner(owner);
+  };
+  /** The selection as the user just made it, which settles a console change held for the same press. */
+  const setSelectionByUser = (id: string | undefined) => {
+    followUp.claim("selection");
+    setSelectedSessionId(id);
+  };
+  /** Makes a console current by a press on the rail, or a console this window created: the terminal
+   * and the aside go with it, and an open archive view gives way. */
+  const switchConsole = (consoleId: string) => {
+    if (consoleId === sidebarView.currentConsole?.id) return;
+    sidebarView.selectConsole(consoleId);
+    setArchiveScope(undefined);
+    showLastSession(consoleId, { selection: true, owner: true });
   };
   // A removed project's browser state has nothing left to apply to.
   useEffect(() => {
@@ -271,7 +302,7 @@ export function App(): React.ReactElement {
   /** Puts a session this window just opened on screen; it is always in the console and project the
    * sidebar already shows, so only the archive view, were it open, has to give way. */
   const showOpenedSession = (sessionId: string) => {
-    setSelectedSessionId(sessionId);
+    setSelectionByUser(sessionId);
     // The reply that names the session has already been applied to the store by the time this runs.
     setOwnerByUser(ownerForSession(store.getState().sessions.get(sessionId)));
     setArchiveScope(undefined);
@@ -290,7 +321,7 @@ export function App(): React.ReactElement {
     const created = consoleList.find((c) => !before.has(c.id));
     if (created) {
       consolesBeforeNew.current = undefined;
-      sidebarView.selectConsole(created.id);
+      switchConsole(created.id);
     }
   }, [consoleList]);
   const closeDialog = () => {
@@ -300,7 +331,7 @@ export function App(): React.ReactElement {
   };
 
   const selectSession = (session: Session, { enterFocus = false, resume = true } = {}) => {
-    setSelectedSessionId(session.id);
+    setSelectionByUser(session.id);
     // A console session brings its report into the aside, a project session its project's browser.
     setOwnerByUser(ownerForSession(session));
     // Whatever led here — the sidebar, the archive, the waiting-count button — the sidebar follows
@@ -477,14 +508,17 @@ export function App(): React.ReactElement {
     focusTerminal,
   });
 
-  // A press in the previewing sidebar makes its console current. If that press goes on to select a
-  // session there, the two changes are one visit in the history, and the aside goes straight to
-  // that session's owner rather than first through the console change's.
+  // A press in the previewing sidebar makes its console current. The console change and that
+  // selection, or the console change and the restore of what the console last showed (the follow-up
+  // `releasePress` runs), are one visit in the history, and neither the last session nor the aside
+  // of the console change shows for the length of the press. The follow-up's release comes first,
+  // then the join ends.
   const commitPreview = () => {
     if (!previewing || !shownConsole) return;
-    navigation.joinPressVisits();
-    ownerRule.holdForPress();
+    followUp.holdForPress();
+    navigation.joinPressVisits(followUp.releasePress);
     sidebarView.selectConsole(shownConsole.id);
+    setArchiveScope(undefined);
   };
 
   const setSessionColour = (session: Session, colour: ConsoleSessionColour) => {
@@ -546,6 +580,7 @@ export function App(): React.ReactElement {
   const stableSetSessionColour = useStableHandler(setSessionColour);
   const stableOpenArchive = useStableHandler(openArchive);
   const stableBrowseProject = useStableHandler(browseProject);
+  const stableSwitchConsole = useStableHandler(switchConsole);
   const stableCommitPreview = useStableHandler(commitPreview);
   const stableNextWaiting = useStableHandler(selectNextWaiting);
   const stableToggleSidebar = useStableHandler(panes.toggleSidebar);
@@ -610,7 +645,7 @@ export function App(): React.ReactElement {
           consoles={consoleList}
           sessions={sessionList}
           currentConsoleId={sidebarView.currentConsole?.id}
-          onSelectConsole={sidebarView.selectConsole}
+          onSelectConsole={stableSwitchConsole}
           onConsoleEnter={panes.sidebarPeek.hoverConsole}
           onConsoleLeave={panes.sidebarPeek.leaveConsole}
           hoverOpensSidebar={panes.sidebarPeek.peekable}

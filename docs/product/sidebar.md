@@ -48,9 +48,35 @@ the sidebar's header carries (see "The console header" below). It does not switc
 
 **The current console is remembered per client**, in that client's own browser storage, as the panes' widths are
 (see "Resizing the sidebar and the right pane" in `docs/product/window-layout.md`). A remembered console that no
-longer exists falls back to the first console. Switching console leaves focus mode; the selected session stays
-selected. Selecting a session anywhere switches the sidebar to that session's console (see "Selecting a session"
-below).
+longer exists falls back to the first console. Switching console switches the terminal's area and the right pane with
+it (see "What switching console shows" below). Selecting a session anywhere switches the sidebar to that session's
+console (see "Selecting a session" below).
+
+### What switching console shows
+
+Making another console the current one — pressing its avatar, a press inside the floating sidebar while it previews
+that console (see "Previewing a console from the rail" below), or a console created from this window appearing —
+switches the whole window to that console, not only the sidebar:
+
+- **The terminal's area shows the session last selected in that console**, the way Back and Forward show a place: an
+  interrupted session is shown without being resumed, and an archived one is shown still archived, not reopened (see
+  "Selecting a session" below for what selecting does instead). With no session remembered for the console, or with
+  the remembered one no longer existing, nothing is selected, and the terminal's area shows its empty state for that
+  console (see "With no session selected" in `docs/product/session-terminal.md`); a console just created always
+  shows that.
+- **The right pane shows that session's own pane** — a console session's report panel, a project session's project
+  pane — and with nothing selected there is no right pane (see "What the right pane shows" in
+  `docs/product/window-layout.md`).
+- **Focus mode is left**, and an **open archive view closes**.
+
+**The session last selected in each console is remembered per window, in memory only**: whichever way the session
+was selected (a row, a menu, Back and Forward, a session this window opened, and so on), it becomes the one shown the
+next time its console is switched to. It is not stored, so reloading the window or restarting the application forgets
+it, and every client has its own.
+
+Selecting a session of another console — from a menu, the rail's waiting count or the menu bar icon's menu — also
+makes its console the current one, but shows **the session chosen**, not the one remembered for that console; Back and
+Forward moving to a place in another console likewise show that place's own session, or none.
 
 ### Previewing a console from the rail
 
@@ -68,8 +94,13 @@ is a **preview**:
   history all stay as they were.
 - **A press anywhere inside the floating sidebar**, with any mouse button, makes the previewed console the current
   one, and the press then goes on to do what it does there — select a row, open a menu, start a dialog. Pressing the
-  avatar itself makes it current too, as always. In the window's history a press that makes the console current and
-  then selects a session counts as one visit (see "What counts as a place" in
+  avatar itself makes it current too, as always. Such a press closes an open archive view at once, but the terminal's
+  area and the right pane change only **once the press has ended**, and to what the press chose itself where it
+  chose something: a session the press selected is shown, with its own pane; otherwise the console's remembered
+  session is shown as described in "What switching console shows" above. A press that only gave the right pane to
+  something, as Browse files does, still brings the remembered session into the terminal's area, and the right pane
+  keeps what the press gave it. In the window's history the console change together with the press's selection, or
+  with the remembered session shown at its end, counts as one visit (see "What counts as a place" in
   `docs/product/navigation-history.md`).
 - Showing the sidebar for good with its toggle while it previews a console shows the current console, not the one the
   card was previewing. The card goes away and the column eases open; see "Hiding the sidebar and the right pane"
@@ -499,7 +530,8 @@ puts its own pane in the window's right pane: a console session's report panel, 
 "What the right pane shows" in `docs/product/window-layout.md`). Whatever it is selected from — a sidebar row, a "View
 archive" or "Archived console sessions" submenu, focus mode and its switch strip, the archive view, the rail's waiting
 count, or the menu bar icon's menu (see "Choosing a session" in `docs/product/menu-bar-icon.md`) — **the sidebar
-follows it**: it switches to the session's console, and leaves focus mode when the session does not belong to what
+follows it**: it switches to the session's console, showing the session selected rather than the one remembered for
+that console (see "What switching console shows" above), and leaves focus mode when the session does not belong to what
 focus mode is on (see "Leaving focus mode, and what is remembered" in `docs/product/focus-mode.md`). Back and Forward
 return to earlier selections without resuming anything (see `docs/product/navigation-history.md`).
 
@@ -578,7 +610,8 @@ scope and nesting are described below.
   archived sessions.
 
 **It closes** on its Close button, on `Escape` while keyboard focus is in it, when a session is selected (from it or
-from anywhere else, as in "Selecting a session" above), when this window opens a new session, and by itself when its
+from anywhere else, as in "Selecting a session" above), when this window opens a new session, when another console is
+made the current one (see "What switching console shows" above), and by itself when its
 project, its console session or its console no longer exists. Closing it hands keyboard focus to the terminal.
 
 The view slides up from below on opening and slides down on closing, each over 240 ms. Closing takes effect at
