@@ -60,7 +60,7 @@ export const unboundArchived = sessionOf("s-unbound-archived", console_.id, proj
 // An archived lead session bound to `boundConsoleSession` with two archived sessions of its own:
 // a console session's archive reaches them, and lists them under their lead session. Exported for
 // `ArchiveView.test.tsx`, as the sessions above are.
-export const archivedLead = sessionOf("s-lead-archived", console_.id, project.id, "Archived lead session", "archived", {
+export const archivedLead = sessionOf("s-lead-archived", console_.id, project.id, "Release lead session", "archived", {
   bound_to: boundConsoleSession.id,
   ended_at: minutesAgo(8),
 });
@@ -145,8 +145,12 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive with live and archived owners",
     state: archiveState,
-    description: "The full project archive retains the last active task titles beside the original session names and includes children omitted from the preview. Children of the archived lead nest under it; the archived child of the active lead appears as a standalone row. Only dates sit on the right, with archived time above created time to match the archive ordering; bare native usage follows the agent name with a dot separator, showing substantial usage while recorded zero totals and absent records are hidden. Hover a row to compare the separately filled Reopen and Delete buttons against its background. Long session titles fade and scroll only on text hover. Agent names omit parenthesized accounts; hover agent icons for account details. Archive count and heading also respond only to their own text hover. Hovering agent icons, Reopen, Delete or header controls leaves the text still. Close the archive, then open it again through the project menu to review both transitions.",
+    description: "The full project archive retains the last active task titles beside the original session names and includes children omitted from the preview. Children of the archived lead nest under it; the archived child of the active lead appears as a standalone row. Only dates sit on the right, with archived time above created time to match the archive ordering; bare native usage follows the agent name with a dot separator, showing substantial usage while recorded zero totals and absent records are hidden. Each row is a button: hover it for the pointer cursor and the row background, or Tab to it for a focus ring around the row; Reopen and Delete show in both cases, and their separate fills can be compared against the row background. The archived lead's row is the selected session and keeps its selected background at rest, as the archived rows in the sidebar do. Pressing another row (not Reopen or Delete) closes the archive and shows that session's saved terminal. Long session titles fade and scroll only on text hover. Agent names omit parenthesized accounts; hover agent icons for account details. Archive count and heading also respond only to their own text hover. Hovering agent icons, Reopen, Delete or header controls leaves the text still. Close the archive, then open it again through the project menu to review both transitions.",
     steps: [
+      // Selecting the archived lead from the menu, then opening the full archive, marks its row.
+      (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
+      (ui) => ui.press(ui.t("sidebar.project.archive")),
+      (ui) => ui.press(archivedLead.title),
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),

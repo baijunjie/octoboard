@@ -48,6 +48,11 @@ the **100** most recent places; older ones are dropped.
 - **Moving shows the place as it was, without acting on it**: going back to an interrupted session shows it without
   resuming it, and going back to a place with the archive view open opens it again. Selecting a session, by contrast,
   resumes an interrupted one (see "Selecting a session" in `docs/product/sidebar.md`).
+- **An archive view comes back as it was left**: moving to a place with the archive view open shows as many rows as
+  were loaded when that scope's view was last left, scrolled to the same offset — or as far as the list now goes, if it
+  has since become shorter. This is kept per scope (a project, a console session or a console), in memory alone, for as
+  long as the history is. Opening the archive view anew with any **View all** starts it at the top with its first
+  rows, while asking for the scope that is already open leaves it where it is.
 - **When the place on screen stops existing** — its selected session deleted, its console deleted, its focus mode gone —
   the window falls back by itself, as described where each of those is, and the place it falls back to takes the
   place of the one that has gone rather than counting as a visit.

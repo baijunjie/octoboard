@@ -23,14 +23,14 @@ export const HISTORY_LIMIT = 100;
 
 export const EMPTY_HISTORY: NavigationHistory = { entries: [], index: -1 };
 
+/** Names an archive view's scope, for keeping per-scope state. */
+export function archiveKey(scope: ArchiveScope): string {
+  return JSON.stringify([scope.console, scope.project, scope.consoleSession]);
+}
+
 export function locationKey(location: Location): string {
   const { archive } = location;
-  return JSON.stringify([
-    location.console,
-    location.session,
-    location.focus,
-    archive && [archive.console, archive.project, archive.consoleSession],
-  ]);
+  return JSON.stringify([location.console, location.session, location.focus, archive && archiveKey(archive)]);
 }
 
 /** Records a location the user navigated to. The same location as the current one is not recorded

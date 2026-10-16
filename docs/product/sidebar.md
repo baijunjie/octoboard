@@ -347,8 +347,9 @@ icon identifies the account in its tooltip: the account's name, the agent's defa
 account, the directory the session recorded. With no account to name, the tooltip names the agent instead. The
 tooltip shows on pointer hover only, and the icon adds no tab stop. It is also available on focus mode's session
 cards and archived rows (see `docs/product/focus-mode.md`), the archive view's rows (see "The archive view" below),
-and sessions listed in a confirmation. Session rows and focus mode cards retain the account in their accessible
-names; confirmations provide the agent and account as hidden accessible text beside the icon. Its action menu offers:
+and sessions listed in a confirmation. Session rows, focus mode cards and the archive view's rows retain the account in
+their accessible names; confirmations provide the agent and account as hidden accessible text beside the icon. Its
+action menu offers:
 
 - **Pin** / **Unpin**.
 - **Rename** — see "Renaming a session" in `docs/product/sessions.md`.
@@ -596,9 +597,13 @@ scope and nesting are described below.
 - A session whose owner is **a project session listed here too** — an archived session of an archived lead session, or
   of any archived project session that had started sessions — is **inset under that owner**, with rounded connectors
   as in "Project rows" above, and follows it instead of being ranked against the rows beside it; one whose owner is
-  not in the list is listed on its own. The row's text names the owner for assistive technology, in the wording a
+  not in the list is listed on its own. The row's accessible name also names the owner, in the wording a
   session row uses (see "The binding badge" above). The 30 rows are counted as rows, so an inset row is never shown before the row it is
   inset under.
+- **Selecting a row** — clicking it, or `Enter` or `Space` on it — selects its session, which closes the view (see
+  "Selecting a session" above): the session is shown still archived, its saved terminal preview read-only behind the
+  card that offers Reopen, just as when it is selected from a preview. Selecting it does not reopen it. Pressing the
+  row's Reopen or Delete does not select the row. The row of the selected session is marked as selected.
 - **Reopen** resumes the session and selects it, which closes the view (see "Selecting a session" above).
 - **Delete** asks for confirmation, then deletes that session — for an archived owner, listing the archived sessions
   under it that are deleted with it; **Delete all** asks for confirmation, naming how many, then deletes every archived

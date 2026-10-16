@@ -35,6 +35,7 @@ function renderArchiveView(
   onOpenDialog: (dialog: DialogRequest) => void = () => {},
   onClose: () => void = () => {},
   sessions: Session[] = [...OTHER_SESSIONS, ...boundArchived],
+  overrides: Partial<React.ComponentProps<typeof ArchiveView>> = {},
 ): { container: HTMLElement } {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -49,10 +50,12 @@ function renderArchiveView(
         boundTo={boundConsoleSession}
         sessions={sessions}
         accounts={[]}
+        onSelect={() => {}}
         onReopen={() => {}}
         onOpenDialog={onOpenDialog}
         dialogOpen={false}
         onClose={onClose}
+        {...overrides}
       />,
     ),
   );
@@ -88,7 +91,7 @@ it("lists the sessions archived under a lead session after it, inset, and names 
   const rows = Array.from(container.querySelectorAll<HTMLElement>("ul > li:has(button)"));
   // Newest first, except that the lead session's own sessions follow it rather than being ranked
   // against the console session's.
-  expect(rows.map((row) => [row.querySelector(".text-sm")?.textContent, row.className.includes("ms-[17px]")])).toEqual([
+  expect(rows.map((row) => [row.querySelector("[dir=auto]")?.textContent, row.className.includes("ms-[17px]")])).toEqual([
     [boundArchived[0].title, false],
     [archivedLead.title, false],
     [underArchivedLead[0].title, true],
@@ -96,7 +99,29 @@ it("lists the sessions archived under a lead session after it, inset, and names 
     [boundArchived[1].title, false],
     [boundArchived[2].title, false],
   ]);
-  expect(rows[2].querySelector(".sr-only")?.textContent).toBe(`Bound to ${isolate(archivedLead.title)}`);
+  expect(rows[2].querySelector("[role=button]")?.getAttribute("aria-label")).toContain(`Bound to ${isolate(archivedLead.title)}`);
+});
+
+it("selects a row's session when the row is pressed or given Enter, but not when Reopen or Delete is", () => {
+  const onSelect = vi.fn();
+  const onReopen = vi.fn();
+  const onOpenDialog = vi.fn();
+  const { container } = renderArchiveView(onOpenDialog, () => {}, undefined, { onSelect, onReopen });
+  const row = container.querySelector<HTMLElement>("ul > li [role=button]")!;
+  act(() => row.click());
+  expect(onSelect).toHaveBeenCalledTimes(1);
+  expect(onSelect).toHaveBeenCalledWith(boundArchived[0]);
+  act(() => {
+    row.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  });
+  expect(onSelect).toHaveBeenCalledTimes(2);
+  const reopen = Array.from(row.querySelectorAll("button")).find((b) => b.textContent === "Reopen")!;
+  act(() => reopen.click());
+  expect(onReopen).toHaveBeenCalledWith(boundArchived[0]);
+  const remove = row.querySelector<HTMLElement>("button[aria-label^='Delete']")!;
+  act(() => remove.click());
+  expect(onOpenDialog).toHaveBeenCalledWith({ kind: "delete-session", session: boundArchived[0] });
+  expect(onSelect).toHaveBeenCalledTimes(2);
 });
 
 /** Presses Escape on the control the way a keyboard user gets there — a key press, then the focus,
@@ -135,4 +160,23 @@ it.each(["header", "row"] as const)("runs only the hovered text in the archive %
   const labels = Array.from(surface.querySelectorAll<HTMLElement>(".overflow-hidden.whitespace-nowrap"));
   expect(labels).toHaveLength(2);
   expectIndependentMarquees(labels, [surface, ...surface.querySelectorAll("button, svg")]);
+});
+
+it("opens at the loaded page count and scroll offset it is restored to, and reports where it is scrolled", () => {
+  const onViewState = vi.fn();
+  // Two of the three rows are shown, so the end-of-list sentinel is observed.
+  vi.stubGlobal("IntersectionObserver", class { observe() {} disconnect() {} });
+  onTestFinished(() => void vi.unstubAllGlobals());
+  const { container } = renderArchiveView(() => {}, () => {}, undefined, {
+    restore: { shown: 2, scrollTop: 40 },
+    onViewState,
+  });
+  expect(container.querySelectorAll("ul > li:has([role=button])")).toHaveLength(2);
+  const scroller = container.querySelector<HTMLElement>("section[data-region='archive'] > div")!;
+  expect(scroller.scrollTop).toBe(40);
+  act(() => {
+    scroller.scrollTop = 10;
+    scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+  });
+  expect(onViewState).toHaveBeenLastCalledWith({ shown: 2, scrollTop: 10 });
 });

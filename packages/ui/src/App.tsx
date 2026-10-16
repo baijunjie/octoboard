@@ -8,6 +8,7 @@ import { errorPresentation } from "./errorPresentation";
 import { flushSync } from "react-dom";
 
 import { ArchiveLayer } from "./archive/ArchiveLayer";
+import type { ArchiveViewState } from "./archive/ArchiveView";
 import { forgetProjectsOtherThan, noteSessionSwitch, setProjectBrowserMode } from "./browser/browserState";
 import { LazyProjectBrowser } from "./browser/LazyProjectBrowser";
 import { ConnectionBanner } from "./components/ConnectionBanner";
@@ -38,7 +39,7 @@ import { useAppExit } from "./lifecycle/useAppExit";
 import { useGitStatusSchedule } from "./lifecycle/useGitStatusSchedule";
 import { useStatusItemMenu } from "./lifecycle/useStatusItemMenu";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
-import { isLive, type Location } from "./navigation/history";
+import { archiveKey, isLive, type Location } from "./navigation/history";
 import { useNavigationHistory } from "./navigation/useNavigationHistory";
 import { usePlatform } from "./platform/react";
 import { ALREADY_RUNNING_CODES, type Console, type ConsoleSessionColour, type Project, type Session } from "./protocol";
@@ -85,6 +86,10 @@ export function App(): React.ReactElement {
   const [dialogRequest, setDialogRequest] = useState<DialogRequest>();
   const latestDialogRequest = useLatest(dialogRequest);
   const [archiveScope, setArchiveScope] = useState<ArchiveScope>();
+  // How far each scope's archive list was loaded and scrolled, by `archiveKey`, for Back and
+  // Forward to put it back. A visit opened fresh (`openArchive`) forgets it and starts at the top.
+  const archiveViewStates = useRef(new Map<string, ArchiveViewState>());
+  const [archiveRestore, setArchiveRestore] = useState<ArchiveViewState>();
   // Sessions whose `resume_session` is in flight, for the terminal's loading state.
   const [resumingIds, setResumingIds] = useState<ReadonlySet<string>>(new Set());
 
@@ -425,6 +430,12 @@ export function App(): React.ReactElement {
   };
 
   const openArchive = (scope: ArchiveScope) => {
+    // Asking for the archive already open changes nothing, so what Back would restore stays.
+    const alreadyOpen = archiveOpen && archiveScope !== undefined && archiveKey(archiveScope) === archiveKey(scope);
+    if (!alreadyOpen) {
+      archiveViewStates.current.delete(archiveKey(scope));
+      setArchiveRestore(undefined);
+    }
     setArchiveScope(scope);
     // Below the `docked` breakpoint the sidebar is a drawer over the terminal, and would keep
     // covering the archive that was just asked for.
@@ -503,6 +514,7 @@ export function App(): React.ReactElement {
       // current, as the place moved to may have another current console than its session's.
       const owner = target.session !== selectedSessionId ? ownerForSession(session) : asideOwner;
       setAsideOwner(ownerAfterMove(owner, session, target.console, projects));
+      setArchiveRestore(target.archive && archiveViewStates.current.get(archiveKey(target.archive)));
       setArchiveScope(target.archive);
     },
     focusTerminal,
@@ -568,14 +580,15 @@ export function App(): React.ReactElement {
     if (next) selectSession(next);
   };
 
-  // Handed to the sidebar's and the rail's rows and to the top bar. The React Compiler cannot keep
-  // these closures from changing with every daemon event (they capture the store's maps, or write
-  // refs), so each is one function for good: an event then renders again only the rows whose own
-  // records it changed.
+  // Handed to the sidebar's and the rail's rows, the archive view's rows and the top bar. The React
+  // Compiler cannot keep these closures from changing with every daemon event (they capture the
+  // store's maps, or write refs), so each is one function for good: an event then renders again
+  // only the rows whose own records it changed.
   const stableSelectSession = useStableHandler((session: Session) => selectSession(session));
   const stableSwitchConsoleSession = useStableHandler(switchConsoleSession);
   const stableOpenConsoleSession = useStableHandler(openConsoleSession);
   const stableOpenDialog = useStableHandler(openDialog);
+  const stableReopenSession = useStableHandler(reopenSession);
   const stableArchiveSession = useStableHandler(archiveSession);
   const stableSetSessionColour = useStableHandler(setSessionColour);
   const stableOpenArchive = useStableHandler(openArchive);
@@ -733,10 +746,16 @@ export function App(): React.ReactElement {
                           ? sessionList.filter((s) => s.console_id === archiveConsole.id)
                           : sessionList.filter((s) => s.console_id === archiveConsole.id && s.role === "console"),
                       accounts,
-                      onReopen: reopenSession,
-                      onOpenDialog: openDialog,
+                      selectedSessionId,
+                      onSelect: stableSelectSession,
+                      onReopen: stableReopenSession,
+                      onOpenDialog: stableOpenDialog,
                       dialogOpen: dialogRequest !== undefined,
                       onClose: closeArchive,
+                      restore: archiveRestore,
+                      onViewState: (state) => {
+                        if (archiveScope) archiveViewStates.current.set(archiveKey(archiveScope), state);
+                      },
                     } : undefined}
                   />
                   <TerminalPane
