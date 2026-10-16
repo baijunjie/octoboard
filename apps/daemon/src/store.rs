@@ -1169,6 +1169,27 @@ impl Store {
         Ok(session)
     }
 
+    /// A session other than `except` that records `agent_session_id` as its agent's conversation
+    /// id, live or archived and of any project, if there is one.
+    pub fn session_by_agent_session_id(
+        &self,
+        agent_session_id: &str,
+        except: Option<&str>,
+    ) -> Result<Option<Session>> {
+        let conn = self.lock();
+        let session = conn
+            .query_row(
+                &format!(
+                    "SELECT {SESSION_COLUMNS} FROM sessions
+                     WHERE agent_session_id = ?1 AND id IS NOT ?2 LIMIT 1"
+                ),
+                params![agent_session_id, except],
+                read_session,
+            )
+            .optional()?;
+        Ok(session)
+    }
+
     pub fn list_sessions(&self) -> Result<Vec<Session>> {
         let conn = self.lock();
         let mut stmt = conn.prepare(&format!(

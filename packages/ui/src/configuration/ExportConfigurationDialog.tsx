@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { appConfig } from "../appConfig";
 import { TintedAlert } from "../components/TintedAlert";
 import { Dialog, DialogError, useDialogAction } from "../dialogs/Dialog";
+import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Console, Event } from "../protocol";
@@ -58,7 +59,7 @@ export function ExportConfigurationDialog({
         throw new Error(fileFailureText(t, err, "configuration.export.failed"), { cause: err });
       }
       if (saved === undefined) return;
-      toastNotice(saved.kind === "saved" ? t("configuration.export.saved", { name: saved.name }) : t("configuration.export.downloaded"));
+      toastNotice(saved.kind === "saved" ? t("configuration.export.saved", { name: isolate(saved.name) }) : t("configuration.export.downloaded"));
       onClose();
     });
   };

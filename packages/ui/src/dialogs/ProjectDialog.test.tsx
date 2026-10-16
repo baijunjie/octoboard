@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { DaemonRequestError } from "../daemon-client";
 import { consoleOf, projectOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { Account, Agent, Event, ModelsUnavailable, Project, ProjectAccount, RequestBody } from "../protocol";
@@ -12,7 +13,7 @@ import { ProjectDialog } from "./ProjectDialog";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** A daemon whose replies the test hands out itself, in whatever order it likes. */
-type Pending = { body: RequestBody; resolve: (event: Event) => void };
+type Pending = { body: RequestBody; resolve: (event: Event) => void; reject: (error: Error) => void };
 const roots: Root[] = [];
 
 beforeEach(() => vi.useFakeTimers());
@@ -32,7 +33,7 @@ function render(editing?: Project, accounts: Account[] = []) {
       consoles: new Map([["c-1", consoleOf("c-1", "Main", { claude_account_id: accounts[0]?.id })]]),
       settings: { auto_pull_repositories: false, default_clone_dir: "", accounts },
     }),
-    request: (body) => new Promise((resolve) => pending.push({ body, resolve })),
+    request: (body) => new Promise((resolve, reject) => pending.push({ body, resolve, reject })),
     toastError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
@@ -90,6 +91,16 @@ it("preselects the agent detected for a typed directory, and only the latest ans
   await answer(pending[1], "grok");
   await answer(pending[0], "codex");
   expect(agentValue()).toBe("grok");
+});
+
+it("sets the refused directory as danger-toned code under the field", async () => {
+  const pending = render();
+  type(input("Directory"), "~/code/missing");
+  await settle(500);
+  await act(async () => pending[0].reject(new DaemonRequestError("plain", "path_not_found", { path: "/Users/dev/code/missing" })));
+  const code = document.body.querySelector('[role="alert"] code');
+  expect(code?.textContent).toBe("/Users/dev/code/missing");
+  expect(code?.getAttribute("data-color")).toBe("danger");
 });
 
 it("keeps the form locked while the answer for the path as it stands is out", async () => {

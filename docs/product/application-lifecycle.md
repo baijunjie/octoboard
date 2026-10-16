@@ -121,11 +121,17 @@ shown in that dialog instead — except in the trust dialog, which closes and re
 "The trust dialog" in `docs/product/folder-trust.md`).
 
 A dialog has two places to say what went wrong. **The failure of the dialog's own action** — what the daemon
-rejected, or an image the window could not read as an avatar — is a line at the foot of the dialog. **What is wrong
+rejected, or an image the window could not read as an avatar — is a line at the foot of the dialog. When that line
+appears or changes out of sight, below the visible part of a long form, the dialog's body scrolls to bring it into
+view once the dialog has settled at its new height (see "What an open dialog, menu or popover covers" in
+`docs/product/window-layout.md`) — smoothly, or at once where the system asks for reduced motion. **What is wrong
 with one field**, such as a required field left blank, is said under that field instead, and the field is marked
 invalid. A field is never marked before the user has tried to submit: the message appears on the first attempt —
 which sends nothing while any field is still wanting — and from then on follows what is typed, so it goes as soon as
-the field is corrected and comes back if the field is emptied again.
+the field is corrected and comes back if the field is emptied again. A rejection by the daemon that is about one
+field's value is said under that field too, where the dialog knows which field it concerns: the session dialog's
+refusals of a conversation to resume (see "Resuming a conversation started outside Octoboard" in
+`docs/product/sessions.md`).
 
 ## Closing the window
 

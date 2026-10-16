@@ -21,9 +21,10 @@ as it is, and do not add a new exception without the user's say.
 
 ### Confirmed visual choices
 
-Tabs in Settings, the project's Files / Git switch and the Git view's Uncommitted / Compare switch keep their labels
-fully opaque on hover and use the foreground colour instead of dimming. Preserve this shared visual treatment as an
-explicit product choice, while retaining the component's layout, selection and keyboard behaviour.
+Tabs in Settings, the project's Files / Git switch, the Git view's Uncommitted / Compare switch and the session
+dialog's New / Resume conversation switch keep their labels fully opaque on hover and use the foreground colour instead
+of dimming. Preserve this shared visual treatment as an explicit product choice, while retaining the component's
+layout, selection and keyboard behaviour.
 
 A notice toast (HeroUI's accent variant) tints its indicator with the title's `--accent-soft-foreground`, as HeroUI
 does itself for its success, warning and danger toasts, instead of leaving it in the plain foreground under an accent
@@ -111,7 +112,7 @@ it, which is how the cycle tells the two apart.
 
 Every editable text input has a non-empty placeholder, including fields whose current value hides it.
 
-- A required input shows a valid example with the localized example prefix: `例：XXX` in Simplified Chinese
+- A required input shows a valid example with the localized example prefix: `例如：XXX` in Simplified Chinese
   and `Ex. XXX` in English. This applies to format examples such as paths, URLs and email addresses too.
 - An optional input shows the default that takes effect when it is left empty, without an example prefix.
   Derive the placeholder from the current context: a session title uses its project's name, and a project name
@@ -364,8 +365,10 @@ the surface around it does not forbid selection. It is accepted there because th
 
 An error that stands on its own in a page, pane or dialog uses `ErrorAlert`, the shared HeroUI `Alert` with danger
 status, its indicator, the danger-soft background and foreground body text. Neutral absence, loading and unsupported
-content keep their state presentations. A field's validation stays in its
-`FieldError`; a failure attached to a row, table cell or rendered document stays in that content's own presentation.
+content keep their state presentations. A field's validation stays in its `FieldError`, and so does a request's
+refusal that is about one field's value, with focus moved to that field; a failure attached to a row, table cell or
+rendered document stays in that content's own presentation. A dialog's own failure line scrolls itself into view, since
+on a long form it can appear below the visible part of the body.
 Toast errors use the Toast's danger variant and indicator, without nesting an Alert or a second live region inside it.
 Warnings use warning status, rather than the error wrapper.
 
@@ -374,18 +377,22 @@ already says what failed needs no generic title repeating it. An optional title 
 surrounding content: a startup page's is `h1`, and a subsection under a dialog or pane's `h2` is `h3`. Paragraphs,
 lists and diagnostic blocks belong directly in the callout's content; HeroUI's span description cannot contain them.
 
-Technical literals in prose use `InlineCode`, with left-to-right isolation, selectable text and wrapping. Raw
-diagnostics use `CodeBlock` or the existing source renderer, preserving their text, direction and indentation; long
-content remains scrollable and reachable from the keyboard. Keep structured error metadata separate from the plain
-error message, so notifications and unknown-error fallbacks retain usable text.
+Technical literals in prose use `InlineCode`, with left-to-right isolation, selectable text, wrapping and the size of
+the text they stand in. A technical literal — a path, a file name, a URL, a branch, a commit id, an ID, a command or a
+setting value — stands without quotation marks, as code where the text is rendered and bare in its plain-text form; a
+name or title the user gave stays in quotation marks. Raw diagnostics use `CodeBlock` or the existing source renderer,
+preserving their text, direction and indentation; long content remains scrollable and reachable from the keyboard.
+Keep structured error metadata separate from the plain error message, so notifications and unknown-error fallbacks
+retain usable text.
 
 Application code uses the shared v3 Typography wrappers. Outside an Alert, code defaults to neutral styling and may
 choose `primary`, `secondary`, `success`, `warning` or `danger`. Colored Alert roots use `TintedAlert` (including the
 root inside `ErrorAlert`), which sets both the fill and the code tone: default stays neutral, accent maps to primary,
 and success, warning and danger use their matching colors. Code inside an Alert must follow that tone; the enclosing
-Alert takes precedence over an explicit code color, and nested Alerts supply their own tone. Do not use the bare
-HeroUI Alert root for application callouts or hand-color individual code literals inside one. HeroUI's Alert parts
-remain the content, title and indicator primitives.
+Alert takes precedence over an explicit code color, and nested Alerts supply their own tone. The same tone reaches
+code in other text coloured by status, through the same `CodeToneContext`: a field's error is danger, and a toast's
+title takes its toast's status. Do not use the bare HeroUI Alert root for application callouts or hand-color
+individual code literals inside one. HeroUI's Alert parts remain the content, title and indicator primitives.
 
 Colored code adds a stronger tint of the Alert's hue over its fill and uses a readable foreground of that hue; it
 must remain distinguishable from the callout while meeting 4.5:1 text contrast in both appearances. Rendered Markdown,

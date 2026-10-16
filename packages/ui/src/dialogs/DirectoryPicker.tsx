@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { DaemonRequestError } from "../daemon-client";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { useScrollFade } from "../components/scrollFade";
+import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
 import { useT } from "../i18n/react";
 import type { DirEntry, Event } from "../protocol";
 import { useDaemon } from "../store";
@@ -52,7 +53,7 @@ export function DirectoryPicker({
   const pathField = useTrimmedField(path, setPath);
   const [entries, setEntries] = useState<DirEntry[]>();
   const [resolvedPath, setResolvedPath] = useState<string>();
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<ErrorPresentation>();
   const listRef = useRef<HTMLDivElement>(null);
   // The list scrolls on its own inside the dialog, which `Dialog`'s body fade does not reach.
   const fade = useScrollFade({ ref: listRef, className: "max-h-72 overflow-y-auto" });
@@ -75,7 +76,7 @@ export function DirectoryPicker({
       if (fallBackToAncestor && targetPath !== "~" && err instanceof DaemonRequestError && err.code === "path_not_found") {
         return load(ancestorOf(targetPath), true);
       }
-      setError((err as Error).message);
+      setError(errorPresentation(err as Error));
       // Deliberately not clearing `entries`/`resolvedPath`: a denied or not-yet-answered volume
       // prompt is the expected failure here, and it should not yank the previous listing (and its
       // parent-directory row back up) out from under the user along with it.

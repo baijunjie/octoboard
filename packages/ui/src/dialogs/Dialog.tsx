@@ -3,14 +3,16 @@ import React, { useEffect, useId, useRef, useState } from "react";
 
 import { DaemonErrorMessage, DaemonErrorTitle } from "../components/DaemonErrorMessage";
 import { ErrorAlert } from "../components/ErrorAlert";
-import { errorPresentation, hasShellTimeoutDetails, type ErrorPresentation } from "../errorPresentation";
 import { takeMenuFocusToRestore } from "../components/ActionMenu";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 import { TitledControl } from "../components/TitledControl";
 import { useLatest } from "../components/useLatest";
+import { errorPresentation, hasShellTimeoutDetails, type ErrorPresentation } from "../errorPresentation";
 import { useT } from "../i18n/react";
+import { prefersReducedMotion } from "../reducedMotion";
 import { dialogAround } from "./dialogElement";
 import { useEscapeWhileTooltipOpen } from "./useEscapeWhileTooltipOpen";
+import { useHeightMotion } from "./useHeightMotion";
 import { useToastClearance } from "./useToastClearance";
 
 /** The inline error and busy state every dialog that talks to the daemon needs. The error is the
@@ -68,7 +70,7 @@ export function useRefocusIfLost(target: () => HTMLElement | null | undefined, d
  * correcting the field takes it away. */
 export function useSubmitValidation(): {
   /** `message` once a submit has found something wanting, nothing before that. */
-  shown: (message: string | undefined) => string | undefined;
+  shown: <T extends string>(message: T | undefined) => T | undefined;
   /** Records the attempt and answers whether the dialog may go ahead with it. */
   attempt: (...messages: (string | undefined)[]) => boolean;
 } {
@@ -83,12 +85,41 @@ export function useSubmitValidation(): {
 }
 
 /** A dialog's inline failure line, for the failure of the request itself; a field's own validation
- * belongs under that field. */
-export function DialogError({ message }: { message: ErrorPresentation | undefined }): React.ReactElement | null {
+ * belongs under that field. A message the dialog words itself with markup (a file name as code) is
+ * passed as an element. It sits at the foot of the body, which in a long form is out of view,
+ * so it is scrolled into view when it appears or changes (smoothly, unless the system asks for
+ * reduced motion); `nearest` leaves the body where it is when the line is already showing. */
+export function DialogError({ message }: { message: ErrorPresentation | React.ReactElement | undefined }): React.ReactElement | null {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!message) return;
+    let cancelled = false;
+    let frame = requestAnimationFrame(() => {
+      // The line's arrival changes the dialog's height, which `useHeightMotion` starts easing once
+      // the browser has laid that out, a frame on. Scrolling waits for the dialog to have settled:
+      // until then its body is held at the old height, and the line is not where it will be.
+      frame = requestAnimationFrame(() => {
+        const animations = dialogAround(ref)?.getAnimations?.() ?? [];
+        void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+          if (!cancelled) ref.current?.scrollIntoView?.({ block: "nearest", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+        });
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
+  }, [message]);
   return message ? (
-    <ErrorAlert title={typeof message !== "string" && hasShellTimeoutDetails(message) ? <DaemonErrorTitle /> : undefined}>
-      <DaemonErrorMessage error={message} showTitle={false} />
-    </ErrorAlert>
+    <div ref={ref} className="shrink-0">
+      {React.isValidElement(message) ? (
+        <ErrorAlert>{message}</ErrorAlert>
+      ) : (
+        <ErrorAlert title={typeof message !== "string" && hasShellTimeoutDetails(message) ? <DaemonErrorTitle /> : undefined}>
+          <DaemonErrorMessage error={message} showTitle={false} />
+        </ErrorAlert>
+      )}
+    </div>
   ) : null;
 }
 
@@ -187,6 +218,7 @@ export function Dialog({
   const markerRef = useRef<HTMLSpanElement>(null);
   useRefocusIfLost(() => dialogAround(markerRef), [resetKey]);
   useToastClearance(markerRef, footer !== null);
+  useHeightMotion(markerRef);
   useEscapeWhileTooltipOpen(() => dialogAround(markerRef), onClose);
 
   const Frame = alert ? AlertDialog : Modal;

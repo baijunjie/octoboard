@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 
 import { appConfig } from "./appConfig";
+import { EXAMPLE_CONVERSATION_ID } from "./conversationId";
 import { daemonMessage } from "./daemonMessage";
 import { CATALOGS } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
@@ -16,7 +17,11 @@ const records = {
 it("words a known code from the catalog, showing a record by its name and an unknown record by its id", () => {
   expect(daemonMessage("en", "unknown_session", { session: "s1" }, "x", records)).toBe(`Unknown session ${isolate("Hub")}.`);
   expect(daemonMessage("en", "unknown_project", { project: "p9" }, "x", records)).toBe(`Unknown project ${isolate("p9")}.`);
-  expect(daemonMessage("en", "path_not_found", { path: "/a/b" }, "x", records)).toBe(`“${isolate("/a/b")}” does not exist.`);
+  expect(daemonMessage("en", "path_not_found", { path: "/a/b" }, "x", records)).toBe(`${isolate("/a/b")} does not exist.`);
+});
+
+it("words an invalid conversation ID with the example the UI supplies", () => {
+  expect(daemonMessage("en", "resume_id_invalid", { id: "x" }, "y", records)).toContain(isolate(EXAMPLE_CONVERSATION_ID));
 });
 
 it("words a trust answer's failure from its reason code, keeping the English reason for an unknown one", () => {

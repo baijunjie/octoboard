@@ -14,7 +14,7 @@ import { ConfigurationFileError } from "../platform/configurationFileError";
 import { galleryFailure } from "./banner";
 import { SCENARIOS } from "./fixtures";
 import { installFakeTerminal } from "./fakeTerminal";
-import { createUi, stuckExit } from "./interact";
+import { createUi, settleMotion, stuckExit } from "./interact";
 import { prepareStorage } from "./prepare";
 
 const params = new URLSearchParams(window.location.search);
@@ -159,13 +159,16 @@ try {
 } catch (error) {
   galleryFailure(`Scenario step failed: ${(error as Error).message}`, error);
 }
-// Ready is claimed two frames after the last step, not at its end: what the last step set going (a render, a
+// The first wait: two frames after the last step, not at its end, since what the last step set going (a render, a
 // transition's first frames, a failure line) has usually been drawn by then, which is what a capture or a read of
-// the overlay needs. The wait is capped at 200ms, though, so that a tab drawing no frames (a background one) cannot
-// hold it forever: ready comes at two frames or at 200ms, whichever is first, and a page too busy to draw two
-// frames in that time claims it without them.
+// the overlay needs. It is capped at 200ms, though, so that a tab drawing no frames (a background one) cannot hold
+// it forever: it ends at two frames or at 200ms, whichever is first, and a page too busy to draw two frames in
+// that time goes on without them.
 await new Promise<void>((resolve) => {
   requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   setTimeout(resolve, 200);
 });
+// What the steps set easing (a dialog growing to its height) is waited out, so the view captured is the
+// settled one; the wait is capped, as the other is, so that a page that never settles still claims ready.
+await settleMotion(document, 1000);
 document.documentElement.dataset.galleryReady = "true";

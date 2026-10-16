@@ -240,6 +240,7 @@ async fn start_session(
             origin: Origin::Console,
             // A session a session starts always reports to it.
             bound_to: Some(caller.id.clone()),
+            resume_agent_session_id: None,
         },
     )
     .await?;

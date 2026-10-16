@@ -3,6 +3,7 @@ import { FolderOpen, FolderX, RefreshCw } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Key } from "react-aria-components";
 
+import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { handFocusOff } from "../components/handFocusOff";
@@ -12,6 +13,7 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
 import { useStableHandler } from "../components/useLatest";
+import type { ErrorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { AsidePane, type AsideLayout } from "../layout/AsidePane";
@@ -289,13 +291,13 @@ export function ProjectBrowser({
 }
 
 /** The project's own directory could not be listed: why, and a way to try again. */
-function RootError({ message, onRetry }: { message: string; onRetry: (from: Element | null) => void }): React.ReactElement {
+function RootError({ message, onRetry }: { message: ErrorPresentation; onRetry: (from: Element | null) => void }): React.ReactElement {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   return (
     <div ref={ref} className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-sm">
       <ErrorAlert title={t("browser.error.root")} className="w-full max-w-lg">
-        {message}
+        <DaemonErrorMessage error={message} showTitle={false} />
       </ErrorAlert>
       <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => onRetry(ref.current)}>
         {t("error.tryAgain")}

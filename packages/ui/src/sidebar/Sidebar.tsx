@@ -19,6 +19,7 @@ import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { handFocusOff } from "../components/handFocusOff";
+import { PATH_VAR_PARAMS } from "../components/literalParams";
 import { RowControls, RowIconGroup, RowIconSlot } from "../components/RowControls";
 import { FadedScroller } from "../components/scrollFade";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
@@ -26,7 +27,7 @@ import { StatusIcon } from "../components/StatusIcon";
 import { useStableHandler } from "../components/useLatest";
 import { withGitBadge } from "../gitStatusLabel";
 import { isolate } from "../i18n/isolate";
-import { useCurrentLanguage, useT } from "../i18n/react";
+import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { drawerClass, PANE_ID, RailClip, usePanePeekPointer } from "../layout/paneOverlay";
 import type { PaneWidth } from "../layout/paneWidth";
 import { columnClipClass, useSidebarDockMotion } from "../layout/sidebarDockMotion";
@@ -39,10 +40,10 @@ import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
-import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterSummary } from "./ProjectFilter";
 import { consoleMenu, projectMenu } from "./menus";
 import { SessionActions } from "./SessionActions";
 import { archivedSessions, consoleActivity, hasBoundSessions, isInactiveProject, liveSessionRows, liveSessions, sortProjects } from "./order";
+import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterSummary } from "./ProjectFilter";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
 import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, PinButton, RowIconButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
 import { focusTargetId } from "./focus";
@@ -602,7 +603,7 @@ function ConsoleSessionsSection({
       </StickySectionHeading>
       {/* A warning rather than the glyph the rows below carry: this row is the one in the section
           that offers nothing to press, and the console header's `+` is disabled. */}
-      {blocked && <EmptyPanel compact icon={TriangleAlert} message={t("agents.noneFound")} />}
+      {blocked && <EmptyPanel compact icon={TriangleAlert} message={<Message id="agents.noneFound" params={PATH_VAR_PARAMS} />} />}
       {live.length === 0 && !blocked && (
         <EmptyPanel
           compact

@@ -52,7 +52,7 @@ const EXEMPTIONS: Exemption[] = [
     seen: false,
   },
   {
-    surface: "HeroUI `Tabs.ListContainer` (the settings dialog's sections, the Git mode's Uncommitted / Compare row)",
+    surface: "HeroUI `Tabs.ListContainer` (the settings dialog's sections, the Git mode's Uncommitted / Compare row, the session dialog's Conversation tabs)",
     reason:
       "The library wraps the strip in a `ScrollShadow` of its own, left as the library draws it. The settings column also cannot overflow: `docked:self-start` keeps its wrapper at content height.",
     seen: false,

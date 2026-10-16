@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useLatest } from "../components/useLatest";
+import { prefersReducedMotion } from "../reducedMotion";
 
 /** Matches the column's CSS width ease and the drawer's `duration-200`. */
 export const PANE_SPAN_MS = 200;
@@ -139,10 +140,6 @@ function applyPainted(state: Machine): Machine {
     return { ...state, pending: null, insetShown: true };
   }
   return state.pending === null ? state : { ...state, pending: null };
-}
-
-function prefersReducedMotion(): boolean {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 /** The hover card takes no space in the row. */

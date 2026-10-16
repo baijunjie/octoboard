@@ -492,10 +492,11 @@ pub struct Session {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage: Option<SessionUsage>,
     pub status: SessionStatus,
-    /// Whether this session has ever had a turn. Until it has, the agent has stored no
-    /// conversation to resume: `claude --resume` on such an id fails outright with "No conversation
-    /// found", and a session the user opened and never typed into is the common case of that. A
-    /// resume therefore starts a fresh conversation rather than failing.
+    /// Whether this session has a conversation on the agent's side: a turn taken, or one resumed
+    /// at open. Until it has, the agent has stored no conversation to resume: `claude --resume`
+    /// on such an id fails outright with "No conversation found", and a session the user opened
+    /// and never typed into is the common case of that. A resume therefore starts a fresh
+    /// conversation rather than failing.
     pub has_conversation: bool,
     /// The session this session is bound to — its owner, which it reports to — or `None` for one
     /// outside the orchestration. The owner is a console session, or a project session of the
@@ -1320,6 +1321,14 @@ pub enum RequestBody {
         /// with `unknown_session`.
         #[serde(default)]
         bound_to: Option<String>,
+        /// The agent's own id of a conversation started outside Octoboard, to continue in this
+        /// session. Trimmed, blank meaning absent. Only a project session takes one, never
+        /// together with `bound_to`; it must be a UUID (kept lowercase and hyphenated), found in
+        /// the session's account directory and recorded by no session already. Each refusal has a
+        /// code of its own (see `apps/daemon/PROTOCOL.md`'s "Coded messages" section) and leaves
+        /// no session behind.
+        #[serde(default)]
+        resume_agent_session_id: Option<String>,
     },
     ResumeSession {
         session: String,
@@ -2158,6 +2167,22 @@ pub mod error_code {
     /// A switch found no conversation record of the session in the account it is on. `params`
     /// names `agent` and the `path` of that account's directory.
     pub const CONVERSATION_NOT_FOUND: &str = "conversation_not_found";
+    /// An `open_session` asked to resume a conversation found no record of it in the
+    /// session's account directory. `params` names `agent`, the `path` of that directory and the
+    /// `id` asked for.
+    pub const CONVERSATION_TO_RESUME_NOT_FOUND: &str = "conversation_to_resume_not_found";
+    /// An `open_session` asked to resume a conversation named an id that is not a UUID, which
+    /// every agent's conversation ids are. `params` names the `id`.
+    pub const RESUME_ID_INVALID: &str = "resume_id_invalid";
+    /// An `open_session` asked to resume a conversation for a console session.
+    pub const RESUME_FOR_CONSOLE_SESSION: &str = "resume_for_console_session";
+    /// The conversation an `open_session` asked to resume is already recorded by a session
+    /// outside the project (of another project, or a console session). `params` names the `id`.
+    pub const CONVERSATION_OUTSIDE_PROJECT: &str = "conversation_outside_project";
+    /// The conversation an `open_session` asked to resume is already recorded by a session of the
+    /// same project, which resuming or reopening continues instead. `params` names the `id` and
+    /// that `session`, by id.
+    pub const CONVERSATION_IN_SESSION: &str = "conversation_in_session";
     /// Copying the conversation into the target account's directory did not complete. `params`
     /// names the target `path` and the `detail`.
     pub const RELOCATION_FAILED: &str = "relocation_failed";
@@ -2691,6 +2716,23 @@ mod tests {
         assert_eq!(
             parse(r#"{"type":"open_session","console_id":"c","account":"acct-1"}"#),
             Some(Some("acct-1".to_string()))
+        );
+    }
+
+    /// The conversation to resume is optional on the wire: an `open_session` without it still parses.
+    #[test]
+    fn the_conversation_to_resume_is_optional() {
+        let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::OpenSession {
+                resume_agent_session_id,
+                ..
+            } => resume_agent_session_id,
+            _ => panic!("parses as open_session"),
+        };
+        assert_eq!(parse(r#"{"type":"open_session","console_id":"c"}"#), None);
+        assert_eq!(
+            parse(r#"{"type":"open_session","console_id":"c","resume_agent_session_id":"u"}"#),
+            Some("u".to_string())
         );
     }
 

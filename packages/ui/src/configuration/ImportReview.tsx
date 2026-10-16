@@ -3,6 +3,8 @@ import { Info } from "lucide-react";
 import React, { useId, useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
+import { InlineCode } from "../components/InlineCode";
+import { TILDE_PARAMS } from "../components/literalParams";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
 import { LabelledGroup } from "../dialogs/LabelledGroup";
@@ -99,7 +101,7 @@ function ProjectRow({
   project: InspectedProject;
   row: RowState;
   /** What is wrong with the directory typed for this project, once the user has tried to import. */
-  problem: string | undefined;
+  problem: React.ReactNode;
   onChange: (row: RowState) => void;
 }): React.ReactElement {
   const t = useT();
@@ -215,19 +217,19 @@ function ConsoleGroup({
         <ul className="flex flex-col divide-y divide-separator">
           {console.projects.map((project, p) => {
             const row = review[index][p];
-            const problem = directoryProblem(row);
+            const problem = shown(directoryProblem(row));
             return (
               <ProjectRow
                 key={p}
                 project={project}
                 row={row}
-                problem={shown(
+                problem={
                   problem === "empty"
                     ? t("configuration.import.directory.required")
                     : problem === "not_absolute"
-                      ? t("configuration.import.directory.notAbsolute")
-                      : undefined,
-                )}
+                      ? <Message id="configuration.import.directory.notAbsolute" params={TILDE_PARAMS} />
+                      : undefined
+                }
                 onChange={(next) => onReview(withRow(review, index, p, next))}
               />
             );
@@ -278,7 +280,9 @@ export function ImportReview({
   return (
     <>
       <StatusAnnouncer text={announcement} />
-      <p className="text-sm">{t("configuration.import.review.intro", { file: fileName })}</p>
+      <p className="text-sm">
+        <Message id="configuration.import.review.intro" params={{ file: <InlineCode>{fileName}</InlineCode> }} />
+      </p>
       <LabelledGroup label={t("configuration.import.all.label")}>
         <div className="flex flex-wrap gap-2">
           {APPLY_ALL.map(({ choice, label }) => {

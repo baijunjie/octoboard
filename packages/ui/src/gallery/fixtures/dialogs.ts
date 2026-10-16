@@ -8,6 +8,9 @@ import { SHELL_TIMEOUT } from "./shellTimeout";
 
 const { console: console_, web, api, sessions } = SAMPLE;
 
+// A conversation ID as an agent writes it, typed into the Session ID field the dialog's Resume conversation tab shows.
+const RESUME_ID = "3f2b8c1e-7a4d-4e9b-9c55-0d6a1b2e4f70";
+
 // Two projects carrying tags, so the edited one has some of its own and the field suggests the rest.
 const tagged = [
   projectOf("p-docs", console_.id, "Docs Site", { tags: ["x", "frontend", "a-long-tag-for-checking-project-interface-layout"] }),
@@ -296,10 +299,14 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Console account switch partial failure",
-    description: "The completed batch keeps each failed session and its cause visible beside the completion count. Retry targets only the failed sessions; successful switches are retained.",
+    description: "The completed batch keeps each failed session and its cause visible beside the completion count, the cause naming its folder as code. Retry targets only the failed sessions; successful switches are retained.",
     state: switchAccountState,
     sessionAccountSwitches: {
-      "s-switch-work": { code: "internal_error", params: { detail: "The agent exited before its account switch completed." }, message: "The agent exited before its account switch completed." },
+      "s-switch-work": {
+        code: "relocation_failed",
+        params: { path: "/Users/dev/.claude-work/projects/-Users-dev-code-website", detail: "No space left on device (os error 28)" },
+        message: "The conversation could not be copied into /Users/dev/.claude-work/projects/-Users-dev-code-website: No space left on device (os error 28)",
+      },
     },
     steps: submitConsoleSwitch,
   },
@@ -421,10 +428,47 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "New session advanced settings",
-    description: "Name comes first. Claude Code and its inherited long account name share the joined field; expanded Advanced shows the project's Opus model and high reasoning effort. Changing either applies to this session.",
+    description: "The Conversation tabs at the head have New conversation selected, with Name below them. Claude Code and its inherited long account name share the joined field; expanded Advanced shows the project's Opus model and high reasoning effort, with Report to still offered above. Changing either setting applies to this session.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: sessionLaunchState,
+    id: "dialog-new-session-resume-invalid",
+    group: "Sidebar sessions",
+    category: "exceptional",
+    title: "Session resume, conversation ID not valid",
+    description: "On the Resume conversation tab, a session title typed instead of an ID is marked invalid under the Session ID field once Open is pressed, with an example ID as code in the danger tone, the field focused and Report to gone; the dialog stays as typed and nothing is sent.",
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.project.openSession")),
+      (ui) => ui.press(ui.t("dialog.session.conversationResume")),
+      (ui) => ui.focus(ui.t("dialog.session.resumeId")),
+      (ui) => ui.type("my-title"),
+      (ui) => ui.confirm(),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: sessionLaunchState,
+    sessionOpenError: {
+      code: "conversation_to_resume_not_found",
+      params: { agent: "Claude Code", path: "/Users/dev/.claude-personal", id: RESUME_ID },
+      message: "no conversation `" + RESUME_ID + "` of Claude Code was found in `/Users/dev/.claude-personal`",
+    },
+    id: "dialog-new-session-resume-not-found",
+    group: "Sidebar sessions",
+    category: "exceptional",
+    title: "Session resume, conversation not found",
+    description: "On the Resume conversation tab with a session ID filled in and Report to gone, the refusal stands under the Session ID field, with the field focused: it says no conversation with this ID is in the account's directory, with the directory path as code in the danger tone and the typed ID not repeated. The dialog has no alert at its foot and the ID stays as typed.",
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.project.openSession")),
+      (ui) => ui.press(ui.t("dialog.session.conversationResume")),
+      (ui) => ui.focus(ui.t("dialog.session.resumeId")),
+      (ui) => ui.type(RESUME_ID),
+      (ui) => ui.confirm(),
     ],
   },
   {
@@ -615,6 +659,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Project path refused",
+    description: "The refusal stands under the Directory field with the missing path as code in the danger tone.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),

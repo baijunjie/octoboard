@@ -1,7 +1,7 @@
 import { DaemonRequestError } from "../daemon-client";
 import { daemonMessage } from "../daemonMessage";
+import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
 import type { Translate } from "../i18n/catalog";
-import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
 import { REQUEST_SUPERSEDED, SOURCE_CHANGED, type MessageParams } from "../protocol";
 import type { State } from "../store";
@@ -14,7 +14,7 @@ export type BrowseFailure =
   | { kind: "superseded" }
   | { kind: "changed" }
   | { kind: "disconnected" }
-  | { kind: "failed"; message: string; code: string };
+  | { kind: "failed"; message: ErrorPresentation; code: string };
 
 /** The browse budgets counted in bytes; the others (`pending_requests`, `change_entries`) are counts. */
 const BYTE_LIMITS = new Set(["file_bytes", "reply_bytes", "git_output", "patch_bytes"]);
@@ -72,8 +72,8 @@ export function browseFailure(
   if (err.code === "limit_exceeded" && err.params.limit === "patch_bytes") {
     return { kind: "failed", code: err.code, message: t("browser.error.patchTooLarge", { max: params.max }) };
   }
-  if (err.code === "unsupported_file_type" && err.params.file_type === "unmerged") {
-    return { kind: "failed", code: err.code, message: t("browser.error.unmerged", { path: isolate(params.path ?? "") }) };
-  }
-  return { kind: "failed", code: err.code, message: daemonMessage(language, err.code, params, err.message, records) };
+  // The shaped params, not the raw ones: a structured render of the message must read them as the
+  // plain text does.
+  const message = daemonMessage(language, err.code, params, err.message, records);
+  return { kind: "failed", code: err.code, message: errorPresentation(new DaemonRequestError(message, err.code, params)) };
 }

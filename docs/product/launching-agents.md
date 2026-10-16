@@ -92,7 +92,10 @@ stalling it.
 **A session's role is fixed for its lifetime.** Two of the three agents record the injected role text
 into the conversation on its first turn and replay it on every resume afterwards, so changing a
 session's role later is not possible: a session that belongs on the other side of the orchestration
-is a new session.
+is a new session. For the same reason, a session opened to resume a conversation started outside Octoboard (see
+"Resuming a conversation started outside Octoboard" in `docs/product/sessions.md`) may not take up its role
+description with Claude Code or Grok Build, which keep what that conversation recorded; the status hooks and
+Octoboard's MCP server are injected as on any resume.
 
 A resume reassembles the full injection, because all three agents resolve hooks and MCP servers from the launch
 arguments every time and a resume that omitted them would leave a session nobody can observe and nothing to report
@@ -232,7 +235,7 @@ unavailable, no session can be opened at all; see "Opening a session" in `docs/p
 ## Per-agent specifics a user will notice
 
 **Claude Code.** Octoboard assigns the session's id up front, so a session has an agent-side id from the moment it
-starts. The flags that would drop the project's own permission rules, hooks or MCP servers are never passed.
+starts; a session opened to resume a conversation has that conversation's id. The flags that would drop the project's own permission rules, hooks or MCP servers are never passed.
 
 When Claude Code has **not been trusted with the project's directory**, it ignores that project's own
 `allow` permission rules for the session while still applying its `deny` rules — so the session is
@@ -249,7 +252,8 @@ will itself read: `.claude.json` inside the Claude Code config directory in effe
 that file yet produces no warning; `~/.claude.json` is not consulted in its place.
 
 **Codex.** Codex cannot be given a session id in advance, and its conversation is created lazily on the first prompt
-submission — so a session opened without a task has no agent-side id until the user types something. The launch
+submission — so a session opened without a task has no agent-side id until the user types something, unless it was
+opened to resume a conversation, whose id it has from the start. The launch
 conditions that are visible:
 
 - project trust is not passed: in a git repository Codex has not been told to trust, its own folder-trust

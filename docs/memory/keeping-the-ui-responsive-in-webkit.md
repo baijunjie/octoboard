@@ -13,11 +13,19 @@ That is why each HTML entry of `packages/ui` keeps a permanent hidden sibling af
 the end of `<body>`, and without it the first one mounting and the last one unmounting flip `#root`'s `:last-child`.
 A new HTML entry needs the same sibling.
 
-A synchronous layout read (`offsetHeight`, `getBoundingClientRect`, `scrollHeight`, `getComputedStyle`) made after a
-DOM change runs the pending restyle there and then, so an interaction whose components each change the DOM and then
-measure it (a pane switch re-measuring its fades, scrollers and FLIP animations) pays the full restyle once per
-read, not once per frame. Judge an interaction's cost as restyle cost times the number of forced passes; make the
-restyle cheap first, since that shrinks every pass at once.
+A synchronous layout read (`offsetHeight`, `getBoundingClientRect`, `scrollHeight`, `getComputedStyle`, and
+`getAnimations()`, which brings style up to date before it answers) made after a DOM change runs the pending restyle
+there and then, so an interaction whose components each change the DOM and then measure it (a pane switch re-measuring
+its fades, scrollers and FLIP animations) pays the full restyle once per read, not once per frame. Judge an
+interaction's cost as restyle cost times the number of forced passes; make the restyle cheap first, since that shrinks
+every pass at once.
+
+Animating an element's size turns every `ResizeObserver` on it or inside it into a per-frame callback. Before easing a
+size (as `Dialog`'s height ease does), check those observers: one whose write reaches past its own element — the toast
+clearance's custom property on `<html>` — skips while the element has running animations and measures once their
+`finished` promises settle (`animationend` is not sent for an animation made with `element.animate()`). Ask
+`getAnimations()` once per wait rather than on every report, and a frame after the report, since an observer can be
+told of the change before the animation easing it exists.
 
 One whole-document restyle per overlay is not ours to remove: every modal overlay — each HeroUI `Dropdown`, `Popover`
 and `Modal` in `packages/ui`, `ActionMenu` included — has React Aria set `inert` on everything outside it, `#root`

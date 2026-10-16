@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { useLatest } from "../components/useLatest";
+import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
 import { useT } from "../i18n/react";
 import type { Agent, Event, RequestBody } from "../protocol";
 
@@ -8,6 +9,9 @@ import type { Agent, Event, RequestBody } from "../protocol";
  * which includes the wait before it is asked. `ready`: the daemon has answered for it. `failed`:
  * the daemon refused, with `error`. */
 export type DetectionStatus = "idle" | "checking" | "ready" | "failed";
+
+/** The state of the check, with the daemon's refusal when it is `failed`. */
+export type Detection = { status: Exclude<DetectionStatus, "failed"> } | { status: "failed"; error: ErrorPresentation };
 
 /** What the form can ask the daemon about: a directory's agent, or a git remote's. */
 export type DetectionQuery = Extract<RequestBody, { type: "detect_directory_agent" | "probe_git_remote" }>;
@@ -24,10 +28,10 @@ export function useDetectedAgent(
   query: DetectionQuery | undefined,
   delayMs: number,
   onDetected: (agent: Agent | "") => void,
-): { status: DetectionStatus; error?: string } {
+): Detection {
   const t = useT();
   const key = query ? JSON.stringify(query) : undefined;
-  const [answered, setAnswered] = useState<{ key: string; error?: string }>();
+  const [answered, setAnswered] = useState<{ key: string; error?: ErrorPresentation }>();
   const latest = useLatest({ request, query, onDetected, t });
 
   useEffect(() => {
@@ -48,7 +52,7 @@ export function useDetectedAgent(
           onDetected(event.agent ?? "");
           setAnswered({ key });
         },
-        (err: Error) => current && setAnswered({ key, error: err.message }),
+        (err: Error) => current && setAnswered({ key, error: errorPresentation(err) }),
       );
     }, delayMs);
     return () => {

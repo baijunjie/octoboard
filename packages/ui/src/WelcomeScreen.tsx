@@ -5,9 +5,10 @@ import React, { useId, useImperativeHandle, useRef } from "react";
 import { AGENT_OPTIONS } from "./agents";
 import { AgentIcon } from "./components/AgentIcon";
 import { EmptyPanel } from "./components/EmptyPanel";
+import { PATH_VAR_PARAMS } from "./components/literalParams";
 import { useFadeRegion, useScrollFade } from "./components/scrollFade";
 import type { DialogRequest } from "./dialogs/dialogRequest";
-import { useT } from "./i18n/react";
+import { Message, useT } from "./i18n/react";
 import { usePlatform } from "./platform/react";
 import { useDaemonStore } from "./store";
 
@@ -106,7 +107,7 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
               </ul>
             </Card.Content>
           </Card>
-          <p className="mt-3 text-center text-xs text-app-muted">{t("welcome.toolsHint")}</p>
+          <p className="mt-3 text-center text-xs text-app-muted"><Message id="welcome.toolsHint" params={PATH_VAR_PARAMS} /></p>
         </section>
       </main>
     </div>

@@ -441,6 +441,7 @@ pub async fn handle(
             task,
             title,
             bound_to,
+            resume_agent_session_id,
         } => {
             let session = open_session(
                 state,
@@ -455,6 +456,7 @@ pub async fn handle(
                     title,
                     origin: Origin::User,
                     bound_to,
+                    resume_agent_session_id,
                 },
             )
             .await?;
@@ -1444,6 +1446,137 @@ pub struct OpenRequest {
     /// project session of the same project — or `None` for one outside the orchestration. Ignored
     /// when a console session itself is being opened, which is never bound.
     pub bound_to: Option<String>,
+    /// The agent's own id of a conversation started outside Octoboard, which this (project)
+    /// session continues instead of starting one. What is refused is in [`checked_resume_id`] and
+    /// [`locate_conversation_to_resume`].
+    pub resume_agent_session_id: Option<String>,
+}
+
+/// The conversation id `requested` to resume, trimmed, or `None` for none (blank counting as
+/// none), refused before anything is launched or written. A console session takes none, and a
+/// session reporting to another takes none: a resumed session is a plain project session. The id
+/// must be a UUID, which every agent's conversation ids are (Grok reads anything else as a
+/// title), and no session may record it already, in any project, because two processes must
+/// never share one transcript.
+fn checked_resume_id(
+    state: &Arc<AppState>,
+    role: Role,
+    project_id: Option<&str>,
+    bound_to: Option<&str>,
+    requested: Option<String>,
+) -> Result<Option<String>> {
+    let Some(id) = requested
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty())
+    else {
+        return Ok(None);
+    };
+    if role == Role::Console {
+        return Err(CodedError::raised(
+            error_code::RESUME_FOR_CONSOLE_SESSION,
+            "a console session cannot resume a conversation",
+            &[],
+        ));
+    }
+    if bound_to.is_some() {
+        return Err(CodedError::raised(
+            error_code::CONFLICTING_FIELDS,
+            "`resume_agent_session_id` and `bound_to` cannot both be given",
+            &[("first", "resume_agent_session_id"), ("second", "bound_to")],
+        ));
+    }
+    let Ok(parsed) = Uuid::parse_str(&id) else {
+        return Err(CodedError::raised(
+            error_code::RESUME_ID_INVALID,
+            format!("`{id}` is not a conversation id: it must be a UUID"),
+            &[("id", &id)],
+        ));
+    };
+    // The agents write their ids lowercase and hyphenated, which is how a record is looked for
+    // and stored, however the user typed it.
+    let id = parsed.hyphenated().to_string();
+    refuse_if_conversation_recorded(state, &id, project_id, None)?;
+    Ok(Some(id))
+}
+
+/// Refuses `id` when a session other than `except` records it as its agent's conversation id, in
+/// any project and in any state: two processes must never share one transcript. A session of
+/// `project_id` is named so the user can resume it instead; any other, a console session
+/// included, is only said to be outside the project.
+fn refuse_if_conversation_recorded(
+    state: &Arc<AppState>,
+    id: &str,
+    project_id: Option<&str>,
+    except: Option<&str>,
+) -> Result<()> {
+    let Some(holder) = state.store.session_by_agent_session_id(id, except)? else {
+        return Ok(());
+    };
+    Err(if holder.project_id.as_deref() == project_id {
+        CodedError::raised(
+            error_code::CONVERSATION_IN_SESSION,
+            format!(
+                "the session \"{}\" already holds this conversation: resume or reopen it instead",
+                holder.title
+            ),
+            &[("id", id), ("session", &holder.id)],
+        )
+    } else {
+        CodedError::raised(
+            error_code::CONVERSATION_OUTSIDE_PROJECT,
+            "this conversation already belongs to a session outside this project",
+            &[("id", id)],
+        )
+    })
+}
+
+/// The directory of an account: the pinned one, else the default account's, resolved from
+/// `shell_env`, the snapshot the caller took when it had a default side.
+fn account_dir(
+    agent: Agent,
+    pinned: Option<&str>,
+    shell_env: Option<&HashMap<String, String>>,
+) -> PathBuf {
+    match (pinned, shell_env) {
+        (Some(dir), _) => PathBuf::from(dir),
+        (None, Some(shell_env)) => adapter::default_account_dir(agent, shell_env),
+        (None, None) => unreachable!("a default account takes the snapshot"),
+    }
+}
+
+/// Refuses a conversation to resume that has no record in the account directory the session will
+/// launch with: the pinned one, else the default account's, resolved from the shell snapshot.
+/// Answers that snapshot (none for a pinned account) for the launch to use, so the check and the
+/// launch cannot disagree about where the default account is. Blocking.
+fn locate_conversation_to_resume(
+    agent: Agent,
+    config_dir: Option<&str>,
+    id: &str,
+    snapshot: impl FnOnce() -> Result<HashMap<String, String>>,
+) -> Result<Option<HashMap<String, String>>> {
+    let shell_env = match config_dir {
+        Some(_) => None,
+        None => Some(snapshot().context("snapshotting the user's shell environment")?),
+    };
+    let dir = account_dir(agent, config_dir, shell_env.as_ref());
+    relocate::locate(agent, &dir, id).map_err(|err| match err.downcast::<CodedError>() {
+        Ok(coded) if coded.code == error_code::CONVERSATION_NOT_FOUND => CodedError::raised(
+            error_code::CONVERSATION_TO_RESUME_NOT_FOUND,
+            format!(
+                "no conversation `{id}` of {} was found in `{}`",
+                agent.label(),
+                dir.display()
+            ),
+            &[
+                ("agent", agent.label()),
+                ("path", &dir.to_string_lossy()),
+                ("id", id),
+            ],
+        ),
+        Ok(coded) => anyhow::Error::new(coded),
+        Err(err) => err,
+    })?;
+    Ok(shell_env)
 }
 
 pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result<Session> {
@@ -1458,6 +1591,7 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         title,
         origin,
         bound_to,
+        resume_agent_session_id,
     } = request;
     let console = state
         .store
@@ -1481,6 +1615,14 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         }
     };
 
+    // Before `bound_to` is resolved, which would drop a console session's request for one.
+    let resume_agent_session_id = checked_resume_id(
+        state,
+        role,
+        project_id.as_deref(),
+        bound_to.as_deref(),
+        resume_agent_session_id,
+    )?;
     let bound_to = resolve_bound_to(state, &console_id, project_id.as_deref(), role, bound_to)?;
 
     let agent = session_agent(agent, project.as_ref(), &console);
@@ -1488,6 +1630,16 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
 
     let (account_id, config_dir) =
         session_account(state, agent, &console, project.as_ref(), account)?;
+    let resume_shell_env = match resume_agent_session_id.clone() {
+        Some(id) => {
+            let dir = config_dir.clone();
+            tokio::task::spawn_blocking(move || {
+                locate_conversation_to_resume(agent, dir.as_deref(), &id, env_shell::snapshot)
+            })
+            .await??
+        }
+        None => None,
+    };
     let (model, effort) = (
         normalize_session_launch_setting(model),
         normalize_session_launch_setting(effort),
@@ -1516,7 +1668,9 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
     let session = Session {
         id: Uuid::new_v4().to_string(),
         agent,
-        agent_session_id: None,
+        // Recorded with `has_conversation`, so an interrupt before the first prompt does not drop
+        // the id on a relaunch (see [`resumable_agent_session_id`]).
+        agent_session_id: resume_agent_session_id.clone(),
         console_id,
         project_id,
         host_id: LOCAL_HOST_ID.to_string(),
@@ -1533,7 +1687,7 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         },
         terminal_title: None,
         usage: None,
-        has_conversation: false,
+        has_conversation: resume_agent_session_id.is_some(),
         // Resolved now and kept: a resume must find the transcript where the first launch put it,
         // whatever the console's reference says by then.
         account_id,
@@ -1555,6 +1709,19 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         state.store.insert_console_session(session, title)?
     } else {
         state.store.insert_session(&session)?;
+        // The duplicate check ran before the awaits above, so another request may have recorded
+        // the same conversation since. Nothing has been launched yet.
+        if let Some(id) = &resume_agent_session_id {
+            if let Err(err) = refuse_if_conversation_recorded(
+                state,
+                id,
+                session.project_id.as_deref(),
+                Some(&session.id),
+            ) {
+                state.store.delete_session(&session.id)?;
+                return Err(err);
+            }
+        }
         // `bound_to` was resolved before the launch check above awaited, so an unused owner may
         // have been deleted since. Once this row exists the owner can no longer be deleted (it has
         // a session bound to it), so one that is gone now is gone for good. Nothing has been
@@ -1569,7 +1736,18 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
     };
     let claim = state.begin_launch(&session.id)?;
 
-    match start_process(state, &claim, &session, &cwd, task.as_deref(), None, None).await {
+    let resume_id = resume_agent_session_id.as_deref();
+    match start_process(
+        state,
+        &claim,
+        &session,
+        &cwd,
+        task.as_deref(),
+        resume_id,
+        resume_shell_env,
+    )
+    .await
+    {
         Ok(()) => {
             // Re-read rather than publish the record we built: launching may have learned the
             // agent's own session id, and publishing the stale copy would tell every client the
@@ -2247,11 +2425,7 @@ fn prepare_switch(
             relocation: None,
         });
     };
-    let resolve = |pinned: Option<&str>| match (pinned, &shell_env) {
-        (Some(dir), _) => PathBuf::from(dir),
-        (None, Some(shell_env)) => adapter::default_account_dir(agent, shell_env),
-        (None, None) => unreachable!("a default side takes the snapshot"),
-    };
+    let resolve = |pinned: Option<&str>| account_dir(agent, pinned, shell_env.as_ref());
     let (from, to) = (resolve(source), resolve(target));
     let relative = relocate::locate(agent, &from, resume_id)?;
     Ok(SwitchPlan {
@@ -3585,6 +3759,7 @@ mod tests {
                     effort: None,
                     origin: Origin::User,
                     bound_to: None,
+                    resume_agent_session_id: None,
                 },
             )
             .await
@@ -5328,6 +5503,119 @@ mod tests {
             dir.join("default-claude").to_string_lossy().into_owned(),
         )]);
         move || Ok(env)
+    }
+
+    /// A conversation to resume is refused before anything is launched or written, each for its
+    /// own code; blank counts as none and the id is kept trimmed.
+    #[tokio::test]
+    async fn a_conversation_to_resume_is_checked_before_a_session_is_opened() {
+        const ID: &str = "11111111-2222-3333-4444-555555555555";
+        let (state, _dir) = switch_fixture("resume-id-checked");
+        let mut holder = project_session("holder", Agent::Claude, SessionStatus::Archived);
+        holder.agent_session_id = Some(ID.to_string());
+        state.store.insert_session(&holder).unwrap();
+        let check = |role, project: Option<&str>, bound_to: Option<&str>, id: &str| {
+            checked_resume_id(&state, role, project, bound_to, Some(id.to_string()))
+        };
+
+        // (what is refused, the result, the code it is refused with)
+        let cases = [
+            (
+                "a console session",
+                check(Role::Console, None, None, ID),
+                error_code::RESUME_FOR_CONSOLE_SESSION,
+            ),
+            (
+                "a session that reports to another",
+                check(Role::Project, Some("project-1"), Some("hub"), ID),
+                error_code::CONFLICTING_FIELDS,
+            ),
+            (
+                "an id that is not a UUID",
+                check(Role::Project, Some("project-1"), None, "my-title"),
+                error_code::RESUME_ID_INVALID,
+            ),
+            (
+                "an id a session of the project holds",
+                check(Role::Project, Some("project-1"), None, ID),
+                error_code::CONVERSATION_IN_SESSION,
+            ),
+            (
+                "an id a session of another project holds",
+                check(Role::Project, Some("project-2"), None, ID),
+                error_code::CONVERSATION_OUTSIDE_PROJECT,
+            ),
+        ];
+        for (what, result, code) in cases {
+            assert_eq!(code_of(&result.expect_err(what)), code, "{what}");
+        }
+        // The session already holding it is named by id, which the UI words as its current title.
+        let err = check(Role::Project, Some("project-1"), None, ID).unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<CodedError>().unwrap().params["session"],
+            "holder"
+        );
+        let free = "99999999-2222-3333-4444-555555555555";
+        assert_eq!(
+            check(
+                Role::Project,
+                Some("project-1"),
+                None,
+                &format!(" {} \n", free.to_uppercase())
+            )
+            .unwrap(),
+            Some(free.to_string())
+        );
+        assert_eq!(check(Role::Console, None, None, "  ").unwrap(), None);
+
+        // Through `open_session`, where the refusal leaves no record of the one to open.
+        let err = open_session(
+            &state,
+            OpenRequest {
+                console_id: "console-1".to_string(),
+                project_id: Some("project-1".to_string()),
+                agent: None,
+                account: None,
+                model: None,
+                effort: None,
+                task: None,
+                title: None,
+                origin: Origin::User,
+                bound_to: None,
+                resume_agent_session_id: Some("my-title".to_string()),
+            },
+        )
+        .await
+        .expect_err("refused");
+        assert_eq!(code_of(&err), error_code::RESUME_ID_INVALID);
+        assert_eq!(state.store.list_sessions().unwrap().len(), 1);
+    }
+
+    /// The conversation to resume is looked for in the directory the session will launch with: the
+    /// pinned one, else the default account's from the shell snapshot.
+    #[test]
+    fn a_conversation_to_resume_must_be_in_the_accounts_directory() {
+        const ID: &str = "11111111-2222-3333-4444-555555555555";
+        let dir = temp_dir("resume-conversation-located");
+        let (pinned, default) = (dir.join("pinned"), dir.join("default-claude"));
+        let no_snapshot = || panic!("a pinned account needs no snapshot");
+        let snapshot = shell_env(&dir);
+
+        let err = locate_conversation_to_resume(
+            Agent::Claude,
+            Some(&pinned.to_string_lossy()),
+            ID,
+            no_snapshot,
+        )
+        .expect_err("not there");
+        let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+        assert_eq!(coded.code, error_code::CONVERSATION_TO_RESUME_NOT_FOUND);
+        assert_eq!(coded.params["id"], ID);
+
+        let record = default.join("projects/slug").join(format!("{ID}.jsonl"));
+        std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        std::fs::write(&record, "").unwrap();
+        locate_conversation_to_resume(Agent::Claude, None, ID, snapshot).unwrap();
     }
 
     /// Every refusal that can be told before the process is ended names its reason and records

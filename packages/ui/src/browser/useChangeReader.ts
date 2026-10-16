@@ -1,7 +1,9 @@
 import { createElement, useEffect, useRef, useState } from "react";
 
+import { InlineCode } from "../components/InlineCode";
 import { useLatest } from "../components/useLatest";
 import { DaemonRequestError } from "../daemon-client";
+import { errorText } from "../errorText";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
@@ -255,7 +257,7 @@ export function useChangeReader(project: string): ChangeReader {
           case "disconnected":
             throw new ChangeBodiesError("failed", t("viewer.expand.disconnected"));
           case "failed":
-            throw new ChangeBodiesError("failed", failure.message);
+            throw new ChangeBodiesError("failed", errorText(failure.message));
         }
       }
     };
@@ -358,15 +360,15 @@ export function useChangeReader(project: string): ChangeReader {
       ? createElement(Message<"git.compare.source">, {
         id: "git.compare.source",
         params: {
-          from: createElement("bdi", { dir: "auto" }, displayWirePath(origin.left.branch)),
-          fromCommit: createElement("bdi", { dir: "auto" }, shortCommit(origin.base)),
-          to: createElement("bdi", { dir: "auto" }, displayWirePath(origin.right.branch)),
-          toCommit: createElement("bdi", { dir: "auto" }, shortCommit(origin.right.commit)),
+          from: createElement(InlineCode, null, displayWirePath(origin.left.branch)),
+          fromCommit: createElement(InlineCode, null, shortCommit(origin.base)),
+          to: createElement(InlineCode, null, displayWirePath(origin.right.branch)),
+          toCommit: createElement(InlineCode, null, shortCommit(origin.right.commit)),
         },
       })
       : undefined;
-  // The same wording as `source`, as plain text for its tooltip, each branch name
-  // and commit isolated by U+2068/U+2069 the way the `<bdi>`s isolate them in `source`.
+  // The same wording as `source`, as plain text for its tooltip, each branch name and commit
+  // isolated by U+2068/U+2069 where `source` sets them as code, which reads left to right.
   const sourceText =
     origin.kind === "comparison"
       ? t("git.compare.source", {

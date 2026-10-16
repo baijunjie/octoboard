@@ -11,10 +11,14 @@ import {
 import React, { useMemo } from "react";
 import { Collection, ListLayout, Tree, TreeItem, TreeItemContent, Virtualizer, type Key } from "react-aria-components";
 
+import { CodeToneContext } from "../components/codeTone";
+import { failureParam } from "../components/DaemonErrorMessage";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { useScrollFade } from "../components/scrollFade";
+import type { ErrorPresentation } from "../errorPresentation";
+import { errorText } from "../errorText";
 import { isolate } from "../i18n/isolate";
-import { useCurrentLanguage, useT } from "../i18n/react";
+import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { BrowseEntry } from "../protocol";
 import { wireBaseName } from "../wirePath";
 import { RowActions } from "./RowActions";
@@ -60,6 +64,10 @@ function sameEntry(a: BrowseEntry | undefined, b: BrowseEntry | undefined): bool
   return a === b || (a !== undefined && b !== undefined && a.kind === b.kind && a.size === b.size && a.target === b.target);
 }
 
+function sameMessage(before: ErrorPresentation | undefined, next: ErrorPresentation | undefined): boolean {
+  return before === undefined || next === undefined ? before === next : errorText(before) === errorText(next);
+}
+
 function sameNode(before: TreeNode, next: TreeNode): boolean {
   if (before.type === "directory" && next.type === "directory") {
     const sameChildren = before.children.length === next.children.length && before.children.every((child, i) => child === next.children[i]);
@@ -68,7 +76,7 @@ function sameNode(before: TreeNode, next: TreeNode): boolean {
   if (before.type === "file" && next.type === "file") {
     return sameEntry(before.entry, next.entry) && before.missing === next.missing && before.selected === next.selected;
   }
-  if (before.type === "status" && next.type === "status") return before.status === next.status && before.message === next.message;
+  if (before.type === "status" && next.type === "status") return before.status === next.status && sameMessage(before.message, next.message);
   return false;
 }
 
@@ -216,6 +224,7 @@ export function FileTree({
  * tries again) or cut short. */
 function StatusItem({ node }: { node: Extract<TreeNode, { type: "status" }> }): React.ReactElement {
   const t = useT();
+  const message = node.message === undefined ? "" : errorText(node.message);
   const text =
     node.status === "loading"
       ? t("browser.tree.loading")
@@ -223,11 +232,11 @@ function StatusItem({ node }: { node: Extract<TreeNode, { type: "status" }> }): 
         ? t("browser.tree.empty")
         : node.status === "partial"
           ? t("browser.tree.partial")
-          : t("browser.tree.error", { message: isolate(node.message ?? "") });
+          : t("browser.tree.error", { message: isolate(message) });
   return (
     // Named by the plain message, not by `text`: `textValue` is what react-aria collates for
     // type-to-select, which an isolate mark in the middle of would only get in the way of.
-    <TreeItem id={node.key} textValue={node.status === "error" ? (node.message ?? "") : text} className={ROW_CLASS}>
+    <TreeItem id={node.key} textValue={node.status === "error" ? message : text} className={ROW_CLASS}>
       <TreeItemContent>
         <RowContent>
           {node.status === "loading" ? (
@@ -238,7 +247,9 @@ function StatusItem({ node }: { node: Extract<TreeNode, { type: "status" }> }): 
             <span className="size-4 shrink-0" />
           )}
           <FadeOverflow as="span" className={`min-w-0 flex-1 ${node.status === "error" ? "text-app-danger" : "text-app-muted"} italic`} titleWhenClipped={text}>
-            {text}
+            {node.status === "error" && node.message !== undefined
+              ? <CodeToneContext.Provider value="danger"><Message id="browser.tree.error" params={{ message: failureParam(node.message) }} /></CodeToneContext.Provider>
+              : text}
           </FadeOverflow>
           {node.status === "error" && <RotateCw aria-hidden="true" className="size-3.5 shrink-0 text-app-muted" />}
         </RowContent>

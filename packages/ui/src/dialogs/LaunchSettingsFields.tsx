@@ -2,6 +2,7 @@ import { Description, Disclosure } from "@heroui/react";
 import React, { useState } from "react";
 
 import { effortLevels, launchSettingOptions } from "../agentLaunchSettings";
+import { codedMessageNode } from "../components/DaemonErrorMessage";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { daemonMessage } from "../daemonMessage";
 import type { Translate } from "../i18n/catalog";
@@ -65,14 +66,16 @@ export function LaunchSettingsFields({
     unavailable ? daemonMessage(language, unavailable.code, unavailable.params, unavailable.message, s) : undefined,
   );
 
-  const modelDescription = loading ? t("dialog.agentSettings.modelsLoading") : (unavailableText ?? error);
+  const modelText = loading ? t("dialog.agentSettings.modelsLoading") : (unavailableText ?? error);
+  // Why there are no models, with what it names set as code where the message has such params.
+  const modelDescription = !loading && unavailable ? codedMessageNode(unavailable, unavailableText ?? unavailable.message) : modelText;
   const { levels, none } = effortLevels(models, model);
 
   return (
     <Disclosure isExpanded={expanded} onExpandedChange={setExpanded}>
       {/* The model field's note changes with no action of the user's, and its picker is locked while
           the note says "loading", so it cannot be reached to be read: say it from a status region. */}
-      <StatusAnnouncer text={modelDescription} />
+      <StatusAnnouncer text={modelText} />
       {/* The trigger spans the row so the whole row expands the section; HeroUI pushes its
           indicator to the far end with an auto margin, which `ms-0` cancels so the chevron follows
           the label. */}

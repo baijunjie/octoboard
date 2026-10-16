@@ -37,9 +37,9 @@ export const en = {
   // Shared across the session dialog, the welcome screen and the console dialog's agent rows —
   // anywhere availability (`AgentAvailability`) is shown or acted on.
   "agents.installPrompt":
-    "{appName} supports Claude Code, Codex and Grok Build. Make sure one of them is on your PATH to open a session.",
+    "{appName} supports Claude Code, Codex and Grok Build. Make sure one of them is on your {pathVar} to open a session.",
   // The sidebar's row for the same state, which has room for a title and nothing else.
-  "agents.noneFound": "No agent found on PATH",
+  "agents.noneFound": "No agent found on {pathVar}",
   "agents.notInstalled": "{agent} (not installed)",
 
   // What a session activity marker stands for, in words and on its own, for the tooltip of every
@@ -112,7 +112,7 @@ export const en = {
   "daemon.account_name_taken": "{agent} already has an account named “{name}”.",
   "daemon.field_required": "{field} is required.",
   "daemon.conflicting_fields": "{first} and {second} cannot both be given.",
-  "daemon.invalid_launch_setting": "“{value}” is not a {field} that {agent} offers.",
+  "daemon.invalid_launch_setting": "{value} is not a {field} that {agent} offers.",
   "daemon.console_has_running_sessions":
     "This console still has sessions that are running or starting. Archive the running ones, or wait for the ones that are starting to finish.",
   "daemon.project_has_running_sessions":
@@ -121,29 +121,29 @@ export const en = {
     "The folder is shared with project “{project}”, so it cannot be moved to the Trash. Remove that project first, or keep the folder.",
   "daemon.project_directory_protected": "This is your home folder, the root of a disk, or holds Octoboard’s own data, so it cannot be moved to the Trash.",
   "daemon.project_directory_trash_failed": "The folder could not be moved to the Trash, so the project was kept: {detail}",
-  "daemon.path_not_absolute": "“{path}” is not an absolute path. Give the full path, or start it with “~/”.",
-  "daemon.path_not_found": "“{path}” does not exist.",
-  "daemon.path_not_a_directory": "“{path}” is not a directory.",
-  "daemon.path_already_exists": "“{path}” already exists.",
+  "daemon.path_not_absolute": "{path} is not an absolute path. Give the full path, or start it with {tilde}.",
+  "daemon.path_not_found": "{path} does not exist.",
+  "daemon.path_not_a_directory": "{path} is not a directory.",
+  "daemon.path_already_exists": "{path} already exists.",
   "daemon.directory_unreadable":
-    "“{path}” could not be read. On a volume the application has no file access to, macOS asks for permission per volume. Grant it and try again: {detail}",
+    "{path} could not be read. On a volume the application has no file access to, macOS asks for permission per volume. Grant it and try again: {detail}",
   "daemon.directory_unreachable":
-    "“{path}” is not a directory the daemon can reach. A packaged application needs file access granted per volume, and the prompt may not have been answered yet.",
-  "daemon.no_repositories_found": "No git repositories were found directly under “{path}”.",
+    "{path} is not a directory the daemon can reach. A packaged application needs file access granted per volume, and the prompt may not have been answered yet.",
+  "daemon.no_repositories_found": "No git repositories were found directly under {path}.",
   "daemon.all_projects_already_added": "Every directory that was found is already associated with this console.",
-  "daemon.repository_name_missing": "“{url}” does not contain a repository name.",
+  "daemon.repository_name_missing": "{url} does not contain a repository name.",
   "daemon.git_clone_failed": "git clone failed: {detail}",
   "daemon.git_remote_unreachable": "The repository could not be read: {detail}",
-  "daemon.models_binary_not_found": "{binary} was not found, so the models cannot be listed. Check that it is installed and on your shell's PATH.",
+  "daemon.models_binary_not_found": "{binary} was not found, so the models cannot be listed. Check that it is installed and on your shell's {pathVar}.",
   "daemon.models_shell_environment_failed": "The shell environment could not be read, so the models cannot be listed: {detail}",
   "daemon.models_timed_out": "{agent} took too long to list its models.",
   "daemon.models_command_failed": "{agent} could not list its models: {detail}",
   "daemon.models_unreadable_output": "{agent} printed no models that could be read.",
-  "daemon.config_dir_not_absolute": "The {agent} config directory must be an absolute path, or start with “~/”.",
+  "daemon.config_dir_not_absolute": "The {agent} config directory must be an absolute path, or start with {tilde}.",
   "daemon.config_dir_unreachable":
-    "The {agent} config directory “{path}” is not a directory the daemon can reach. Recreate it, or point the account at a different directory.",
+    "The {agent} config directory {path} is not a directory the daemon can reach. Recreate it, or point the account at a different directory.",
   "daemon.grok_home_not_initialized":
-    "“{path}” is not a Grok home yet. Run Grok against it directly at least once so it has a session history, before pointing an account at it.",
+    "{path} is not a Grok home yet. Run Grok against it directly at least once so it has a session history, before pointing an account at it.",
   "daemon.icon_not_an_image": "The console avatar must be an image.",
   "daemon.icon_too_large": "The console avatar is larger than {limit_kib} KiB.",
   "daemon.configuration_not_recognised": "This is not a {appName} configuration file.",
@@ -161,9 +161,16 @@ export const en = {
   "daemon.session_already_on_account": "This session is on that account already.",
   "daemon.session_archived": "An archived session cannot be switched to another account. Reopen it first.",
   "daemon.conversation_not_found":
-    "No {agent} conversation of this session was found in “{path}”, so it cannot continue under another account.",
+    "No {agent} conversation of this session was found in {path}, so it cannot continue under another account.",
+  "daemon.conversation_to_resume_not_found":
+    "No {agent} conversation with this ID was found in {path}. Check the ID, and that it was started under this account.",
+  "daemon.resume_id_invalid": "This is not a conversation ID. It looks like {example}.",
+  "daemon.resume_for_console_session": "A console session cannot continue an earlier conversation.",
+  "daemon.conversation_in_session":
+    "This conversation is already in the session “{session}” of this project. Resume or reopen that session instead.",
+  "daemon.conversation_outside_project": "This conversation already belongs to a session outside this project.",
   "daemon.relocation_failed":
-    "The conversation could not be copied into “{path}”: {detail}. The session stays on the account it had.",
+    "The conversation could not be copied into {path}: {detail}. The session stays on the account it had.",
   "daemon.session_did_not_stop":
     "{session} did not stop in time, so it was not switched. It may still be running.",
   "daemon.switch_did_not_come_up":
@@ -180,27 +187,29 @@ export const en = {
   "daemon.queued_messages_lost":
     "A message queued for this session could not be written in full, so it and everything queued behind it were dropped. The session's input line may be holding part of a message {appName} could not finish writing. The next message written into the session will be run together with it, so check the session before sending anything else.",
   "daemon.page_not_current": "This page is no longer current, so its form can no longer be submitted.",
-  "daemon.invalid_path": "“{path}” is not a valid path in this project.",
-  "daemon.source_unavailable": "The folder “{path}” cannot be read: {detail}",
-  "daemon.file_not_found": "“{path}” does not exist any more.",
-  "daemon.permission_denied": "{appName} is not allowed to read “{path}”: {detail}",
-  "daemon.outside_scope": "“{path}” leads outside this project, so it is not shown.",
-  "daemon.unsupported_file_type": "“{path}” is not a regular file.",
-  "daemon.source_changed": "“{path}” changed while it was being read. Try again.",
+  "daemon.invalid_path": "{path} is not a valid path in this project.",
+  "daemon.source_unavailable": "The folder {path} cannot be read: {detail}",
+  "daemon.file_not_found": "{path} does not exist any more.",
+  "daemon.permission_denied": "{appName} is not allowed to read {path}: {detail}",
+  "daemon.outside_scope": "{path} leads outside this project, so it is not shown.",
+  // The UI's wording of `unsupported_file_type` with `file_type` `unmerged` (see `messageCode`), not a code the daemon sends.
+  "daemon.unsupported_file_type.unmerged": "{path} is in conflict, so it has no single version to read.",
+  "daemon.unsupported_file_type": "{path} is not a regular file.",
+  "daemon.source_changed": "{path} changed while it was being read. Try again.",
   "daemon.limit_exceeded": "This is more than {appName} reads at once (the limit is {max}).",
   "daemon.not_a_git_repository": "{project} is not in a Git repository.",
   "daemon.git_unavailable": "Git cannot read this repository: {detail}",
   "daemon.worktree_unavailable": "That worktree is no longer available.",
-  "daemon.invalid_branch_name": "“{branch}” is not a valid branch name.",
-  "daemon.unknown_branch": "There is no branch “{branch}” with a commit at its tip.",
-  "daemon.invalid_commit": "“{commit}” is not a full commit ID.",
-  "daemon.unknown_commit": "This repository has no commit “{commit}”.",
-  "daemon.no_merge_base": "“{left}” and “{right}” have no commit in common, so there is nothing to compare from.",
+  "daemon.invalid_branch_name": "{branch} is not a valid branch name.",
+  "daemon.unknown_branch": "There is no branch {branch} with a commit at its tip.",
+  "daemon.invalid_commit": "{commit} is not a full commit ID.",
+  "daemon.unknown_commit": "This repository has no commit {commit}.",
+  "daemon.no_merge_base": "{left} and {right} have no commit in common, so there is nothing to compare from.",
   "daemon.no_merge_base_shallow":
-    "No commit shared by “{left}” and “{right}” was found. This repository is a shallow clone, so the history that would show one may be missing.",
+    "No commit shared by {left} and {right} was found. This repository is a shallow clone, so the history that would show one may be missing.",
   "daemon.invalid_change": "This change names nothing that can be read.",
   "daemon.clean_filtered":
-    "“{path}” passes through the {filter} clean filter, so the content this change was made from cannot be read.",
+    "{path} passes through the {filter} clean filter, so the content this change was made from cannot be read.",
   "daemon.git_failed": "Git could not read this: {detail}",
   "daemon.terminal_unavailable": "The system terminal could not be opened: {detail}",
   "daemon.directory_unavailable": "The system file manager could not be opened: {detail}",
@@ -211,16 +220,16 @@ export const en = {
   "daemon.git_push_failed": "Git could not push this branch: {detail}",
   "daemon.request_superseded": "A newer request took the place of this one.",
   "daemon.trust_directory_too_broad":
-    "“{path}” is too broad to trust as a whole. It is the filesystem root or your home directory, or it contains one of them. Trust this project on its own, or move it under a narrower folder and trust that folder.",
-  "daemon.trust_path_not_absolute": "“{path}” is not an absolute path, so there is no folder above it to trust.",
+    "{path} is too broad to trust as a whole. It is the filesystem root or your home directory, or it contains one of them. Trust this project on its own, or move it under a narrower folder and trust that folder.",
+  "daemon.trust_path_not_absolute": "{path} is not an absolute path, so there is no folder above it to trust.",
   "daemon.trust_home_unknown": "The home directory could not be determined, so no folder can be checked against it.",
   "daemon.trust_not_waiting": "This session is no longer waiting at its agent's trust confirmation.",
   "daemon.console_session_trust_not_asked": "{appName} presses a console session's trust confirmation without asking.",
   "daemon.console_request_not_waiting": "This session is no longer waiting for an answer, so no console session was started.",
   "daemon.console_request_answered": "This request for a console session has already been answered.",
-  "daemon.binary_not_found": "“{binary}” was not found on PATH in the snapshotted shell environment.",
+  "daemon.binary_not_found": "{binary} was not found on {pathVar} in the snapshotted shell environment.",
   "daemon.shell_environment_timeout":
-    "“{shell} -l -i -c '{command}'” did not finish within {timeout}. A shell startup file is probably blocked on something other than stdin, or it left a background process holding the shell's output open. {appName} will not launch while the environment is unknown, because it will not guess at one. Fix or skip the slow step in the shell's rc files.",
+    "{shell} -l -i -c '{command}' did not finish within {timeout}. A shell startup file is probably blocked on something other than stdin, or it left a background process holding the shell's output open. {appName} will not launch while the environment is unknown, because it will not guess at one. Fix or skip the slow step in the shell's rc files.",
   "daemon.shell_environment_timeout.title": "Shell environment timed out",
   "daemon.shell_environment_timeout.command": "{command} did not finish within {timeout}.",
   "daemon.shell_environment_timeout.cause":
@@ -228,14 +237,14 @@ export const en = {
   "daemon.shell_environment_timeout.consequence": "{appName} will not launch while the shell environment is unknown, because it will not guess at one.",
   "daemon.shell_environment_timeout.recovery": "Fix or skip the slow step in the shell's rc files.",
   "daemon.agent_not_available":
-    "{agent} is not available on this machine: its binary does not resolve on your login shell's PATH. {appName} supports Claude Code, Codex and Grok Build; make sure one of them is on your PATH to open a session.",
+    "{agent} is not available on this machine: its binary does not resolve on your login shell's {pathVar}. {appName} supports Claude Code, Codex and Grok Build; make sure one of them is on your {pathVar} to open a session.",
   "daemon.claude_workspace_untrusted":
-    "Claude Code has not been trusted with this directory, so this project's own “allow” permission rules are ignored until Claude Code's trust confirmation is answered. Its “deny” rules still apply, so a session is only more restrictive, never less. {appName} presses that confirmation for you once you have agreed to it.",
+    "Claude Code has not been trusted with this directory, so this project's own {allow} permission rules are ignored until Claude Code's trust confirmation is answered. Its {deny} rules still apply, so a session is only more restrictive, never less. {appName} presses that confirmation for you once you have agreed to it.",
   "daemon.queued_messages_dropped":
     "{appName} dropped what it had queued for this session. The session's input line may be holding part of a message {appName} could not finish writing. The next message written into the session will be run together with it, so check the session before sending anything else.",
   "daemon.trust_answer_failed": "{appName} could not press {agent}'s trust confirmation ({reason}). Answer it in the terminal.",
   "daemon.trust_not_carried_over":
-    "{appName} could not copy {agent}'s trust for this folder into “{path}” ({reason}), so {agent} will ask again the next time it opens this folder.",
+    "{appName} could not copy {agent}'s trust for this folder into {path} ({reason}), so {agent} will ask again the next time it opens this folder.",
   // What goes in place of `{reason}` above, keyed by the daemon's `reason_code`. Lowercase: it is
   // spliced into the middle of that sentence.
   "daemon.trust_reason.screen_gone": "the trust confirmation is no longer on the terminal",
@@ -461,7 +470,7 @@ export const en = {
   "welcome.toolInstalled": "Installed",
   "welcome.toolNotFound": "Not detected",
   "welcome.toolChecking": "Checking…",
-  "welcome.toolsHint": "To open a session, install at least one tool and make sure it is on your PATH.",
+  "welcome.toolsHint": "To open a session, install at least one tool and make sure it is on your {pathVar}.",
 
   "terminal.empty": "No session selected",
   "terminal.empty.description": "Select a session to view its terminal.",
@@ -496,7 +505,6 @@ export const en = {
   "browser.error.folderChanged": "This folder kept changing while it was being listed. Refresh to try again.",
   "browser.partial": "Not every entry of this folder is shown.",
   "browser.error.patchTooLarge": "This change is too large to show as a diff: its patch is more than the {max} that can be opened here.",
-  "browser.error.unmerged": "“{path}” is in conflict, so it has no single version to read.",
   "browser.modes": "View",
   "browser.mode.files": "Files",
   "browser.mode.git": "Git",
@@ -577,8 +585,8 @@ export const en = {
   "git.compare.list.label": "Changes since the branches forked",
   "git.compare.commits": "Changes from the fork at commit {base} to commit {to}",
   "git.compare.source": "{to} at {toCommit}, since it forked from {from} at {fromCommit}",
-  "git.compare.moved": "“{branch}” has moved since these branches were compared. Refresh to compare its current commit.",
-  "git.compare.deleted": "“{branch}” no longer exists. The comparison still uses the commits it was made at.",
+  "git.compare.moved": "{branch} has moved since these branches were compared. Refresh to compare its current commit.",
+  "git.compare.deleted": "{branch} no longer exists. The comparison still uses the commits it was made at.",
   "browser.tree.label": "Files",
   "browser.tree.collapse": "Collapse",
   "browser.tree.expand": "Expand",
@@ -754,6 +762,15 @@ export const en = {
   "dialog.session.agent": "Agent",
   "dialog.session.launchSettingsNote": "Changes apply only to this session, including when resumed. Unchanged values follow the project settings.",
   "dialog.session.titleHint": "Leave this empty to use the project name.",
+  "dialog.session.conversation": "Conversation",
+  "dialog.session.conversationNew": "New conversation",
+  "dialog.session.conversationResume": "Resume conversation",
+  "dialog.session.resumeId": "Session ID",
+  "dialog.session.resumeHint":
+    "The session ID of a conversation started outside Octoboard, as the agent's resume command takes it. The session then does not report to another session.",
+  "dialog.session.resumeInvalid": "Enter a session ID like {example}.",
+  "dialog.session.resumeRequired": "Enter the session ID of the conversation to resume.",
+  "dialog.session.resumeExample": "Ex. {example}",
   "dialog.session.owner": "Report to",
   "dialog.session.ownerNone": "No console session",
   "dialog.session.ownerFixed": "Reports to {name}",
@@ -876,7 +893,7 @@ export const en = {
   "configuration.export.paths.description":
     "Each project's directory is written into it as a path on the machine running {appName}, which may not be the one this window is on. Share the file only with people you are happy to show those paths to.",
   "configuration.export.submit": "Export",
-  "configuration.export.saved": "Configuration saved as “{name}”.",
+  "configuration.export.saved": "Configuration saved as {name}.",
   "configuration.export.downloaded": "Configuration downloaded.",
   "configuration.export.failed": "Could not save the file: {detail}",
   "configuration.import.title": "Import configuration",
@@ -886,9 +903,9 @@ export const en = {
   "configuration.import.readFailed": "Could not read the file: {detail}",
   "configuration.file.tooLarge": "The file is too large to be a configuration file.",
   "configuration.file.notText": "The file is not a text file.",
-  "configuration.import.notJson": "“{name}” is not a JSON file.",
+  "configuration.import.notJson": "{name} is not a JSON file.",
   "configuration.import.review.intro":
-    "From “{file}”. Each console below is created as a new console, and none of your existing ones is changed. A project you leave out is not added.",
+    "From {file}. Each console below is created as a new console, and none of your existing ones is changed. A project you leave out is not added.",
   "configuration.import.review.submit": "Import",
   "configuration.import.review.pending": "Importing…",
   "configuration.import.review.cloneNote":
@@ -933,7 +950,7 @@ export const en = {
   "configuration.import.directory.label": "Directory for {project}",
   "configuration.import.directory.placeholder": "~/code/website",
   "configuration.import.directory.required": "Enter a directory, or leave the project out.",
-  "configuration.import.directory.notAbsolute": "Enter an absolute path, or one starting with “~/”.",
+  "configuration.import.directory.notAbsolute": "Enter an absolute path, or one starting with {tilde}.",
   "configuration.import.result.finished": "Import finished.",
   "configuration.import.result.consolesCreated": {
     one: "{count} console created.",
@@ -1026,7 +1043,7 @@ export const en = {
   "settings.accounts.add": "Add account",
   "settings.accounts.defaultName": "Default",
   "settings.accounts.defaultDescription": "The setup a session runs under when no account is pinned. It cannot be changed or removed.",
-  "settings.accounts.notUsable": "Not usable until {agent} is on your PATH.",
+  "settings.accounts.notUsable": "Not usable until {agent} is on your {pathVar}.",
   "settings.accounts.editLabel": "Edit {name} ({agent})",
   "settings.accounts.removeLabel": "Remove {name} ({agent})",
   "settings.accounts.removeTitle": "Remove account “{name}”?",
@@ -1039,7 +1056,7 @@ export const en = {
   "settings.accounts.dirHint": "{appName} does not require the directory to exist yet.",
   "settings.accounts.dirHintGrok":
     "{appName} does not require the directory to exist yet, but sessions only keep their login and conversation if it is a Grok home that Grok has already been run against. {appName} checks that when a session launches, not here.",
-  "settings.accounts.dirNotAbsolute": "Enter an absolute path, or one starting with “~/”.",
+  "settings.accounts.dirNotAbsolute": "Enter an absolute path, or one starting with {tilde}.",
   "settings.accounts.nameTaken": "{agent} already has an account named “{name}”.",
   "settings.accounts.nameTakenDefault": "“{name}” is the name of the default {agent} account.",
   "settings.notifications.label": "Notify when a session is waiting for you",

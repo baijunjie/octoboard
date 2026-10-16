@@ -39,6 +39,8 @@ export function useToastClearance(inside: RefObject<HTMLElement | null>, hasFoot
     if (!dialog || !footer) return;
     const root = document.documentElement;
     let frame = 0;
+    let waiting = false;
+    let disposed = false;
     const apply = () => {
       const rect = footer.getBoundingClientRect();
       if (overlapsToastCorner(rect)) {
@@ -49,9 +51,27 @@ export function useToastClearance(inside: RefObject<HTMLElement | null>, hasFoot
     };
     const entry: Entry = {
       measure: () => {
+        // While the dialog's own height eases (`useHeightMotion`) it resizes every frame, and each
+        // measurement would set a property on `<html>`, restyling the whole document. So the
+        // measurement waits for the animation to end (`animationend` is not sent for one made
+        // with `animate()`), and checks for it only once a frame has passed: this observer is
+        // told of a change before `useHeightMotion`'s is, so the report that starts the ease
+        // arrives before the animation exists. `getAnimations` flushes style in WebKit, hence
+        // nothing asks it while a wait is under way.
+        if (waiting) return;
         cancelAnimationFrame(frame);
         frame = requestAnimationFrame(() => {
-          if (stack[stack.length - 1] === entry) apply();
+          if (stack[stack.length - 1] !== entry) return;
+          const running = dialog.getAnimations?.().filter((animation) => animation.playState === "running") ?? [];
+          if (running.length === 0) {
+            apply();
+            return;
+          }
+          waiting = true;
+          void Promise.allSettled(running.map((animation) => animation.finished)).then(() => {
+            waiting = false;
+            if (!disposed) entry.measure();
+          });
         });
       },
     };
@@ -66,6 +86,7 @@ export function useToastClearance(inside: RefObject<HTMLElement | null>, hasFoot
     document.addEventListener("animationend", entry.measure, true);
     document.addEventListener("transitionend", entry.measure, true);
     return () => {
+      disposed = true;
       cancelAnimationFrame(frame);
       resize.disconnect();
       window.removeEventListener("resize", entry.measure);

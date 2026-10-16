@@ -85,7 +85,8 @@ it("keeps the dialog on the file step, with the daemon's reason, for a document 
 
 it("refuses a file that is not JSON without asking the daemon", async () => {
   const mounted = await reviewing({ text: "not json" });
-  expect(text()).toContain("“mine.json” is not a JSON file.");
+  expect(text()).toContain("mine.json is not a JSON file.");
+  expect(document.body.querySelector('[role="alert"] code')?.textContent).toBe("mine.json");
   expect(mounted.sent()).toEqual([]);
 });
 
@@ -144,7 +145,7 @@ it("stops before any request when a project is to go to a directory that is miss
   await press("Import");
   expect(text()).toContain("Enter a directory, or leave the project out.");
   type(row("Notes").querySelector("input")!, "relative/dir");
-  expect(text()).toContain("Enter an absolute path, or one starting with “~/”.");
+  expect(text()).toContain("Enter an absolute path, or one starting with ~/.");
   expect(mounted.sent().filter((body) => body.type === "import_configuration")).toEqual([]);
   type(row("Notes").querySelector("input")!, "~/notes");
   await press("Import");
@@ -158,9 +159,11 @@ it("tells each project's result in a table row, with the reason beside a failure
   await press("Import");
   const line = (project: string) =>
     Array.from(document.body.querySelectorAll("tbody tr")).find((tr) => tr.querySelectorAll("td")[1]?.textContent?.endsWith(project))?.textContent ?? "";
-  expect(line("Website")).toContain("Work laptop");
-  expect(line("Website")).toContain("Created");
-  expect(line("Website")).toContain("At its exported path");
+  expect(line("Search API")).toContain("Work laptop");
+  expect(line("Search API")).toContain("Created");
+  expect(line("Search API")).toContain("In the default clone directory");
+  expect(line("Website")).toContain("Failed");
+  expect(line("Website")).toContain("/Users/ana/code/website does not exist.");
   expect(line("Notes")).toContain("Left out");
   expect(line("Design System")).toContain("Failed");
   expect(line("Design System")).toContain("git clone failed:");

@@ -1,8 +1,9 @@
 import { Button } from "@heroui/react";
 import React, { useEffect, useRef, useState } from "react";
 
+import { InlineCode } from "../components/InlineCode";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "../dialogs/Dialog";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { useDaemon } from "../store";
 import { fileFailureText } from "./failureText";
@@ -38,6 +39,9 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   const { request } = useDaemon();
   const { configurationFile } = usePlatform();
   const { error, setError, busy, run } = useDialogAction();
+  // The name of a file that is not JSON, which its failure line sets as code.
+  const [notJson, setNotJson] = useState<string>();
+  const failure = notJson === undefined ? error : <Message id="configuration.import.notJson" params={{ name: <InlineCode>{notJson}</InlineCode> }} />;
   const { shown, attempt } = useSubmitValidation();
   const [stage, setStage] = useState<Stage>({ kind: "choose" });
   const [review, setReview] = useState<ReviewState>([]);
@@ -76,6 +80,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   const choose = async () => {
     if (!configurationFile || busy || waitingRef.current) return;
     setError(undefined);
+    setNotJson(undefined);
     const picker = ++pickerRef.current;
     waitingRef.current = true;
     setWaiting(true);
@@ -97,7 +102,8 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       try {
         document = JSON.parse(opened.text);
       } catch {
-        throw new Error(t("configuration.import.notJson", { name: opened.name }));
+        setNotJson(opened.name);
+        return;
       }
       const inspection = (await request({ type: "inspect_configuration", document })) as Inspection;
       setReview(initialReview(inspection.consoles));
@@ -127,9 +133,9 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   // seen without scrolling a long review back to its end.
   const reviewFooter = (
     <>
-      {error && (
+      {failure && (
         <div className="basis-full">
-          <DialogError message={error} />
+          <DialogError message={failure} />
         </div>
       )}
       <Button type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
@@ -178,7 +184,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
         {stage.kind === "choose" && (
           <>
             <p className="text-sm">{t("configuration.import.choose.intro")}</p>
-            <DialogError message={error} />
+            <DialogError message={failure} />
           </>
         )}
         {stage.kind === "review" && (

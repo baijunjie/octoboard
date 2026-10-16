@@ -5,6 +5,7 @@ import { useStore } from "zustand/react";
 import { DaemonClient, DaemonRequestError, type ConnectionState } from "./daemon-client";
 import { daemonMessage } from "./daemonMessage";
 import { errorPresentation } from "./errorPresentation";
+import { errorText } from "./errorText";
 import { currentLanguage } from "./i18n/language";
 import { daemonWsUrl, type DaemonOrigin } from "./daemon";
 import {
@@ -31,6 +32,8 @@ import {
 export interface ToastRequest {
   kind: "error" | "notice";
   message: string;
+  /** The daemon's own code and params, kept for a structured rendering of the message (a literal
+   * set as code), for a notice as well as an error. Absent for a message the UI worded itself. */
   daemonError?: DaemonRequestError;
   /** The session the toast is about, so the stack can say where it is. A daemon `notice` always
    * has one; a notice the UI raises itself (`toastNotice`) has none. An `error` has one only where
@@ -409,6 +412,7 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
     if (event.type === "session_notice") {
       emitToast({
         kind: "notice",
+        daemonError: new DaemonRequestError(event.message, event.code, event.params),
         message: daemonMessage(currentLanguage(), event.code, event.params, event.message, store.getState()),
         session: event.session,
       });
@@ -436,7 +440,7 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
       }),
     toastError: (message, session) => {
       const presentation = typeof message === "string" ? message : errorPresentation(message);
-      emitToast({ kind: "error", message: typeof message === "string" ? message : message.message, session,
+      emitToast({ kind: "error", message: errorText(message), session,
         ...(typeof presentation !== "string" && { daemonError: presentation }) });
     },
     toastNotice: (message) => emitToast({ kind: "notice", message }),

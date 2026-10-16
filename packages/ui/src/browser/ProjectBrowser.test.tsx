@@ -17,9 +17,6 @@ const roots: Root[] = [];
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
-  // jsdom has no Web Animations API, which react-aria asks the tabs' indicator for as the chosen
-  // tab changes; it is taken off the prototype again so no later file inherits it.
-  Element.prototype.getAnimations = () => [];
 });
 
 afterEach(async () => {
@@ -27,7 +24,6 @@ afterEach(async () => {
   await act(async () => pending.splice(0).forEach((request) => request.reject(new Error("test over"))));
   vi.useRealTimers();
   vi.unstubAllGlobals();
-  delete (Element.prototype as Partial<Element>).getAnimations;
 });
 
 const daemon: Daemon = {

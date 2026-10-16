@@ -7,7 +7,9 @@ import { expect, it, onTestFinished } from "vitest";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
 import { DialogError, useDialogAction } from "../dialogs/Dialog";
+import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
+import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { DaemonErrorMessage } from "./DaemonErrorMessage";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -76,4 +78,15 @@ it("uses the plain fallback for an unfamiliar code or an incomplete shell timeou
   const container = mount(<><DaemonErrorMessage error={unknown} /><DaemonErrorMessage error={incomplete} /></>);
   expect(container.textContent).toBe("new daemon errorincomplete daemon error");
   expect(container.querySelector("code")).toBeNull();
+});
+
+it("sets the path of a conversation that was not found as code, not as quoted text, and does not repeat the ID", () => {
+  const error = new DaemonRequestError("plain", "conversation_to_resume_not_found", { agent: "Claude Code", path: "/Users/dev/.claude", id: "3f2b8c1e" });
+  expect(errorPresentation(error)).toBe(error);
+  const daemon = { store: createStateStore({}) } as Daemon;
+  const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  expect(Array.from(container.querySelectorAll("code"), (code) => code.textContent)).toEqual(["/Users/dev/.claude"]);
+  // One element, so an alert's flex column cannot split the sentence into an item per literal.
+  expect(container.children).toHaveLength(1);
+  expect(container.textContent).toBe(`No ${isolate("Claude Code")} conversation with this ID was found in /Users/dev/.claude. Check the ID, and that it was started under this account.`);
 });

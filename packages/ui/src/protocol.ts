@@ -763,6 +763,9 @@ export type RequestBody =
        * session the user opens by hand stays outside the orchestration unless they choose one.
        * Ignored for the console session itself, which is never bound. */
     bound_to?: string;
+    /** The agent's own id of a conversation started outside Octoboard, which this project session
+       * continues. Only a project session takes one, never together with `bound_to`. */
+    resume_agent_session_id?: string;
   }
   | { type: "resume_session"; session: string }
   | { type: "archive_session"; session: string }

@@ -888,8 +888,12 @@ html.pane-resizing * {
   background-color: color-mix(in oklab, var(--app-code-tone) 18%, transparent);
   color: color-mix(in oklab, var(--app-code-tone) 40%, var(--foreground));
 }
-.app-code-block > .app-code {
+/* An inline literal is as large as the text it stands in, a field's 12px error included; HeroUI's
+   own code style fixes it at 14px. Unlayered, so it wins over HeroUI's components layer. */
+.app-code {
   font-size: inherit;
+}
+.app-code-block > .app-code {
   white-space: inherit;
   overflow-wrap: inherit;
 }

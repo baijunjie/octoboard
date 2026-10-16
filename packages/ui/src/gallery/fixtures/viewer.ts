@@ -3,6 +3,8 @@
 // the renderer cannot read, a grammar that fails to load, and repository markup that must stay
 // inert — and a rendered document's diagrams, formulas, project images and links. The viewer
 // renders them outside the app (see `viewerGallery.tsx`).
+import { createElement } from "react";
+
 import { format, type Translate } from "../../i18n/catalog";
 import { isolate } from "../../i18n/isolate";
 import type { Language } from "../../i18n/languages";
@@ -13,6 +15,14 @@ import type { Scenario } from "../scenario";
 import { IMAGES } from "./viewerImages";
 
 const GROUP = "File viewer";
+
+// The app's own modules are imported when a scenario's subjects are built, not here: the gallery
+// frame reads the window's language from storage when `i18n/react` is first evaluated, which has to
+// follow the preparation of that storage, and this module is loaded before it.
+async function loadLiveParts() {
+  return { Message: (await import("../../i18n/react")).Message, InlineCode: (await import("../../components/InlineCode")).InlineCode };
+}
+type LiveParts = Awaited<ReturnType<typeof loadLiveParts>>;
 
 const OLD_SESSION = `import type { Session } from "./protocol";
 
@@ -631,6 +641,7 @@ const longPatch = () =>
 /** Shared file subjects, built only when a viewer scenario opens; navigation selects its explicit
  * normal or exceptional targets below. */
 async function allFiles(): Promise<ViewerSubject[]> {
+  const { DaemonRequestError } = await import("../../daemon-client");
   return [
     file("src/session.ts", text("src/session.ts", NEW_SESSION)),
     file("scripts/build.py", text("scripts/build.py", PYTHON)),
@@ -666,7 +677,10 @@ async function allFiles(): Promise<ViewerSubject[]> {
     {
       key: "live:src/gone.ts",
       path: "src/gone.ts",
-      content: { state: "error", message: "src/gone.ts no longer exists in this project." },
+      content: {
+        state: "error",
+        message: new DaemonRequestError("src/gone.ts does not exist any more.", "file_not_found", { path: "src/gone.ts" }),
+      },
     },
     { key: "live:src/offline.ts", path: "src/offline.ts", content: { state: "disconnected", what: "file" } },
     // Names too long for the header, for both source files and design notes.
@@ -697,10 +711,24 @@ async function failedFiles(): Promise<ViewerSubject[]> {
 }
 
 // The comparison wording of a change opened from the Compare view, in the window's language.
-const comparisonWording = (t: Translate, from: string, fromCommit: string, to: string, toCommit: string) =>
-  t("git.compare.source", { from: isolate(from), fromCommit: isolate(fromCommit), to: isolate(to), toCommit: isolate(toCommit) });
-const longComparison = (t: Translate) =>
-  comparisonWording(t, "release/2024-11-stabilisation-and-hotfix-candidates", "1234567", "feature/ranking-experiments-with-a-long-name", "fedcba0");
+// The branches and commits are set as code, as the app sets them, with the same wording as plain text
+// for the tooltip.
+const comparisonWording = ({ Message, InlineCode }: LiveParts, t: Translate, from: string, fromCommit: string, to: string, toCommit: string) => {
+  return {
+    source: createElement(Message<"git.compare.source">, {
+      id: "git.compare.source",
+      params: {
+        from: createElement(InlineCode, null, from),
+        fromCommit: createElement(InlineCode, null, fromCommit),
+        to: createElement(InlineCode, null, to),
+        toCommit: createElement(InlineCode, null, toCommit),
+      },
+    }),
+    sourceText: t("git.compare.source", { from: isolate(from), fromCommit: isolate(fromCommit), to: isolate(to), toCommit: isolate(toCommit) }),
+  };
+};
+const longComparison = (parts: LiveParts, t: Translate) =>
+  comparisonWording(parts, t, "release/2024-11-stabilisation-and-hotfix-candidates", "1234567", "feature/ranking-experiments-with-a-long-name", "fedcba0");
 /** A one-hunk patch of a Markdown file, from `oldPath` to `newPath` (the same for a plain edit). */
 const markdownPatch = (oldPath: string, newPath: string) => `diff --git a/${oldPath} b/${newPath}
 index 1111111..2222222 100644
@@ -713,8 +741,9 @@ index 1111111..2222222 100644
  
 `;
 const DESIGN_PATH = "docs/design-notes/interaction-and-visuals/project-file-browser-interaction-and-visual-design-notes-final-review-do-not-edit-directly.md";
-const designComparison = (t: Translate) =>
+const designComparison = (parts: LiveParts, t: Translate) =>
   comparisonWording(
+    parts,
     t,
     "release/november-2024-stabilisation-and-hotfix-candidates",
     "1234567",
@@ -741,13 +770,12 @@ function untrackedNotFile(path: string, kind: "symlink" | "submodule"): ViewerSu
 }
 
 /** A change opened from the Compare view: the comparison is the subtitle under the title. */
-function compared(t: Translate): ViewerSubject {
-  const wording = comparisonWording(t, "main", "1234567", "feature", "fedcba0");
+function compared(parts: LiveParts, t: Translate): ViewerSubject {
+  const wording = comparisonWording(parts, t, "main", "1234567", "feature", "fedcba0");
   return {
     key: "Compare:src/session.ts",
     path: "src/session.ts",
-    source: wording,
-    sourceText: wording,
+    ...wording,
     content: { state: "change", change: { old: present("src/session.ts", oldSession), new: present("src/session.ts", newSession), patch: MODIFIED_PATCH } },
   };
 }
@@ -757,11 +785,13 @@ function compared(t: Translate): ViewerSubject {
  * control left, so the group is empty) and a compared change (the layout and wrap choices, with the
  * subtitle). */
 async function withoutClipboard(language: Language): Promise<ViewerSubject[]> {
+  const parts = await loadLiveParts();
   const t: Translate = (key, ...args) => format(language, key, ...args);
-  return [file("docs/guide.md", text("docs/guide.md", GUIDE)), file("assets/before.png", binary("assets/before.png", IMAGES.before_png)), compared(t)];
+  return [file("docs/guide.md", text("docs/guide.md", GUIDE)), file("assets/before.png", binary("assets/before.png", IMAGES.before_png)), compared(parts, t)];
 }
 
 async function allChanges(language: Language): Promise<ViewerSubject[]> {
+  const parts = await loadLiveParts();
   const t: Translate = (key, ...args) => format(language, key, ...args);
   return [
     change(t, "src/session.ts", present("src/session.ts", oldSession), present("src/session.ts", newSession), MODIFIED_PATCH),
@@ -798,15 +828,14 @@ async function allChanges(language: Language): Promise<ViewerSubject[]> {
         body: text("src/merge.ts", "<<<<<<< ours\nconst a = 1;\n=======\nconst a = 2;\n>>>>>>> theirs\n"),
       },
     },
-    compared(t),
+    compared(parts, t),
     // A long comparison under the title, and a Markdown file shown alone from the Compare view, which
     // has the source / document choice and the wrap choice in source (a Markdown diff has the layout
     // and wrap choices and no document, so all three never show together).
     {
       key: "Compare:docs/guide.md",
       path: "docs/guide.md",
-      source: longComparison(t),
-      sourceText: longComparison(t),
+      ...longComparison(parts, t),
       content: { state: "change", change: { old: { state: "absent" }, new: present("docs/guide.md", text("docs/guide.md", GUIDE)) } },
     },
     change(
@@ -823,8 +852,7 @@ async function allChanges(language: Language): Promise<ViewerSubject[]> {
     {
       key: "Compare:docs/handbook/renamed-notes.md",
       path: "docs/handbook/engineering/onboarding/renamed-notes.md",
-      source: longComparison(t),
-      sourceText: longComparison(t),
+      ...longComparison(parts, t),
       content: {
         state: "change",
         change: {
@@ -841,8 +869,7 @@ async function allChanges(language: Language): Promise<ViewerSubject[]> {
     {
       key: `Compare:${DESIGN_PATH}`,
       path: DESIGN_PATH,
-      source: designComparison(t),
-      sourceText: designComparison(t),
+      ...designComparison(parts, t),
       content: { state: "change", change: { old: { state: "absent" }, new: present(DESIGN_PATH, text("design-notes.md", GUIDE)) } },
     },
     change(t, "bin/tool.wasm", present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAA=" })), present("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAABBAFgAAA=" }))),

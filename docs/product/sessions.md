@@ -76,7 +76,16 @@ are listed in, pinning, the archive view and how selecting a session works — i
 
 New console session from the console header, the console sessions section's empty row, and the terminal's offer of
 the same action open a dialog before anything is launched. New session under a project opens the same dialog for that
-project. Both offer these fields in this order:
+project.
+
+A project session's dialog opens with two tabs at its head, **New conversation**, selected by default, and **Resume
+conversation**, each holding the whole form: the **Resume conversation** tab starts with a required **Session ID**
+field and has no **Report to** field (see "Resuming a conversation started outside Octoboard" below). What is typed or
+picked is kept across a switch between the tabs, while the Advanced section folds back closed. The dialog for a console
+session has no tabs, and neither has the dialog opened from a console session's focus mode, whose session always starts
+a new conversation.
+
+Both dialogs offer these fields in this order:
 
 - **Name** (optional) — the empty field shows the project's name for a project session, or the console's name for a
   console session, as its placeholder. Leaving it empty uses that parent's current name when the session is created,
@@ -108,7 +117,8 @@ project. Both offer these fields in this order:
   `docs/product/hub-orchestration.md`. The choice is offered from the project list and the terminal's **New session** offer outside focus
   mode. Opened from a project's focus mode the dialog has no such field and the session is always unbound; opened from a console session's focus mode it
   has none either, and shows a line saying the session reports to that console session instead, which is the binding
-  it gets (see `docs/product/focus-mode.md`).
+  it gets (see `docs/product/focus-mode.md`). The **Resume conversation** tab has no such field, since a resumed
+  session is never bound (see "Resuming a conversation started outside Octoboard" below).
 
 After these fields, the collapsed **Advanced** section offers the model and reasoning effort for this session. It
 initially shows the selected agent's project defaults, or the console's console-session defaults for a console
@@ -192,6 +202,64 @@ A session uses its own model and reasoning effort choices, each independently, o
 its agent from its project (its console for a console session). The inheritance, explicit clearing and persistence
 rules are in `docs/product/model-and-reasoning-effort.md`. How the resolved values reach the agent is in "The model
 and reasoning effort" in `docs/product/launching-agents.md`.
+
+### Resuming a conversation started outside Octoboard
+
+A project session can be opened to continue a conversation the user started with the agent outside Octoboard — Claude
+Code, Codex or Grok Build run in a terminal — instead of starting a new one. The session dialog's **Resume
+conversation** tab, beside the default **New conversation** tab at the head of the dialog, starts with a required
+**Session ID** field for the conversation's session ID — the one the agent's own resume command takes. The tabs are
+offered for a project session only, from the project list, the terminal's **New session** offer and a project's focus
+mode alike: the dialog for a console session has none, and neither has the dialog opened from a console session's
+focus mode, whose session always reports to that console session. A session started with `start_session` never resumes one. In the daemon protocol, `open_session` takes the ID
+as `resume_agent_session_id`; blank is read as absent.
+
+The tab's other fields apply to a resumed session as to a new one: its name, its agent and account, and the model and
+reasoning effort in the Advanced section, which are passed to the agent when it resumes the conversation. The ID is
+sent only when the dialog is submitted from the **Resume conversation** tab; one typed there and then left for the
+**New conversation** tab is not.
+
+- **A resumed session is a plain, unbound project session.** The **Resume conversation** tab has no **Report to**
+  field and the session is opened unbound; the **New conversation** tab still shows the choice made there before. `open_session` refuses a request that names both a conversation to resume and a session to report to
+  (`conflicting_fields`).
+- **The ID must be a UUID.** The field takes the hyphenated form the agents show (such as
+  `123e4567-e89b-12d3-a456-426614174000`), in either letter case. An empty field, or anything else, stops the submit
+  and is reported under the field — asking for the session ID of the conversation to resume when it is empty, and
+  giving an example ID otherwise — and focus moves to the field. From then on the message follows what is
+  typed. `open_session` takes any spelling of a UUID, trimmed, and keeps it lowercase and hyphenated; anything else is
+  refused (`resume_id_invalid`).
+- **A conversation already in Octoboard is refused.** No two sessions share one conversation: an ID that a session
+  already records as its agent's conversation, live or archived, is refused. A session of the same project is named,
+  and the user is told to resume or reopen that session instead (`conversation_in_session`); a session outside the
+  project — of another project, or a console session — is only said to be outside this project
+  (`conversation_outside_project`). The check is made again once the new session is recorded, so two requests for the
+  same conversation cannot both succeed.
+- **The conversation must be in the session's account directory.** It is looked for in the config directory of the
+  account the session will use (see "Which account a session uses" above): the account's own directory, or for the
+  default account the directory the agent defaults to under the user's login shell environment (see "Agent config
+  directories" in `docs/product/consoles-and-projects.md`). With no record of it there, the open is refused, naming the
+  agent and the directory but not the ID, which is in the field above (`conversation_to_resume_not_found`). A
+  conversation started in a terminal is
+  therefore found only when the session's account resolves to the same config directory that terminal's agent used.
+  For the default account, a login shell environment that could not be captured refuses the open as well (see "The
+  launch environment" in `docs/product/launching-agents.md`).
+- Every refusal comes before anything is recorded or launched: no session appears, and the reason is shown in the
+  dialog. `open_session` also refuses an ID for a console session (`resume_for_console_session`).
+- **The refusals about the conversation are shown under the Session ID field**, not at the foot of the dialog: an ID
+  that is not a conversation ID (`resume_id_invalid`), a conversation already in a session (`conversation_in_session`,
+  `conversation_outside_project`) and one not found (`conversation_to_resume_not_found`). The field is marked invalid
+  and takes focus. The refusal goes when the dialog is submitted again, and as soon as the ID, the agent or the account
+  is changed, since that asks about a different conversation; it is not shown on the **New conversation** tab. Any
+  other failure of the open is shown at the foot of the dialog.
+
+A session opened this way starts by resuming that conversation, and comes up at the agent's prompt like any session
+opened from the dialog. It **has a conversation from the moment it is opened**, not from its first turn: interrupted
+before the user has typed anything, it resumes that conversation rather than starting a fresh one; it is never unused,
+so it is archived rather than deleted (see "Deleting an unused session" below); switching its account copies that
+conversation; and its relaunch is refused when its pinned config directory has gone (see "Archiving, interruption and
+resuming" below). Octoboard's status hooks and tools are injected as on any resume, so its status is tracked and its
+tools are there; whether the role description takes effect in it is in "What is injected on every launch" in
+`docs/product/launching-agents.md`.
 
 ## Session statuses
 
@@ -455,15 +523,17 @@ Octoboard injects.
 
 - Where the agent has a stored conversation, that conversation is resumed.
 - A session that **nobody ever typed into** has no stored conversation on the agent's side; resuming it opens a fresh
-  conversation in its place, in the same project and under the same session.
+  conversation in its place, in the same project and under the same session. A session opened to resume a
+  conversation is the exception: it has that conversation from the start (see "Resuming a conversation started
+  outside Octoboard" above).
 - A resume carries no opening prompt, so the session comes up at the agent's prompt; an archived session reopened by
   typing into its terminal is then handed what was typed (see "Interrupted, archived and dormant sessions" in
   `docs/product/session-terminal.md`).
 - A session relaunches with the account and the config directory it last recorded for its agent — the one it was
   opened with until the user switches it (see "Switching a session's account" below), not the console's current
   reference — and is refused if that directory no longer exists, but only when the session has a conversation to
-  resume; one that was opened and never typed into launches into the missing directory instead (see "Agent config
-  directories" in `docs/product/consoles-and-projects.md`).
+  resume; one with none yet, opened and never typed into without resuming a conversation, launches into the missing
+  directory instead (see "Agent config directories" in `docs/product/consoles-and-projects.md`).
 - **Reopening a session whose owner is archived reopens its archived owners first, level by level from the topmost
   down**, then the session itself, so what the session reports reaches a running owner: a session bound to an archived
   lead session whose console session is archived too brings back the console session, then the lead session, then
@@ -510,9 +580,9 @@ session separately.
 
 - **The conversation continues** where the agent has one stored: the session's own record is copied — added to the
   target directory, or replacing an earlier copy there — and the original stays in the account it came from, so a
-  failed switch loses nothing and switching back needs no second copy. A session nobody ever typed into has no
-  conversation to copy; the switch records the account and relaunches into a fresh conversation, as a resume of such a
-  session does. The default account is a target like any other: the directory it resolves to at that moment is where
+  failed switch loses nothing and switching back needs no second copy. A session nobody ever typed into, unless it
+  was opened to resume a conversation, has no conversation to copy; the switch records the account and relaunches into
+  a fresh conversation, as a resume of such a session does. The default account is a target like any other: the directory it resolves to at that moment is where
   the conversation is copied, and the relaunch runs against that same resolution.
 - **The session reads the target account's configuration and keeps its explicit model and reasoning effort choices.**
   An account's directory holds the agent's global configuration as well as its login. Settings kept only in the old
@@ -588,8 +658,9 @@ A session that has **never been used** is deleted rather than archived: its acti
 **Archive** — on its sidebar row, on its card in a focus mode and, for a console session, in its focus mode's header.
 A session is unused, whatever its status, while all of these hold:
 
-- **It has had no turn yet.** The first prompt its agent reports as submitted makes it used for good, whether the user
-  typed it or Octoboard wrote it in.
+- **It has no conversation yet.** The first prompt its agent reports as submitted makes it used for good, whether the
+  user typed it or Octoboard wrote it in; a session opened to resume a conversation is used from the moment it is
+  opened (see "Resuming a conversation started outside Octoboard" above).
 - **It is bound to no owner.** A session another session started, or one opened to report to a console session, keeps
   Archive even before its first prompt lands, since it reports to that owner.
 - **No session is bound to it.** An owner with any session under it, in any status, keeps Archive.

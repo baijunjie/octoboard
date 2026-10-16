@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import type { ErrorPresentation } from "../errorPresentation";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
 import { WORKTREE_UNAVAILABLE } from "../protocol";
@@ -19,7 +20,7 @@ const CHANGED_RETRIES = 2;
 export type ChangeList =
   | { state: "loading" }
   | { state: "loaded"; head: string | null; items: ChangeItem[]; complete: boolean; refreshing: boolean }
-  | { state: "error"; message: string; unavailable: boolean; refreshing: boolean };
+  | { state: "error"; message: ErrorPresentation; unavailable: boolean; refreshing: boolean };
 
 /**
  * The uncommitted changes of one worktree of a project, asked of the daemon while `active`: once

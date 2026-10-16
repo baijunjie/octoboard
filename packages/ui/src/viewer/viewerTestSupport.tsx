@@ -1,6 +1,7 @@
 // Shared by the viewer's tests: the providers the header needs around a `FileViewer`.
 import React from "react";
 
+import { errorText } from "../errorText";
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
@@ -26,7 +27,7 @@ export function ViewerHost({
     () => ({
       store: createStateStore(),
       request: request ?? (() => Promise.reject(new Error("no daemon"))),
-      toastError: (message) => toasts.error(typeof message === "string" ? message : message.message),
+      toastError: (message) => toasts.error(errorText(message)),
       toastNotice: toasts.notice,
       onToast: () => () => {},
       dismissTrustPrompt: () => {},

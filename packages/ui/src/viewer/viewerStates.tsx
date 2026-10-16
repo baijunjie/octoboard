@@ -6,10 +6,12 @@ import { Alert, Spinner } from "@heroui/react";
 import { Equal, FileQuestion, FolderGit2, Link, Unplug } from "lucide-react";
 import React from "react";
 
+import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { TintedAlert } from "../components/TintedAlert";
+import type { ErrorPresentation } from "../errorPresentation";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
@@ -202,10 +204,10 @@ export function Disconnected({ what }: { what: "file" | "change" }): React.React
  * the content with an error rather than standing in for it. The shared alert keeps it consistent
  * with failures in the other panes and dialogs.
  */
-export function Failure({ message, title }: { message: string; title: string }): React.ReactElement {
+export function Failure({ message, title }: { message: ErrorPresentation; title: string }): React.ReactElement {
   return (
     <ErrorAlert title={title} className="min-w-0 shrink-0">
-      {message}
+      <DaemonErrorMessage error={message} showTitle={false} />
     </ErrorAlert>
   );
 }

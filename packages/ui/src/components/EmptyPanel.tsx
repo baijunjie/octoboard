@@ -25,7 +25,7 @@ export function EmptyPanel({
   silent,
 }: {
   icon: LucideIcon;
-  message: string;
+  message: React.ReactNode;
   /** The full panel's heading level: the level of the heading naming whatever the panel stands in
    * for, so the two read as one thing in the view's outline rather than the panel opening a section
    * of its own. The default suits a pane's own title and a dialog's, both `h2`; the sidebar's

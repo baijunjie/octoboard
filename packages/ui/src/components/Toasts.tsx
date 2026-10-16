@@ -2,8 +2,9 @@ import { Toast, toast, type ToastContentValue } from "@heroui/react";
 import React, { useCallback, useEffect, useSyncExternalStore } from "react";
 import type { QueuedToast } from "react-aria-components";
 
-import { hasShellTimeoutDetails } from "../errorPresentation";
+import { CodeToneContext } from "./codeTone";
 import { DaemonErrorMessage, DaemonErrorTitle } from "./DaemonErrorMessage";
+import { hasCodeParams, hasShellTimeoutDetails } from "../errorPresentation";
 import { t } from "../i18n/language";
 import { useT } from "../i18n/react";
 import { sessionLocation } from "../sessionLabel";
@@ -190,13 +191,20 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
 
 function showToast({ kind, message, session, daemonError }: ToastRequest, location: string | undefined): void {
   const signature = JSON.stringify([kind, message, session]);
-  const structured = daemonError && hasShellTimeoutDetails(daemonError) ? daemonError : undefined;
+  const shell = daemonError && hasShellTimeoutDetails(daemonError) ? daemonError : undefined;
+  // A message that sets some of its params as code is worded from the catalog here, not shown as text.
+  const coded = daemonError && hasCodeParams(daemonError) ? daemonError : undefined;
+  const structured = shell ?? coded;
+  // With a session's location as the title the message is the description; without one the title
+  // is the message itself, and only the shell timeout, which has a title of its own, adds a description.
+  const title = location ?? (shell ? <DaemonErrorTitle /> : coded ? <DaemonErrorMessage error={coded} /> : message);
   const options = {
     variant: kind === "error" ? ("danger" as const) : ("accent" as const),
-    description: structured ? <DaemonErrorMessage error={structured} showTitle={!!location} /> : location ? message : undefined,
+    description: location
+      ? structured ? <DaemonErrorMessage error={structured} showTitle /> : message
+      : shell ? <DaemonErrorMessage error={shell} showTitle={false} /> : undefined,
     timeout: kind === "error" ? ERROR_DURATION_MS : NOTICE_DURATION_MS,
   };
-  const title = location ?? (structured ? <DaemonErrorTitle /> : message);
 
   const existing = shownToasts.get(signature);
   if (existing) toast.close(existing);
@@ -213,7 +221,12 @@ function renderToast({ toast: queued }: { toast: QueuedToast<ToastContentValue> 
     <Toast toast={queued} variant={variant}>
       <Toast.Indicator variant={variant} />
       <Toast.Content>
-        {!!title && <Toast.Title>{title}</Toast.Title>}
+        {/* The title is the toast's own tone, so a literal in it takes that tone; the description stays neutral. */}
+        {!!title && (
+          <CodeToneContext.Provider value={variant === "danger" ? "danger" : "primary"}>
+            <Toast.Title>{title}</Toast.Title>
+          </CodeToneContext.Provider>
+        )}
         {!!description && <Toast.Description elementType="div">{description}</Toast.Description>}
       </Toast.Content>
       <ToastClose />

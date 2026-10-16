@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import type { ErrorPresentation } from "../errorPresentation";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
 import type { BranchInfo } from "../protocol";
@@ -14,8 +15,8 @@ import { AUTO_REFRESH_MS } from "./useDirectoryListings";
  * a refresh that fails, with that failure beside it (`error`) until a refresh succeeds. */
 export type BranchList =
   | { state: "loading" }
-  | { state: "loaded"; branches: BranchInfo[]; complete: boolean; sentAt: number; error?: string }
-  | { state: "error"; message: string };
+  | { state: "loaded"; branches: BranchInfo[]; complete: boolean; sentAt: number; error?: ErrorPresentation }
+  | { state: "error"; message: ErrorPresentation };
 
 /**
  * The local branches of a project's repository, asked of the daemon while `active`: once at first,

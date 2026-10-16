@@ -109,6 +109,11 @@ to spare, a confirmation say, centres in the space above the strip rather than i
 the strip's height higher than it otherwise would. With the strip gone, every dialog sits exactly where it would with
 no connection banner at all.
 
+**A dialog whose content changes its height while it is open eases to the new height** — a tab switched, a section
+opened, a failure line appearing — over **200 ms**, growing or shrinking about its centre. Its first size and a change of
+the window's size are not eased, and where the system asks for reduced motion the height changes at once. Every
+dialog does this except Settings.
+
 The strip's Retry is also reachable by keyboard with a modal dialog open. For how focus moves to Retry and back,
 where it goes when Retry disappears, and the restriction while a menu is open, see "Moving focus between regions with
 F6" in `docs/product/moving-focus-between-regions.md`.

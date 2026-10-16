@@ -7,3 +7,6 @@ class StubResizeObserver {
   disconnect(): void {}
 }
 globalThis.ResizeObserver ??= StubResizeObserver as unknown as typeof ResizeObserver;
+
+// jsdom has no Web Animations API, which react-aria's tab indicator asks for as the chosen tab changes.
+if (typeof Element !== "undefined") Element.prototype.getAnimations ??= () => [];

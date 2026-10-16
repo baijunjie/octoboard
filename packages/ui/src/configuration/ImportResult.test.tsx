@@ -102,10 +102,12 @@ it("does not say nothing failed beside a failure to apply the settings", () => {
     container.remove();
   });
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
-  const settings_error = { code: "settings_failed", params: {}, message: "no" };
+  const settings_error = { code: "path_not_found", params: { path: "/Users/dev/missing" }, message: "no" };
   act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles, settings_error }} /></DaemonProvider>));
   expect(container.textContent).toContain("The application settings could not be applied");
   expect(container.textContent).not.toContain("Nothing failed");
+  // The failure's literal takes the danger tone of the line it is in.
+  expect(container.querySelector("code")?.getAttribute("data-color")).toBe("danger");
 });
 
 it("puts no space between the sentences of the summary in a language that has none after its full stop", () => {

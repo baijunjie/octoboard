@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { DaemonRequestError } from "../daemon-client";
 import { isolate } from "../i18n/isolate";
 import type { Agent, AgentAvailability, Session } from "../protocol";
 import type { NewSessionBinding } from "./dialogRequest";
@@ -223,6 +224,116 @@ it("opens on the console's account when the project pins none", async () => {
   expect(await openedAccount({})).toBe("a-console");
 });
 
+
+const UUID = "11111111-2222-3333-4444-555555555555";
+
+const tab = (name: string) => Array.from(document.body.querySelectorAll<HTMLElement>('[role="tab"]')).find((element) => element.textContent === name);
+const resumeTab = () => tab("Resume conversation");
+const newTab = () => tab("New conversation");
+const resumeField = () =>
+  Array.from(document.body.querySelectorAll<HTMLInputElement>("input")).find((input) => input.labels?.[0]?.textContent === "Session ID");
+
+/** Chooses to resume a conversation, if the dialog offers the choice. */
+async function chooseResume(): Promise<void> {
+  await act(async () => resumeTab()?.click());
+}
+
+/** Types `value` into the Session ID field. */
+function typeResumeId(value: string): void {
+  act(() => {
+    const field = resumeField()!;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, value);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+/** Renders the dialog for a project (or, with `null`, for the console) over one console session and
+ * mocks its request to succeed. */
+function renderForResume(projectOverride: Partial<typeof project> | null = {}) {
+  const { container, root, daemon } = renderDialog([hub1], {}, {}, { kind: "choose" }, projectOverride);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  vi.mocked(daemon.request).mockResolvedValue({ type: "ack" } as never);
+  return daemon;
+}
+
+const submit = async () => act(async () => buttons().find((button) => button.textContent === "Open")!.click());
+const sentOpenSession = (daemon: Daemon) =>
+  vi.mocked(daemon.request).mock.calls.find(([body]) => body.type === "open_session")?.[0] as unknown as Record<string, unknown> | undefined;
+
+it("offers the choice of resuming only to a project session that is not fixed to an owner", () => {
+  for (const [override, binding] of [[{}, choose], [{}, { kind: "unbound" } as const], [null, choose], [{}, { kind: "bound", to: hub1 } as const]] as const) {
+    const { container, root } = renderDialog([hub1], {}, {}, binding, override);
+    expect(resumeTab() !== undefined).toBe(override !== null && binding.kind !== "bound");
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
+it("starts a new conversation by default, without the Session ID field", async () => {
+  const daemon = renderForResume();
+  expect(newTab()!.getAttribute("aria-selected")).toBe("true");
+  expect(resumeField()).toBeUndefined();
+  await submit();
+  expect(sentOpenSession(daemon)).not.toHaveProperty("resume_agent_session_id");
+});
+
+it("sends the conversation to resume, trimmed, with no owner", async () => {
+  const daemon = renderForResume();
+  await chooseResume();
+  expect(document.body.textContent).not.toContain("Report to");
+  typeResumeId(`  ${UUID} `);
+  await submit();
+  expect(sentOpenSession(daemon)).toMatchObject({ resume_agent_session_id: UUID, bound_to: undefined });
+});
+
+it.each([
+  { name: "empty", id: "", message: "Enter the session ID of the conversation to resume." },
+  { name: "not a UUID", id: "my-title", message: "Enter a session ID like" },
+])("holds back a $name conversation ID and says so under the field", async ({ id, message }) => {
+  const daemon = renderForResume();
+  await chooseResume();
+  if (id) typeResumeId(id);
+  expect(document.body.textContent).not.toContain(message);
+  await submit();
+  expect(document.body.textContent).toContain(message);
+  expect(document.activeElement).toBe(resumeField());
+  expect(sentOpenSession(daemon)).toBeUndefined();
+  // A literal in the message takes the error's tone.
+  for (const code of document.body.querySelectorAll('[role="alert"] code')) expect(code.getAttribute("data-color")).toBe("danger");
+});
+
+it("shows the daemon's refusal of the conversation under the Session ID field and takes it away once the ID changes", async () => {
+  const daemon = renderForResume();
+  vi.mocked(daemon.request).mockRejectedValue(
+    new DaemonRequestError("plain", "conversation_to_resume_not_found", { agent: "Claude Code", path: "/Users/dev/.claude", id: UUID }),
+  );
+  await chooseResume();
+  typeResumeId(UUID);
+  await submit();
+  const field = resumeField()!;
+  expect(field.getAttribute("aria-invalid")).toBe("true");
+  expect(document.activeElement).toBe(field);
+  const refusal = field.closest('[data-slot="textfield"], [role="group"]')?.textContent ?? "";
+  expect(refusal).toContain("was found in /Users/dev/.claude");
+  // Under the field, not in the alert at the dialog's foot.
+  expect(document.body.querySelectorAll('[role="alert"]')).toHaveLength(1);
+  typeResumeId("11111111-2222-3333-4444-555555555556");
+  expect(document.body.textContent).not.toContain("was found in");
+});
+
+it("brings back the owner choice and sends no conversation after choosing a new one again", async () => {
+  const daemon = renderForResume();
+  await act(async () => buttons().find((b) => b.textContent?.includes("No console session"))!.click());
+  await act(async () => optionElements().find((o) => o.textContent === "Hub")!.click());
+  await chooseResume();
+  typeResumeId(UUID);
+  await act(async () => newTab()!.click());
+  expect(document.body.textContent).toContain("Report to");
+  expect(resumeField()).toBeUndefined();
+  await submit();
+  expect(sentOpenSession(daemon)).toMatchObject({ bound_to: "s-hub-1" });
+  expect(sentOpenSession(daemon)).not.toHaveProperty("resume_agent_session_id");
+});
 
 it("updates the fixed owner's displayed name while the session dialog is open", () => {
   const owner = { ...hub1, terminal_title: "First task" };

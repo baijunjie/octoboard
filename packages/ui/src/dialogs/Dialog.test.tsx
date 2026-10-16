@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
-import { Dialog } from "./Dialog";
+import { Dialog, DialogError } from "./Dialog";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -373,4 +373,47 @@ it.each(["Enter", " "])("ignores a repeated %j on the submit button", (key) => {
     expect(repeat.defaultPrevented).toBe(true);
     expect(first.defaultPrevented).toBe(false);
   });
+});
+
+it("eases the dialog's height when its content changes it, but not for its first size", () => {
+  const observers: ResizeObserverCallback[] = [];
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(callback: ResizeObserverCallback) { observers.push(callback); }
+    observe() {}
+    disconnect() {}
+  });
+  const animate = vi.fn(() => ({ playState: "finished", cancel() {} }));
+  Element.prototype.animate = animate as never;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+    delete (Element.prototype as Partial<Element>).animate;
+  });
+  act(() => root.render(
+    <DaemonProvider value={fakeDaemon()}>
+      <Dialog title="Rename" onClose={() => {}} footer={null}><span>body</span></Dialog>
+    </DaemonProvider>,
+  ));
+  const resize = (blockSize: number) => observers.forEach((report) => report([{ borderBoxSize: [{ blockSize }], contentRect: { height: blockSize } } as unknown as ResizeObserverEntry], {} as ResizeObserver));
+  resize(200);
+  expect(animate).not.toHaveBeenCalled();
+  resize(260);
+  expect(animate).toHaveBeenCalledWith([{ height: "200px" }, { height: "260px" }], expect.objectContaining({ duration: 200 }));
+});
+
+it("scrolls a dialog's failure line into view once it appears", async () => {
+  const scrollIntoView = vi.fn();
+  Element.prototype.scrollIntoView = scrollIntoView;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  });
+  act(() => root.render(<DialogError message="Something failed" />));
+  await vi.waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest", behavior: "smooth" }));
 });

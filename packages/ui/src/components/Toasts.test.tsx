@@ -5,6 +5,7 @@ import { toast } from "@heroui/react";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
+import { sessionOf } from "../gallery/fixtures/builders";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { Toasts } from "./Toasts";
 
@@ -104,6 +105,55 @@ it("renders a coded shell timeout with a separate title and command while plain 
     expect(description?.textContent).not.toContain("plain fallback");
     act(() => deliver({ kind: "error", message: "a plain failure" }));
     expect([...document.querySelectorAll('[data-slot="toast-title"]')].some((element) => element.textContent === "a plain failure")).toBe(true);
+  } finally {
+    act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
+it("sets the path of a coded daemon message as code in the toast's title", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  stubWidth(1280);
+  let deliver!: (request: import("../store").ToastRequest) => void;
+  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /></DaemonProvider>));
+    const error = new DaemonRequestError("plain fallback", "path_not_found", { path: "/Users/dev/missing" });
+    act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
+    const title = document.querySelector('[data-slot="toast-title"]');
+    expect(title?.querySelector("code")?.textContent).toBe("/Users/dev/missing");
+    expect(title?.textContent).toBe("/Users/dev/missing does not exist.");
+    expect(document.body.textContent?.split("does not exist.")).toHaveLength(2);
+  } finally {
+    act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
+it("shows a coded notice under the session's location, the path as code in the description", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  stubWidth(1280);
+  let deliver!: (request: import("../store").ToastRequest) => void;
+  const source: Daemon = {
+    ...daemon,
+    store: createStateStore({ sessions: new Map([["s1", sessionOf("s1", "c1", undefined, "Hub", "idle")]]) }),
+    onToast: (listener) => { deliver = listener; return () => {}; },
+  };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /></DaemonProvider>));
+    const error = new DaemonRequestError("plain fallback", "trust_not_carried_over", { agent: "Codex", path: "/Users/dev/code", reason: "why" });
+    act(() => deliver({ kind: "notice", message: error.message, daemonError: error, session: "s1" }));
+    const description = document.querySelector('[data-slot="toast-description"]');
+    expect(description?.querySelector("code")?.textContent).toBe("/Users/dev/code");
+    expect(document.querySelector('[data-slot="toast-title"]')?.querySelector("code")).toBeNull();
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
     act(() => root.unmount());

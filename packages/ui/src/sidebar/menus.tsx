@@ -161,9 +161,10 @@ function switchAccountSubmenu(
 }
 
 /** Whether a session's menu offers Delete in place of Archive: it is archived already, or it has
- * never been used — no turn yet, bound to no owner and no session bound to it — and is deleted
- * outright. One bound to an owner keeps Archive even before its first prompt lands, since it
- * reports to that owner, and so does an owner that already has a session under it. */
+ * never been used — no conversation on the agent's side (no turn taken, none resumed at open),
+ * bound to no owner and no session bound to it — and is deleted outright. One bound to an owner
+ * keeps Archive even before its first prompt lands, since it reports to that owner, and so does an
+ * owner that already has a session under it. */
 export function offersDelete(session: Session, hasBoundSessions: boolean): boolean {
   return session.status === "archived" || (!session.has_conversation && !session.bound_to && !hasBoundSessions);
 }

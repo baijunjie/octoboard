@@ -548,6 +548,7 @@ where
         effort: None,
         origin: Origin::User,
         bound_to: None,
+        resume_agent_session_id: None,
     })
     .await?;
     // The caller's process can also end while the console session launches, once nothing withdraws

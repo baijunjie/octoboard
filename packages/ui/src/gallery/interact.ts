@@ -227,6 +227,26 @@ export async function stuckExit(doc: Document): Promise<string | undefined> {
   return `<${stuck.tagName.toLowerCase()}> beginning “${text}”`;
 }
 
+/**
+ * Waits, for at most `limit` ms, until the page's finite animations and transitions have ended, so a
+ * capture taken once the page is ready shows the settled view rather than a frame of a dialog still
+ * easing to its height. Infinite animations (a spinner) are part of a view and are not waited for,
+ * and neither are scroll-driven ones, which end only when the user scrolls.
+ */
+export async function settleMotion(doc: Document, limit: number): Promise<void> {
+  if (typeof doc.getAnimations !== "function") return;
+  const running = () =>
+    doc.getAnimations().filter((animation) => {
+      if (animation.playState !== "running" || !(animation.timeline instanceof DocumentTimeline)) return false;
+      return Number.isFinite(animation.effect?.getComputedTiming().endTime);
+    });
+  const spent = new Promise<void>((resolve) => setTimeout(resolve, limit));
+  for (let pending = running(); pending.length > 0; pending = running()) {
+    const ended = await Promise.race([Promise.allSettled(pending.map((animation) => animation.finished)).then(() => true), spent.then(() => false)]);
+    if (!ended) return;
+  }
+}
+
 export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui {
   const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 

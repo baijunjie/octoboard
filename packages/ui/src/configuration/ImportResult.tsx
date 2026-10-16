@@ -2,11 +2,12 @@ import { CircleAlert, CircleCheck, CircleMinus, CircleSlash, CircleX, Info, type
 import React, { useId } from "react";
 
 import { AGENT_LABEL } from "../agents";
+import { CodeToneContext } from "../components/codeTone";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import type { PlainMessageKey } from "../i18n/catalog";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import type { Event, ImportChoiceKind, ImportedProject } from "../protocol";
-import { useFailureText } from "./failureText";
+import { useFailureNode } from "./failureText";
 import { outcomeOf } from "./importPlan";
 
 export type Imported = Extract<Event, { type: "configuration_imported" }>;
@@ -42,7 +43,7 @@ interface Line {
   console: string;
   project: string | undefined;
   status: Status;
-  detail: string;
+  detail: React.ReactNode;
 }
 
 /** One cell. The cell that is dropped when stacked (`empty`) is only ever the last column's, so no
@@ -85,7 +86,7 @@ function Cell({
  */
 export function ImportResult({ result }: { result: Imported }): React.ReactElement {
   const t = useT();
-  const failureText = useFailureText();
+  const failureNode = useFailureNode();
   const fallbacksId = useId();
   const outcome = outcomeOf(result.consoles);
   const setting = t("settings.git.autoPull.label");
@@ -100,7 +101,7 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
             console: console.name,
             project: undefined,
             status: "failed",
-            detail: console.error ? failureText(console.error) : "",
+            detail: console.error ? failureNode(console.error) : "",
           },
         ]
         : console.projects.length === 0
@@ -117,7 +118,7 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
             : ""
           : project.status === "failed"
             ? project.error
-              ? failureText(project.error)
+              ? failureNode(project.error)
               : ""
             : project.status === "not_attempted"
               ? t("configuration.import.result.detail.consoleFailed")
@@ -160,12 +161,14 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
         </p>
       )}
       {result.settings_error && (
-        <p className="flex items-start gap-2 text-app-danger">
-          <CircleX aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          <span className="min-w-0">
-            {t("configuration.import.result.settings.failed", { reason: failureText(result.settings_error) })}
-          </span>
-        </p>
+        <CodeToneContext.Provider value="danger">
+          <p className="flex items-start gap-2 text-app-danger">
+            <CircleX aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            <span className="min-w-0">
+              <Message id="configuration.import.result.settings.failed" params={{ reason: failureNode(result.settings_error) }} />
+            </span>
+          </p>
+        </CodeToneContext.Provider>
       )}
       {lines.length > 0 && (
         <div className="@container">

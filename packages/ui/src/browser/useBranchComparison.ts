@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import type { ErrorPresentation } from "../errorPresentation";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
 import type { ComparisonEndpoint } from "../protocol";
@@ -19,7 +20,7 @@ export type Comparison =
   | { state: "idle" }
   | { state: "loading" }
   | { state: "loaded"; left: ComparisonEndpoint; right: ComparisonEndpoint; base: string; items: ChangeItem[]; complete: boolean; receivedAt: number }
-  | { state: "error"; message: string };
+  | { state: "error"; message: ErrorPresentation };
 
 /**
  * The comparison of branch `right` (To) with branch `left` (From) of a project: what `right` has

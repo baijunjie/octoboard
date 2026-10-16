@@ -3,6 +3,7 @@
 // without touching the daemon contract or the callers.
 import type { ReactNode } from "react";
 
+import type { ErrorPresentation } from "../errorPresentation";
 import type { FileContent } from "../protocol";
 import { joinedPatch, saysNothingChanged } from "./patch";
 import type { StatusKey } from "./statusMarks";
@@ -48,7 +49,7 @@ export interface ViewerChange {
   old: ViewerChangeSide;
   new: ViewerChangeSide;
   patch?: string;
-  unavailable?: string;
+  unavailable?: ErrorPresentation;
   /** Reads both sides' whole text, for showing the lines the patch collapses. Present only where
    * those lines can be offered at all: a change whose sides both exist as files. Called on the
    * first expansion and not again for the same patch; it rejects with a `ChangeBodiesError`. */
@@ -83,7 +84,7 @@ export class ChangeBodiesError extends Error {
 
 export type ViewerContent =
   | { state: "loading" }
-  | { state: "error"; message: string }
+  | { state: "error"; message: ErrorPresentation }
   /** Nothing has been read yet and the connection to the daemon is lost; it is read again once the
    * connection is back. Not a failure of the file or change itself. */
   | { state: "disconnected"; what: "file" | "change" }
@@ -91,7 +92,7 @@ export type ViewerContent =
   | { state: "change"; change: ViewerChange }
   /** A path in conflict, which is no two-sided change: `conflict` says how, in the caller's
    * wording, beside the file on disk with its conflict markers, or why that cannot be shown. */
-  | { state: "conflict"; conflict: string; body?: ViewerBody; message?: string };
+  | { state: "conflict"; conflict: string; body?: ViewerBody; message?: ErrorPresentation };
 
 /**
  * What the viewer shows. `key` is the subject's identity — the caller composes it from the
@@ -203,7 +204,7 @@ export type ChangePresentation =
   | { kind: "renamedUnchanged" }
   | { kind: "image" }
   | { kind: "binary" }
-  | { kind: "unreadable"; message?: string };
+  | { kind: "unreadable"; message?: ErrorPresentation };
 
 export function changePresentation(change: ViewerChange): ChangePresentation {
   const { old: before, new: after } = change;

@@ -4,6 +4,7 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { onTestFinished } from "vitest";
 
+import { errorText } from "../errorText";
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { ChangeEntry } from "../protocol";
@@ -72,7 +73,7 @@ export function mountRows(children: React.ReactNode, { clipboard, toasts = { not
   const daemon: Daemon = {
     store: createStateStore(state),
     request: () => Promise.reject(new Error("no daemon")),
-    toastError: (message) => toasts.error(typeof message === "string" ? message : message.message),
+    toastError: (message) => toasts.error(errorText(message)),
     toastNotice: toasts.notice,
     onToast: () => () => {},
     dismissTrustPrompt: () => {},

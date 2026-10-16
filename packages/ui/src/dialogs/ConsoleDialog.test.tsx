@@ -327,7 +327,7 @@ it("locks the pickers and says so while the list is out, with the stored value i
 });
 
 it.each([
-  ["models_binary_not_found", { binary: "claude" }, `${isolate("claude")} was not found, so the models cannot be listed.`],
+  ["models_binary_not_found", { binary: "claude" }, "claude was not found, so the models cannot be listed."],
   ["models_shell_environment_failed", { detail: "no shell" }, `The shell environment could not be read, so the models cannot be listed: ${isolate("no shell")}`],
   ["models_timed_out", { agent: "Claude Code" }, `${isolate("Claude Code")} took too long to list its models.`],
   ["models_command_failed", { agent: "Claude Code", detail: "exit 1" }, `${isolate("Claude Code")} could not list its models: ${isolate("exit 1")}`],

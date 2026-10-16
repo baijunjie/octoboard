@@ -1,6 +1,7 @@
 import { Description, FieldError, Input, Label, TextField } from "@heroui/react";
 import React from "react";
 
+import { CodeToneContext } from "../components/codeTone";
 import { useTrimmedField } from "./useTrimmedField";
 
 /** A labelled single-line text field, in HeroUI's variant for a field on a surface, since it is
@@ -27,13 +28,14 @@ export function TextInput({
   onChange: (value: string) => void;
   placeholder?: string;
   description?: string;
-  errorMessage?: string;
+  errorMessage?: React.ReactNode;
   trailing?: React.ReactNode;
   autoFocus?: boolean;
   dir?: "ltr";
   isDisabled?: boolean;
 }): React.ReactElement {
   const field = useTrimmedField(value, onChange);
+  const invalid = errorMessage !== undefined && errorMessage !== null && errorMessage !== false && errorMessage !== "";
   const input = <Input dir={dir} placeholder={placeholder} className={trailing ? "min-w-0 flex-1" : undefined} />;
   return (
     <TextField
@@ -42,7 +44,7 @@ export function TextInput({
       {...field}
       autoFocus={autoFocus}
       isDisabled={isDisabled}
-      isInvalid={errorMessage !== undefined}
+      isInvalid={invalid}
       // Whether to submit is the dialog's own decision: react-aria's default behaviour hands a
       // field marked invalid to the browser's constraint validation, which then refuses the submit
       // before the dialog's handler — and the mark itself only ever appears from that handler.
@@ -67,7 +69,10 @@ export function TextInput({
           react-aria drops a `role` given to the error itself: the message appears on a submit that
           gives the user no other feedback, so it has to be announced as a dialog-wide failure is. */}
       <FieldError>
-        <span role="alert">{errorMessage}</span>
+        {/* The error is danger-toned text, so a literal inside it is too, as in a danger alert. */}
+        <CodeToneContext.Provider value="danger">
+          <span role="alert">{invalid ? errorMessage : null}</span>
+        </CodeToneContext.Provider>
       </FieldError>
     </TextField>
   );

@@ -11,6 +11,7 @@ import {
   AGENT_PROJECT_MODEL_FIELD,
 } from "../agents";
 import { AGENT_ICON_OPTIONS, AgentIcon } from "../components/AgentIcon";
+import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { InlineCode } from "../components/InlineCode";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
@@ -122,6 +123,7 @@ export function ProjectDialog({
   // Whatever the form asks the daemon about locks the fields below it until the answer for what is
   // entered now has arrived: a failure keeps them locked, and a git URL is asked about from the
   // first character, so it stays locked while empty too.
+  const detectionError = detection.status === "failed" ? <DaemonErrorMessage error={detection.error} showTitle={false} /> : undefined;
   const locked = !editing && (source === "git" ? detection.status !== "ready" : detection.status === "checking" || detection.status === "failed");
 
   // `path` is required for the `local` and `parent` sources; `git` needs no check here, since its
@@ -223,7 +225,7 @@ export function ProjectDialog({
             dir="ltr"
             placeholder={t("dialog.project.urlExample")}
             description={detection.status === "checking" ? t("dialog.project.urlChecking") : undefined}
-            errorMessage={detection.status === "failed" ? detection.error : undefined}
+            errorMessage={detectionError}
           />
         )}
         {!editing && (
@@ -234,7 +236,7 @@ export function ProjectDialog({
             dir="ltr"
             placeholder={source === "git" ? defaultCloneDir : t("dialog.project.directoryExample")}
             description={source === "local" && detection.status === "checking" ? t("dialog.project.pathChecking") : undefined}
-            errorMessage={shown(pathError) ?? (source === "local" && detection.status === "failed" ? detection.error : undefined)}
+            errorMessage={shown(pathError) ?? (source === "local" ? detectionError : undefined)}
             isDisabled={source === "git" && locked}
             trailing={
               <Button type="button" variant="secondary" isDisabled={source === "git" && locked} onPress={() => setPickingDirectory(true)}>

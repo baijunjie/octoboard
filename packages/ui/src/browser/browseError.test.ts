@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
+import { errorText } from "../errorText";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
@@ -14,17 +15,23 @@ function sourceUnavailable(path: string) {
   return new DaemonRequestError("unreadable", "source_unavailable", { path, detail: "denied" });
 }
 
+/** The plain text of a failure to show. */
+const failed = (failure: ReturnType<typeof browseFailure>) => (failure.kind === "failed" ? errorText(failure.message) : "");
+
 describe("browseFailure", () => {
   it("names the project's directory for the empty path, isolated once", () => {
     const failure = browseFailure(t, "en", sourceUnavailable(""), records, "~/project");
-    expect(failure).toMatchObject({
-      kind: "failed",
-      message: `The folder “${isolate("~/project")}” cannot be read: ${isolate("denied")}`,
-    });
+    expect(failure).toMatchObject({ kind: "failed" });
+    expect(failed(failure)).toBe(`The folder ${isolate("~/project")} cannot be read: ${isolate("denied")}`);
+  });
+
+  it("keeps the shaped params beside the text, for a structured render of the same message", () => {
+    const failure = browseFailure(t, "en", sourceUnavailable(""), records, "~/project");
+    expect(failure.kind === "failed" && failure.message).toMatchObject({ code: "source_unavailable", params: { path: "~/project" } });
   });
 
   it("shows an ordinary path as it is, isolated once", () => {
     const failure = browseFailure(t, "en", sourceUnavailable("src/lib"), records, "~/project");
-    expect(failure).toMatchObject({ message: `The folder “${isolate("src/lib")}” cannot be read: ${isolate("denied")}` });
+    expect(failed(failure)).toBe(`The folder ${isolate("src/lib")} cannot be read: ${isolate("denied")}`);
   });
 });

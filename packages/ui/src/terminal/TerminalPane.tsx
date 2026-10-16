@@ -4,10 +4,11 @@ import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, us
 
 import "@xterm/xterm/css/xterm.css";
 import { EmptyPanel } from "../components/EmptyPanel";
+import { PATH_VAR_PARAMS } from "../components/literalParams";
 import { focusTopBar } from "../components/regionFocus";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useLatest } from "../components/useLatest";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { isDormant as isDormantStatus, isLive, type Session } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
@@ -427,7 +428,7 @@ export function TerminalPane({
         // same hand-off the cover's button uses, which can never be on screen at the same time.
         <div ref={emptyRef} {...held} className="absolute inset-0 flex items-center justify-center-safe bg-panel">
           {noAgents ? (
-            <EmptyPanel icon={TriangleAlert} message={t("agents.noneFound")} description={t("welcome.toolsHint")} />
+            <EmptyPanel icon={TriangleAlert} message={<Message id="agents.noneFound" params={PATH_VAR_PARAMS} />} description={<Message id="welcome.toolsHint" params={PATH_VAR_PARAMS} />} />
           ) : newSession ? (
             <EmptyPanel
               icon={MessageSquarePlus}

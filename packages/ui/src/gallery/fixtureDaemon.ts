@@ -2,6 +2,7 @@ import { DaemonRequestError } from "../daemon-client";
 import { consoleAccount, inheritedAccount } from "../accountChoices";
 import { daemonMessage } from "../daemonMessage";
 import { errorPresentation } from "../errorPresentation";
+import { errorText } from "../errorText";
 import { currentLanguage } from "../i18n/language";
 import type { BrowseEntry, Console, DirEntry, Event, RequestBody, Session } from "../protocol";
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
@@ -103,7 +104,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
     for (const { code, params, message, ...toast } of scenario.toasts ?? []) {
       emitToast({
         ...toast,
-        ...(code && toast.kind === "error" && { daemonError: new DaemonRequestError(message, code, params ?? {}) }),
+        ...(code && { daemonError: new DaemonRequestError(message, code, params ?? {}) }),
         message: code ? daemonMessage(currentLanguage(), code, params ?? {}, message, store.getState()) : message,
       });
     }
@@ -387,7 +388,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
     },
     toastError: (message, session) => {
       const presentation = typeof message === "string" ? message : errorPresentation(message);
-      emitToast({ kind: "error", message: typeof message === "string" ? message : message.message, session,
+      emitToast({ kind: "error", message: errorText(message), session,
         ...(typeof presentation !== "string" && { daemonError: presentation }) });
     },
     toastNotice: (message) => emitToast({ kind: "notice", message }),

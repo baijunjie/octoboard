@@ -1,6 +1,7 @@
 // The project browser's tree rules: which entries it lists and in what order, the rows that make
 // up what is on screen, and how the viewer moves through the files among them. Pure, so the tree's
 // rendering and the viewer's navigation are two readings of one structure and can never disagree.
+import type { ErrorPresentation } from "../errorPresentation";
 import type { BrowseEntry } from "../protocol";
 import { displayWirePath } from "../wirePath";
 
@@ -9,7 +10,7 @@ import { displayWirePath } from "../wirePath";
 export type DirListing =
   | { state: "loading" }
   | { state: "loaded"; entries: BrowseEntry[]; complete: boolean; refreshing: boolean }
-  | { state: "error"; message: string };
+  | { state: "error"; message: ErrorPresentation };
 
 /** Names the tree leaves out: Git's own metadata, never project content. Everything else is listed,
  * ignored files included, since the daemon reports no ignore rules and an agent's build output is
@@ -87,7 +88,7 @@ export type StatusRow = "loading" | "empty" | "error" | "partial";
 export type TreeNode =
   | { type: "directory"; key: string; path: string; entry: BrowseEntry; children: TreeNode[] }
   | { type: "file"; key: string; path: string; entry?: BrowseEntry; missing?: "removed" | "unlisted"; selected: boolean }
-  | { type: "status"; key: string; dir: string; status: StatusRow; message?: string };
+  | { type: "status"; key: string; dir: string; status: StatusRow; message?: ErrorPresentation };
 
 export interface TreeModel {
   /** The rows under the project's directory; empty until its listing has loaded. */
@@ -120,7 +121,7 @@ export function buildTree(
   const rows: string[] = [];
   const wanted: string[] = [];
 
-  const status = (dir: string, row: StatusRow, message?: string): TreeNode => {
+  const status = (dir: string, row: StatusRow, message?: ErrorPresentation): TreeNode => {
     rows.push(statusKey(dir));
     return { type: "status", key: statusKey(dir), dir, status: row, message };
   };

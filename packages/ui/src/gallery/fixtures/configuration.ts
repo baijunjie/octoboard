@@ -172,7 +172,8 @@ const failure = (code: string, params: Record<string, string>, message: string) 
 /** What git says of a clone that failed: long, and with an address in it that has no place to break. */
 const LONG_CLONE_DETAIL = "unable to access 'https://github.com/acme/design-system.git/': Could not resolve host: github.com";
 
-/** What importing `REVIEW` with its defaults came to: a clone that failed with a long reason, a project nothing
+/** What importing `REVIEW` with its defaults came to: a project whose directory was gone by the time it was
+ * imported, a clone that failed with a long reason, a project nothing
  * placed, a console that could not be created with its project not tried, and the account
  * references that fell back. */
 export const MIXED_RESULT: Omit<Imported, "type"> = {
@@ -185,7 +186,18 @@ export const MIXED_RESULT: Omit<Imported, "type"> = {
       error: null,
       account_fallbacks: [{ agent: "claude", name: "Work" }],
       projects: [
-        { name: "Website", status: "created", via: "exported_path", project: "p-new-1", error: null, account_fallbacks: [] },
+        {
+          name: "Website",
+          status: "failed",
+          via: null,
+          project: null,
+          error: failure(
+            "path_not_found",
+            { path: "/Users/ana/code/website" },
+            "/Users/ana/code/website does not exist",
+          ),
+          account_fallbacks: [],
+        },
         {
           name: "Search API",
           status: "created",

@@ -3,6 +3,7 @@ import { act } from "react";
 import { expect, it, vi } from "vitest";
 
 import { consoleOf } from "../gallery/fixtures/builders";
+import { isolate } from "../i18n/isolate";
 import type { SavedConfigurationFile } from "../platform";
 import type { ConfigurationDocument, Event, RequestBody } from "../protocol";
 import { ExportConfigurationDialog, exportFileName } from "./ExportConfigurationDialog";
@@ -58,7 +59,7 @@ it("saves the document as the daemon sent it, under a name for the console, and 
   const mounted = mount();
   await press("Export");
   expect(mounted.save).toHaveBeenCalledExactlyOnceWith("octoboard-Main.json", `${JSON.stringify(DOCUMENT, null, 2)}\n`);
-  expect(mounted.notices()).toEqual(["Configuration saved as “octoboard-Main.json”."]);
+  expect(mounted.notices()).toEqual([`Configuration saved as ${isolate("octoboard-Main.json")}.`]);
   expect(mounted.closed()).toBe(1);
 });
 

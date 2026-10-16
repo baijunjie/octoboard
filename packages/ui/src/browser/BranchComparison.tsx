@@ -3,8 +3,10 @@ import { ArrowUpDown, GitBranch, GitCompareArrows, GitFork, TriangleAlert } from
 import type React from "react";
 import { ListLayout, Virtualizer } from "react-aria-components";
 
+import { failureParam } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { InlineCode } from "../components/InlineCode";
 import { TitledControl } from "../components/TitledControl";
 import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
 import { useFocusHandoff } from "../components/useFocusHandoff";
@@ -123,7 +125,7 @@ export function BranchComparisonView({
       <ChangeFilterField changeView={changeView} />
       {branchesError !== undefined && !(comparison.state === "idle" && branches.state === "error") && (
         <p role="alert" className="shrink-0 px-3 py-2 text-xs text-app-muted">
-          {t("git.compare.branchesError", { message: isolate(branchesError) })}
+          <Message id="git.compare.branchesError" params={{ message: failureParam(branchesError) }} />
         </p>
       )}
       <div className="flex min-h-0 flex-1 flex-col" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
@@ -175,7 +177,10 @@ function ComparisonContent({
   return (
     <>
       <p className="shrink-0 px-3 py-2 text-xs text-app-muted">
-        {t("git.compare.commits", { base: isolate(shortCommit(base)), to: isolate(shortCommit(right.commit)) })}
+        <Message
+          id="git.compare.commits"
+          params={{ base: <InlineCode>{shortCommit(base)}</InlineCode>, to: <InlineCode>{shortCommit(right.commit)}</InlineCode> }}
+        />
       </p>
       {/* Mounted for as long as the comparison is, so a notice appearing in it is announced. */}
       <div role="status" className="flex shrink-0 flex-col gap-1 px-3 text-xs text-app-muted not-empty:pb-2">
@@ -184,9 +189,9 @@ function ComparisonContent({
             <TriangleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0" />
             <span>
               {notice.kind === "moved" ? (
-                <Message id="git.compare.moved" params={{ branch: <bdi dir="auto">{displayWirePath(notice.branch)}</bdi> }} />
+                <Message id="git.compare.moved" params={{ branch: <InlineCode>{displayWirePath(notice.branch)}</InlineCode> }} />
               ) : (
-                <Message id="git.compare.deleted" params={{ branch: <bdi dir="auto">{displayWirePath(notice.branch)}</bdi> }} />
+                <Message id="git.compare.deleted" params={{ branch: <InlineCode>{displayWirePath(notice.branch)}</InlineCode> }} />
               )}
             </span>
           </p>

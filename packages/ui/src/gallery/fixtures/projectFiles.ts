@@ -85,7 +85,7 @@ export const projectFilesScenarios: Scenario[] = [
   {
     id: "files-viewer-error-toast", group: "File viewer", category: "exceptional",
     title: "File viewer with an error toast",
-    description: "An unrelated path failure is deliberately raised over the viewer to confirm that toast placement leaves Previous / Next accessible.",
+    description: "An unrelated path failure is deliberately raised over the viewer, its path set as code, to confirm that toast placement leaves Previous / Next accessible.",
     state,
     toasts: [{ kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "" }],
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600)],

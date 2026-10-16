@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { accountsByAgent, AGENT_LABEL } from "../agents";
 import { AgentIcon } from "../components/AgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { InlineCode } from "../components/InlineCode";
+import { PATH_VAR_PARAMS } from "../components/literalParams";
 import { MarkedPath } from "../components/MarkedPath";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { isolate } from "../i18n/isolate";
@@ -36,7 +36,7 @@ export function AgentAccountsSection(): React.ReactElement {
   return (
     <>
       <p className="pb-2 text-sm text-app-muted">
-        <Message id="settings.accounts.description" params={{ pathVar: <InlineCode>PATH</InlineCode> }} />
+        <Message id="settings.accounts.description" params={PATH_VAR_PARAMS} />
       </p>
       <Button size="sm" variant="outline" preventFocusOnPress onPress={() => setEditing(null)}>
         {t("settings.accounts.add")}
@@ -45,7 +45,7 @@ export function AgentAccountsSection(): React.ReactElement {
         const state = availability.get(agent);
         const unavailable = state?.availability === "unavailable";
         const notUsable = unavailable && (
-          <div>{t("settings.accounts.notUsable", { agent: AGENT_LABEL[agent] })}</div>
+          <div><Message id="settings.accounts.notUsable" params={{ agent: AGENT_LABEL[agent], ...PATH_VAR_PARAMS }} /></div>
         );
         return (
           <div key={agent} className="pt-6">

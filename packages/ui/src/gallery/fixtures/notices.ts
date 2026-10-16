@@ -67,11 +67,10 @@ export const noticeScenarios: Scenario[] = [
     category: "exceptional",
     title: "Error toasts",
     description:
-      "Daemon error codes worded from the catalog, two naming a session (one an approval given after the session stopped waiting), one with a code the catalog lacks.",
+      "Daemon error codes worded from the catalog: the missing folder's path is set as code in the toast's title, one toast names a session (an approval given after the session stopped waiting), and one has a code the catalog lacks.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
       { kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "" },
-      { kind: "error", code: "session_not_running", params: {}, message: "", session: "s-web-2" },
       { kind: "error", code: "console_request_not_waiting", params: { session: "s-web-1" }, message: "", session: "s-web-1" },
       { kind: "error", code: "a_code_from_a_newer_daemon", params: {}, message: "The daemon's own English text, shown as is." },
     ],
@@ -91,7 +90,7 @@ export const noticeScenarios: Scenario[] = [
     category: "exceptional",
     title: "Warning notices and recovery",
     description:
-      "Deliberate warning notices: an untrusted workspace workaround, a failed trust confirmation, dropped queued messages and a trust entry blocked by a locked store. Session links identify where recovery is needed.",
+      "Deliberate warning notices: an untrusted workspace workaround naming its allow and deny settings as code, a failed trust confirmation and a trust entry blocked by a locked store. Session links identify where recovery is needed, and the trust file's path is set as code.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
       { kind: "notice", code: "claude_workspace_untrusted", params: {}, message: "", session: "s-web-1" },
@@ -102,7 +101,6 @@ export const noticeScenarios: Scenario[] = [
         message: "",
         session: codexSession.id,
       },
-      { kind: "notice", code: "queued_messages_dropped", params: {}, message: "", session: "s-web-2" },
       {
         kind: "notice",
         code: "trust_not_carried_over",

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import type { ErrorPresentation } from "../errorPresentation";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
 import type { ProjectSourceInfo } from "../protocol";
@@ -13,7 +14,7 @@ export type SourceState =
   | { state: "loading" }
   /** `sentAt` is when the request this answers was sent (`gitMoment`), so what was read can be told to be newer than something that happened before it. */
   | { state: "loaded"; source: ProjectSourceInfo; sentAt: number }
-  | { state: "error"; message: string };
+  | { state: "error"; message: ErrorPresentation };
 
 /**
  * A project's source — whether it is in a Git repository, and that repository's worktrees — asked

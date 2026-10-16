@@ -3,12 +3,13 @@ import React, { useState } from "react";
 
 import { AGENT_DEFAULT_CONFIG_DIR, AGENT_LABEL } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
+import { TILDE_PARAMS } from "../components/literalParams";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "../dialogs/Dialog";
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
 import { OptionSelect } from "../dialogs/OptionSelect";
 import { TextInput } from "../dialogs/TextInput";
 import { isolate } from "../i18n/isolate";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import type { Account, Agent } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { isAbsoluteConfigDir, nameCollision } from "./agentAccounts";
@@ -39,7 +40,7 @@ export function AccountDialog({
     : collision?.kind === "default"
       ? t("settings.accounts.nameTakenDefault", { name: isolate(collision.name), agent: AGENT_LABEL[agent] })
       : collision && t("settings.accounts.nameTaken", { name: isolate(collision.name), agent: AGENT_LABEL[agent] });
-  const dirError = isAbsoluteConfigDir(configDir) ? undefined : t("settings.accounts.dirNotAbsolute");
+  const dirError = isAbsoluteConfigDir(configDir) ? undefined : "notAbsolute";
 
   const submit = () => {
     if (!attempt(nameError, dirError)) return;
@@ -91,7 +92,7 @@ export function AccountDialog({
           dir="ltr"
           placeholder={AGENT_DEFAULT_CONFIG_DIR[agent]}
           description={agent === "grok" ? t("settings.accounts.dirHintGrok") : t("settings.accounts.dirHint")}
-          errorMessage={shown(dirError)}
+          errorMessage={shown(dirError) && <Message id="settings.accounts.dirNotAbsolute" params={TILDE_PARAMS} />}
           trailing={
             <Button type="button" variant="secondary" onPress={() => setPickingDirectory(true)}>
               {t("common.browse")}
