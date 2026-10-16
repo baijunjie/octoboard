@@ -252,3 +252,22 @@ it("asks for confirmation before restoring project changes", () => {
   entry!.onClick();
   expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith({ kind: "restore-project-changes", project });
 });
+
+
+describe("the Copy session ID entry", () => {
+  it.each([
+    ["project", "idle", "list"],
+    ["console", "idle", "focused"],
+    ["console", "starting", "list"],
+    ["project", "archived", "nested"],
+  ] as const)("copies a %s session while %s in the %s menu", (role, status, placement) => {
+    const session = sessionOf("session-id", "c", role === "project" ? "p" : undefined, "Title", status);
+    const handlers = { onCopySessionId: vi.fn() } as unknown as SidebarHandlers;
+    const menu = sessionMenu(t, handlers, session, [], { placement });
+    const labels = menu.map((entry) => entry === "separator" ? entry : entry.label);
+    if (status !== "archived") expect(labels.indexOf("Copy session ID")).toBe(labels.indexOf("Rename") + 1);
+    const entry = menu.find((item) => typeof item === "object" && item.label === "Copy session ID");
+    (entry as { onClick: () => void }).onClick();
+    expect(handlers.onCopySessionId).toHaveBeenCalledExactlyOnceWith(session);
+  });
+});

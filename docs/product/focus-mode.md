@@ -55,6 +55,7 @@ agent's icon and its title on one compact line, with native token usage at the t
 "Native session usage" in `docs/product/session-usage.md`). These preview rows show no creation or archive time.
 The heading counts every archived session in the view's scope, including children omitted from the preview. Clicking a
 row selects it while leaving it archived. Its action menu offers **Reopen**, which selects and resumes the session,
+then **Copy session ID** when a clipboard is available (see "Session rows" in `docs/product/sidebar.md`),
 and after a separator **Delete**. A Delete button immediately before the action-menu button takes the same deletion
 action (see "Deleting archived sessions" in `docs/product/deleting-sessions.md` for the confirmation rules). Both
 controls show with the row's other controls as described in "Rows, names and keyboard focus" in

@@ -408,6 +408,15 @@ export function App(): React.ReactElement {
     }
     : undefined;
 
+  const copySessionId = clipboard
+    ? (session: Session) => {
+      clipboard.writeText(session.id).then(
+        () => toastNotice(t("sidebar.session.idCopied")),
+        () => toastError(t("sidebar.session.copyIdFailed")),
+      );
+    }
+    : undefined;
+
   const openProjectTerminal = (project: Project) => {
     request({ type: "open_project_terminal", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
   };
@@ -624,6 +633,7 @@ export function App(): React.ReactElement {
   const stableFocus = useStableHandler(sidebarView.setFocus);
   const stableOpenProjectDirectory = useStableHandler(openProjectDirectory);
   const stableOpenProjectTerminal = useStableHandler(openProjectTerminal);
+  const stableCopySessionId = useStableHandler((session: Session) => copySessionId?.(session));
   const stableCopyProjectName = useStableHandler((project: Project) => copyProjectName?.(project));
   const stablePullProjectBranch = useStableHandler(pullProjectBranch);
   const stablePushProjectBranch = useStableHandler(pushProjectBranch);
@@ -733,6 +743,7 @@ export function App(): React.ReactElement {
                 onOpenProjectDirectory={stableOpenProjectDirectory}
                 onOpenProjectTerminal={stableOpenProjectTerminal}
                 onCopyProjectName={clipboard ? stableCopyProjectName : undefined}
+                onCopySessionId={clipboard ? stableCopySessionId : undefined}
                 onPullProjectBranch={stablePullProjectBranch}
                 onPushProjectBranch={stablePushProjectBranch}
                 onLoadProjectBranches={stableLoadProjectBranches}

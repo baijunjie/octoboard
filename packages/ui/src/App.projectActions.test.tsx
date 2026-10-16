@@ -132,6 +132,30 @@ it("omits copying the project name without clipboard support", async () => {
   expect(menuHas("Copy project name")).toBe(false);
 });
 
+it("copies the session ID unchanged and reports success", async () => {
+  const clipboard = { writeText: vi.fn(async () => {}) };
+  const { daemon } = mountApp(false, clipboard, true);
+  await press(`Actions for session ${isolate("Fix bug")}`);
+  await press("Copy session ID");
+  expect(clipboard.writeText).toHaveBeenCalledExactlyOnceWith("s-archive");
+  expect(daemon.toastNotice).toHaveBeenCalledWith("Session ID copied");
+});
+
+it("reports a session ID clipboard failure", async () => {
+  const clipboard = { writeText: vi.fn(async () => { throw new Error("Denied"); }) };
+  const { daemon } = mountApp(false, clipboard, true);
+  await press(`Actions for session ${isolate("Fix bug")}`);
+  await press("Copy session ID");
+  expect(daemon.toastError).toHaveBeenCalledWith("Could not copy the session ID");
+  expect(daemon.toastNotice).not.toHaveBeenCalled();
+});
+
+it("omits copying the session ID without clipboard support", async () => {
+  mountApp(false, undefined, true);
+  await press(`Actions for session ${isolate("Fix bug")}`);
+  expect(menuHas("Copy session ID")).toBe(false);
+});
+
 async function openRestoreConfirmation() {
   const mounted = mountApp();
   const { daemon, project } = mounted;

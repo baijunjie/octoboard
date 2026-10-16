@@ -66,7 +66,7 @@ export const consoleSessionsScenarios: Scenario[] = [
     title: "Choose a console session's colour",
     description:
       "The Colour submenu opens beside Hub 2's action menu, a grid of sixteen swatches in two rows, one per colour family. Hub 2's current colour carries the check mark and a ring in its own colour; " +
-      "no colour name is written out.",
+      "no colour name is written out. Copy session ID sits directly after Rename in the parent menu.",
     state,
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 2" })),

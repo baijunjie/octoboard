@@ -364,6 +364,10 @@ action menu offers:
 
 - **Pin** / **Unpin**.
 - **Rename** — see "Renaming a session" in `docs/product/sessions.md`.
+- **Copy session ID** — immediately after Rename, copies the session's ID exactly to the clipboard. Available for
+  project and console sessions wherever their action menus are offered, including right-click menus, focus mode and
+  nested sessions. An archived session's menu offers it after Reopen. When the platform offers no clipboard, the item
+  is absent. Success raises a notice toast; a refused copy raises an error toast.
 - **Colour** — a console session's row only: a submenu of swatches where the user chooses the console session's colour
   (see "The binding badge" below). A project session's row has no such entry, and neither has an archived console
   session's.
@@ -443,8 +447,8 @@ the same colour. Each colour has its own light and dark value (see "What follows
 `docs/product/appearance.md`).
 
 **Choosing the colour.** **Colour** in a console session's action menu — wherever that menu is offered, its sidebar
-row and its focus mode's header among them, always right after **Rename** — is a submenu entry, marked with the same
-chevron as **Switch account**. Its submenu holds the palette as swatches in two rows of eight, in the order above. The
+row and its focus mode's header among them, after **Rename** and the optional **Copy session ID** — is a submenu entry,
+marked with the same chevron as **Switch account**. Its submenu holds the palette as swatches in two rows of eight, in the order above. The
 console session's current colour is selected, marked with a check mark and a ring in its own colour. Pointing at
 **Colour** opens the submenu without moving keyboard focus; `ArrowRight` (`ArrowLeft` under a right-to-left language)
 or `Enter` on the entry opens it, or moves into it when it is already open, with focus on the current swatch, or the

@@ -291,7 +291,7 @@ export const focusScenarios: Scenario[] = [
     title: "Archived session actions",
     state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "A Delete shortcut appears immediately before each archived row’s actions menu and opens the existing confirmation. The menu offers Reopen and destructive Delete, separated by a divider. Reopen selects the session and moves it from Archived to Sessions.",
+    description: "A Delete shortcut appears immediately before each archived row’s actions menu and opens the existing confirmation. The menu offers Reopen, Copy session ID and destructive Delete, with a divider before Delete. Reopen selects the session and moves it from Archived to Sessions.",
     steps: [(ui) => ui.press(ui.t("sidebar.session.actions", { title: previewLead.title }))],
   },
   {
