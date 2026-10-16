@@ -21,11 +21,11 @@ This is the guarantee the whole design rests on:
   `docs/product/project-git-status.md`). Separately, **Push current branch** pushes that one branch. That updates
   the remote and, in the repository, the remote-tracking refs `git` updates for that push; when the branch had no
   upstream, it records one. It does not edit the project's files and does not move the working tree (see "Pushing
-  the current branch" in `docs/product/project-git-status.md`). **Restore file changes**, after confirmation,
+  the current branch" in `docs/product/project-git-actions.md`). **Restore file changes**, after confirmation,
   discards staged and unstaged tracked changes in the project's own worktree, restoring files to `HEAD` without
-  moving the branch or changing commits (see "Restoring file changes" in `docs/product/project-git-status.md`).
+  moving the branch or changing commits (see "Restoring file changes" in `docs/product/project-git-actions.md`).
   **Switch branch** moves the project's own worktree to an existing local branch when chosen, preserving local
-  changes Git can carry safely (see "Switching the local branch" in `docs/product/project-git-status.md`).
+  changes Git can carry safely (see "Switching the local branch" in `docs/product/project-git-actions.md`).
   A check's fetch of remote refs is separate:
   it does not move the working tree and it does not push (see "What one check does" in
   `docs/product/project-git-status.md`).

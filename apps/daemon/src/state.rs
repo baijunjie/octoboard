@@ -82,6 +82,9 @@ pub struct AppState {
     /// added (`crate::branch_origin`).
     pub branch_origins: crate::branch_origin::Gates,
     pub usage_watch: crate::usage::Watch,
+    /// The repositories' refs under watch, so a commit made outside the daemon is re-read
+    /// (`crate::git_watch`).
+    pub git_watch: crate::git_watch::Watch,
     /// Each agent's availability and what its default account currently resolves to, derived once
     /// per daemon start (`crate::availability`) and broadcast by its own event on change; never a
     /// field of `Store`'s settings row, which only the user's own updates write. Always holds all
@@ -180,6 +183,7 @@ impl AppState {
             git_check_completed: Mutex::new(HashMap::new()),
             branch_origins: Default::default(),
             usage_watch: Default::default(),
+            git_watch: Default::default(),
             agent_availability: RwLock::new(
                 Agent::ALL
                     .into_iter()
@@ -1176,15 +1180,6 @@ impl AppState {
     /// under one: either way nothing resurrects a status for a project that no longer exists, and
     /// `PROTOCOL.md` promises no `project_git_status` for one either.
     pub fn publish_git_status(&self, status: GitStatus) {
-        self.publish_git_status_with(status, false);
-    }
-
-    /// A local re-read changes the header without ending an overlapping check or pull.
-    pub(crate) fn publish_git_reread(&self, status: GitStatus) {
-        self.publish_git_status_with(status, true);
-    }
-
-    fn publish_git_status_with(&self, mut status: GitStatus, preserve_activity: bool) {
         // A store error says nothing about whether the project is actually gone, so this fails
         // open rather than risk dropping a status that is still perfectly valid.
         if let Ok(None) = self.store.get_project(&status.project) {
@@ -1195,14 +1190,42 @@ impl AppState {
             .git_statuses
             .write()
             .expect("git statuses lock poisoned");
-        if preserve_activity {
-            if let Some(previous) = statuses.statuses.get(&status.project) {
-                status.activity = previous.activity;
-            }
-        }
         statuses
             .statuses
             .insert(status.project.clone(), status.clone());
+        self.broadcast(Event::ProjectGitStatus {
+            status: statuses.visible(status),
+        });
+    }
+
+    /// Records a local re-read of the branch header and broadcasts the result. Only what the read
+    /// produced is merged into the held status, under the lock: a read that finished after an
+    /// overlapping check or pull published must not bring back that check's older `error` or end
+    /// its `activity`. A failed read records its own `error` and leaves the header as it was. As
+    /// with [`Self::publish_git_status`], a project no longer in the store is dropped instead.
+    pub(crate) fn publish_git_reread(
+        &self,
+        project_id: &str,
+        header: Result<crate::git_status::BranchHeader, String>,
+    ) {
+        if let Ok(None) = self.store.get_project(project_id) {
+            self.remove_git_status(project_id);
+            return;
+        }
+        let mut statuses = self
+            .git_statuses
+            .write()
+            .expect("git statuses lock poisoned");
+        let status = statuses
+            .statuses
+            .entry(project_id.to_string())
+            .or_insert_with(|| blank_git_status(project_id));
+        status.repository = true;
+        match header {
+            Ok(header) => crate::git_status::apply_header(status, header),
+            Err(err) => status.error = Some(err),
+        }
+        let status = status.clone();
         self.broadcast(Event::ProjectGitStatus {
             status: statuses.visible(status),
         });
@@ -1239,17 +1262,7 @@ impl AppState {
         let status = statuses
             .statuses
             .entry(project_id.to_string())
-            .or_insert_with(|| GitStatus {
-                project: project_id.to_string(),
-                repository: true,
-                branch: None,
-                detached: false,
-                upstream: None,
-                ahead: 0,
-                behind: 0,
-                activity: GitActivity::Idle,
-                error: None,
-            });
+            .or_insert_with(|| blank_git_status(project_id));
         status.repository = true;
         let status = status.clone();
         self.broadcast(Event::ProjectGitStatus {
@@ -1380,6 +1393,20 @@ impl Drop for LaunchClaim {
     }
 }
 
+fn blank_git_status(project_id: &str) -> GitStatus {
+    GitStatus {
+        project: project_id.to_string(),
+        repository: true,
+        branch: None,
+        detached: false,
+        upstream: None,
+        ahead: 0,
+        behind: 0,
+        activity: GitActivity::Idle,
+        error: None,
+    }
+}
+
 /// The base check status and its push overlay share a lock so an overlapping publication cannot
 /// briefly clear the pushing glyph, and broadcasts retain the same order as cached snapshots.
 #[derive(Default)]
@@ -1505,25 +1532,7 @@ mod tests {
     fn insert_record(state: &AppState, dir: &std::path::Path, id: &str, status: SessionStatus) {
         state
             .store
-            .insert_console(&crate::protocol::Console {
-                id: "console-1".to_string(),
-                name: "Console".to_string(),
-                workdir: dir.join("workdir").to_string_lossy().into_owned(),
-                console_session_agent: Agent::Claude,
-                default_agent: Agent::Claude,
-                claude_account_id: None,
-                codex_account_id: None,
-                grok_account_id: None,
-                claude_console_session_model: None,
-                claude_console_session_effort: None,
-                codex_console_session_model: None,
-                codex_console_session_effort: None,
-                grok_console_session_model: None,
-                grok_console_session_effort: None,
-                icon: None,
-                console_session_prompt: None,
-                created_at: 0,
-            })
+            .insert_console(&crate::test_support::console(dir))
             .unwrap();
         state
             .store
@@ -1903,14 +1912,7 @@ mod tests {
 
     fn git_project(state: &AppState, dir: &std::path::Path) -> crate::protocol::Project {
         insert_record(state, dir, "s", SessionStatus::Idle);
-        let project = serde_json::from_value(serde_json::json!({
-            "id": "p1", "console_id": "console-1", "host_id": LOCAL_HOST_ID,
-            "name": "Project", "path": dir, "source": "local",
-            "trust_consent": false, "pinned": false, "tags": [],
-        }))
-        .unwrap();
-        state.store.insert_project(&project).unwrap();
-        project
+        crate::test_support::insert_project(state, dir)
     }
 
     fn git_reading() -> GitStatus {
@@ -1940,11 +1942,16 @@ mod tests {
             activity: GitActivity::Checking,
             ..git_reading()
         });
-        state.publish_git_reread(GitStatus {
-            ahead: 0,
-            activity: GitActivity::Idle,
-            ..git_reading()
-        });
+        state.publish_git_reread(
+            "p1",
+            Ok(crate::git_status::BranchHeader {
+                branch: Some("main".to_string()),
+                upstream: Some("origin/main".to_string()),
+                ahead: 0,
+                behind: 1,
+                ..Default::default()
+            }),
+        );
         drop(first);
         let status = state.git_statuses().pop().unwrap();
         assert_eq!(status.activity, GitActivity::Pushing);
@@ -2001,7 +2008,8 @@ mod tests {
         state.publish_git_status(git_reading());
         let mut events = state.subscribe();
         assert!(crate::git_push::push_current_branch(&state, &project).is_err());
-        for expected in [GitActivity::Pushing, GitActivity::Idle] {
+        // The header re-read first, ahead of the push being marked in flight.
+        for expected in [GitActivity::Idle, GitActivity::Pushing, GitActivity::Idle] {
             let Event::ProjectGitStatus { status } = events.try_recv().unwrap() else {
                 panic!("git status event")
             };
@@ -2014,6 +2022,7 @@ mod tests {
         crate::test_support::git(&dir, &["init", "--bare", remote.to_str().unwrap()]);
         crate::git_push::push_current_branch(&state, &project).unwrap();
         for expected in [
+            GitActivity::Idle,
             GitActivity::Pushing,
             GitActivity::Pushing,
             GitActivity::Idle,

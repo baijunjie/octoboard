@@ -173,6 +173,7 @@ pub async fn handle(
             state.store.delete_console(&id)?;
             for project in &projects {
                 state.remove_git_status(&project.id);
+                crate::git_watch::remove(state, &project.id);
                 crate::branch_origin::project_deleted(state, &project.path);
             }
             for session_id in &session_ids {
@@ -336,6 +337,7 @@ pub async fn handle(
             let session_ids = session_ids_where(state, in_project)?;
             state.store.delete_project(&id)?;
             state.remove_git_status(&id);
+            crate::git_watch::remove(state, &id);
             crate::branch_origin::project_deleted_in(state, repository);
             for session_id in &session_ids {
                 state.forget_saved_output(session_id);
@@ -1191,6 +1193,7 @@ pub async fn add_project(
             tags: tags.clone(),
         };
         state.store.insert_project(&project)?;
+        crate::git_watch::add(state, &project);
         state.broadcast(Event::ProjectUpserted {
             project: project.clone(),
         });

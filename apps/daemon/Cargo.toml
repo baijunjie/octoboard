@@ -52,6 +52,8 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 rmcp = { version = "=0.9.1", features = ["server", "transport-io"] }
 toml = { version = "1.1.6", default-features = false, features = ["parse", "display", "serde"] }
 trash = "5"
+# Watches each repository's refs for a commit made outside the daemon (`crate::git_watch`).
+notify = "8.2"
 
 # Alacritty's Unix PTY module needs std descriptor conversions from rustix-openpty's
 # rustix 0.38 dependency; that crate disables std by default.

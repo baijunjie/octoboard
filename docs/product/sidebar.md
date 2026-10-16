@@ -257,9 +257,9 @@ and **Remove project**. An item a view does not offer is left out without moving
   succeeds (see "Pulling one project by hand" in `docs/product/project-git-status.md`). Push current branch pushes
   that branch and is waited on until the push finishes; the window then shows a notice that the current branch was
   pushed, or an error toast if the push was refused (see "Pushing the current branch" in
-  `docs/product/project-git-status.md`). Switch branch opens the third-level local branch menu; see "Switching the
-  local branch" in `docs/product/project-git-status.md`. Restore file changes asks for confirmation before discarding tracked changes
-  (see "Restoring file changes" in `docs/product/project-git-status.md`).
+  `docs/product/project-git-actions.md`). Switch branch opens the third-level local branch menu; see "Switching the
+  local branch" in `docs/product/project-git-actions.md`. Restore file changes asks for confirmation before discarding tracked changes
+  (see "Restoring file changes" in `docs/product/project-git-actions.md`).
 - **Rename** — a dialog with the name alone; an empty name is rejected.
 - **Copy project name** — copies the project's name exactly to the clipboard. Available in all the
   project-menu placements above, including right-click menus, when the platform offers a clipboard; otherwise the

@@ -35,7 +35,7 @@ const READ_TIMEOUT: Duration = Duration::from_secs(30);
 /// would hold that pool for as long as the slowest `git`, and a session opening or a trust key
 /// press would queue behind them. A handful keeps the whole pass quick when the reads are fast, and
 /// a directory that stalls holds one of these places for up to [`READ_TIMEOUT`] and no more.
-const MAX_CONCURRENT_READS: usize = 4;
+pub(crate) const MAX_CONCURRENT_READS: usize = 4;
 
 /// Why a `git` read did not produce output. `code` is the exit status, absent when `git` did not
 /// run to an exit at all (it could not be started, timed out, or was killed by a signal).

@@ -22,6 +22,7 @@ mod git_remote;
 mod git_restore;
 mod git_status;
 mod git_switch;
+mod git_watch;
 mod hook_mode;
 mod hooks;
 mod hostfs;
@@ -257,6 +258,7 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
     usage::spawn(&state);
     // Likewise off the runtime: it runs `git` in every project's directory, a few at a time.
     git_remote::reconcile_remote_urls(&state);
+    git_watch::start(&state);
 
     let serve = axum::serve(listener, server::router(state.clone()));
     tokio::select! {

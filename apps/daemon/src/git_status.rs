@@ -1,8 +1,10 @@
 //! Checking a project's git status against its remote, on request — the daemon keeps no timer of
-//! its own; the client drives the schedule and asks with `refresh_git_status` (see
+//! its own for that; the client drives the schedule and asks with `refresh_git_status` (see
 //! `apps/daemon/PROTOCOL.md`'s "Daemon behaviour, per project"). Each project is checked at most
 //! once at a time, concurrently with the others of its console, and at most once every
-//! `GIT_CHECK_MIN_INTERVAL`.
+//! `GIT_CHECK_MIN_INTERVAL`. What a check does not go to the remote for, the local branch header,
+//! is also re-read on its own when the project's refs change (`crate::git_watch`) and around a
+//! push or a switch (`publish_reread`).
 //!
 //! `pull_project_now` is the manual entry point, driven by `pull_project_branch`: one project's
 //! ordinary check, but past the floor above and fast-forwarding whatever the setting says.
@@ -87,6 +89,8 @@ fn spawn_check(state: &Arc<AppState>, project: Project, force: bool) {
         let mut force = force;
         loop {
             check_project(&state, &project, force);
+            // A repository made, or reachable, after the daemon started is not watched yet.
+            crate::git_watch::watch_now(&state, &project);
             if !claim.release_unless_rerun_owed() {
                 break;
             }
@@ -361,20 +365,26 @@ pub(crate) const BRANCH_HEADER_ARGS: &[&str] = &[
 /// separate invocation rather than reviving this one's enumeration for every sweep that does not
 /// need it.
 fn read_branch_header(path: &Path, status: &mut GitStatus) {
-    match run_git_read(path, BRANCH_HEADER_ARGS) {
-        Ok(output) => {
-            let header = parse_branch_header(&output);
-            status.branch = header.branch;
-            status.detached = header.detached;
-            status.upstream = header.upstream;
-            status.ahead = header.ahead;
-            status.behind = header.behind;
-        }
+    match read_header(path) {
+        Ok(header) => apply_header(status, header),
         Err(err) => {
             tracing::debug!(%err, "reading the local branch state failed");
             status.error = Some(err);
         }
     }
+}
+
+/// Reads the local branch header with `git status`, without touching the remote.
+pub(crate) fn read_header(path: &Path) -> Result<BranchHeader, String> {
+    run_git_read(path, BRANCH_HEADER_ARGS).map(|output| parse_branch_header(&output))
+}
+
+pub(crate) fn apply_header(status: &mut GitStatus, header: BranchHeader) {
+    status.branch = header.branch;
+    status.detached = header.detached;
+    status.upstream = header.upstream;
+    status.ahead = header.ahead;
+    status.behind = header.behind;
 }
 
 /// Whether a `git` this module runs only reads the project's repository, or is one of the two
@@ -541,28 +551,11 @@ pub(crate) fn parse_branch_header(output: &str) -> BranchHeader {
 }
 
 /// Re-reads the local branch header and publishes it. A push moves the ahead count without a
-/// fetch, and this is what the badge shows afterwards; nothing here goes to the remote. An
-/// `error` already on the status stays unless this read itself fails, which records its own.
-/// An overlapping check or pull keeps its current activity; the local read does not finish it.
+/// fetch, and this is what the badge shows afterwards; nothing here goes to the remote. Only the
+/// header, or the error of failing to read it, reaches the held status: see
+/// `AppState::publish_git_reread`.
 pub(crate) fn publish_reread(state: &AppState, project: &Project) {
-    let path = PathBuf::from(&project.path);
-    let mut status = state
-        .git_status(&project.id)
-        .filter(|status| status.repository)
-        .unwrap_or(GitStatus {
-            project: project.id.clone(),
-            repository: true,
-            branch: None,
-            detached: false,
-            upstream: None,
-            ahead: 0,
-            behind: 0,
-            activity: GitActivity::Idle,
-            error: None,
-        });
-    status.repository = true;
-    read_branch_header(&path, &mut status);
-    state.publish_git_reread(status);
+    state.publish_git_reread(&project.id, read_header(Path::new(&project.path)));
 }
 
 /// Parses `+<ahead> -<behind>` as printed after `# branch.ab `; a part that does not match reads

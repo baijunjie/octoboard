@@ -128,6 +128,42 @@ pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
     )
 }
 
+/// A console whose working directory is below `dir`, for a store that needs one to hold projects
+/// and sessions.
+pub(crate) fn console(dir: &Path) -> crate::protocol::Console {
+    crate::protocol::Console {
+        id: "console-1".to_string(),
+        name: "Console".to_string(),
+        workdir: dir.join("workdir").to_string_lossy().into_owned(),
+        console_session_agent: Agent::Claude,
+        default_agent: Agent::Claude,
+        claude_account_id: None,
+        codex_account_id: None,
+        grok_account_id: None,
+        claude_console_session_model: None,
+        claude_console_session_effort: None,
+        codex_console_session_model: None,
+        codex_console_session_effort: None,
+        grok_console_session_model: None,
+        grok_console_session_effort: None,
+        icon: None,
+        console_session_prompt: None,
+        created_at: 0,
+    }
+}
+
+/// The local project `p1` of [`console`]'s console, at `path`, inserted into `state`'s store.
+pub(crate) fn insert_project(state: &AppState, path: &Path) -> crate::protocol::Project {
+    let project = serde_json::from_value(serde_json::json!({
+        "id": "p1", "console_id": "console-1", "host_id": crate::store::LOCAL_HOST_ID,
+        "name": "Project", "path": path, "source": "local",
+        "trust_consent": false, "pinned": false, "tags": [],
+    }))
+    .unwrap();
+    state.store.insert_project(&project).unwrap();
+    project
+}
+
 /// Seeds the models `agent` offers under its default account as `(id, efforts)`, so that a test that
 /// gives a model or an effort is checked against this list and not against the agent installed on
 /// the machine, which running its catalogue command would make it depend on.

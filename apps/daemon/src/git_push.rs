@@ -66,8 +66,9 @@ impl PushPlan {
     }
 }
 
-/// Pushes the project's current branch. Answered only once `git push` has exited. A success
-/// re-reads the local branch header so the badge's ahead count drops without a fetch.
+/// Pushes the project's current branch. Answered only once `git push` has exited. The local branch
+/// header is re-read first, so the push shows against the current ahead count, and again after a
+/// success, so that count drops without a fetch.
 pub fn push_current_branch(state: &AppState, project: &Project) -> Result<(), anyhow::Error> {
     let path = Path::new(&project.path);
     if !hostfs::is_git_repo(path) {
@@ -77,10 +78,11 @@ pub fn push_current_branch(state: &AppState, project: &Project) -> Result<(), an
             &[("project", &project.id)],
         ));
     }
+    let header = git_status::read_header(path).map_err(|detail| push_failed(&detail))?;
+    // Published before the push is marked in flight: the badge draws the push on its ahead count,
+    // which a commit nothing has re-read yet would leave at zero, and nothing drawn.
+    state.publish_git_reread(&project.id, Ok(header.clone()));
     let _activity = state.begin_git_push(&project.id);
-    let output = git_status::run_git_read(path, git_status::BRANCH_HEADER_ARGS)
-        .map_err(|detail| push_failed(&detail))?;
-    let header = git_status::parse_branch_header(&output);
     let run = git_remote::runner(path);
     let inspection = git_remote::inspect(&run)
         .ok_or_else(|| push_failed("the repository's remotes could not be read"))?;

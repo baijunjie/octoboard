@@ -599,8 +599,9 @@ pub enum GitActivity {
 /// One project's live git state: its branch and how far it is from its upstream, and whether a
 /// check, a fast-forward pull, or a push is in flight right now. Derived from the project's working
 /// directory on disk, never stored in SQLite; held in memory by `AppState` and (re)built only when
-/// `refresh_git_status` asks for it — the daemon keeps no timer of its own for this (see
-/// `apps/daemon/PROTOCOL.md`'s "Daemon behaviour, per project").
+/// `refresh_git_status` asks for it, with the local branch header also re-read when the project's
+/// refs change — the daemon keeps no timer of its own for this (see `apps/daemon/PROTOCOL.md`'s
+/// "Daemon behaviour, per project").
 #[derive(Debug, Clone, Serialize)]
 pub struct GitStatus {
     pub project: String,

@@ -5,12 +5,14 @@ upstream** in the sidebar. Octoboard checks those projects against their remotes
 current console, and checks one project at once when asked to with **Pull current branch**. What a check does beyond
 reporting depends on one setting, **Automatically pull repositories**, described in "Automatically pulling
 repositories" below, and on whether the check was asked for by hand. Pushing the current branch is not a check
-(see "Pushing the current branch" below).
+(see "Pushing the current branch" in `docs/product/project-git-actions.md`). Between checks, the branch and the
+counts follow changes made in the repository itself, without going to the remote (see "Following changes to the
+repository's refs" below).
 
 A project's uncommitted changes are inspected in the project pane's Git mode (see
 `docs/product/project-pane-git-mode.md`), which only reads the repository and has no part in these checks. The
 separate **Restore file changes** action discards tracked changes after confirmation (see "Restoring file changes"
-below).
+in `docs/product/project-git-actions.md`).
 
 ## The branch badge
 
@@ -41,17 +43,18 @@ What it holds, in this order:
   arrow and both numbers stay still. A zero count still has no arrow, so the leading refresh glyph remains the in-flight
   indication when the relevant count is zero. Reduced motion keeps the arrows still too.
 
-**While a check is in flight the badge keeps what the last check found** — the branch name (or short commit id), the
+**While a check is in flight the badge keeps what it was showing** — the branch name (or short commit id), the
 counts and a failed check's message — and only its glyph turns into the spinning refresh glyph, the warning triangle
-included; the whole badge is replaced once the check finishes. A project's first check has nothing to keep, so until it
-finishes the badge shows the spinning glyph alone.
+included; the whole badge is replaced once the check finishes. Meanwhile a local re-read can still update the branch
+and the counts (see "Following changes to the repository's refs" below). A project with no status yet has nothing to
+keep, so until its first check finishes the badge shows the spinning glyph alone.
 
 **While a push is in flight the badge describes the push**, including over a check or pull running at the same
 time. All three use the same leading refresh glyph; the tooltip, accessible name and animated count arrow follow the
 push state. The branch, counts and any failed check's message remain visible and can update during the push. Every
 window showing the project sees the pushing state, including one that connects while the push is running. Once all
 pushes of the project end, successfully or otherwise, the badge shows the latest check or pull state, or its
-idle glyph if neither is running (see "Pushing the current branch" below).
+idle glyph if neither is running (see "Pushing the current branch" in `docs/product/project-git-actions.md`).
 
 **As the row gets tight the branch and counts give way together**: the branch name (or short commit id) and both
 upstream counts form one line, showing its beginning and fading at its right edge. This line reads left to right
@@ -103,7 +106,7 @@ project skipped that way simply keeps the status it already had. Pull current br
 "Pulling one project by hand" below). **The five-minute interval and the one-minute floor are fixed**, not settings.
 
 A status is never stored: after a daemon restart there is none for any project, and a project's badge shows nothing
-again until its next check.
+again until its next check, or until its refs change (see "Following changes to the repository's refs" below).
 
 ### What one check does
 
@@ -127,12 +130,39 @@ again until its next check.
 - Finally the branch may be pulled; see "Automatically pulling repositories" and "Pulling one project by hand"
   below.
 
+## Following changes to the repository's refs
+
+Between checks, the badge follows what happens in the repository itself: a commit made by an agent session or in a
+terminal, a branch switched, created or deleted there, a fetch, pull or push run there, or a commit in another
+worktree of the same repository. Octoboard watches each git project's `HEAD`, its local branches and its
+remote-tracking branches, packed ones included. The working tree and the index are not watched, so editing or staging
+files changes nothing here. Once those refs have stayed unchanged for 300 milliseconds, the branch, its upstream and
+the ahead/behind counts are read again from the repository — locally, nothing is fetched — and the result reaches
+every window showing the project. So a commit raises the ahead count at once, and a push started right after it is
+drawn on that count (see "Pushing the current branch" in `docs/product/project-git-actions.md`).
+
+This is not a check: the five-minute interval and the one-minute floor do not apply to it, it never pulls, even with
+**Automatically pull repositories** on, and it leaves the project's recorded remote URL alone. Every project of every
+console is watched, whether or not its console is current and whether or not a window is connected. A directory is a
+git repository here by the badge's rule (see "What one check does" above). Watching starts when the daemon starts,
+when a project is added, and, for a directory that becomes a repository later, at the first check that finds it one;
+it ends when the project, or its console, is deleted. A project whose refs cannot be watched is left to the checks. A
+project whose `.git` has gone is not re-read: its badge keeps what it showed until its next check reports that the
+directory is not a repository.
+
+The re-read changes only the branch, its upstream and the counts. It also runs while a check, a pull or a push is in
+flight, and leaves the badge's in-flight indication alone. A warning the last check left stays on the badge, since a
+local read says nothing about the remote. A re-read that fails puts its own message on the badge as the warning, and
+the branch and the counts stay as they were. A project with no status yet — never checked, or not since the daemon
+restarted — gets its badge from the re-read.
+
 ## The environment a check runs `git` in
 
 Every `git` run for a project's git status — the remotes read, the fetch, the branch read, and a fast-forward, whether
-it comes from a check, from Pull current branch or from the pass that turning the switch on starts — is the `git` on the
-user's `PATH`, started from the user's own login shell environment, but with that environment **filtered**. Their git
-configuration files and their credential helpers are used as they stand.
+it comes from a check, from Pull current branch, from the pass that turning the switch on starts or from a change to
+the repository's refs — is the `git` on the user's `PATH`, started from the user's own login shell environment, but
+with that environment **filtered**. Their git configuration files and their credential helpers are used as they
+stand.
 
 What the filter takes out are the `GIT_*` variables the user exports in their own shell configuration. Kept are only
 those that say which of the user's own material to use and how to reach a remote with it: where git's configuration
@@ -148,7 +178,7 @@ Two consequences are worth knowing:
 - A setting only a dropped variable carries does not apply. The check then fails, rather than quietly reporting the
   branch and counts of whatever repository such a variable names, and its reason reaches the badge like any other
   failure (see "The branch badge" above). A push fails the same way, as an error toast, rather than
-  publishing some other repository (see "Pushing the current branch" below).
+  publishing some other repository (see "Pushing the current branch" in `docs/product/project-git-actions.md`).
 
 A git association's clone, and the check the association form makes of a git URL, are **not** filtered this way: they
 run with the whole shell environment (see "Associating a project" in `docs/product/consoles-and-projects.md`).
@@ -156,7 +186,7 @@ run with the whole shell environment (see "Associating a project" in `docs/produ
 `git` is run so that it can never stop to ask for a credential, a passphrase or an unknown host key — each of those
 fails immediately instead — and every `git` call of a check is given at most two minutes, so a check cannot hang; a
 call that runs out reports only that it did not finish in time. A push's own bounds are in "Pushing the current
-branch" below.
+branch" in `docs/product/project-git-actions.md`.
 
 ## Automatically pulling repositories
 
@@ -173,7 +203,7 @@ the same rules:
 
 - It **never pushes**, and never merges anything that is not a fast-forward. A push happens only when the user
   chooses **Push current branch**, and it is never part of this pull (see "Pushing the current branch"
-  below).
+  in `docs/product/project-git-actions.md`).
 - A branch that is ahead of its upstream, whether or not it is also behind, is left alone. So are a branch with no
   upstream and a detached `HEAD`.
 - Whether the project has a running agent session makes no difference: the working tree can move under an agent that
@@ -183,9 +213,10 @@ the same rules:
 Pulling a branch — with the switch on, or by Pull current branch — moves that branch's working tree. Pushing
 the current branch does not: it updates the remote and, in the repository, the remote-tracking refs `git` updates
 for that push, and when the branch had no upstream it records one. It does not edit the project's files (see
-"Pushing the current branch" below). Switching to a local branch moves the project's own working tree
-(see "Switching the local branch" below). Restoring file changes discards tracked changes without moving the branch
-(see "Restoring file changes" below). A check's fetch still updates remote refs only and still does not move the
+"Pushing the current branch" in `docs/product/project-git-actions.md`). Switching to a local branch moves the
+project's own working tree (see "Switching the local branch" in `docs/product/project-git-actions.md`). Restoring
+file changes discards tracked changes without moving the branch (see "Restoring file changes" in
+`docs/product/project-git-actions.md`). A check's fetch still updates remote refs only and still does not move the
 working tree or push (see "What one check does" above). The guarantee these qualify is in "What Octoboard never
 modifies" in `docs/product/launching-agents.md`.
 
@@ -217,8 +248,9 @@ there and then, instead of waiting for the next check. Setting the switch to the
 
 This pass **never goes to the remote** — nothing is fetched. The statuses Octoboard is already holding only pick which
 projects are worth visiting, so, unlike a check, it is **not limited to the current console**: every
-project that has a status at all is visited, including projects of consoles that were current earlier since Octoboard
-was started. A project that has never been checked is not visited — nothing is known to fast-forward it to.
+project that has a status at all is visited — including projects of consoles that were current earlier since the
+daemon started, and projects whose status came only from a local re-read (see "Following changes to the repository's
+refs" above). A project with no status is not visited — nothing is known to fast-forward it to.
 
 Before anything moves, each project's repository is read again — locally, still no network — and the same rule applied
 to what it says now, because an arbitrary amount of time may have passed since the status was filled in. So a project
@@ -237,133 +269,3 @@ console that is current in no window therefore stays on it until that console is
 checked, since a status is dropped only when the project or its console is deleted.
 
 Turning the switch **off** undoes nothing and triggers nothing: branches already fast-forwarded stay where they are.
-
-## Pushing the current branch
-
-**Push current branch**, under **Git** in the project's action menu, pushes that project's current branch and only
-that branch. It is offered only while the project's status says the directory is a git repository (see "Project
-rows" in `docs/product/sidebar.md`). Choosing it closes the menu at once. The push is waited on until `git push` has
-exited. When the push is accepted, the window that asked shows a notice toast saying the current branch was pushed.
-A refusal is an error toast worded from the code below. Pushing does not fetch and does not fast-forward, and a
-pull never pushes (see "Automatically pulling repositories" above). A local branch that is behind its
-upstream stays behind; if the remote rejects the update, the push fails and the branch stays where it was.
-
-The push never uses `--force`, and it is never a bare `git push`, which would follow `push.default` and can publish
-every branch whose name exists on the remote. The one branch is named explicitly, so only that branch is published.
-The user's git configuration and credential helpers are used as they stand. `git` cannot stop to ask for a
-credential, a passphrase or a host key — the same refusal as a fetch (see "The environment a check runs `git` in"
-above) — and the push itself is given at most two minutes.
-
-Once the directory is a repository, the branch is read, then the repository's remotes. That remotes read is
-filtered and non-interactive in the same way, and is given at most 30 seconds. If either read fails, the push
-fails and `git push` is not run, so a detached `HEAD` whose remotes cannot be read is reported as that failed read
-rather than as not being on a branch.
-
-What is pushed, when both reads succeed:
-
-- A branch that has an upstream is pushed to that upstream's remote and remote branch. The remote is the longest
-  configured remote name that is a prefix of the upstream followed by `/`, and the rest of the upstream — which
-  must be non-empty — is the remote branch. A remote named `fork/origin` wins over `fork` for an upstream
-  `fork/origin/main`; a remote named `origin` does not match an upstream `origin-fork/main`. The remote branch
-  need not have the same name as the local branch. This push does not change the upstream.
-- A branch with no upstream is pushed to `origin` when the repository has that remote, otherwise to its only
-  remote, and that push records the upstream under the local branch's own name.
-
-Nothing is pushed when the push is refused. A refusal itself does not change the badge's branch, counts or last
-check's error; the push failure is reported by its error toast:
-
-- The project directory is not a git repository when the push runs: `not_a_git_repository`. The rule is the badge's
-  (see "What one check does" above): `.git` must be in the project directory itself. A subdirectory of a repository
-  is not one.
-- `HEAD` is detached: `not_on_a_branch`.
-- The branch has no commit yet: `no_commits_to_push`.
-- The upstream names no configured remote of this repository: `upstream_not_a_remote`.
-- There is no upstream, and the repository has neither an `origin` nor exactly one remote: `no_push_remote`. No
-  remotes at all, and several remotes with no `origin`, are both this refusal.
-- A branch or remote name is empty, starts with `-`, or contains `:`, a NUL or a newline: `git_push_failed`. `git`
-  is not run. The reason says the name cannot be used in a refspec. The local branch's name is judged before the
-  upstream. A remote or remote-branch name is judged only after the upstream has matched a remote, so an upstream
-  that matches none is `upstream_not_a_remote` even when its text would not be a usable name.
-- The branch cannot be read, or the remotes cannot be read: `git_push_failed`. The branch's reason is `git`'s own
-  message, or that the read did not finish in time. The remotes' reason says they could not be read.
-- `git push` itself fails, including a remote that rejects the update, a missing credential, or a push that does
-  not finish within two minutes: `git_push_failed`, with `git`'s own message, or that it did not finish in time.
-
-A project that no longer exists is `unknown_project`.
-
-The push and a check are not ordered. **Pull current branch**, or a scheduled check, that arrives during a push is handled
-as it would be with no push in flight: it is not queued behind the push. The badge shows the push in flight while the
-check can still update its branch, counts and error. When the push ends, a check or pull still in flight is
-shown again. A second push of the same project is not refused while one is still running; the pushing state stays until
-the last push ends. Once the directory has been confirmed as a repository, the state covers the branch and remote reads
-as well as `git push`, and ends on a refusal too.
-
-A successful push does not edit the project's files and does not move the working tree. It updates the remote, and
-in the repository it updates the remote-tracking refs `git` updates for that push. When the branch had no upstream,
-it also records one. The daemon then re-reads the local branch header and publishes the project's git status, with
-no fetch, so the badge's ahead count can drop. Every window showing the project sees that status. This re-read does
-not end the badge's indication of an overlapping check or pull. An error the last check left on the badge
-stays, unless that re-read fails, in which case the warning becomes the re-read's message and the branch and the counts
-stay as they were. A re-read that fails does not turn the notice into an error toast: the push was accepted.
-Turning **Automatically pull repositories** on never pushes.
-
-## Switching the local branch
-
-**Switch branch**, under **Git** in every placement of the project's action menu, opens a third-level menu of
-existing local branches. Remote-only branches are not offered. The list is read afresh when the submenu opens,
-in byte order of branch names, with the project's own worktree's current branch checked. Selecting that branch
-closes the menu without requesting a switch.
-
-While the list is being read, the submenu shows a loading state. No local branches produces an unavailable empty
-item. A failed read shows its reason and **Try again**, which reloads without closing the menu. At most 10,000
-branches, or as many as 2 MiB of encoded names hold, are listed; a truncated list carries an incomplete-list notice.
-
-Selecting another branch closes the menus and switches immediately, without confirmation. It changes the project's
-own worktree, including a linked worktree, regardless of which worktree the Git pane is reviewing. It never creates
-a branch, guesses a remote branch, fetches, pushes or pulls. It does not force the switch or stash or discard local
-changes: changes Git can carry safely stay, and a conflict, a branch checked out in another worktree, or another Git
-refusal fails with an error toast. Running agent sessions do not prevent a switch; the working tree can change
-underneath them. Other Git operations are not serialized with the switch.
-
-The directory must contain its own `.git` entry, as for the badge. A missing project is `unknown_project`, a
-directory that is not a repository under that rule is `not_a_git_repository`, and an invalid or vanished local
-branch or a Git failure is `git_switch_failed`, with the reason as `detail`. Each Git call uses the filtered,
-non-interactive environment described in "The environment a check runs `git` in" above and has at most two minutes.
-
-Success raises no toast. The local branch and upstream counts are read again for the badge in every window,
-without fetching; an earlier remote-check warning stays unless that read itself fails. A failed status re-read
-records its warning without turning a completed switch into a switch error. The project pane refreshes when the
-reported branch changes (see "Files and Git" in `docs/product/project-pane.md`).
-
-## Restoring file changes
-
-**Restore file changes**, under **Git** in every project's action-menu placement, follows Switch branch
-after a separator (see "Project rows" in `docs/product/sidebar.md`). It opens a destructive confirmation dialog
-explaining that staged and unstaged tracked changes will be discarded, staged new files deleted, and untracked and
-ignored files kept, and that the discard cannot be undone. Cancelling makes no restore request. Confirming waits
-for the restore; success closes the dialog and raises a notice toast. A failure stays in the dialog as an inline
-error, leaving it open.
-
-Restoration covers the project's own worktree: tracked files and the index are restored to the current commit,
-`HEAD`, including tracked deletions and renames. Staged additions absent from that commit are deleted. It leaves
-untracked and ignored files, submodule worktrees and their gitlinks in the index, commits, the branch, and other
-worktrees unchanged. It fetches and pushes nothing. A successful restore re-reads the local branch status for the
-badge; a failure publishes no such re-read.
-
-The project directory itself must contain `.git`, as for the branch badge; a project pointing at a repository's
-subdirectory is refused. The other refusals are:
-
-- A project that no longer exists: `unknown_project`; a directory that is not a repository under that rule:
-  `not_a_git_repository`.
-- Detached `HEAD`: `restore_not_on_branch`; a branch with no commit yet: `no_commits_to_restore`.
-- A merge, rebase, cherry-pick, revert or bisect in progress: `git_operation_in_progress`. Finish or abort it first.
-- A tracked path blocked by a directory, or an ancestor blocked by a file or symbolic link; or a path in `HEAD`
-  removed from the index but still present on disk: `git_restore_failed`. These collisions are refused before
-  restoration to preserve untracked or ignored content; move the obstruction aside first.
-- Git cannot inspect or restore the files: `git_restore_failed`, with the reason as `detail`. Each Git call has at
-  most two minutes, 16 MiB of standard output and 64 KiB of standard error; an inspection exceeding a bound fails
-  before restoration.
-
-A restore failure does not promise rollback: Git can restore some paths before a later path fails. Running agent
-sessions do not prevent restoration, and their Git operations, checks, pulls, pushes and other restores are not
-serialized with it. The files can change underneath a running agent.
