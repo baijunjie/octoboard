@@ -97,6 +97,9 @@ export function SessionDialog({
   const [launchSettings, setLaunchSettings] = useState<Partial<Record<Agent, { model?: string | null; effort?: string | null }>>>({});
   const [pickedOwner, setPickedOwner] = useState(NO_OWNER);
   const [conversation, setConversation] = useState<Conversation>("new");
+  // The Name field takes focus as the dialog opens, so Enter submits at once; a field mounted by
+  // a tab switch must not, or it would take focus off the tab the user is on.
+  const [switched, setSwitched] = useState(false);
   const [resumeId, setResumeId] = useState("");
   const [refusal, setRefusal] = useState<{ error: DaemonRequestError; asked: string }>();
   const { error, busy, run } = useDialogAction();
@@ -197,6 +200,7 @@ export function SessionDialog({
         value={title}
         onChange={setTitle}
         placeholder={project?.name ?? parentConsole.name}
+        autoFocus={!switched}
         description={t(project ? "dialog.session.titleHint" : "dialog.consoleSession.consoleNameHint")}
       />
       <AgentAccountField
@@ -263,7 +267,10 @@ export function SessionDialog({
     >
       {blocked && <p className="text-sm text-app-danger"><Message id="agents.installPrompt" params={PATH_VAR_PARAMS} /></p>}
       {resumable && (
-        <Tabs selectedKey={conversation} onSelectionChange={(key) => setConversation(key as Conversation)} isDisabled={blocked} className="gap-4">
+        <Tabs selectedKey={conversation} onSelectionChange={(key) => {
+          setSwitched(true);
+          setConversation(key as Conversation);
+        }} isDisabled={blocked} className="gap-4">
           <Tabs.ListContainer render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
             <Tabs.List aria-label={t("dialog.session.conversation")}>
               {/* Keep hovered labels at full opacity and use the foreground colour for clear feedback. */}

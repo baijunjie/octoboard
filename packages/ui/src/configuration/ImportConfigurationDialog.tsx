@@ -160,7 +160,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
         {t("common.cancel")}
       </Button>
       {/* Pending rather than disabled, so the button keeps focus and the dialog its Escape. */}
-      <Button type="submit" isPending={busy || waiting}>
+      <Button type="submit" isPending={busy || waiting} autoFocus>
         {t("configuration.import.choose.submit")}
       </Button>
     </>

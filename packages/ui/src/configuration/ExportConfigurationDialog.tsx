@@ -70,6 +70,7 @@ export function ExportConfigurationDialog({
       onClose={busy ? () => {} : onClose}
       submitLabel={t("configuration.export.submit")}
       busy={busy}
+      autoFocusSubmit
       onSubmit={submit}
     >
       {inHand ? (

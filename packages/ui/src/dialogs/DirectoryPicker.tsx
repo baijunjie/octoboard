@@ -119,7 +119,7 @@ export function DirectoryPicker({
   return (
     <Dialog title={title} onClose={onClose} footer={footer} onSubmit={() => void load(path)}>
       <div className="flex gap-2">
-        <Input fullWidth variant="secondary" dir="ltr" aria-label={t("directoryPicker.path")} {...pathField} />
+        <Input autoFocus fullWidth variant="secondary" dir="ltr" aria-label={t("directoryPicker.path")} {...pathField} />
         <Button type="submit" variant="secondary">
           {t("directoryPicker.go")}
         </Button>

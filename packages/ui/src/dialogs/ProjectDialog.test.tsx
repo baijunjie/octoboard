@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { setInteractionModality } from "react-aria";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
@@ -77,6 +78,16 @@ async function chooseSource(label: string) {
   await click(Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent?.includes("A single directory")));
   await click(Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]')).find((o) => o.textContent?.includes(label)));
 }
+
+it("opens on the directory when adding and on the name when editing, so Enter submits at once", () => {
+  act(() => setInteractionModality("pointer"));
+  render();
+  expect(document.activeElement).toBe(input("Directory"));
+  act(() => roots.pop()!.unmount());
+  document.body.replaceChildren();
+  render(stored);
+  expect(document.activeElement).toBe(input("Name"));
+});
 
 it("preselects the agent detected for a typed directory, and only the latest answer counts", async () => {
   const pending = render();

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { setInteractionModality } from "react-aria";
 import { expect, it, vi } from "vitest";
 
 import { consoleOf } from "../gallery/fixtures/builders";
@@ -27,6 +28,12 @@ const mount = (save = vi.fn<Save>(async (name) => ({ kind: "saved", name })), in
 };
 
 const text = () => document.body.textContent ?? "";
+
+it("opens with focus on the Export button, since it has no text field", () => {
+  act(() => setInteractionModality("pointer"));
+  mount();
+  expect(document.activeElement?.textContent).toBe("Export");
+});
 
 it("states that the file carries project paths, and whose, while the scope is still being chosen, before any request is made", () => {
   const { sent } = mount();

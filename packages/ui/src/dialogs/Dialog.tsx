@@ -152,7 +152,10 @@ let openDialogs = 0;
  * focusable and announces itself. Cancel is disabled instead, which costs nothing because focus
  * cannot be on it at the moment the request starts. `submitDisabled` disables the submit button
  * alone, before any action, Cancel stays pressable, and since it is the form's only submit control
- * this also suppresses implicit submission from Enter in a text field.
+ * this also suppresses implicit submission from Enter in a text field. A form dialog puts
+ * `autoFocus` on its first text field, so Enter submits at once; one with no text field passes
+ * `autoFocusSubmit` to open on the submit button instead (a dialog with its own `footer` puts
+ * `autoFocus` on its own button).
  */
 export function Dialog({
   title,
@@ -164,6 +167,7 @@ export function Dialog({
   submitLabel,
   busy,
   submitDisabled,
+  autoFocusSubmit,
   onSubmit,
   size = "md",
   alert,
@@ -194,9 +198,10 @@ export function Dialog({
     submitLabel?: never;
     busy?: never;
     submitDisabled?: never;
+    autoFocusSubmit?: never;
     onSubmit?: () => void;
   }
-  | { footer?: never; submitLabel: string; busy?: boolean; submitDisabled?: boolean; onSubmit: () => void }
+  | { footer?: never; submitLabel: string; busy?: boolean; submitDisabled?: boolean; autoFocusSubmit?: boolean; onSubmit: () => void }
 )): React.ReactElement {
   const t = useT();
   // Closing returns focus to the element focused when the dialog opened, which for a dialog a menu
@@ -261,7 +266,7 @@ export function Dialog({
               <Button type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
                 {t("common.cancel")}
               </Button>
-              <Button type="submit" isPending={busy} isDisabled={submitDisabled}>
+              <Button type="submit" isPending={busy} isDisabled={submitDisabled} autoFocus={autoFocusSubmit}>
                 {submitLabel}
               </Button>
             </>

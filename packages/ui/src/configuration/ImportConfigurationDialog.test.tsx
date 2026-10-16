@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
@@ -53,6 +54,12 @@ async function reviewing(options: Parameters<typeof mount>[0] = {}) {
   await press("Choose file");
   return mounted;
 }
+
+it("opens with focus on the Choose file button, since the first step has no text field", () => {
+  act(() => setInteractionModality("pointer"));
+  mount();
+  expect(document.activeElement?.textContent).toBe("Choose file");
+});
 
 it("inspects the document as it was read, and creates nothing", async () => {
   const mounted = await reviewing();

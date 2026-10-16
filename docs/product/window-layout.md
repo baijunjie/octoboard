@@ -82,6 +82,16 @@ Enter confirms at once. Three kinds start elsewhere:
   back on the dialog each time it moves on to the next waiting question, so an Enter held past one answer does not
   answer the next.
 
+**Where keyboard focus starts in a form dialog.** A form dialog opens with keyboard focus in its first text field, so
+the user can type at once and Enter submits the form: the Name field of a console, session or account dialog and of
+editing a project, the Directory field of adding a project, the field of a rename dialog, and the path field of the
+directory browser, where Enter lists the path typed. A field that appears only after a choice in the dialog does not
+take focus when it appears: switching a project session's dialog between its **New conversation** and **Resume
+conversation** tabs leaves focus on the tab, and switching **Add project**'s **Source** to a git repository leaves it
+on that picker. A form dialog with no text field opens with focus on its submit button instead: the export dialog's
+**Export** button, and the import dialog's **Choose file** button in its first step (see "In the window" in
+`docs/product/configuration-export-and-import.md`).
+
 **A held Enter or Space does not confirm.** Every confirmation and every form dialog ignores the auto-repeats of a
 held Enter or Space, so the press that opened it (a menu item acts as the key goes down) cannot go on to confirm it; a
 fresh press still does. Where text is being typed the repeats stay: Space in any text field, Enter in a multi-line one.

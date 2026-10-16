@@ -234,6 +234,9 @@ export function ProjectDialog({
             value={path}
             onChange={setPath}
             dir="ltr"
+            // The first text field when adding; the source picker above it is not one, and the
+            // repository URL only appears after a switch, which must not take focus off the picker.
+            autoFocus
             placeholder={source === "git" ? defaultCloneDir : t("dialog.project.directoryExample")}
             description={source === "local" && detection.status === "checking" ? t("dialog.project.pathChecking") : undefined}
             errorMessage={shown(pathError) ?? (source === "local" ? detectionError : undefined)}
@@ -249,6 +252,7 @@ export function ProjectDialog({
           label={t("common.name")}
           value={name}
           onChange={setName}
+          autoFocus={!!editing}
           placeholder={editing ? undefined : t("dialog.project.nameExample")}
           description={editing ? undefined : t("dialog.project.nameHint")}
           errorMessage={shown(nameError)}

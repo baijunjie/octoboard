@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
@@ -97,6 +98,16 @@ async function openWith(
   container.remove();
   return { request, options, text };
 }
+
+it("opens with focus in the Name field, so Enter submits at once", () => {
+  act(() => setInteractionModality("pointer"));
+  const { container, root } = renderDialog([]);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  expect((document.activeElement as HTMLInputElement).labels?.[0]?.textContent).toBe("Name");
+});
 
 const choose: NewSessionBinding = { kind: "choose" };
 it.each([
@@ -237,6 +248,20 @@ const resumeField = () =>
 async function chooseResume(): Promise<void> {
   await act(async () => resumeTab()?.click());
 }
+
+it("leaves focus off the fields a tab switch mounts, so it stays on the tab", async () => {
+  act(() => setInteractionModality("pointer"));
+  const { container, root } = renderDialog([]);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  act(() => resumeTab()?.focus());
+  await chooseResume();
+  expect(document.activeElement).toBe(resumeTab());
+  await act(async () => newTab()?.click());
+  expect(document.activeElement).toBe(resumeTab());
+});
 
 /** Types `value` into the Session ID field. */
 function typeResumeId(value: string): void {

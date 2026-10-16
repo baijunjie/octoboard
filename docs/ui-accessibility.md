@@ -45,6 +45,10 @@ asks for a word to be typed opens with focus in that field. A dialog's form igno
 Space, except Space in a text field and Enter in a multi-line one, so the press that opened it cannot go on to submit
 it.
 
+A form dialog opens with focus in its first text field, so the user can type at once and Enter submits; one with no text
+field opens with focus on its submit button instead. A field that appears later, after a tab or a choice has changed what
+the form holds, does not take focus, so it never pulls it off the control the user is on.
+
 ### Reaching a control with Tab
 
 Tab is how a control is reached, except for a control inside the row of a react-aria collection that manages focus
