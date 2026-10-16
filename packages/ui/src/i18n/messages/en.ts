@@ -995,6 +995,8 @@ export const en = {
   "settings.appearance.light": "Light",
   "settings.appearance.dark": "Dark",
   "settings.appearance.system": "System",
+  "settings.markdownStyle.label": "Markdown style",
+  "settings.markdownStyle.description": "How Markdown documents are styled in the file viewer.",
   "settings.language.label": "Language",
   "settings.language.description":
     "The language of {appName}'s interface. It is picked from the system's languages the first time {appName} opens.",

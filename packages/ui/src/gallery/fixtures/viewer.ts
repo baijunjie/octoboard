@@ -415,6 +415,68 @@ const FIGURES = `# 2024
 | 3 | 4 |
 `;
 
+// One compact document with the elements a style has to dress, so that the styles can be compared:
+// headings, a paragraph with inline marks, a footnote and a long identifier in inline code, nested
+// and ordered lists with a fence inside an item, a task list, a table, a blockquote, a fenced block,
+// a block formula, a diagram, a rule and links. The fence, the formula and the diagram sit in
+// `not-prose` blocks, which no style may set as text.
+const STYLE_SAMPLE = `# Release handbook
+
+A short introduction with **bold**, _italic_, ~~struck~~ text, \`inline code\` and a [link to the guide](https://example.com/guide), followed by enough words to wrap onto a second line so that the measure of the page can be read.[^1]
+
+Internationalization of the changelog characteristically produces incompatibilities between the archive named \`renderReleaseArchiveWithDetachedSignatureAndChecksumManifest\` and the tooling that unpacks it, which is why the long identifier in this paragraph has to break only where there is no room left.
+
+## Shipping a release
+
+### Before you start
+
+1. Update the changelog.
+2. Tag the commit:
+   - use the version from \`package.json\`
+   - sign the tag
+3. Publish the archive with the helper below, which must not be justified or hyphenated like the text around it:
+   \`\`\`sh
+   ./scripts/publish-release-archive.sh --channel stable --checksum-manifest SHA256SUMS --sign
+   \`\`\`
+
+- [x] Tests pass
+- [x] Notes written
+- [ ] Announcement sent
+
+#### Checks by platform
+
+| Platform | Architecture | Status |
+| :--- | :-: | ---: |
+| macOS | arm64 | ready |
+| Linux | x86_64 | in review |
+
+> A release is only as good as the last thing that was checked, and that thing is rarely the code.
+
+\`\`\`ts
+export function bump(version: string): string {
+  const [major, minor, patch] = version.split(".").map(Number);
+  return [major, minor, patch + 1].join(".");
+}
+\`\`\`
+
+The chance that a release goes out unchecked falls with every reviewer:
+
+$$
+P_{\\text{unchecked}} = \\prod_{i=1}^{n} (1 - r_i)
+$$
+
+\`\`\`mermaid
+flowchart LR
+  Tag --> Build --> Sign --> Publish
+\`\`\`
+
+---
+
+Read the [full guide](https://example.com/guide) or the [changelog](https://example.com/changelog) for more.
+
+[^1]: The measure is read from the longest line of this paragraph.
+`;
+
 // A rendered document that scrolls sideways: a table whose cells hold download addresses and a
 // checksum, which have no place to break, so the table is wider than the viewer, and long enough
 // to scroll down as well.
@@ -938,6 +1000,9 @@ See [the other note](./other.md#kept) and [the heading below](#kept-aside).
 
 What the link in this note scrolls to.
 `;
+async function styleSampleSubjects(): Promise<ViewerSubject[]> {
+  return [file("docs/handbook.md", text("docs/handbook.md", STYLE_SAMPLE))];
+}
 async function documentSubjects(): Promise<ViewerSubject[]> {
   return [file("docs/notes.md", text("docs/notes.md", NORMAL_NOTES)), file("docs/other.md", text("docs/other.md", OTHER))];
 }
@@ -986,6 +1051,33 @@ export const viewerScenarios: Scenario[] = [
     description: "Rendered diagrams and formulas, a project image, mixed text directions and links between documents. The named diagram is Request flow; the second uses the translated Diagram label. Follow the other-note link to its Kept heading or the local link to Kept aside.",
     files: { "docs/picture.png": { image: IMAGES.before_png } },
     viewer: { subjects: documentSubjects },
+  },
+  {
+    id: "viewer-document-github",
+    group: GROUP,
+    category: "normal",
+    title: "Rendered document, GitHub style",
+    description: "The document in the GitHub style: rules under the first two heading levels, a fully ruled zebra table, a barred quote and tinted inline code. Scroll down for the table, the code block, the formula, the diagram and the footnote; none of those takes the text's tint or rules.",
+    preferences: { markdownStyle: "github" },
+    viewer: { subjects: styleSampleSubjects },
+  },
+  {
+    id: "viewer-document-newsprint",
+    group: GROUP,
+    category: "normal",
+    title: "Rendered document, Newsprint style",
+    description: "The document in the Newsprint style: a serif page capped in width and centred, a centred title over a double rule, an italic second-level heading and an italic quote. Scroll down for the table, the code block, the formula, the diagram and the footnote; the Wide window shows the margins either side.",
+    preferences: { markdownStyle: "newsprint" },
+    viewer: { subjects: styleSampleSubjects },
+  },
+  {
+    id: "viewer-document-latex",
+    group: GROUP,
+    category: "normal",
+    title: "Rendered document, LaTeX style",
+    description: "The document in the LaTeX style: a serif page capped in width and centred, justified and hyphenated text, a centred title, a table ruled only at its head and foot and an indented quote. The long identifier in inline code stays unhyphenated, and the code block in the list item, the formula and the diagram are not justified or hyphenated. Scroll down for the rest; the Wide window shows the margins either side.",
+    preferences: { markdownStyle: "latex" },
+    viewer: { subjects: styleSampleSubjects },
   },
   {
     id: "viewer-changes",

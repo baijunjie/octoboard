@@ -46,7 +46,8 @@ Everything the window shows follows the chosen appearance, including:
   highlighted in the same scheme, with added and removed lines tinted and marked `+` and `-`, and a changed word within
   a line underlined rather than tinted, so that every colour still meets 4.5:1 on the tinted lines. A rendered
   Markdown document (see "A Markdown file as a document" in `docs/product/project-pane.md`) sits on that background
-  too, its links underlined as well as coloured, in a colour that meets 4.5:1 on it in either appearance. A diagram
+  too, whichever Markdown style is chosen, its links underlined as well as coloured, in a colour that meets 4.5:1 on
+  it in either appearance. A diagram
   in that document is drawn in the same ink and paper as the highlighted code.
 - **A console's default avatar**, whose fills have their own light and dark values (see "Avatar" in
   `docs/product/consoles-and-projects.md`).

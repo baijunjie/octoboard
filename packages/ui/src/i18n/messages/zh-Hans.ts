@@ -893,6 +893,8 @@ export const zhHans: Translation<"other"> = {
   "settings.appearance.light": "浅色",
   "settings.appearance.dark": "深色",
   "settings.appearance.system": "跟随系统",
+  "settings.markdownStyle.label": "Markdown 样式",
+  "settings.markdownStyle.description": "文件查看器中 Markdown 文档的呈现样式。",
   "settings.language.label": "语言",
   "settings.language.description": "{appName} 界面的语言。首次打开时按系统语言选定。",
   "settings.cloneDir.label": "默认克隆目录",

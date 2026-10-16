@@ -68,6 +68,9 @@
 @import "@heroui/styles/variants";
 
 @import "./viewer/markdown.css";
+@import "./viewer/markdown-github.css";
+@import "./viewer/markdown-newsprint.css";
+@import "./viewer/markdown-latex.css";
 
 /* xterm's default black viewport can show through fractional scaling at the screen edges.
    Use the same theme colour as TerminalPane's opaque surface, including after a theme switch. */

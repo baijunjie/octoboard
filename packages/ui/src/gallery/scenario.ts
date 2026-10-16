@@ -7,6 +7,7 @@ import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
 import type { GroupTitle } from "./fixtures/groups";
 import type { FixtureGit } from "./fixtures/changeFixtures";
 import type { ViewerSubject } from "../viewer/content";
+import type { MarkdownStyle } from "../viewer/markdownStyle";
 import type { State, ToastRequest } from "../store";
 import type { TerminalBehaviour } from "./fakeTerminal";
 import type { Ui } from "./interact";
@@ -27,6 +28,8 @@ export interface Preferences {
   projectFocusIncludeConsoleSessions?: boolean;
   /** How the Git mode's change lists show their changes. */
   changeLayout?: "flat" | "tree";
+  /** How a rendered Markdown document is styled; Tailwind, the original look, when unset. */
+  markdownStyle?: MarkdownStyle;
   /** Closing the window keeps the app running in the background; off by default. */
   runInBackground?: boolean;
 }

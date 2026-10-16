@@ -17,5 +17,6 @@ export const PREFERENCE_KEYS = {
   wordWrap: "octoboard.wordWrap",
   changeLayout: "octoboard.changeLayout",
   markdownView: "octoboard.markdownView",
+  markdownStyle: "octoboard.markdownStyle",
   runInBackground: "octoboard.runInBackground",
 } as const;

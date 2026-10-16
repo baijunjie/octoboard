@@ -70,14 +70,21 @@ every path is shown in full.
 
 ## General
 
-Small app-wide settings: an **Appearance** row, a **Language** row, then a **Default clone directory** row, and last,
-in the macOS application only, a **Keep running in the background** row.
+Small app-wide settings: an **Appearance** row, a **Markdown style** row, a **Language** row, then a **Default clone
+directory** row, and last, in the macOS application only, a **Keep running in the background** row.
 
 ### Appearance
 
 The Light / Dark / System choice for the window's appearance, as a three-way segmented control showing each option as
 an icon — a sun for Light, a moon for Dark, a monitor for System — named by its word. What each option means,
 which one is the default and where the choice is kept are in `docs/product/appearance.md`.
+
+### Markdown style
+
+How a rendered Markdown document in the project pane's file viewer looks, chosen from a drop-down of the styles:
+**Tailwind**, **GitHub**, **Newsprint** and **LaTeX**. The styles are named for what they are modelled on, so their
+names are proper names, the same in every language. What each style looks like, which one is the default and where
+the choice is kept are in "A Markdown file as a document" in `docs/product/project-pane.md`.
 
 ### Language
 

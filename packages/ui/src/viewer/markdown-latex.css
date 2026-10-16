@@ -1,0 +1,78 @@
+@layer utilities {
+  /* LaTeX: a justified, hyphenated serif page with ruled (booktabs) tables and an indented quote. */
+  .markdown-styled[data-markdown-style="latex"] {
+    --markdown-font: "Latin Modern Roman", "Latin Modern", "CMU Serif", "Computer Modern", Georgia, "Times New Roman", serif;
+    --markdown-size: 1.125rem;
+    --markdown-leading: 1.5;
+    max-inline-size: 40em;
+    margin-inline: auto;
+  }
+
+  .markdown-styled[data-markdown-style="latex"] p:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled[data-markdown-style="latex"] li:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    hyphens: auto;
+    text-align: justify;
+  }
+
+  .markdown-styled[data-markdown-style="latex"] h1:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled[data-markdown-style="latex"] h2:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled[data-markdown-style="latex"] h3:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    font-weight: 700;
+  }
+
+  .markdown-styled[data-markdown-style="latex"] h1:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    font-size: 2em;
+    text-align: center;
+  }
+
+  .markdown-styled[data-markdown-style="latex"] h2:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    font-size: 1.5em;
+  }
+
+  .markdown-styled[data-markdown-style="latex"] h3:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    font-size: 1.25em;
+  }
+
+  .markdown-styled[data-markdown-style="latex"] h4:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled[data-markdown-style="latex"] h5:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled[data-markdown-style="latex"] h6:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    font-size: 1em;
+    font-style: italic;
+  }
+
+  .markdown-styled[data-markdown-style="latex"] h4:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    font-weight: 700;
+  }
+
+  .markdown-styled[data-markdown-style="latex"] h5:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled[data-markdown-style="latex"] h6:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    font-weight: 400;
+  }
+
+  .markdown-styled[data-markdown-style="latex"] blockquote:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    margin-inline: 2em;
+  }
+
+  .markdown-styled[data-markdown-style="latex"] hr:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    border-block-start-color: currentColor;
+  }
+
+  .markdown-styled[data-markdown-style="latex"] table:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    border-block: 2px solid currentColor;
+  }
+
+  .markdown-styled[data-markdown-style="latex"] thead:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    border-block-end: 1px solid currentColor;
+  }
+
+  .markdown-styled[data-markdown-style="latex"] code:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    padding: 0;
+    background: none;
+    font-size: 0.9em;
+    hyphens: manual;
+  }
+
+  .markdown-styled[data-markdown-style="latex"] a:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    hyphens: manual;
+  }
+}

@@ -1,0 +1,68 @@
+@layer utilities {
+  /* Newsprint: a serif page, narrow like a column, with the first headings set centred. */
+  .markdown-styled[data-markdown-style="newsprint"] {
+    --markdown-font: "PT Serif", Palatino, "Palatino Linotype", "Book Antiqua", Georgia, "Times New Roman", serif;
+    --markdown-size: 1.0625rem;
+    --markdown-leading: 1.65;
+    max-inline-size: 44em;
+    margin-inline: auto;
+  }
+
+  .markdown-styled[data-markdown-style="newsprint"] h1:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled[data-markdown-style="newsprint"] h2:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    text-align: center;
+  }
+
+  .markdown-styled[data-markdown-style="newsprint"] h1:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    padding-block-end: 0.4em;
+    border-block-end: 3px double var(--markdown-rule);
+    font-size: 2.25em;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .markdown-styled[data-markdown-style="newsprint"] h2:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    font-size: 1.5em;
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  .markdown-styled[data-markdown-style="newsprint"] h3:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    font-size: 1.25em;
+  }
+
+  .markdown-styled[data-markdown-style="newsprint"] h4:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled[data-markdown-style="newsprint"] h5:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled[data-markdown-style="newsprint"] h6:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    font-size: 1em;
+  }
+
+  .markdown-styled[data-markdown-style="newsprint"] h6:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    font-style: italic;
+  }
+
+  .markdown-styled[data-markdown-style="newsprint"] blockquote:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    padding-inline: 1.25em;
+    border-inline-start: 3px solid var(--markdown-rule);
+    font-style: italic;
+  }
+
+  .markdown-styled[data-markdown-style="newsprint"] hr:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    inline-size: 30%;
+    margin-inline: auto;
+  }
+
+  .markdown-styled[data-markdown-style="newsprint"] th:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    border-block: 1px solid var(--markdown-rule);
+  }
+
+  .markdown-styled[data-markdown-style="newsprint"] td:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    border-block-end: 1px solid var(--markdown-rule);
+  }
+
+  .markdown-styled[data-markdown-style="newsprint"] code:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    padding: 0.1em 0.3em;
+    border-radius: 2px;
+    background-color: var(--markdown-tint);
+  }
+}

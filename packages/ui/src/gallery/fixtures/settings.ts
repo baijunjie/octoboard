@@ -42,10 +42,22 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Browser General settings",
-    description: "The clone-directory explanation describes when the chosen directory is used; the path appears in the input.",
+    description: "The Markdown style row sits between Appearance and Language and starts on Tailwind. The clone-directory explanation describes when the chosen directory is used; the path appears in the input.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
+    ],
+  },
+  {
+    id: "settings-general-markdown-style-open",
+    group: GROUP,
+    category: "normal",
+    title: "General, Markdown style drop-down open",
+    description: "The four styles are listed by name, in every language, with Tailwind marked as the current one.",
+    state: browserState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.markdownStyle.label")),
     ],
   },
   {

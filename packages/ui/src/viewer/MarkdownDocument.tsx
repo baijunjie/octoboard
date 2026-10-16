@@ -16,6 +16,7 @@ import { type Direction, type DirectionNode, firstStrongDirection } from "./bloc
 import { DocumentImage } from "./DocumentImage";
 import { FormulaView } from "./FormulaView";
 import { headingIds, limitFences, prepareMarkdown } from "./markdownPlugins";
+import { markdownStyle, type MarkdownStyle } from "./markdownStyle";
 import { MermaidBlock } from "./MermaidBlock";
 import { resolveProjectAddress } from "./projectAddress";
 
@@ -70,18 +71,24 @@ function fenceOf(node: Element): { language?: string; text: string; highlight: b
 }
 
 /** Puts the document's content in the frame `<div data-markdown-document>`, which takes the
- * direction of the first strong letter of the whole text, or `fallback` when it has none. Done on the
- * syntax tree because the wrapper has to be told a direction that only the tree can give: the library
- * is a component of its own, which draws after the one around it. Called with that direction before
- * it is placed in the plugin list, so this returns the plugin: unified calls each entry to obtain
- * the transformer, and a transformer placed in the list runs once at setup and never on the tree. */
-function frameDocument(fallback: Direction) {
+ * direction of the first strong letter of the whole text, or `fallback` when it has none, and the
+ * classes of the document's `style` (`markdown.css`). Done on the syntax tree because the wrapper
+ * has to be told a direction that only the tree can give: the library is a component of its own,
+ * which draws after the one around it. Called with that direction before it is placed in the plugin
+ * list, so this returns the plugin: unified calls each entry to obtain the transformer, and a
+ * transformer placed in the list runs once at setup and never on the tree. */
+function frameDocument(fallback: Direction, style: MarkdownStyle) {
   return () => (tree: DirectionNode & { children: DirectionNode[] }) => {
     tree.children = [
       {
         type: "element",
         tagName: "div",
-        properties: { dir: firstStrongDirection(tree) ?? fallback, dataMarkdownDocument: "", className: "markdown-prose prose prose-sm max-w-none" },
+        properties: {
+          dir: firstStrongDirection(tree) ?? fallback,
+          dataMarkdownDocument: "",
+          dataMarkdownStyle: style,
+          className: style === "tailwind" ? "markdown-prose prose prose-sm max-w-none" : "markdown-prose markdown-styled",
+        },
         children: tree.children,
       },
     ];
@@ -164,11 +171,12 @@ function overBudget(node: Element | undefined): boolean {
  * merged, never replaced, and both sets of utilities are on the element, the stylesheet and not
  * their order deciding which wins. The one exception is the footnote heading, which the library
  * marks `sr-only` and which keeps to that alone: it is for screen readers, and the styling of a
- * heading would show it. Made once, here, so every element keeps one identity for the library to
- * keep mounted. A `dir` of "first-strong" gives the element the direction of the first strong
- * letter of its whole text, see `blockDirection.ts`; a block with no strong letter of its own is
- * given no `dir` at all, so that it reads the way the document around it does rather than being
- * pinned left to right the way an unresolved `dir="auto"` would be. */
+ * heading would show it (the style sheets leave an `sr-only` element out as well). Made once,
+ * here, so every element keeps one identity for the library to keep mounted. A `dir` of
+ * "first-strong" gives the element the direction of the first strong letter of its whole text,
+ * see `blockDirection.ts`; a block with no strong letter of its own is given no `dir` at all, so
+ * that it reads the way the document around it does rather than being pinned left to right the
+ * way an unresolved `dir="auto"` would be. */
 function styled(
   tag:
     "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "p" | "ul" | "ol" | "li" | "blockquote" | "hr" | "table" | "th" | "td" | "code" | "section",
@@ -185,7 +193,7 @@ function styled(
   };
 }
 
-// Direction follows each block's text; Typography owns the document's visual hierarchy.
+// Direction follows each block's text; the document's style (`markdown.css`) owns its visual hierarchy.
 const BLOCKS = {
   h1: styled("h1", "", "first-strong"),
   h2: styled("h2", "", "first-strong"),
@@ -233,6 +241,7 @@ export const MarkdownDocument = memo(function MarkdownDocument({
 }: MarkdownDocumentProps): React.ReactElement {
   const t = useT();
   const appDirection = textDirection(useCurrentLanguage());
+  const style = markdownStyle.useValue();
   const frameRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!anchor) return;
@@ -242,7 +251,7 @@ export const MarkdownDocument = memo(function MarkdownDocument({
   // Not memoised, unlike the components below: the library builds its processor on every render
   // whatever this array's identity is, so holding one would buy nothing.
   const remarkPlugins: NonNullable<Options["remarkPlugins"]> = [remarkGfm, remarkMath, prepareMarkdown(text, path), limitFences];
-  const rehypePlugins: NonNullable<Options["rehypePlugins"]> = [headingIds, frameDocument(appDirection)];
+  const rehypePlugins: NonNullable<Options["rehypePlugins"]> = [headingIds, frameDocument(appDirection, style)];
   // Memoised: the library takes a new component for an element to be a new kind of element and
   // mounts it afresh, which would take the focus of a link with it and draw every fenced block again
   // each time the caller renders (as it does when the frame gains or loses its focus ring).

@@ -1,6 +1,17 @@
 /* Each rule keeps a tag or class on its rightmost compound, with no `:where()` around it, which
-   would leave WebKit nothing to file the rule under. Weighing 0,2,x, they beat the plugin's rules,
-   which weigh 0,1,x at most. */
+   would leave WebKit nothing to file the rule under. The Tailwind overrides weigh 0,2,x, over the
+   plugin's rules, which weigh 0,1,x at most. A rule for the other styles weighs 0,1,x, over the
+   utilities the library's elements carry (0,1,0), and a rule of one style's own file weighs 0,2,x,
+   over the shared ones here. A descendant rule of those ends in the escape
+   `:where(:not(.not-prose, .not-prose *, .sr-only))`, the form `typography.mjs` gives the plugin's:
+   a fence, a diagram, a formula and the footnotes' screen-reader heading are not styled as text.
+
+   The document's frame carries `markdown-prose` and `data-markdown-style`, and the Tailwind style
+   adds the plugin's `prose` classes on top. The other styles are `markdown-styled` and the style's
+   name: this file holds what they share, and `markdown-github.css`, `markdown-newsprint.css` and
+   `markdown-latex.css` one style each. They take everything from the text's colour, so that both
+   appearances read the same way and the contrast of the reading surface holds: a rule or a tint is
+   a share of `currentColor`, and a muted text keeps 75% of it. */
 @layer utilities {
   .markdown-prose.prose {
     color: inherit;
@@ -35,29 +46,159 @@
     content: none;
   }
 
+  .markdown-prose {
+    overflow-wrap: break-word;
+  }
+
   /* A loose item's paragraph may read the other way; its box stays with the list's markers. */
-  .markdown-prose.prose .task-list-item:dir(ltr) > input,
-  .markdown-prose.prose .task-list-item:dir(ltr) > p > input {
+  .markdown-prose .task-list-item:dir(ltr) > input,
+  .markdown-prose .task-list-item:dir(ltr) > p > input {
     direction: ltr;
   }
 
-  .markdown-prose.prose .task-list-item:dir(rtl) > input,
-  .markdown-prose.prose .task-list-item:dir(rtl) > p > input {
+  .markdown-prose .task-list-item:dir(rtl) > input,
+  .markdown-prose .task-list-item:dir(rtl) > p > input {
     direction: rtl;
   }
 
   /* Task boxes occupy the marker gutter, including in right-to-left and loose lists. */
-  .markdown-prose.prose .task-list-item {
+  .markdown-prose .task-list-item {
     position: relative;
     list-style-type: none;
   }
 
-  .markdown-prose.prose .task-list-item input[type="checkbox"] {
+  .markdown-prose .task-list-item input[type="checkbox"] {
     position: absolute;
     inset-inline-start: -1.25em;
     top: 0.4em;
     width: 0.95em;
     height: 0.95em;
     margin: 0;
+  }
+
+  /* The styles other than Tailwind. The base restores what the reset strips and sets the rhythm; each
+     style then sets its own face, headings and the few blocks that set it apart. */
+  .markdown-prose.markdown-styled {
+    --markdown-rule: color-mix(in srgb, currentColor 25%, transparent);
+    --markdown-tint: color-mix(in srgb, currentColor 8%, transparent);
+    --markdown-muted: color-mix(in srgb, currentColor 75%, transparent);
+    font-family: var(--markdown-font);
+    font-size: var(--markdown-size);
+    line-height: var(--markdown-leading);
+  }
+
+  .markdown-styled > h1:first-child,
+  .markdown-styled > h2:first-child,
+  .markdown-styled > h3:first-child,
+  .markdown-styled > h4:first-child,
+  .markdown-styled > h5:first-child,
+  .markdown-styled > h6:first-child,
+  .markdown-styled > p:first-child,
+  .markdown-styled > ul:first-child,
+  .markdown-styled > ol:first-child,
+  .markdown-styled > blockquote:first-child,
+  .markdown-styled > hr:first-child,
+  .markdown-styled > table:first-child {
+    margin-block-start: 0;
+  }
+
+  .markdown-styled > h1:last-child,
+  .markdown-styled > h2:last-child,
+  .markdown-styled > h3:last-child,
+  .markdown-styled > h4:last-child,
+  .markdown-styled > h5:last-child,
+  .markdown-styled > h6:last-child,
+  .markdown-styled > p:last-child,
+  .markdown-styled > ul:last-child,
+  .markdown-styled > ol:last-child,
+  .markdown-styled > blockquote:last-child,
+  .markdown-styled > hr:last-child,
+  .markdown-styled > table:last-child {
+    margin-block-end: 0;
+  }
+
+  .markdown-styled p:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled ul:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled ol:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled blockquote:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled table:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    margin-block: 0 1em;
+  }
+
+  .markdown-styled ul:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled ol:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    padding-inline-start: 2em;
+  }
+
+  .markdown-styled ul:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    list-style: disc;
+  }
+
+  .markdown-styled ol:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    list-style: decimal;
+  }
+
+  .markdown-styled li ul:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    list-style: circle;
+  }
+
+  .markdown-styled li ul ul:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    list-style: square;
+  }
+
+  .markdown-styled li ul:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled li ol:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    margin-block: 0;
+  }
+
+  .markdown-styled li + li:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    margin-block-start: 0.25em;
+  }
+
+  .markdown-styled h1:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled h2:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled h3:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled h4:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled h5:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled h6:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    margin-block: 1.5em 0.75em;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .markdown-styled hr:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    margin-block: 1.5em;
+    border: 0;
+    border-block-start: 1px solid var(--markdown-rule);
+  }
+
+  .markdown-styled table:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .markdown-styled th:where(:not(.not-prose, .not-prose *, .sr-only)),
+  .markdown-styled td:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    padding: 0.4em 0.8em;
+  }
+
+  .markdown-styled th:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    font-weight: 600;
+  }
+
+  .markdown-styled code:where(:not(.not-prose, .not-prose *, .sr-only)) {
+    font-size: 0.875em;
+  }
+
+  /* What sits in a `not-prose` block (a fence, a diagram, a formula) is not the document's text: it
+     reads as it would anywhere else, whatever the style sets on the text around it. */
+  .markdown-styled .not-prose {
+    hyphens: manual;
+    text-align: start;
+  }
+
+  /* A task box is centred on the first line, which is as tall as the style's line height. */
+  .markdown-styled .task-list-item input[type="checkbox"] {
+    top: calc((var(--markdown-leading) - 0.95) / 2 * 1em);
   }
 }

@@ -332,6 +332,31 @@ are set off at the end, under a heading only assistive technology is given; a re
 the definition's back link moves to the reference, both scrolling within the document rather than taking the viewer
 anywhere.
 
+**How the document looks.** The document is drawn in one of four styles, chosen in the Markdown style row of Settings'
+General section (see "Markdown style" in `docs/product/settings.md`):
+
+- **Tailwind** — **the default**: Tailwind Typography's prose styling.
+- **GitHub** — modelled on GitHub's own rendering of Markdown: a sans-serif face, the first two heading levels ruled
+  underneath, tables with a border round every cell and every other row tinted, inline code on a tint, and a quote set
+  off by a bar on its starting side, in muted text.
+- **Newsprint** — modelled on Typora's Newsprint theme: a serif reading face, the page at most 44 em wide in its own
+  text size and centred in the viewer, the first two heading levels centred, and a quote in italics.
+- **LaTeX** — modelled on latex.css: a Computer Modern-like serif face, paragraphs and list items justified and
+  hyphenated, the page at most 40 em wide and centred, and tables ruled above, below and under their header only, in
+  the manner of booktabs. Headings are not numbered.
+
+A face is used only when the system has it, falling back to a common serif or sans-serif face; nothing is fetched for
+it. Every style keeps the same reading area as the others: the background described in "What follows the choice" in
+`docs/product/appearance.md`, text — muted text included — and links that meet 4.5:1 against it in either appearance,
+links underlined, task boxes in the list's marker gutter, and the directions described below. Fenced code, diagrams
+and formulas keep their own rendering under every style, and are never justified, hyphenated or styled as the
+document's text. Changing the choice restyles a document that is already open at once.
+
+The choice is remembered **per client**, in that client's own browser storage, under the same rules as the appearance
+choice (see "Where the choice is stored" in `docs/product/appearance.md`): the daemon neither stores it nor carries it,
+so it does not travel between clients. Where nothing is stored, or what is stored names no style, the style is
+Tailwind.
+
 **Which direction the document reads.** Every block — each heading, paragraph, list, quote and table — is laid out in
 the direction of **its own text**, whichever direction the window reads in (see "Right-to-left layout" in
 `docs/product/window-layout.md`): the direction of the first strong directional character anywhere in that block's
