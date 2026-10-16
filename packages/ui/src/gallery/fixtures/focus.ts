@@ -126,7 +126,7 @@ const scrollingFocusState = {
       const session = sessionOf(`s-scroll-unbound-${i}`, console_.id, project.id, `Review search improvement ${i + 1}`, "idle", i === 0 ? { pinned: true } : {});
       return [session.id, session] as const;
     }),
-    // Nothing was ever said in it, so its menu offers Delete in place of Archive.
+    // Nothing was ever said in it, so its shortcut and menu offer Delete in place of Archive.
     ["s-scroll-unused", sessionOf("s-scroll-unused", console_.id, project.id, "Draft the release notes", "idle", { has_conversation: false })] as const,
     ...Array.from({ length: 6 }, (_, i) => {
       const session = sessionOf(`s-scroll-bound-${i}`, console_.id, project.id, `Investigate ranking result ${i + 1}`, "idle", { bound_to: hub1.id });
@@ -193,7 +193,7 @@ const hierarchyState = {
   projects: new Map([...state.projects!].map(([id, item]) => [id, id === project.id ? { ...item, pinned: true } : item])),
   sessions: new Map([
     ...[...state.sessions!].map(([id, session]) => [id, id === "s-3" || id === "s-3b" ? { ...session, pinned: true } : id === "s-2" ? { ...session, terminal_title: "Review search result accuracy and verify long session row titles scroll only while hovering their text" } : session] as const),
-    // Nothing was ever said in it, so its menu offers Delete in place of Archive.
+    // Nothing was ever said in it, so its shortcut and menu offer Delete in place of Archive.
     ["s-unused", sessionOf("s-unused", console_.id, project.id, "Draft the release notes", "idle", { has_conversation: false })] as const,
   ]),
 };
@@ -205,8 +205,9 @@ export const focusScenarios: Scenario[] = [
     category: "normal",
     title: "Project session hierarchy",
     state: hierarchyState,
+    sessionRecords: { "s-unused": "absent" },
     preferences: { sidebarConsole: console_.id },
-    description: "The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches connect each project session and its nested sessions; the final branch ends at the last child. Agent task titles and fallback session names appear together. Search API and its bound Add idempotency keys and unbound Write the migration and Profile the slow query are pinned. Binding dots and pins remain visible while action menus hide; hover or focus a row to compare the evenly spaced controls, then unpin a session to see the remaining controls close together. An Archive button precedes the menu only on a session that archives without a confirmation: an idle or interrupted one with no unarchived session bound to it or to one bound to it. Profile the slow query (its pin stays left of Archive) and Rework the retry loop have it; Write the migration and Compare ranking strategies (unarchived sessions are bound under them), the idle console sessions (which have bound sessions too), Add idempotency keys (working), Review search result accuracy (waiting) and Draft the release notes (unused, so its menu offers Delete) do not. Long session names scroll only while their text is hovered; hovering row icons or controls leaves them still.",
+    description: "The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches connect each project session and its nested sessions; the final branch ends at the last child. Agent task titles and fallback session names appear together. Search API and its bound Add idempotency keys and unbound Write the migration and Profile the slow query are pinned. Binding dots and pins remain visible while action menus hide; hover or focus a row to compare the evenly spaced controls, then unpin a session to see the remaining controls close together. An Archive button precedes the menu only on a session that archives without a confirmation: an idle or interrupted one with no unarchived session bound to it or to one bound to it. Profile the slow query (its pin stays left of Archive) and Rework the retry loop have it; Write the migration and Compare ranking strategies (unarchived sessions are bound under them), the idle console sessions (which have bound sessions too), Add idempotency keys (working) and Review search result accuracy (waiting) do not. Draft the release notes (unused) has a Delete shortcut immediately before its menu; its native records are verified absent, so it deletes immediately without confirmation. Long session names scroll only while their text is hovered; hovering row icons or controls leaves them still.",
   },
   {
     id: "focus-project",
@@ -214,8 +215,9 @@ export const focusScenarios: Scenario[] = [
     category: "normal",
     title: "Project focus",
     state: scrollingFocusState,
+    sessionRecords: { "s-scroll-unused": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    description: "Write the migration has one nested card: a rounded branch crosses the card gap and stops at that child’s centre, with no line below it or beside top-level cards. The branch mirrors in Arabic. Write the migration has recorded zero usage, so its usage value is hidden, as it is for sessions without an agent usage record. The switch beside the Sessions count starts off; hover or focus it for its Show all project sessions tooltip. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height, Archived pushes it away at the top; the preview hides child sessions and retains View all. Idle and interrupted cards show an Archive button beside the menu, the pinned Review search improvement 1 after its pin; Write the migration (an unarchived session is bound under it) and the unused Draft the release notes (its menu offers Delete) show none. Rework the result ranking and the working and waiting cards sit under console sessions, so they appear once the switch is on. Compare the selected session card and project header actions buttons at rest with muted glyphs, then hover or open each menu for the shared subtle tint.",
+    description: "Write the migration has one nested card: a rounded branch crosses the card gap and stops at that child’s centre, with no line below it or beside top-level cards. The branch mirrors in Arabic. Write the migration has recorded zero usage, so its usage value is hidden, as it is for sessions without an agent usage record. The switch beside the Sessions count starts off; hover or focus it for its Show all project sessions tooltip. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height, Archived pushes it away at the top; the preview hides child sessions and retains View all. Idle and interrupted cards show an Archive button beside the menu, the pinned Review search improvement 1 after its pin; Write the migration (an unarchived session is bound under it) has no shortcut; the unused Draft the release notes instead has a Delete shortcut immediately before its menu, deleting immediately without confirmation because its native records are verified absent. Rework the result ranking and the working and waiting cards sit under console sessions, so they appear once the switch is on. Compare the selected session card and project header actions buttons at rest with muted glyphs, then hover or open each menu for the shared subtle tint.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Plan the database migration", name: "Write the migration" }))),
     ],
@@ -280,7 +282,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project archive preview, exactly ten parents",
     state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The headings count zero live sessions and ten archived parents. All ten parents appear without View all. Compact archive rows omit dates and show a usage chip only for positive totals. Long preview titles scroll only while the pointer is over their text; icons and row controls do not start them. The Show all project sessions switch is absent even when its saved preference is on.",
+    description: "The headings count zero live sessions and ten archived parents. All ten parents appear without View all. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus a row to see its Delete shortcut immediately before the menu. Long preview titles scroll only while the pointer is over their text; icons and row controls do not start them. The Show all project sessions switch is absent even when its saved preference is on.",
   },
   {
     id: "focus-archived-session-menu",
@@ -289,7 +291,7 @@ export const focusScenarios: Scenario[] = [
     title: "Archived session actions",
     state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The archived row's menu offers Reopen and destructive Delete, separated by a divider. Reopen selects the session and moves it from Archived to Sessions.",
+    description: "A Delete shortcut appears immediately before each archived row’s actions menu and opens the existing confirmation. The menu offers Reopen and destructive Delete, separated by a divider. Reopen selects the session and moves it from Archived to Sessions.",
     steps: [(ui) => ui.press(ui.t("sidebar.session.actions", { title: previewLead.title }))],
   },
   {
@@ -299,7 +301,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project archive preview, eleven parents with children",
     state: archivePreviewEleven,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}` },
-    description: "The heading counts thirteen archived sessions: eleven parents and two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show a usage chip only for positive totals. Ten parent rows precede View all; children of the archived lead appear only in the full archive.",
+    description: "The heading counts thirteen archived sessions: eleven parents and two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus a row to see its Delete shortcut immediately before the menu. Ten parent rows precede View all; children of the archived lead appear only in the full archive.",
   },
   {
     id: "focus-console-archive-five",
@@ -308,7 +310,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console archive preview, exactly ten parents",
     state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The headings count zero live sessions and ten directly bound archived parents. All ten appear without View all. Compact archive rows omit dates and show a usage chip only for positive totals. Long preview titles scroll only while their text is hovered; icons and controls leave them still.",
+    description: "The headings count zero live sessions and ten directly bound archived parents. All ten appear without View all. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus a row to see its Delete shortcut immediately before the menu. Long preview titles scroll only while their text is hovered; icons and controls leave them still.",
   },
   {
     id: "focus-console-archive-overflow",
@@ -317,7 +319,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console archive preview, eleven parents with children",
     state: archivePreviewEleven,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The heading counts thirteen bound archived sessions, including two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show a usage chip only for positive totals. Only ten of eleven parent rows appear before View all; the full archive keeps children under their archived lead.",
+    description: "The heading counts thirteen bound archived sessions, including two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus a row to see its Delete shortcut immediately before the menu. Only ten of eleven parent rows appear before View all; the full archive keeps children under their archived lead.",
   },
   {
     id: "focus-project-empty",

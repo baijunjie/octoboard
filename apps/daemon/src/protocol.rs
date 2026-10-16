@@ -1345,12 +1345,20 @@ pub enum RequestBody {
         #[serde(default, deserialize_with = "present_option")]
         account: Option<Option<String>>,
     },
+    /// Fresh native-record presence for exactly the supplied sessions, aggregated across accounts.
+    InspectSessionRecords {
+        sessions: Vec<String>,
+    },
     /// Removes Octoboard's record of one session, archived or never used. A session that is not
     /// archived is deleted only while it has had no turn and nothing is bound to it or from it, and
     /// its process is stopped. The agent's own records of the session are moved to the Trash only
     /// when `trash_agent_records` is set.
     DeleteSession {
         session: String,
+        /// Requires a fresh absent-record inspection and the atomic unused-session delete,
+        /// including when the session is archived.
+        #[serde(default)]
+        only_if_unused_without_agent_records: bool,
         #[serde(default)]
         trash_agent_records: bool,
     },
@@ -1499,9 +1507,21 @@ pub enum RequestBody {
     Shutdown,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionRecordPresence {
+    Present,
+    Absent,
+    Unknown,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
+    SessionRecordsInspected {
+        id: Option<String>,
+        presence: SessionRecordPresence,
+    },
     Snapshot {
         hosts: Vec<Host>,
         consoles: Vec<Console>,

@@ -2,7 +2,7 @@ import type { Language } from "../i18n/languages";
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/ImportReview";
 import type { MacosPermissionsStatus } from "../platform";
-import type { Agent, AgentModel, DirEntry, GitStatus, MessageParams, ModelsUnavailable } from "../protocol";
+import type { Agent, AgentModel, DirEntry, GitStatus, MessageParams, ModelsUnavailable, SessionRecordsPresence } from "../protocol";
 import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
 import type { GroupTitle } from "./fixtures/groups";
 import type { FixtureGit } from "./fixtures/changeFixtures";
@@ -134,6 +134,10 @@ export interface Scenario {
   agentModels?: Partial<Record<Agent, { models: AgentModel[]; unavailable?: ModelsUnavailable } | "pending">>;
   /** A refused session launch, such as a shell environment that could not be read. */
   sessionOpenError?: FixtureError;
+  /** Native session-file inspection per session. Unlisted or missing sessions are unknown;
+   * has_conversation does not establish whether files exist. Aggregate presence is present if
+   * any inspected session has files, otherwise unknown if any cannot be established. */
+  sessionRecords?: Record<string, SessionRecordsPresence>;
   /** Per-session account-switch refusals or a request kept pending. Unlisted sessions switch
    * normally, updating their account and recorded configuration directory. */
   sessionAccountSwitches?: Record<string, FixtureError | "pending">;

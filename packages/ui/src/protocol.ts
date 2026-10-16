@@ -4,6 +4,9 @@
 // request field is named `id`: what a request acts on is named for its kind (`console`, `project`,
 // `session`), because the envelope's own `id` and the request's fields share one flat object.
 
+/** Unknown when the daemon cannot prove presence or absence of the sessions’ native files. */
+export type SessionRecordsPresence = "present" | "absent" | "unknown";
+
 export type Agent = "claude" | "codex" | "grok";
 export type Role = "console" | "project";
 export type Origin = "console" | "user";
@@ -778,8 +781,12 @@ export type RequestBody =
    * (no turn, bound to no owner, none bound to it), whose process is stopped; refused with
    * `session_not_deletable` otherwise, or while it is starting. The agent's own records of the
    * session (and of the archived sessions deleted with it) are moved to the Trash only with
-   * `trash_agent_records`; default false. */
-  | { type: "delete_session"; session: string; trash_agent_records?: boolean }
+   * `trash_agent_records`; default false. `only_if_unused_without_agent_records` rejects unless
+   * the session remains unused and a fresh native-file inspection proves absence; guarded deletion
+   * never moves native files to the Trash. */
+  | { type: "delete_session"; session: string; trash_agent_records?: boolean; only_if_unused_without_agent_records?: boolean }
+  /** Inspects the agent-native files of the entire supplied deletion scope; reads no transcripts. */
+  | { type: "inspect_session_records"; sessions: string[] }
   /** With `project`: every archived session of that project. With `console_session`: every
    * archived session under it (bound to it, or to an archived lead session bound to it). With
    * neither: every archived console session of the console. Naming both is refused. Each removal
@@ -917,6 +924,7 @@ export type RequestBody =
 export type Request = RequestBody & { id?: string };
 
 export type Event =
+  | { type: "session_records_inspected"; id?: string; presence: SessionRecordsPresence }
   | {
     type: "snapshot";
     hosts: Host[];

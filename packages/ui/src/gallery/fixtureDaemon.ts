@@ -4,7 +4,7 @@ import { daemonMessage } from "../daemonMessage";
 import { errorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
 import { currentLanguage } from "../i18n/language";
-import type { BrowseEntry, Console, DirEntry, Event, RequestBody, Session } from "../protocol";
+import type { BrowseEntry, Console, DirEntry, Event, RequestBody, Session, SessionRecordsPresence } from "../protocol";
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -77,7 +77,7 @@ function entriesUnder(files: FixtureFiles, dir: string): BrowseEntry[] {
  * A `Daemon` with no connection behind it, for the gallery: the store holds the scenario's state as
  * it is, requests are answered from the scenario (`list_dir`, `list_pages`, the browse requests) or
  * accepted and ignored (settings and trusted folders are updated, a console is added or saved, and
- * deleting a scope's archived sessions removes them), and the scenario's toasts are raised once the app is
+ * session-file inspections are answered explicitly and deleting sessions removes them), and the scenario's toasts are raised once the app is
  * listening.
  *
  * A project pane's Git-mode requests are answered by `fixtureGit.ts` instead, and the export and import
@@ -119,6 +119,15 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
   };
   const gitReply = createGitReplies(git, fail);
   const configurationReply = createConfigurationReplies(scenario.configuration, store.getState, fail);
+  const recordsPresence = (ids: string[]): SessionRecordsPresence => {
+    let presence: SessionRecordsPresence = "absent";
+    for (const id of ids) {
+      const item = store.getState().sessions.has(id) ? scenario.sessionRecords?.[id] ?? "unknown" : "unknown";
+      if (item === "present") return "present";
+      if (item === "unknown") presence = "unknown";
+    }
+    return presence;
+  };
   /** A browse request's path, or the daemon error it is answered with, worded as the store words one. */
   const browsed = (files: FixtureFiles, path: string): FixtureFile => {
     const file = files[path];
@@ -363,6 +372,32 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           // reads what was saved.
           const current = store.getState().consoles.get(body.console);
           if (current) store.setState((state) => ({ consoles: new Map(state.consoles).set(current.id, { ...current, ...consoleFields(body) }) }));
+          return { type: "ack" };
+        }
+        case "inspect_session_records":
+          return { type: "session_records_inspected", presence: recordsPresence(body.sessions) };
+        case "delete_session": {
+          const all = [...store.getState().sessions.values()];
+          const session = store.getState().sessions.get(body.session);
+          if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: "Unknown session" });
+          const unused = !session.has_conversation && !session.bound_to && !all.some((s) => s.bound_to === session.id);
+          if ((body.only_if_unused_without_agent_records && (!unused || recordsPresence([session.id]) !== "absent"))
+            || (session.status !== "archived" && !unused)) {
+            return fail({ code: "session_not_deletable", params: { session: session.id }, message: "Session is no longer unused or its agent records cannot be proved absent" });
+          }
+          const doomed = new Set([session.id]);
+          const visit = (owner: string) => {
+            for (const child of all.filter((s) => s.bound_to === owner && s.status === "archived")) {
+              if (doomed.has(child.id)) continue;
+              doomed.add(child.id);
+              visit(child.id);
+            }
+          };
+          if (session.status === "archived") visit(session.id);
+          store.setState((state) => ({
+            sessions: new Map([...state.sessions].filter(([id]) => !doomed.has(id))),
+            pages: new Map([...state.pages].filter(([id]) => !doomed.has(id))),
+          }));
           return { type: "ack" };
         }
         case "delete_archived_sessions": {

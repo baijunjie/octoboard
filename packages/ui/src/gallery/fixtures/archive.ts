@@ -238,8 +238,23 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Delete an archived lead session",
     state: archiveState,
+    sessionRecords: Object.fromEntries([...archiveState.sessions.keys()].map((id) => [id, id === underArchivedLead[0].id ? "present" as const : "absent" as const])),
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
-    description: "The confirmation lists both archived children with their agent icons and titles; hover the agent icons for account details. The unchecked option to move the agent's own session records to the Trash carries the hint that says the sessions deleted with it go too.",
+    description: "Native files exist for a child, so the confirmation keeps the Trash option. It lists both archived children with their agent icons and titles; hover the agent icons for account details. The unchecked option to move the agent's own session records to the Trash carries the hint that says the sessions deleted with it go too.",
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
+      (ui) => ui.press(ui.t("archive.delete", { title: archivedLead.title })),
+    ],
+  },
+  {
+    id: "archive-delete-bound-sessions-no-records",
+    group: GROUP,
+    category: "normal",
+    title: "Delete used archived sessions without native files",
+    state: archiveState,
+    sessionRecords: Object.fromEntries([...archiveState.sessions.keys()].map((id) => [id, "absent" as const])),
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
+    description: "The used archived lead still requires confirmation and lists its two archived children. No native files exist for any of them, so the Trash checkbox and hint are absent.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
       (ui) => ui.press(ui.t("archive.delete", { title: archivedLead.title })),
@@ -252,6 +267,7 @@ export const archiveScenarios: Scenario[] = [
     title: "Delete all archived console sessions",
     description: "The confirmation counts the archived console sessions and the archived session deleted along with them. Under it, the unchecked option to also move the agents' own session records to the Trash, with its hint.",
     state: deleteAllState,
+    sessionRecords: { "s-under-hub": "present" },
     steps: [
       (ui) => ui.press(ui.t("sidebar.console.actions", { name: console_.name })),
       (ui) => ui.press(ui.t("sidebar.archive.consoleSessions")),

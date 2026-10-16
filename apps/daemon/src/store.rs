@@ -1148,11 +1148,28 @@ impl Store {
     /// bound to no owner and has no session bound to it, whatever its status. Checked and deleted
     /// in one statement, so a turn that lands meanwhile wins.
     pub fn delete_session_if_unused(&self, id: &str) -> Result<bool> {
+        self.delete_unused(id, None)
+    }
+
+    pub fn delete_session_if_unused_matching(&self, expected: &Session) -> Result<bool> {
+        self.delete_unused(&expected.id, Some(expected))
+    }
+
+    fn delete_unused(&self, id: &str, expected: Option<&Session>) -> Result<bool> {
         let deleted = self.lock().execute(
             "DELETE FROM sessions
              WHERE id = ?1 AND has_conversation = 0 AND bound_to IS NULL
-               AND NOT EXISTS (SELECT 1 FROM sessions WHERE bound_to = ?1)",
-            params![id],
+               AND NOT EXISTS (SELECT 1 FROM sessions WHERE bound_to = ?1)
+               AND (?2 = 0 OR (agent = ?3 AND agent_session_id IS ?4
+                              AND config_dir IS ?5 AND account_id IS ?6))",
+            params![
+                id,
+                expected.is_some(),
+                expected.map(|session| enum_to_text(&session.agent)),
+                expected.and_then(|session| session.agent_session_id.as_deref()),
+                expected.and_then(|session| session.config_dir.as_deref()),
+                expected.and_then(|session| session.account_id.as_deref()),
+            ],
         )?;
         Ok(deleted > 0)
     }

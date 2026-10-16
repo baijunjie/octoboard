@@ -501,6 +501,13 @@ impl AppState {
         self.delete_where(id, |store| store.delete_session_if_unused(id))
     }
 
+    /// Deletes an unused session only if its native-record identity still matches the one inspected.
+    pub fn delete_if_unused_matching(&self, expected: &Session) -> Result<Deletion> {
+        self.delete_where(&expected.id, |store| {
+            store.delete_session_if_unused_matching(expected)
+        })
+    }
+
     fn delete_where(
         &self,
         id: &str,

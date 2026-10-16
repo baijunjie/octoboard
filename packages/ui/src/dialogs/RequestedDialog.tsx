@@ -1,6 +1,7 @@
 import { Alert } from "@heroui/react";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 
+import { useFocusHandoff } from "../components/useFocusHandoff";
 import { AgentIcon } from "../components/AgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { StatusIcon } from "../components/StatusIcon";
@@ -20,6 +21,7 @@ import { RenameDialog } from "./RenameDialog";
 import { SessionDialog } from "./SessionDialog";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";
 import { TrashOption } from "./TrashOption";
+import { useSessionRecords } from "./useSessionRecords";
 
 /** A warning callout for what a confirmation is about to take along, over the list of sessions when
  * there is one to show: each with its agent's icon and title, plus a status glyph for live sessions.
@@ -95,12 +97,23 @@ function DeleteProjectDialog({ project, running, onClose }: { project: Project; 
   );
 }
 
+/** Keeps focus inside the confirmation when a completed inspection removes its cleanup option. */
+function SessionRecordsTrashOption({ visible, ...props }: React.ComponentProps<typeof TrashOption> & { visible: boolean }): React.ReactElement {
+  const ref = useRef<HTMLDivElement>(null);
+  const handoff = useFocusHandoff(() => ref.current?.closest<HTMLElement>("[role=alertdialog]")?.focus());
+  return <div ref={ref} className="contents" {...handoff}>{visible && <TrashOption {...props} />}</div>;
+}
+
 /** The confirmation of a session's deletion, with the option of also moving the agent's own
  * records of it to the Trash. `withIt` are the archived sessions that go along. */
-function DeleteSessionDialog({ session, withIt, onClose }: { session: Session; withIt: Session[]; onClose: () => void }): React.ReactElement {
+function DeleteSessionDialog({ session, withIt, unused, onClose }: { session: Session; withIt: Session[]; unused: boolean; onClose: () => void }): React.ReactElement | null {
   const t = useT();
   const { request } = useDaemon();
   const [trash, setTrash] = useState(false);
+  const { pending, presence } = useSessionRecords([session.id, ...withIt.map((s) => s.id)], unused ? session.id : undefined, onClose);
+  const canTrash = presence !== "absent";
+  const moveRecords = canTrash && trash;
+  if (unused && pending) return null;
   return (
     <ConfirmDialog
       title={t("dialog.deleteSession.title", { title: isolate(sessionDisplayTitle(t, session)) })}
@@ -111,10 +124,11 @@ function DeleteSessionDialog({ session, withIt, onClose }: { session: Session; w
         </>
       }
       confirmLabel={t("common.delete")}
-      pendingLabel={trash ? t("dialog.removeProject.pendingTrash") : undefined}
+      pendingLabel={moveRecords ? t("dialog.removeProject.pendingTrash") : undefined}
       destructive
       extraControl={(busy) => (
-        <TrashOption
+        <SessionRecordsTrashOption
+          visible={canTrash}
           isSelected={trash}
           onChange={setTrash}
           isReadOnly={busy}
@@ -124,7 +138,7 @@ function DeleteSessionDialog({ session, withIt, onClose }: { session: Session; w
       )}
       onCancel={onClose}
       onConfirm={async () => {
-        await request({ type: "delete_session", session: session.id, trash_agent_records: trash });
+        await request({ type: "delete_session", session: session.id, trash_agent_records: moveRecords });
         onClose();
       }}
     />
@@ -136,15 +150,20 @@ function DeleteSessionDialog({ session, withIt, onClose }: { session: Session; w
 function DeleteArchivedDialog({
   dialog,
   withThem,
+  targets,
   onClose,
 }: {
   dialog: Extract<DialogRequest, { kind: "delete-archived" }>;
   withThem: number;
+  targets: Session[];
   onClose: () => void;
 }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
   const [trash, setTrash] = useState(false);
+  const { presence } = useSessionRecords(targets.map((s) => s.id), undefined, onClose);
+  const canTrash = presence !== "absent";
+  const moveRecords = canTrash && trash;
   return (
     <ConfirmDialog
       title={t("dialog.deleteArchived.title", { count: dialog.count })}
@@ -155,10 +174,11 @@ function DeleteArchivedDialog({
         </>
       }
       confirmLabel={t("dialog.deleteArchived.confirm")}
-      pendingLabel={trash ? t("dialog.removeProject.pendingTrash") : undefined}
+      pendingLabel={moveRecords ? t("dialog.removeProject.pendingTrash") : undefined}
       destructive
       extraControl={(busy) => (
-        <TrashOption
+        <SessionRecordsTrashOption
+          visible={canTrash}
           isSelected={trash}
           onChange={setTrash}
           isReadOnly={busy}
@@ -173,7 +193,7 @@ function DeleteArchivedDialog({
           console: dialog.console.id,
           project: dialog.project?.id,
           console_session: dialog.consoleSession?.id,
-          trash_agent_records: trash,
+          trash_agent_records: moveRecords,
         });
         onClose();
       }}
@@ -335,7 +355,9 @@ export function RequestedDialog({
     case "delete-session": {
       // An archived owner takes the archived sessions bound to it, and those bound to those, along.
       const withIt = boundArchivedSessions(Array.from(sessions.values()), dialog.session.id);
-      return <DeleteSessionDialog session={dialog.session} withIt={withIt} onClose={onClose} />;
+      const unused = !dialog.session.has_conversation && !dialog.session.bound_to
+        && !Array.from(sessions.values()).some((s) => s.bound_to === dialog.session.id);
+      return <DeleteSessionDialog session={dialog.session} withIt={withIt} unused={unused} onClose={onClose} />;
     }
     case "delete-archived": {
       // All of a console's archived console sessions take their archived bound sessions with them;
@@ -344,7 +366,14 @@ export function RequestedDialog({
         ? []
         : Array.from(sessions.values()).filter((s) => s.console_id === dialog.console.id && s.role === "console" && s.status === "archived");
       const withThem = consoleSessions.flatMap((owner) => boundArchivedSessions(Array.from(sessions.values()), owner.id)).length;
-      return <DeleteArchivedDialog dialog={dialog} withThem={withThem} onClose={onClose} />;
+      const all = Array.from(sessions.values());
+      const roots = dialog.project
+        ? all.filter((s) => s.project_id === dialog.project!.id && s.status === "archived")
+        : dialog.consoleSession
+          ? boundArchivedSessions(all, dialog.consoleSession.id)
+          : consoleSessions;
+      const targets = Array.from(new Map(roots.flatMap((s) => [s, ...boundArchivedSessions(all, s.id)]).map((s) => [s.id, s])).values());
+      return <DeleteArchivedDialog dialog={dialog} withThem={withThem} targets={targets} onClose={onClose} />;
     }
   }
 }

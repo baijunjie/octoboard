@@ -346,6 +346,7 @@ export const zhHans: Translation<"other"> = {
   "sidebar.session.rename": "重命名",
   "sidebar.session.archive": "归档",
   "sidebar.session.archiveItem": "归档会话 {title}",
+  "sidebar.session.deleteItem": "删除会话 {title}",
   "sidebar.session.delete": "删除",
   "sidebar.session.switchAccount": "切换账户",
   "sidebar.session.manageAccounts": "管理账户…",

@@ -24,9 +24,9 @@ view stays below both the heading and the fade. The other scrolling rules are in
 fades" and "Scrolling a surface from the keyboard" in `docs/product/scrolling-surfaces.md`.
 
 **Session cards**, in both: the status glyph with the status in words, the pin button when pinned (see "Pinning" in
-`docs/product/sidebar.md`), the session's action menu and, just before it while archiving would go through without a
-confirmation, the Archive button (both always shown; see "Session rows" in `docs/product/sidebar.md` for when the
-button is there and what it does), its title on one line, its agent's icon
+`docs/product/sidebar.md`), the session's action menu and, just before it, a Delete or Archive button
+(both always shown when available; see "Session rows" in `docs/product/sidebar.md` for when the
+shortcut is there and what it does), its title on one line, its agent's icon
 and name, and how long ago it was created at the trailing end of the agent line. Resuming or
 reopening does not reset that time. When native token usage has a positive total, it appears immediately before
 the creation time on that same agent line and updates while the session runs (see "Native session usage" in
@@ -55,8 +55,10 @@ agent's icon and its title on one compact line, with native token usage at the t
 "Native session usage" in `docs/product/session-usage.md`). These preview rows show no creation or archive time.
 The heading counts every archived session in the view's scope, including children omitted from the preview. Clicking a
 row selects it while leaving it archived. Its action menu offers **Reopen**, which selects and resumes the session,
-and after a separator **Delete** (which asks for confirmation; see "Deleting archived sessions" in
-`docs/product/deleting-sessions.md`). Reopening follows "Archiving, interruption and resuming" in `docs/product/sessions.md`.
+and after a separator **Delete**. A Delete button immediately before the action-menu button takes the same deletion
+action (see "Deleting archived sessions" in `docs/product/deleting-sessions.md` for the confirmation rules). Both
+controls show with the row's other controls as described in "Rows, names and keyboard focus" in
+`docs/product/sidebar.md`. Reopening follows "Archiving, interruption and resuming" in `docs/product/sessions.md`.
 Whenever any archived session is omitted — a child or a parent beyond the first ten — **View all** follows the
 preview as a row with the same alignment, hover feedback and keyboard focus treatment as the session rows; it
 opens the archive view and carries no count. With only archived children, the section shows its count and View all

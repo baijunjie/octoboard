@@ -648,7 +648,7 @@ function ArchivedRow({
       </RowLabel>
       {hasVisibleUsage(session.usage) && <span id={metadataId}><SessionUsageLabel usage={session.usage} /></span>}
       <RowControls>
-        <ActionMenu label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, session)) })} items={sessionMenu(t, handlers, session, accounts)} contextTargetRef={rowRef} />
+        <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={false} rowRef={rowRef} />
       </RowControls>
     </TreeRow>
   );

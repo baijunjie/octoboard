@@ -1,4 +1,4 @@
-import { Archive } from "lucide-react";
+import { Archive, Trash2 } from "lucide-react";
 import React, { type RefObject } from "react";
 
 import { ActionMenu } from "../components/ActionMenu";
@@ -13,12 +13,10 @@ import { archiveNeedsConfirmation } from "./order";
 import { RowIconButton } from "./rows";
 import type { SidebarHandlers } from "./types";
 
-/** A session row's or card's own controls: its action menu, and before it an Archive shortcut shown
- * only while archiving would go through at once — a session at its prompt or with no process and
- * nothing unarchived bound under it — and the menu offers Archive rather than Delete. A session the
- * app is resuming still asks first when it is pressed. The shortcut disappears while it holds keyboard
- * focus when the session starts working or gets a session bound to it, and focus then moves to the row
- * (`rowRef`); when pressing it archives the session, the row itself leaves. */
+/** A session row's or card's controls: its action menu, and before it a Delete shortcut when
+ * deletion is offered, otherwise Archive only while archiving needs no confirmation. Deleting
+ * checks whether confirmation or an option to move the agent's records to the Trash is needed. When a shortcut
+ * disappears while holding keyboard focus, focus moves to the row (`rowRef`). */
 export function SessionActions({
   handlers,
   session,
@@ -36,15 +34,18 @@ export function SessionActions({
   const atOnce = useDaemonStore((s) => !archiveNeedsConfirmation(s.sessions.values(), session));
   const handoff = useFocusHandoff(() => rowRef.current?.focus());
   const title = sessionDisplayTitle(t, session);
+  const deletable = offersDelete(session, hasBoundSessions);
   return (
     <>
-      {atOnce && !offersDelete(session, hasBoundSessions) && (
+      {(deletable || atOnce) && (
         <div className="contents" {...handoff}>
           <RowIconButton
-            icon={Archive}
-            label={t("sidebar.session.archive")}
-            ariaLabel={t("sidebar.session.archiveItem", { title: isolate(title) })}
-            onPress={() => handlers.onArchiveSession(session)}
+            icon={deletable ? Trash2 : Archive}
+            label={t(deletable ? "sidebar.session.delete" : "sidebar.session.archive")}
+            ariaLabel={t(deletable ? "sidebar.session.deleteItem" : "sidebar.session.archiveItem", { title: isolate(title) })}
+            onPress={() => deletable
+              ? handlers.onOpenDialog({ kind: "delete-session", session })
+              : handlers.onArchiveSession(session)}
           />
         </div>
       )}

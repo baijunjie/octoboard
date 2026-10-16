@@ -7,8 +7,9 @@ interruption and resuming" and "Archived sessions" in `docs/product/sessions.md`
 ## Deleting archived sessions
 
 An archived session can be deleted: one at a time, or at once every archived session of a project, every
-archived session under a console session, or every archived console session of a console. The user is asked to
-confirm either way.
+archived session under a console session, or every archived console session of a console. Deleting all at once always
+asks for confirmation. Deleting one also asks, except for an unused session whose agent records are proved absent
+(see "Deleting an unused session" below); a used session still asks even when its agent records are absent.
 
 **Deleting an archived owner deletes the archived sessions bound to it, at both levels**: an archived lead session
 among them takes its own archived sessions along, so deleting an archived console session or an archived lead session
@@ -39,18 +40,26 @@ Removing a project or deleting a console also deletes its archived sessions alon
 
 A session that has **never been used** is deleted rather than archived: its action menu offers **Delete** in place of
 **Archive** — on its sidebar row, on its card in a focus mode and, for a console session, in its focus mode's header.
+Its row and card also offer a Delete shortcut (see "Session rows" in `docs/product/sidebar.md`).
 A session is unused, whatever its status, while all of these hold:
 
 - **It has no conversation yet.** The first prompt its agent reports as submitted makes it used for good, whether the
   user typed it or Octoboard wrote it in; a session opened to resume a conversation is used from the moment it is
   opened (see "Resuming a conversation started outside Octoboard" in `docs/product/sessions.md`).
-- **It is bound to no owner.** A session another session started, or one opened to report to a console session, keeps
-  Archive even before its first prompt lands, since it reports to that owner.
-- **No session is bound to it.** An owner with any session under it, in any status, keeps Archive.
+- **It is bound to no owner.** A live session another session started, or one opened to report to a console session,
+  keeps Archive even before its first prompt lands, since it reports to that owner.
+- **No session is bound to it.** A live owner with any session under it, in any status, keeps Archive.
 
-Deleting one asks for the same confirmation as deleting an archived session, and removes the session's record exactly
-as described in "Deleting archived sessions" above. Its process is stopped, and nothing is left in the archive. A trust
-confirmation or console-session request of the session's that is still waiting is dropped with it.
+**Deleting first checks for the agent's own records**, including when the unused session is archived. While the check
+is pending, no confirmation is shown. When their absence is proved, deletion goes through without confirmation and
+without moving any agent records to the Trash. The session is checked again at deletion: it must still be the same
+unused session and its agent records must still be proved absent. If that guarded deletion is refused, the records
+are checked again and a confirmation is offered. A check that finds records or cannot prove their absence also
+offers confirmation (see "Moving the agent's own records to the Trash" below).
+
+Deleting removes the session's record as described in "Deleting archived sessions" above. Its process is stopped,
+and nothing is left in the archive. A trust confirmation or console-session request of the session's that is still
+waiting is dropped with it.
 
 - The check is made at the moment of the delete: a session that has become used by then — a prompt submitted at the
   same moment wins — is refused as in "Deleting archived sessions" above, and keeps its record and its process. So is a
@@ -62,16 +71,21 @@ confirmation or console-session request of the session's that is still waiting i
 
 ## Moving the agent's own records to the Trash
 
-Every confirmation of a deletion — of one session, archived or unused, and of all archived sessions at once — has an
-**unchecked by default** checkbox to also move the agent's own session records to the Trash. Its hint says that the
+For a deletion, Octoboard checks the agent's own files across the accounts described below for **every
+session the deletion removes**, including archived descendants. The result is **present** when any record is found,
+**absent** only when the whole scope is proved to have no records, and **unknown** when that cannot be established.
+A missing or invalid agent session ID, an account location that cannot be determined, an unreadable location or a
+symbolic link can leave the result unknown. Having no conversation does not itself prove that no files exist.
+
+The confirmation — for one session or all archived sessions at once — hides its cleanup option when the result is
+absent. Otherwise it offers an **unchecked by default** checkbox to also move the agent's own session records to the
+Trash, including while the check is pending or its result is unknown. Its hint says that the
 agent's transcript goes, wherever this machine keeps it, that the session can then no longer be resumed in the agent
 itself, and that it can be recovered from the Trash; when archived sessions are deleted along, the hint covers their
 transcripts too. Unticked, only Octoboard's own record goes. Either way the confirmation's message says that the
 project's files are kept. While a deletion with the option ticked runs, the button says it is moving to the Trash,
 and the confirmation stays open until the move has finished; while any deletion runs, the option cannot be changed.
 
-- **It covers every session the deletion removes**: the session itself, the archived sessions deleted with an archived
-  owner, and every session a "delete all" removes.
 - **The records are moved to the system Trash, never deleted outright**, after the sessions themselves are deleted.
   For each agent they are:
 
@@ -91,7 +105,7 @@ and the confirmation stays open until the move has finished; while any deletion 
   symbolically linked directory is left, and nothing else in the account's directory is touched.
 - **A record another remaining session still refers to is left**: when a session that is not deleted runs the same
   agent on the same agent conversation, that conversation's records are not moved.
-- A session with no conversation on the agent's side has nothing to move, and a record that is missing is skipped.
+- A record that is missing is skipped.
 - **The deletion succeeds whatever happens to the records.** A record that cannot be moved stays where it is, and the
   failure is only logged; the sessions are deleted all the same.
 - An unused session's process is stopped by the deletion; if it writes to its transcript once more after the move, a

@@ -71,7 +71,11 @@ pub fn on_hook(state: &AppState, id: &str, payload: &Value) {
 
 /// Every record of one agent in one account, by agent session id, listed once and kept for as long
 /// as the `Locator` lives.
-type Index = HashMap<String, Vec<PathBuf>>;
+#[derive(Default)]
+struct Index {
+    records: HashMap<String, Vec<PathBuf>>,
+    complete: bool,
+}
 
 /// Resolves accounts' directories and lists their records. The login-shell snapshot that says where
 /// a default account lives is taken only when something asks for one, and an unknown location is
@@ -113,7 +117,7 @@ impl Locator {
 
     /// The newest record of `agent_id` in the account at `root`.
     pub fn newest(&mut self, agent: Agent, root: &Path, agent_id: &str) -> Option<PathBuf> {
-        let paths = self.index(agent, root).get(agent_id)?;
+        let paths = self.index(agent, root).records.get(agent_id)?;
         let mut newest: Option<&PathBuf> = None;
         for path in paths {
             if newest.is_none_or(|old| modified(path) > modified(old)) {
@@ -135,23 +139,46 @@ fn records_dir(agent: Agent, root: &Path) -> PathBuf {
 /// Index names once per account per pass; never read other sessions' contents or follow links.
 fn index_records(agent: Agent, root: &Path) -> Index {
     fn walk(agent: Agent, dir: &Path, depth: usize, out: &mut Index) {
-        if depth == 0 {
-            return;
+        match std::fs::symlink_metadata(dir) {
+            Ok(meta) if meta.file_type().is_dir() => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return,
+            _ => {
+                out.complete = false;
+                return;
+            }
         }
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return;
+        let entries = match std::fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(_) => {
+                out.complete = false;
+                return;
+            }
         };
-        for entry in entries.flatten() {
-            let Ok(kind) = entry.file_type() else {
+        for entry in entries {
+            let Ok(entry) = entry else {
+                out.complete = false;
                 continue;
             };
+            let Ok(kind) = entry.file_type() else {
+                out.complete = false;
+                continue;
+            };
+            if kind.is_symlink() {
+                out.complete = false;
+                continue;
+            }
             let path = entry.path();
             let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
+                out.complete = false;
                 continue;
             };
             let id = match agent {
                 Agent::Claude if kind.is_file() && depth == 1 => {
                     name.strip_suffix(".jsonl").map(str::to_owned)
+                }
+                // A subagent directory may survive after the main transcript was removed.
+                Agent::Claude if kind.is_dir() && depth == 1 && plausible_id(&name) => {
+                    Some(name.clone())
                 }
                 Agent::Codex if kind.is_file() && name.starts_with("rollout-") => name
                     .strip_suffix(".jsonl")
@@ -162,22 +189,31 @@ fn index_records(agent: Agent, root: &Path) -> Index {
                 _ => None,
             };
             if let Some(id) = id {
-                let path = if agent == Agent::Grok {
-                    path.join("usage.json")
-                } else {
-                    path
+                let path = match agent {
+                    Agent::Grok => path.join("usage.json"),
+                    Agent::Claude if kind.is_dir() => path.with_file_name(format!("{id}.jsonl")),
+                    _ => path,
                 };
-                out.entry(id).or_default().push(path);
-            } else if kind.is_dir() {
+                let records = out.records.entry(id).or_default();
+                if !records.contains(&path) {
+                    records.push(path);
+                }
+            } else if kind.is_dir() && depth > 1 {
                 walk(agent, &path, depth - 1, out);
             }
         }
     }
-    let mut out = HashMap::new();
+    let mut out = Index {
+        complete: true,
+        ..Index::default()
+    };
     let depth = match agent {
         Agent::Claude | Agent::Grok => 2,
         Agent::Codex => 6,
     };
+    if std::fs::symlink_metadata(root).is_ok_and(|meta| meta.file_type().is_symlink()) {
+        out.complete = false;
+    }
     walk(agent, &records_dir(agent, root), depth, &mut out);
     out
 }
@@ -211,24 +247,14 @@ pub fn record_paths(
         return Vec::new();
     }
     let agent = session.agent;
-    let mut candidates = vec![locator.root(agent, session.config_dir.as_deref())];
-    for account in accounts.iter().filter(|account| account.agent == agent) {
-        candidates.push(locator.root(agent, Some(&account.config_dir)));
-    }
-    candidates.push(locator.root(agent, None));
-    let mut roots: Vec<PathBuf> = Vec::new();
-    for root in candidates.into_iter().flatten() {
-        let root = lexically_normalise(&root);
-        if root.is_absolute() && !roots.contains(&root) {
-            roots.push(root);
-        }
-    }
+    let (roots, _) = account_roots(locator, accounts, session);
     // Each record with the records directory it was found under.
     let mut records: Vec<(PathBuf, PathBuf)> = Vec::new();
     for root in &roots {
         let dir = records_dir(agent, root);
         for record in locator
             .index(agent, root)
+            .records
             .get(agent_id)
             .into_iter()
             .flatten()
@@ -258,6 +284,68 @@ pub fn record_paths(
         }
     }
     paths
+}
+
+fn account_roots(
+    locator: &Locator,
+    accounts: &[Account],
+    session: &Session,
+) -> (Vec<PathBuf>, bool) {
+    let agent = session.agent;
+    let mut candidates = vec![locator.root(agent, session.config_dir.as_deref())];
+    for account in accounts.iter().filter(|account| account.agent == agent) {
+        candidates.push(locator.root(agent, Some(&account.config_dir)));
+    }
+    candidates.push(locator.root(agent, None));
+    let mut roots: Vec<PathBuf> = Vec::new();
+    let mut complete = true;
+    for root in candidates {
+        let Some(root) = root else {
+            complete = false;
+            continue;
+        };
+        let root = lexically_normalise(&root);
+        if !root.is_absolute() {
+            complete = false;
+        } else if !roots.contains(&root) {
+            roots.push(root);
+        }
+    }
+    (roots, complete)
+}
+
+/// Whether all known account locations can prove the absence of this session's native records.
+/// Missing ids and unreadable or linked directories cannot establish absence.
+pub fn presence(
+    hints: &Hints,
+    locator: &mut Locator,
+    accounts: &[Account],
+    session: &Session,
+) -> crate::protocol::SessionRecordPresence {
+    use crate::protocol::SessionRecordPresence::{Absent, Present, Unknown};
+    if !session
+        .agent_session_id
+        .as_deref()
+        .is_some_and(plausible_id)
+    {
+        return Unknown;
+    }
+    let (roots, mut complete) = account_roots(locator, accounts, session);
+    for root in &roots {
+        complete &= locator.index(session.agent, root).complete;
+    }
+    for path in record_paths(hints, locator, accounts, session) {
+        match std::fs::symlink_metadata(&path) {
+            Ok(meta) if meta.file_type().is_file() || meta.file_type().is_dir() => return Present,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            _ => complete = false,
+        }
+    }
+    if complete {
+        Absent
+    } else {
+        Unknown
+    }
 }
 
 /// Whether `id` is a canonical UUID, the shape of every agent's session ids.
@@ -345,6 +433,79 @@ mod tests {
     fn touch(path: &Path) {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, "{}\n").unwrap();
+    }
+
+    #[test]
+    fn native_presence_requires_a_complete_scan_and_counts_orphan_directories() {
+        use crate::protocol::SessionRecordPresence::{Absent, Present, Unknown};
+        let dir = crate::test_support::ScratchDir::new("agent-records-presence");
+        let account = dir.join("account");
+        let shell = || {
+            HashMap::from([(
+                "HOME".to_owned(),
+                dir.join("home").to_string_lossy().into_owned(),
+            )])
+        };
+        let hints = Hints::default();
+        for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+            let mut native = session(agent, CLAUDE_ID, Some(&account));
+            assert_eq!(
+                presence(&hints, &mut Locator::with_shell(shell()), &[], &native),
+                Absent
+            );
+            native.agent_session_id = None;
+            assert_eq!(
+                presence(&hints, &mut Locator::with_shell(shell()), &[], &native),
+                Unknown
+            );
+            native.agent_session_id = Some("invalid".to_owned());
+            assert_eq!(
+                presence(&hints, &mut Locator::with_shell(shell()), &[], &native),
+                Unknown
+            );
+        }
+        let claude = session(Agent::Claude, CLAUDE_ID, Some(&account));
+        let orphan = account.join("projects/work").join(CLAUDE_ID);
+        std::fs::create_dir_all(orphan.join("subagents")).unwrap();
+        assert_eq!(
+            presence(&hints, &mut Locator::with_shell(shell()), &[], &claude),
+            Present
+        );
+        let grok = session(Agent::Grok, CLAUDE_ID, Some(&account));
+        std::fs::create_dir_all(account.join("sessions/work").join(CLAUDE_ID)).unwrap();
+        assert_eq!(
+            presence(&hints, &mut Locator::with_shell(shell()), &[], &grok),
+            Present
+        );
+
+        std::fs::remove_dir_all(&orphan).unwrap();
+        std::os::unix::fs::symlink(dir.join("elsewhere"), account.join("projects/linked")).unwrap();
+        assert_eq!(
+            presence(&hints, &mut Locator::with_shell(shell()), &[], &claude),
+            Unknown
+        );
+        touch(
+            &account
+                .join("projects/work")
+                .join(format!("{CLAUDE_ID}.jsonl")),
+        );
+        assert_eq!(
+            presence(&hints, &mut Locator::with_shell(shell()), &[], &claude),
+            Present
+        );
+        std::fs::remove_file(
+            account
+                .join("projects/work")
+                .join(format!("{CLAUDE_ID}.jsonl")),
+        )
+        .unwrap();
+        std::fs::remove_file(account.join("projects/linked")).unwrap();
+        std::fs::remove_dir_all(account.join("projects")).unwrap();
+        touch(&account.join("projects"));
+        assert_eq!(
+            presence(&hints, &mut Locator::with_shell(shell()), &[], &claude),
+            Unknown
+        );
     }
 
     /// Where each agent keeps a session's records, and what of them is named: Claude's transcript

@@ -326,3 +326,38 @@ describe("the fixture daemon's console saving", () => {
     expect(d.store.getState().consoles.get(owner.id)).toMatchObject({ console_session_prompt: null, codex_console_session_model: null });
   });
 });
+
+describe("the fixture daemon's native session records", () => {
+  const unused = sessionOf("unused", "c", "p", "Unused", "idle", { has_conversation: false });
+  const owner = sessionOf("owner", "c", "p", "Used archived lead", "archived");
+  const child = sessionOf("child", "c", "p", "Archived child", "archived", { bound_to: owner.id });
+  const live = sessionOf("live", "c", "p", "Live child", "idle", { bound_to: owner.id });
+  const scenario = { id: "records", group: "Sidebar sessions" as const, category: "normal" as const, title: "", state: snapshotState({ sessions: [unused, owner, child, live] }) };
+
+  it("keeps absence explicit and aggregates child files ahead of unknown or absent records", async () => {
+    const daemon = createFixtureDaemon({ ...scenario, sessionRecords: { owner: "absent", child: "present" } });
+    await expect(daemon.request({ type: "inspect_session_records", sessions: [unused.id] })).resolves.toMatchObject({ presence: "unknown" });
+    await expect(daemon.request({ type: "inspect_session_records", sessions: [owner.id] })).resolves.toMatchObject({ presence: "absent" });
+    await expect(daemon.request({ type: "inspect_session_records", sessions: [owner.id, "missing"] })).resolves.toMatchObject({ presence: "unknown" });
+    await expect(daemon.request({ type: "inspect_session_records", sessions: [owner.id, child.id, "missing"] })).resolves.toMatchObject({ presence: "present" });
+  });
+
+  it.each(["present", "unknown"] as const)("refuses guarded deletion with %s files", async (presence) => {
+    const daemon = createFixtureDaemon({ ...scenario, sessionRecords: { unused: presence } });
+    await expect(daemon.request({ type: "delete_session", session: unused.id, only_if_unused_without_agent_records: true })).rejects.toMatchObject({ code: "session_not_deletable" });
+    expect(daemon.store.getState().sessions.has(unused.id)).toBe(true);
+  });
+
+  it("removes an unused session with proven absence but refuses the guard for used sessions", async () => {
+    const daemon = createFixtureDaemon({ ...scenario, sessionRecords: { unused: "absent", owner: "absent" } });
+    await daemon.request({ type: "delete_session", session: unused.id, only_if_unused_without_agent_records: true });
+    expect(daemon.store.getState().sessions.has(unused.id)).toBe(false);
+    await expect(daemon.request({ type: "delete_session", session: owner.id, only_if_unused_without_agent_records: true })).rejects.toMatchObject({ code: "session_not_deletable" });
+  });
+
+  it("takes archived children with a confirmed archived lead and preserves live children", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await daemon.request({ type: "delete_session", session: owner.id });
+    expect([...daemon.store.getState().sessions.keys()]).toEqual([unused.id, live.id]);
+  });
+});

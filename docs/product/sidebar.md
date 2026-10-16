@@ -387,19 +387,23 @@ action menu offers:
   archive is refused, with the sessions named, while any session under it has a process running. A project session that
   has started sessions is archived under the same rule, with the same confirmation while any of them is unarchived.
 - **Delete**, in place of Archive for a session that has never been used — no turn yet, bound to no owner and with no
-  session bound to it; it asks for confirmation, then stops the session and deletes it outright, leaving nothing in the
-  archive (see "Deleting an unused session" in `docs/product/deleting-sessions.md`).
+  session bound to it; it stops the session and deletes it outright, leaving nothing in the archive. The record check
+  and when confirmation is needed are described in "Deleting an unused session" in `docs/product/deleting-sessions.md`.
 
-**The Archive button.** Just before its action-menu button, a session row — a console session's included — carries an
-Archive button, a one-click shortcut for the menu's **Archive**, while archiving would go through without a
-confirmation and the menu offers **Archive** rather than **Delete**: the session is at its prompt or interrupted, no
-unarchived session is bound to it or to a session bound to it, and it has been used. A pinned session's pin button
-stays before it. Pressing it does what the menu's **Archive** does — a session still being resumed asks for
-confirmation first there too — and when the row leaves with keyboard focus, focus goes to the terminal. A mouse press
-neither selects the row nor moves keyboard focus. Its tooltip is "Archive", while the name assistive technology
-announces for it also names the session ("Archive session …"). It shows with the row's other controls (see "Rows,
-names and keyboard focus" below). When the conditions stop holding — the session starts working or raises a hand, or
-a session becomes bound to it — the button goes away; when it held keyboard focus, focus goes to the row.
+**The Delete or Archive button.** Just before its action-menu button, a session row — a console session's included —
+carries a **Delete** button whenever its menu offers Delete. Pressing it takes the same deletion action as the menu
+(see "Deleting an unused session" and "Deleting archived sessions" in `docs/product/deleting-sessions.md`). Otherwise
+it carries an Archive button, a one-click shortcut for the menu's **Archive**, while archiving would go through without a
+confirmation: the session is at its prompt or interrupted, no unarchived session is bound to it or to a session
+bound to it, and it has been used. Pressing Archive does what the menu's **Archive** does — a session still being
+resumed asks for confirmation first there too — and when the row leaves with keyboard focus, focus goes to the terminal.
+When the Archive conditions stop holding — the session starts working or raises a hand, or a session becomes bound
+to it — the button goes away.
+
+A pinned session's pin button stays before the shortcut. A mouse press on either shortcut neither selects the row
+nor moves keyboard focus. Its tooltip is "Delete" or "Archive", while the name assistive technology announces for it
+also names the session ("Delete session …" or "Archive session …"). It shows with the row's other controls (see "Rows,
+names and keyboard focus" below). When a shortcut goes away while holding keyboard focus, focus goes to the row.
 
 ## The binding badge
 
@@ -464,7 +468,7 @@ project session has no colour to choose.
   marquee (see "Names too long for their space" in `docs/product/labels-and-tooltips.md`). When the sidebar's
   content is taller than the sidebar it scrolls, fading at the end that has more beyond it (see "The edge that hides
   content fades" in `docs/product/scrolling-surfaces.md`).
-- A row's **+**, Archive (see "Session rows" above) and action-menu buttons show while the row is hovered, holds keyboard focus, is the selected session,
+- A row's **+**, Delete or Archive (see "Session rows" above) and action-menu buttons show while the row is hovered, holds keyboard focus, is the selected session,
   or has its menu open; they are still reached with Tab when hidden, and show once one of them has focus. They fade
   and open out as they appear, and fade and close up as they go, briefly — at once where the system asks for reduced
   motion.
@@ -630,7 +634,8 @@ scope and nesting are described below.
   card that offers Reopen, just as when it is selected from a preview. Selecting it does not reopen it. Pressing the
   row's Reopen or Delete does not select the row. The row of the selected session is marked as selected.
 - **Reopen** resumes the session and selects it, which closes the view (see "Selecting a session" above).
-- **Delete** asks for confirmation, then deletes that session — for an archived owner, listing the archived sessions
+- **Delete** deletes that session, with the confirmation rules in "Deleting archived sessions" in
+  `docs/product/deleting-sessions.md` — for an archived owner, listing the archived sessions
   under it that are deleted with it; **Delete all** asks for confirmation, naming how many, then deletes every archived
   session in the view's scope — for a console session's archive, the archived sessions under it and not the console
   session itself; for a console's archived console sessions it also says how many archived sessions under them are
