@@ -2,6 +2,7 @@ import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
 import { accountsByAgent, AGENT_LABEL } from "../agents";
+import { InlineChip } from "../components/InlineChip";
 import { AgentIcon } from "../components/AgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { PATH_VAR_PARAMS } from "../components/literalParams";
@@ -107,7 +108,7 @@ export function AgentAccountsSection(): React.ReactElement {
       {editing !== undefined && <AccountDialog account={editing ?? undefined} onClose={() => setEditing(undefined)} />}
       {removing && (
         <ConfirmDialog
-          title={t("settings.accounts.removeTitle", { name: isolate(removing.name) })}
+          title={<Message id="settings.accounts.removeTitle" params={{ name: <InlineChip dir="auto" wrap size="inherit">{removing.name}</InlineChip> }} />}
           message={t("settings.accounts.removeMessage", { agent: AGENT_LABEL[removing.agent] })}
           confirmLabel={t("common.remove")}
           destructive

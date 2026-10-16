@@ -3,8 +3,8 @@ import React from "react";
 import { AGENT_LABEL } from "../agents";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
-import { isolate } from "../i18n/isolate";
-import { useT } from "../i18n/react";
+import { InlineChip } from "../components/InlineChip";
+import { Message, useT } from "../i18n/react";
 import { SESSION_REQUEST_ANSWERED, SESSION_REQUEST_NOT_WAITING } from "../protocol";
 import { useDaemon, useDaemonStore, type SessionRequest } from "../store";
 import type { ConfirmDialogProps } from "./ConfirmDialog";
@@ -18,7 +18,6 @@ import type { ConfirmDialogProps } from "./ConfirmDialog";
  * user's own, and a long one may have no break opportunity, so the sentence wraps anywhere. Names
  * the store does not know stand in as their ids. */
 function SessionRequestMessage({ request }: { request: SessionRequest }): React.ReactElement {
-  const t = useT();
   const requesting = useDaemonStore((s) => s.sessions.get(request.session));
   const consoles = useDaemonStore((s) => s.consoles);
   const projects = useDaemonStore((s) => s.projects);
@@ -26,29 +25,29 @@ function SessionRequestMessage({ request }: { request: SessionRequest }): React.
   // be asked for in any console.
   const console_ = consoles.get(request.console)?.name ?? request.console;
   const project = request.project ? (projects.get(request.project)?.name ?? request.project) : "";
-  const session = isolate(requesting?.title ?? request.session);
-  let requester: string;
-  if (!requesting) requester = t("dialog.sessionRequest.requester.unknown", { session });
+  const session = <InlineChip dir="auto" wrap size="inherit">{requesting?.title ?? request.session}</InlineChip>;
+  let requester: React.ReactElement;
+  if (!requesting) requester = <Message id="dialog.sessionRequest.requester.unknown" params={{ session }} />;
   else {
     const elsewhere = requesting.console_id !== request.console;
-    const own = { session, console: isolate(consoles.get(requesting.console_id)?.name ?? requesting.console_id) };
+    const own = { session, console: <InlineChip dir="auto" wrap size="inherit">{consoles.get(requesting.console_id)?.name ?? requesting.console_id}</InlineChip> };
     if (requesting.project_id) {
-      const project = isolate(projects.get(requesting.project_id)?.name ?? requesting.project_id);
+      const project = <InlineChip dir="auto" wrap size="inherit">{projects.get(requesting.project_id)?.name ?? requesting.project_id}</InlineChip>;
       requester = elsewhere
-        ? t("dialog.sessionRequest.requester.projectElsewhere", { ...own, project })
-        : t("dialog.sessionRequest.requester.project", { session, project });
+        ? <Message id="dialog.sessionRequest.requester.projectElsewhere" params={{ ...own, project }} />
+        : <Message id="dialog.sessionRequest.requester.project" params={{ session, project }} />;
     } else {
       requester = elsewhere
-        ? t("dialog.sessionRequest.requester.consoleElsewhere", own)
-        : t("dialog.sessionRequest.requester.console", { session });
+        ? <Message id="dialog.sessionRequest.requester.consoleElsewhere" params={own} />
+        : <Message id="dialog.sessionRequest.requester.console" params={{ session }} />;
     }
   }
-  const params = { requester, console: isolate(console_), agent: AGENT_LABEL[request.agent] };
+  const params = { requester, console: <InlineChip dir="auto" wrap size="inherit">{console_}</InlineChip>, agent: AGENT_LABEL[request.agent] };
   return (
     <p className="[overflow-wrap:anywhere]">
       {request.role === "console"
-        ? t("dialog.sessionRequest.question.console", params)
-        : t("dialog.sessionRequest.question.project", { ...params, project: isolate(project) })}
+        ? <Message id="dialog.sessionRequest.question.console" params={params} />
+        : <Message id="dialog.sessionRequest.question.project" params={{ ...params, project: <InlineChip dir="auto" wrap size="inherit">{project}</InlineChip> }} />}
     </p>
   );
 }

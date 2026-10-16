@@ -189,24 +189,25 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
   );
 }
 
-function showToast({ kind, message, session, daemonError }: ToastRequest, location: string | undefined): void {
+function showToast({ kind, message, session, daemonError, daemonTitle, content }: ToastRequest, location: string | undefined): void {
   const signature = JSON.stringify([kind, message, session]);
+  const body = content ?? message;
   const shell = daemonError && hasShellTimeoutDetails(daemonError) ? daemonError : undefined;
-  // A message that sets some of its params as code is worded from the catalog here, not shown as text.
+  // A message with chips is worded from the catalog here, preserving each marked parameter.
   const coded = daemonError && hasCodeParams(daemonError) ? daemonError : undefined;
   const structured = shell ?? coded;
   // A notice about a session that no longer exists (a launch that failed) has no location, and its
   // worded message is the only place that names the session, so it stays the title above the
   // details instead of giving way to the details' own.
-  const named = shell && !location && kind === "notice";
+  const named = !!daemonTitle || (!!shell && !location && kind === "notice");
   // With a session's location as the title the message is the description; without one the title
-  // is the message itself, and only the shell timeout, which has a title of its own, adds a description.
-  const title = location ?? (named ? message : shell ? <DaemonErrorTitle /> : coded ? <DaemonErrorMessage error={coded} /> : message);
+  // is the message itself; a structured launch or shell timeout lays its details beneath it.
+  const title = location ?? (daemonTitle ? <DaemonErrorMessage error={daemonTitle} /> : named ? body : shell ? <DaemonErrorTitle /> : coded ? <DaemonErrorMessage error={coded} /> : body);
   const options = {
     variant: kind === "error" ? ("danger" as const) : ("accent" as const),
     description: location
-      ? structured ? <DaemonErrorMessage error={structured} showTitle /> : message
-      : shell ? <DaemonErrorMessage error={shell} showTitle={false} /> : undefined,
+      ? structured ? <DaemonErrorMessage error={structured} showTitle /> : body
+      : (shell || named) && structured ? <DaemonErrorMessage error={structured} showTitle={false} /> : undefined,
     timeout: kind === "error" ? ERROR_DURATION_MS : NOTICE_DURATION_MS,
   };
 

@@ -8,7 +8,7 @@ import { dialogAround } from "./dialogElement";
 import { useTrimmedField } from "./useTrimmedField";
 
 export interface ConfirmDialogProps {
-  title: string;
+  title: string | React.ReactElement;
   /** What the dialog says: a string is one paragraph; a node lays out its own structure. */
   message: React.ReactNode;
   confirmLabel?: string;
@@ -103,7 +103,7 @@ export function ConfirmDialog({
           autoFocus
         >
           <Label>
-            <Message id="dialog.typeToConfirm.label" params={{ word: <InlineChip monospace wrap size="xs">{word}</InlineChip> }} />
+            <Message id="dialog.typeToConfirm.label" params={{ word: <InlineChip size="inherit" className="italic">{word}</InlineChip> }} />
           </Label>
           {/* Capitals by styling rather than by rewriting the value: rewriting a controlled value
               mid-composition breaks an input method's composition. */}

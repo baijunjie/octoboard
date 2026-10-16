@@ -109,7 +109,7 @@ export const en = {
   "daemon.unknown_session": "Unknown session {session}.",
   "daemon.unknown_page": "Unknown page {page}.",
   "daemon.unknown_account": "Unknown account {account}.",
-  "daemon.account_name_taken": "{agent} already has an account named “{name}”.",
+  "daemon.account_name_taken": "{agent} already has an account named {name}.",
   "daemon.field_required": "{field} is required.",
   "daemon.conflicting_fields": "{first} and {second} cannot both be given.",
   "daemon.invalid_launch_setting": "{value} is not a {field} that {agent} offers.",
@@ -118,7 +118,7 @@ export const en = {
   "daemon.project_has_running_sessions":
     "This project still has sessions that are running or starting. Archive the running ones, or wait for the ones that are starting to finish.",
   "daemon.project_directory_shared":
-    "The folder is shared with project “{project}”, so it cannot be moved to the Trash. Remove that project first, or keep the folder.",
+    "The folder is shared with project {project}, so it cannot be moved to the Trash. Remove that project first, or keep the folder.",
   "daemon.project_directory_protected": "This is your home folder, the root of a disk, or holds Octoboard’s own data, so it cannot be moved to the Trash.",
   "daemon.project_directory_trash_failed": "The folder could not be moved to the Trash, so the project was kept: {detail}",
   "daemon.path_not_absolute": "{path} is not an absolute path. Give the full path, or start it with {tilde}.",
@@ -167,7 +167,7 @@ export const en = {
   "daemon.resume_id_invalid": "This is not a conversation ID. It looks like {example}.",
   "daemon.resume_for_console_session": "A console session cannot continue an earlier conversation.",
   "daemon.conversation_in_session":
-    "This conversation is already in the session “{session}” of this project. Resume or reopen that session instead.",
+    "This conversation is already in the session {session} of this project. Resume or reopen that session instead.",
   "daemon.conversation_outside_project": "This conversation already belongs to a session outside this project.",
   "daemon.relocation_failed":
     "The conversation could not be copied into {path}: {detail}. The session stays on the account it had.",
@@ -243,9 +243,9 @@ export const en = {
     "Claude Code has not been trusted with this directory, so this project's own {allow} permission rules are ignored until Claude Code's trust confirmation is answered. Its {deny} rules still apply, so a session is only more restrictive, never less. {appName} presses that confirmation for you once you have agreed to it.",
   "daemon.queued_messages_dropped":
     "{appName} dropped what it had queued for this session. The session's input line may be holding part of a message {appName} could not finish writing. The next message written into the session will be run together with it, so check the session before sending anything else.",
-  "daemon.launch_failed": "Could not start “{title}”: {reason}",
+  "daemon.launch_failed": "Could not start {title}: {reason}",
   // The same notice's title when its failure is laid out beneath it, which says the reason itself.
-  "daemon.launch_failed.title": "Could not start “{title}”",
+  "daemon.launch_failed.title": "Could not start {title}",
   "daemon.trust_answer_failed": "{appName} could not press {agent}'s trust confirmation ({reason}). Answer it in the terminal.",
   "daemon.trust_not_carried_over":
     "{appName} could not copy {agent}'s trust for this folder into {path} ({reason}), so {agent} will ask again the next time it opens this folder.",
@@ -587,12 +587,12 @@ export const en = {
   "git.compare.to": "To",
   "git.compare.choose": "Choose a branch",
   "git.compare.branchGone": "{branch} (no longer exists)",
-  "git.compare.branchOrigin": "Created by session “{title}”",
-  "git.compare.branchOriginSelected": "Created by the selected session “{title}”",
-  "git.compare.branchOriginGone": "Created by session “{title}”, which no longer exists",
+  "git.compare.branchOrigin": "Created by session {title}",
+  "git.compare.branchOriginSelected": "Created by the selected session {title}",
+  "git.compare.branchOriginGone": "Created by session {title}, which no longer exists",
   "git.compare.swap": "Swap branches",
   "git.compare.prompt": "Two branches needed",
-  "git.compare.prompt.description": "Choose a From and a To branch to see what To has changed since it forked from From.",
+  "git.compare.prompt.description": "Choose a {from} and a {to} branch to see what {to} has changed since it forked from {from}.",
   "git.compare.loading": "Comparing branches…",
   "git.compare.noBranches": "No branches yet",
   "git.compare.branchesError": "The branches could not be listed: {message}",
@@ -600,7 +600,7 @@ export const en = {
   "git.compare.error": "Could not compare these branches",
   "git.compare.noDifferences": "No differences",
   "git.compare.same.description": "Both branches are at the same commit.",
-  "git.compare.empty.description": "The To branch has changed nothing in this project's folder since the branches forked.",
+  "git.compare.empty.description": "The {to} branch has changed nothing in this project's folder since the branches forked.",
   "git.compare.list.label": "Changes since the branches forked",
   "git.compare.commits": "Changes from the fork at commit {base} to commit {to}",
   "git.compare.source": "{to} at {toCommit}, since it forked from {from} at {fromCommit}",
@@ -769,7 +769,7 @@ export const en = {
   "dialog.project.accountInherit": "{account} (from the console)",
   "dialog.project.agentDetect": "Detect from files",
   "dialog.project.agentDetectHint":
-    "“Detect from files” looks for {claudeFile}, {agentsFile} and agent folders such as {claudeDir} or {codexDir} in each repository; one it cannot decide on inherits from the console. An agent chosen here applies to every repository.",
+    "{detect} looks for {claudeFile}, {agentsFile} and agent folders such as {claudeDir} or {codexDir} in each repository; one it cannot decide on inherits from the console. An agent chosen here applies to every repository.",
   "dialog.project.launchSettingsNote": "Used by sessions, from the next one opened or resumed.",
   "dialog.project.directoryRequired": "A directory is required.",
   "dialog.project.pathChecking": "Checking the directory…",
@@ -805,9 +805,9 @@ export const en = {
   "dialog.typeToConfirm.label": "Type {word} to confirm",
   "dialog.typeToConfirm.delete": "DELETE",
   "dialog.archiveSession.confirm": "Archive",
-  "dialog.deleteConsole.title": "Delete console “{name}”?",
+  "dialog.deleteConsole.title": "Delete console {name}?",
   "dialog.deleteConsole.message": "You can delete it only while none of its sessions is running or starting.",
-  "dialog.removeProject.title": "Remove project “{name}”?",
+  "dialog.removeProject.title": "Remove project {name}?",
   "dialog.removeProject.message": "Its sessions are deleted with it. Files on disk are kept.",
   "dialog.removeProject.running": {
     one: "{count} session is still running and will be ended",
@@ -820,13 +820,13 @@ export const en = {
   "dialog.removeProject.confirmTrash": "Remove and move to Trash",
   "dialog.removeProject.confirmRunningTrash": "End, remove and move to Trash",
   "dialog.removeProject.pendingTrash": "Moving to Trash…",
-  "dialog.archiveSession.title": "Archive “{title}”?",
+  "dialog.archiveSession.title": "Archive {title}?",
   "dialog.archiveSession.message": "Its process ends. You can reopen it later.",
   "dialog.archiveSession.bound": {
     one: "{count} session under it is archived with it",
     other: "{count} sessions under it are archived with it",
   },
-  "dialog.switchAccount.title": "Switch “{title}” to {account}?",
+  "dialog.switchAccount.title": "Switch {title} to {account}?",
   "dialog.switchAccount.message":
     "Its process restarts under the new account and the conversation continues there. The session reads that account's configuration and keeps its explicit model and reasoning effort settings. A copy of the conversation stays in the current account.",
   "dialog.switchAccount.messageFresh":
@@ -844,17 +844,17 @@ export const en = {
     one: "{completed} of {count} session processed",
     other: "{completed} of {count} sessions processed",
   },
-  "dialog.switchAccount.current": "Switching “{title}”…",
+  "dialog.switchAccount.current": "Switching {title}…",
   "dialog.switchAccount.progressLabel": "Account switch progress",
   "dialog.switchAccount.progressCurrent": {
-    one: "{completed} of {count} session processed. Switching “{title}”…",
-    other: "{completed} of {count} sessions processed. Switching “{title}”…",
+    one: "{completed} of {count} session processed. Switching {title}…",
+    other: "{completed} of {count} sessions processed. Switching {title}…",
   },
   "dialog.switchAccount.failed": {
     one: "{count} session could not be switched. Retry only attempts this session.",
     other: "{count} sessions could not be switched. Retry only attempts these sessions.",
   },
-  "dialog.deleteSession.title": "Delete “{title}” permanently?",
+  "dialog.deleteSession.title": "Delete {title} permanently?",
   "dialog.deleteSession.message": "This deletes the session. The project's files are kept.",
   "dialog.deleteSession.trashRecords": "Also move the agent's own session records to the Trash",
   "dialog.deleteSession.trashRecordsHint": "The agent's transcript of this session goes, wherever this machine keeps it. The session can then no longer be resumed in the agent itself. You can recover it from the Trash.",
@@ -878,8 +878,8 @@ export const en = {
     other: "Delete {count} archived sessions permanently?",
   },
   "dialog.trust.title": "Trust this folder?",
-  "dialog.trust.question": "{agent} is asking whether to trust this folder:",
-  "dialog.trust.questionForSession": "{agent} is asking whether to trust this folder for session “{session}”:",
+  "dialog.trust.question": "{agent} is asking whether to trust the folder {path}.",
+  "dialog.trust.questionForSession": "{agent} is asking whether to trust the folder {path} for session {session}.",
   "dialog.trust.behavior":
     "If you agree, {appName} presses {agent}'s own confirmation, and {agent} records the trust, so it does not ask again here. {appName} also records a permission every agent shares, so a later trust confirmation for this project is pressed without asking.",
   "dialog.trust.codexRoot":
@@ -897,15 +897,15 @@ export const en = {
   "dialog.trust.alreadyAnswered":
     "The trust confirmation was already answered, so this folder was not trusted. Use this dialog again for the next one.",
   "dialog.sessionRequest.title": "Start a session?",
-  "dialog.sessionRequest.requester.project": "The session “{session}” in the project “{project}”",
-  "dialog.sessionRequest.requester.projectElsewhere": "The session “{session}” in the project “{project}” of the console “{console}”",
-  "dialog.sessionRequest.requester.console": "The console session “{session}”",
-  "dialog.sessionRequest.requester.consoleElsewhere": "The session “{session}” in the console “{console}”",
-  "dialog.sessionRequest.requester.unknown": "The session “{session}”",
+  "dialog.sessionRequest.requester.project": "The session {session} in the project {project}",
+  "dialog.sessionRequest.requester.projectElsewhere": "The session {session} in the project {project} of the console {console}",
+  "dialog.sessionRequest.requester.console": "The console session {session}",
+  "dialog.sessionRequest.requester.consoleElsewhere": "The session {session} in the console {console}",
+  "dialog.sessionRequest.requester.unknown": "The session {session}",
   "dialog.sessionRequest.question.project":
-    "{requester} asks to start a {agent} session in the project “{project}” of the console “{console}”. The new session would report to you.",
+    "{requester} asks to start a {agent} session in the project {project} of the console {console}. The new session would report to you.",
   "dialog.sessionRequest.question.console":
-    "{requester} asks to start a {agent} console session in the console “{console}”. The new session would report to you.",
+    "{requester} asks to start a {agent} console session in the console {console}. The new session would report to you.",
   "dialog.sessionRequest.confirm": "Start session",
   "dialog.sessionRequest.refuse": "Refuse",
 
@@ -918,7 +918,7 @@ export const en = {
 
   "configuration.export.title": "Export configuration",
   "configuration.export.scope": "What to export",
-  "configuration.export.scope.console": "Only the console “{name}”",
+  "configuration.export.scope.console": "Only the console {name}",
   "configuration.export.scope.console.description": "The console and its projects. No application settings.",
   "configuration.export.scope.all": "Everything",
   "configuration.export.scope.all.description": "Every console with its projects, and the application settings.",
@@ -938,7 +938,7 @@ export const en = {
   "configuration.file.notText": "The file is not a text file.",
   "configuration.import.notJson": "{name} is not a JSON file.",
   "configuration.import.review.intro":
-    "From {file}. Each console below is created as a new console, and none of your existing ones is changed. A project you leave out is not added.",
+    "From {file}. Each console below is created as a new console, and none of your existing ones is changed. A project set to {skip} is not added.",
   "configuration.import.review.submit": "Import",
   "configuration.import.review.pending": "Importing…",
   "configuration.import.review.cloneNote":
@@ -949,23 +949,23 @@ export const en = {
   "configuration.import.all.clone": "Clone from remotes ({count})",
   "configuration.import.all.skip": "Leave all out ({count})",
   "configuration.import.all.applied": {
-    one: "Applied “{choice}” to {count} project.",
-    other: "Applied “{choice}” to {count} projects.",
+    one: "Applied {choice} to {count} project.",
+    other: "Applied {choice} to {count} projects.",
   },
   "configuration.import.settings.label": "Also apply the application settings",
   "configuration.import.settings.turnsOn":
-    "Turns on “{setting}”, which is currently off. {appName} then pulls your repositories by itself.",
-  "configuration.import.settings.turnsOff": "Turns off “{setting}”, which is currently on.",
+    "Turns on {setting}, which is currently off. {appName} then pulls your repositories by itself.",
+  "configuration.import.settings.turnsOff": "Turns off {setting}, which is currently on.",
   "configuration.import.settings.alreadyOn":
-    "“{setting}” is on in the file and already on, so applying changes nothing.",
+    "{setting} is on in the file and already on, so applying changes nothing.",
   "configuration.import.settings.alreadyOff":
-    "“{setting}” is off in the file and already off, so applying changes nothing.",
+    "{setting} is off in the file and already off, so applying changes nothing.",
   "configuration.import.console.projects": {
     one: "{count} project",
     other: "{count} projects",
   },
   "configuration.import.console.noProjects": "This console has no projects.",
-  "configuration.import.fallback": "{agent} account “{name}” is not set up in {appName}, so the default account is used.",
+  "configuration.import.fallback": "{agent} account {name} is not set up in {appName}, so the default account is used.",
   "configuration.import.project.exportedPath": "Exported path: {path}",
   "configuration.import.project.exportedPathUsed": "Exported path, placed there: {path}",
   "configuration.import.project.state.exportedPath": "Found there.",
@@ -1025,11 +1025,11 @@ export const en = {
   "configuration.import.result.fallbacks": "Accounts that fell back to the default account",
   "configuration.import.result.fallbacks.intro":
     "These accounts are not set up in {appName}, so the agent's default account is used in their place.",
-  "configuration.import.result.fallback.console": "{agent} account “{name}”, named by the console {console}",
+  "configuration.import.result.fallback.console": "{agent} account {name}, named by the console {console}",
   "configuration.import.result.fallback.project":
-    "{agent} account “{name}”, named by the project {project} in {console}",
-  "configuration.import.result.settings.on": "Application settings applied: “{setting}” is now on.",
-  "configuration.import.result.settings.off": "Application settings applied: “{setting}” is now off.",
+    "{agent} account {name}, named by the project {project} in {console}",
+  "configuration.import.result.settings.on": "Application settings applied: {setting} is now on.",
+  "configuration.import.result.settings.off": "Application settings applied: {setting} is now off.",
   "configuration.import.result.settings.failed": "The application settings could not be applied: {reason}",
 
   "settings.title": "Settings",
@@ -1079,7 +1079,7 @@ export const en = {
   "settings.accounts.notUsable": "Not usable until {agent} is on your {pathVar}.",
   "settings.accounts.editLabel": "Edit {name} ({agent})",
   "settings.accounts.removeLabel": "Remove {name} ({agent})",
-  "settings.accounts.removeTitle": "Remove account “{name}”?",
+  "settings.accounts.removeTitle": "Remove account {name}?",
   "settings.accounts.removeMessage":
     "Consoles that use it go back to the default {agent} account, and projects that use it go back to their console's. Sessions that are already open are kept, each going on with the directory it started from.",
   "settings.accounts.dialog.edit": "Edit {agent} account",
@@ -1090,8 +1090,8 @@ export const en = {
   "settings.accounts.dirHintGrok":
     "{appName} does not require the directory to exist yet, but sessions only keep their login and conversation if it is a Grok home that Grok has already been run against. {appName} checks that when a session launches, not here.",
   "settings.accounts.dirNotAbsolute": "Enter an absolute path, or one starting with {tilde}.",
-  "settings.accounts.nameTaken": "{agent} already has an account named “{name}”.",
-  "settings.accounts.nameTakenDefault": "“{name}” is the name of the default {agent} account.",
+  "settings.accounts.nameTaken": "{agent} already has an account named {name}.",
+  "settings.accounts.nameTakenDefault": "{name} is the name of the default {agent} account.",
   "settings.notifications.label": "Notify when a session is waiting for you",
   "settings.notifications.unavailable": "Notifications are not available here.",
   "settings.notifications.allowed": "Allowed.",

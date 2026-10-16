@@ -166,7 +166,7 @@ function ComparisonContent({
   if (comparison.state === "idle") {
     if (branches.state === "error") return <GitFailure title={t("git.compare.branchesFailed")} message={branches.message} onRetry={onRetry} />;
     if (noBranches) return <CenteredEmptyPanel icon={GitFork} message={t("git.compare.noBranches")} />;
-    return <CenteredEmptyPanel icon={GitCompareArrows} message={t("git.compare.prompt")} description={t("git.compare.prompt.description")} />;
+    return <CenteredEmptyPanel icon={GitCompareArrows} message={t("git.compare.prompt")} description={<Message id="git.compare.prompt.description" params={{ from: <InlineChip size="inherit">{t("git.compare.from")}</InlineChip>, to: <InlineChip size="inherit">{t("git.compare.to")}</InlineChip> }} />} />;
   }
   if (comparison.state === "loading") return <GitLoading label={t("git.compare.loading")} />;
   if (comparison.state === "error") return <GitFailure title={t("git.compare.error")} message={comparison.message} onRetry={onRetry} />;
@@ -177,7 +177,7 @@ function ComparisonContent({
       <p className="shrink-0 px-3 py-2 text-xs text-app-muted">
         <Message
           id="git.compare.commits"
-          params={{ base: <InlineChip monospace wrap size="xs">{shortCommit(base)}</InlineChip>, to: <InlineChip monospace wrap size="xs">{shortCommit(right.commit)}</InlineChip> }}
+          params={{ base: <InlineChip monospace wrap size="inherit">{shortCommit(base)}</InlineChip>, to: <InlineChip monospace wrap size="inherit">{shortCommit(right.commit)}</InlineChip> }}
         />
       </p>
       {/* Mounted for as long as the comparison is, so a notice appearing in it is announced. */}
@@ -187,9 +187,9 @@ function ComparisonContent({
             <TriangleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0" />
             <span>
               {notice.kind === "moved" ? (
-                <Message id="git.compare.moved" params={{ branch: <InlineChip monospace wrap size="xs">{displayWirePath(notice.branch)}</InlineChip> }} />
+                <Message id="git.compare.moved" params={{ branch: <InlineChip monospace wrap size="inherit">{displayWirePath(notice.branch)}</InlineChip> }} />
               ) : (
-                <Message id="git.compare.deleted" params={{ branch: <InlineChip monospace wrap size="xs">{displayWirePath(notice.branch)}</InlineChip> }} />
+                <Message id="git.compare.deleted" params={{ branch: <InlineChip monospace wrap size="inherit">{displayWirePath(notice.branch)}</InlineChip> }} />
               )}
             </span>
           </p>
@@ -198,7 +198,7 @@ function ComparisonContent({
       {left.commit === right.commit ? (
         <CenteredEmptyPanel icon={GitCompareArrows} message={t("git.compare.noDifferences")} description={t("git.compare.same.description")} />
       ) : items.length === 0 && complete ? (
-        <CenteredEmptyPanel icon={GitCompareArrows} message={t("git.compare.noDifferences")} description={t("git.compare.empty.description")} />
+        <CenteredEmptyPanel icon={GitCompareArrows} message={t("git.compare.noDifferences")} description={<Message id="git.compare.empty.description" params={{ to: <InlineChip size="inherit">{t("git.compare.to")}</InlineChip> }} />} />
       ) : (
         <>
           <ChangeList items={items} selected={selectedChange} label={t("git.compare.list.label")} onOpen={onOpen} listRef={listRef} changeView={changeView} />

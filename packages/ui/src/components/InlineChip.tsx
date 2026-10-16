@@ -3,7 +3,7 @@ import React from "react";
 
 import { useCodeColor, type CodeColor } from "./codeTone";
 
-export type InlineChipSize = "xs" | "sm" | "md" | "lg";
+export type InlineChipSize = "xs" | "sm" | "md" | "lg" | "inherit";
 export type InlineChipProps = Omit<React.ComponentProps<typeof Chip<"span">>, "size" | "color" | "children"> & {
   children?: React.ReactNode;
   size?: InlineChipSize;
@@ -13,7 +13,7 @@ export type InlineChipProps = Omit<React.ComponentProps<typeof Chip<"span">>, "s
   startContent?: React.ReactNode;
 };
 
-/** One chip scale for prose, labels and metadata. `xs` keeps dense rows one 16px line tall. */
+/** One chip scale for prose, labels and metadata. `inherit` follows the surrounding text. */
 export function InlineChip({
   children,
   size = "sm",
@@ -34,14 +34,14 @@ export function InlineChip({
   return (
     <Chip<"span">
       {...props}
-      size={size === "xs" ? "sm" : size}
+      size={size === "xs" || size === "inherit" ? "sm" : size}
       color={nativeColor}
       variant={variant}
       dir={dir}
       data-inline-chip=""
       data-size={size}
       data-color={resolvedColor}
-      className={`inline-chip ${size === "xs" ? "inline-chip--xs" : ""} ${wrap ? "inline-chip--wrap" : ""} ${monospace ? "font-mono select-text" : ""} ${resolvedColor === "secondary" ? "inline-chip--secondary" : ""} ${className}`}
+      className={`inline-chip ${size === "xs" ? "inline-chip--xs" : size === "inherit" ? "inline-chip--inherit" : ""} ${wrap ? "inline-chip--wrap" : ""} ${monospace ? "select-text" : ""} ${resolvedColor === "secondary" ? "inline-chip--secondary" : ""} ${className}`}
     >
       {startContent}
       <Chip.Label>

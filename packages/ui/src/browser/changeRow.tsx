@@ -1,10 +1,11 @@
 import React, { useRef, useState } from "react";
 
+import { InlineChip } from "../components/InlineChip";
 import { AnchoredTooltip } from "../components/AnchoredTooltip";
 import { FadeOverflow } from "../components/FadeOverflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import { StatusChip } from "../viewer/StatusChip";
 import { STATUS_LABELS, STATUS_MARKS, type StatusKey } from "../viewer/statusMarks";
 import { displayWirePath, wireBaseName } from "../wirePath";
@@ -23,21 +24,26 @@ const STATUS_WORDS: Record<StatusKey, PlainMessageKey> = {
   conflicted: "git.status.conflicted",
 };
 
+/** Rename and cross-project paths belong to prose; bare folder metadata does not. */
+function pathDetail(item: ChangeItem): { id: "git.row.fromOutside" | "git.row.toOutside" | "git.row.from"; path: string } | undefined {
+  const { entry } = item;
+  if (entry.group === "conflicted") return undefined;
+  const { old: before, new: after } = entry;
+  if (before.state === "out_of_scope") return { id: "git.row.fromOutside", path: displayWirePath(before.repository_path) };
+  if (after.state === "out_of_scope") return { id: "git.row.toOutside", path: displayWirePath(after.repository_path) };
+  if (before.state === "present" && after.state === "present" && before.path !== after.path) return { id: "git.row.from", path: displayWirePath(before.path) };
+  return undefined;
+}
+
 /** What a row says beside its file's name: where a rename came from or went, and otherwise, unless
  * the row sits under its folder in a tree (`inFolder`), the folder the file is in. `shown` is what
  * is painted, and `sentence` what goes into the row's accessible name: they differ for a bare
  * folder, which is isolated only in the sentence, since the element painting it isolates it already. */
 function rowDetail(t: Translate, item: ChangeItem, inFolder: boolean): { shown: string; sentence: string } {
-  const { entry } = item;
-  if (entry.group !== "conflicted") {
-    const { old: before, new: after } = entry;
-    let prose: string | undefined;
-    if (before.state === "out_of_scope") prose = t("git.row.fromOutside", { path: isolate(displayWirePath(before.repository_path)) });
-    else if (after.state === "out_of_scope") prose = t("git.row.toOutside", { path: isolate(displayWirePath(after.repository_path)) });
-    else if (before.state === "present" && after.state === "present" && before.path !== after.path) {
-      prose = t("git.row.from", { path: isolate(displayWirePath(before.path)) });
-    }
-    if (prose !== undefined) return { shown: prose, sentence: prose };
+  const prose = pathDetail(item);
+  if (prose) {
+    const sentence = t(prose.id, { path: isolate(prose.path) });
+    return { shown: sentence, sentence };
   }
   const slash = item.path.lastIndexOf("/");
   if (inFolder || slash === -1) return { shown: "", sentence: "" };
@@ -65,6 +71,8 @@ export function changeRowText(
 /** What a change's row shows: its status mark, its file's name and the detail beside it, and at its
  * end the button of the row's actions. */
 export function ChangeRowBody({ item, name, detail, contextTargetRef }: { item: ChangeItem; name: string; detail: string; contextTargetRef: React.RefObject<HTMLElement | null> }): React.ReactElement {
+  const prose = pathDetail(item);
+  const shownDetail = prose ? <Message id={prose.id} params={{ path: <InlineChip monospace size="inherit">{prose.path}</InlineChip> }} /> : detail;
   return (
     <>
       <ChangeStatusChip status={item.status} />
@@ -72,8 +80,8 @@ export function ChangeRowBody({ item, name, detail, contextTargetRef }: { item: 
         {name}
       </FadeOverflow>
       {detail !== "" && (
-        <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1 text-xs text-app-muted" titleWhenClipped={detail}>
-          {detail}
+        <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1 text-xs text-app-muted" titleWhenClipped={shownDetail}>
+          {shownDetail}
         </FadeOverflow>
       )}
       <RowActions contextTargetRef={contextTargetRef} path={item.path} name={name} />

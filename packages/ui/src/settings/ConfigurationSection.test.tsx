@@ -54,13 +54,13 @@ const docs = consoleOf("c-docs", "Docs");
 it("exports the console the sidebar shows when the export is opened", async () => {
   mount([main, docs]);
   await press("Export…");
-  expect(document.body.textContent).toContain("Only the console “Docs”");
+  expect(document.body.textContent).toContain("Only the console Docs");
 });
 
 it("falls back to the first console when the one the sidebar chose is gone", async () => {
   mount([main]);
   await press("Export…");
-  expect(document.body.textContent).toContain("Only the console “Main”");
+  expect(document.body.textContent).toContain("Only the console Main");
 });
 
 it("opens the import from its own button", async () => {

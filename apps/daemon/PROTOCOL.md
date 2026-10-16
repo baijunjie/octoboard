@@ -185,7 +185,7 @@ A client also branches on some codes, instead of only showing them:
 | `project_directory_shared` | `project` | Moving a deleted project's directory to the Trash would take another project's files or repository; `project` is that project's name |
 | `project_directory_protected` | `path` | The directory is the home directory, the root of a disk, or holds Octoboard's data; the project is kept |
 | `project_directory_trash_failed` | `path`, `detail` | The directory could not be moved to the Trash; the project is kept |
-| `session_has_running_sessions` | `count`, `sessions` | Archiving a session while sessions under it (bound to it, or to a lead session bound to it) have a process running, whatever their status; `count` is how many, at both levels, and `sessions` their titles, quoted and comma separated |
+| `session_has_running_sessions` | `count`, `sessions`, `session_ids` | Archiving a session while sessions under it (bound to it, or to a lead session bound to it) have a process running, whatever their status; `count` is how many, at both levels, and `sessions` their titles, comma separated as plain fallback text. `session_ids` is a JSON array of their IDs, encoded as a string like every param, so clients can resolve current names and render each separately without parsing user-provided titles |
 | `path_not_absolute` | `path` | A project path that is neither absolute nor `~`-relative |
 | `path_not_found` | `path` | A directory the request names does not exist |
 | `path_not_a_directory` | `path` | The path is not a directory |

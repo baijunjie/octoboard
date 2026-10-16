@@ -39,10 +39,10 @@ it("words a trust answer's failure from its reason code, keeping the English rea
 it("words a failed launch's reason from the failure's own code and params, keeping the English reason for an unknown code", () => {
   const params = { title: "Hub", reason: "the English account", reason_code: "binary_not_found", binary: "codex" };
   expect(daemonMessage("en", "launch_failed", params, "x", records)).toBe(
-    `Could not start “${isolate("Hub")}”: ${isolate("codex")} was not found on ${isolate("PATH")} in the snapshotted shell environment.`,
+    `Could not start ${isolate("Hub")}: ${isolate("codex")} was not found on ${isolate("PATH")} in the snapshotted shell environment.`,
   );
   expect(daemonMessage("en", "launch_failed", { ...params, reason_code: "newer" }, "x", records)).toBe(
-    `Could not start “${isolate("Hub")}”: ${isolate("the English account")}`,
+    `Could not start ${isolate("Hub")}: ${isolate("the English account")}`,
   );
 });
 
@@ -76,4 +76,12 @@ it.each([
     expect(worded, language).not.toBe(english);
     expect(worded, language).not.toBe("the daemon's text");
   }
+});
+
+it("localizes structured running-session lists using live titles without parsing punctuation", () => {
+  const params = { count: "2", sessions: "legacy fallback", session_ids: JSON.stringify(["s1", "gone"]) };
+  const message = daemonMessage("en", "session_has_running_sessions", params, "fallback", records);
+  expect(message).toContain(`${isolate("Hub")}, ${isolate("gone")}`);
+  expect(message).not.toContain("legacy fallback");
+  expect(daemonMessage("en", "session_has_running_sessions", { ...params, session_ids: "bad" }, "fallback", records)).toContain("legacy fallback");
 });

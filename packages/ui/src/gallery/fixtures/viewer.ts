@@ -718,10 +718,10 @@ const comparisonWording = ({ Message, InlineChip }: LiveParts, t: Translate, fro
     source: createElement(Message<"git.compare.source">, {
       id: "git.compare.source",
       params: {
-        from: createElement(InlineChip, { monospace: true, wrap: true, size: "xs", color: "primary" }, from),
-        fromCommit: createElement(InlineChip, { monospace: true, wrap: true, size: "xs", color: "default" }, fromCommit),
-        to: createElement(InlineChip, { monospace: true, wrap: true, size: "xs", color: "primary" }, to),
-        toCommit: createElement(InlineChip, { monospace: true, wrap: true, size: "xs", color: "default" }, toCommit),
+        from: createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "primary" }, from),
+        fromCommit: createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "default" }, fromCommit),
+        to: createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "primary" }, to),
+        toCommit: createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "default" }, toCommit),
       },
     }),
     sourceText: t("git.compare.source", { from: isolate(from), fromCommit: isolate(fromCommit), to: isolate(to), toCommit: isolate(toCommit) }),
@@ -1105,6 +1105,16 @@ export const viewerScenarios: Scenario[] = [
     description: "The document in the LaTeX style: a serif page capped in width and centred, justified and hyphenated text, a centred title, a table ruled only at its head and foot and an indented quote. The long identifier in inline code stays unhyphenated, and the code block in the list item, the formula and the diagram are not justified or hyphenated. Scroll down for the rest; the Wide window shows the margins either side.",
     preferences: { markdownStyle: "latex" },
     viewer: { subjects: styleSampleSubjects },
+  },
+  {
+    id: "git-renamed-viewer",
+    group: GROUP,
+    category: "normal",
+    title: "Renamed file, long source path in the viewer header",
+    description: "The renamed-from path is a chip beneath the new file name. Narrow the window to check that the long source path wraps inside the header.",
+    viewer: {
+      subjects: async (language) => (await changes(language)).filter(({ path }) => path === "docs/handbook/engineering/onboarding/renamed-guide.md"),
+    },
   },
   {
     id: "viewer-changes",

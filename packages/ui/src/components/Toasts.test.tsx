@@ -7,7 +7,6 @@ import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 import { DaemonRequestError } from "../daemon-client";
 import { daemonMessage } from "../daemonMessage";
 import { noticeErrorPresentation } from "../errorPresentation";
-import { isolate } from "../i18n/isolate";
 import { sessionOf } from "../gallery/fixtures/builders";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { Toasts } from "./Toasts";
@@ -179,8 +178,9 @@ it("shows a failed launch's shell timeout once: the title names the launch, the 
     const params = { title: "Draft the notes", reason_code: "shell_environment_timeout", shell: "/bin/zsh", command: "env -0", timeout: "10s" };
     const error = noticeErrorPresentation("launch_failed", params, "fallback");
     const message = daemonMessage("en", "launch_failed.title", params, "fallback", daemon.store.getState());
-    act(() => deliver({ kind: "notice", message, daemonError: error }));
-    expect(document.querySelector('[data-slot="toast-title"]')?.textContent).toBe(`Could not start “${isolate("Draft the notes")}”`);
+    act(() => deliver({ kind: "notice", message, daemonError: error, daemonTitle: new DaemonRequestError(message, "launch_failed.title", params) }));
+    expect(document.querySelector('[data-slot="toast-title"]')?.textContent).toBe("Could not start Draft the notes");
+    expect(document.querySelector('[data-slot="toast-title"] [data-inline-chip]')?.textContent).toBe("Draft the notes");
     const description = document.querySelector('[data-slot="toast-description"]');
     expect(description?.querySelector("h3")).toBeNull();
     expect(description?.querySelector("code")?.textContent).toBe("/bin/zsh -l -i -c 'env -0'");
@@ -212,6 +212,35 @@ it("shows the error heading above a structured error's details when the toast is
     const description = document.querySelector('[data-slot="toast-description"]');
     expect(description?.querySelector("h3")?.textContent).toBe("Shell environment timed out");
     expect(description?.querySelector("code")?.textContent).toBe("/bin/zsh -l -i -c 'env -0'");
+  } finally {
+    act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
+it("preserves a failed launch's name and nested path, and renders rich notices from their plain signature", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  stubWidth(1280);
+  let deliver!: (request: import("../store").ToastRequest) => void;
+  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /></DaemonProvider>));
+    const params = { title: "Draft", reason_code: "path_not_found", path: "/missing" };
+    const message = daemonMessage("en", "launch_failed", params, "fallback", daemon.store.getState());
+    act(() => deliver({ kind: "notice", message, daemonError: noticeErrorPresentation("launch_failed", params, message), daemonTitle: new DaemonRequestError(message, "launch_failed.title", params) }));
+    const title = document.querySelector('[data-slot="toast-title"]');
+    const description = document.querySelector('[data-slot="toast-description"]');
+    expect(title?.querySelector("[data-inline-chip]")?.textContent).toBe("Draft");
+    expect(title?.querySelector("code")).toBeNull();
+    expect(description?.querySelector("code")?.textContent).toBe("/missing");
+    expect(description?.textContent).toBe("/missing does not exist.");
+    expect(message).toContain("does not exist.");
+    act(() => deliver({ kind: "notice", message: "Saved export.json", content: <span>Saved <em>export.json</em></span> }));
+    expect(document.querySelector('[data-slot="toast-title"] em')?.textContent).toBe("export.json");
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
     act(() => root.unmount());

@@ -32,22 +32,23 @@ const dialogText = () => (document.body.querySelector("[role=alertdialog]")?.tex
 // What the user decides on is on the dialog: the agent, where the session would be, that it would
 // report to them — for a project session and a console session alike.
 it.each([
-  { asked: request, where: "The session “s-1” asks to start a Codex session in the project “p-1” of the console “c-1”" },
-  { asked: consoleRequest, where: "The session “s-2” asks to start a Codex console session in the console “c-1”" },
+  { asked: request, where: "The session s-1 asks to start a Codex session in the project p-1 of the console c-1" },
+  { asked: consoleRequest, where: "The session s-2 asks to start a Codex console session in the console c-1" },
 ])("shows who asks, where the session would be, that it reports to the user: $asked.role", ({ asked, where }) => {
   mountPendingQuestionDialog({ sessionRequests: [asked] }, ack);
   expect(dialogText()).toContain("Start a session?");
   expect(dialogText()).toContain(where);
   expect(dialogText()).toContain("The new session would report to you.");
+  expect([...document.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent)).toEqual([asked.session, asked.project, asked.console].filter(Boolean));
 });
 
 // The requester may live in another project or console than the one it asks in, which the dialog is
 // the only place to see; its console is named only where it is not the one the session is asked in.
 it.each([
-  { requester: sessionOf("s-1", "c-1", "p-3", "Billing agent", "working"), where: "The session “Billing agent” in the project “Shop” asks to start" },
-  { requester: sessionOf("s-1", "c-1", undefined, "Planner", "working"), where: "The console session “Planner” asks to start" },
-  { requester: sessionOf("s-1", "c-2", "p-2", "Billing agent", "working"), where: "The session “Billing agent” in the project “Ledger” of the console “Other” asks to start" },
-  { requester: sessionOf("s-1", "c-2", undefined, "Planner", "working"), where: "The session “Planner” in the console “Other” asks to start" },
+  { requester: sessionOf("s-1", "c-1", "p-3", "Billing agent", "working"), where: "The session Billing agent in the project Shop asks to start" },
+  { requester: sessionOf("s-1", "c-1", undefined, "Planner", "working"), where: "The console session Planner asks to start" },
+  { requester: sessionOf("s-1", "c-2", "p-2", "Billing agent", "working"), where: "The session Billing agent in the project Ledger of the console Other asks to start" },
+  { requester: sessionOf("s-1", "c-2", undefined, "Planner", "working"), where: "The session Planner in the console Other asks to start" },
 ])("names where the requester is: $where", ({ requester, where }) => {
   mountPendingQuestionDialog(
     {
@@ -96,5 +97,5 @@ it("what arrives while a request is on screen waits behind it", async () => {
   await act(async () => dialog.store.setState({ trustPrompts: [prompt], sessionRequests: [consoleRequest, request] }));
   const shown = dialogText();
   await act(async () => dialog.store.setState({ sessionRequests: [consoleRequest] }));
-  expect([shown.includes("session in the project “p-1”"), title()]).toEqual([true, "Trust this folder?"]);
+  expect([shown.includes("session in the project p-1"), title()]).toEqual([true, "Trust this folder?"]);
 });

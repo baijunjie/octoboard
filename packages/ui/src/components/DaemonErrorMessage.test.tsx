@@ -90,3 +90,49 @@ it("sets the path of a conversation that was not found as code, not as quoted te
   expect(container.children).toHaveLength(1);
   expect(container.textContent).toBe(`No ${isolate("Claude Code")} conversation with this ID was found in /Users/dev/.claude. Check the ID, and that it was started under this account.`);
 });
+
+it("sets resolved project and session names in chips without changing their typeface", () => {
+  const daemon = { store: createStateStore({ sessions: new Map([["s1", { id: "s1", title: "Live title" } as import("../protocol").Session]]) }) } as Daemon;
+  const error = new DaemonRequestError("plain", "conversation_in_session", { session: "s1" });
+  expect(errorPresentation(error)).toBe(error);
+  const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  expect(container.querySelector("[data-inline-chip]")?.textContent).toBe("Live title");
+  expect(container.querySelector("code")).toBeNull();
+  expect(container.textContent).not.toMatch(/[“”]/);
+  act(() => daemon.store.setState({ sessions: new Map([["s1", { id: "s1", title: "Renamed" } as import("../protocol").Session]]) }));
+  expect(container.querySelector("[data-inline-chip]")?.textContent).toBe("Renamed");
+});
+
+it("keeps a failed launch's name and its nested failure's path as distinct chips", () => {
+  const daemon = { store: createStateStore({}) } as Daemon;
+  const params = { title: "Draft", reason_code: "path_not_found", path: "/missing/project" };
+  const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={new DaemonRequestError("fallback", "launch_failed", params)} /></DaemonProvider>);
+  expect(Array.from(container.querySelectorAll("[data-inline-chip]"), (chip) => chip.textContent)).toEqual(["Draft", "/missing/project"]);
+  expect(container.querySelector("code")?.textContent).toBe("/missing/project");
+  expect(container.textContent).toBe("Could not start Draft: /missing/project does not exist.");
+});
+
+it("renders structured running-session IDs as distinct live names, preserving commas and quote characters in titles", () => {
+  const titles = ["Draft, review “notes”", "Second, “task”"];
+  const daemon = { store: createStateStore({ sessions: new Map(titles.map((title, index) => [`s${index}`, { id: `s${index}`, title } as import("../protocol").Session])) }) } as Daemon;
+  const params = { count: "3", sessions: "old fallback", session_ids: JSON.stringify(["s0", "s1", "gone"]) };
+  const error = new DaemonRequestError("plain fallback", "session_has_running_sessions", params);
+  expect(errorPresentation(error)).toBe(error);
+  const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  expect(Array.from(container.querySelectorAll("[data-inline-chip]"), (chip) => chip.textContent)).toEqual([...titles, "gone"]);
+  expect(container.querySelector("code")).toBeNull();
+  expect(container.textContent).not.toContain("old fallback");
+  act(() => daemon.store.setState({ sessions: new Map([["s0", { id: "s0", title: "Renamed" } as import("../protocol").Session]]) }));
+  expect(Array.from(container.querySelectorAll("[data-inline-chip]"), (chip) => chip.textContent)).toEqual(["Renamed", "s1", "gone"]);
+});
+
+it("does not try to parse old or malformed running-session lists out of quoted title text", () => {
+  const params = { count: "2", sessions: "“One, task”, “Other”" };
+  for (const extra of [{}, { session_ids: "not JSON" }, { session_ids: '["s0",5]' }, { session_ids: "[]" }] as import("../protocol").MessageParams[]) {
+    const error = new DaemonRequestError("old daemon fallback", "session_has_running_sessions", { ...params, ...extra });
+    expect(errorPresentation(error)).toBe("old daemon fallback");
+    const container = mount(<DaemonErrorMessage error={error} />);
+    expect(container.textContent).toBe("old daemon fallback");
+    expect(container.querySelector("[data-inline-chip]")).toBeNull();
+  }
+});

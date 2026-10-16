@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { createStore, type StoreApi } from "zustand";
 import { useStore } from "zustand/react";
 
@@ -34,6 +34,9 @@ import {
 export interface ToastRequest {
   kind: "error" | "notice";
   message: string;
+  /** Optional markup; `message` stays plain for deduplication and text-only consumers. */
+  content?: ReactNode;
+  daemonTitle?: DaemonRequestError;
   /** The daemon's own code and params, kept for a structured rendering of the message (a literal
    * set as code), for a notice as well as an error. Absent for a message the UI worded itself. */
   daemonError?: DaemonRequestError;
@@ -412,7 +415,7 @@ export interface Daemon {
   toastError: (message: string | Error, session?: string) => void;
   /** Confirms something the user just did, which has no inline place to say so (a path copied);
    * about no session, so the toast is the message alone. */
-  toastNotice: (message: string) => void;
+  toastNotice: (message: string, content?: ReactNode) => void;
   /** Calls `listener` for every toast to show from now on: the daemon's errors and notices that
    * belong to no request, and what `toastError` and `toastNotice` are given. Returns the unsubscribe. */
   onToast: (listener: (toast: ToastRequest) => void) => () => void;
@@ -449,7 +452,8 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
       const failure = noticeErrorPresentation(event.code, event.params, event.message);
       emitToast({
         kind: "notice",
-        message: daemonMessage(currentLanguage(), failure ? `${event.code}.title` : event.code, event.params, event.message, store.getState()),
+        message: daemonMessage(currentLanguage(), event.code, event.params, event.message, store.getState()),
+        daemonTitle: failure ? new DaemonRequestError(event.message, `${event.code}.title`, event.params) : undefined,
         daemonError: failure ?? new DaemonRequestError(event.message, event.code, event.params),
         session: event.session,
       });
@@ -480,7 +484,7 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
       emitToast({ kind: "error", message: errorText(message), session,
         ...(typeof presentation !== "string" && { daemonError: presentation }) });
     },
-    toastNotice: (message) => emitToast({ kind: "notice", message }),
+    toastNotice: (message, content) => emitToast({ kind: "notice", message, content }),
     onToast: (listener) => {
       toastListeners.add(listener);
       return () => void toastListeners.delete(listener);

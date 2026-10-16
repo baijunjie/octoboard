@@ -1,6 +1,7 @@
 import { Alert } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
+import { InlineChip } from "../components/InlineChip";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { AgentIcon } from "../components/AgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -8,7 +9,7 @@ import { StatusIcon } from "../components/StatusIcon";
 import { TintedAlert } from "../components/TintedAlert";
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
 import { isolate } from "../i18n/isolate";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import { isLive, type Project, type Session } from "../protocol";
 import { sessionAccountTooltip, sessionAgentLabel, sessionDisplayTitle } from "../sessionLabel";
 import { boundArchivedSessions, boundSessionsArchivedWith, compareSessions } from "../sidebar/order";
@@ -75,7 +76,7 @@ function DeleteProjectDialog({ project, running, onClose }: { project: Project; 
         : "common.remove";
   return (
     <ConfirmDialog
-      title={t("dialog.removeProject.title", { name: isolate(project.name) })}
+      title={<Message id="dialog.removeProject.title" params={{ name: <InlineChip dir="auto" wrap size="inherit">{project.name}</InlineChip> }} />}
       message={
         <>
           <p>{t(trash ? "dialog.removeProject.messageTrash" : "dialog.removeProject.message")}</p>
@@ -116,7 +117,7 @@ function DeleteSessionDialog({ session, withIt, unused, onClose }: { session: Se
   if (unused && pending) return null;
   return (
     <ConfirmDialog
-      title={t("dialog.deleteSession.title", { title: isolate(sessionDisplayTitle(t, session)) })}
+      title={<Message id="dialog.deleteSession.title" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, session)}</InlineChip> }} />}
       message={
         <>
           <p>{t("dialog.deleteSession.message")}</p>
@@ -233,7 +234,7 @@ export function RequestedDialog({
     case "delete-console":
       return (
         <ConfirmDialog
-          title={t("dialog.deleteConsole.title", { name: isolate(dialog.console.name) })}
+          title={<Message id="dialog.deleteConsole.title" params={{ name: <InlineChip dir="auto" wrap size="inherit">{dialog.console.name}</InlineChip> }} />}
           message={t("dialog.deleteConsole.message")}
           confirmLabel={t("common.delete")}
           typeToConfirm={t("dialog.typeToConfirm.delete")}
@@ -326,7 +327,7 @@ export function RequestedDialog({
       const withIt = boundSessionsArchivedWith(Array.from(sessions.values()), dialog.session.id);
       return (
         <ConfirmDialog
-          title={t("dialog.archiveSession.title", { title: isolate(sessionDisplayTitle(t, dialog.session)) })}
+          title={<Message id="dialog.archiveSession.title" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, dialog.session)}</InlineChip> }} />}
           message={
             <>
               <p>{t("dialog.archiveSession.message")}</p>

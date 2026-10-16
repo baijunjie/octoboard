@@ -914,6 +914,12 @@ html.pane-resizing * {
 .inline-chip--xs {
   line-height: 16px;
 }
+.inline-chip--inherit {
+  display: inline;
+  font-size: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
+}
 .inline-chip--wrap {
   display: inline;
   white-space: normal;
@@ -921,8 +927,18 @@ html.pane-resizing * {
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
+/* Inner padding participates in line fitting; cloned outer padding can paint beyond a wrapped line. */
+.inline-chip--inherit.inline-chip--wrap {
+  padding-inline: 0;
+}
+.inline-chip--inherit.inline-chip--wrap > .chip__label {
+  padding-inline: 0.375rem;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
 .inline-chip__code {
   font: inherit;
+  font-family: var(--font-mono);
 }
 .inline-chip--secondary {
   --chip-bg: color-mix(in oklab, var(--color-purple-500) 15%, transparent);

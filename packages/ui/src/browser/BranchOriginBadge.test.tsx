@@ -40,11 +40,11 @@ function open(selectedSessionId?: string, daemonState = state, value?: string): 
   act(() => container.querySelector<HTMLElement>("button")!.click());
 }
 
-it("marks only a branch with an origin, naming the session by its quoted current title", () => {
+it("marks only a branch with an origin, naming the session by its current title", () => {
   open();
   const ring = ringOf("made-by-session");
   // The session was renamed since the attribution, and the sidebar shows the new title.
-  expect(ring.getAttribute("aria-label")).toBe(`Created by session “${isolate("Fix the layout, renamed")}”`);
+  expect(ring.getAttribute("aria-label")).toBe(`Created by session ${isolate("Fix the layout, renamed")}`);
   expect(optionOf("made-in-terminal").querySelector("[role=img]")).toBeNull();
 });
 
@@ -55,8 +55,8 @@ it("leaves the option's own name to its content, so the ring's name is not dupli
 });
 
 it.each([
-  ["an archived session, which still exists", "made-by-archived", `Created by session “${isolate("Old experiment")}”`],
-  ["a session that is gone", "made-by-gone", `Created by session “${isolate("Tune the weights")}”, which no longer exists`],
+  ["an archived session, which still exists", "made-by-archived", `Created by session ${isolate("Old experiment")}`],
+  ["a session that is gone", "made-by-gone", `Created by session ${isolate("Tune the weights")}, which no longer exists`],
 ])("names %s", (_, branch, name) => {
   open();
   expect(ringOf(branch).getAttribute("aria-label")).toBe(name);
@@ -64,7 +64,7 @@ it.each([
 
 it("does not call a session gone before the daemon's first snapshot", () => {
   open(undefined, {});
-  expect(ringOf("made-by-gone").getAttribute("aria-label")).toBe(`Created by session “${isolate("Tune the weights")}”`);
+  expect(ringOf("made-by-gone").getAttribute("aria-label")).toBe(`Created by session ${isolate("Tune the weights")}`);
 });
 
 it("draws no badge on the trigger once a branch is chosen", () => {
@@ -94,7 +94,8 @@ it("shows the creator in a tooltip after the delay while the pointer is on the r
   enter(ringOf("made-by-session"));
   expect(openTooltip()).toBeNull();
   settle();
-  expect(openTooltip()?.textContent).toBe(`Created by session “${isolate("Fix the layout, renamed")}”`);
+  expect(openTooltip()?.textContent).toBe("Created by session Fix the layout, renamed");
+  expect(openTooltip()?.querySelector("[data-inline-chip]")?.textContent).toBe("Fix the layout, renamed");
 
   leave(ringOf("made-by-session"));
   settle();
@@ -113,12 +114,12 @@ it("takes no focus: the ring is no tab stop and a press on it is cancelled", () 
 
 it("names the selected session by its current title, not the snapshot's", () => {
   open("s-live");
-  expect(ringOf("made-by-session").getAttribute("aria-label")).toBe(`Created by the selected session “${isolate("Fix the layout, renamed")}”`);
+  expect(ringOf("made-by-session").getAttribute("aria-label")).toBe(`Created by the selected session ${isolate("Fix the layout, renamed")}`);
 });
 
 it("keeps the snapshot title for a selected session that is gone", () => {
   open("s-gone");
-  expect(ringOf("made-by-gone").getAttribute("aria-label")).toBe(`Created by session “${isolate("Tune the weights")}”, which no longer exists`);
+  expect(ringOf("made-by-gone").getAttribute("aria-label")).toBe(`Created by session ${isolate("Tune the weights")}, which no longer exists`);
 });
 
 it("marks the selected session's branches in the accent colour and in words", () => {

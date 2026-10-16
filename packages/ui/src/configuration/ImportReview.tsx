@@ -60,12 +60,11 @@ const APPLY_ALL: {
 
 /** An account reference that names no account of this machine, and what happens to it. */
 function FallbackNote({ fallback }: { fallback: AccountFallback }): React.ReactElement {
-  const t = useT();
   return (
     <p className="flex items-start gap-2 text-sm">
       <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning-glyph" />
       <span className="min-w-0">
-        {t("configuration.import.fallback", { agent: AGENT_LABEL[fallback.agent], name: fallback.name })}
+        <Message id="configuration.import.fallback" params={{ agent: AGENT_LABEL[fallback.agent], name: <InlineChip dir="auto" wrap size="inherit">{fallback.name}</InlineChip> }} />
       </span>
     </p>
   );
@@ -108,17 +107,23 @@ function ProjectRow({
       {/* Where the project is placed is the exported path itself for the commonest choice, and one
           line then says both. */}
       {/* The state is a sentence of its own beside the path, so the row stays two lines. */}
-      <p className="flex flex-wrap gap-x-3">
-        <Message
-          id={
-            inPlace
-              ? "configuration.import.project.exportedPathUsed"
-              : "configuration.import.project.exportedPath"
-          }
-          params={{ path: <InlineChip monospace wrap size="xs">{project.path}</InlineChip> }}
-        />
+      <p>
+        <span>
+          <Message
+            id={
+              inPlace
+                ? "configuration.import.project.exportedPathUsed"
+                : "configuration.import.project.exportedPath"
+            }
+            params={{ path: <InlineChip monospace wrap size="inherit">{project.path}</InlineChip> }}
+          />
+        </span>
         {/* A project found at its exported path and placed there is already said by the path's own line. */}
-        {!(inPlace && project.default === "exported_path") && <span>{t(STATE_LABEL[project.default ?? "none"])}</span>}
+        {!(inPlace && project.default === "exported_path") && (
+          <>
+            {" "}<span className="ms-2">{t(STATE_LABEL[project.default ?? "none"])}</span>
+          </>
+        )}
       </p>
       {row.choice === "directory" ? (
         <TextInput
@@ -138,12 +143,12 @@ function ProjectRow({
         <p>
           <Message
             id="configuration.import.target.clone"
-            params={{ url: <InlineChip monospace wrap size="xs">{project.remote_url ?? ""}</InlineChip>, path: <InlineChip monospace wrap size="xs">{target ?? ""}</InlineChip> }}
+            params={{ url: <InlineChip monospace wrap size="inherit">{project.remote_url ?? ""}</InlineChip>, path: <InlineChip monospace wrap size="inherit">{target ?? ""}</InlineChip> }}
           />
         </p>
       ) : inPlace ? null : (
         <p>
-          <Message id="configuration.import.target.place" params={{ path: <InlineChip monospace wrap size="xs">{target ?? ""}</InlineChip> }} />
+          <Message id="configuration.import.target.place" params={{ path: <InlineChip monospace wrap size="inherit">{target ?? ""}</InlineChip> }} />
         </p>
       )}
       {project.account_fallbacks.map((fallback) => (
@@ -248,11 +253,11 @@ export function ImportReview({
   const t = useT();
   const [announcement, setAnnouncement] = useState<string>();
   const settings = inspection.settings;
-  const setting = t("settings.git.autoPull.label");
+  const setting = <InlineChip dir="auto" wrap size="inherit">{t("settings.git.autoPull.label")}</InlineChip>;
   const settingsNote = settings
     ? settings.auto_pull_repositories === settings.current_auto_pull_repositories
-      ? t(settings.auto_pull_repositories ? "configuration.import.settings.alreadyOn" : "configuration.import.settings.alreadyOff", { setting })
-      : t(settings.auto_pull_repositories ? "configuration.import.settings.turnsOn" : "configuration.import.settings.turnsOff", { setting })
+      ? <Message id={settings.auto_pull_repositories ? "configuration.import.settings.alreadyOn" : "configuration.import.settings.alreadyOff"} params={{ setting }} />
+      : <Message id={settings.auto_pull_repositories ? "configuration.import.settings.turnsOn" : "configuration.import.settings.turnsOff"} params={{ setting }} />
     : undefined;
   const cloning = review.some((rows) => rows.some((row) => row.choice === "clone"));
 
@@ -260,7 +265,7 @@ export function ImportReview({
     <>
       <StatusAnnouncer text={announcement} />
       <p className="text-sm">
-        <Message id="configuration.import.review.intro" params={{ file: <InlineChip monospace wrap size="xs">{fileName}</InlineChip> }} />
+        <Message id="configuration.import.review.intro" params={{ file: <InlineChip monospace wrap size="inherit">{fileName}</InlineChip>, skip: <InlineChip dir="auto" wrap size="inherit">{t("configuration.import.choice.skip")}</InlineChip> }} />
       </p>
       <LabelledGroup label={t("configuration.import.all.label")}>
         <div className="flex flex-wrap gap-2">

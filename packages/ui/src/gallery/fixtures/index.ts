@@ -47,7 +47,7 @@ export const SCENARIOS: Scenario[] = [
     group: "Component colors",
     category: "normal",
     title: "Inline chips, sizes and alert tones",
-    description: "Four inline chip sizes with regular and monospace text and wrapping paths, six colors outside alerts, all requested colors inside each alert tone, code blocks and nested tone priority. Scroll to compare the complete palette; theme and language controls show the same view in dark and right-to-left layouts.",
+    description: "Inherited 12px field descriptions, 14px body labels and 16px dialog headings compare names, labels, files, paths and italic confirmation words on the same baseline, with long-path wrapping and RTL isolation. Four fixed metadata sizes, six colors outside alerts, all requested colors inside each alert tone, code blocks and nested tone priority remain available. Scroll to compare the complete palette; theme and language controls show the same view in dark and right-to-left layouts.",
     codePalette: true,
   },
 ];

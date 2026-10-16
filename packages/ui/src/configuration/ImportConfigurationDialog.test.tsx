@@ -178,9 +178,9 @@ it("tells each project's result in a table row, with the reason beside a failure
   expect(line("Dotfiles")).toContain("Not attempted");
   expect(line("Dotfiles")).toContain("Its console could not be created.");
   const section = (title: string) => Array.from(document.body.querySelectorAll("section")).find((s) => s.querySelector(":scope > h3")?.textContent === title)?.textContent ?? "";
-  expect(section("Accounts that fell back to the default account")).toContain("Claude Code account “Work”, named by the console Work laptop");
-  expect(section("Accounts that fell back to the default account")).toContain("Codex account “Personal”, named by the project Search API in Work laptop");
-  expect(text()).toContain("“Automatically pull repositories” is now on.");
+  expect(section("Accounts that fell back to the default account")).toContain("Claude Code account Work, named by the console Work laptop");
+  expect(section("Accounts that fell back to the default account")).toContain("Codex account Personal, named by the project Search API in Work laptop");
+  expect(text()).toContain("Automatically pull repositories is now on.");
 });
 
 it("names the result step in its title and takes focus to the dialog, wherever focus was while it ran", async () => {
@@ -218,8 +218,8 @@ it("announces which choice was applied to how many, so two presses with the same
   const first = announced();
   await press("Clone from remotes (2)");
   expect([first, announced()]).toEqual([
-    "Applied “Default clone directory” to 2 projects.",
-    "Applied “Clone from remote” to 2 projects.",
+    "Applied Default clone directory to 2 projects.",
+    "Applied Clone from remote to 2 projects.",
   ]);
 });
 

@@ -1,5 +1,6 @@
 import { EXAMPLE_CONVERSATION_ID } from "./conversationId";
 import { format, isMessageKey } from "./i18n/catalog";
+import { joinPhrases } from "./i18n/joinPhrases";
 import { isolate } from "./i18n/isolate";
 import type { Language } from "./i18n/languages";
 import type { MessageParams } from "./protocol";
@@ -62,6 +63,28 @@ export const CODE_PARAMS: Record<string, readonly string[]> = {
   agent_not_available: ["pathVar"],
 };
 
+/** Names retain the surrounding prose's typeface rather than the monospace used for paths. */
+export const NAME_PARAMS: Record<string, readonly string[]> = {
+  account_name_taken: ["name"],
+  project_directory_shared: ["project"],
+  conversation_in_session: ["session"],
+  launch_failed: ["title"],
+  "launch_failed.title": ["title"],
+  session_did_not_stop: ["session"],
+  switch_did_not_come_up: ["session"],
+};
+
+/** A structured list never infers boundaries from user-provided names or punctuation. */
+export function runningSessionIds(params: MessageParams): string[] | undefined {
+  if (!params.session_ids) return undefined;
+  try {
+    const ids: unknown = JSON.parse(params.session_ids);
+    return Array.isArray(ids) && ids.length > 0 && ids.every((id) => typeof id === "string" && id.length > 0) ? ids : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The params of a message that the UI supplies itself, by message code, beneath what the daemon
  * sends. */
 export const UI_PARAMS: Record<string, MessageParams> = {
@@ -98,19 +121,21 @@ function paramText(records: RecordNames, name: string, value: string): string {
  * reason code the catalog lacks. A `launch_failed` notice's `reason_code` is the code of the error
  * the launch failed with, so its `reason` is worded from that code's own `daemon.<code>` message, with
  * the failure's params that arrive beside it and that code's `UI_PARAMS`. With `mark`, a param the
- * message shows as code (`CODE_PARAMS`) is what `mark` makes of its raw value instead. */
+ * message sets apart (`CODE_PARAMS` or `NAME_PARAMS`) is what `mark` makes of its displayed value instead. */
 export function daemonParams<V = never>(
   language: Language,
   code: string,
   params: MessageParams,
   records: RecordNames,
-  mark?: (value: string) => V,
+  mark?: (value: string, monospace: boolean) => V,
 ): Record<string, string | number | V> {
   // A failed launch carries its failure's params, which take the UI's own for the failure's code.
   const all = code === "launch_failed" && params.reason_code ? withUiParams(params.reason_code, params) : withUiParams(code, params);
   const shown: Record<string, string | number> = Object.fromEntries(
     Object.entries(all).map(([name, value]) => [name, paramText(records, name, value)]),
   );
+  const running = code === "session_has_running_sessions" ? runningSessionIds(all) : undefined;
+  if (running) shown.sessions = joinPhrases(language, running.map((id) => paramText(records, "session", id)));
   // A count arrives as text; as a number it selects the singular or plural wording.
   if (/^\d+$/.test(all.count ?? "")) shown.count = Number(all.count);
   const reasonKey = `daemon.trust_reason.${all.reason_code}`;
@@ -119,7 +144,8 @@ export function daemonParams<V = never>(
   if (code === "launch_failed" && isMessageKey(failureKey)) shown.reason = format(language, failureKey, shown);
   if (!mark) return shown;
   const marked: Record<string, string | number | V> = { ...shown };
-  for (const name of CODE_PARAMS[messageCode(code, all)] ?? []) if (name in all) marked[name] = mark(all[name]);
+  for (const name of CODE_PARAMS[messageCode(code, all)] ?? []) if (name in all) marked[name] = mark(all[name], true);
+  for (const name of NAME_PARAMS[messageCode(code, all)] ?? []) if (name in all) marked[name] = mark(RECORD_NAMES[name]?.(records, all[name]) ?? all[name], false);
   return marked;
 }
 

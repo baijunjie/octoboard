@@ -156,7 +156,7 @@ export function SessionDialog({
   const resumeProblem: "required" | "invalid" | undefined = !resuming ? undefined : resumeId === "" ? "required" : !CONVERSATION_ID.test(resumeId) ? "invalid" : undefined;
   const resumeProblems = {
     required: t("dialog.session.resumeRequired"),
-    invalid: <Message id="dialog.session.resumeInvalid" params={{ example: <InlineChip monospace wrap size="xs">{EXAMPLE_CONVERSATION_ID}</InlineChip> }} />,
+    invalid: <Message id="dialog.session.resumeInvalid" params={{ example: <InlineChip monospace wrap size="inherit">{EXAMPLE_CONVERSATION_ID}</InlineChip> }} />,
   };
   const shownProblem = shown(resumeProblem);
 

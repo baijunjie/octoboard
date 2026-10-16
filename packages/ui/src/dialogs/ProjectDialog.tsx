@@ -276,10 +276,11 @@ export function ProjectDialog({
               <Message
                 id="dialog.project.agentDetectHint"
                 params={{
-                  claudeFile: <InlineChip monospace wrap size="xs">CLAUDE.md</InlineChip>,
-                  agentsFile: <InlineChip monospace wrap size="xs">AGENTS.md</InlineChip>,
-                  claudeDir: <InlineChip monospace wrap size="xs">.claude</InlineChip>,
-                  codexDir: <InlineChip monospace wrap size="xs">.codex</InlineChip>,
+                  detect: <InlineChip dir="auto" wrap size="inherit">{t("dialog.project.agentDetect")}</InlineChip>,
+                  claudeFile: <InlineChip monospace wrap size="inherit">CLAUDE.md</InlineChip>,
+                  agentsFile: <InlineChip monospace wrap size="inherit">AGENTS.md</InlineChip>,
+                  claudeDir: <InlineChip monospace wrap size="inherit">.claude</InlineChip>,
+                  codexDir: <InlineChip monospace wrap size="inherit">.codex</InlineChip>,
                 }}
               />
             ) : undefined

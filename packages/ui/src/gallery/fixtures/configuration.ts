@@ -316,6 +316,18 @@ export const configurationScenarios: Scenario[] = [
     steps: exportFromSettings,
   },
   {
+    id: "configuration-export-saved",
+    group: GROUP,
+    category: "normal",
+    title: "Export, saved file confirmation",
+    description: "The success toast names the saved configuration file as a chip.",
+    state,
+    steps: [
+      ...exportFromSettings,
+      (ui) => ui.press(ui.t("configuration.export.submit")),
+    ],
+  },
+  {
     id: "configuration-export-downloaded",
     group: GROUP,
     category: "normal",

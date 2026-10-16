@@ -1,5 +1,5 @@
 import type { Scenario } from "../scenario";
-import { SAMPLE, projectOf, sessionOf, snapshotState } from "./builders";
+import { SAMPLE, consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
 import { SHELL_TIMEOUT } from "./shellTimeout";
 
 const TRUST = "Trust prompts and toasts";
@@ -12,6 +12,7 @@ const codexSession = sessionOf("s-api-codex", console_.id, api.id, "Review the r
 const grokProject = projectOf("p-grok-home", console_.id, "Home", { path: "/Users/dev" });
 const grokSession = sessionOf("s-web-grok", console_.id, grokProject.id, "Tidy the stylesheet", "working", { agent: "grok" });
 const sessions = [...SAMPLE.sessions, codexSession, grokSession];
+const requestingConsole = consoleOf("c-requester", "Release coordination");
 
 export const noticeScenarios: Scenario[] = [
   {
@@ -38,11 +39,11 @@ export const noticeScenarios: Scenario[] = [
     category: "normal",
     title: "Request to start a session in another project",
     description:
-      "A session in Website asks for a Grok Build session in Search API: the requester's project and the target project differ, and the dialog names both.",
+      "A session in Website asks for a Grok Build session in Search API: the requester belongs to a different console and project, so all requester and destination names are visible as chips.",
     state: snapshotState({
-      consoles: [console_],
-      projects: [web, api, grokProject],
-      sessions: sessions.map((s) => (s.id === "s-web-1" ? { ...s, status: "waiting_user" } : s)),
+      consoles: [console_, requestingConsole],
+      projects: [{ ...web, console_id: requestingConsole.id }, api, grokProject],
+      sessions: sessions.map((s) => ({ ...s, ...(s.project_id === web.id ? { console_id: requestingConsole.id } : {}), ...(s.id === "s-web-1" ? { status: "waiting_user" as const } : {}) })),
       sessionRequests: [
         {
           requestId: "r-1",
@@ -92,6 +93,50 @@ export const noticeScenarios: Scenario[] = [
       { kind: "error", code: "session_request_not_waiting", params: { session: "s-web-1" }, message: "", session: "s-web-1" },
       { kind: "error", code: "a_code_from_a_newer_daemon", params: {}, message: "The daemon's own English text, shown as is." },
     ],
+  },
+  {
+    id: "toast-running-session-titles",
+    group: TRUST,
+    category: "exceptional",
+    title: "Archiving refused, running session names",
+    description: "Each running session is a separate chip, including names containing commas and quotation marks.",
+    state: snapshotState({
+      consoles: [console_],
+      projects: [web, api],
+      sessions: sessions.map((session) => session.id === "s-web-1"
+        ? { ...session, title: 'Review "draft", then release' }
+        : session),
+    }),
+    toasts: [{
+      kind: "error",
+      code: "session_has_running_sessions",
+      params: {
+        count: "2",
+        sessions: '"Review "draft", then release", "Update the dependencies"',
+        session_ids: JSON.stringify(["s-web-1", "s-web-2"]),
+      },
+      message: "",
+    }],
+  },
+  {
+    id: "toast-launch-path",
+    group: TRUST,
+    category: "exceptional",
+    title: "Launch failed, nested path in its reason",
+    description: "The session title and the configuration path inside the failure reason are chips.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{
+      kind: "notice",
+      code: "launch_failed",
+      params: {
+        title: "Draft the release notes",
+        reason_code: "config_dir_unreachable",
+        agent: "Claude Code",
+        path: "/Users/dev/.claude-work",
+        reason: "Permission denied",
+      },
+      message: "",
+    }],
   },
   {
     id: "toast-shell-timeout",

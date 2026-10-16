@@ -2,12 +2,13 @@ import { Checkbox, Description, Label, ProgressBar } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
+import { InlineChip } from "../components/InlineChip";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import type { Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { useDaemon, useDaemonStore } from "../store";
@@ -45,7 +46,7 @@ export function SwitchAccountDialog({
     && (candidate.account_id ?? null) !== account;
   const candidates = Array.from(sessions.values()).filter(eligible);
   const progressText = progress && t("dialog.switchAccount.progress", { count: progress.total, completed: progress.completed });
-  const currentText = progress?.current && t("dialog.switchAccount.current", { title: isolate(sessionDisplayTitle(t, progress.current)) });
+  const currentText = progress?.current && <Message id="dialog.switchAccount.current" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, progress.current)}</InlineChip> }} />;
   const announcement = progress?.current
     ? t("dialog.switchAccount.progressCurrent", { count: progress.total, completed: progress.completed, title: isolate(sessionDisplayTitle(t, progress.current)) })
     : progressText;
@@ -82,7 +83,7 @@ export function SwitchAccountDialog({
 
   return (
     <ConfirmDialog
-      title={t("dialog.switchAccount.title", { title: isolate(sessionDisplayTitle(t, session)), account: isolate(accountName) })}
+      title={<Message id="dialog.switchAccount.title" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, session)}</InlineChip>, account: <InlineChip dir="auto" wrap size="inherit">{accountName}</InlineChip> }} />}
       message={t(all ? "dialog.switchAccount.messageAll" : session.has_conversation ? "dialog.switchAccount.message" : "dialog.switchAccount.messageFresh")}
       confirmLabel={t(failures.length ? "connection.retry" : "dialog.switchAccount.confirm")}
       pendingLabel={t("dialog.switchAccount.pending")}

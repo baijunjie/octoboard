@@ -344,20 +344,17 @@ function renamedFromPath(change: ViewerChange): string | undefined {
 }
 
 /** One detail of the header, an item of its own that flows around the view controls and can take a
- * row of its own when it does not fit beside them. Its `inline-flex` is not free to change:
- * `RenamedFrom` puts a path into the middle of a sentence, which works only because the sentence's
- * text run becomes an anonymous flex item beside the path's own flex item, spaced by `gap-1.5`
- * rather than by the space in the message. In a non-flex display the path, a block-level flex box,
- * would break the line. */
+ * row of its own when it does not fit beside them. The rename origin uses a separate wrapping
+ * layout, since the full path must remain readable at a narrow window width. */
 function DetailItem({ children }: { children: React.ReactNode }): React.ReactElement {
   return <span className="me-4 inline-flex h-8 max-w-full items-center gap-1.5 whitespace-nowrap align-top text-app-muted">{children}</span>;
 }
 
 function RenamedFrom({ path }: { path: string }): React.ReactElement {
   return (
-    <DetailItem>
-      <Message id="viewer.change.renamedFrom" params={{ path: <PlainMarkedPath path={displayWirePath(path)} icon={File} /> }} />
-    </DetailItem>
+    <span className="me-4 inline-block min-h-8 max-w-[calc(100%-1rem)] whitespace-normal align-top text-app-muted">
+      <Message id="viewer.change.renamedFrom" params={{ path: <InlineChip monospace wrap size="inherit" startContent={<File aria-hidden="true" className="inline-block size-3.5 align-text-bottom text-app-muted" />}>{displayWirePath(path)}</InlineChip> }} />
+    </span>
   );
 }
 
@@ -526,7 +523,7 @@ function ChangeView({
           <Notice tone="warned">
             <Message
               id={presentation.hidden === "old" ? "viewer.change.outsideOld" : "viewer.change.outsideNew"}
-              params={{ path: <InlineChip monospace wrap size="xs">{displayWirePath(presentation.repositoryPath)}</InlineChip> }}
+              params={{ path: <InlineChip monospace wrap size="inherit">{displayWirePath(presentation.repositoryPath)}</InlineChip> }}
             />
           </Notice>
           {shown.state === "present" && shown.body ? (

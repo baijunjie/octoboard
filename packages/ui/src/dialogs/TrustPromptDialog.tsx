@@ -3,22 +3,17 @@ import { errorPresentation } from "../errorPresentation";
 import React, { useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
-import { CodeBlock } from "../components/CodeBlock";
 import { InlineChip } from "../components/InlineChip";
 import { TintedAlert } from "../components/TintedAlert";
 import { DaemonRequestError } from "../daemon-client";
-import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { TRUST_NOT_WAITING, TRUST_REFUSED_CODES, type Agent } from "../protocol";
 import { abbreviateHome } from "../pathDisplay";
 import { useDaemon, useDaemonStore, type TrustPrompt } from "../store";
 import type { ConfirmDialogProps } from "./ConfirmDialog";
 
-/** A file path or directory in the dialog's text. A block one (the project's path) breaks at any
- * character, so it wraps to the dialog's width rather than splitting at a hyphen; an inline one
- * breaks only where it would otherwise overflow, since a folder's name has no length limit. */
-function Path({ children, block }: { children: string; block?: boolean }): React.ReactElement {
-  return block ? <CodeBlock dir="ltr" className="break-all">{children}</CodeBlock> : <InlineChip monospace wrap size="xs">{children}</InlineChip>;
+function Path({ children }: { children: string }): React.ReactElement {
+  return <InlineChip monospace wrap size="inherit">{children}</InlineChip>;
 }
 
 /** What trusting lets the asking agent do with the project's own configuration: true for that agent
@@ -53,14 +48,11 @@ function TrustPromptMessage({
   const agent = AGENT_LABEL[prompt.agent];
   return (
     <>
-      <div className="flex flex-col gap-2">
-        <p>
-          {sessionTitle
-            ? t("dialog.trust.questionForSession", { agent, session: isolate(sessionTitle) })
-            : t("dialog.trust.question", { agent })}
-        </p>
-        <Path block>{abbreviateHome(prompt.path, home)}</Path>
-      </div>
+      <p>
+        {sessionTitle
+          ? <Message id="dialog.trust.questionForSession" params={{ agent, session: <InlineChip dir="auto" wrap size="inherit">{sessionTitle}</InlineChip>, path: <Path>{abbreviateHome(prompt.path, home)}</Path> }} />
+          : <Message id="dialog.trust.question" params={{ agent, path: <Path>{abbreviateHome(prompt.path, home)}</Path> }} />}
+      </p>
       <p>{t("dialog.trust.behavior", { agent })}</p>
       {prompt.agent === "codex" && <p>{t("dialog.trust.codexRoot", { agent })}</p>}
       {/* HeroUI's own warning tint rather than its default surface, which is the dialog's own fill and
@@ -106,7 +98,7 @@ function TrustDirCheckbox({
             id="dialog.trust.parent"
             params={{
               directory: (
-                <InlineChip monospace wrap size="xs">{directory}</InlineChip>
+                <InlineChip monospace wrap size="inherit">{directory}</InlineChip>
               ),
             }}
           />

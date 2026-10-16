@@ -105,11 +105,12 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
       const failure = code && toast.kind === "notice" ? noticeErrorPresentation(code, params ?? {}, message) : undefined;
       emitToast({
         ...toast,
-        // As the store presents a daemon's: a failed launch as the failure it reports.
+        // Mirror the store: keep the full plain message and structured launch title separately.
         ...(code && {
+          daemonTitle: failure ? new DaemonRequestError(message, `${code}.title`, params ?? {}) : undefined,
           daemonError: failure ?? new DaemonRequestError(message, code, params ?? {}),
         }),
-        message: code ? daemonMessage(currentLanguage(), failure ? `${code}.title` : code, params ?? {}, message, store.getState()) : message,
+        message: code ? daemonMessage(currentLanguage(), code, params ?? {}, message, store.getState()) : message,
       });
     }
   };
@@ -463,7 +464,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
       emitToast({ kind: "error", message: errorText(message), session,
         ...(typeof presentation !== "string" && { daemonError: presentation }) });
     },
-    toastNotice: (message) => emitToast({ kind: "notice", message }),
+    toastNotice: (message, content) => emitToast({ kind: "notice", message, content }),
     onToast: (listener) => {
       toastListeners.add(listener);
       // StrictMode subscribes, unsubscribes and subscribes again; by the time this fires only the

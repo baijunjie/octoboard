@@ -2,6 +2,7 @@ import { CircleAlert, CircleCheck, CircleMinus, CircleSlash, CircleX, Info, type
 import React, { useId } from "react";
 
 import { AGENT_LABEL } from "../agents";
+import { InlineChip } from "../components/InlineChip";
 import { CodeToneContext } from "../components/codeTone";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
@@ -88,7 +89,7 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
   const failureNode = useFailureNode();
   const fallbacksId = useId();
   const outcome = outcomeOf(result.consoles);
-  const setting = t("settings.git.autoPull.label");
+  const setting = <InlineChip dir="auto" wrap size="inherit">{t("settings.git.autoPull.label")}</InlineChip>;
   // Every project in the order of the document, under its console; a console is a line of its
   // own only when something came of it that its projects do not already say: it failed, or it was
   // created with nothing in it.
@@ -147,12 +148,10 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
       <p>{summary.join(t("configuration.import.result.summary.join"))}</p>
       {result.settings_applied && (
         <p>
-          {t(
-            result.settings_applied.auto_pull_repositories
-              ? "configuration.import.result.settings.on"
-              : "configuration.import.result.settings.off",
-            { setting },
-          )}
+          <Message
+            id={result.settings_applied.auto_pull_repositories ? "configuration.import.result.settings.on" : "configuration.import.result.settings.off"}
+            params={{ setting }}
+          />
         </p>
       )}
       {result.settings_error && (
@@ -239,17 +238,17 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
               return (
                 <li key={index} className="[overflow-wrap:anywhere]" dir="auto">
                   {fallback.project === undefined
-                    ? t("configuration.import.result.fallback.console", {
+                    ? <Message id="configuration.import.result.fallback.console" params={{
                       agent,
-                      name: fallback.name,
-                      console: fallback.console,
-                    })
-                    : t("configuration.import.result.fallback.project", {
+                      name: <InlineChip dir="auto" wrap size="inherit">{fallback.name}</InlineChip>,
+                      console: <InlineChip dir="auto" wrap size="inherit">{fallback.console}</InlineChip>,
+                    }} />
+                    : <Message id="configuration.import.result.fallback.project" params={{
                       agent,
-                      name: fallback.name,
-                      project: fallback.project,
-                      console: fallback.console,
-                    })}
+                      name: <InlineChip dir="auto" wrap size="inherit">{fallback.name}</InlineChip>,
+                      project: <InlineChip dir="auto" wrap size="inherit">{fallback.project}</InlineChip>,
+                      console: <InlineChip dir="auto" wrap size="inherit">{fallback.console}</InlineChip>,
+                    }} />}
                 </li>
               );
             })}

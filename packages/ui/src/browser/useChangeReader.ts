@@ -360,10 +360,10 @@ export function useChangeReader(project: string): ChangeReader {
       ? createElement(Message<"git.compare.source">, {
         id: "git.compare.source",
         params: {
-          from: createElement(InlineChip, { monospace: true, wrap: true, size: "xs", color: "primary", children: displayWirePath(origin.left.branch) }),
-          fromCommit: createElement(InlineChip, { monospace: true, wrap: true, size: "xs", color: "default", children: shortCommit(origin.base) }),
-          to: createElement(InlineChip, { monospace: true, wrap: true, size: "xs", color: "primary", children: displayWirePath(origin.right.branch) }),
-          toCommit: createElement(InlineChip, { monospace: true, wrap: true, size: "xs", color: "default", children: shortCommit(origin.right.commit) }),
+          from: createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "primary", children: displayWirePath(origin.left.branch) }),
+          fromCommit: createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "default", children: shortCommit(origin.base) }),
+          to: createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "primary", children: displayWirePath(origin.right.branch) }),
+          toCommit: createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "default", children: shortCommit(origin.right.commit) }),
         },
       })
       : undefined;

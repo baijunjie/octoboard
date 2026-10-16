@@ -42,7 +42,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   const { error, setError, busy, run } = useDialogAction();
   // The name of a file that is not JSON, which its failure line sets as code.
   const [notJson, setNotJson] = useState<string>();
-  const failure = notJson === undefined ? error : <Message id="configuration.import.notJson" params={{ name: <InlineChip monospace wrap size="xs">{notJson}</InlineChip> }} />;
+  const failure = notJson === undefined ? error : <Message id="configuration.import.notJson" params={{ name: <InlineChip monospace wrap size="inherit">{notJson}</InlineChip> }} />;
   const { shown, attempt } = useSubmitValidation();
   const [stage, setStage] = useState<Stage>({ kind: "choose" });
   const [review, setReview] = useState<ReviewState>([]);

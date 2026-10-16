@@ -2734,11 +2734,20 @@ pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
             format!(
                 "this session cannot be archived while sessions under it have a process \
                  running: {}; archive them or wait for them to finish first",
-                quoted_titles(&running)
+                session_titles(&running)
             ),
             &[
                 ("count", &running.len().to_string()),
-                ("sessions", &quoted_titles(&running)),
+                ("sessions", &session_titles(&running)),
+                (
+                    "session_ids",
+                    &serde_json::to_string(
+                        &running
+                            .iter()
+                            .map(|session| &session.id)
+                            .collect::<Vec<_>>(),
+                    )?,
+                ),
             ],
         ));
     }
@@ -2882,13 +2891,11 @@ fn binding_depth(state: &Arc<AppState>, session: &Session) -> Result<usize> {
     Ok(if owner_bound { 2 } else { 1 })
 }
 
-/// The titles of `sessions`, each in quotes, comma separated. The separator is half-width and
-/// English whatever the reading language; that is accepted, because a client with the message in
-/// its catalogue words the list itself and this serves the fallback text, which needs the titles.
-fn quoted_titles(sessions: &[Session]) -> String {
+/// English fallback titles; clients use the structured IDs to word and render the list.
+fn session_titles(sessions: &[Session]) -> String {
     sessions
         .iter()
-        .map(|session| format!("\u{201c}{}\u{201d}", session.title))
+        .map(|session| session.title.as_str())
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -6728,7 +6735,10 @@ mod tests {
             for (id, status) in ids.iter().zip(statuses) {
                 state
                     .store
-                    .insert_session(&bound_session(id, *status, "hub"))
+                    .insert_session(&Session {
+                        title: format!("Task “{id}”, notes"),
+                        ..bound_session(id, *status, "hub")
+                    })
                     .unwrap();
                 let fake = idle_stand_in(id);
                 state.register_live(fake.clone());
@@ -6739,8 +6749,15 @@ mod tests {
             assert_eq!(code_of(&err), error_code::SESSION_HAS_RUNNING_SESSIONS);
             let coded = err.downcast_ref::<CodedError>().unwrap();
             assert_eq!(coded.params["count"], statuses.len().to_string(), "{name}");
+            let mut shown_ids: Vec<String> =
+                serde_json::from_str(&coded.params["session_ids"]).unwrap();
+            shown_ids.sort();
+            assert_eq!(shown_ids, ids, "{name}");
             for id in &ids {
-                assert!(coded.params["sessions"].contains(id.as_str()), "{name}");
+                assert!(
+                    coded.params["sessions"].contains(&format!("Task “{id}”, notes")),
+                    "{name}"
+                );
                 assert!(coded.message.contains(id.as_str()), "{name}");
             }
             assert!(!coded.params["sessions"].contains("dormant"), "{name}");

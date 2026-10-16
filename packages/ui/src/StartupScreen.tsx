@@ -75,7 +75,7 @@ export function DaemonFailedMessage({ error }: { error: string }): React.ReactEl
 /** What the screen says when there is no daemon address to connect to, and how to give it one. */
 export function NoAddressMessage(): React.ReactElement {
   const t = useT();
-  const code = (text: string) => <InlineChip monospace wrap size="xs">{text}</InlineChip>;
+  const code = (text: string) => <InlineChip monospace wrap size="inherit">{text}</InlineChip>;
   return (
     <ErrorAlert title={t("startup.noAddress.title")} headingLevel={1} announce={false}>
       <p>

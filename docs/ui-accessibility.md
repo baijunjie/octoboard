@@ -392,21 +392,42 @@ lists and diagnostic blocks belong directly in the callout's content; HeroUI's s
 
 Inline labels and technical literals use the shared `InlineChip`, backed by HeroUI Chip. Technical literals use
 its monospace, left-to-right and wrapping options. A technical literal — a path, a file name, a URL, a branch,
-a commit id, an ID, a command or a setting value — stands without quotation marks, as code where the text is rendered and bare in its plain-text form; a
-name or title the user gave stays in quotation marks. Raw diagnostics use `CodeBlock` or the existing source renderer,
+a commit id, an ID, a command or a setting value — stands without quotation marks, as code where the text is rendered and bare in its plain-text form.
+A name, title or control label quoted within UI copy uses a non-monospace chip instead of quotation marks.
+Plain-text surfaces, including accessible names and system notifications, retain text without chip markup.
+Raw diagnostics use `CodeBlock` or the existing source renderer,
 preserving their text, direction and indentation; long content remains scrollable and reachable from the keyboard.
 Keep structured error metadata separate from the plain error message, so notifications and unknown-error fallbacks
 retain usable text.
 
-The shared size scale is `xs` (12px text, 16px line height and no vertical padding), `sm` (20px tall), `md` (24px)
-and `lg` (28px). `sm` is the default; the last three retain HeroUI's preset metrics. Compact prose literals, field
-errors, filter labels and usage indicators use `xs`. Sizes belong to the shared component rather than caller-level
-font, line-height or padding overrides. Width constraints for aligned metadata remain layout concerns.
+Choose the chip size by its role, consistently across the UI:
+
+| Role | Size | Typography and geometry |
+| --- | --- | --- |
+| A value within a sentence, heading, label, description, validation error, tooltip or toast; also a single technical value displayed on its own line in application copy | `inherit` | The surrounding font size and line height, on the text baseline. Typically 12px in field errors or secondary descriptions, 14px in body copy and labels, and 16px in dialog headings. No fixed chip height. |
+| Dense metadata: project filter terms and session usage indicators | `xs` | 12px text, 16px line height and height, no vertical padding. |
+| Independent status, type or size metadata: agent availability, file-change status, staging state, file size, Git-directory markers and report-history indicators | `sm` | 12px text, 20px height, HeroUI's compact preset. This is the component default for independent metadata. |
+| Reserved presets, shown only in the component comparison; no current product use | `md`, `lg` | HeroUI's 24px and 28px heights respectively. Do not use them to enlarge values within copy. |
+
+A path's length, monospace font or position on its own line does not select its size. Every technical literal
+within copy follows the same `inherit` rule as a name or control label. Technical literals keep their monospace
+code child while the chip's background uses the same font metrics as a name chip. Keep a sentence in ordinary
+inline flow rather than making its text runs and chips separate flex items that stretch to different heights.
+When a technical value completes a sentence, fill it through that sentence's localized placeholder; do not
+retain a separate paragraph or a colon-led block just because the value used to be shown as code.
+Long values wrap at slashes or anywhere they need to, within the available width; they do not select a smaller size.
+Sizes belong to the shared component rather than caller-level font, line-height or padding overrides. Width
+constraints for aligned metadata remain layout concerns.
 
 The `monospace` option preserves a semantic `code` child without introducing a second visual component. Paths and
 URLs can wrap after slashes, and longer uninterrupted literals can wrap anywhere. A confirmation word, file size,
-status and technical ID use the same chip component. Standalone path rows, code blocks and source or Markdown
-renderers retain their own layouts.
+status and technical ID use the same chip component. A typed confirmation word inherits the label's font size,
+uses italic text, and keeps the ordinary UI font. A single technical value in application copy uses a chip
+even on a line of its own, including the folder a trust confirmation asks about. Reserve `CodeBlock` for
+multi-line code or raw diagnostics, never as a larger presentation of one path. Structured path displays
+are separate from copy: file and directory lists, settings rows whose value is a path, and the viewer's
+primary file-path row retain their shared path components, including their icons, clipping and full-path
+tooltips. Path input fields and source or Markdown content also retain their own layouts.
 
 Inline chips retain HeroUI's colours, soft fill and shape; the secondary hue is the shared purple extension.
 `CodeBlock` uses the shared Typography wrapper for multi-line diagnostics. Outside an Alert, both default to neutral

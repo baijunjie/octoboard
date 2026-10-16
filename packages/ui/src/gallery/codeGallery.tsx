@@ -19,6 +19,21 @@ export function CodeGallery(): React.ReactElement {
       <FadedScroller region={region} className="min-h-0 flex-1 p-6">
         <div className="mx-auto flex max-w-5xl flex-col gap-6">
           <h1 className="text-lg font-semibold">Inline chips, sizes and alert tones</h1>
+          <section className="flex flex-col gap-3" aria-labelledby="chip-prose-title">
+            <h2 id="chip-prose-title" className="font-semibold">Inherited prose: equal size, height and baseline</h2>
+            {[12, 14, 16].map((size) => (
+              <div key={size} data-prose-size={size} className="min-w-0 rounded-lg border border-separator bg-surface p-3" style={{ fontSize: size }}>
+                <p className="mb-3 font-medium">{size}px — {size === 12 ? "Field description / validation" : size === 14 ? "Body / label" : "Dialog heading"}</p>
+                <p data-prose-comparison="" className="leading-relaxed">
+                  Remove <InlineChip size="inherit" data-chip-kind="name">Main 控制台</InlineChip>, choose <InlineChip size="inherit" data-chip-kind="label">Skip 跳过</InlineChip>,
+                  open <InlineChip size="inherit" monospace data-chip-kind="file">AGENTS.md</InlineChip> in <InlineChip size="inherit" monospace data-chip-kind="path">~/Projects</InlineChip>,
+                  or type <InlineChip size="inherit" className="italic" data-chip-kind="confirmation">Delete 删除</InlineChip> to confirm.
+                </p>
+                <p className="mt-3 leading-relaxed">Long path: <InlineChip size="inherit" monospace wrap>/Users/dev/Projects/octoboard/packages/ui/src/components/InlineChip.tsx</InlineChip> stays within the paragraph.</p>
+                <p dir="rtl" data-prose-rtl="" className="mt-3 leading-relaxed">افتح <InlineChip size="inherit" monospace>AGENTS.md</InlineChip> في <InlineChip size="inherit" monospace wrap>/Users/dev/Projects/octoboard</InlineChip> ثم اختر <InlineChip size="inherit">Main</InlineChip>.</p>
+              </div>
+            ))}
+          </section>
           <section className="flex flex-col gap-3" aria-labelledby="chip-sizes-title">
             <h2 id="chip-sizes-title" className="font-semibold">Four sizes, regular and monospace</h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -37,7 +52,7 @@ export function CodeGallery(): React.ReactElement {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {COLORS.map((color) => (
                 <div key={color} data-code-sample={color} className="min-w-0 rounded-lg border border-separator p-3">
-                  <p className="mb-2 text-sm">{color}: <InlineChip monospace wrap size="xs" color={color}>VITE_DAEMON_PORT</InlineChip></p>
+                  <p className="mb-2 text-sm">{color}: <InlineChip monospace wrap size="inherit" color={color}>VITE_DAEMON_PORT</InlineChip></p>
                   <CodeBlock color={color}>{"env -0\nOCTOBOARD_DAEMON_PORT=5174"}</CodeBlock>
                 </div>
               ))}
@@ -51,7 +66,7 @@ export function CodeGallery(): React.ReactElement {
                 <Alert.Content className="min-w-0">
                   <h3 className="mb-3 font-semibold">{status}</h3>
                   <div className="flex flex-wrap gap-3">
-                    {COLORS.map((color) => <span key={color} className="text-sm">{color}: <InlineChip monospace wrap size="xs" color={color}>CLAUDE.md</InlineChip></span>)}
+                    {COLORS.map((color) => <span key={color} className="text-sm">{color}: <InlineChip monospace wrap size="inherit" color={color}>CLAUDE.md</InlineChip></span>)}
                   </div>
                   <CodeBlock>{"env -0 && printf '%s' 'OCTOBOARD-ENV-SNAPSHOT-END-12345678-1234-1234-1234-123456789abc'"}</CodeBlock>
                 </Alert.Content>
@@ -62,14 +77,14 @@ export function CodeGallery(): React.ReactElement {
             <h2 id="nested-tones-title" className="font-semibold">Nearest alert wins; outside chips keep their own tone</h2>
             <TintedAlert status="warning" data-nested-sample="outer">
               <Alert.Content className="flex min-w-0 flex-col gap-3">
-                <p>Outer warning: <InlineChip monospace wrap size="xs" color="danger">AGENTS.md</InlineChip></p>
+                <p>Outer warning: <InlineChip monospace wrap size="inherit" color="danger">AGENTS.md</InlineChip></p>
                 <TintedAlert status="success" data-nested-sample="inner">
-                  <Alert.Content>Inner success: <InlineChip monospace wrap size="xs" color="danger">.claude</InlineChip></Alert.Content>
+                  <Alert.Content>Inner success: <InlineChip monospace wrap size="inherit" color="danger">.claude</InlineChip></Alert.Content>
                 </TintedAlert>
-                <p>Outer warning again: <InlineChip monospace wrap size="xs" color="primary">.codex</InlineChip></p>
+                <p>Outer warning again: <InlineChip monospace wrap size="inherit" color="primary">.codex</InlineChip></p>
               </Alert.Content>
             </TintedAlert>
-            <p>After both alerts: <InlineChip monospace wrap size="xs" color="secondary">~/Projects</InlineChip></p>
+            <p>After both alerts: <InlineChip monospace wrap size="inherit" color="secondary">~/Projects</InlineChip></p>
           </section>
         </div>
       </FadedScroller>

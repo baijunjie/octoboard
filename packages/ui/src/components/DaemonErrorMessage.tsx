@@ -1,7 +1,7 @@
 import React from "react";
 
 import { DaemonRequestError } from "../daemon-client";
-import { daemonParams, messageCode } from "../daemonMessage";
+import { daemonParams, messageCode, runningSessionIds } from "../daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, type ErrorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
 import { isMessageKey } from "../i18n/catalog";
@@ -18,18 +18,27 @@ export function DaemonErrorTitle(): React.ReactElement {
 
 const NO_RECORDS = new Map<string, never>();
 
-/** A failure whose message shows some params as code (`CODE_PARAMS`): those set as `InlineChip`, the
- * rest as plain text, in the catalog's wording for the code. */
+/** A failure with names or technical literals set apart as chips in the catalog's wording. */
 function CodedDaemonMessage({ error }: { error: DaemonRequestError }): React.ReactElement {
   const language = useCurrentLanguage();
   // The records are subscribed to only for a message that names one, so a failure that does not
   // re-renders with none of them.
   const consoles = useDaemonStore((s) => ("console" in error.params ? s.consoles : NO_RECORDS));
   const projects = useDaemonStore((s) => ("project" in error.params ? s.projects : NO_RECORDS));
-  const sessions = useDaemonStore((s) => ("session" in error.params ? s.sessions : NO_RECORDS));
+  const sessions = useDaemonStore((s) => ("session" in error.params || "session_ids" in error.params ? s.sessions : NO_RECORDS));
   const id = `daemon.${messageCode(error.code, error.params)}`;
   if (!isMessageKey(id)) return <>{error.message}</>;
-  const params = daemonParams(language, error.code, error.params, { consoles, projects, sessions }, (value) => <InlineChip monospace wrap size="xs">{value}</InlineChip>);
+  const params = daemonParams<React.ReactNode>(language, error.code, error.params, { consoles, projects, sessions }, (value, monospace) => <InlineChip monospace={monospace} wrap size="inherit">{value}</InlineChip>);
+  const running = error.code === "session_has_running_sessions" ? runningSessionIds(error.params) : undefined;
+  if (running) {
+    const titles = running.map((id) => sessions.get(id)?.title ?? id);
+    params.sessions = new Intl.ListFormat(language, { style: "narrow", type: "conjunction" }).formatToParts(titles).map((part, key) => (
+      part.type === "literal" ? part.value : <InlineChip key={key} wrap size="inherit">{part.value}</InlineChip>
+    ));
+  }
+  if (error.code === "launch_failed" && error.params.reason_code && error.params.reason_code !== "launch_failed" && hasCodeParams({ code: error.params.reason_code, params: error.params })) {
+    params.reason = codedMessageNode({ code: error.params.reason_code, params: error.params }, String(params.reason ?? ""));
+  }
   // One element, so a container that lays its children out as flex items (an alert's column) keeps
   // the sentence whole instead of making each run of text and each literal an item of its own.
   return <span><Message id={id} params={params as never} /></span>;
@@ -59,7 +68,7 @@ export function DaemonErrorMessage({ error, showTitle = true }: { error: ErrorPr
       <p>
         <Message
           id="daemon.shell_environment_timeout.command"
-          params={{ command: <InlineChip monospace wrap size="xs">{`${shell} -l -i -c '${command}'`}</InlineChip>, timeout }}
+          params={{ command: <InlineChip monospace wrap size="inherit">{`${shell} -l -i -c '${command}'`}</InlineChip>, timeout }}
         />
       </p>
       <p>{t("daemon.shell_environment_timeout.cause")}</p>

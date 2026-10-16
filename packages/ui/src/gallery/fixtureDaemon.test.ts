@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { describe, expect, it, vi } from "vitest";
+
+import type { ToastRequest } from "../store";
 
 import type { RequestBody } from "../protocol";
 import { exportedDocument } from "./fixtureConfiguration";
@@ -382,5 +385,39 @@ describe("the fixture daemon's native session records", () => {
     const daemon = createFixtureDaemon(scenario);
     await daemon.request({ type: "delete_session", session: owner.id });
     expect([...daemon.store.getState().sessions.keys()]).toEqual([unused.id, live.id]);
+  });
+});
+
+
+describe("the fixture daemon's structured notices", () => {
+  const scenario = { id: "notices", group: "Trust prompts and toasts" as const, category: "normal" as const, title: "" };
+
+  it("preserves a UI notice's structured content alongside its plain text", () => {
+    const daemon = createFixtureDaemon(scenario);
+    const listener = vi.fn();
+    const unsubscribe = daemon.onToast(listener);
+    const content = createElement("span", null, "saved-file.json");
+    daemon.toastNotice("Saved saved-file.json", content);
+    expect(listener).toHaveBeenCalledWith({ kind: "notice", message: "Saved saved-file.json", content });
+    unsubscribe();
+  });
+
+  it("keeps a failed launch's title metadata, nested path and complete plain message", async () => {
+    vi.useFakeTimers();
+    try {
+      const params = { title: "Release notes", reason_code: "config_dir_unreachable", agent: "Claude Code", path: "/Users/dev/.claude-work", reason: "Permission denied" };
+      const daemon = createFixtureDaemon({ ...scenario, toasts: [{ kind: "notice", code: "launch_failed", params, message: "" }] });
+      const toasts: ToastRequest[] = [];
+      const unsubscribe = daemon.onToast((toast) => toasts.push(toast));
+      await vi.runAllTimersAsync();
+      expect(toasts).toHaveLength(1);
+      expect(toasts[0]?.daemonTitle).toMatchObject({ code: "launch_failed.title", params });
+      expect(toasts[0]?.daemonError).toMatchObject({ code: "config_dir_unreachable", params: expect.objectContaining({ path: params.path }) });
+      expect(toasts[0]?.message).toContain(params.title);
+      expect(toasts[0]?.message).toContain(params.path);
+      unsubscribe();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

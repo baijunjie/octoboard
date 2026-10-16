@@ -2,10 +2,11 @@ import { Alert, Description, Label, Radio, RadioGroup } from "@heroui/react";
 import React, { useState } from "react";
 
 import { appConfig } from "../appConfig";
+import { InlineChip } from "../components/InlineChip";
 import { TintedAlert } from "../components/TintedAlert";
 import { Dialog, DialogError, useDialogAction } from "../dialogs/Dialog";
 import { isolate } from "../i18n/isolate";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Console, Event } from "../protocol";
 import { useDaemon } from "../store";
@@ -59,7 +60,10 @@ export function ExportConfigurationDialog({
         throw new Error(fileFailureText(t, err, "configuration.export.failed"), { cause: err });
       }
       if (saved === undefined) return;
-      toastNotice(saved.kind === "saved" ? t("configuration.export.saved", { name: isolate(saved.name) }) : t("configuration.export.downloaded"));
+      toastNotice(
+        saved.kind === "saved" ? t("configuration.export.saved", { name: isolate(saved.name) }) : t("configuration.export.downloaded"),
+        saved.kind === "saved" ? <Message id="configuration.export.saved" params={{ name: <InlineChip monospace wrap size="inherit">{saved.name}</InlineChip> }} /> : undefined,
+      );
       onClose();
     });
   };
@@ -81,7 +85,7 @@ export function ExportConfigurationDialog({
               <Radio.Control>
                 <Radio.Indicator />
               </Radio.Control>
-              <Label>{t("configuration.export.scope.console", { name: inHand.name })}</Label>
+              <Label><Message id="configuration.export.scope.console" params={{ name: <InlineChip dir="auto" wrap size="inherit">{inHand.name}</InlineChip> }} /></Label>
             </Radio.Content>
             <Description>{t("configuration.export.scope.console.description")}</Description>
           </Radio>

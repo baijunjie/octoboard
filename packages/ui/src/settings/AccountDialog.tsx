@@ -9,6 +9,7 @@ import { DirectoryPicker } from "../dialogs/DirectoryPicker";
 import { OptionSelect } from "../dialogs/OptionSelect";
 import { TextInput } from "../dialogs/TextInput";
 import { isolate } from "../i18n/isolate";
+import { InlineChip } from "../components/InlineChip";
 import { Message, useT } from "../i18n/react";
 import type { Account, Agent } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
@@ -82,7 +83,9 @@ export function AccountDialog({
           value={name}
           onChange={setName}
           placeholder={t("settings.accounts.nameExample")}
-          errorMessage={shown(nameError)}
+          errorMessage={shown(nameError) && (collision
+            ? <Message id={collision.kind === "default" ? "settings.accounts.nameTakenDefault" : "settings.accounts.nameTaken"} params={{ name: <InlineChip dir="auto" wrap size="inherit">{collision.name}</InlineChip>, agent: AGENT_LABEL[agent] }} />
+            : nameError)}
           autoFocus
         />
         <TextInput
