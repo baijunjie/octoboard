@@ -16,7 +16,6 @@ import { Message, useT } from "../i18n/react";
 import type { BranchInfo } from "../protocol";
 import { displayWirePath } from "../wirePath";
 import { BranchOriginBadge } from "./BranchOriginBadge";
-import { ChangeFilterField } from "./ChangeFilterField";
 import { ChangeList } from "./ChangeList";
 import type { ChangeViewState } from "./changeView";
 import type { ChangeItem } from "./changes";
@@ -122,7 +121,6 @@ export function BranchComparisonView({
           </Button>
         </TitledControl>
       </div>
-      <ChangeFilterField changeView={changeView} />
       {branchesError !== undefined && !(comparison.state === "idle" && branches.state === "error") && (
         <p role="alert" className="shrink-0 px-3 py-2 text-xs text-app-muted">
           <Message id="git.compare.branchesError" params={{ message: failureParam(branchesError) }} />

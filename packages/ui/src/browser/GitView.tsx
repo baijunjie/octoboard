@@ -1,16 +1,13 @@
-import { Label, ListBox, Select, Tabs } from "@heroui/react";
-import { FileCheck, FolderTree, Funnel, FunnelX, GitBranch, GitFork, List, TriangleAlert } from "lucide-react";
+import { Label, ListBox, Select } from "@heroui/react";
+import { FileCheck, GitBranch, GitFork, TriangleAlert } from "lucide-react";
 import React, { useRef } from "react";
 
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { CodeBlock } from "../components/CodeBlock";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { IconToggle } from "../components/IconToggle";
-import { RowIconGroup } from "../components/RowControls";
 import { PathText } from "../components/PathText";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
-import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
@@ -21,8 +18,6 @@ import { useDaemonStore } from "../store";
 import { displayWirePath } from "../wirePath";
 import { BranchComparisonView } from "./BranchComparison";
 import type { GitView as GitViewKind } from "./browserState";
-import { changeLayout } from "./changeLayout";
-import { ChangeFilterField } from "./ChangeFilterField";
 import { ChangeList } from "./ChangeList";
 import type { ChangeViewState } from "./changeView";
 import type { ChangeItem } from "./changes";
@@ -90,7 +85,6 @@ function worktreeGone(worktrees: WorktreeInfo[], own: string, worktree: string |
 function GitContent({
   source,
   view,
-  onViewChange,
   worktree,
   compare,
   changeView,
@@ -99,7 +93,6 @@ function GitContent({
 }: {
   source: SourceState;
   view: GitViewKind;
-  onViewChange: (view: GitViewKind) => void;
   worktree: WorktreeViewProps;
   compare: Omit<React.ComponentProps<typeof BranchComparisonView>, "onRetry" | "changeView" | "selectedSessionId">;
   /** How both views' change lists show their changes. */
@@ -113,7 +106,6 @@ function GitContent({
   onRetry: (from: Element | null) => void;
 }): React.ReactElement {
   const t = useT();
-  const tabScrollLabels = useTabScrollLabels();
   if (source.state === "loading") return <GitLoading label={t("git.loading")} />;
   if (source.state === "error") return <GitFailure title={t("git.error.source")} message={source.message} onRetry={onRetry} />;
   const git = source.source.git;
@@ -128,46 +120,9 @@ function GitContent({
       <CenteredEmptyPanel icon={GitFork} message={t("git.notARepository")} />
     );
   }
-  return (
-    <Tabs
-      variant="secondary"
-      selectedKey={view}
-      onSelectionChange={(key) => onViewChange(key as GitViewKind)}
-      className="flex min-h-0 flex-1 flex-col gap-0"
-    >
-      {/* The filter and layout toggles are members of the tab row: the tabs' container draws only
-          its list, and wrapping it would switch its variant's styles off, so they join it through
-          the container's `render`. The tabs set the row's height. The container uses the pane's
-          separator colour so its divider matches the header and selector dividers. */}
-      <Tabs.ListContainer
-        className="flex shrink-0 items-center border-separator ps-3 pe-2"
-        render={(props) => (
-          <div {...props}>
-            {tabScrollLabels(props.children)}
-            <ChangeViewToggles changeView={changeView} />
-          </div>
-        )}
-      >
-        <Tabs.List aria-label={t("git.views")} className="w-auto">
-          {/* Keep hovered labels at full opacity and use the foreground colour for clear feedback. */}
-          <Tabs.Tab id="worktree" className="h-10 px-3 whitespace-nowrap hover:text-foreground hover:opacity-100">
-            {t("git.view.worktree")}
-            <Tabs.Indicator />
-          </Tabs.Tab>
-          <Tabs.Tab id="compare" className="h-10 px-3 whitespace-nowrap hover:text-foreground hover:opacity-100">
-            {t("git.view.compare")}
-            <Tabs.Indicator />
-          </Tabs.Tab>
-        </Tabs.List>
-      </Tabs.ListContainer>
-      <Tabs.Panel id="worktree" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
-        <WorktreeChanges worktrees={git.worktrees} own={git.worktree} {...worktree} changeView={changeView} onRetry={onRetry} />
-      </Tabs.Panel>
-      <Tabs.Panel id="compare" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
-        <BranchComparisonView {...compare} changeView={changeView} selectedSessionId={selectedSessionId} onRetry={onRetry} />
-      </Tabs.Panel>
-    </Tabs>
-  );
+  return view === "worktree"
+    ? <WorktreeChanges worktrees={git.worktrees} own={git.worktree} {...worktree} changeView={changeView} onRetry={onRetry} />
+    : <BranchComparisonView {...compare} changeView={changeView} selectedSessionId={selectedSessionId} onRetry={onRetry} />;
 }
 
 function WorktreeChanges({
@@ -205,7 +160,6 @@ function WorktreeChanges({
         missing={!shown}
         onChange={(id) => onWorktreeChange(id === own ? undefined : id)}
       />
-      <ChangeFilterField changeView={changeView} />
       <div className="flex min-h-0 flex-1 flex-col" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
         {shown && !gone && !shown.scope_present && <p className="shrink-0 px-3 py-2 text-xs text-app-muted">{t("git.worktree.scopeMissing")}</p>}
         {gone ? (
@@ -224,39 +178,6 @@ function WorktreeChanges({
         )}
       </div>
     </>
-  );
-}
-
-/** The two view toggles at the end of the row of view tabs: the one that holds the filter field
- * the views draw (`ChangeFilterField`), then Group by folder. Closing the filter drops the text with the field,
- * so no filter out of sight narrows a list; the field hands keyboard focus back to the toggle as
- * it goes, which is what `filterToggleRef` is for. */
-function ChangeViewToggles({ changeView }: { changeView: ChangeViewState }): React.ReactElement {
-  const t = useT();
-  // Taken apart first: the React Compiler counts every read of an object that carries a ref as a
-  // read of that ref during render.
-  const { filterToggleRef, filterOpen, onFilterOpenChange, layout } = changeView;
-  return (
-    <RowIconGroup className="ms-auto">
-      <IconToggle
-        ref={filterToggleRef}
-        label={t(filterOpen ? "git.filter.hide" : "git.filter.show")}
-        isSelected={filterOpen}
-        expanded={filterOpen}
-        onChange={onFilterOpenChange}
-      >
-        {filterOpen ? <FunnelX aria-hidden="true" className="size-4" /> : <Funnel aria-hidden="true" className="size-4" />}
-      </IconToggle>
-      <IconToggle
-        label={t(layout === "tree" ? "git.layout.flat" : "git.layout.tree")}
-        isSelected={layout === "tree"}
-        onChange={(selected) => changeLayout.set(selected ? "tree" : "flat")}
-      >
-        {/* Both glyphs hang their rows off the leading side, so they mirror under right-to-left,
-            as the sidebar's fold control does. */}
-        {layout === "tree" ? <FolderTree aria-hidden="true" className="size-4 rtl:-scale-x-100" /> : <List aria-hidden="true" className="size-4 rtl:-scale-x-100" />}
-      </IconToggle>
-    </RowIconGroup>
   );
 }
 

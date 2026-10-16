@@ -3,7 +3,7 @@
 The project pane's **Git mode** reviews the project's repository in two views: **Uncommitted**, the uncommitted
 changes of one worktree — what is staged, what is in conflict, what is changed on disk and what Git does not track —
 and **Compare**, what one local branch has changed since it forked from another. Either view opens each change in the
-project pane's read-only file viewer. The Git mode is the second of the project pane's two modes: opening the pane, its
+project pane's read-only file viewer. Git is one of the project pane's two modes: opening the pane, its
 header, switching modes and the file viewer in general are in `docs/product/project-pane.md` (see "Files and Git" and
 "The file viewer" there).
 
@@ -24,11 +24,11 @@ from this read-only mode.
 
 ## Uncommitted and Compare
 
-Two tabs at the top of the Git mode switch between its views, **Uncommitted** and **Compare**; a project starts on
-Uncommitted. The tabs are there once the project's repository is found (see "The repository and its worktrees" below);
-while it is being read, when it cannot be read, or when there is none, what the Git mode says takes their place. At the
-end of the tabs' row are the two controls both views share: the one that shows and hides the file name filter field,
-then **Group by folder** (see "Filtering by file name" and "Flat or grouped by folder" below).
+The project pane's single header row holds three peer tabs, **Files**, **Uncommitted** and **Compare** (see "Files and Git" in
+`docs/product/project-pane.md`). Choosing either Git view's tab shows that view directly; the initial Git view is
+Uncommitted. The tabs stay available while the repository is being read, cannot be read, or is not a repository.
+Two controls stay between the tabs and Refresh in every state: the one that shows and hides the
+file-name filter field, then **Group by folder** (see "Filtering by file name" and "Flat or grouped by folder" below).
 
 Each view reads the repository only while it is on screen: the Uncommitted view as "Keeping the list up to date"
 below says, the Compare view as "When a comparison is made" below says. The repository's branches are read while
@@ -180,12 +180,12 @@ focus or as the viewer's selected change stays clear of both (see "The edge that
 
 ### Flat or grouped by folder
 
-**Group by folder**, the last of the two toggles at the end of the row of view tabs, switches the change list between
+**Group by folder**, the second of the two Git toggles in the pane's header, switches the change list between
 one row per change and the changes grouped under the folders they are in. It is a single icon button whose icon shows
 which form the lists are in and whose name says what pressing it will do, so the name alternates between "Group by
-folder" and "Show as flat list" (see "Two-state icon toggles" in `docs/product/labels-and-tooltips.md`). It is the one
-choice for both views, kept across projects and after the application restarts; both lists are flat until it is turned
-on.
+folder" and "Show as flat list" (see "Two-state icon toggles" in `docs/product/labels-and-tooltips.md`). Each project
+and each Git view keeps its own layout across reloads and restarts. A view without a saved layout starts flat, or
+uses a grouped preference retained from before per-view choices were available.
 
 Grouped by folder, a list keeps its sections and their counts — the Uncommitted view's Conflicted, Staged, Unstaged
 and Untracked, the comparison's one section — and within each section the changes sit under their folders:
@@ -213,13 +213,13 @@ changes" below).
 ### Filtering by file name
 
 The **filter field** narrows a change list to the changes whose file name contains its text, in both views and both
-forms of the list, flat or grouped by folder. It is not on screen to begin with: the **first of the two toggles at the
-end of the row of view tabs** shows and hides it, its name saying what pressing it will do — "Filter by file name"
+forms of the list, flat or grouped by folder. It is not on screen to begin with: the **first of the two Git toggles in the
+pane's header** shows and hides it, its name saying what pressing it will do — "Filter by file name"
 while the field is hidden, "Hide the filter" while it is shown (see "Two-state icon toggles" in
 `docs/product/labels-and-tooltips.md`). Assistive technology is also told whether the field is on screen.
 
-- **Opening it from the toggle puts the field under the view's selectors** — the worktree selector in the Uncommitted
-  view, the From and To selectors in the Compare view — and **keyboard focus in the field**. The field is there in
+- **Opening it from the toggle puts the field directly below the pane's header**, above the worktree selector in
+  Uncommitted or the From and To selectors in Compare, and **keyboard focus in the field**. The field is there in
   every state of a view, over the lines that say the changes are being read, that reading them failed, that there is
   nothing to list, or that a branch has still to be chosen (see "What the list says instead" and "What the view says"
   below), so the toggle always has a field to open.
@@ -244,16 +244,10 @@ while the field is hidden, "Hide the filter" while it is shown (see "Two-state i
   letters in the list does. While an input method is composing text in it, its keys, Escape included, belong to the
   composition, and do not clear the field.
 
-The text, and whether the field is on screen, are **one for both views** of a project: switching views carries the
-open field over with the same text in it, and leaves keyboard focus where it is rather than taking it into the field
-again. Both are kept while the project's pane stays in the right pane — through switching views and modes, choosing
-worktrees or branches, and the pane being hidden — the text no longer than the field, which drops it as it closes.
-Once the right pane is given to something else (see "What the right pane shows" in
-`docs/product/window-layout.md`), or the window is reloaded or the application restarted, the project's pane starts
-with no filter field. It is not a choice kept like the grouping by folder.
-
-The viewer moves through the rows the filter leaves (see "Moving between changes" below). The Files mode's tree has no
-such field.
+Each Git view keeps its own keyword, field-open state, layout and folded sections and folders independently of the
+other view and Files. Filter lifetime and tab-switch focus behavior are in "Filtering by file name" in
+`docs/product/project-pane.md`. A worktree or branch selection keeps that view's keyword. The viewer moves through
+the rows the filter leaves (see "Moving between changes" below).
 
 ### What the list says instead
 
@@ -282,7 +276,7 @@ Nothing tells Octoboard when a repository changes, so the chosen worktree's chan
 - **every 10 seconds** while the Uncommitted view is on screen — the project pane docked, in an open drawer, or
   floating in — and the window is visible, skipping a turn while a listing is still out;
 - when the window comes back to the front or becomes visible again, with the Uncommitted view on screen, or when it
-  comes back on screen — a hidden pane shown, the Git tab or the Uncommitted tab chosen — either one more than 5
+  comes back on screen — a hidden pane shown, the Uncommitted tab chosen — either one more than 5
   seconds after the last listing;
 - on the header's **Refresh**, which reads the worktrees and the branches again too;
 - after the connection to the daemon comes back, while the Uncommitted view is on screen.
@@ -711,6 +705,5 @@ lists, branch lists, comparisons and their contents are never stored. Whether th
 text in it, last only while the project's pane stays in the right pane, and the text only until the field is closed (see
 "Filtering by file name" above).
 
-**Across projects and restarts**: whether the change lists are grouped by folder (see "Flat or grouped by folder"
-above), kept as the file viewer's document-or-source, unified-or-split and wrap choices are. The mode itself is kept
-with the rest of the pane's state (see "What is remembered" in `docs/product/project-pane.md`).
+**Per project and per view, across restarts**: whether the change list is grouped by folder (see "Flat or grouped by
+folder" above). The mode and layouts are kept with the rest of the pane's state (see "What is remembered" in `docs/product/project-pane.md`).

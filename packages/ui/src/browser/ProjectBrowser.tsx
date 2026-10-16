@@ -1,17 +1,19 @@
 import { Button, Spinner, Tabs } from "@heroui/react";
-import { FolderOpen, FolderX, RefreshCw } from "lucide-react";
+import { FolderOpen, FolderX, RefreshCw, SearchX } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Key } from "react-aria-components";
 
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { FadeOverflow } from "../components/FadeOverflow";
 import { handFocusOff } from "../components/handFocusOff";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { FADE_SIZE } from "../components/scrollFade";
-import { FadeOverflow } from "../components/FadeOverflow";
+import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { TitledControl } from "../components/TitledControl";
-import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
+import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
+import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useStableHandler } from "../components/useLatest";
 import type { ErrorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
@@ -20,13 +22,17 @@ import { AsidePane, type AsideLayout } from "../layout/AsidePane";
 import type { Project } from "../protocol";
 import { useDaemonStore } from "../store";
 import { FileViewer } from "../viewer/FileViewer";
-import { useProjectBrowserState, type BrowserMode } from "./browserState";
+import { useProjectBrowserState } from "./browserState";
+import { FileFilterField, useFileFilterState } from "./FileFilterField";
+import { BrowserViewControls } from "./BrowserViewControls";
+import { buildFileResults, resultDirectories } from "./filesView";
 import { FileTree } from "./FileTree";
 import { focusRow } from "./focusRow";
 import { GitView } from "./GitView";
 import { buildTree, fileEvidence, listingSaysDirectory, neighbours, parentPath, rereadFor, rowKey, type DirListing, type FileEvidence } from "./tree";
 import { ROW_HEIGHT } from "./treeRow";
 import { useDirectoryListings } from "./useDirectoryListings";
+import { useFileSearch } from "./useFileSearch";
 import { useFileReader } from "./useFileReader";
 import { useGitReview } from "./useGitReview";
 
@@ -71,29 +77,64 @@ export function ProjectBrowser({
   selectedSessionId: string | undefined;
 }): React.ReactElement {
   const t = useT();
+  const tabScrollLabels = useTabScrollLabels();
   const browser = useProjectBrowserState(project.id);
   const mode = browser.mode;
-  const dirs = useDirectoryListings(project.id, active && mode === "files");
+
+  const filters = { files: useFileFilterState(), worktree: useFileFilterState(), compare: useFileFilterState() };
+  const tab = mode === "files" ? "files" : browser.gitView;
+  const activeFilter = filters[tab];
+  const fileFilter = filters.files;
+  const [collapsedFiles, setCollapsedFiles] = useState<ReadonlySet<string>>(new Set());
   const reader = useFileReader(project.id);
   // The selected session sets the Git mode's selectors, when it is one of this project's.
   const sessionHere = useDaemonStore((s) => (selectedSessionId !== undefined && s.sessions.get(selectedSessionId)?.project_id === project.id ? selectedSessionId : undefined));
-  const git = useGitReview(project.id, browser, active && mode === "git", sessionHere);
+  const git = useGitReview(project.id, browser, active && mode === "git", sessionHere, filters);
   const treeRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLDivElement>(null);
+  const refreshRef = useRef<HTMLButtonElement>(null);
+  const filesFocus = useFocusHandoff(() => refreshRef.current?.focus());
 
-  const tree = useMemo(() => buildTree(dirs.listings, browser.expanded, browser.selected), [dirs.listings, browser.expanded, browser.selected]);
-  const wantedKey = tree.wanted.join("\0");
+  const query = fileFilter.filter.trim();
+  const searching = query !== "";
+  const listingFiles = searching || browser.layouts.files === "flat";
+  const dirs = useDirectoryListings(project.id, active && mode === "files" && (!listingFiles || reader.subject !== undefined));
+  const search = useFileSearch(project.id, query, active && mode === "files" && listingFiles, !searching);
+  const directoryTree = useMemo(() => buildTree(dirs.listings, browser.expanded, browser.selected), [dirs.listings, browser.expanded, browser.selected]);
+  const resultPaths = search.result.state === "loaded" ? search.result.paths : [];
+  const resultModel = useMemo(() => buildFileResults(resultPaths, browser.selected, browser.layouts.files, collapsedFiles), [resultPaths, browser.selected, browser.layouts.files, collapsedFiles]);
+  const tree = listingFiles ? resultModel.tree : directoryTree;
+  const searchParents = reader.subject?.path.split("/").slice(0, -1) ?? [];
+  const wantedDirectories = !listingFiles
+    ? directoryTree.wanted
+    : reader.subject
+      ? ["", ...searchParents.map((_, index) => searchParents.slice(0, index + 1).join("/"))]
+      : [];
+  const wantedKey = wantedDirectories.join("\0");
   useEffect(() => {
-    if (mode === "files") dirs.want(tree.wanted);
-  }, [wantedKey, mode]);
+    if (mode === "files") dirs.want(wantedDirectories);
+  }, [wantedKey, mode, listingFiles]);
   useEffect(() => browser.touch(), []);
 
-  const expandedKeys = useMemo(() => new Set([...browser.expanded].map(rowKey)), [browser.expanded]);
+  const directoryExpandedKeys = useMemo(() => new Set([...browser.expanded].map(rowKey)), [browser.expanded]);
+  const expandedKeys = listingFiles ? resultModel.expanded : directoryExpandedKeys;
   const onExpandedChange = (keys: Set<Key>) => {
+    if (listingFiles) {
+      const next = new Set(collapsedFiles);
+      for (const dir of resultDirectories(resultPaths)) {
+        if (keys.has(rowKey(dir))) next.delete(dir);
+        else next.add(dir);
+      }
+      setCollapsedFiles(next);
+      return;
+    }
     const paths = new Set([...keys].map((key) => String(key).slice(rowKey("").length)));
     // A directory listed before is listed again as it opens; one never listed is asked for as it
     // comes on screen.
     const opened = [...paths].filter((path) => !browser.expanded.has(path) && dirs.listings.has(path));
+    const next = new Set(collapsedFiles);
+    for (const path of browser.expanded) if (!paths.has(path)) next.add(path);
+    for (const path of paths) next.delete(path);
+    setCollapsedFiles(next);
     browser.setExpanded(paths);
     dirs.refresh(opened);
   };
@@ -119,7 +160,7 @@ export function ProjectBrowser({
     if (browser.selected !== undefined) focusRow(treeRef.current, rowKey(browser.selected));
   };
 
-  const refresh = () => (mode === "files" ? dirs.refreshAll() : git.refresh());
+  const refresh = () => (mode === "files" ? listingFiles ? search.refresh() : dirs.refreshAll() : git.refresh());
 
   const branch = useDaemonStore((state) => {
     const status = state.gitStatuses.get(project.id);
@@ -148,15 +189,16 @@ export function ProjectBrowser({
   useLayoutEffect(() => {
     const selected = browser.selected;
     const element = treeRef.current;
-    if (selected === undefined || selected === scrolledTo.current || !element) return;
+    const scrollKey = `${query}\0${browser.layouts.files}\0${selected ?? ""}`;
+    if (selected === undefined || scrollKey === scrolledTo.current || !element) return;
     const index = tree.rows.indexOf(rowKey(selected));
     if (index === -1) return;
-    scrolledTo.current = selected;
+    scrolledTo.current = scrollKey;
     const top = TREE_PADDING + index * ROW_HEIGHT;
     // Clear of the fade at the tree's edges, as `scroll-padding` keeps the rows react-aria scrolls.
     if (top - FADE_SIZE < element.scrollTop) element.scrollTop = top - FADE_SIZE;
     else if (top + ROW_HEIGHT + FADE_SIZE > element.scrollTop + element.clientHeight) element.scrollTop = top + ROW_HEIGHT + FADE_SIZE - element.clientHeight;
-  }, [browser.selected, tree.rows]);
+  }, [browser.selected, tree.rows, query, browser.layouts.files]);
 
   // What the listings say of the file in the viewer decides whether it is read again (`rereadFor`):
   // gone, out of reach or at another version, or back after a failure. What they said the last
@@ -186,81 +228,98 @@ export function ProjectBrowser({
   }, [tree.files, viewedPath, openNeighbour]);
 
   const root = dirs.listings.get("");
-  const rootLoading = root === undefined || root.state === "loading";
+  const rootLoading = listingFiles ? search.result.state === "loading" : root === undefined || root.state === "loading";
+  const loadingLabel = t(searching ? "browser.filter.searching" : "browser.loading");
   return (
     <AsidePane layout={layout} label={t("browser.label", { project: isolate(project.name) })} className="control-fills">
       <div className="project-browser-entry relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <Tabs selectedKey={mode} onSelectionChange={(key) => browser.setMode(key as BrowserMode)} className="project-browser-view flex min-h-0 flex-1 flex-col gap-0">
-          <div ref={headerRef} className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator ps-3 pe-2 text-sm">
+        <Tabs
+          selectedKey={mode === "files" ? "files" : browser.gitView}
+          onSelectionChange={(key) => {
+            if (key === "files") browser.setMode("files");
+            else if (key === "worktree" || key === "compare") {
+              browser.setGitView(key);
+              browser.setMode("git");
+            }
+          }}
+          className="project-browser-view flex min-h-0 flex-1 flex-col gap-0"
+        >
+          <div className="flex h-(--pane-header-height) shrink-0 items-center gap-1 border-b border-separator px-2 text-sm">
             <FolderOpen aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
-            <h2 className="flex min-w-0 flex-1 font-medium">
-              <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={project.name}>
-                {project.name}
-              </FadeOverflow>
+            <h2 className="flex min-w-8 max-w-40 flex-1 font-medium">
+              <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={project.name}>{project.name}</FadeOverflow>
             </h2>
-            <Tabs.List aria-label={t("browser.modes")} className="w-auto min-w-0 shrink-0 p-0.5">
-              {/* Keep hovered labels at full opacity and use the foreground colour for clear feedback. */}
-              <Tabs.Tab id="files" className="h-7 px-3 whitespace-nowrap hover:text-foreground hover:opacity-100">
-                {t("browser.mode.files")}
-                <Tabs.Indicator />
-              </Tabs.Tab>
-              <Tabs.Tab id="git" className="h-7 px-3 whitespace-nowrap hover:text-foreground hover:opacity-100">
-                {t("browser.mode.git")}
-                <Tabs.Indicator />
-              </Tabs.Tab>
-            </Tabs.List>
-            <TitledControl title={t("browser.refresh")}>
-              <Button isIconOnly size="sm" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("browser.refresh")} preventFocusOnPress onPress={pressRefresh}>
-                <RefreshCw aria-hidden="true" className={spinning > 0 ? "size-4 motion-safe:animate-spin-slow" : "size-4"} />
-              </Button>
-            </TitledControl>
+            <Tabs.ListContainer className="min-w-0 shrink rounded-none bg-transparent" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
+              {/* The scroller clips outside this padding; leave room for the focus ring and its offset. */}
+              <Tabs.List aria-label={t("browser.modes")} className="w-max min-w-0 p-1.5">
+                <Tabs.Tab id="files" className="h-7 scroll-mx-1.5 px-1.5 whitespace-nowrap hover:text-foreground hover:opacity-100">{t("browser.mode.files")}<Tabs.Indicator /></Tabs.Tab>
+                <Tabs.Tab id="worktree" className="h-7 scroll-mx-1.5 px-1.5 whitespace-nowrap hover:text-foreground hover:opacity-100">{t("git.view.worktree")}<Tabs.Indicator /></Tabs.Tab>
+                <Tabs.Tab id="compare" className="h-7 scroll-mx-1.5 px-1.5 whitespace-nowrap hover:text-foreground hover:opacity-100">{t("git.view.compare")}<Tabs.Indicator /></Tabs.Tab>
+              </Tabs.List>
+            </Tabs.ListContainer>
+            <RowIconGroup className="ms-auto">
+              <BrowserViewControls filter={activeFilter} layout={browser.layouts[tab]} onLayoutChange={(layout) => browser.setLayout(tab, layout)} />
+              <TitledControl title={t("browser.refresh")}>
+                <Button ref={refreshRef} isIconOnly size="sm" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("browser.refresh")} preventFocusOnPress onPress={pressRefresh}>
+                  <RefreshCw aria-hidden="true" className={spinning > 0 ? "size-4 motion-safe:animate-spin-slow" : "size-4"} />
+                </Button>
+              </TitledControl>
+            </RowIconGroup>
           </div>
-          <Tabs.Panel id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
-            <StatusAnnouncer text={rootLoading ? t("browser.loading") : undefined} />
-            {rootLoading ? (
-              <div aria-hidden="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-app-muted">
-                <Spinner size="sm" aria-hidden="true" />
-                {t("browser.loading")}
-              </div>
-            ) : root.state === "error" ? (
-              <RootError
-                message={root.message}
-                onRetry={(from) => {
+          <FileFilterField contextKey={tab} state={activeFilter} label={t("browser.filter.label")} placeholder={t(mode === "files" ? "browser.filter.placeholder" : "git.filter.placeholder")} />
+          {mode === "files" ? <Tabs.Panel id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
+            <div className="flex min-h-0 flex-1 flex-col" onFocus={filesFocus.onFocus} onBlur={filesFocus.onBlur}>
+              <StatusAnnouncer text={rootLoading ? loadingLabel : undefined} />
+              {rootLoading ? (
+                <div aria-hidden="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-app-muted">
+                  <Spinner size="sm" aria-hidden="true" />
+                  {loadingLabel}
+                </div>
+              ) : listingFiles && search.result.state === "error" ? (
+                <RootError title={t("browser.filter.error")} message={search.result.message} onRetry={(from) => { handFocusOff(from, refreshRef.current, true); search.refresh(); }} />
+              ) : !listingFiles && root?.state === "error" ? (
+                <RootError
+                  message={root.message}
+                  onRetry={(from) => {
                   // The error and its button go as the listing starts again; focus on it moves to the
                   // header's Refresh, which stays.
-                  handFocusOff(from, headerRef.current, true);
-                  dirs.refresh([""]);
-                }}
-              />
-            ) : tree.nodes.length === 0 && root.complete ? (
-              <CenteredEmptyPanel icon={FolderX} message={t("browser.empty")} />
-            ) : (
-              <>
-                <FileTree
-                  nodes={tree.nodes}
-                  expanded={expandedKeys}
-                  label={t("browser.tree.label")}
-                  onExpandedChange={onExpandedChange}
-                  onOpenFile={openFile}
-                  onRetry={(dir) => dirs.refresh([dir])}
-                  treeRef={treeRef}
+                    handFocusOff(from, refreshRef.current, true);
+                    dirs.refresh([""]);
+                  }}
                 />
-                {!root.complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-app-muted">{t("browser.partial")}</p>}
-              </>
-            )}
-          </Tabs.Panel>
-          <Tabs.Panel id="git" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
+              ) : tree.nodes.length === 0 && (listingFiles || root?.state === "loaded" && root.complete) ? (
+                <>
+                  <CenteredEmptyPanel icon={searching ? SearchX : FolderX} message={t(searching ? "browser.filter.noMatch" : "browser.empty")} />
+                  {listingFiles && search.result.state === "loaded" && !search.result.complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-app-muted">{t("browser.filter.partial")}</p>}
+                </>
+              ) : (
+                <>
+                  <FileTree
+                    nodes={tree.nodes}
+                    showPaths={listingFiles && browser.layouts.files === "flat"}
+                    expanded={expandedKeys}
+                    label={t("browser.tree.label")}
+                    onExpandedChange={onExpandedChange}
+                    onOpenFile={openFile}
+                    onRetry={(dir) => dirs.refresh([dir])}
+                    treeRef={treeRef}
+                  />
+                  {(listingFiles ? search.result.state === "loaded" && !search.result.complete : root?.state === "loaded" && !root.complete) && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-app-muted">{t(listingFiles ? "browser.filter.partial" : "browser.partial")}</p>}
+                </>
+              )}
+            </div>
+          </Tabs.Panel> : <Tabs.Panel id={browser.gitView} className="mt-0 flex min-h-0 flex-1 flex-col p-0">
             <GitView
               {...git.view}
               selectedSessionId={selectedSessionId}
               onRetry={(from) => {
                 // The failure and its button go as the request starts again; focus on it moves to
                 // the header's Refresh, which stays.
-                handFocusOff(from, headerRef.current, true);
+                handFocusOff(from, refreshRef.current, true);
                 refresh();
               }}
             />
-          </Tabs.Panel>
+          </Tabs.Panel>}
         </Tabs>
       </div>
       {reader.subject && (
@@ -291,12 +350,12 @@ export function ProjectBrowser({
 }
 
 /** The project's own directory could not be listed: why, and a way to try again. */
-function RootError({ message, onRetry }: { message: ErrorPresentation; onRetry: (from: Element | null) => void }): React.ReactElement {
+function RootError({ message, onRetry, title }: { title?: string; message: ErrorPresentation; onRetry: (from: Element | null) => void }): React.ReactElement {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   return (
     <div ref={ref} className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-sm">
-      <ErrorAlert title={t("browser.error.root")} className="w-full max-w-lg">
+      <ErrorAlert title={title ?? t("browser.error.root")} className="w-full max-w-lg">
         <DaemonErrorMessage error={message} showTitle={false} />
       </ErrorAlert>
       <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => onRetry(ref.current)}>

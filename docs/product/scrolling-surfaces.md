@@ -51,9 +51,9 @@ Once it holds more than it can show, each of these fades at its edge:
   the project list" in `docs/product/sidebar.md`);
 - the **directory browser's** list of directories (see "Browsing directories" in
   `docs/product/consoles-and-projects.md`);
-- a **strip of tabs** whose tabs do not fit, which scrolls sideways: the Git mode's Uncommitted and Compare row (see
-  "Uncommitted and Compare" in `docs/product/project-pane-git-mode.md`), and the row Settings' list of sections
-  becomes in a narrow window (see "In a narrow window" in `docs/product/settings.md`). **A tab strip fades over 64 px,
+- a **strip of tabs** whose tabs do not fit, which scrolls sideways: the project pane's Files, Uncommitted and
+  Compare row (see "Files and Git" in `docs/product/project-pane.md`), and the row Settings' list of sections becomes
+  in a narrow window (see "In a narrow window" in `docs/product/settings.md`). **A tab strip fades over 64 px,
   not 24**, and is the one surface where the fade can cover what the keyboard moved to: a tab reached with the arrow
   keys is scrolled only as far as the strip's edge, which is where its fade sits. The fade's size and the chevrons'
   appearance remain the component library's own; the application supplies the chevrons' accessible names in the

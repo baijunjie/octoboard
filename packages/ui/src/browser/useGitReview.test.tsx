@@ -6,8 +6,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { ChangeEntry, Event, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { noteSessionSwitch, useProjectBrowserState } from "./browserState";
-import { changeLayout } from "./changeLayout";
 import { directoryKey, sectionKey } from "./changes";
+import { useFileFilterState } from "./FileFilterField";
 import { useGitReview } from "./useGitReview";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -65,7 +65,7 @@ it("follows a comparison made again with the change still in it, and closes on o
   let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
   const Probe = () => {
     const browser = useProjectBrowserState("p");
-    latest = { browser, git: useGitReview("p", browser, true, undefined) };
+    latest = { browser, git: useGitReview("p", browser, true, undefined, { worktree: useFileFilterState(), compare: useFileFilterState() }) };
     return null;
   };
   const root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -118,7 +118,7 @@ it("follows the list's status for an open worktree change whose key did not chan
   let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
   const Probe = () => {
     const browser = useProjectBrowserState("p");
-    latest = { browser, git: useGitReview("p", browser, true, undefined) };
+    latest = { browser, git: useGitReview("p", browser, true, undefined, { worktree: useFileFilterState(), compare: useFileFilterState() }) };
     return null;
   };
   const root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -177,7 +177,7 @@ it("moves the viewer through the change tree's rows on screen, skipping a collap
   let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
   const Probe = () => {
     const browser = useProjectBrowserState("p");
-    latest = { browser, git: useGitReview("p", browser, true, undefined) };
+    latest = { browser, git: useGitReview("p", browser, true, undefined, { worktree: useFileFilterState(), compare: useFileFilterState() }) };
     return null;
   };
   const root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -191,7 +191,7 @@ it("moves the viewer through the change tree's rows on screen, skipping a collap
   );
   act(() => {
     latest.browser.setGitView("worktree");
-    changeLayout.set("tree");
+    latest.browser.setLayout("worktree", "tree");
   });
   try {
     const worktree = { id: "w", root: "/r", main: true, head: "c1", branch: "main", scope_present: true };
@@ -229,7 +229,7 @@ it("moves the viewer through the change tree's rows on screen, skipping a collap
     expect(latest.git.viewer?.navigation?.onNext).toBeUndefined();
 
     // The flat list has every change on screen whatever was folded in the tree.
-    act(() => changeLayout.set("flat"));
+    act(() => latest.browser.setLayout("worktree", "flat"));
     expect(latest.git.viewer?.navigation?.onPrevious).toBeDefined();
 
     // A folded section takes its changes off the screen in either layout, this list holding only
@@ -239,7 +239,7 @@ it("moves the viewer through the change tree's rows on screen, skipping a collap
     expect(latest.git.viewer?.navigation?.onNext).toBeUndefined();
   } finally {
     act(() => {
-      changeLayout.set("flat");
+      latest.browser.setLayout("worktree", "flat");
       latest.browser.setCollapsedChangeRows(new Set());
     });
   }
@@ -249,7 +249,7 @@ it("moves the viewer through the rows a file name filter leaves", async () => {
   let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
   const Probe = () => {
     const browser = useProjectBrowserState("p");
-    latest = { browser, git: useGitReview("p", browser, true, undefined) };
+    latest = { browser, git: useGitReview("p", browser, true, undefined, { worktree: useFileFilterState(), compare: useFileFilterState() }) };
     return null;
   };
   const root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -303,7 +303,7 @@ it("moves the viewer through the rows a file name filter leaves", async () => {
 it("drops the filter text with the field, so no filter out of sight narrows a list", () => {
   let latest!: ReturnType<typeof useGitReview>;
   const Probe = () => {
-    latest = useGitReview("p", useProjectBrowserState("p"), true, undefined);
+    latest = useGitReview("p", useProjectBrowserState("p"), true, undefined, { worktree: useFileFilterState(), compare: useFileFilterState() });
     return null;
   };
   const root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -335,7 +335,7 @@ function followHarness(id: string) {
   let selected: string | undefined;
   const Probe = ({ session, active }: { session: string | undefined; active: boolean }) => {
     const browser = useProjectBrowserState(id);
-    latest = { browser, git: useGitReview(id, browser, active, session) };
+    latest = { browser, git: useGitReview(id, browser, active, session, { worktree: useFileFilterState(), compare: useFileFilterState() }) };
     return null;
   };
   const render = (session: string | undefined, active: boolean) =>

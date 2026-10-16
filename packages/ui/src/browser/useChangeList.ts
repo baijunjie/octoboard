@@ -7,7 +7,7 @@ import { WORKTREE_UNAVAILABLE } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { browseFailure } from "./browseError";
 import { changeItems, type ChangeItem } from "./changes";
-import { sendGitRequest } from "./gitRequests";
+import { sendBrowseListRequest } from "./browseListRequests";
 import { AUTO_REFRESH_MS } from "./useDirectoryListings";
 
 /** How many times a change list is asked again when what it read changed while it was read. */
@@ -67,7 +67,7 @@ export function useChangeList(
       list.state === "loading" || (list.state === "error" && !background) ? { state: "loading" } : list.refreshing ? list : { ...list, refreshing: true },
     );
     const slot = `changes:${project}`;
-    return sendGitRequest(slot, () =>
+    return sendBrowseListRequest(slot, () =>
       current() ? request({ type: "list_project_changes", project, ...(asked === undefined ? {} : { worktree: asked }), slot }) : undefined,
     )
       .then((reply) => {

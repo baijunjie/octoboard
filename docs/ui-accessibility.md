@@ -128,6 +128,12 @@ description or validation. Leaving a field empty retains its existing requiredne
 
 HeroUI controls draw their own focus ring.
 
+A scrollable tab list leaves enough inner padding for the full focus ring and its offset on every
+side. `Tabs.ListContainer` clips its child list through a scroll container, so this clearance belongs
+to `Tabs.List` itself; padding outside the scroller does not protect the ring. Each tab also needs matching horizontal
+scroll margin so keyboard navigation reveals the ring as well as the tab border. Suppress the tab
+scroller’s fade mask while a tab has visible keyboard focus, so it cannot fade out the ring.
+
 An invalid, focused HeroUI `Input` keeps its outline offset at zero so the error outline meets the
 focus ring. This overrides WebKit's native inset without changing the component's colours or ring.
 
@@ -158,7 +164,7 @@ they have to be able to see where focus went, and the previous input was often a
 destination without a ring. `handFocusOff` takes a `showRing` flag for the hand-off whose trigger is a press, where the
 ring follows how the press came; `HandOffOnUnmount` always sets it, its trigger being a render, and so does
 `useFocusHandoff`, whose trigger is the render that took the control away. That covers the one hand-off through it
-whose trigger is really a press — the change filter field closed from the tab row's toggle, which takes no focus
+whose trigger is really a press — the change filter field closed from the header's toggle, which takes no focus
 itself — knowingly: focus lands on a control the user did not aim it at either way.
 
 A separator of collapsed lines taken off the screen is such a move: the bar for the run past a diff's last hunk goes

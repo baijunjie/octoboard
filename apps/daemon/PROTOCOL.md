@@ -60,6 +60,7 @@ the request id as if it were a record id.
 | `import_configuration` | `document`, `resolutions?`, `apply_settings?` | Answered with `configuration_imported`: creates a new console for each console of `document` and associates each project with the directory its entry in `resolutions` chooses (see "Configuration import" below). A project with no entry is left out. The document is refused as `inspect_configuration` refuses it, and a resolution that names a console or project the document does not have, names one twice, or chooses a `directory` that is neither an absolute path nor starts with `~/`, is refused with `import_resolution_invalid`; all of that before anything is created, as is anything `create_console` would refuse of a console of the document (an avatar that is not an image, say). `apply_settings` (absent means false) also applies the document's application settings; asking for them of a document that carries none is refused with `import_settings_missing`, before anything is created. A project that cannot be placed after that is not an error of the request (see "Configuration import") |
 | `get_project_source` | `project`, `slot?` | Where the project's files are read from: its resolved directory and, when it is inside a Git repository, the repository, the worktree holding it, its place in that worktree and every worktree of the repository, that one included. Answered with `project_source`. A browse request: see "Browsing a project" below for the rules every browse request shares (`slot`, budgets, its own outbound queue) |
 | `list_project_dir` | `project`, `path`, `worktree?`, `slot?` | Lists one directory of the project's files on disk, `path` being a wire path relative to the project's directory (empty for the directory itself). With `worktree`, the same place in that worktree of the project's repository is listed instead. Answered with `project_dir`. A browse request |
+| `search_project_files` | `project`, `query`, `slot?` | Searches file names recursively beneath the project's directory, including unopened subdirectories. A trimmed, case-insensitive basename substring, not a path expression. Answered with `project_file_matches`. A browse request |
 | `read_project_file` | `project`, `path`, `worktree?`, `from?`, `slot?` | Reads one file of the project, `path` being a wire path relative to the project's directory. `from` picks the content: `{"kind":"live"}` (the default) the file on disk, `{"kind":"index"}` the blob staged for it, `{"kind":"branch","branch":…}` the blob at a local branch's tip, `{"kind":"commit","commit":…}` the blob in a commit given by its full id. With `worktree`, the disk and the index read are that worktree's. Answered with `project_file`. A browse request |
 | `list_project_changes` | `project`, `worktree?`, `slot?` | Lists the uncommitted changes of the worktree holding the project's directory — or, with `worktree`, of that worktree of its repository — that touch the project: staged, unstaged, untracked and in conflict. Answered with `project_changes`. A browse request |
 | `read_project_change` | `project`, `worktree?`, `change`, `slot?` | Reads one of those changes for its diff: `change` is `{group, old, new}`, `group` being `staged`, `unstaged` or `untracked` and each side `{"state":"present","path":…}`, `{"state":"absent"}` or `{"state":"out_of_scope"}` as the listing gave it. Answered with `project_change`. A browse request |
@@ -121,6 +122,7 @@ the request id as if it were a record id.
 | `dir_listing` | `id`, `path`, `entries`: `[{name, path, is_git_repo}]` — only directories are listed |
 | `project_source` | `id`, `source` — the reply to `get_project_source`; `source` is a `ProjectSourceInfo` (see "Browsing a project") |
 | `project_dir` | `id`, `project`, `worktree`, `path`, `root_id`, `entries`, `complete` — the reply to `list_project_dir`. `project`, `worktree` and `path` echo the request; `root_id` is the identity of the directory the listing was scoped to; `entries` are `BrowseEntry` records in byte order of their names' wire forms; `complete` is false when the listing was cut at a budget or an entry could not be read |
+| `project_file_matches` | `id`, `project`, `query`, `paths`, `complete` — the reply to `search_project_files`. `project` and `query` echo the request; `paths` are canonical wire paths relative to the project, sorted in byte order. `complete` is false when traversal was cut short or an entry or subtree could not be read |
 | `project_file` | `id`, `project`, `worktree`, `path`, `source`, `file` — the reply to `read_project_file`. `project`, `worktree` and `path` echo the request; `source` is the `ContentSource` the body was read from and `file` the `FileContent` |
 | `project_changes` | `id`, `project`, `worktree`, `head`, `changes`, `complete` — the reply to `list_project_changes`. `project` and `worktree` echo the request; `head` is the commit the staged changes are against, null before the first commit; `changes` are `ChangeEntry` records in the order `git status` gives them; `complete` is false when the list was cut at a budget |
 | `project_change` | `id`, `project`, `worktree`, `group`, `head`, `old`, `new`, `patch` — the reply to `read_project_change`. `project`, `worktree` and `group` echo the request; `head` is the commit a staged change was read against (null before the first commit, and for the other groups); `old` and `new` are `SideRead` records; `patch` is a `FileContent` holding the change's unified patch as `git` writes it, null when none is made |
@@ -828,7 +830,7 @@ run non-interactively, and pass the whole shell environment.
 
 ### Browsing a project
 
-The browse requests — `get_project_source`, `list_project_dir`, `read_project_file`, `list_project_changes`,
+The browse requests — `get_project_source`, `list_project_dir`, `search_project_files`, `read_project_file`, `list_project_changes`,
 `read_project_change`, `read_project_change_bodies`, `list_project_branches`, `compare_project_branches`,
 `read_project_comparison_change` and `read_project_comparison_change_bodies` — read a project's files, their Git
 versions, a worktree's changes and the changes between two branches on demand, for a client showing them. Their replies
@@ -961,6 +963,25 @@ what a symbolic link resolves to — a file, a directory, something else, nothin
 scope (`outside`, not looked at further). `complete` is false when the listing stopped at a
 budget, and the entries then are those read before it stopped, not a chosen subset; it is false too when an entry
 could not be read, which is then left out.
+
+#### Searching file names
+
+`search_project_files` searches the project's own directory and all real subdirectories, including hidden and
+ignored entries, excluding every entry named `.git`. It matches only the basename, read as UTF-8 with replacement
+characters, against the trimmed query using Unicode lowercase on both. An empty or whitespace-only query matches
+all files, with the same traversal and result budgets. Returned paths retain their canonical wire encoding; their
+byte order is the result order.
+
+Directory symbolic links are not traversed, preventing cycles and duplicate subtrees. A symbolic link to a regular
+file is a result only when its target stays inside the project. Files are named without reading their bodies.
+The traversal uses the same no-follow directory opens as ordinary live reads. An unreadable entry or subtree makes
+`complete` false while other subtrees continue; failure to open the project root fails the request.
+
+The scan stops with `complete: false` at the traversal, depth, result, path-byte or elapsed-time budgets below.
+Results are the matches reached before stopping, sorted afterwards, rather than the first matches of a complete
+sorted traversal. Cancellation is checked between entries. Elapsed time is also checked between entries, so an
+individual filesystem operation on a stalled volume can outlast the time budget. A search reserves the same
+reply memory as one directory listing.
 
 #### Telling a stale reply from a current one
 
@@ -1231,6 +1252,11 @@ born yet, and its staged changes are compared with the empty tree.
 | Patch, per change | 4 MiB | 99 % of the measured commits' whole patches were under about 1.2 MB, so one file's patch under this is the overwhelming case |
 | Directory entries | 10,000 | Counted on disk across the same projects' worktrees, ignored directories included: the largest held 6,418 entries (a Gradle cache) and 4,536 (an icon package in `node_modules`); 99.99 % held under 1,600 |
 | Listing names | 2 MiB, as sent | Bounds a listing whose names are few but long, counted as JSON writes them; 10,000 names of typical length are a small fraction of it |
+| Search entries visited | 250,000 | Counts matching and nonmatching entries across the traversal |
+| Search matches | 2,000 | Bounds a recursive result list before it is cut short |
+| Search paths | 2 MiB, as sent | Bounds escaped path bytes in a recursive result |
+| Search directory depth | 128 open directory levels | Bounds descriptors and traversal stack; deeper subtrees are skipped and the search marked incomplete |
+| Search elapsed time | 5 s, checked between entries | Bounds traversal work while allowing the current filesystem operation to finish |
 | Change entries | 10,000 | The largest measured commit changed 704 files and 99 % changed under 170; a worktree's pending changes are smaller still. A change list past it is cut |
 | Change paths | 2 MiB, as sent | Bounds a change list whose entries are few but whose paths are long, counted as JSON writes them, the repository paths of sides outside the project included. A change list past it is cut |
 | Branches | 10,000 | A repository usually has a handful to tens of local branches, and one kept for years with every branch left behind a few thousand. A branch list past it is cut |

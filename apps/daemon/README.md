@@ -132,11 +132,11 @@ details the settings tools.
 
 ### `src/browse/`
 
-Serves the project-browsing requests of the control socket (`get_project_source`, `list_project_dir`,
+Serves the project-browsing requests of the control socket (`get_project_source`, `list_project_dir`, `search_project_files`,
 `read_project_file`, `list_project_changes`, `read_project_change`, `list_project_branches`, `compare_project_branches`,
 `read_project_comparison_change`, and the two `…_change_bodies` requests that read a diff's whole file bodies): where a
 project's files live (the directory itself, its repository and worktree, the same place in the repository's other
-worktrees), and then a bounded read of a directory listing or one file from the disk, the index, a branch or a commit,
+worktrees), and then a bounded recursive file-name search, directory listing or read of one file from the disk, the index, a branch or a commit,
 or of a worktree's uncommitted changes to the project and one change's diff, the repository's local branches, and the
 changes one branch has made since it forked from another (from their merge base to its tip) and one of them as a diff. A
 request is re-resolved from the store and the repository each time; nothing a client names is used as a directory. The
@@ -151,7 +151,7 @@ retained bytes) the lanes draw on.
 | `mod.rs` | `serve`: turns one request into a reply or a coded error, and the marker error a cancelled read ends with; `locate`, the repository and the worktree (the project's own, or another of the same repository, checked now) a Git read works in |
 | `source.rs` | Resolving a project to its root, repository, worktree and sibling worktrees; minting and re-checking the identities clients hold; repository discovery that stops below the home directory |
 | `wire_path.rs` | The canonical text form a path takes on the wire so no byte of a file name is lost (`RelPath`) |
-| `live.rs` | Reading and listing files on disk under a scope, bounded while reading, refusing symlink escapes, links in a path's components and non-regular files |
+| `live.rs` | Reading and listing files on disk under a scope, and `search_files`, the bounded recursive file-name search; reads refuse symlink escapes, links in a path's components and non-regular files |
 | `blob.rs` | Reading a file's blob from the index or a commit, and resolving and verifying a branch (a broken one, naming no commit, refused) or commit, and checking a branch name without looking it up (`branch_refname`); the exact-path lookups of the index's entries and of a commit's tree entry, and a blob read by object id, that a change's two sides are read through |
 | `git.rs` | The one way browse runs `git`: isolated from the environment and configuration, bounded, output kept as bytes, and never writing to the repository (`GitEnv`); its exact-path runs (`run_exact`) and the predicate for paths that nest (`paths_nest`) |
 | `changes.rs` | A worktree's uncommitted changes scoped to a project and one change's diff: `list` (one `git status` of the whole worktree, kept to the entries with a side inside the project, a side outside it named by its repository path alone) and `read` (the `Reader`: one change read afresh at the paths it names from its group's two sources, its index entry and disk file re-checked after the patch is made, the change refused as `source_changed` when they moved; a change with a side outside the project gets no patch; the patch is made by one of two routes, the diff `git` computes between the change's two versions when its paths nest and both sides are a file or a symbolic link, otherwise one restricted to the change's own paths), `read_between`, the same read of a change between two commits, which nothing is re-checked after since neither moves, and `read_bodies` / `read_bodies_between`, the same read run without inline bodies and its sides compared with the versions a client names before each file's whole body is read from the matched blob or file version, a side on disk whose path has a clean filter in effect refused as `clean_filtered` before either body is read |

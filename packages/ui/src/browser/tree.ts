@@ -103,7 +103,7 @@ export interface TreeModel {
 }
 
 export const rowKey = (path: string): string => `path:${path}`;
-const statusKey = (dir: string): string => `status:${dir}`;
+const statusKey = (dir: string, status: StatusRow): string => `status:${status}:${dir}`;
 
 /**
  * The rows on screen for the listings held and the directories expanded. A directory's rows follow
@@ -122,8 +122,8 @@ export function buildTree(
   const wanted: string[] = [];
 
   const status = (dir: string, row: StatusRow, message?: ErrorPresentation): TreeNode => {
-    rows.push(statusKey(dir));
-    return { type: "status", key: statusKey(dir), dir, status: row, message };
+    rows.push(statusKey(dir, row));
+    return { type: "status", key: statusKey(dir, row), dir, status: row, message };
   };
 
   const childrenOf = (dir: string): TreeNode[] => {

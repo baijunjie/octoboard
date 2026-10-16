@@ -19,7 +19,7 @@ and nothing is staged, committed or checked out.
   (see `docs/product/focus-mode.md`) — shows that project's project pane in Files mode, selecting, starting and
   resuming no session. It is offered when the right pane is hidden or belongs to another owner, and omitted while
   that project's browser is visible, whether docked, floating in or in an open drawer. This applies in Git mode too;
-  use the Files tab to return to the tree while the pane is already visible.
+  choose the Files tab to return to the tree while the pane is already visible.
 - **Selecting a project session** shows its project's project pane.
 
 Moving between sessions of one project leaves its pane as it was: its mode, its expanded folders and selected file, and
@@ -30,22 +30,33 @@ another project's Browse files, shows that project's own pane.
 
 When a project's pane first appears or replaces another project's pane, its header and content fade in with a
 small slide from the right, or from the left in a right-to-left language. The pane keeps its width and position
-throughout. Moving between sessions of the same project, changing tabs or refreshing does not replay this entry.
+throughout. Moving between sessions of the same project, changing views or refreshing does not replay this entry.
 The system's Reduce motion setting disables it.
 
-The pane's header names the project, with a folder icon, and carries the **Files** and **Git** tabs (see "Files and
-Git" below) and a **Refresh** button. Pressing Refresh with the mouse leaves keyboard focus where it was.
+The pane has **one header row**: a folder icon and the visible project name, three peer tabs — **Files**,
+**Uncommitted** and **Compare** — the controls for the chosen view, then **Refresh**. The project name fades when
+space is tight, and the tabs can shrink into a horizontally scrolling strip. The tabs are compact, with a pill behind
+the selected tab and muted labels on the others; the strip itself has no filled track. Every tab offers file-name
+filter and folder-grouping controls. These controls and Refresh stay together at the header's trailing
+end in loading, empty and error states too (see "Filtering by file name" and "Flat or grouped by folder" below). Pressing Refresh with
+the mouse leaves keyboard focus where it was.
 
 ## Files and Git
 
-The tabs in the pane's header switch between its two modes; a project's pane first opens in Files. The mode is
-remembered per project (see "What is remembered" below), so selecting a session shows a project in the mode it was
-last left in. Browse files explicitly chooses Files.
+The **Files**, **Uncommitted** and **Compare** tabs in the header switch directly between the project's directory and
+its two Git review views (see "Uncommitted and Compare" in `docs/product/project-pane-git-mode.md`). The tabs occupy
+one level, with no separate Git tab. A project's pane first opens in Files. The mode is remembered per project
+(see "What is remembered" below), so selecting a session shows a project in the mode it was last left in. Browse files
+explicitly chooses Files. All three tabs remain available while content is loading, has failed, or has no repository.
+The tab strip scrolls horizontally when it does not fit (see "The edge that hides content fades" in
+`docs/product/scrolling-surfaces.md`).
 
-Only the mode on screen is kept up to date on its own: the Files mode as "Keeping the tree up to date" below says, the
-Git mode as "Uncommitted and Compare" in `docs/product/project-pane-git-mode.md` says. Switching to a mode counts as
-showing it again, so what it keeps up to date is refreshed when its last refresh is more than 5 seconds old. The
-header's **Refresh** refreshes the mode on screen: in Files every folder on screen is listed again, in Git the worktrees
+Only the mode on screen is kept up to date on its own: the Files tree as "Keeping the tree up to date" below says,
+a file-name search as "Filtering by file name" below says, and the Git mode as "Uncommitted and Compare" in `docs/product/project-pane-git-mode.md` says. Switching to a mode counts as
+showing it again, so the tree or Git view is refreshed when its last refresh is more than 5 seconds old; an active
+recursive listing is repeated whenever its filter or flat layout is shown again. The
+header's **Refresh** refreshes the mode on screen: in Files every visible folder of the unfiltered tree is listed
+again, or the recursive listing used by a filter or flat layout is repeated; in Git the worktrees
 and the branches are read again, and so are the changes of the Uncommitted view, or the comparison in the Compare view,
 whichever is on screen. While a refresh the button started is out, its icon turns, slowly, and it keeps turning
 for at least a moment, so a refresh that finishes at once still shows it happened. It spins until the reads the press
@@ -107,12 +118,72 @@ error naming the reason (with the folder shown as its path, `~` standing for the
 place of the tree. Try again pressed from the keyboard hands keyboard focus to the header's Refresh, which stays while
 the error and its button go.
 
+### Flat or grouped by folder
+
+The header's second toggle switches **Files** between a folder tree and a flat file list. Files starts grouped by
+folder. With no filter, the tree lists folders lazily as they are expanded (see "What is listed" above); the flat list
+instead scans all project subdirectories and shows each file's full relative path. A nonempty filter also scans the
+whole project in either layout: grouped results contain only folders leading to a match and start expanded, except
+for folders the user folded away. The scan's scope, limits and refreshes are in "Filtering by file name" below and
+apply to the unfiltered flat list too.
+
+Each project's **Files, Uncommitted and Compare tabs remember their own layout and folded folders independently**.
+Switching tabs or switching between flat and grouped layout leaves the other tabs' state alone. The unfiltered Files
+tree retains its ordinary expansion state; its recursive search results retain which folders were folded separately
+while that project's pane stays mounted. Folding a folder in the ordinary tree also marks it folded for search
+results, and expanding it clears that mark. Clearing a filter returns to the ordinary tree when grouped, or to all
+files when flat. The viewer navigates only through the displayed file rows, skipping folded folders.
+
+## Filtering by file name
+
+In Files, the **filter toggle** between the tabs and Refresh shows and hides a field directly below the
+header. It starts hidden. Opening it puts keyboard focus in the field; closing it clears its text and returns focus
+to the toggle if the field held it. An empty field closes when focus leaves it, with whitespace alone counting as
+empty; the window itself losing focus leaves it in place. A field with text stays visible. The toggle follows the
+convention in "Two-state icon toggles" in `docs/product/labels-and-tooltips.md`.
+
+A nonempty filter **searches the entire project directory**, including folders never expanded in the tree, and
+shows the matching files in the tab's chosen layout (see "Flat or grouped by folder" above). Flat rows show each file's
+full relative path; grouped rows show names under their folders. Clearing the text restores the unfiltered layout.
+
+- Only the **file name**, the last part of its path, is matched, by containment, ignoring case and whitespace around
+  the query. Folder names and file contents are not searched. An empty query shows all files in the chosen layout.
+- Dot files and ignored files are included. Entries named `.git` are excluded at every depth. Symbolic links to files
+  inside the project can match under the link's own name; symbolic links to directories are not traversed, and links
+  outside the project are excluded.
+- Results follow the tree's path order: directory branches before files at each level, with names compared
+  case-insensitively and in natural order (see "Order" above). Their rows open the file viewer and offer Copy path
+  as tree rows do (see "A row's actions" below). The viewer's Previous/Next controls follow the visible result rows in this order, skipping folded folders.
+- Typing waits **250 ms** before searching. A changed query shows a searching state until its own results arrive;
+  a reply to an earlier query never replaces them. A failure shows its reason and a retry action. No matches has a
+  distinct empty state, leaving the field available to change or clear.
+- A search is bounded to **250,000 visited entries**, **2,000 matching files**, **2 MiB of encoded result paths**,
+  **128 directory levels** and **5 seconds**. An unreadable subdirectory or entry also makes the result incomplete.
+  Incomplete results carry a notice that not every matching file may be shown, even when no matches were found;
+  an unreadable project root instead fails the search.
+- Searches repeat when the query changes, Files becomes active again, the daemon reconnects, Refresh is pressed,
+  or the project's reported branch or detached state changes. **A nonempty filter has no periodic refresh**. The
+  unfiltered flat list rescans **every 10 seconds** while Files is active and the window is visible, skipping while
+  a scan is pending; returning focus to the window or making it visible again also rescans once the last request
+  is at least **5 seconds** old, unless one is pending. While a filter or flat layout is active, the tree's folder
+  listings pause except for the folder containing an open file and its ancestors through the project root: these continue to be listed to keep the viewer's content current, without repeating the search.
+
+The field's clear button and **Escape** clear its text while leaving focus in the field. In a floating pane or a
+drawer, Escape with text clears it; Escape once empty can close the pane. Input-method composition owns its keys,
+including Escape, so those keys do not clear the field. Typing in the field does not trigger the list's name navigation.
+
+Each of **Files, Uncommitted and Compare has its own keyword and filter-field open state**. Switching tabs restores
+that tab's choices without taking keyboard focus into a restored field. Clearing or closing the field affects only
+the current tab; closing it drops its keyword. These choices last while the project's pane stays in the right pane,
+including tab switches and hiding the pane; replacing it with another owner, reloading the window or restarting the
+application discards them. They are not shared across projects.
+
 ## The selected file
 
-The tree's **selected file** is the one the file viewer showed last. Its row is tinted, and assistive technology hears
-it named as selected. Nothing else in the tree is selected; a row's one action is to open or close it.
+The tree's or search results' **selected file** is the one the file viewer showed last. Its row is tinted, and
+assistive technology hears it named as selected. Nothing else in the tree is selected; a row's one action is to open or close it.
 
-While the viewer moves from file to file, the tree keeps the selected file's row in view behind it.
+While the viewer moves from file to file, the tree or search results keep the selected file's row in view behind it.
 
 A selected file that its folder no longer lists stays as a row in its place, struck through, until the selection moves
 on: marked **Removed** when the folder's listing is complete, or **Not listed** when it was cut short and the file may
@@ -121,7 +192,8 @@ still be there.
 ## Keeping the tree up to date
 
 The tree is read from the project's directory as it is on disk; nothing tells Octoboard when files change, so it lists
-the folders on screen — the project's own directory and every expanded folder whose parents are expanded — again:
+the folders on screen — the project's own directory and every expanded folder whose parents are expanded — again,
+while grouped by folder with no nonempty file-name filter active (see "Filtering by file name" above):
 
 - the first time the Files mode is shown after the project pane is put in the right pane, which lists it afresh;
 - when a folder is expanded, if it had been listed before;
@@ -180,15 +252,15 @@ button in both its views and both forms of the list, flat or grouped by folder (
 ## What is remembered
 
 **Per project, per client**, in that client's own browser storage (as the right pane's width is, see "Resizing the
-sidebar and the right pane" in `docs/product/window-layout.md`): the mode, Files or Git, and which folders are
-expanded, so the pane comes back as it was after a reload or a restart. At most 200 expanded folders are kept per
+sidebar and the right pane" in `docs/product/window-layout.md`): the mode, Files or Git, each of the three tabs' flat-or-grouped layout, and which folders are expanded in the ordinary Files tree, so the pane comes back as it was after a reload or a restart. At most 200 expanded folders are kept per
 project, the earliest expanded dropped first, and the state of at most 50 projects, the one shown least recently
 dropped first. A removed project's state is dropped.
 
 The selected file is kept only while the window is open: reloading it, or restarting the application, starts every
 project with no file selected. So are the Git mode's view, chosen worktree, chosen branches, selected changes and the
 sections and folders it has folded away (see "What is remembered" in `docs/product/project-pane-git-mode.md`).
-Listings, change lists and file contents are never stored.
+Listings, search results, change lists and file contents are never stored. Each tab's filter text and visibility, and the Files recursive results' folded folders,
+last only while the project's pane stays in the right pane (see "Filtering by file name" above).
 
 ## The file viewer
 
@@ -520,8 +592,9 @@ another file (see "Moving between files" below).
 and **Right** arrow keys move to the file before and after the one shown, without closing the viewer. They move through
 the file rows the tree shows, top
 to bottom: folders are skipped, and so is everything inside a collapsed folder. They stop at either end rather than
-going round, Previous file disabled on the first file and Next file on the last. A file shown as removed moves on to
-the files that were beside it.
+going round, Previous file disabled on the first file and Next file on the last. With a file-name filter or flat layout active,
+they instead follow the recursive results' visible file rows in their displayed order (see "Filtering by file name" above). A file
+shown as removed moves on to the files that were beside it.
 
 - Under a right-to-left language the keys are mirrored: Right moves to the previous file and Left to the next.
 - The keys do nothing while a modifier is held, during an input method's composition, when keyboard focus is on a

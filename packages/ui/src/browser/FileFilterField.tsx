@@ -1,37 +1,50 @@
 import { SearchField } from "@heroui/react";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useT } from "../i18n/react";
 import { isImeKey } from "../imeKey";
-import type { ChangeViewState } from "./changeView";
 
-/**
- * The field whose text narrows a change list to the changes whose file name contains it
- * (`filterChanges`), between the view's selectors and the list itself. It is on screen only while
- * the tab row's filter toggle has it open, and it is a view's own, not the list's: it is there
- * whichever state the view is in, so the toggle always has a field to open, and the text it holds
- * is the Git mode's, shared by both views.
- *
- * It takes keyboard focus as the toggle opens it, but not when the view is mounted again with it
- * already open, where focus would be taken off whatever the user reached. An empty field goes away
- * once focus leaves it, so the only field on screen is one the user can see the effect of; one
- * with text typed in it stays, and the toggle is what drops both.
- */
-export function ChangeFilterField({ changeView }: { changeView: ChangeViewState }): React.ReactElement {
+export interface FileFilterState {
+  filter: string;
+  filterOpen: boolean;
+  onFilterChange: (filter: string) => void;
+  onFilterOpenChange: (open: boolean) => void;
+  filterToggleRef: React.RefObject<HTMLButtonElement | null>;
+}
+
+export function useFileFilterState(): FileFilterState {
+  const [filter, onFilterChange] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterToggleRef = useRef<HTMLButtonElement>(null);
+  return {
+    filter,
+    filterOpen,
+    onFilterChange,
+    onFilterOpenChange: (open) => {
+      setFilterOpen(open);
+      if (!open) onFilterChange("");
+    },
+    filterToggleRef,
+  };
+}
+
+/** Opening the field takes focus; closing it hands focus back to its toggle. An empty field
+ * closes on blur, while a field holding a filter stays visible. */
+export function FileFilterField({ state, label, placeholder, contextKey }: { state: FileFilterState; label: string; placeholder: string; contextKey?: string }): React.ReactElement {
   const t = useT();
   // The field is taken away while it may still hold keyboard focus — the toggle closing it is
   // pressed without taking focus itself — and a removal fires no blur, so focus would fall to
   // `<body>` and the terminal would stop receiving keystrokes; the hand-off puts it on the toggle.
   // This component stays mounted for the hook's check to run in, and its wrapper takes no box of
   // its own (`contents`), so the field is a flex child of the view's column.
-  const handoff = useFocusHandoff(() => changeView.filterToggleRef.current?.focus());
+  const handoff = useFocusHandoff(() => state.filterToggleRef.current?.focus());
   const input = useRef<HTMLInputElement>(null);
-  const wasOpen = useRef(changeView.filterOpen);
+  const previous = useRef({ open: state.filterOpen, contextKey });
   useEffect(() => {
-    if (changeView.filterOpen && !wasOpen.current) input.current?.focus();
-    wasOpen.current = changeView.filterOpen;
-  }, [changeView.filterOpen]);
+    if (state.filterOpen && !previous.current.open && previous.current.contextKey === contextKey) input.current?.focus();
+    previous.current = { open: state.filterOpen, contextKey };
+  }, [state.filterOpen, contextKey]);
   // An input method's keys are stopped here before the field's own handler and before whatever
   // handles keys above it in the React tree: the composition owns them. react-aria's `useKeyboard`
   // ignores only `isComposing`, so a key an engine reports with `keyCode` 229 alone is held back by
@@ -48,16 +61,16 @@ export function ChangeFilterField({ changeView }: { changeView: ChangeViewState 
   // it, and taking it away then would move keyboard focus behind their back as well.
   const onBlur = (event: React.FocusEvent<HTMLDivElement>) => {
     if (!document.hasFocus()) return;
-    if (changeView.filter.trim() === "" && !event.currentTarget.contains(event.relatedTarget)) changeView.onFilterOpenChange(false);
+    if (state.filter.trim() === "" && !event.currentTarget.contains(event.relatedTarget)) state.onFilterOpenChange(false);
   };
   return (
     <div className="contents" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
-      {changeView.filterOpen && (
+      {state.filterOpen && (
         <div className="shrink-0 border-b border-separator px-3 py-2" onKeyDownCapture={guardComposition} onBlur={onBlur}>
-          <SearchField aria-label={t("git.filter.label")} value={changeView.filter} onChange={changeView.onFilterChange} fullWidth variant="secondary">
+          <SearchField aria-label={label} value={state.filter} onChange={state.onFilterChange} fullWidth variant="secondary">
             <SearchField.Group>
               <SearchField.SearchIcon />
-              <SearchField.Input ref={input} placeholder={t("git.filter.placeholder")} />
+              <SearchField.Input ref={input} placeholder={placeholder} />
               {/* HeroUI's close button hardcodes an English `aria-label` ahead of its spread
                   props, which also shadows the name react-aria supplies through the `clear` slot,
                   so the button is named from the catalog here. */}

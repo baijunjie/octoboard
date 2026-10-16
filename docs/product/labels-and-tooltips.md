@@ -83,7 +83,8 @@ card lists, each with its own status glyph and that glyph's tooltip (see "Toolti
 
 A control that switches a view between two states is **one icon button**, not a set of choices side by side. These are
 the two pane toggles (see "The two pane toggles" in `docs/product/window-layout.md`), the file viewer's three view
-controls (see "The file viewer" in `docs/product/project-pane.md`) and the Git mode's two — the toggle of its change
+controls (see "The file viewer" in `docs/product/project-pane.md`), the Files mode's file-name filter and folder-grouping toggles
+(see "Filtering by file name" and "Flat or grouped by folder" in that doc), and the Git mode's two — the toggle of its change
 filter field (see "Filtering by file name" in `docs/product/project-pane-git-mode.md`) and Group by folder (see "Flat
 or grouped by folder" in the same doc). For all of them:
 
@@ -91,7 +92,7 @@ or grouped by folder" in the same doc). For all of them:
 - **The icon shows the state the view is in; the name says what pressing will do**, so the name alternates with the
   state. That name is both the tooltip and what assistive technology announces, as "Tooltips on icon-only controls"
   above says. Assistive technology is also told which state the control is in: whether the button is pressed; a pane
-  toggle says instead whether its pane is expanded, and the Git mode's filter toggle says both, pressed while its
+  toggle says instead whether its pane is expanded, and each file-name filter toggle says both, pressed while its
   field is on screen.
 - **Nothing about the state is said in colour**: the button in its pressed state is drawn exactly as in its
   unpressed one.

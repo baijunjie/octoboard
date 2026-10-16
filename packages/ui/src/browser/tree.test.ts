@@ -45,16 +45,23 @@ describe("buildTree", () => {
     expect(tree.rows).toEqual([
       "path:docs",
       "path:empty",
-      "status:empty",
+      "status:empty:empty",
       "path:src",
       "path:src/lib",
-      "status:src/lib",
+      "status:loading:src/lib",
       "path:src/main.ts",
-      "status:src",
+      "status:partial:src",
       "path:README.md",
     ]);
     expect(tree.files).toEqual(["src/main.ts", "README.md"]);
     expect(tree.wanted).toEqual(["", "empty", "src", "src/lib"]);
+  });
+
+  it("gives the empty and partial notices of an incomplete empty folder distinct row keys", () => {
+    const partial = new Map<string, DirListing>([["", loaded([dir("src")])], ["src", loaded([], false)]]);
+    const tree = buildTree(partial, new Set(["src"]), undefined);
+    expect(tree.nodes[0]).toMatchObject({ children: [{ status: "empty" }, { status: "partial" }] });
+    expect(new Set(tree.rows).size).toBe(tree.rows.length);
   });
 
   it("keeps a selection its directory no longer lists, in its place, marked by why", () => {

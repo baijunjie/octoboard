@@ -987,6 +987,7 @@ pub struct BrowseRequest {
 pub const BROWSE_REQUEST_TYPES: &[&str] = &[
     "get_project_source",
     "list_project_dir",
+    "search_project_files",
     "read_project_file",
     "list_project_changes",
     "read_project_change",
@@ -1008,6 +1009,10 @@ pub enum BrowseBody {
         #[serde(default)]
         worktree: Option<String>,
         path: String,
+    },
+    SearchProjectFiles {
+        project: String,
+        query: String,
     },
     ReadProjectFile {
         project: String,
@@ -1726,6 +1731,14 @@ pub enum Event {
         /// The identity of the directory the listing was scoped to.
         root_id: String,
         entries: Vec<BrowseEntry>,
+        complete: bool,
+    },
+    /// Recursive filename matches, possibly cut at a traversal or reply budget.
+    ProjectFileMatches {
+        id: Option<String>,
+        project: String,
+        query: String,
+        paths: Vec<String>,
         complete: bool,
     },
     /// The reply to `read_project_file`; `project`, `worktree` and `path` echo the request.

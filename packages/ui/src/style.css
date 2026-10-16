@@ -729,6 +729,11 @@ html.pane-resizing * {
   to { opacity: 0; }
 }
 
+/* Keep keyboard focus fully visible when the tab strip scrolls beneath its edge fade. */
+.project-browser-view .tabs__list-container__scroller:has([role="tab"][data-focus-visible="true"]) {
+  mask-image: none;
+}
+
 .project-browser-entry:dir(rtl) {
   --project-browser-shift: -10px;
 }

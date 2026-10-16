@@ -80,6 +80,12 @@ const unreadableDir = (path: string): FixtureFile => ({
 const { console: console_, web, api, sessions } = SAMPLE;
 const state = snapshotState({ consoles: [console_], projects: [web, api], sessions });
 const openFiles = [(ui: Ui) => ui.press(ui.session("Fix the summary layout")), (ui: Ui) => ui.wait(400)];
+const filterFiles: FixtureFiles = {
+  ...SAMPLE_FILES,
+  "src/services": { dir: true },
+  "src/services/search": { dir: true },
+  "src/services/search/server.ts": { text: "export const searchPort = 8081;\n" },
+};
 
 export const projectFilesScenarios: Scenario[] = [
   {
@@ -109,6 +115,50 @@ export const projectFilesScenarios: Scenario[] = [
       },
     },
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
+  },
+  {
+    id: "files-filter",
+    group: GROUP,
+    category: "normal",
+    title: "Matching files throughout the project",
+    description: "The filter sits above matching files grouped by folder. Both server.ts files match the trimmed, case-insensitive filename query without opening any folders first. The project title, compact pill tabs and right-aligned filter, layout and Refresh controls share one header row. Each tab keeps its own query, layout and folded folders.",
+    state,
+    files: filterFiles,
+    steps: [
+      ...openFiles,
+      (ui) => ui.press(ui.t("browser.filter.show")),
+      (ui) => ui.type(" SERVER "),
+      (ui) => ui.wait(400),
+    ],
+  },
+  {
+    id: "files-flat",
+    group: GROUP,
+    category: "normal",
+    title: "All project files as a flat list",
+    description: "The flat layout lists files throughout the project without opening folders or entering a query. Relative paths distinguish files in different folders. The layout toggle occupies the same header position as in Uncommitted and Compare.",
+    state,
+    files: filterFiles,
+    steps: [
+      ...openFiles,
+      (ui) => ui.press(ui.t("git.layout.flat")),
+      (ui) => ui.wait(400),
+    ],
+  },
+  {
+    id: "files-filter-empty",
+    group: GROUP,
+    category: "normal",
+    title: "No matching files in the project",
+    description: "The whole project has no files matching the query, so the active filter shows a no-match empty state. Hiding the filter clears the query and restores the folder tree.",
+    state,
+    files: filterFiles,
+    steps: [
+      ...openFiles,
+      (ui) => ui.press(ui.t("browser.filter.show")),
+      (ui) => ui.type("no-such-file"),
+      (ui) => ui.wait(400),
+    ],
   },
   {
     id: "files-project-menu",

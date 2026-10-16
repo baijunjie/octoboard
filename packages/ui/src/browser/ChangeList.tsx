@@ -40,7 +40,7 @@ export function changeRowOffset(items: readonly ChangeItem[], key: string, layou
  * (`ChangeTree`). A row's action is to open its change in the viewer, and a button at its end opens
  * a menu of the others (`RowActions`); nothing is selectable in the list's sense. The change
  * the viewer showed last is tinted and named as selected in its row's label instead, as the file
- * tree marks its file. The view's filter field above it (`ChangeFilterField`) narrows its rows to
+ * tree marks its file. The view's filter field above it (`FileFilterField`) narrows its rows to
  * the changes whose file name contains the text (`filterChanges`); the sections' counts follow the
  * rows left, and the list says so where none are.
  *

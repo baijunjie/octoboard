@@ -217,7 +217,7 @@ export function createPreviewScenario(
   };
   if (scene === "changes")
     scenario.steps!.push(
-      (ui) => ui.press(ui.t("browser.mode.git")),
+      (ui) => ui.press(ui.t("git.view.worktree")),
       (ui) => ui.press(ui.changeRow("meal-deal-orders.ts", "modified")),
       (ui) => ui.wait(600),
     );

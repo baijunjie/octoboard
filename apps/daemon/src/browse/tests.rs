@@ -13,11 +13,54 @@ use super::git::tests::test_env;
 use super::git::GitEnv;
 use super::*;
 use crate::protocol::{
-    Agent, BrowseEntry, Console, ContentKind, EntryKind, LinkTarget, Project, ProjectAccount,
-    ProjectSource,
+    Agent, BrowseEntry, BrowseRequest, Console, ContentKind, EntryKind, LinkTarget, Project,
+    ProjectAccount, ProjectSource,
 };
 use crate::state::AppState;
 use crate::test_support::{app_state, git, git_bytes, repo_with, ScratchDir};
+
+#[test]
+fn search_request_resolves_the_stored_project_and_echoes_the_query() {
+    let fixture = Fixture::new();
+    let directory = ScratchDir::new("browse-search-request");
+    std::fs::create_dir_all(directory.join("unopened/deeper")).unwrap();
+    std::fs::write(directory.join("unopened/deeper/Needle.txt"), b"match").unwrap();
+    let project = fixture.project("search-project", &directory);
+    let request: BrowseRequest = serde_json::from_value(serde_json::json!({
+        "id": "search-1", "slot": "files-filter", "type": "search_project_files",
+        "project": project, "query": "  NEEDLE  "
+    }))
+    .unwrap();
+    assert_eq!(request.slot.as_deref(), Some("files-filter"));
+    let reply = serve(
+        &fixture.state,
+        request.id,
+        request.body,
+        &git_env,
+        &AtomicBool::new(false),
+    )
+    .unwrap();
+    let wire = serde_json::to_value(reply).unwrap();
+    assert_eq!(wire["type"], "project_file_matches");
+    assert_eq!(wire["id"], "search-1");
+    assert_eq!(wire["project"], "search-project");
+    assert_eq!(wire["query"], "  NEEDLE  ");
+    assert_eq!(
+        wire["paths"],
+        serde_json::json!(["unopened/deeper/Needle.txt"])
+    );
+    assert_eq!(wire["complete"], true);
+    let error = fixture
+        .serve(BrowseBody::SearchProjectFiles {
+            project: "unknown".into(),
+            query: "needle".into(),
+        })
+        .unwrap_err();
+    assert_eq!(
+        error.downcast_ref::<CodedError>().unwrap().code,
+        error_code::UNKNOWN_PROJECT
+    );
+}
 
 pub(super) struct Fixture {
     pub(super) state: Arc<AppState>,

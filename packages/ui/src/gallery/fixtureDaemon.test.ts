@@ -69,6 +69,29 @@ describe("the fixture daemon's session colour", () => {
 });
 
 describe("the fixture daemon's project file trees", () => {
+  it("searches unopened descendants by filename and returns sorted project-relative paths", async () => {
+    const daemon = createFixtureDaemon({
+      id: "project-search", group: "Project pane: files", category: "normal", title: "",
+      files: {
+        "": { dir: true },
+        "src": { dir: true },
+        "src/server.ts": { text: "" },
+        "server-docs": { dir: true },
+        "server-docs/notes.md": { text: "" },
+        "Server.md": { text: "" },
+        ".git": { dir: true },
+        ".git/server": { text: "" },
+      },
+    });
+    await expect(daemon.request({ type: "search_project_files", project: "web", query: " SERVER " })).resolves.toEqual({
+      type: "project_file_matches", project: "web", query: " SERVER ", paths: ["Server.md", "src/server.ts"], complete: true,
+    });
+    await expect(daemon.request({ type: "search_project_files", project: "web", query: "missing" })).resolves.toMatchObject({ paths: [], complete: true });
+    await expect(daemon.request({ type: "search_project_files", project: "web", query: "" })).resolves.toMatchObject({
+      paths: ["Server.md", "server-docs/notes.md", "src/server.ts"], complete: true,
+    });
+  });
+
   it("uses each project's tree for listings and reads, retaining the shared fallback", async () => {
     const daemon = createFixtureDaemon({
       id: "project-trees", group: "Project pane: files", category: "normal", title: "",

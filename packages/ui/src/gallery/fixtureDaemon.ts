@@ -313,6 +313,14 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const complete = "dir" in dir ? dir.complete !== false : true;
           return { type: "project_dir", project: body.project, worktree: null, path: body.path, root_id: "fixture", entries: entriesUnder(files, body.path), complete };
         }
+        case "search_project_files": {
+          const query = body.query.trim().toLowerCase();
+          const paths = Object.entries(projectFiles(body.project))
+            .filter(([path, file]) => !("dir" in file) && !path.split("/").includes(".git") && path.slice(path.lastIndexOf("/") + 1).toLowerCase().includes(query))
+            .map(([path]) => path)
+            .sort();
+          return { type: "project_file_matches", project: body.project, query: body.query, paths, complete: true };
+        }
         case "read_project_file": {
           const file = browsed(projectFiles(body.project), body.path);
           const source = { kind: "live" as const, root_id: "fixture", version: "1" };

@@ -152,6 +152,18 @@ pub fn serve(
                 complete: listing.complete,
             })
         }
+        BrowseBody::SearchProjectFiles { project, query } => {
+            let record = stored_project(state, &project)?;
+            let scope = scope_for(&record, None, &git, cancel)?;
+            let matches = live::search_files(&scope.canonical, &query, cancel)?;
+            Ok(Event::ProjectFileMatches {
+                id,
+                project,
+                query,
+                paths: matches.paths,
+                complete: matches.complete,
+            })
+        }
         BrowseBody::ReadProjectFile {
             project,
             worktree,

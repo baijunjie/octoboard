@@ -350,6 +350,130 @@ pub(super) fn list_resolved(
     Ok(Listing { entries, complete })
 }
 
+/// Recursive matches in canonical wire path form, bounded independently of directory listings.
+#[derive(Debug)]
+pub struct FileMatches {
+    pub paths: Vec<String>,
+    pub complete: bool,
+}
+
+/// Searches every real subdirectory, including ignored and hidden entries. Directory symlinks
+/// are never traversed; file symlinks are included only when their targets stay in the scope.
+pub fn search_files(scope: &Path, query: &str, cancel: &AtomicBool) -> Result<FileMatches> {
+    search_bounded(
+        scope,
+        query,
+        budget::MAX_SEARCH_VISITED,
+        budget::MAX_SEARCH_MATCHES,
+        budget::MAX_SEARCH_PATH_BYTES,
+        budget::MAX_SEARCH_DEPTH,
+        budget::SEARCH_TIMEOUT,
+        cancel,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn search_bounded(
+    scope: &Path,
+    query: &str,
+    max_visited: usize,
+    max_matches: usize,
+    max_path_bytes: usize,
+    max_depth: usize,
+    timeout: std::time::Duration,
+    cancel: &AtomicBool,
+) -> Result<FileMatches> {
+    let mut result = FileMatches {
+        paths: Vec::new(),
+        complete: true,
+    };
+    let query = query.trim().to_lowercase();
+    if cancel.load(Ordering::Relaxed) {
+        return Err(anyhow::Error::new(Cancelled));
+    }
+    let started = std::time::Instant::now();
+    let root = RelPath::parse("").expect("the root is a valid path");
+    let directory = open_without_links(scope, libc::O_DIRECTORY | libc::O_NOCTTY)
+        .map_err(|err| open_failure(&root, &err))?;
+    let mut stack = vec![(root, DirReader::new(directory)?)];
+    let mut visited = 0;
+    let mut path_bytes = 0;
+    while let Some((parent, reader)) = stack.last_mut() {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(anyhow::Error::new(Cancelled));
+        }
+        if started.elapsed() >= timeout {
+            result.complete = false;
+            break;
+        }
+        let raw = match reader.next_entry() {
+            Ok(Some((raw, _))) => raw,
+            Ok(None) => {
+                stack.pop();
+                continue;
+            }
+            Err(_) => {
+                result.complete = false;
+                stack.pop();
+                continue;
+            }
+        };
+        if visited == max_visited {
+            result.complete = false;
+            break;
+        }
+        visited += 1;
+        if raw == b".git" {
+            continue;
+        }
+        let Some(stat) = reader.stat(&raw) else {
+            result.complete = false;
+            continue;
+        };
+        let path =
+            parent.join(&RelPath::from_bytes(raw.clone()).expect("a directory entry is a name"));
+        let canonical = scope.join(path.as_path());
+        let kind = stat.st_mode as libc::mode_t & libc::S_IFMT;
+        if kind == libc::S_IFDIR {
+            if stack.len() >= max_depth {
+                result.complete = false;
+                continue;
+            }
+            // Do not canonicalize this path: a directory replaced with a symlink since stat
+            // must fail the same no-follow open that protects ordinary browse reads.
+            match open_without_links(&canonical, libc::O_DIRECTORY | libc::O_NOCTTY)
+                .and_then(DirReader::new)
+            {
+                Ok(reader) => stack.push((path, reader)),
+                Err(_) => result.complete = false,
+            }
+            continue;
+        }
+        if kind != libc::S_IFREG
+            && !(kind == libc::S_IFLNK
+                && matches!(link_target(scope, &canonical), LinkTarget::File))
+        {
+            continue;
+        }
+        if !String::from_utf8_lossy(&raw)
+            .to_lowercase()
+            .contains(&query)
+        {
+            continue;
+        }
+        let wire = path.to_wire();
+        let bytes = json_escaped_len(wire.as_bytes());
+        if result.paths.len() == max_matches || path_bytes + bytes > max_path_bytes {
+            result.complete = false;
+            break;
+        }
+        path_bytes += bytes;
+        result.paths.push(wire);
+    }
+    result.paths.sort();
+    Ok(result)
+}
+
 /// Reads the entries of an open directory through its descriptor, so what is listed is the
 /// directory that was opened, whatever has happened to its path since.
 struct DirReader {
@@ -568,6 +692,104 @@ mod tests {
         err.downcast_ref::<CodedError>()
             .expect("a coded refusal")
             .code
+    }
+
+    #[test]
+    fn search_finds_unopened_nested_hidden_and_ignored_files_without_following_directories() {
+        use std::os::unix::fs::symlink;
+        let scope = ScratchDir::new("file-search");
+        let outside = ScratchDir::new("file-search-outside");
+        let scope = fs::canonicalize(&*scope).unwrap();
+        fs::create_dir_all(scope.join("unopened/deeper")).unwrap();
+        fs::create_dir_all(scope.join("ignored")).unwrap();
+        fs::create_dir_all(scope.join("unopened/.git")).unwrap();
+        fs::write(scope.join(".gitignore"), b"ignored/").unwrap();
+        for path in [
+            "unopened/deeper/Needle.txt",
+            ".needle",
+            "ignored/needle.txt",
+            "unopened/.git/needle",
+            "needle%name.txt",
+        ] {
+            fs::write(scope.join(path), b"match").unwrap();
+        }
+        fs::write(outside.join("needle.txt"), b"outside").unwrap();
+        symlink("unopened", scope.join("needle-dir")).unwrap();
+        symlink(".", scope.join("loop")).unwrap();
+        symlink("unopened/deeper/Needle.txt", scope.join("needle-link")).unwrap();
+        symlink(outside.join("needle.txt"), scope.join("needle-outside")).unwrap();
+        let found = search_files(&scope, "  NEEDLE  ", &never()).unwrap();
+        assert!(found.complete);
+        assert_eq!(
+            found.paths,
+            [
+                ".needle",
+                "ignored/needle.txt",
+                "needle%25name.txt",
+                "needle-link",
+                "unopened/deeper/Needle.txt"
+            ]
+        );
+        assert!(search_files(&scope, "unopened", &never())
+            .unwrap()
+            .paths
+            .is_empty());
+        let all = search_files(&scope, "", &never()).unwrap();
+        assert!(all.complete);
+        let mut expected = found.paths;
+        expected.push(".gitignore".into());
+        expected.sort();
+        assert_eq!(all.paths, expected);
+    }
+
+    #[test]
+    fn search_reports_visit_result_path_depth_and_time_limits_and_cancellation() {
+        let scope = ScratchDir::new("file-search-limits");
+        let scope = fs::canonicalize(&*scope).unwrap();
+        fs::create_dir_all(scope.join("nested")).unwrap();
+        fs::write(scope.join("needle.txt"), b"match").unwrap();
+        fs::write(scope.join("nested/needle.txt"), b"match").unwrap();
+        for (visited, matches, bytes, depth, timeout) in [
+            (0, 10, 1024, 10, std::time::Duration::from_secs(5)),
+            (100, 1, 1024, 10, std::time::Duration::from_secs(5)),
+            (100, 10, 1, 10, std::time::Duration::from_secs(5)),
+            (100, 10, 1024, 1, std::time::Duration::from_secs(5)),
+            (100, 10, 1024, 10, std::time::Duration::ZERO),
+        ] {
+            let found = search_bounded(
+                &scope,
+                "needle",
+                visited,
+                matches,
+                bytes,
+                depth,
+                timeout,
+                &never(),
+            )
+            .unwrap();
+            assert!(!found.complete);
+            assert!(found.paths.len() <= matches);
+        }
+        assert!(search_files(&scope, "needle", &AtomicBool::new(true))
+            .unwrap_err()
+            .downcast_ref::<Cancelled>()
+            .is_some());
+        let empty = search_files(&scope, "  ", &never()).unwrap();
+        assert!(empty.complete);
+        assert_eq!(empty.paths, ["needle.txt", "nested/needle.txt"]);
+        let limited = search_bounded(
+            &scope,
+            "",
+            100,
+            1,
+            1024,
+            10,
+            std::time::Duration::from_secs(5),
+            &never(),
+        )
+        .unwrap();
+        assert!(!limited.complete);
+        assert_eq!(limited.paths.len(), 1);
     }
 
     /// Whether this Linux system refuses `openat2`, so that an open falls back to holding only the

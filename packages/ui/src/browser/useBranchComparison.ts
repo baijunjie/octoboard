@@ -7,7 +7,8 @@ import type { ComparisonEndpoint } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { browseFailure } from "./browseError";
 import { changeItems, type ChangeItem } from "./changes";
-import { gitMoment, sendGitRequest } from "./gitRequests";
+import { gitMoment } from "./gitRequests";
+import { sendBrowseListRequest } from "./browseListRequests";
 
 /**
  * A comparison of two branches as the client holds it. Once loaded, `left` and `right` are the
@@ -64,7 +65,7 @@ export function useBranchComparison(
       setHeld((now) => ({ pair: asked, comparison: change(now.pair === asked ? now.comparison : { state: "loading" }) }));
     setComparison((comparison) => (comparison.state === "loaded" || (comparison.state === "error" && background) ? comparison : { state: "loading" }));
     const slot = `comparison:${project}`;
-    return sendGitRequest(slot, () => (current() ? request({ type: "compare_project_branches", project, left, right, slot }) : undefined))
+    return sendBrowseListRequest(slot, () => (current() ? request({ type: "compare_project_branches", project, left, right, slot }) : undefined))
       .then((reply) => {
         if (!reply || !current() || reply.type !== "project_comparison" || reply.project !== project) return;
         if (reply.left.branch !== left || reply.right.branch !== right) return;

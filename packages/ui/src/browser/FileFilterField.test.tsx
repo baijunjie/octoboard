@@ -2,7 +2,7 @@
 import React, { act, useState } from "react";
 import { expect, it, vi } from "vitest";
 
-import { ChangeFilterField } from "./ChangeFilterField";
+import { FileFilterField } from "./FileFilterField";
 import { ChangeList } from "./ChangeList";
 import type { ChangeViewState } from "./changeView";
 import { change, changeViewFixture, mountRows } from "./browserTestSupport";
@@ -29,7 +29,7 @@ function render(open = false) {
     const view: ChangeViewState = { ...fixture, filterOpen, onFilterOpenChange: setFilterOpen, filter, onFilterChange: setFilter };
     return (
       <>
-        <ChangeFilterField changeView={view} />
+        <FileFilterField state={view} label="File name contains" placeholder="Filter changes" />
         <ChangeList items={items} selected={undefined} label="Changes" onOpen={() => {}} listRef={() => {}} changeView={view} />
       </>
     );

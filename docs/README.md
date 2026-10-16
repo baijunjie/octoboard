@@ -115,7 +115,7 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Project pane](product/project-pane.md) — a project's files and Git review (uncommitted changes and branch comparison)
   in the right pane: its Files and Git modes and what is remembered of the mode, opening it with Browse files or by
   selecting a project session without starting or resuming anything, the file tree (what is listed, its order, rows and
-  the keyboard, the selected file and a removed one), the menu a row's own button opens in either mode (Copy path),
+  the keyboard, the selected file and a removed one), recursive file-name filtering with relative-path results, the menu a row's own button opens in either mode (Copy path),
   when the tree is listed again, what is remembered per project, the read-only file viewer (what it shows, including
   a Markdown document's diagrams, formulas, project images and links to other project files, wrapping long lines,
   Previous/Next and the arrow keys, closing it, a file that changes while open), its errors, and a pane that fails

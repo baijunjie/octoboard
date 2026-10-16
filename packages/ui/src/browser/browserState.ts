@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 
 import { createPersistedPreference } from "../persistedPreference";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { changeLayout, type ChangeLayout } from "./changeLayout";
 import { gitMoment } from "./gitRequests";
 
 /** What a project's browser shows: its files on disk, or Git review. */
@@ -10,12 +11,14 @@ export type BrowserMode = "files" | "git";
 /** What the Git mode shows: a worktree's uncommitted changes, or the changes between two
  * branches. */
 export type GitView = "worktree" | "compare";
+export type BrowserTab = "files" | GitView;
 
-/** The part of a project's browser state that outlives the window: its mode and the directories
- * expanded in its tree (wire paths). File bodies and listings are never stored. */
+/** The part of a project's browser state that outlives the window: its mode, per-tab layouts and
+ * directories expanded in its tree (wire paths). File bodies and listings are never stored. */
 interface StoredBrowser {
   mode: BrowserMode;
   expanded: string[];
+  layouts?: Partial<Record<BrowserTab, ChangeLayout>>;
   /** When the project's browser was last shown, for dropping the least recently used ones. */
   used: number;
 }
@@ -34,7 +37,12 @@ function parseStored(raw: string | null): Record<string, StoredBrowser> {
       if (!entry || typeof entry !== "object") continue;
       const expanded = Array.isArray(entry.expanded) ? entry.expanded.filter((p): p is string => typeof p === "string" && p !== "") : [];
       const mode = entry.mode === "git" ? "git" : "files";
-      result[project] = { mode, expanded: expanded.slice(-MAX_EXPANDED), used: typeof entry.used === "number" ? entry.used : 0 };
+      const layouts: Partial<Record<BrowserTab, ChangeLayout>> = {};
+      for (const tab of ["files", "worktree", "compare"] as const) {
+        const layout = entry.layouts?.[tab];
+        if (layout === "flat" || layout === "tree") layouts[tab] = layout;
+      }
+      result[project] = { mode, layouts, expanded: expanded.slice(-MAX_EXPANDED), used: typeof entry.used === "number" ? entry.used : 0 };
     }
     return result;
   } catch {
@@ -141,6 +149,8 @@ const NO_EXPANDED: ReadonlySet<string> = new Set();
 const expandedSets = new WeakMap<string[], ReadonlySet<string>>();
 
 export interface ProjectBrowserState {
+  layouts: Record<BrowserTab, ChangeLayout>;
+  setLayout: (tab: BrowserTab, layout: ChangeLayout) => void;
   mode: BrowserMode;
   expanded: ReadonlySet<string>;
   selected?: string;
@@ -192,6 +202,8 @@ export function useProjectBrowserState(project: string): ProjectBrowserState {
     expandedSets.set(entry.expanded, expanded);
   }
   return {
+    layouts: { files: entry?.layouts?.files ?? "tree", worktree: entry?.layouts?.worktree ?? changeLayout.get(), compare: entry?.layouts?.compare ?? changeLayout.get() },
+    setLayout: (tab, layout) => update(project, (e) => ({ ...e, layouts: { ...e.layouts, [tab]: layout } })),
     mode: entry?.mode ?? "files",
     expanded,
     selected: selections.file.get(project),

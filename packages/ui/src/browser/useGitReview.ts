@@ -1,15 +1,16 @@
 import type React from "react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 
 import { FADE_SIZE } from "../components/scrollFade";
 import type { ComparisonEndpoint } from "../protocol";
 import type { ViewerSubject } from "../viewer/content";
 import type { ViewerNavigation } from "../viewer/FileViewer";
 import { sessionFollow, type ProjectBrowserState } from "./browserState";
-import { changeLayout, type ChangeLayout } from "./changeLayout";
+import { type ChangeLayout } from "./changeLayout";
 import { changeRowOffset } from "./ChangeList";
 import { HEADING_HEIGHT } from "./changeSectionHeading";
 import { changeEvidence, changeNeighbours, filterChanges, rereadChange, visibleChanges, type ChangeEvidence, type ChangeItem } from "./changes";
+import type { FileFilterState } from "./FileFilterField";
 import { focusFirst, focusRow } from "./focusRow";
 import type { GitView } from "./GitView";
 import { gitMoment } from "./gitRequests";
@@ -52,7 +53,7 @@ export interface GitReview {
  * created none, to their defaults; no session leaves them as they are. Only what was read from
  * the daemon after the selection is weighed, so what a pane held from before it is asked for again.
  */
-export function useGitReview(project: string, browser: ProjectBrowserState, active: boolean, session: string | undefined): GitReview {
+export function useGitReview(project: string, browser: ProjectBrowserState, active: boolean, session: string | undefined, filters: Record<"worktree" | "compare", FileFilterState>): GitReview {
   const source = useProjectSource(project, active);
   // Changes are listed only once the source says there is a repository with the chosen worktree in
   // it: a project in none, or a worktree that has gone, has nothing to ask for until that changes.
@@ -69,20 +70,13 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
   const changeListRef = useRef<HTMLDivElement>(null);
   const comparedListRef = useRef<HTMLDivElement>(null);
   const selectorsRef = useRef<HTMLDivElement>(null);
-  const layout = changeLayout.useValue();
+  const worktreeLayout = browser.layouts.worktree;
+  const compareLayout = browser.layouts.compare;
+  const layout = browser.layouts[gitView];
+  const filterState = filters[gitView];
   const collapsed = browser.collapsedChangeRows;
-  // The file name text narrowing both views' lists, and whether the field it is typed in is on
-  // screen at all: kept while this project's browser is, shared by the two views, and not stored
-  // (they narrow what is on screen now, not a choice to come back to). Closing the field drops the
-  // text with it, so no filter the user cannot see narrows a list.
-  const [filter, setFilter] = useState("");
-  const [filterOpen, setFilterOpen] = useState(false);
-  const filterToggleRef = useRef<HTMLButtonElement>(null);
-  const shownFilter = filter.trim();
-  const openFilter = (open: boolean) => {
-    setFilterOpen(open);
-    if (!open) setFilter("");
-  };
+  const worktreeFilter = filters.worktree.filter.trim();
+  const compareFilter = filters.compare.filter.trim();
 
   // A worktree found gone may have been replaced by another at its place, or others added: what
   // the selector offers is asked for again.
@@ -195,19 +189,19 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
   // narrowed or widened, is a list with its own scroll.
   useLayoutEffect(() => {
     const selected = browser.selectedChange;
-    const scrolled = selected && `${layout}:${shownFilter}:${selected}`;
-    if (scrolled !== scrolledToChange.current && changes.list.state === "loaded" && scrollToChange(changeListRef.current, filterChanges(changes.list.items, shownFilter), selected, layout, collapsed)) {
+    const scrolled = selected && `${worktreeLayout}:${worktreeFilter}:${selected}`;
+    if (scrolled !== scrolledToChange.current && changes.list.state === "loaded" && scrollToChange(changeListRef.current, filterChanges(changes.list.items, worktreeFilter), selected, worktreeLayout, collapsed)) {
       scrolledToChange.current = scrolled;
     }
-  }, [browser.selectedChange, changes.list, layout, collapsed, shownFilter]);
+  }, [browser.selectedChange, changes.list, worktreeLayout, collapsed, worktreeFilter]);
   const scrolledToCompared = useRef<string | undefined>(undefined);
   useLayoutEffect(() => {
     const selected = browser.selectedComparedChange;
-    const scrolled = selected && `${layout}:${shownFilter}:${selected}`;
-    if (scrolled !== scrolledToCompared.current && shownComparison && scrollToChange(comparedListRef.current, filterChanges(shownComparison.items, shownFilter), selected, layout, collapsed)) {
+    const scrolled = selected && `${compareLayout}:${compareFilter}:${selected}`;
+    if (scrolled !== scrolledToCompared.current && shownComparison && scrollToChange(comparedListRef.current, filterChanges(shownComparison.items, compareFilter), selected, compareLayout, collapsed)) {
       scrolledToCompared.current = scrolled;
     }
-  }, [browser.selectedComparedChange, shownComparison, layout, collapsed, shownFilter]);
+  }, [browser.selectedComparedChange, shownComparison, compareLayout, collapsed, compareFilter]);
 
   // The change list's say about the change in the viewer, as `rereadFor` weighs the listings' say
   // about a file; a fresh list counts as news only for a change whose sources kept moving.
@@ -258,30 +252,25 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     if (viewedChange === undefined) return undefined;
     const compared = viewedOrigin?.kind === "comparison";
     const items = compared ? (shownComparison?.items ?? []) : changes.list.state === "loaded" ? changes.list.items : [];
-    const { previous, next } = changeNeighbours(visibleChanges(filterChanges(items, shownFilter), layout, collapsed), viewedChange);
+    const { previous, next } = changeNeighbours(visibleChanges(filterChanges(items, compared ? compareFilter : worktreeFilter), compared ? compareLayout : worktreeLayout, collapsed), viewedChange);
     const open = compared ? openComparedChange : openChange;
     return {
       onPrevious: previous === undefined ? undefined : () => open(previous),
       onNext: next === undefined ? undefined : () => open(next),
     };
-  }, [changes.list, shownComparison, viewedChange, viewedOrigin, layout, collapsed, shownFilter]);
+  }, [changes.list, shownComparison, viewedChange, viewedOrigin, worktreeLayout, compareLayout, collapsed, worktreeFilter, compareFilter]);
 
   const changeView = {
     layout,
     collapsed,
     onCollapsedChange: browser.setCollapsedChangeRows,
-    filterOpen,
-    onFilterOpenChange: openFilter,
-    filter,
-    onFilterChange: setFilter,
-    filterToggleRef,
+    ...filterState,
   };
 
   return {
     view: {
       source: source.source,
       view: gitView,
-      onViewChange: browser.setGitView,
       changeView,
       worktree: {
         list: changes.list,

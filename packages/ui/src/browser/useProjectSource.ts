@@ -6,7 +6,8 @@ import { abbreviateHome } from "../pathDisplay";
 import type { ProjectSourceInfo } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { browseFailure } from "./browseError";
-import { gitMoment, sendGitRequest } from "./gitRequests";
+import { gitMoment } from "./gitRequests";
+import { sendBrowseListRequest } from "./browseListRequests";
 
 /** Where a project's files are read from, as far as the client knows: still asked for, known, or
  * failed with why. A known source stays while it is asked for again. */
@@ -38,7 +39,7 @@ export function useProjectSource(project: string, wanted: boolean): { source: So
     const current = () => s.alive && s.sequence === sequence;
     const slot = `source:${project}`;
     let sentAt = 0;
-    return sendGitRequest(slot, () => {
+    return sendBrowseListRequest(slot, () => {
       if (!current()) return undefined;
       sentAt = gitMoment();
       return request({ type: "get_project_source", project, slot });

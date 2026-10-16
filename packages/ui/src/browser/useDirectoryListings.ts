@@ -14,7 +14,7 @@ const MAX_IN_FLIGHT = 3;
  * and above one browser's own share, so a browser stalled on one project never starves the next.
  * Sized under the daemon's bound of 16 outstanding requests a connection together with the
  * viewer's read, its read of a change's bodies (a slot of its own, `useChangeReader.ts`) and the
- * Git mode's 2 list requests (`gitRequests.ts`), with room for requests that replace another in
+ * 2 shared search/Git list requests (`browseListRequests.ts`), with room for requests that replace another in
  * their slot: the daemon counts the newer one before it gives the older one up, so for that moment
  * both are outstanding. A unit is reserved for each slot that can be replaced, as the viewer's two
  * can at the same moment. 10 + 1 + 2 + 2 = 15: the listings, the viewer's read, the Git mode's

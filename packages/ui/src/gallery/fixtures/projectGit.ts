@@ -314,21 +314,21 @@ const { console: console_, web, api, sessions } = SAMPLE;
  * their defaults. */
 const rankingSession = sessionOf("s-ranking", console_.id, web.id, "Tune the ranking weights", "idle");
 const state = snapshotState({ consoles: [console_], projects: [web, api], sessions: [...sessions, rankingSession] });
-const openGitFor = (session: { title: string }) => [
+const openGitFor = (session: { title: string }, view: "worktree" | "compare" = "worktree") => [
   (ui: Ui) => ui.press(ui.session(session.title)),
   (ui: Ui) => ui.wait(400),
-  (ui: Ui) => ui.press(ui.t("browser.mode.git")),
+  (ui: Ui) => ui.press(ui.t(view === "compare" ? "git.view.compare" : "git.view.worktree")),
   (ui: Ui) => ui.wait(400),
 ];
 const openGit = openGitFor(sessions[1]);
+const openCompare = openGitFor(sessions[1], "compare");
 /** Matches a branch's option in a selector: its name followed by the 7 characters of its short
  * commit id. */
 const branchOption = (name: string): Matcher => describing(`branchOption(${name})`, (n) => n.startsWith(name) && n.length === name.length + 7);
 
 /** Opens the Compare view with `main` as From and the To selector open. */
 const openToSelector = [
-  ...openGit,
-  (ui: Ui) => ui.press(ui.t("git.view.compare")),
+  ...openCompare,
   (ui: Ui) => ui.wait(300),
   (ui: Ui) => ui.press(ui.t("git.compare.choose")),
   (ui: Ui) => ui.press(branchOption("main")),
@@ -340,8 +340,7 @@ const openToSelector = [
 /** Shows the comparison of branch `left` with branch `right`, choosing each in its selector: From
  * is the first one still to choose, then To. */
 const compare = (left: string, right: string) => [
-  ...openGit,
-  (ui: Ui) => ui.press(ui.t("git.view.compare")),
+  ...openCompare,
   (ui: Ui) => ui.wait(300),
   (ui: Ui) => ui.press(ui.t("git.compare.choose")),
   (ui: Ui) => ui.press(branchOption(left)),
@@ -447,7 +446,7 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "More branches than the selector shows",
     description:
-      "The To selector open over a repository with more branches than its list holds: the list scrolls and its rows fade at the bottom edge, where more are waiting, while the popover around it keeps its edges. The worktree scenario's Compare tab shows every branch in its selectors, with no fade.",
+      "The To selector open over a repository with more branches than its list holds: the list scrolls and its rows fade at the bottom edge, where more are waiting, while the popover around it keeps its edges. The Compare tab opens branch selectors that show every branch with no fade.",
     state,
     git: { ...SAMPLE_GIT, branches: CROWDED_BRANCHES },
     steps: openToSelector,
@@ -461,8 +460,7 @@ const reviewScenarios: Scenario[] = [
     state,
     git: FRESH_GIT,
     steps: [
-      ...openGit,
-      (ui: Ui) => ui.press(ui.t("git.view.compare")),
+      ...openCompare,
       (ui: Ui) => ui.wait(400),
     ],
   },
@@ -526,8 +524,7 @@ const reviewScenarios: Scenario[] = [
     state: state,
     description: "The selected, other and removed session origins are visible together; hover their rings for details.",
     steps: [
-      ...openGitFor(rankingSession),
-      (ui: Ui) => ui.press(ui.t("git.view.compare")),
+      ...openGitFor(rankingSession, "compare"),
       (ui: Ui) => ui.wait(300),
       (ui: Ui) => ui.press("main"),
       (ui: Ui) => ui.wait(400),
@@ -550,8 +547,7 @@ const reviewScenarios: Scenario[] = [
     state: state,
     description: "From is the branch the main worktree has checked out and To the branch the selected session created: the list is what that branch changed since it forked from main.",
     steps: [
-      ...openGitFor(rankingSession),
-      (ui: Ui) => ui.press(ui.t("git.view.compare")),
+      ...openGitFor(rankingSession, "compare"),
       (ui: Ui) => ui.wait(600),
     ],
   },
@@ -620,7 +616,7 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Changes with an empty filter field",
-    description: "The focused, empty filter shows its placeholder above the unchanged list. Files/Git and Uncommitted/Compare tabs remain visible. Moving focus away closes the empty field.",
+    description: "The focused, empty filter shows its placeholder above the unchanged list. The project title, Files, Uncommitted and Compare compact pill tabs, filter toggle and Refresh share one header row. Moving focus away closes the empty field.",
     state,
     steps: [
       ...openGit,

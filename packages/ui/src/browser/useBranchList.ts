@@ -6,7 +6,8 @@ import { abbreviateHome } from "../pathDisplay";
 import type { BranchInfo } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { browseFailure } from "./browseError";
-import { gitMoment, sendGitRequest } from "./gitRequests";
+import { gitMoment } from "./gitRequests";
+import { sendBrowseListRequest } from "./browseListRequests";
 import { AUTO_REFRESH_MS } from "./useDirectoryListings";
 
 /** A repository's local branches as the client holds them. `sentAt` is when the request this list
@@ -46,7 +47,7 @@ export function useBranchList(project: string, active: boolean): { branches: Bra
     s.lastRefresh = Date.now();
     const slot = `branches:${project}`;
     let sentAt = 0;
-    return sendGitRequest(slot, () => {
+    return sendBrowseListRequest(slot, () => {
       if (!current()) return undefined;
       sentAt = gitMoment();
       return request({ type: "list_project_branches", project, slot });

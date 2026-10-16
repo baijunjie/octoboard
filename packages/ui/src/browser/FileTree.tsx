@@ -20,7 +20,7 @@ import { errorText } from "../errorText";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { BrowseEntry } from "../protocol";
-import { wireBaseName } from "../wirePath";
+import { displayWirePath, wireBaseName } from "../wirePath";
 import { RowActions } from "./RowActions";
 import type { TreeNode } from "./tree";
 import { DirectoryRow, ROW_CLASS, ROW_HEIGHT, RowContent, RowName } from "./treeRow";
@@ -100,7 +100,9 @@ export function FileTree({
   onOpenFile,
   onRetry,
   treeRef,
+  showPaths = false,
 }: {
+  showPaths?: boolean;
   nodes: TreeNode[];
   /** Row keys of the expanded directories. */
   expanded: ReadonlySet<string>;
@@ -158,7 +160,7 @@ export function FileTree({
 
   const renderNode = (node: TreeNode): React.ReactElement => {
     if (node.type === "status") return <StatusItem node={node} />;
-    const name = wireBaseName(node.path);
+    const name = showPaths ? displayWirePath(node.path) : wireBaseName(node.path);
     if (node.type === "directory") {
       const link = node.entry.kind === "symlink";
       return (
@@ -170,7 +172,7 @@ export function FileTree({
               </DirectoryRow>
             )}
           </TreeItemContent>
-          <Collection items={childrenOf(node)} dependencies={[language]}>
+          <Collection items={childrenOf(node)} dependencies={[language, showPaths]}>
             {renderNode}
           </Collection>
         </TreeItem>
@@ -212,7 +214,7 @@ export function FileTree({
         expandedKeys={expanded}
         onExpandedChange={onExpandedChange}
         onAction={onAction}
-        dependencies={[language]}
+        dependencies={[language, showPaths]}
       >
         {renderNode}
       </Tree>

@@ -21,6 +21,14 @@ pub const MAX_DIR_ENTRIES: usize = 10_000;
 /// thousand typical names come to well under a tenth of this.
 pub const MAX_LISTING_NAME_BYTES: usize = 2 * 1024 * 1024;
 
+/// Recursive filename searches stop before growing beyond these traversal and reply limits.
+/// Unlike one directory listing, the visited-entry cap includes names that do not match.
+pub const MAX_SEARCH_VISITED: usize = 250_000;
+pub const MAX_SEARCH_MATCHES: usize = 2_000;
+pub const MAX_SEARCH_PATH_BYTES: usize = 2 * 1024 * 1024;
+pub const MAX_SEARCH_DEPTH: usize = 128;
+pub const SEARCH_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// The most stdout a metadata `git` command (`rev-parse`, `worktree list`, `ls-files` and
 /// `ls-tree` for one path, `grep -c` over a change's two blobs) may print. A `worktree list` entry
 /// is about 200 bytes, so this is thousands of worktrees; past it the command is killed rather
@@ -132,7 +140,8 @@ pub const READ_RESERVATION: usize = 3 * MAX_FILE_BYTES + 64 * 1024;
 
 /// What a directory listing reserves: its names at [`MAX_LISTING_NAME_BYTES`] held as read and as
 /// serialized, and the rest of each of [`MAX_DIR_ENTRIES`] entries (kind, size, link target and
-/// the JSON around them, under 200 bytes) likewise.
+/// the JSON around them, under 200 bytes) likewise. Recursive filename search uses the same
+/// reservation: its smaller match count leaves room for the bounded directory-reader stack.
 pub const LISTING_RESERVATION: usize = 2 * (MAX_LISTING_NAME_BYTES + MAX_DIR_ENTRIES * 200);
 
 /// What a change listing reserves: the `git status` output while it is parsed, and its entries at
@@ -170,6 +179,8 @@ pub const MAX_RETAINED_PER_CONNECTION: usize = MAX_CONCURRENT_READS * READ_RESER
 /// Twice one connection's share, so a second window still gets a full share beside the first.
 pub const MAX_RETAINED_BYTES: usize = 2 * MAX_RETAINED_PER_CONNECTION;
 
+const _: () = assert!(MAX_SEARCH_PATH_BYTES <= MAX_LISTING_NAME_BYTES);
+const _: () = assert!(MAX_SEARCH_MATCHES <= MAX_DIR_ENTRIES);
 const _: () = assert!(LISTING_RESERVATION <= READ_RESERVATION);
 const _: () = assert!(READ_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
 const _: () = assert!(CHANGE_LIST_RESERVATION <= MAX_RETAINED_PER_CONNECTION);

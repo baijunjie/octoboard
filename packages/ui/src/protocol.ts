@@ -859,13 +859,14 @@ export type RequestBody =
    * `console_upserted` for every console whose reference was cleared. */
   | { type: "delete_account"; account: string }
   /** The browse requests (see "Browsing a project" in `apps/daemon/PROTOCOL.md`), answered with
-   * `project_source`, `project_dir`, `project_file`, `project_changes`, `project_change`,
+   * `project_source`, `project_dir`, `project_file_matches`, `project_file`, `project_changes`, `project_change`,
    * `project_branches`, `project_comparison`, `project_comparison_change`, `project_change_bodies`
    * and `project_comparison_change_bodies`. A
    * newer browse request on this connection with the same `slot` supersedes an older one still
    * outstanding, which is answered `request_superseded`; one that finished first still gets its
    * real reply, so a reply is also discarded by its `id`. */
   | { type: "get_project_source"; project: string; slot?: string }
+  | { type: "search_project_files"; project: string; query: string; slot?: string }
   | { type: "list_project_dir"; project: string; path: string; worktree?: string; slot?: string }
   | {
     type: "read_project_file";
@@ -1061,6 +1062,15 @@ export type Event =
     path: string;
     root_id: string;
     entries: BrowseEntry[];
+    complete: boolean;
+  }
+  /** Recursive filename matches in canonical wire path form; incomplete when bounded or unreadable. */
+  | {
+    type: "project_file_matches";
+    id?: string;
+    project: string;
+    query: string;
+    paths: string[];
     complete: boolean;
   }
   | {
