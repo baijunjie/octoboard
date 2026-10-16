@@ -718,10 +718,10 @@ const comparisonWording = ({ Message, InlineCode }: LiveParts, t: Translate, fro
     source: createElement(Message<"git.compare.source">, {
       id: "git.compare.source",
       params: {
-        from: createElement(InlineCode, null, from),
-        fromCommit: createElement(InlineCode, null, fromCommit),
-        to: createElement(InlineCode, null, to),
-        toCommit: createElement(InlineCode, null, toCommit),
+        from: createElement(InlineCode, { color: "primary", children: from }),
+        fromCommit: createElement(InlineCode, { color: "default", children: fromCommit }),
+        to: createElement(InlineCode, { color: "primary", children: to }),
+        toCommit: createElement(InlineCode, { color: "default", children: toCommit }),
       },
     }),
     sourceText: t("git.compare.source", { from: isolate(from), fromCommit: isolate(fromCommit), to: isolate(to), toCommit: isolate(toCommit) }),

@@ -526,7 +526,7 @@ export const zhHans: Translation<"other"> = {
   "git.compare.empty.description": "自分叉以来，“到”分支没有更改此项目的文件夹。",
   "git.compare.list.label": "分支分叉以来的更改",
   "git.compare.commits": "自分叉点提交 {base} 至提交 {to} 的更改",
-  "git.compare.source": "{to}（{toCommit}），自 {from}（{fromCommit}）分叉以来",
+  "git.compare.source": "{to} {toCommit}，自 {from} {fromCommit} 分叉以来",
   "git.compare.moved": "比较之后，{branch} 已移动。请刷新以比较其当前提交。",
   "git.compare.deleted": "{branch} 已不存在。比较仍使用其生成时的提交。",
   "browser.tree.label": "文件",

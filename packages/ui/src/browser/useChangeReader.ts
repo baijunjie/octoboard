@@ -360,10 +360,10 @@ export function useChangeReader(project: string): ChangeReader {
       ? createElement(Message<"git.compare.source">, {
         id: "git.compare.source",
         params: {
-          from: createElement(InlineCode, null, displayWirePath(origin.left.branch)),
-          fromCommit: createElement(InlineCode, null, shortCommit(origin.base)),
-          to: createElement(InlineCode, null, displayWirePath(origin.right.branch)),
-          toCommit: createElement(InlineCode, null, shortCommit(origin.right.commit)),
+          from: createElement(InlineCode, { color: "primary", children: displayWirePath(origin.left.branch) }),
+          fromCommit: createElement(InlineCode, { color: "default", children: shortCommit(origin.base) }),
+          to: createElement(InlineCode, { color: "primary", children: displayWirePath(origin.right.branch) }),
+          toCommit: createElement(InlineCode, { color: "default", children: shortCommit(origin.right.commit) }),
         },
       })
       : undefined;
