@@ -14,11 +14,19 @@ const listed = (topic: string | undefined, { sentAt = 20, complete = true } = {}
 it.each([
   ["a list asked for before the comparison says nothing", listed("c9", { sentAt: 5 }), []],
   ["a branch at the compared commit says nothing", listed("c2"), []],
-  ["a branch at another commit has moved", listed("c9"), [{ kind: "moved", branch: "topic" }]],
+  ["a branch at another commit has moved", listed("c9"), [{ kind: "moved", branch: "topic", refreshable: true }]],
   ["a branch missing from a complete list is gone", listed(undefined), [{ kind: "deleted", branch: "topic" }]],
   ["a list cut short never says a branch is gone", listed(undefined, { complete: false }), []],
+  [
+    "a moved branch is not refreshable while another is gone",
+    { ...listed("c9"), branches: [{ name: "topic", commit: "c9" }] } as BranchList,
+    [
+      { kind: "deleted", branch: "main" },
+      { kind: "moved", branch: "topic", refreshable: false },
+    ],
+  ],
   ["no list says nothing", { state: "loading" } as BranchList, []],
-  ["a branch compared with itself is named once", listed("c9"), [{ kind: "moved", branch: "topic" }], "topic"],
+  ["a branch compared with itself is named once", listed("c9"), [{ kind: "moved", branch: "topic", refreshable: true }], "topic"],
 ])("%s", (_, branches, expected, left?: string) => {
   const compared = left ? { ...comparison, left: { branch: left, commit: "c2" } } : comparison;
   expect(comparisonNotices(branches, compared)).toEqual(expected);

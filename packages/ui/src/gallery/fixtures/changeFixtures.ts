@@ -38,7 +38,9 @@ export interface FixtureChange {
  * clone's refusal when `shallow` is set), and a pair it does
  * not name forks at `<left>`'s own tip, as a branch made from it does. `missing` are branches the
  * list has that a comparison no longer finds. `moved` is what the branch list says of a branch once
- * a comparison has been made: a branch moved to another commit since. */
+ * a comparison has been made: a branch moved to another commit since. `gone` are branches deleted
+ * once a comparison has been made: from then on neither the list nor a new comparison finds them,
+ * where `missing` ones are refused from the start. */
 export interface FixtureGit {
   worktrees: WorktreeInfo[];
   changes: Record<string, FixtureChange[] | FixtureError>;
@@ -49,6 +51,7 @@ export interface FixtureGit {
   shallow?: boolean;
   missing?: string[];
   moved?: Record<string, string>;
+  gone?: string[];
 }
 
 /** Which section of a change list a change with two sides belongs to; `committed` is a branch

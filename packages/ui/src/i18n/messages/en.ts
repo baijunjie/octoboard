@@ -605,6 +605,7 @@ export const en = {
   "git.compare.commits": "Changes from the fork at commit {base} to commit {to}",
   "git.compare.source": "{to} at {toCommit}, since it forked from {from} at {fromCommit}",
   "git.compare.moved": "{branch} has moved since these branches were compared. Refresh to compare its current commit.",
+  "git.compare.movedNoRefresh": "{branch} has moved since these branches were compared.",
   "git.compare.deleted": "{branch} no longer exists. The comparison still uses the commits it was made at.",
   "browser.tree.label": "Files",
   "browser.tree.collapse": "Collapse",

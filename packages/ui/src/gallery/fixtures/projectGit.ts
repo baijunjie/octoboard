@@ -478,6 +478,19 @@ const reviewScenarios: Scenario[] = [
     ],
   },
   {
+    id: "git-compare-moved-and-deleted",
+    group: GROUP,
+    category: "normal",
+    title: "One compared branch moved and the other deleted",
+    description: "Two notices under the commits line: main has moved, and feature/ranking-experiments no longer exists. The moved notice does not advise Refresh, which could not compare the deleted branch.",
+    state,
+    git: { ...SAMPLE_GIT, moved: { main: FEATURE_TIP }, gone: ["feature/ranking-experiments"] },
+    steps: [
+      ...compare("main", "feature/ranking-experiments"),
+      (ui) => ui.wait(10_500),
+    ],
+  },
+  {
     id: "git-compare-gone",
     group: GROUP,
     category: "exceptional",

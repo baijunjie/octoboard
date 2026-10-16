@@ -3,8 +3,12 @@
 import type { ComparisonEndpoint } from "../protocol";
 import type { BranchList } from "./useBranchList";
 
-/** A compared branch that has moved to another commit since the comparison, or gone. */
-export type ComparisonNotice = { kind: "moved"; branch: string } | { kind: "deleted"; branch: string };
+/**
+ * A compared branch that has moved to another commit since the comparison, or gone. A moved branch
+ * is `refreshable` unless a compared branch is gone: Refresh then fails for the missing one rather
+ * than comparing the moved one's current commit.
+ */
+export type ComparisonNotice = { kind: "moved"; branch: string; refreshable: boolean } | { kind: "deleted"; branch: string };
 
 /**
  * What `branches` says of the branches of a comparison received at `receivedAt`: each one now at
@@ -21,8 +25,9 @@ export function comparisonNotices(
   for (const endpoint of [comparison.left, comparison.right]) {
     if (notices.some((notice) => notice.branch === endpoint.branch)) continue;
     const now = branches.branches.find((branch) => branch.name === endpoint.branch);
-    if (now && now.commit !== endpoint.commit) notices.push({ kind: "moved", branch: endpoint.branch });
+    if (now && now.commit !== endpoint.commit) notices.push({ kind: "moved", branch: endpoint.branch, refreshable: true });
     else if (!now && branches.complete) notices.push({ kind: "deleted", branch: endpoint.branch });
   }
-  return notices;
+  const gone = notices.some((notice) => notice.kind === "deleted");
+  return notices.map((notice) => (notice.kind === "moved" ? { ...notice, refreshable: !gone } : notice));
 }

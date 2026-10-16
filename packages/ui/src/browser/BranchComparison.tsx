@@ -33,9 +33,9 @@ const BRANCH_ROW_HEIGHT = 32;
  * The Git mode's comparison of two local branches: a selector for each — From, the base, and To —
  * and the changes To has made to the project since it forked from From, from their merge base to
  * To's tip (as `git diff From...To`). A comparison is of the commits the branches were at when it
- * was made, which it names, and the fork they share; when the
- * branch list read since says one of them has moved or gone, it says so, and Refresh compares the
- * branches as they are now. Nothing here checks anything out, and the worktree chosen for the
+ * was made, which it names, and the fork they share; when the branch list read since says one of
+ * them has moved or gone, it says so. Refresh compares the branches as they are now, and fails for
+ * one that no longer exists. Nothing here checks anything out, and the worktree chosen for the
  * uncommitted changes plays no part in it.
  */
 export function BranchComparisonView({
@@ -187,7 +187,7 @@ function ComparisonContent({
             <TriangleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0" />
             <span>
               {notice.kind === "moved" ? (
-                <Message id="git.compare.moved" params={{ branch: <InlineChip monospace wrap size="inherit">{displayWirePath(notice.branch)}</InlineChip> }} />
+                <Message id={notice.refreshable ? "git.compare.moved" : "git.compare.movedNoRefresh"} params={{ branch: <InlineChip monospace wrap size="inherit">{displayWirePath(notice.branch)}</InlineChip> }} />
               ) : (
                 <Message id="git.compare.deleted" params={{ branch: <InlineChip monospace wrap size="inherit">{displayWirePath(notice.branch)}</InlineChip> }} />
               )}

@@ -101,7 +101,7 @@ const sameSide = (listed: ChangeSide, asked: SideRef) =>
  * one of them.
  */
 export function createGitReplies(git: FixtureGit | null | undefined, fail: (error: FixtureError) => never) {
-  /** Whether a comparison has been made, after which the branch list tells of the branches moved. */
+  /** Whether a comparison has been made, after which the branch list tells of the branches moved or gone. */
   let compared = false;
   /** The daemon's refusal of a change whose patch has no lines to expand. */
   const noBodies = (): never => fail({ code: "invalid_change", params: {}, message: "no patch to expand" });
@@ -205,13 +205,16 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
       }
       case "list_project_branches": {
         const moved = compared ? (git?.moved ?? {}) : {};
-        const branches = (git?.branches ?? []).map((branch) => ({ ...branch, commit: moved[branch.name] ?? branch.commit }));
+        const gone = compared ? (git?.gone ?? []) : [];
+        const branches = (git?.branches ?? [])
+          .filter((branch) => !gone.includes(branch.name))
+          .map((branch) => ({ ...branch, commit: moved[branch.name] ?? branch.commit }));
         return { type: "project_branches", project: body.project, branches, complete: true };
       }
       case "compare_project_branches": {
         const resolve = (name: string) => {
           const branch = git?.branches?.find((b) => b.name === name);
-          if (!branch || git?.missing?.includes(name)) return fail({ code: "unknown_branch", params: { branch: name }, message: `there is no local branch ${name}` });
+          if (!branch || git?.missing?.includes(name) || (compared && git?.gone?.includes(name))) return fail({ code: "unknown_branch", params: { branch: name }, message: `there is no local branch ${name}` });
           return { branch: name, commit: branch.commit };
         };
         const left = resolve(body.left);

@@ -394,10 +394,11 @@ When the list goes away while one of its rows holds keyboard focus, focus goes t
 
 The comparison on screen stays on the commits it was made at. Once a branch list read after the comparison came in
 shows a compared branch at another commit, a notice under the commits line says that branch has moved since the
-comparison and that Refresh compares its current commit. Once a complete branch list no longer has a compared branch,
-the notice says it no longer exists and that the comparison still uses the commits it was made at, and its selector
-names it as no longer existing. A branch list cut short says nothing of a branch it does not have. A notice that appears
-is announced to assistive technology.
+comparison and that Refresh compares its current commit — or, while a notice says the other compared branch no
+longer exists, only that it has moved, since Refresh then fails for the missing branch. Once a complete branch list no
+longer has a compared branch, the notice says it no longer exists and that the comparison still uses the commits it
+was made at, and its selector names it as no longer existing. A branch list cut short says nothing of a branch it does
+not have. A notice that appears is announced to assistive technology.
 
 Refresh then compares the branches as they are now, finding their fork again, or, for a branch that no longer exists,
 fails saying there is no such branch. A change opened from the comparison still on screen reads from its commits for as
