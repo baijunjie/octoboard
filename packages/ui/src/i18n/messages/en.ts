@@ -834,14 +834,19 @@ export const en = {
     other: "{count} sessions could not be switched. Retry only attempts these sessions.",
   },
   "dialog.deleteSession.title": "Delete “{title}” permanently?",
-  "dialog.deleteSession.message": "This deletes the session. The agent's own transcript and the project's files are kept.",
+  "dialog.deleteSession.message": "This deletes the session. The project's files are kept.",
+  "dialog.deleteSession.trashRecords": "Also move the agent's own session records to the Trash",
+  "dialog.deleteSession.trashRecordsHint": "The agent's transcript of this session goes, wherever this machine keeps it. The session can then no longer be resumed in the agent itself. You can recover it from the Trash.",
+  "dialog.deleteSession.trashRecordsHintBound": "The agent's transcripts of this session and of the sessions deleted with it go, wherever this machine keeps them. They can then no longer be resumed in the agent itself. You can recover them from the Trash.",
+  "dialog.deleteArchived.trashRecords": "Also move the agents' own session records to the Trash",
+  "dialog.deleteArchived.trashRecordsHint": "The agents' transcripts of every session deleted, those deleted with them included, go, wherever this machine keeps them. The sessions can then no longer be resumed in the agents themselves. You can recover them from the Trash.",
   "dialog.deleteSession.bound": {
     one: "{count} archived session under it is deleted with it",
     other: "{count} archived sessions under it are deleted with it",
   },
   "dialog.deleteArchived.message": {
-    one: "This deletes the archived session. The agent's own transcript and the project's files are kept.",
-    other: "This deletes the archived sessions. The agents' own transcripts and the project's files are kept.",
+    one: "This deletes the archived session. The project's files are kept.",
+    other: "This deletes the archived sessions. The project's files are kept.",
   },
   "dialog.deleteArchived.bound": {
     one: "{count} archived session under a console session in the view is deleted too",

@@ -1,4 +1,4 @@
-import { Alert, Checkbox, Description, Label } from "@heroui/react";
+import { Alert } from "@heroui/react";
 import React, { useState } from "react";
 
 import { AgentIcon } from "../components/AgentIcon";
@@ -19,6 +19,7 @@ import { ProjectDialog } from "./ProjectDialog";
 import { RenameDialog } from "./RenameDialog";
 import { SessionDialog } from "./SessionDialog";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";
+import { TrashOption } from "./TrashOption";
 
 /** A warning callout for what a confirmation is about to take along, over the list of sessions when
  * there is one to show: each with its agent's icon and title, plus a status glyph for live sessions.
@@ -62,8 +63,6 @@ function DeleteProjectDialog({ project, running, onClose }: { project: Project; 
   const t = useT();
   const { request } = useDaemon();
   const [trash, setTrash] = useState(false);
-  // The confirmation's own busy state is not visible from here; the option is frozen while the request runs.
-  const [busy, setBusy] = useState(false);
   const confirmKey =
     running.length > 0
       ? trash
@@ -84,24 +83,99 @@ function DeleteProjectDialog({ project, running, onClose }: { project: Project; 
       confirmLabel={t(confirmKey)}
       pendingLabel={trash ? t("dialog.removeProject.pendingTrash") : undefined}
       destructive
-      extraControl={
-        <Checkbox variant="secondary" isSelected={trash} onChange={setTrash} isReadOnly={busy}>
-          <Checkbox.Content className="min-h-6 items-start">
-            <Checkbox.Control><Checkbox.Indicator /></Checkbox.Control>
-            <Label>{t("dialog.removeProject.trash")}</Label>
-          </Checkbox.Content>
-          <Description>{t("dialog.removeProject.trashHint")}</Description>
-        </Checkbox>
-      }
+      extraControl={(busy) => (
+        <TrashOption isSelected={trash} onChange={setTrash} isReadOnly={busy} label={t("dialog.removeProject.trash")} hint={t("dialog.removeProject.trashHint")} />
+      )}
       onCancel={onClose}
       onConfirm={async () => {
-        setBusy(true);
-        try {
-          await request({ type: "delete_project", project: project.id, stop_sessions: running.length > 0, trash_directory: trash });
-          onClose();
-        } finally {
-          setBusy(false);
-        }
+        await request({ type: "delete_project", project: project.id, stop_sessions: running.length > 0, trash_directory: trash });
+        onClose();
+      }}
+    />
+  );
+}
+
+/** The confirmation of a session's deletion, with the option of also moving the agent's own
+ * records of it to the Trash. `withIt` are the archived sessions that go along. */
+function DeleteSessionDialog({ session, withIt, onClose }: { session: Session; withIt: Session[]; onClose: () => void }): React.ReactElement {
+  const t = useT();
+  const { request } = useDaemon();
+  const [trash, setTrash] = useState(false);
+  return (
+    <ConfirmDialog
+      title={t("dialog.deleteSession.title", { title: isolate(sessionDisplayTitle(t, session)) })}
+      message={
+        <>
+          <p>{t("dialog.deleteSession.message")}</p>
+          {withIt.length > 0 && <SessionCallout title={t("dialog.deleteSession.bound", { count: withIt.length })} sessions={withIt} />}
+        </>
+      }
+      confirmLabel={t("common.delete")}
+      pendingLabel={trash ? t("dialog.removeProject.pendingTrash") : undefined}
+      destructive
+      extraControl={(busy) => (
+        <TrashOption
+          isSelected={trash}
+          onChange={setTrash}
+          isReadOnly={busy}
+          label={t("dialog.deleteSession.trashRecords")}
+          hint={t(withIt.length > 0 ? "dialog.deleteSession.trashRecordsHintBound" : "dialog.deleteSession.trashRecordsHint")}
+        />
+      )}
+      onCancel={onClose}
+      onConfirm={async () => {
+        await request({ type: "delete_session", session: session.id, trash_agent_records: trash });
+        onClose();
+      }}
+    />
+  );
+}
+
+/** The confirmation of deleting many archived sessions at once, with the option of also moving the
+ * agent's own records of them to the Trash. `withThem` counts the archived sessions that go along. */
+function DeleteArchivedDialog({
+  dialog,
+  withThem,
+  onClose,
+}: {
+  dialog: Extract<DialogRequest, { kind: "delete-archived" }>;
+  withThem: number;
+  onClose: () => void;
+}): React.ReactElement {
+  const t = useT();
+  const { request } = useDaemon();
+  const [trash, setTrash] = useState(false);
+  return (
+    <ConfirmDialog
+      title={t("dialog.deleteArchived.title", { count: dialog.count })}
+      message={
+        <>
+          <p>{t("dialog.deleteArchived.message", { count: dialog.count })}</p>
+          {withThem > 0 && <SessionCallout title={t("dialog.deleteArchived.bound", { count: withThem })} />}
+        </>
+      }
+      confirmLabel={t("dialog.deleteArchived.confirm")}
+      pendingLabel={trash ? t("dialog.removeProject.pendingTrash") : undefined}
+      destructive
+      extraControl={(busy) => (
+        <TrashOption
+          isSelected={trash}
+          onChange={setTrash}
+          isReadOnly={busy}
+          label={t("dialog.deleteArchived.trashRecords")}
+          hint={t("dialog.deleteArchived.trashRecordsHint")}
+        />
+      )}
+      onCancel={onClose}
+      onConfirm={async () => {
+        await request({
+          type: "delete_archived_sessions",
+          console: dialog.console.id,
+          project: dialog.project?.id,
+          console_session: dialog.consoleSession?.id,
+          trash_agent_records: trash,
+        });
+        onClose();
       }}
     />
   );
@@ -261,24 +335,7 @@ export function RequestedDialog({
     case "delete-session": {
       // An archived owner takes the archived sessions bound to it, and those bound to those, along.
       const withIt = boundArchivedSessions(Array.from(sessions.values()), dialog.session.id);
-      return (
-        <ConfirmDialog
-          title={t("dialog.deleteSession.title", { title: isolate(sessionDisplayTitle(t, dialog.session)) })}
-          message={
-            <>
-              <p>{t("dialog.deleteSession.message")}</p>
-              {withIt.length > 0 && <SessionCallout title={t("dialog.deleteSession.bound", { count: withIt.length })} sessions={withIt} />}
-            </>
-          }
-          confirmLabel={t("common.delete")}
-          destructive
-          onCancel={onClose}
-          onConfirm={async () => {
-            await request({ type: "delete_session", session: dialog.session.id });
-            onClose();
-          }}
-        />
-      );
+      return <DeleteSessionDialog session={dialog.session} withIt={withIt} onClose={onClose} />;
     }
     case "delete-archived": {
       // All of a console's archived console sessions take their archived bound sessions with them;
@@ -287,29 +344,7 @@ export function RequestedDialog({
         ? []
         : Array.from(sessions.values()).filter((s) => s.console_id === dialog.console.id && s.role === "console" && s.status === "archived");
       const withThem = consoleSessions.flatMap((owner) => boundArchivedSessions(Array.from(sessions.values()), owner.id)).length;
-      return (
-        <ConfirmDialog
-          title={t("dialog.deleteArchived.title", { count: dialog.count })}
-          message={
-            <>
-              <p>{t("dialog.deleteArchived.message", { count: dialog.count })}</p>
-              {withThem > 0 && <SessionCallout title={t("dialog.deleteArchived.bound", { count: withThem })} />}
-            </>
-          }
-          confirmLabel={t("dialog.deleteArchived.confirm")}
-          destructive
-          onCancel={onClose}
-          onConfirm={async () => {
-            await request({
-              type: "delete_archived_sessions",
-              console: dialog.console.id,
-              project: dialog.project?.id,
-              console_session: dialog.consoleSession?.id,
-            });
-            onClose();
-          }}
-        />
-      );
+      return <DeleteArchivedDialog dialog={dialog} withThem={withThem} onClose={onClose} />;
     }
   }
 }

@@ -587,6 +587,18 @@
   overflow-wrap: break-word;
 }
 
+/* A checkbox's box sits on its label's first line, centred in that line, whether the label wraps or
+   not. HeroUI centres the 16px box on the whole label, which floats it between the lines of a
+   wrapping one; aligned to the top instead, it sits 2px above the centre of the 20px line. The
+   offset is half the difference, in the line height of the checkbox's content, which its label
+   shares. Unlayered, so it wins over HeroUI's layered rule and is not overridable per checkbox. */
+.checkbox__content {
+  align-items: flex-start;
+}
+.checkbox__content > .checkbox__control {
+  margin-block-start: calc((1lh - 1rem) / 2);
+}
+
 /* HeroUI's toast region sits 1rem above the window bottom; lifted by the bottom chrome, it floats
    over the content above the connection banner instead of over the banner, and while a dialog whose
    footer reaches this corner is open, above that footer (`dialogs/useToastClearance.ts`), whose

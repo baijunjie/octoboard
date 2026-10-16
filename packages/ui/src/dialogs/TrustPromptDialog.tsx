@@ -94,10 +94,9 @@ function TrustDirCheckbox({
   const t = useT();
   return (
     <Checkbox variant="secondary" isSelected={checked} onChange={onChange}>
-      {/* Aligned to the top of a label that wraps, which a folder's name of any length can. The
-          pressable part is one line of `text-sm`, so an `::after` lifts what the pointer hits to the
-          24-pixel floor without changing what is drawn. */}
-      <Checkbox.Content className="relative items-start after:absolute after:-inset-y-0.5 after:inset-x-0 after:content-['']">
+      {/* The pressable part is one line of `text-sm`, so an `::after` lifts what the pointer hits to
+          the 24-pixel floor without changing what is drawn. */}
+      <Checkbox.Content className="relative after:absolute after:-inset-y-0.5 after:inset-x-0 after:content-['']">
         <Checkbox.Control>
           <Checkbox.Indicator />
         </Checkbox.Control>

@@ -451,7 +451,7 @@ async fn hook_callback(
         }
     }
 
-    crate::usage::on_hook(&state, &session_id, &payload);
+    crate::agent_records::on_hook(&state, &session_id, &payload);
 
     match hooks::event_name(&payload) {
         Some(event) => {

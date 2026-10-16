@@ -776,14 +776,15 @@ export type RequestBody =
   | { type: "switch_session_account"; session: string; account: string | null }
   /** Removes Octoboard's record of one session: an archived one, or one that has never been used
    * (no turn, bound to no owner, none bound to it), whose process is stopped; refused with
-   * `session_not_deletable` otherwise, or while it is starting. The agent's own transcript is never
-   * touched. */
-  | { type: "delete_session"; session: string }
+   * `session_not_deletable` otherwise, or while it is starting. The agent's own records of the
+   * session (and of the archived sessions deleted with it) are moved to the Trash only with
+   * `trash_agent_records`; default false. */
+  | { type: "delete_session"; session: string; trash_agent_records?: boolean }
   /** With `project`: every archived session of that project. With `console_session`: every
    * archived session under it (bound to it, or to an archived lead session bound to it). With
    * neither: every archived console session of the console. Naming both is refused. Each removal
    * is broadcast as `session_deleted`. */
-  | { type: "delete_archived_sessions"; console: string; project?: string; console_session?: string }
+  | { type: "delete_archived_sessions"; console: string; project?: string; console_session?: string; trash_agent_records?: boolean }
   | { type: "set_session_pinned"; session: string; pinned: boolean }
   /** Refused for a project session. */
   | { type: "set_session_colour"; session: string; colour: ConsoleSessionColour }

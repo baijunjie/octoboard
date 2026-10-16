@@ -15,6 +15,7 @@ use anyhow::{Context, Result};
 use uuid::Uuid;
 
 use crate::adapter;
+use crate::agent_records;
 use crate::config_export;
 use crate::config_import;
 use crate::env_shell;
@@ -481,8 +482,14 @@ pub async fn handle(
             Ok(None)
         }
 
-        RequestBody::DeleteSession { session } => {
-            delete_session(state, &session)?;
+        RequestBody::DeleteSession {
+            session,
+            trash_agent_records,
+        } => {
+            let deleted = delete_session(state, &session)?;
+            if trash_agent_records {
+                trash_agent_records_after_delete(state, deleted).await;
+            }
             Ok(None)
         }
 
@@ -490,13 +497,17 @@ pub async fn handle(
             console,
             project,
             console_session,
+            trash_agent_records,
         } => {
-            delete_archived_sessions(
+            let deleted = delete_archived_sessions(
                 state,
                 &console,
                 project.as_deref(),
                 console_session.as_deref(),
             )?;
+            if trash_agent_records {
+                trash_agent_records_after_delete(state, deleted).await;
+            }
             Ok(None)
         }
 
@@ -2625,18 +2636,22 @@ fn session_ids_where(
 ///
 /// The record takes its saved terminal output with it. Nothing else of Octoboard's hangs off a
 /// session: its queue, MCP token and turn bookkeeping go when its process does, and so does its
-/// scratch directory (clearing the run directory at startup is only the fallback). The agent's own
-/// transcript and the project are never touched.
-fn delete_session(state: &Arc<AppState>, id: &str) -> Result<()> {
+/// scratch directory (clearing the run directory at startup is only the fallback). The project is
+/// never touched, and the agent's own records are not either: the caller moves them to the Trash
+/// when asked, through `trash_agent_records_of`, from the sessions this returns (every one
+/// deleted, the archived sessions bound to it included).
+fn delete_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Session>> {
     let session = state.session_record(id)?;
+    let mut gone = Vec::new();
     let deleted = if session.status == SessionStatus::Archived {
-        delete_archived_group(state, &session)?
+        delete_archived_group(state, &session, &mut gone)?
     } else {
         match state.delete_if_unused(id)? {
             Deletion::Deleted { process } => {
                 if let Some(live) = process {
                     stop_process(live);
                 }
+                gone.push(session);
                 true
             }
             Deletion::Refused => false,
@@ -2650,7 +2665,77 @@ fn delete_session(state: &Arc<AppState>, id: &str) -> Result<()> {
             &[("session", id)],
         ));
     }
-    Ok(())
+    Ok(gone)
+}
+
+/// Moves the agent's own records of the sessions just deleted to the Trash, on a blocking task:
+/// a move across volumes copies, and the accounts' records are listed. The delete has happened
+/// already, so nothing here fails the request: a failure is logged.
+async fn trash_agent_records_after_delete(state: &Arc<AppState>, deleted: Vec<Session>) {
+    let state = Arc::clone(state);
+    let moved = tokio::task::spawn_blocking(move || {
+        trash_agent_records_of(
+            &state,
+            &deleted,
+            agent_records::Locator::default(),
+            hostfs::move_to_trash,
+        )
+    })
+    .await;
+    if let Err(err) = moved {
+        tracing::warn!(%err, "moving the agent's session records to the Trash did not finish");
+    }
+}
+
+/// Moves the agent's own records of each of `deleted` (see `agent_records::record_paths`) through
+/// `trash`, once the sessions' records are gone. A session is left alone when another remaining
+/// session refers to the same agent session id (a resumed copy, say), and a path that is missing
+/// is skipped. The records' loss costs the session its resumption in the agent only, so a
+/// failure to find or move one is logged, never raised. The accounts' records are listed once for
+/// the whole call, through `locator`.
+///
+/// A process that was stopped by the deletion may still rewrite its transcript after the move,
+/// leaving a small file behind in the agent's directory; that is accepted.
+fn trash_agent_records_of(
+    state: &AppState,
+    deleted: &[Session],
+    mut locator: agent_records::Locator,
+    trash: impl Fn(&Path) -> Result<()>,
+) {
+    let (remaining, accounts) = match (state.store.list_sessions(), state.store.list_accounts()) {
+        (Ok(sessions), Ok(accounts)) => (sessions, accounts),
+        (Err(err), _) | (_, Err(err)) => {
+            tracing::warn!(%err, "reading the sessions before trashing the agent's records failed");
+            return;
+        }
+    };
+    let mut paths: Vec<PathBuf> = Vec::new();
+    for session in deleted {
+        let Some(agent_id) = &session.agent_session_id else {
+            continue;
+        };
+        let shared = remaining.iter().any(|other| {
+            other.agent == session.agent && other.agent_session_id.as_ref() == Some(agent_id)
+        });
+        if shared {
+            continue;
+        }
+        for path in
+            agent_records::record_paths(&state.record_hints, &mut locator, &accounts, session)
+        {
+            if !paths.contains(&path) {
+                paths.push(path);
+            }
+        }
+    }
+    for path in paths {
+        if path.symlink_metadata().is_err() {
+            continue;
+        }
+        if let Err(err) = trash(&path) {
+            tracing::warn!(path = %path.display(), %err, "moving the agent's session record to the Trash failed");
+        }
+    }
 }
 
 /// Deletes `session` if it is archived and says whether it did; the archived sessions bound to it
@@ -2660,14 +2745,19 @@ fn delete_session(state: &Arc<AppState>, id: &str) -> Result<()> {
 /// step is skipped (a session being launched right now) or fails, the owner is already gone. That
 /// is left, because a bound session can only be mid-launch through a resume, which reopens the
 /// owner first, so the owner was no longer archived and the delete was refused. One that stopped
-/// being archived meanwhile is skipped.
-fn delete_archived_group(state: &Arc<AppState>, session: &Session) -> Result<bool> {
+/// being archived meanwhile is skipped. Each session deleted is added to `deleted`.
+fn delete_archived_group(
+    state: &Arc<AppState>,
+    session: &Session,
+    deleted: &mut Vec<Session>,
+) -> Result<bool> {
     if !state.delete_if_archived(&session.id)? {
         return Ok(false);
     }
+    deleted.push(session.clone());
     for bound in bound_sessions(state, session)? {
         // One that is not archived keeps its own bound sessions, which still have an owner.
-        delete_archived_group(state, &bound)?;
+        delete_archived_group(state, &bound, deleted)?;
     }
     Ok(true)
 }
@@ -2676,13 +2766,13 @@ fn delete_archived_group(state: &Arc<AppState>, session: &Session) -> Result<boo
 /// session `console_session_id`, or with neither every archived console session of `console` along
 /// with the archived sessions bound to them; an archived lead session in either of the last two
 /// takes its own archived sessions along. One that stopped being archived meanwhile (a resume
-/// got there first) is skipped.
+/// got there first) is skipped. Returns every session deleted.
 fn delete_archived_sessions(
     state: &Arc<AppState>,
     console_id: &str,
     project_id: Option<&str>,
     console_session_id: Option<&str>,
-) -> Result<()> {
+) -> Result<Vec<Session>> {
     state
         .store
         .get_console(console_id)?
@@ -2709,6 +2799,7 @@ fn delete_archived_sessions(
             return Err(CodedError::unknown_session(console_session_id));
         }
     }
+    let mut deleted = Vec::new();
     for session in state.store.list_sessions()? {
         let in_scope = session.console_id == console_id
             && match (project_id, console_session_id) {
@@ -2717,10 +2808,10 @@ fn delete_archived_sessions(
                 (None, None) => session.role == Role::Console,
             };
         if in_scope {
-            delete_archived_group(state, &session)?;
+            delete_archived_group(state, &session, &mut deleted)?;
         }
     }
-    Ok(())
+    Ok(deleted)
 }
 
 /// The user's own write into a session. Refused rather than queued while the session is waiting for
@@ -3553,6 +3644,7 @@ mod tests {
         let requests = [
             RequestBody::DeleteSession {
                 session: "s".to_string(),
+                trash_agent_records: false,
             },
             RequestBody::DeleteProject {
                 project: "project-1".to_string(),
@@ -6379,6 +6471,73 @@ mod tests {
         assert_eq!(
             session_ids(&state),
             ["d", "live-hub", "other-hub", "still-here", "unbound"]
+        );
+    }
+
+    /// The agent's records of the sessions a delete removed go through the trash function, Claude's
+    /// subagent directory with the transcript when there is one, unless a remaining session refers
+    /// to the same agent session; a missing record never reaches it and a failing move is not an
+    /// error.
+    #[test]
+    fn the_agent_records_of_deleted_sessions_are_trashed_unless_shared() {
+        use SessionStatus::{Archived, Interrupted};
+        let (state, dir) = switch_fixture("delete-trash-records");
+        let account = dir.join("claude-account");
+        let uuid = |name: &str| {
+            let n = ["solo", "tail", "shared", "never-written"]
+                .iter()
+                .position(|each| *each == name)
+                .unwrap();
+            format!("00000000-0000-0000-0000-00000000000{n}")
+        };
+        let project_dir = account.join("projects").join("-work");
+        std::fs::create_dir_all(project_dir.join(uuid("solo")).join("subagents")).unwrap();
+        for name in ["solo", "tail", "shared"] {
+            std::fs::write(project_dir.join(format!("{}.jsonl", uuid(name))), "{}\n").unwrap();
+        }
+        let native = |id: &str, native: &str, status| Session {
+            agent_session_id: Some(uuid(native)),
+            config_dir: Some(account.to_string_lossy().into_owned()),
+            ..project_session(id, Agent::Claude, status)
+        };
+        for session in [
+            native("solo", "solo", Archived),
+            native("tail", "tail", Archived),
+            native("copy-a", "shared", Archived),
+            native("copy-b", "shared", Interrupted),
+            native("unrecorded", "never-written", Archived),
+        ] {
+            state.store.insert_session(&session).unwrap();
+        }
+        let trashed = std::sync::Mutex::new(Vec::new());
+        let trash = |path: &Path| {
+            trashed.lock().unwrap().push(path.to_path_buf());
+            anyhow::bail!("the Trash refused it")
+        };
+        let locator = || {
+            agent_records::Locator::with_shell(HashMap::from([(
+                "HOME".to_string(),
+                dir.join("home").to_string_lossy().into_owned(),
+            )]))
+        };
+        let deleted = delete_session(&state, "solo").unwrap();
+        trash_agent_records_of(&state, &deleted, locator(), trash);
+        assert_eq!(
+            *trashed.lock().unwrap(),
+            [
+                project_dir.join(format!("{}.jsonl", uuid("solo"))),
+                project_dir.join(uuid("solo"))
+            ]
+        );
+        trashed.lock().unwrap().clear();
+        let deleted =
+            delete_archived_sessions(&state, "console-1", Some("project-1"), None).unwrap();
+        assert_eq!(deleted.len(), 3);
+        trash_agent_records_of(&state, &deleted, locator(), trash);
+        assert_eq!(
+            *trashed.lock().unwrap(),
+            [project_dir.join(format!("{}.jsonl", uuid("tail")))],
+            "the shared copy, the unwritten record and the missing subagent directory are left"
         );
     }
 

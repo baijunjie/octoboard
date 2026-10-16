@@ -307,7 +307,7 @@ export function ImportReview({
       </LabelledGroup>
       {settings && (
         <Checkbox variant="secondary" isSelected={applySettings} onChange={onApplySettings}>
-          <Checkbox.Content>
+          <Checkbox.Content className="min-h-6">
             <Checkbox.Control>
               <Checkbox.Indicator />
             </Checkbox.Control>

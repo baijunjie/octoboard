@@ -82,6 +82,21 @@ Where acting on a stale check would do harm, either take a claim on `AppState` t
 blocking filesystem or process work in a handler on `tokio::task::spawn_blocking` and await it; do not use
 `block_in_place`, which panics under the current-thread runtime plain `#[tokio::test]` gives the coordinator tests.
 
+## A path built from a hook's values is built as if an attacker chose them
+
+Applies to daemon code that turns a value an agent's hook reported into a path it removes, moves or writes to — and
+`Session.agent_session_id` is such a value, since `hook_callback` (`apps/daemon/src/server.rs`) records it from the
+payload, as are the transcript paths the hooks report. `POST /hook/:session` takes no `Origin`, so any local process
+can post to it (`apps/daemon/PROTOCOL.md`, "Who may connect"), the agent's own model included once something it read
+steers it there. The daemon trusting local processes does not make these values safe to name a path with.
+
+So such a path holds to four conditions: the id must match the agent's real id shape exactly (a canonical UUID),
+never be cut out of a reported path; the path is built from a records directory the daemon resolved itself and that
+id, a reported path counting only when it lies inside that directory; only an entry at the agent's exact layout depth
+is taken, since a name one level higher can be a whole directory's (a Claude project directory is named like
+`-Users-me-work`); and no directory between the records directory and the entry may be a link. `record_paths` in
+`apps/daemon/src/agent_records.rs` does all four; extend it rather than write a second one.
+
 ## On macOS, reach the system through APIs that need no consent, never through Apple Events
 
 Applies to host integrations in the daemon and in the desktop shell: moving to the Trash, revealing or opening

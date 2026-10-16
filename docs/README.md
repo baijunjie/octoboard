@@ -26,8 +26,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   agent and account selection, Advanced launch settings, the five session statuses, their
   glyphs and their transitions, the raised hand and its notification, how a declined Claude Code prompt lowers the
   hand from the agent's own transcript and what that costs to keep working, archiving, interruption and resuming,
-  switching a session to another account of its agent, how a console session's archive, reopen and delete follow the
+  switching a session to another account of its agent, how a console session's archive and reopen follow the
   sessions bound to it, and where archived sessions are kept.
+- [Deleting sessions](product/deleting-sessions.md) — deleting archived sessions one at a time or all at once (an
+  archived owner takes its bound archived sessions along), deleting a never-used session, and the opt-in option to
+  move the agent's own session records to the Trash.
 - [Session terminal](product/session-terminal.md) — the selected session's terminal: what its area shows with no
   session selected, typing and the mouse, output, scrollback and resizing, the reconnect and loading covers,
   interrupted, archived and dormant sessions and the saved preview, links in the output (Cmd/Ctrl+click, the OSC 8
@@ -377,8 +380,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   tests; how to type-check Linux-only code from macOS (a scratch crate, since bundled SQLite blocks a cross-check
   of the daemon); and why a test fixture is built only from Git 2.36's commands, since the Mac's newer git lets a
   fixture needing more pass every local run; why a request handler can never assume it is alone with the daemon's
-  state, so it re-checks after a long step or holds a claim; and why macOS host integrations avoid Apple Events
-  (`osascript`, a crate's Finder default) in favour of consent-free APIs.
+  state, so it re-checks after a long step or holds a claim; why a path built from a hook's values,
+  `Session.agent_session_id` among them, holds to the agent's id shape, a daemon-resolved records directory, the exact
+  layout depth and no linked directories; and why macOS host integrations avoid Apple Events (`osascript`, a crate's
+  Finder default) in favour of consent-free APIs.
 - [Writing UI code under the React Compiler](memory/writing-ui-code-under-the-react-compiler.md) — why anything a
   render reads besides props, state, context and hook results (the clock, `getState()`, module state) is frozen at its
   first value and what to read instead; what leaves a component silently uncompiled (ref access during render,

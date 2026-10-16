@@ -180,6 +180,27 @@ it("moves the project folder to the Trash only when the checkbox is selected", a
   expect(daemon.request).toHaveBeenLastCalledWith({ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: true });
 });
 
+it("moves the agent's records to the Trash only when the checkbox is selected", async () => {
+  const archived = { ...owner, status: "archived" as const };
+  const { daemon } = mount({ kind: "delete-session", session: archived }, [archived]);
+  expect(checkbox().checked).toBe(false);
+  await submitDialog();
+  expect(daemon.request).toHaveBeenLastCalledWith({ type: "delete_session", session: archived.id, trash_agent_records: false });
+  act(() => checkbox().click());
+  await submitDialog();
+  expect(daemon.request).toHaveBeenLastCalledWith({ type: "delete_session", session: archived.id, trash_agent_records: true });
+});
+
+it("moves the agents' records to the Trash only when the checkbox of deleting archived sessions is selected", async () => {
+  const { daemon } = mount({ kind: "delete-archived", console: console_, project, count: 2 }, []);
+  expect(checkbox().checked).toBe(false);
+  await submitDialog();
+  expect(daemon.request).toHaveBeenLastCalledWith({ type: "delete_archived_sessions", console: console_.id, project: project.id, trash_agent_records: false });
+  act(() => checkbox().click());
+  await submitDialog();
+  expect(daemon.request).toHaveBeenLastCalledWith({ type: "delete_archived_sessions", console: console_.id, project: project.id, trash_agent_records: true });
+});
+
 it("switches only the selected session to the default account unless the checkbox is selected", async () => {
   const selected = { ...owner, account_id: account.id };
   const waiting = deferred();

@@ -19,7 +19,7 @@ it. Three kinds of session can be an owner:
 
 The sessions an owner starts are ordinary project sessions, described in `docs/product/sessions.md`. Archiving,
 resuming and deleting an owner follow the same rules whichever kind it is (see "Archiving, interruption and resuming"
-and "Deleting archived sessions" in `docs/product/sessions.md`).
+in `docs/product/sessions.md` and "Deleting archived sessions" in `docs/product/deleting-sessions.md`).
 
 Octoboard injects the tools into the session. A console session gets the full set (see "The console session's tools"
 below), an unbound project session a narrower set scoped to its own project, and a session bound to an owner gets one
@@ -150,8 +150,8 @@ starts a console session for it and binds it there (see `docs/product/requesting
   is no third level and no cycle.
 
 A session is **under** an owner when it is bound to it, or bound to a lead session that is bound to it. Archiving,
-reopening and deleting follow the bindings across both levels; see "Archiving, interruption and resuming" and
-"Deleting archived sessions" in `docs/product/sessions.md`.
+reopening and deleting follow the bindings across both levels; see "Archiving, interruption and resuming" in
+`docs/product/sessions.md` and "Deleting archived sessions" in `docs/product/deleting-sessions.md`.
 
 **The console session sees the lead session's sessions but does not drive them.** A lead session's `owner_kind` reads
 `console`; its own sessions read `project`, with the lead session as their `owner`. The console session's reads stay

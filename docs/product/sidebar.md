@@ -387,7 +387,7 @@ action menu offers:
   has started sessions is archived under the same rule, with the same confirmation while any of them is unarchived.
 - **Delete**, in place of Archive for a session that has never been used — no turn yet, bound to no owner and with no
   session bound to it; it asks for confirmation, then stops the session and deletes it outright, leaving nothing in the
-  archive (see "Deleting an unused session" in `docs/product/sessions.md`).
+  archive (see "Deleting an unused session" in `docs/product/deleting-sessions.md`).
 
 **The Archive button.** Just before its action-menu button, a session row — a console session's included — carries an
 Archive button, a one-click shortcut for the menu's **Archive**, while archiving would go through without a
@@ -634,7 +634,7 @@ scope and nesting are described below.
   session in the view's scope — for a console session's archive, the archived sessions under it and not the console
   session itself; for a console's archived console sessions it also says how many archived sessions under them are
   deleted with them. What deleting does and does not remove is in "Deleting archived sessions" in
-  `docs/product/sessions.md`.
+  `docs/product/deleting-sessions.md`.
 - With nothing archived — including after everything has been deleted — the view stays open and says there are no
   archived sessions.
 

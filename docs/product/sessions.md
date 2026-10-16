@@ -22,7 +22,7 @@ title, a pin button when pinned, and selecting it resumes it when it is interrup
 interrupted session's row does. Its action menu offers **Pin**/**Unpin**, **Rename**, **Colour** (see "The binding badge" in
 `docs/product/sidebar.md`), **Focus mode** (see
 `docs/product/focus-mode.md`), **Switch account** and **Archive** — **Delete** in its place while the console session
-has never been used (see "Deleting an unused session" below); there is no Resume item, for the same reason. A
+has never been used (see "Deleting an unused session" in `docs/product/deleting-sessions.md`); there is no Resume item, for the same reason. A
 console session's title is renameable, like a project session's; its default is under **Name** in "Opening a session"
 below.
 
@@ -255,8 +255,8 @@ sent only when the dialog is submitted from the **Resume conversation** tab; one
 A session opened this way starts by resuming that conversation, and comes up at the agent's prompt like any session
 opened from the dialog. It **has a conversation from the moment it is opened**, not from its first turn: interrupted
 before the user has typed anything, it resumes that conversation rather than starting a fresh one; it is never unused,
-so it is archived rather than deleted (see "Deleting an unused session" below); switching its account copies that
-conversation; and its relaunch is refused when its pinned config directory has gone (see "Archiving, interruption and
+so it is archived rather than deleted (see "Deleting an unused session" in `docs/product/deleting-sessions.md`);
+switching its account copies that conversation; and its relaunch is refused when its pinned config directory has gone (see "Archiving, interruption and
 resuming" below). Octoboard's status hooks and tools are injected as on any resume, so its status is tracked and its
 tools are there; whether the role description takes effect in it is in "What is injected on every launch" in
 `docs/product/launching-agents.md`.
@@ -488,7 +488,7 @@ Archiving is available for any session that is not already archived, including a
 a console session is archived from its own row's menu, like any other (see "Console sessions and
 project sessions" above). The user archives a session from its row's menu. A session at its prompt or
 interrupted, with no unarchived session under it, is archived at once, since nothing is cut short; one at work,
-waiting for the user, being resumed, or with an unarchived session under it asks for confirmation first. A session that has never been used offers **Delete** there instead (see "Deleting an unused session" below).
+waiting for the user, being resumed, or with an unarchived session under it asks for confirmation first. A session that has never been used offers **Delete** there instead (see "Deleting an unused session" in `docs/product/deleting-sessions.md`).
 An archived session keeps its pin, if it had one (see "Order of projects and sessions" in `docs/product/sidebar.md`).
 
 Besides the user, two things archive a session: its owner, explicitly, and a project session's own report saying the
@@ -610,8 +610,9 @@ session separately.
 
 ### Archived sessions
 
-A project's archived sessions, and a console's archived console sessions, stay until the user deletes them, the
-project is removed or the console is deleted. They are listed most recently archived first, and reached:
+A project's archived sessions, and a console's archived console sessions, stay until the user deletes them (see
+"Deleting archived sessions" in `docs/product/deleting-sessions.md`), the project is removed or the console is
+deleted. They are listed most recently archived first, and reached:
 
 - from the project's "View archive" submenu, or for console sessions the console's "Archived console
   sessions" submenu, with the newest five;
@@ -621,61 +622,6 @@ project is removed or the console is deleted. They are listed most recently arch
 
 How each of those looks and behaves is in "Project rows" and "The archive view" in `docs/product/sidebar.md`, and in
 `docs/product/focus-mode.md`.
-
-### Deleting archived sessions
-
-An archived session can be deleted: one at a time, or at once every archived session of a project, every
-archived session under a console session, or every archived console session of a console. The user is asked to
-confirm either way.
-
-**Deleting an archived owner deletes the archived sessions bound to it, at both levels**: an archived lead session
-among them takes its own archived sessions along, so deleting an archived console session or an archived lead session
-leaves no archived session under it. Left behind, reopening one of them would have no owner to come back with, and its
-binding would point at nothing. The confirmation says how many that is, counting both levels, before anything is
-deleted. Deleting every archived console session of a console, and deleting every archived session under a console
-session, take the archived sessions under them in the same way, and the confirmation says how many. A lead session that
-is not archived keeps its own sessions. Deleting an archived bound session on its own leaves its owner alone, and
-neither deleting a project's archived sessions nor deleting the archived sessions under a console session touches a
-console session.
-
-- **Deleting removes only Octoboard's record of the session**, for good, and the last output Octoboard kept for it. The
-  session disappears from every client, and the orchestration tools' `list_archived` and `reopen_session` no longer
-  find it. The agent's own record of the conversation, in the agent's own configuration directory, and the project's
-  directory are never touched.
-- Deleting a session that is neither archived nor unused (see "Deleting an unused session" below) is refused, saying
-  that only an archived session, or one that has never been used, can be deleted, and not while it is starting. So is
-  deleting an archived session that is being resumed at that moment. An archived session whose process is still on its
-  way out can be deleted.
-- Deleting everything at once skips a session that stopped being archived meanwhile, because a resume got there first,
-  rather than failing.
-
-Removing a project or deleting a console also deletes its archived sessions along with every other session record
-(see "Removing a project" and "Deleting a console" in `docs/product/consoles-and-projects.md`).
-
-### Deleting an unused session
-
-A session that has **never been used** is deleted rather than archived: its action menu offers **Delete** in place of
-**Archive** — on its sidebar row, on its card in a focus mode and, for a console session, in its focus mode's header.
-A session is unused, whatever its status, while all of these hold:
-
-- **It has no conversation yet.** The first prompt its agent reports as submitted makes it used for good, whether the
-  user typed it or Octoboard wrote it in; a session opened to resume a conversation is used from the moment it is
-  opened (see "Resuming a conversation started outside Octoboard" above).
-- **It is bound to no owner.** A session another session started, or one opened to report to a console session, keeps
-  Archive even before its first prompt lands, since it reports to that owner.
-- **No session is bound to it.** An owner with any session under it, in any status, keeps Archive.
-
-Deleting one asks for the same confirmation as deleting an archived session, and removes the session's record exactly
-as described in "Deleting archived sessions" above. Its process is stopped, and nothing is left in the archive. A trust
-confirmation or console-session request of the session's that is still waiting is dropped with it.
-
-- The check is made at the moment of the delete: a session that has become used by then — a prompt submitted at the
-  same moment wins — is refused as in "Deleting archived sessions" above, and keeps its record and its process. So is a
-  session being launched, resumed or switched to another account at that moment.
-- An unused session can stop existing while a session is being bound to it. Opening a session bound to an owner that
-  was deleted meanwhile is refused, with nothing launched; an approved console-session request whose new console
-  session was deleted before the caller could be bound fails as described in "On approval" in
-  `docs/product/requesting-a-console-session.md`.
 
 ## Renaming a session
 

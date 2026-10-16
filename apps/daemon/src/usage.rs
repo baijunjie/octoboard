@@ -1,41 +1,21 @@
 //! Persisting native per-session token totals for live and archived cards. One collector reads
 //! append-only records incrementally; archived sources are read once, and get a final pass after
 //! their process exits. No conversation content is retained or published. Missing usage stays
-//! unknown. Cache and reasoning counts are subsets, never added to a native total twice.
+//! unknown. Cache and reasoning counts are subsets, never added to a native total twice. Where the
+//! records live is `agent_records.rs`'s business; this module scans and sums them.
 
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, Seek, SeekFrom};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use serde_json::Value;
 
+use crate::agent_records::Locator;
 use crate::protocol::{Agent, SessionUsage};
 use crate::state::AppState;
-
-#[derive(Default)]
-pub struct Watch {
-    hints: Mutex<HashMap<String, (String, PathBuf)>>,
-}
-
-/// The main session's hook provides the exact record path, including a newly created record.
-/// Subagent hooks are filtered by the caller before this point.
-pub fn on_hook(state: &AppState, id: &str, payload: &Value) {
-    let Some(path) = payload.get("transcript_path").and_then(Value::as_str) else {
-        return;
-    };
-    let Some(agent_id) = payload.get("session_id").and_then(Value::as_str) else {
-        return;
-    };
-    state
-        .usage_watch
-        .hints
-        .lock()
-        .expect("usage hint lock poisoned")
-        .insert(id.to_owned(), (agent_id.to_owned(), PathBuf::from(path)));
-}
 
 #[derive(Default)]
 struct Cursor {
@@ -76,23 +56,9 @@ fn collect(state: &AppState, cursors: &mut HashMap<String, Cursor>) {
     };
     let ids: HashSet<_> = sessions.iter().map(|session| session.id.as_str()).collect();
     cursors.retain(|id, _| ids.contains(id.as_str()));
-    let hints = {
-        let mut hints = state
-            .usage_watch
-            .hints
-            .lock()
-            .expect("usage hint lock poisoned");
-        hints.retain(|id, _| ids.contains(id.as_str()));
-        hints.clone()
-    };
-    // Resolve the default homes using the same login-shell snapshot as agent launches. Failure is
-    // unknown, never a fallback to a different account's history.
-    let shell = sessions
-        .iter()
-        .any(|session| session.config_dir.is_none())
-        .then(crate::env_shell::cached_snapshot)
-        .and_then(Result::ok);
-    let mut indexes: HashMap<(Agent, PathBuf), HashMap<String, PathBuf>> = HashMap::new();
+    let hints = state.record_hints.retain(&ids);
+    // Default homes resolve through the same login-shell snapshot as agent launches.
+    let mut locator = Locator::default();
     let mut updates = Vec::new();
     for session in sessions {
         let identity = (
@@ -108,14 +74,11 @@ fn collect(state: &AppState, cursors: &mut HashMap<String, Cursor>) {
             };
         }
         let live = state.live_session(&session.id).is_some();
-        if let Some((_, hint)) = hints
-            .get(&session.id)
-            .filter(|(id, _)| Some(id) == session.agent_session_id.as_ref())
-        {
-            if session.agent != Agent::Grok && cursor.path.as_ref() != Some(hint) {
+        if let Some(hint) = crate::agent_records::hinted_path(&hints, &session) {
+            if cursor.path.as_ref() != Some(&hint) {
                 *cursor = Cursor {
                     identity: cursor.identity.clone(),
-                    path: Some(hint.clone()),
+                    path: Some(hint),
                     ..Default::default()
                 };
             }
@@ -124,21 +87,13 @@ fn collect(state: &AppState, cursors: &mut HashMap<String, Cursor>) {
             continue;
         }
         if cursor.path.is_none() {
-            let root = match &session.config_dir {
-                Some(dir) => PathBuf::from(dir),
-                None => match &shell {
-                    Some(shell) => crate::adapter::default_account_dir(session.agent, shell),
-                    None => continue,
-                },
+            let Some(root) = locator.root(session.agent, session.config_dir.as_deref()) else {
+                continue;
             };
-            let index = indexes
-                .entry((session.agent, root.clone()))
-                .or_insert_with(|| index_records(session.agent, &root));
             cursor.path = session
                 .agent_session_id
                 .as_ref()
-                .and_then(|id| index.get(id))
-                .cloned();
+                .and_then(|id| locator.newest(session.agent, &root, id));
         }
         if let Some(path) = cursor.path.clone() {
             if scan(session.agent, &path, cursor).is_ok() {
@@ -158,65 +113,6 @@ fn collect(state: &AppState, cursors: &mut HashMap<String, Cursor>) {
             }
         }
     }
-}
-
-/// Index names once per account per pass; never read other sessions' contents or follow links.
-fn index_records(agent: Agent, root: &Path) -> HashMap<String, PathBuf> {
-    fn walk(agent: Agent, dir: &Path, depth: usize, out: &mut HashMap<String, PathBuf>) {
-        if depth == 0 {
-            return;
-        }
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let Ok(kind) = entry.file_type() else {
-                continue;
-            };
-            let path = entry.path();
-            let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
-                continue;
-            };
-            let id = match agent {
-                Agent::Claude if kind.is_file() => name.strip_suffix(".jsonl").map(str::to_owned),
-                Agent::Codex if kind.is_file() && name.starts_with("rollout-") => name
-                    .strip_suffix(".jsonl")
-                    .filter(|name| name.len() >= 36)
-                    .and_then(|name| name.get(name.len() - 36..))
-                    .map(str::to_owned),
-                Agent::Grok if kind.is_dir() && depth == 1 => Some(name),
-                _ => None,
-            };
-            if let Some(id) = id {
-                let path = if agent == Agent::Grok {
-                    path.join("usage.json")
-                } else {
-                    path
-                };
-                out.entry(id)
-                    .and_modify(|old| {
-                        if modified(&path) > modified(old) {
-                            *old = path.clone();
-                        }
-                    })
-                    .or_insert(path);
-            } else if kind.is_dir() {
-                walk(agent, &path, depth - 1, out);
-            }
-        }
-    }
-    let mut out = HashMap::new();
-    let (directory, depth) = match agent {
-        Agent::Claude => ("projects", 2),
-        Agent::Codex => ("sessions", 6),
-        Agent::Grok => ("sessions", 2),
-    };
-    walk(agent, &root.join(directory), depth, &mut out);
-    out
-}
-
-fn modified(path: &Path) -> Option<SystemTime> {
-    std::fs::metadata(path).ok()?.modified().ok()
 }
 
 fn scan(agent: Agent, path: &Path, cursor: &mut Cursor) -> std::io::Result<()> {

@@ -1345,11 +1345,14 @@ pub enum RequestBody {
         #[serde(default, deserialize_with = "present_option")]
         account: Option<Option<String>>,
     },
-    /// Removes Octoboard's record of one session, archived or never used; the agent's own
-    /// transcript is never touched. A session that is not archived is deleted only while it has had
-    /// no turn and nothing is bound to it or from it, and its process is stopped.
+    /// Removes Octoboard's record of one session, archived or never used. A session that is not
+    /// archived is deleted only while it has had no turn and nothing is bound to it or from it, and
+    /// its process is stopped. The agent's own records of the session are moved to the Trash only
+    /// when `trash_agent_records` is set.
     DeleteSession {
         session: String,
+        #[serde(default)]
+        trash_agent_records: bool,
     },
     /// Removes every archived session of `project`, or every archived session under
     /// `console_session` (bound to it, or to an archived lead session bound to it), or, with
@@ -1360,6 +1363,9 @@ pub enum RequestBody {
         project: Option<String>,
         #[serde(default)]
         console_session: Option<String>,
+        /// As on `DeleteSession`, for every session deleted.
+        #[serde(default)]
+        trash_agent_records: bool,
     },
     SetSessionPinned {
         session: String,
@@ -2399,7 +2405,7 @@ mod tests {
             (
                 r#"{"type":"delete_session","id":"request-1","session":"session-7"}"#,
                 |body| match body {
-                    RequestBody::DeleteSession { session } => Some(session),
+                    RequestBody::DeleteSession { session, .. } => Some(session),
                     _ => None,
                 },
             ),

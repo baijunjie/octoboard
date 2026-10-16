@@ -315,7 +315,9 @@ Grok console session reads the console's instruction file (see "The console sess
 ## Agent session data
 
 Conversation history and session records belong to each agent and stay wherever that agent keeps them. Octoboard
-never prunes or deletes them; their retention and cleanup follow the agent's own rules. It copies one only when the
+never prunes or deletes them on its own; their retention and cleanup follow the agent's own rules. It moves a
+session's records to the system Trash only when the user ticks that option while deleting the session (see "Moving the
+agent's own records to the Trash" in `docs/product/deleting-sessions.md`). It copies one only when the
 user switches that session to another account of the same agent: the session's own record, and no other, is added to the
 target account's directory so the conversation can continue there. Copying leaves the record in the account it came
 from as well, so switching back needs no second copy; and a record Octoboard copied is the agent's own from then on,

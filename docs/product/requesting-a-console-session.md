@@ -149,7 +149,7 @@ carried out, with the reason, and the window that approved shows the reason as a
 - the console session could not be launched — nothing is bound;
 - the caller could not be bound after the console session was launched — among other reasons, because the user deleted
   the new console session meanwhile, which they can while it has never been used (see "Deleting an unused session" in
-  `docs/product/sessions.md`) — the new console session, if it still exists, is archived, since it was started for that
+  `docs/product/deleting-sessions.md`) — the new console session, if it still exists, is archived, since it was started for that
   binding alone.
 
 Once the caller is bound, the approval stands. If the first report could not be delivered, the note says so, with the

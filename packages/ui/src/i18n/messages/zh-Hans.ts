@@ -753,12 +753,17 @@ export const zhHans: Translation<"other"> = {
     other: "有 {count} 个会话未能切换。重试仅处理这些会话。",
   },
   "dialog.deleteSession.title": "确认永久删除“{title}”？",
-  "dialog.deleteSession.message": "将删除此会话。智能体自己的对话记录和项目文件会保留。",
+  "dialog.deleteSession.message": "将删除此会话。项目文件会保留。",
+  "dialog.deleteSession.trashRecords": "同时将智能体自己的会话记录移到废纸篓",
+  "dialog.deleteSession.trashRecordsHint": "智能体保存的此会话对话记录会被移走，无论它存放在本机的哪个位置。之后将无法在智能体本身中恢复此会话。可以从废纸篓中找回。",
+  "dialog.deleteSession.trashRecordsHintBound": "智能体保存的此会话及一并删除的会话的对话记录会被移走，无论它们存放在本机的哪个位置。之后将无法在智能体本身中恢复这些会话。可以从废纸篓中找回。",
+  "dialog.deleteArchived.trashRecords": "同时将智能体自己的会话记录移到废纸篓",
+  "dialog.deleteArchived.trashRecordsHint": "所有被删除的会话（包括一并删除的会话）在智能体中保存的对话记录都会被移走，无论它们存放在本机的哪个位置。之后将无法在智能体本身中恢复这些会话。可以从废纸篓中找回。",
   "dialog.deleteSession.bound": {
     other: "它名下的 {count} 个已归档会话将一并删除",
   },
   "dialog.deleteArchived.message": {
-    other: "将删除这些已归档会话。智能体自己的对话记录和项目文件会保留。",
+    other: "将删除这些已归档会话。项目文件会保留。",
   },
   "dialog.deleteArchived.bound": {
     other: "视图中控制台会话名下的 {count} 个已归档会话也将被删除",

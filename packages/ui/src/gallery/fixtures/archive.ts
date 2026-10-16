@@ -119,6 +119,19 @@ const archiveState = {
   ]),
 };
 
+// The console archive with an archived session bound to one of its archived console sessions, which
+// "Delete all" takes along.
+const deleteAllState = {
+  ...archiveState,
+  sessions: new Map([
+    ...archiveState.sessions,
+    [
+      "s-under-hub",
+      sessionOf("s-under-hub", console_.id, project.id, "Session under the archived hub", "archived", { bound_to: consoleSessions[0].id, ended_at: minutesAgo(70) }),
+    ] as const,
+  ]),
+};
+
 // The console's menu with nothing archived under it.
 const emptyConsoleArchiveState = snapshotState({
   consoles: [console_],
@@ -225,10 +238,24 @@ export const archiveScenarios: Scenario[] = [
     title: "Delete an archived lead session",
     state: archiveState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
-    description: "The confirmation lists both archived children with their agent icons and titles; hover the agent icons for account details.",
+    description: "The confirmation lists both archived children with their agent icons and titles; hover the agent icons for account details. The unchecked option to move the agent's own session records to the Trash carries the hint that says the sessions deleted with it go too.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
       (ui) => ui.press(ui.t("archive.delete", { title: archivedLead.title })),
+    ],
+  },
+  {
+    id: "archive-delete-all",
+    group: GROUP,
+    category: "normal",
+    title: "Delete all archived console sessions",
+    description: "The confirmation counts the archived console sessions and the archived session deleted along with them. Under it, the unchecked option to also move the agents' own session records to the Trash, with its hint.",
+    state: deleteAllState,
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.console.actions", { name: console_.name })),
+      (ui) => ui.press(ui.t("sidebar.archive.consoleSessions")),
+      (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
+      (ui) => ui.press(ui.t("archive.deleteAll")),
     ],
   },
   {

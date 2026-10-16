@@ -81,7 +81,7 @@ pub struct AppState {
     /// Per repository, the gate every write to its branch origins takes and when rows were last
     /// added (`crate::branch_origin`).
     pub branch_origins: crate::branch_origin::Gates,
-    pub usage_watch: crate::usage::Watch,
+    pub record_hints: crate::agent_records::Hints,
     /// The repositories' refs under watch, so a commit made outside the daemon is re-read
     /// (`crate::git_watch`).
     pub git_watch: crate::git_watch::Watch,
@@ -182,7 +182,7 @@ impl AppState {
             git_checks: Mutex::new(HashMap::new()),
             git_check_completed: Mutex::new(HashMap::new()),
             branch_origins: Default::default(),
-            usage_watch: Default::default(),
+            record_hints: Default::default(),
             git_watch: Default::default(),
             agent_availability: RwLock::new(
                 Agent::ALL

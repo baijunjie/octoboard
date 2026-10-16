@@ -94,7 +94,7 @@ export function SwitchAccountDialog({
       extraControl={
         <>
           <Checkbox variant="secondary" isSelected={all} onChange={setAll} isReadOnly={snapshot !== undefined}>
-            <Checkbox.Content className="min-h-6 items-start">
+            <Checkbox.Content className="min-h-6">
               <Checkbox.Control><Checkbox.Indicator /></Checkbox.Control>
               <Label>{t("dialog.switchAccount.all", { agent: AGENT_LABEL[session.agent] })}</Label>
             </Checkbox.Content>

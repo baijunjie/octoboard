@@ -21,8 +21,9 @@ export interface ConfirmDialogProps {
    * meant for something else (or held down past the previous answer) answers nothing. */
   unprompted?: boolean;
   /** A control shown under the message that settles what Confirm does, such as a checkbox widening
-   * what the action covers; the caller holds its state and reads it in `onConfirm`. */
-  extraControl?: React.ReactNode;
+   * what the action covers; the caller holds its state and reads it in `onConfirm`. A function is
+   * given whether `onConfirm` is running, for a control to freeze while it does. */
+  extraControl?: React.ReactNode | ((busy: boolean) => React.ReactNode);
   /** Names what the dialog currently asks about, for one reused across subjects: a change clears
    * the failure shown for the previous one. */
   resetKey?: string;
@@ -92,7 +93,7 @@ export function ConfirmDialog({
       ) : (
         <div className="flex flex-col gap-3 text-sm text-foreground">{message}</div>
       )}
-      {extraControl}
+      {typeof extraControl === "function" ? extraControl(busy) : extraControl}
       {word !== undefined && (
         <TextField
           fullWidth
