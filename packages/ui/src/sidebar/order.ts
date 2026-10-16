@@ -22,23 +22,22 @@ export function compareSessions(a: Session, b: Session): number {
   );
 }
 
-/** The rank of a project with no session that has a running process, which ends the list. */
-export const INACTIVE_PROJECT_RANK = 3;
+/** The rank of a project with no unarchived session, which ends the list. */
+export const INACTIVE_PROJECT_RANK = 4;
 
-/** A project's rank by the most urgent of its sessions: one with a raised hand, then one with a
- * session at work, then one with a session merely running, then the inactive ones (no session
- * with a running process, `INACTIVE_PROJECT_RANK`), which therefore end the list after the pinned
- * ones. */
+/** A project's rank by its most urgent unarchived session: a raised hand, work, a running
+ * session, then an interrupted session. Projects with no unarchived session end the list. */
 export function projectRank(sessions: Session[]): number {
   if (sessions.some((s) => s.status === "waiting_user")) return 0;
   if (sessions.some((s) => s.status === "working")) return 1;
   if (sessions.some((s) => s.status === "idle" || s.status === "starting")) return 2;
+  if (sessions.some((s) => s.status === "interrupted")) return 3;
   return INACTIVE_PROJECT_RANK;
 }
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
-/** The projects in sidebar order: pinned first; then by `projectRank`; then by name. */
+/** Projects with unarchived sessions first; within each group, pinned, then rank, then name. */
 export function sortProjects(projects: Project[], sessionsOf: (project: Project) => Session[]): Project[] {
   return sortProjectsByRank(projects, new Map(projects.map((p) => [p.id, projectRank(sessionsOf(p))])));
 }
@@ -47,6 +46,7 @@ export function sortProjects(projects: Project[], sessionsOf: (project: Project)
 export function sortProjectsByRank(projects: Project[], rank: ReadonlyMap<string, number>): Project[] {
   return [...projects].sort(
     (a, b) =>
+      Number(rank.get(a.id) === INACTIVE_PROJECT_RANK) - Number(rank.get(b.id) === INACTIVE_PROJECT_RANK) ||
       Number(b.pinned) - Number(a.pinned) ||
       rank.get(a.id)! - rank.get(b.id)! ||
       collator.compare(a.name, b.name),

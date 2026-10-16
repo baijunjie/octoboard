@@ -459,7 +459,9 @@ function ConsoleBody({
     projects.filter((p) => matchesFilter(p, filter.keyword, filter.tags)),
     rankOf,
   );
-  const orderedIds = ordered.map((p) => p.id);
+  const foldIds = ordered
+    .filter((p) => foldControl === "collapse" || rankOf.get(p.id) !== INACTIVE_PROJECT_RANK)
+    .map((p) => p.id);
   const noMatch = projects.length > 0 && ordered.length === 0 ? t("sidebar.filter.noMatch") : undefined;
 
   // Collapsing takes away what a project row holds below it (`data-sessions`), and a keyboard user
@@ -472,7 +474,7 @@ function ConsoleBody({
     if (foldControl === "collapse") {
       handFocusOff(document.activeElement?.closest("[data-sessions]"), foldButton.current, true);
     }
-    setCollapsedFor(orderedIds, foldControl === "collapse");
+    setCollapsedFor(foldIds, foldControl === "collapse");
     onFold();
   };
 
@@ -529,7 +531,7 @@ function ConsoleBody({
             action={{ label: t("sidebar.console.addProject"), onPress: () => handlers.onOpenDialog({ kind: "new-project", console: thisConsole }) }}
           />
         ) : (
-        // The inactive projects (no running session) sit at the end, dimmed as one group; pointing at
+        // The inactive projects (no unarchived session) sit at the end, dimmed as one group; pointing at
         // any of them, keyboard focus or an open menu inside one, brings the whole group back.
         // Keyboard focus only (`data-focus-visible`, set by the rows and HeroUI's controls alike):
         // focus a mouse-opened menu hands back to its trigger would otherwise keep the group lit

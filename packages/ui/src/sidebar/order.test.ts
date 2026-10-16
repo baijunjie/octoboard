@@ -137,7 +137,7 @@ describe("archiveNeedsConfirmation", () => {
 });
 
 describe("sortProjects", () => {
-  it("puts pinned first, then a raised hand, work, a running session, then the inactive ones by name", () => {
+  it("puts unarchived projects first, then pinned, activity and name", () => {
     const sessions: Record<string, Session[]> = {
       b: [session("b1", "working", 1)],
       c: [session("c1", "waiting_user", 1)],
@@ -147,7 +147,24 @@ describe("sortProjects", () => {
       [project("d", "delta"), project("a10", "item 10"), project("b", "beta"), project("a2", "item 2"), project("c", "charlie"), project("z", "zulu", true)],
       (p) => sessions[p.id] ?? [],
     );
-    expect(ordered.map((p) => p.id)).toEqual(["z", "c", "b", "d", "a2", "a10"]);
+    expect(ordered.map((p) => p.id)).toEqual(["c", "b", "d", "z", "a2", "a10"]);
+  });
+
+  it("keeps interrupted sessions ahead of empty and archived-only projects, without dimming", () => {
+    const sessions: Record<string, Session[]> = {
+      interrupted: [session("stopped", "interrupted", 1)],
+      archived: [session("old", "archived", 2)],
+      pinned: [session("pinned", "interrupted", 3)],
+      working: [session("busy", "working", 4)],
+    };
+    const ordered = sortProjects([
+      project("empty", "alpha", true), project("archived", "beta"),
+      project("interrupted", "zulu"), project("pinned", "pinned", true), project("working", "working"),
+    ], (p) => sessions[p.id] ?? []);
+    expect(ordered.map((p) => p.id)).toEqual(["pinned", "working", "interrupted", "empty", "archived"]);
+    expect(projectRank(sessions.interrupted)).toBeLessThan(INACTIVE_PROJECT_RANK);
+    expect(projectRank(sessions.archived)).toBe(INACTIVE_PROJECT_RANK);
+    expect(projectRank([])).toBe(INACTIVE_PROJECT_RANK);
   });
 });
 

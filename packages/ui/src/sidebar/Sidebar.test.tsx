@@ -417,3 +417,31 @@ it("uses the card entry alone for a new console, then animates switches while th
     { duration: 240, easing: "cubic-bezier(0.2, 0, 0, 1)" },
   );
 });
+
+
+it("expands only projects with unarchived sessions and keeps interrupted projects undimmed", () => {
+  onTestFinished(() => {
+    act(() => vi.runOnlyPendingTimers());
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  const stopped = projectOf("p-stopped", main.id, "Stopped");
+  const archived = projectOf("p-archived", main.id, "Archived", { pinned: true });
+  const empty = projectOf("p-empty", main.id, "Empty");
+  const { container } = mountSidebar({
+    projects: [archived, empty, stopped, web],
+    sessions: [
+      sessionOf("s-stopped", main.id, stopped.id, "Stopped task", "interrupted"),
+      sessionOf("s-archived", main.id, archived.id, "Old task", "archived"),
+      ...sessions,
+    ],
+  });
+  const press = (label: string) => act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click());
+  press("Collapse all projects");
+  press("Expand projects with unarchived sessions");
+  const groups = Array.from(container.querySelectorAll<HTMLElement>("[data-flip]")).filter((row) =>
+    [stopped.id, archived.id, empty.id, web.id].includes(row.dataset.flip!),
+  );
+  expect(groups.map((row) => row.dataset.flip)).toEqual([web.id, stopped.id, archived.id, empty.id]);
+  expect(groups.map((row) => row.hasAttribute("data-inactive"))).toEqual([false, false, true, true]);
+  expect(groups.map((row) => row.querySelector('[aria-expanded="true"]') !== null)).toEqual([true, true, false, false]);
+});

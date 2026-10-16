@@ -50,8 +50,8 @@ buttons, the pin buttons and the session Delete or Archive shortcuts below. Thes
   can be told apart;
 - the sidebar's other icon buttons — a project's **+** (New session), wherever it appears, the Projects heading's
   Filter projects / Clear filter button (see "Filtering the project list" in `docs/product/sidebar.md`) and its
-  Expand all projects or Collapse all projects button (see "Expanding and collapsing the listed projects" in the
-  same doc), and focus mode's Leave focus mode;
+  button to expand projects with unarchived sessions or collapse all projects (see "Expanding and collapsing the
+  listed projects" in the same doc), and focus mode's Leave focus mode;
 - the pin button of a pinned project or session, whose tooltip is a short "Unpin", while the name announced for it
   also names what it unpins (see "Pinning" in `docs/product/sidebar.md`);
 - the Delete or Archive shortcut of a session row, a focus mode's session card or its archive preview row, whose

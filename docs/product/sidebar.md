@@ -206,32 +206,32 @@ the mouse leaves keyboard focus where it was.
 ### Expanding and collapsing the listed projects
 
 One icon-only button follows the filter button. Its name is whichever action it will take, **Collapse all projects**
-or **Expand all projects**. The Projects heading holds its label and project count, then the strip of conditions
-while a filter is in force (see "Filtering the project list" above) and, at its end, the filter button followed by
-this button.
+or an action to expand projects with unarchived sessions. The Projects heading holds its label and project count,
+then the strip of conditions while a filter is in force (see "Filtering the project list" above) and, at its end,
+the filter button followed by this button.
 
 - It shows while the console has projects **and** the list shows at least one of them. With a filter matching no
   project it is not there — there is nothing to act on — while the filter button beside it stays, as the way back.
-- It offers one action at a time. Pressing it collapses or expands every project the list is showing, and only those,
-  so with a filter in force the projects it hides keep whatever expanded or collapsed state they had. What it changes
-  is the same state a project row changes (see "Project rows" below). The press flips the button to the other action
-  even when a filter kept it from reaching every project of the console, and even when every listed project is already
-  in the state it asks for.
+- It offers one action at a time. Collapsing closes every listed project. Expanding opens only listed projects with
+  at least one unarchived session, including interrupted sessions; listed projects with none keep their current state.
+  Projects hidden by a filter keep their state in either direction. What it changes is the same state a project row
+  changes (see "Project rows" below). A press records the opposite action, subject to the all-expanded or
+  all-collapsed reconciliation below.
 - Projects start expanded, and whether a project is collapsed is kept per window and is not stored (see "Project
   rows" below). The button's choice is kept the same way, separately for each console: switching to another console
   shows that console's own, and switching back, or entering and leaving focus mode, keeps it. It is not stored, so
   reloading the window starts each console's button over. On first show, if any project of the console is expanded
-  the button offers Collapse all projects; if every project of the console is collapsed it offers Expand all
-  projects. The usual start is Collapse all projects.
+  the button offers Collapse all projects; if every project of the console is collapsed it offers to expand
+  projects with unarchived sessions. The usual start is Collapse all projects.
 - Expanding or collapsing a project from its own row does not change the button while the console still has both
   expanded and collapsed projects. The button changes on its own only when every project of the console is expanded,
-  when it offers Collapse all projects, or every project of the console is collapsed, when it offers Expand all
-  projects. Projects a filter is hiding count, and changing the filter does not itself flip the button. The same
-  holds once the button is offering Collapse all projects again: collapsing some projects from their rows leaves it,
-  and collapsing the last expanded project of the console makes it offer Expand all projects.
+  when it offers Collapse all projects, or every project of the console is collapsed, when it offers to expand
+  projects with unarchived sessions. Projects a filter is hiding count, and changing the filter does not itself flip
+  the button. Once it offers Collapse all projects again, collapsing some projects from their rows leaves that
+  action in place; collapsing the last expanded project makes it offer to expand projects with unarchived sessions.
 - A mouse press leaves keyboard focus where it was, as the sidebar's other controls do. The one exception: Collapse
   all projects takes away the session rows under the projects it collapses, so when keyboard focus is standing in one
-  of those it is handed to this button, its focus ring showing, rather than dropped. Expand all projects does not
+  of those it is handed to this button, its focus ring showing, rather than dropped. Expanding does not
   take rows away, so it does not move focus. The project rows themselves stay, so focus already on a project row is
   left where it is.
 
@@ -501,18 +501,20 @@ project session has no colour to choose.
 
 **Projects** are listed:
 
-1. pinned projects first;
-2. then a project with a session waiting for the user;
-3. then a project with a session working;
-4. then a project with a session running and awaiting instructions, or still starting;
-5. then the **inactive** projects — those with no session whose process is running or that is starting;
-6. within each of those, by name, case-insensitively and in natural order, so that "item 2" comes before "item 10".
+1. projects with at least one unarchived session first, including interrupted sessions;
+2. within each group, pinned projects first;
+3. then a project with a session waiting for the user;
+4. then a project with a session working;
+5. then a project with a session running and awaiting instructions, or still starting;
+6. then a project whose unarchived sessions are all interrupted;
+7. within each of those, by name, case-insensitively and in natural order, so that "item 2" comes before "item 10".
 
-Each rule applies only among projects the rules before it leave tied, so pinned projects come first whatever their
-sessions are doing, and the unpinned inactive projects end the list.
+Each rule applies only among projects the rules before it leave tied. A project with an unarchived session comes
+before even a pinned project with none.
 
-Inactive projects, pinned ones included, are drawn dimmed, as one group. Pointing at any of them, keyboard focus inside
-one, or an open menu in one brings the whole group back to full strength while it lasts.
+**Inactive** projects have no unarchived session. They end the list and, pinned ones included, are drawn dimmed as
+one group. Projects with only interrupted sessions remain at full strength. Pointing at any inactive project,
+keyboard focus inside one, or an open menu in one brings the whole inactive group back to full strength while it lasts.
 
 **Sessions** within a project are listed, by the same scheme:
 

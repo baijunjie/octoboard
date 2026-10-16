@@ -330,7 +330,7 @@ export const en = {
   "sidebar.filter.noTags": "No tags yet",
   "sidebar.filter.noTags.description": "Add tags in a project's settings.",
   "sidebar.filter.keyword": "Filter keyword",
-  "sidebar.expandAll": "Expand all projects",
+  "sidebar.expandAll": "Expand projects with unarchived sessions",
   "sidebar.collapseAll": "Collapse all projects",
   "sidebar.pin": "Pin",
   "sidebar.unpin": "Unpin",
