@@ -156,17 +156,19 @@ function peekGapPx(): number {
  * raises its `pointerleave` (see `usePanePeekPointer`). The top bar is outside it, as the halo's
  * upper edge is the bar's own; the toggle that floated the card in is not (see the hook).
  *
- * The start card's offsets are viewport positions only once the sidebar's docked column has
- * left the row (`sidebarDockMotion.ts`): while it eases out (`phase === "closing"`) the card is
- * not yet `fixed`, so its offsets are relative to an ancestor. The pointer is then resting on the
- * toggle that hid the column, which the hook counts as inside without asking this function. */
+ * A pane still in the row while it eases out (`phase === "closing"`) is not yet `fixed`, so its
+ * offsets are relative to its offsetParent (the sidebar's column clip, or `main` for the right
+ * pane), which is never transformed; that parent's viewport position is added back. */
 function outsidePane(pane: Element | null, event: PointerEvent, gap: number): boolean {
   if (!(pane instanceof HTMLElement)) return true;
-  const top = pane.offsetTop;
+  const parent = pane.offsetParent;
+  const origin = parent && parent !== document.documentElement && parent !== document.body ? parent.getBoundingClientRect() : null;
+  const left = pane.offsetLeft + (origin?.left ?? 0);
+  const top = pane.offsetTop + (origin?.top ?? 0);
   const bottom = top + pane.offsetHeight;
   return (
-    event.clientX < pane.offsetLeft - gap ||
-    event.clientX > pane.offsetLeft + pane.offsetWidth + gap ||
+    event.clientX < left - gap ||
+    event.clientX > left + pane.offsetWidth + gap ||
     event.clientY < top - gap ||
     event.clientY > bottom + gap
   );

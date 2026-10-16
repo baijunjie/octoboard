@@ -140,9 +140,8 @@
      An overlay pane is a card inset by `--peek-gap`, so its headers take the floating value
      instead, which puts their bottom border at the same height as the docked ones'
      (`floatingFrame` in `layout/paneOverlay.tsx`). The gap comes off, and the card's own 1px top
-     border with it: the content panel's top border overlaps the top bar's last pixel (`-mt-px`
-     in `ContentPanel.tsx`), so a docked pane's header starts at `--top-chrome-height`
-     while the card's starts `--peek-gap` plus that border lower.
+     border with it: a docked pane's header starts at `--top-chrome-height` while the card's
+     starts `--peek-gap` plus that border lower.
      The floating value is not a cycle although `floatingFrame` overrides `--pane-header-height`
      with it: a custom property is substituted where it is declared, so this one is already
      `calc(56px - 8px)` when it is inherited, and the override cannot reach back into it. Declared
@@ -154,9 +153,9 @@
   --pane-header-height-floating: calc(var(--pane-header-height) - var(--peek-gap) - 1px);
 
   /* The left rail under the top bar (`Rail.tsx`): the window chrome's second half, at the reading
-     direction's start. The content panel starts where it ends (the panel's own 1px start border
-     overlaps the rail's last pixel, so that is also where the sidebar starts), which is what the
-     docked arithmetic above counts. Pane drawers are inset from that edge. */
+     direction's start. The content panel starts where it ends, so that is also where the
+     sidebar starts, which is what the docked arithmetic above counts. Pane drawers are inset from
+     that edge. */
   --rail-width: 48px;
 
   /* The gap an overlay pane keeps from the window's edges and the top bar, and the sidebar from
@@ -275,6 +274,7 @@
   --panel-sidebar: oklch(0.965 0.002 286);
   --panel-hover: oklch(0 0 0 / 0.04);
   --panel-selected: oklch(0 0 0 / 0.07);
+  --panel-shadow: 0 0 4px oklch(0 0 0 / 0.08);
   --sidebar-fill: oklch(0 0 0 / 0.08);
   --sidebar-fill-hover: oklch(0 0 0 / 0.12);
   --control-fill: oklch(0.92 0.004 286);
@@ -292,6 +292,7 @@
   --panel-sidebar: oklch(0.27 0.006 286);
   --panel-hover: oklch(1 0 0 / 0.045);
   --panel-selected: oklch(1 0 0 / 0.075);
+  --panel-shadow: 0 0 4px oklch(0 0 0 / 0.5);
   --sidebar-fill: oklch(1 0 0 / 0.07);
   --sidebar-fill-hover: oklch(1 0 0 / 0.11);
   --control-fill: oklch(0.33 0.006 286);
@@ -346,14 +347,14 @@
   --default-soft-hover: var(--control-fill-hover);
 }
 
-/* HeroUI's `--separator`, the 1px line between the panes and along the content panel's edge, is
-   set a step further from the surfaces than HeroUI's own, whose dark value (L 0.25) is the dark
-   sidebar's own colour and vanishes there, and whose light one barely shows against `--chrome`.
-   This is a quiet line on every surface it divides: 1.29 / 1.22 / 1.10 against `--panel`,
-   `--panel-sidebar` and `--chrome` in light, 1.35 / 1.23 / 1.56 in dark, lighter than the dark
-   surfaces rather than darker so it reads as an edge. Not a control's boundary, so it is not held
-   to 3:1. The light selector excludes the dark theme rather than relying on order, since an unlayered
-   root declaration would otherwise beat the library's layered dark rule. */
+/* HeroUI's `--separator`, the 1px line between the panes, is set a step further from the surfaces
+   than HeroUI's own, whose dark value (L 0.25) is the dark sidebar's own colour and vanishes
+   there. The content panel's edge has no such line: it is set apart from the chrome by contrast
+   and a soft shadow (`--panel-shadow`). This is a quiet line on every surface it divides: 1.29 / 1.22 against `--panel` and
+   `--panel-sidebar` in light, 1.35 / 1.23 in dark, lighter than the dark surfaces rather than
+   darker so it reads as an edge. Not a control's boundary, so it is not held to 3:1. The light
+   selector excludes the dark theme rather than relying on order, since an unlayered root
+   declaration would otherwise beat the library's layered dark rule. */
 :root:not(.dark):not([data-theme="dark"]) {
   --separator: oklch(0.9 0.004 286);
 }

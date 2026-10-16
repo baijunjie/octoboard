@@ -3,13 +3,17 @@ import { useEffect, useLayoutEffect } from "react";
 import { columnSpan, usePaneDockMotion, type DockPhase, type PaneDockMotion } from "./paneDockMotion";
 
 /** The clip the docked column sits in. `min-w-0` lets the flex item reach 0 while the sidebar
- * inside keeps its full width, so the list does not reflow. The inset shadow is the separator the
- * nav's own end border draws once the column is open: a real border would keep a 1px line when the
- * clip's width is 0. `--sidebar-span` itself is eased on the document element (see the hook). */
+ * inside keeps its full width, so the list does not reflow. The separator at the column's end is
+ * a pseudo-element on this clip rather than the nav's own end border: the nav is wider than the
+ * clip while the column eases, so its border would stay clipped away until the column is fully
+ * open and then appear at once. Drawn here it rides the clip's end edge through the ease, and
+ * `overflow-hidden` clips it to nothing when the clip's width is 0, where a real border would keep
+ * a 1px line at the rail. It is positioned so that it paints over the nav's background.
+ * `--sidebar-span` itself is eased on the document element (see the hook). */
 export function columnClipClass(): string {
   return (
-    "contents docked:block docked:h-full docked:min-h-0 docked:min-w-0 docked:shrink-0 docked:overflow-hidden " +
-    "docked:shadow-[inset_-1px_0_0_0_var(--separator)] docked:rtl:shadow-[inset_1px_0_0_0_var(--separator)]"
+    "contents docked:relative docked:block docked:h-full docked:min-h-0 docked:min-w-0 docked:shrink-0 docked:overflow-hidden " +
+    "docked:after:pointer-events-none docked:after:absolute docked:after:inset-y-0 docked:after:end-0 docked:after:w-px docked:after:bg-separator"
   );
 }
 

@@ -40,12 +40,13 @@ of the breadcrumb.
 - **In a browser** the chrome is an opaque colour of its own, which follows the appearance too.
 
 The **content panel** is always opaque, whatever is behind the window. Its top left corner (top right under a
-right-to-left language), where the top bar meets the rail, is rounded, and a thin line runs along its top edge and
-along its edge beside the rail; it reaches the window's other side and its bottom (or the connection banner) with no
-gap. Inside it the panes are set apart by thin lines too. The terminal's area is the colour of the terminal's own
-background. The sidebar and the right pane share the same background — a touch greyer than the terminal in the light
-appearance, a touch lighter in the dark one — whether docked, floating or shown as drawers. A report page keeps its
-own light surface inside the right pane (see "A report page stays on a light surface in both appearances" in
+right-to-left language), where the top bar meets the rail, is rounded. No line runs along its edges: it is set apart
+from the chrome by the contrast between its surfaces and the chrome and by a soft shadow along its edges, and it reaches
+the window's other side and its bottom (or the connection banner) with no gap. Inside it a thin line runs down the
+inner edge of the docked sidebar and of the docked right pane, setting each apart from the terminal's area. The
+terminal's area is the colour of the terminal's own background. The sidebar and the right pane share the same background — a touch greyer than the terminal
+in the light appearance, a touch lighter in the dark one — whether docked, floating or shown as drawers. A report page
+keeps its own light surface inside the right pane (see "A report page stays on a light surface in both appearances" in
 `docs/product/appearance.md`).
 
 **Every docked pane's header inside the content panel is 56 px high** — the sidebar's console header and a focus mode's
@@ -324,12 +325,13 @@ overlay drawer's slide. Where the system asks for reduced motion, the column ope
 toggle again while the column is still moving reverses the ease. Below 1148 px the panes are drawers and slide
 laterally instead (see "Below 1148 px: the sidebar and the right pane become drawers" below).
 
-During the ease each pane stays a full-height column, from below the top bar to above the connection banner when
-that banner is shown, and does not become the rounded card in "A hidden pane floats in on hover" below. Its contents
-stay at the width the open column is drawn at, including where the window is holding that width back (see "Pane
-widths at 1148 px and wider" above), anchored against the rail for the sidebar and the window's edge for the right
-pane. The inner edge covers them as the column closes and uncovers them as it opens, so the text does not reflow.
-A hover card comes up only once its column has closed.
+During the ease each pane stays a full-height column, from below the top bar to above the connection banner when that
+banner is shown, and does not become the rounded card in "A hidden pane floats in on hover" below. Its contents stay at
+the width the open column is drawn at, including where the window is holding that width back (see "Pane widths at
+1148 px and wider" above), anchored against the rail for the sidebar and the window's edge for the right pane. The inner
+edge covers them as the column closes and uncovers them as it opens, so the text does not reflow. The sidebar's thin
+line rides its column's inner edge through the ease and is gone once the column has closed. A hover card comes up only
+once its column has closed.
 
 As the sidebar's column closes, the width it gives up goes to the terminal. When the right pane is docked and had been held
 below the width the user chose, it can grow into that room as the room appears. Showing the sidebar limits the right
