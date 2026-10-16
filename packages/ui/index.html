@@ -45,9 +45,10 @@
         from this origin. A formula's glyphs are drawn from those fonts; without this directive
         the request is refused (`default-src` is `'none'`) and the formula is not readable.
         The fonts are the only thing this directive admits.
-      - `img-src data:`: for a report page's inline images, inherited the same way, and for a
-        Markdown document's project images, which are `data:` URLs too. No image is loaded from
-        the network or from `'self'`.
+      - `img-src data:`: for a report page's inline images, inherited the same way, for a
+        Markdown document's project images, which are `data:` URLs too, and for the menu bar
+        icon's menu pictures, which are drawn from SVG `data:` URLs (`statusItemIcons.ts`). No
+        image is loaded from the network or from `'self'`.
       - `connect-src`: `'self'` is the daemon when it serves this UI, and the dev server's proxy
         to one (the page then reaches `/ws/...` on its own origin; per CSP3, `'self'` covers the
         `ws:`/`wss:` scheme matching the page's `http:`/`https:`). Otherwise the daemon binds an

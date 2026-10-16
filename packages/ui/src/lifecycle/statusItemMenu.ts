@@ -3,6 +3,7 @@ import type { StatusItemEntry, StatusItemMenu, StatusItemSection } from "../plat
 import type { Console, Project, Session, SessionStatus } from "../protocol";
 import { sessionWithLocation, statusLabel } from "../sessionLabel";
 import { sessionsInTreeOrder } from "../sidebar/order";
+import { agentIconKey, statusIconKey } from "./statusItemIconKeys";
 
 /** The live statuses the menu lists, each under its own heading, most pressing first. */
 const SECTION_ORDER: SessionStatus[] = ["waiting_user", "working", "idle"];
@@ -25,6 +26,10 @@ export function withoutSpinnerGlyphs(title: string): string {
   return title.replace(SPINNER_GLYPHS, "");
 }
 
+/** The menu before its pictures are drawn: lines name them by key (`statusItemIconKeys.ts`), and
+ * `withIcons` (`statusItemIcons.ts`) draws the keys in use. */
+export type StatusItemMenuDraft = Omit<StatusItemMenu, "icons">;
+
 export interface StatusItemMenuSource {
   consoles: Console[];
   projects: Project[];
@@ -40,16 +45,20 @@ function steadyTitle(session: Session): Session {
 
 /** The live sessions — waiting for the user, working, awaiting instructions — in the sidebar's
  * order, each status under its own heading. */
-export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource): StatusItemMenu {
+export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource): StatusItemMenuDraft {
   const { consoles, projects, sessions, consoleMap, projectMap } = source;
   const sections = SECTION_ORDER.flatMap((status): StatusItemSection[] => {
     const listed = sessionsInTreeOrder(consoles, projects, sessions, (s) => s.status === status);
     if (listed.length === 0) return [];
     const items: StatusItemEntry[] = listed
       .slice(0, MAX_PER_SECTION)
-      .map((session) => ({ label: sessionWithLocation(t, steadyTitle(session), consoleMap, projectMap), session: session.id }));
+      .map((session) => ({
+        label: sessionWithLocation(t, steadyTitle(session), consoleMap, projectMap),
+        icon: agentIconKey(session.agent),
+        session: session.id,
+      }));
     if (listed.length > MAX_PER_SECTION) items.push({ label: t("statusItem.more", { count: listed.length - MAX_PER_SECTION }) });
-    return [{ heading: t("statusItem.section", { status: statusLabel(t, status), count: listed.length }), items }];
+    return [{ heading: t("statusItem.section", { status: statusLabel(t, status), count: listed.length }), icon: statusIconKey(status), items }];
   });
   return {
     sections: sections.length > 0 ? sections : [{ heading: t("statusItem.noSessions"), items: [] }],

@@ -4,6 +4,7 @@ import { useLatest } from "../components/useLatest";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Console, Project, Session } from "../protocol";
+import { withIcons } from "./statusItemIcons";
 import { buildStatusItemMenu } from "./statusItemMenu";
 
 interface UseStatusItemMenuOptions {
@@ -40,12 +41,17 @@ export function useStatusItemMenu({
 
   useEffect(() => {
     if (!statusItem || !ready) return;
-    const menu = buildStatusItemMenu(t, { consoles, projects, sessions, consoleMap, projectMap });
-    const serialized = JSON.stringify(menu);
+    const draft = buildStatusItemMenu(t, { consoles, projects, sessions, consoleMap, projectMap });
+    const serialized = JSON.stringify(draft);
     if (serialized === lastSentRef.current) return;
     lastSentRef.current = serialized;
-    // Chained so two pushes cannot settle out of order and leave the older menu up.
-    pendingRef.current = pendingRef.current.then(() => statusItem.setMenu(menu).catch(() => {}));
+    // Chained so two pushes cannot settle out of order and leave the older menu up. The pictures are
+    // drawn once per key, so a menu that differs only in its text costs nothing more.
+    pendingRef.current = pendingRef.current.then(() =>
+      withIcons(draft)
+        .then((menu) => statusItem.setMenu(menu))
+        .catch(() => {}),
+    );
   }, [statusItem, ready, t, consoles, projects, sessions, consoleMap, projectMap]);
 
   // Read at call time: the subscription is made once.

@@ -16,12 +16,13 @@
 //! `set_run_in_background` (a single boolean, the Settings switch; both in `background.rs`) are
 //! bare signals, `set_menu_labels` (in `menu.rs`) is the UI's menu text, and `set_tray_menu` (in
 //! `tray.rs`) is the text of the menu bar icon's menu, with the opaque ids of the sessions it
-//! lists, which `tray-session-chosen` hands back. That is display text the UI words from the
-//! sessions it already shows, as it does the Dock badge's count; the shell never asks the daemon
-//! anything. The three in `permissions.rs` ask the system instead: a read of this process's own
-//! privacy grants, the one prompt that asks the user for one, and a System Settings deep link. The
-//! two in `configuration_file.rs` raise the system's save and open dialogs for the configuration
-//! document and write or read the file the user picked; the page names no path of its own.
+//! lists, which `tray-session-chosen` hands back, and the pictures beside its lines, drawn by the
+//! UI. That is display material the UI words and draws from the sessions it already shows, as it
+//! does the Dock badge's count; the shell never asks the daemon anything. The three in
+//! `permissions.rs` ask the system instead: a read of this process's own privacy grants, the one
+//! prompt that asks the user for one, and a System Settings deep link. The two in
+//! `configuration_file.rs` raise the system's save and open dialogs for the configuration document
+//! and write or read the file the user picked; the page names no path of its own.
 
 mod background;
 mod configuration_file;

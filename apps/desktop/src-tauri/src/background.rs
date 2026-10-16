@@ -149,7 +149,7 @@ fn deactivate(app: &AppHandle) {
 
 /// Brings the window back when the app is activated while the close button has it hidden: by a
 /// click on one of its notifications, which no other event reports. Every path through
-/// `show_main_window` (the tray click and menu, a reopen, `bring_to_front`) clears
+/// `show_main_window` (the tray menu's Open and session lines, a reopen, `bring_to_front`) clears
 /// `hidden_by_close` before it activates the app, so none is answered twice, and Cmd+H never sets
 /// it, so unhiding the app that way is left to AppKit. Called on the main thread.
 #[cfg(target_os = "macos")]

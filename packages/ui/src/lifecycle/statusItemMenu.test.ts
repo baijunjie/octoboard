@@ -40,6 +40,14 @@ describe("buildStatusItemMenu", () => {
     ]);
   });
 
+  it("gives each heading its status glyph and each session its agent's mark", () => {
+    const { sections } = menuOf([inProject("h", "waiting_user"), sessionOf("w", "c", "p", "w", "working", { agent: "codex" })]);
+    expect(sections.map((s) => [s.icon, s.items.map((item) => item.icon)])).toEqual([
+      ["status:waiting_user", ["agent:claude"]],
+      ["status:working", ["agent:codex"]],
+    ]);
+  });
+
   it("names a session with its location unless it is titled after it", () => {
     const { sections } = menuOf([inProject("a", "idle", "Fix bug"), inProject("b", "idle", "Alpha")]);
     expect(sections[0].items.map((item) => item.label).sort()).toEqual(["Alpha", `${isolate("Fix bug")} — ${isolate("Alpha")}`]);

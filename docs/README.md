@@ -178,9 +178,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   restart interrupting every session, the data directory being the owner's), and the files Octoboard keeps under
   `~/.octoboard` (and the two it keeps outside it), including the database that also holds the settings the daemon
   stores.
-- [Menu bar icon](product/menu-bar-icon.md) — the macOS menu bar icon: what a left and a right click do, its menu
+- [Menu bar icon](product/menu-bar-icon.md) — the macOS menu bar icon: what a click does, its menu
   (running sessions grouped by status in sidebar order, at most 10 per group with an "N more…" line, "No sessions
-  running", Open, Quit), choosing a session from it, and its Quit.
+  running", the status and agent pictures, Open, Quit), choosing a session from it, and its Quit.
 
 - [Website](product/website.md) — the localized homepage and its two product goals, privacy and error pages, keyboard
   navigation, motion, interactive workflow illustration, sample application preview, release download links,

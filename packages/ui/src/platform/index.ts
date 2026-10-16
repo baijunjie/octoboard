@@ -139,17 +139,30 @@ export interface AppMenuCapability {
 /** The menu bar icon's menu, already in the UI's language. */
 export interface StatusItemMenu {
   sections: StatusItemSection[];
+  /** Each picture the lines name, once, by the key a line's `icon` gives. */
+  icons: Record<string, StatusItemIcon>;
   open: string;
   quit: string;
 }
 
+export interface StatusItemIcon {
+  /** A base64 PNG, at twice the size it shows at. */
+  png: string;
+  /** Drawn in black for its alpha alone, so the system tints it to suit a light or dark menu. */
+  template: boolean;
+}
+
 export interface StatusItemSection {
   heading: string;
+  /** A key of `StatusItemMenu.icons`. */
+  icon?: string;
   items: StatusItemEntry[];
 }
 
 export interface StatusItemEntry {
   label: string;
+  /** A key of `StatusItemMenu.icons`. */
+  icon?: string;
   /** Absent for a line that cannot be chosen. */
   session?: string;
 }

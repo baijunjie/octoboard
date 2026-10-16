@@ -8,10 +8,8 @@ the user chose about keeping Octoboard running when the window is closed (see "C
 
 ## Clicking the icon
 
-- **A left click** brings a window closed into the background back, as described under "Closing the window" in
-  `docs/product/application-lifecycle.md`. A window that is shown, or minimized, is brought to the front, restored
-  first if it was minimized.
-- **A right click** opens the icon's menu, described below.
+A click on the icon, left or right, opens the icon's menu, described below. A click does nothing else: the window
+comes back through the menu's **Open Octoboard** or one of its sessions.
 
 ## The icon's menu
 
@@ -20,6 +18,11 @@ From top to bottom:
 1. **The running sessions**, one group per status, each group under a heading that cannot be chosen and that names the
    status with the number of sessions in it: **Waiting for you (n)**, then **Working (n)**, then **Awaiting
    instructions (n)**. A group with no session is left out. Interrupted and archived sessions are never listed.
+   - **Pictures.** Each heading has a still glyph for its status — the accent dot for working, the waving hand for
+     waiting for you, the speech bubble for awaiting instructions — and each session line has the mark of its agent
+     (Claude Code, Codex, Grok), as the sidebar draws them. The menu cannot animate, so the working dot does not pulse.
+     The marks the sidebar draws in the text colour (Codex, Grok) are template images here, which macOS tints to suit a
+     light or dark menu; the other pictures keep their own colours, chosen to read on both. The "N more…" line has none.
    - Within a group, sessions come in the order the sidebar lists them: console by console in the order the consoles
      were created, its console sessions before its projects' sessions, both in the sidebar's own order (see "Order of
      projects and sessions" in `docs/product/sidebar.md`). Every console is included, not only the one the sidebar
@@ -40,7 +43,9 @@ From top to bottom:
    - A group names at most **10** sessions. Beyond that, a last line that cannot be chosen says how many more there are
      ("N more…"); the heading's number still counts them all.
    - With no session running at all, this part is a single line that cannot be chosen: **No sessions running**.
-2. **Open Octoboard**, which brings the window back as a left click on the icon does.
+2. **Open Octoboard**, which brings a window closed into the background back, as described under "Closing the window"
+   in `docs/product/application-lifecycle.md`. A window that is shown, or minimized, is brought to the front, restored
+   first if it was minimized.
 3. **Quit Octoboard**, after a separator, described below.
 
 The menu follows the sessions as they change, including while the window is closed into the background. It is never
@@ -69,11 +74,14 @@ into the background back to ask it, and with none it quits at once (see "Quittin
 A closed window below means one closed into the background, which is what closing it does only while the user has
 turned that on (see "Closing the window" in `docs/product/application-lifecycle.md`).
 
-**Observed** in the packaged application: a left click bringing a closed window back; the menu's groups, headings and
-session lines (seen under Simplified Chinese); the menu updating within about 1.5 seconds of a session changing while
-the window was closed; opening and dismissing the menu without choosing anything leaving a closed window closed;
-choosing a session bringing the window back with that session selected; and Open Octoboard. What was seen of Quit
-Octoboard is under "Quitting" in `docs/product/application-lifecycle.md`.
+**Observed** in the packaged application: the menu's groups, headings and session lines (seen under Simplified
+Chinese); the menu updating within about 1.5 seconds of a session changing while the window was closed; opening and
+dismissing the menu without choosing anything leaving a closed window closed; choosing a session bringing the window
+back with that session selected; and Open Octoboard. What was seen of Quit Octoboard is under "Quitting" in
+`docs/product/application-lifecycle.md`.
+
+**Not yet observed** in the packaged application: the pictures in the menu, in a light and in a dark menu, and a left
+click opening the menu.
 
 **Observed caveat:** for about the first 0.6 seconds after closing the window from native fullscreen, a click on the
 icon is lost — a right click does not even open the menu — apparently swallowed by macOS during its exit from

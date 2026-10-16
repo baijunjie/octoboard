@@ -112,7 +112,9 @@ the configuration file:
   carries only that text.
 - `set_tray_menu` (`src-tauri/src/tray.rs`, permitted by `permissions/tray.toml`) — takes the menu bar icon's menu from
   the UI: sections of lines under headings, each line a label with, for one that can be chosen, the opaque id of the
-  session it stands for, plus the Open and Quit labels; all already worded in the UI's language. While any menu of the
+  session it stands for, plus the Open and Quit labels; all already worded in the UI's language. Lines and headings
+  also name a picture (an agent's mark, a status glyph) by key in an `icons` table of base64 PNGs, which the UI draws
+  (`packages/ui/src/lifecycle/statusItemIcons.ts`) so the shell needs nothing per agent. While any menu of the
   app is open it only holds the latest one and applies it once the menu closes, because replacing an open menu closes it.
 - `set_run_in_background` (`src-tauri/src/background.rs`, permitted by `permissions/run-in-background.toml`) — one
   boolean, the UI's Settings choice of whether the close button keeps the application running in the background; the UI
@@ -143,8 +145,8 @@ Beyond those, the shell emits two events to the webview. `settings-requested` fi
 platform adapter's `appMenu` capability (whose `setLabels` is the other direction). `tray-session-chosen` fires when a
 session line of the menu bar icon's menu is chosen, after the shell has brought the window back, with that session's id
 as its payload; the platform adapter exposes it, with `set_tray_menu`, as the `statusItem` capability. The menu bar
-icon's other items (Open, Quit) and a left click on the icon are answered in the shell: Open and the click show the
-window, and Quit takes the same exit flow as Cmd+Q.
+icon's other items (Open, Quit) are answered in the shell: Open shows the window, and Quit takes the same exit flow
+as Cmd+Q. Any click on the icon, left or right, opens the menu.
 
 The window's close button is answered in the shell too (`src-tauri/src/background.rs`): the UI registers no close
 listener. Cmd+W and the Window menu's Close Window item are the same gesture to it (the menu builds that item with
@@ -231,7 +233,7 @@ any IPC call for it. The system's preferred languages travel the same way (`&lan
 | `src-tauri/src/page_isolation.rs` | macOS only: the window's `WKWebViewConfiguration` carrying a `WKContentRuleList` that blocks every `http(s)` request the webview would make, so a report page that got past the UI's sanitizer still cannot load from the web or preconnect / `dns-prefetch` (WebRTC is backed up by the page's nonce-only `script-src` instead); built by `lib.rs` before the window is created |
 | `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated, and keeps `DaemonState` (whether the daemon is gone), which `exit.rs` and `background.rs` consult |
 | `src-tauri/src/background.rs` | Running in the background: `set_run_in_background` (the UI's choice), the window's close button hiding it and leaving the Dock when the choice is on (an ordinary quit when it is off, an immediate one when the daemon is gone), `show_main_window` and the `bring_to_front` command bring it back, and the Dock badge, the app's activation and `hidden_by_close` state that go with it |
-| `src-tauri/src/tray.rs` | The menu bar icon: its menu (rebuilt from the UI's `set_tray_menu`, held back while a menu is open (`TrayState`, following AppKit's menu-tracking notifications on macOS); Open, Quit and the session lines), a left click that shows the window, and the `tray-session-chosen` event |
+| `src-tauri/src/tray.rs` | The menu bar icon: its menu (rebuilt from the UI's `set_tray_menu`, held back while a menu is open (`TrayState`, following AppKit's menu-tracking notifications on macOS); Open, Quit and the session lines, with their pictures), and the `tray-session-chosen` event |
 | `src-tauri/src/menu.rs` | Builds the native macOS menu bar from the labels the UI sends (`set_menu_labels`), including the Settings… item that `lib.rs` turns into the `settings-requested` event |
 | `src-tauri/src/permissions.rs` | The macOS privacy permissions (Screen Recording, Accessibility): the three IPC commands above over hand-declared CoreGraphics / ApplicationServices calls and an `NSWorkspace` deep link, and `capture_launch_state()`, which records the Screen Recording grant the process started with, the only one it can use, so the UI can tell a grant made since from one it can act on |
 | `src-tauri/src/configuration_file.rs` | The two configuration-file IPC commands above: the system's save and open dialogs, and the write or read of the file the user picked |

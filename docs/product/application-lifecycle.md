@@ -169,8 +169,8 @@ hands the choice over (see "Starting up" above).
 **Bringing a window closed into the background back.** Any of these brings the window back where it was, at the size
 and position it had:
 
-- a left click on the menu bar icon, or its menu's Open Octoboard or one of its sessions (see "Clicking the icon" and
-  "The icon's menu" in `docs/product/menu-bar-icon.md`);
+- the menu bar icon's menu: its Open Octoboard or one of its sessions (see "Clicking the icon" and "The icon's menu"
+  in `docs/product/menu-bar-icon.md`);
 - opening Octoboard again while it runs — from the Finder, Spotlight or `open`;
 - anything else that activates Octoboard, such as clicking one of its notifications;
 - a quit that has to ask for confirmation (see "Quitting" below);
@@ -195,9 +195,9 @@ Octoboard then returns to the Dock, comes to the front, and its Dock badge shows
 **With the switch on:**
 
 - the close button and `Cmd+W` closing the window into the background: the application left running with the daemon
-  and the agent process alive and no window, Octoboard out of the Dock and inactive, with the application used
-  before it frontmost again; a left click on the menu bar icon then brought the window back at the same size and
-  position, the session still live and Octoboard back in the Dock and frontmost;
+  and the agent process alive and no window, Octoboard out of the Dock and inactive, with the application used before
+  it frontmost again; the menu bar icon then bringing the window back at the same size and position (observed when a
+  left click on it still did that), the session still live and Octoboard back in the Dock and frontmost;
 - a close from native fullscreen hiding the window with no empty fullscreen space left behind, and the window
   staying on screen when brought back during that transition, by the menu bar icon's Open Octoboard or by opening
   Octoboard again;
