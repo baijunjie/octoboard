@@ -4,7 +4,7 @@ import React, { useRef } from "react";
 
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
-import { CodeBlock } from "../components/InlineCode";
+import { CodeBlock } from "../components/CodeBlock";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { IconToggle } from "../components/IconToggle";
 import { RowIconGroup } from "../components/RowControls";

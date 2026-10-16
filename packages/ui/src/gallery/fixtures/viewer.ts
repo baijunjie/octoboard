@@ -20,7 +20,7 @@ const GROUP = "File viewer";
 // frame reads the window's language from storage when `i18n/react` is first evaluated, which has to
 // follow the preparation of that storage, and this module is loaded before it.
 async function loadLiveParts() {
-  return { Message: (await import("../../i18n/react")).Message, InlineCode: (await import("../../components/InlineCode")).InlineCode };
+  return { Message: (await import("../../i18n/react")).Message, InlineChip: (await import("../../components/InlineChip")).InlineChip };
 }
 type LiveParts = Awaited<ReturnType<typeof loadLiveParts>>;
 
@@ -713,15 +713,15 @@ async function failedFiles(): Promise<ViewerSubject[]> {
 // The comparison wording of a change opened from the Compare view, in the window's language.
 // The branches and commits are set as code, as the app sets them, with the same wording as plain text
 // for the tooltip.
-const comparisonWording = ({ Message, InlineCode }: LiveParts, t: Translate, from: string, fromCommit: string, to: string, toCommit: string) => {
+const comparisonWording = ({ Message, InlineChip }: LiveParts, t: Translate, from: string, fromCommit: string, to: string, toCommit: string) => {
   return {
     source: createElement(Message<"git.compare.source">, {
       id: "git.compare.source",
       params: {
-        from: createElement(InlineCode, { color: "primary", children: from }),
-        fromCommit: createElement(InlineCode, { color: "default", children: fromCommit }),
-        to: createElement(InlineCode, { color: "primary", children: to }),
-        toCommit: createElement(InlineCode, { color: "default", children: toCommit }),
+        from: createElement(InlineChip, { monospace: true, wrap: true, size: "xs", color: "primary" }, from),
+        fromCommit: createElement(InlineChip, { monospace: true, wrap: true, size: "xs", color: "default" }, fromCommit),
+        to: createElement(InlineChip, { monospace: true, wrap: true, size: "xs", color: "primary" }, to),
+        toCommit: createElement(InlineChip, { monospace: true, wrap: true, size: "xs", color: "default" }, toCommit),
       },
     }),
     sourceText: t("git.compare.source", { from: isolate(from), fromCommit: isolate(fromCommit), to: isolate(to), toCommit: isolate(toCommit) }),

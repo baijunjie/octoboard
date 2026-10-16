@@ -1,6 +1,6 @@
 import { createElement, useEffect, useRef, useState } from "react";
 
-import { InlineCode } from "../components/InlineCode";
+import { InlineChip } from "../components/InlineChip";
 import { useLatest } from "../components/useLatest";
 import { DaemonRequestError } from "../daemon-client";
 import { errorText } from "../errorText";
@@ -360,10 +360,10 @@ export function useChangeReader(project: string): ChangeReader {
       ? createElement(Message<"git.compare.source">, {
         id: "git.compare.source",
         params: {
-          from: createElement(InlineCode, { color: "primary", children: displayWirePath(origin.left.branch) }),
-          fromCommit: createElement(InlineCode, { color: "default", children: shortCommit(origin.base) }),
-          to: createElement(InlineCode, { color: "primary", children: displayWirePath(origin.right.branch) }),
-          toCommit: createElement(InlineCode, { color: "default", children: shortCommit(origin.right.commit) }),
+          from: createElement(InlineChip, { monospace: true, wrap: true, size: "xs", color: "primary", children: displayWirePath(origin.left.branch) }),
+          fromCommit: createElement(InlineChip, { monospace: true, wrap: true, size: "xs", color: "default", children: shortCommit(origin.base) }),
+          to: createElement(InlineChip, { monospace: true, wrap: true, size: "xs", color: "primary", children: displayWirePath(origin.right.branch) }),
+          toCommit: createElement(InlineChip, { monospace: true, wrap: true, size: "xs", color: "default", children: shortCommit(origin.right.commit) }),
         },
       })
       : undefined;

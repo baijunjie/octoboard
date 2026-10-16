@@ -1,7 +1,7 @@
 import React from "react";
 
 import { ErrorAlert } from "./components/ErrorAlert";
-import { CodeBlock } from "./components/InlineCode";
+import { CodeBlock } from "./components/CodeBlock";
 import { FadedScroller, useFadeRegion } from "./components/scrollFade";
 import { useT } from "./i18n/react";
 import { StartupScreen } from "./StartupScreen";

@@ -128,6 +128,9 @@ description or validation. Leaving a field empty retains its existing requiredne
 
 HeroUI controls draw their own focus ring.
 
+An invalid, focused HeroUI `Input` keeps its outline offset at zero so the error outline meets the
+focus ring. This overrides WebKit's native inset without changing the component's colours or ring.
+
 ### A hand-built focusable element
 
 An element that removes the outline puts a ring back, never `outline-none` alone, and takes it from
@@ -377,26 +380,31 @@ already says what failed needs no generic title repeating it. An optional title 
 surrounding content: a startup page's is `h1`, and a subsection under a dialog or pane's `h2` is `h3`. Paragraphs,
 lists and diagnostic blocks belong directly in the callout's content; HeroUI's span description cannot contain them.
 
-Technical literals in prose use `InlineCode`, with left-to-right isolation, selectable text, wrapping and the size of
-the text they stand in. A technical literal — a path, a file name, a URL, a branch, a commit id, an ID, a command or a
-setting value — stands without quotation marks, as code where the text is rendered and bare in its plain-text form; a
+Inline labels and technical literals use the shared `InlineChip`, backed by HeroUI Chip. Technical literals use
+its monospace, left-to-right and wrapping options. A technical literal — a path, a file name, a URL, a branch,
+a commit id, an ID, a command or a setting value — stands without quotation marks, as code where the text is rendered and bare in its plain-text form; a
 name or title the user gave stays in quotation marks. Raw diagnostics use `CodeBlock` or the existing source renderer,
 preserving their text, direction and indentation; long content remains scrollable and reachable from the keyboard.
 Keep structured error metadata separate from the plain error message, so notifications and unknown-error fallbacks
 retain usable text.
 
-Application code uses the shared v3 Typography wrappers. Outside an Alert, code defaults to neutral styling and may
-choose `primary`, `secondary`, `success`, `warning` or `danger`. Colored Alert roots use `TintedAlert` (including the
-root inside `ErrorAlert`), which sets both the fill and the code tone: default stays neutral, accent maps to primary,
-and success, warning and danger use their matching colors. Code inside an Alert must follow that tone; the enclosing
-Alert takes precedence over an explicit code color, and nested Alerts supply their own tone. The same tone reaches
-code in other text coloured by status, through the same `CodeToneContext`: a field's error is danger, and a toast's
-title takes its toast's status. Do not use the bare HeroUI Alert root for application callouts or hand-color
-individual code literals inside one. HeroUI's Alert parts remain the content, title and indicator primitives.
+The shared size scale is `xs` (12px text, 16px line height and no vertical padding), `sm` (20px tall), `md` (24px)
+and `lg` (28px). `sm` is the default; the last three retain HeroUI's preset metrics. Compact prose literals, field
+errors, filter labels and usage indicators use `xs`. Sizes belong to the shared component rather than caller-level
+font, line-height or padding overrides. Width constraints for aligned metadata remain layout concerns.
 
-Colored code adds a stronger tint of the Alert's hue over its fill and uses a readable foreground of that hue; it
-must remain distinguishable from the callout while meeting 4.5:1 text contrast in both appearances. Rendered Markdown,
-syntax-highlighted source and foreign renderer markup keep their own code palettes.
+The `monospace` option preserves a semantic `code` child without introducing a second visual component. Paths and
+URLs can wrap after slashes, and longer uninterrupted literals can wrap anywhere. A confirmation word, file size,
+status and technical ID use the same chip component. Standalone path rows, code blocks and source or Markdown
+renderers retain their own layouts.
+
+Inline chips retain HeroUI's colours, soft fill and shape; the secondary hue is the shared purple extension.
+`CodeBlock` uses the shared Typography wrapper for multi-line diagnostics. Outside an Alert, both default to neutral
+and may choose a colour. `TintedAlert` supplies `CodeToneContext`: default stays neutral, accent maps to primary, and
+success, warning and danger use their matching colours. The nearest status context takes precedence over an explicit
+colour, including field errors and toast titles. Do not hand-colour individual literals within a status message.
+HeroUI's Alert parts remain the content, title and indicator primitives. Syntax-highlighted source and foreign
+renderer markup retain their own palettes.
 
 An error appearing after the surface is open has one `role="alert"` owner, supplied by `ErrorAlert`; do not put a
 second alert role on its parent or descendants. An initial startup explanation passes `announce={false}` and is

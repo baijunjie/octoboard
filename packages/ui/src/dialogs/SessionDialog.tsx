@@ -6,7 +6,7 @@ import { AGENT_CONSOLE_EFFORT_FIELD, AGENT_CONSOLE_MODEL_FIELD, AGENT_LABEL, AGE
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { InlineCode } from "../components/InlineCode";
+import { InlineChip } from "../components/InlineChip";
 import { PATH_VAR_PARAMS } from "../components/literalParams";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { CONVERSATION_ID, EXAMPLE_CONVERSATION_ID } from "../conversationId";
@@ -153,7 +153,7 @@ export function SessionDialog({
   const resumeProblem: "required" | "invalid" | undefined = !resuming ? undefined : resumeId === "" ? "required" : !CONVERSATION_ID.test(resumeId) ? "invalid" : undefined;
   const resumeProblems = {
     required: t("dialog.session.resumeRequired"),
-    invalid: <Message id="dialog.session.resumeInvalid" params={{ example: <InlineCode>{EXAMPLE_CONVERSATION_ID}</InlineCode> }} />,
+    invalid: <Message id="dialog.session.resumeInvalid" params={{ example: <InlineChip monospace wrap size="xs">{EXAMPLE_CONVERSATION_ID}</InlineChip> }} />,
   };
   const shownProblem = shown(resumeProblem);
 

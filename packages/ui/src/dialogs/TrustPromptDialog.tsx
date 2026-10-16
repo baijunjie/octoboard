@@ -3,7 +3,8 @@ import { errorPresentation } from "../errorPresentation";
 import React, { useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
-import { CodeBlock, InlineCode } from "../components/InlineCode";
+import { CodeBlock } from "../components/CodeBlock";
+import { InlineChip } from "../components/InlineChip";
 import { TintedAlert } from "../components/TintedAlert";
 import { DaemonRequestError } from "../daemon-client";
 import { isolate } from "../i18n/isolate";
@@ -17,7 +18,7 @@ import type { ConfirmDialogProps } from "./ConfirmDialog";
  * character, so it wraps to the dialog's width rather than splitting at a hyphen; an inline one
  * breaks only where it would otherwise overflow, since a folder's name has no length limit. */
 function Path({ children, block }: { children: string; block?: boolean }): React.ReactElement {
-  return block ? <CodeBlock dir="ltr" className="break-all">{children}</CodeBlock> : <InlineCode>{children}</InlineCode>;
+  return block ? <CodeBlock dir="ltr" className="break-all">{children}</CodeBlock> : <InlineChip monospace wrap size="xs">{children}</InlineChip>;
 }
 
 /** What trusting lets the asking agent do with the project's own configuration: true for that agent
@@ -101,15 +102,11 @@ function TrustDirCheckbox({
           <Checkbox.Indicator />
         </Checkbox.Control>
         <Label>
-          {/* The folder is named in plain text rather than through `Path`: HeroUI's `Code` is a
-              react-aria `Text`, which inside a checkbox's field demands a slot of its own. */}
           <Message
             id="dialog.trust.parent"
             params={{
               directory: (
-                <span dir="ltr" className="[overflow-wrap:anywhere]">
-                  {directory}
-                </span>
+                <InlineChip monospace wrap size="xs">{directory}</InlineChip>
               ),
             }}
           />

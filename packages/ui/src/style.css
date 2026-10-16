@@ -72,6 +72,12 @@
 @import "./viewer/markdown-newsprint.css";
 @import "./viewer/markdown-latex.css";
 
+/* WebKit insets a focused input's outline by 2px. Keep HeroUI's invalid outline against its
+   focus ring so the two draw as one edge. */
+.input[data-invalid="true"]:is(:focus, [data-focused="true"]) {
+  outline-offset: 0;
+}
+
 /* xterm's default black viewport can show through fractional scaling at the screen edges.
    Use the same theme colour as TerminalPane's opaque surface, including after a theme switch. */
 [data-region="terminal"] .xterm .xterm-viewport {
@@ -898,6 +904,24 @@ html.pane-resizing * {
    own code style fixes it at 14px. Unlayered, so it wins over HeroUI's components layer. */
 .app-code {
   font-size: inherit;
+}
+/* The remaining sizes use HeroUI's own chip metrics. */
+.inline-chip--xs {
+  line-height: 16px;
+}
+.inline-chip--wrap {
+  display: inline;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.inline-chip__code {
+  font: inherit;
+}
+.inline-chip--secondary {
+  --chip-bg: color-mix(in oklab, var(--color-purple-500) 15%, transparent);
+  --chip-fg: color-mix(in oklab, var(--color-purple-500) 40%, var(--foreground));
 }
 .app-code-block > .app-code {
   white-space: inherit;

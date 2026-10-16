@@ -461,7 +461,7 @@ function mountFilter(clipped: boolean): void {
 it("hoverFilterConditions puts up the chips of the clipped filter", async () => {
   mountFilter(true);
   await settledLive(createUi(document, "en").hoverFilterConditions());
-  expect(Array.from(openTooltip()!.querySelectorAll("span"), (chip) => chip.textContent)).toEqual(["site", "docs", "customer-facing"]);
+  expect(Array.from(openTooltip()!.querySelectorAll("[data-inline-chip]"), (chip) => chip.textContent)).toEqual(["site", "docs", "customer-facing"]);
   release(document.querySelector("[role=group]")!.parentElement!);
 });
 

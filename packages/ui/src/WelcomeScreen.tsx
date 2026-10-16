@@ -1,7 +1,8 @@
-import { Card, Chip } from "@heroui/react";
+import { Card } from "@heroui/react";
 import { Check, CircleDashed, FileUp, LayoutDashboard, Minus, Plus } from "lucide-react";
 import React, { useId, useImperativeHandle, useRef } from "react";
 
+import { InlineChip } from "./components/InlineChip";
 import { AGENT_OPTIONS } from "./agents";
 import { AgentIcon } from "./components/AgentIcon";
 import { EmptyPanel } from "./components/EmptyPanel";
@@ -96,10 +97,9 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
                           <AgentIcon agent={value} className="size-5 shrink-0" />
                           <bdi className="break-words">{label}</bdi>
                         </span>
-                        <Chip size="sm" variant="soft" color={available ? "success" : "default"}>
-                          <StatusIcon aria-hidden="true" className="size-3.5 shrink-0" />
-                          <Chip.Label>{t(available ? "welcome.toolInstalled" : unavailable ? "welcome.toolNotFound" : "welcome.toolChecking")}</Chip.Label>
-                        </Chip>
+                        <InlineChip size="sm" variant="soft" color={available ? "success" : "default"} startContent={<StatusIcon aria-hidden="true" className="size-3.5 shrink-0" />}>
+                          {t(available ? "welcome.toolInstalled" : unavailable ? "welcome.toolNotFound" : "welcome.toolChecking")}
+                        </InlineChip>
                       </div>
                     </li>
                   );

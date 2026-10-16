@@ -8,7 +8,7 @@ import {
 import { Check, Funnel, FunnelX, Tags } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
-import { NEUTRAL_CHIP_COLOR_CLASS } from "../components/chipClasses";
+import { InlineChip } from "../components/InlineChip";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
@@ -231,10 +231,6 @@ function TagPicker({
   );
 }
 
-/** A small tag's shape and type (HeroUI's `tag--sm`), without the tag's hover, press and focus
- * states, which belong to a tag that does something. */
-const CHIP_CLASS = "rounded-xl px-2 py-0.5 text-xs font-medium";
-const TAG_COLOR_CLASS = "bg-accent-soft text-accent-soft-foreground";
 /** How a chip takes its width: kept whole on the heading's line, where the line clips it, or
  * shrunk to the tooltip's line, where a long one breaks inside itself. */
 const CHIP_FIT_CLASS = { whole: "shrink-0", wrapping: "min-w-0 max-w-full" };
@@ -245,13 +241,12 @@ function Chip({ kind, fit, children }: {
   fit: keyof typeof CHIP_FIT_CLASS;
   children: string;
 }): React.ReactElement {
-  const color = kind === "keyword" ? NEUTRAL_CHIP_COLOR_CLASS : TAG_COLOR_CLASS;
-  return <span dir="auto" className={`${CHIP_CLASS} ${CHIP_FIT_CLASS[fit]} ${color}`}>{children}</span>;
+  return <InlineChip size="xs" color={kind === "keyword" ? "default" : "accent"} dir="auto" wrap={fit === "wrapping"} className={CHIP_FIT_CLASS[fit]}>{children}</InlineChip>;
 }
 
 /** The whole filter as a tooltip: the same chips as the heading's line, wrapped onto as many lines
- * as the tooltip's width needs instead of clipped at one. The chips are not `shrink-0` here, so a
- * single tag longer than a line shrinks to the line and breaks inside itself. The tooltip's surface
+ * as the tooltip's width needs instead of clipped at one. Each chip is capped at the tooltip's
+ * width, so a tag longer than a line breaks inside itself. The tooltip's surface
  * is a dialog's `--overlay`, so the chips take the fills of `.control-fills`: HeroUI's own
  * `--default` lands at 1.19:1 against it and the keyword would barely read as a chip. */
 function ProjectFilterTooltip({ filter }: { filter: ProjectFilter }): React.ReactElement {

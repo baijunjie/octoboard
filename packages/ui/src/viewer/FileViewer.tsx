@@ -1,7 +1,8 @@
-import { Button, Chip } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { ChevronLeft, ChevronRight, Copy, File } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { InlineChip } from "../components/InlineChip";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { PlainMarkedPath } from "../components/MarkedPath";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
@@ -218,9 +219,9 @@ export function FileViewer({
               <span className="flex shrink-0 items-center gap-1">
                 {status && <StatusChip status={status}>{statusLabel}</StatusChip>}
                 {subject.stage !== undefined && (
-                  <Chip size="sm" variant="soft">
+                  <InlineChip size="sm" variant="soft">
                     {subject.stage}
-                  </Chip>
+                  </InlineChip>
                 )}
               </span>
             )}
@@ -271,9 +272,9 @@ export function FileViewer({
         </DetailItem>
         {content.state === "file" && (
           <DetailItem>
-            <Chip size="sm" variant="soft">
+            <InlineChip size="sm" variant="soft">
               {formatFileSize(language, content.body.size)}
-            </Chip>
+            </InlineChip>
           </DetailItem>
         )}
         {renamedFrom !== undefined && <RenamedFrom path={renamedFrom} />}
@@ -525,7 +526,7 @@ function ChangeView({
           <Notice tone="warned">
             <Message
               id={presentation.hidden === "old" ? "viewer.change.outsideOld" : "viewer.change.outsideNew"}
-              params={{ path: <span dir="ltr">{displayWirePath(presentation.repositoryPath)}</span> }}
+              params={{ path: <InlineChip monospace wrap size="xs">{displayWirePath(presentation.repositoryPath)}</InlineChip> }}
             />
           </Notice>
           {shown.state === "present" && shown.body ? (

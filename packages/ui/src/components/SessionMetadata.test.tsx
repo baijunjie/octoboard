@@ -29,6 +29,11 @@ it("uses the recorded total and exposes full localized counts with cache subsets
   expect(label).toContain(`Input: ${isolate("123,456")}`);
   expect(label).toContain(`Cached input: ${isolate("100,000")}`);
   expect(label).toContain(`Cache write: ${isolate("0")}`);
+  const indicator = container.querySelector<HTMLElement>('[role="img"]')!;
+  expect(indicator.tabIndex).toBe(-1);
+  expect(indicator.querySelector('[data-inline-chip][data-size="xs"]')?.getAttribute("aria-hidden")).toBe("true");
+  expect(container.querySelector("button")).toBeNull();
+  expect(indicator.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }))).toBe(false);
 });
 
 it("omits unavailable and zero usage until a positive total arrives", () => {

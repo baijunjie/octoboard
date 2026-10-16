@@ -6,7 +6,7 @@ import { ListLayout, Virtualizer } from "react-aria-components";
 import { failureParam } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { InlineCode } from "../components/InlineCode";
+import { InlineChip } from "../components/InlineChip";
 import { TitledControl } from "../components/TitledControl";
 import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
 import { useFocusHandoff } from "../components/useFocusHandoff";
@@ -179,7 +179,7 @@ function ComparisonContent({
       <p className="shrink-0 px-3 py-2 text-xs text-app-muted">
         <Message
           id="git.compare.commits"
-          params={{ base: <InlineCode>{shortCommit(base)}</InlineCode>, to: <InlineCode>{shortCommit(right.commit)}</InlineCode> }}
+          params={{ base: <InlineChip monospace wrap size="xs">{shortCommit(base)}</InlineChip>, to: <InlineChip monospace wrap size="xs">{shortCommit(right.commit)}</InlineChip> }}
         />
       </p>
       {/* Mounted for as long as the comparison is, so a notice appearing in it is announced. */}
@@ -189,9 +189,9 @@ function ComparisonContent({
             <TriangleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0" />
             <span>
               {notice.kind === "moved" ? (
-                <Message id="git.compare.moved" params={{ branch: <InlineCode>{displayWirePath(notice.branch)}</InlineCode> }} />
+                <Message id="git.compare.moved" params={{ branch: <InlineChip monospace wrap size="xs">{displayWirePath(notice.branch)}</InlineChip> }} />
               ) : (
-                <Message id="git.compare.deleted" params={{ branch: <InlineCode>{displayWirePath(notice.branch)}</InlineCode> }} />
+                <Message id="git.compare.deleted" params={{ branch: <InlineChip monospace wrap size="xs">{displayWirePath(notice.branch)}</InlineChip> }} />
               )}
             </span>
           </p>

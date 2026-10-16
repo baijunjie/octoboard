@@ -9,7 +9,7 @@ import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { MessageParams } from "../protocol";
 import { useDaemonStore } from "../store";
-import { InlineCode } from "./InlineCode";
+import { InlineChip } from "./InlineChip";
 
 export function DaemonErrorTitle(): React.ReactElement {
   const t = useT();
@@ -18,7 +18,7 @@ export function DaemonErrorTitle(): React.ReactElement {
 
 const NO_RECORDS = new Map<string, never>();
 
-/** A failure whose message shows some params as code (`CODE_PARAMS`): those set as `InlineCode`, the
+/** A failure whose message shows some params as code (`CODE_PARAMS`): those set as `InlineChip`, the
  * rest as plain text, in the catalog's wording for the code. */
 function CodedDaemonMessage({ error }: { error: DaemonRequestError }): React.ReactElement {
   const language = useCurrentLanguage();
@@ -29,7 +29,7 @@ function CodedDaemonMessage({ error }: { error: DaemonRequestError }): React.Rea
   const sessions = useDaemonStore((s) => ("session" in error.params ? s.sessions : NO_RECORDS));
   const id = `daemon.${messageCode(error.code, error.params)}`;
   if (!isMessageKey(id)) return <>{error.message}</>;
-  const params = daemonParams(language, error.code, error.params, { consoles, projects, sessions }, (value) => <InlineCode>{value}</InlineCode>);
+  const params = daemonParams(language, error.code, error.params, { consoles, projects, sessions }, (value) => <InlineChip monospace wrap size="xs">{value}</InlineChip>);
   // One element, so a container that lays its children out as flex items (an alert's column) keeps
   // the sentence whole instead of making each run of text and each literal an item of its own.
   return <span><Message id={id} params={params as never} /></span>;
@@ -59,7 +59,7 @@ export function DaemonErrorMessage({ error, showTitle = true }: { error: ErrorPr
       <p>
         <Message
           id="daemon.shell_environment_timeout.command"
-          params={{ command: <InlineCode>{`${shell} -l -i -c '${command}'`}</InlineCode>, timeout }}
+          params={{ command: <InlineChip monospace wrap size="xs">{`${shell} -l -i -c '${command}'`}</InlineChip>, timeout }}
         />
       </p>
       <p>{t("daemon.shell_environment_timeout.cause")}</p>

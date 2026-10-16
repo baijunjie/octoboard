@@ -12,7 +12,7 @@ import {
 } from "../agents";
 import { AGENT_ICON_OPTIONS, AgentIcon } from "../components/AgentIcon";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
-import { InlineCode } from "../components/InlineCode";
+import { InlineChip } from "../components/InlineChip";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
 import { tagVocabulary } from "../projectFiltering";
@@ -272,10 +272,10 @@ export function ProjectDialog({
               <Message
                 id="dialog.project.agentDetectHint"
                 params={{
-                  claudeFile: <InlineCode>CLAUDE.md</InlineCode>,
-                  agentsFile: <InlineCode>AGENTS.md</InlineCode>,
-                  claudeDir: <InlineCode>.claude</InlineCode>,
-                  codexDir: <InlineCode>.codex</InlineCode>,
+                  claudeFile: <InlineChip monospace wrap size="xs">CLAUDE.md</InlineChip>,
+                  agentsFile: <InlineChip monospace wrap size="xs">AGENTS.md</InlineChip>,
+                  claudeDir: <InlineChip monospace wrap size="xs">.claude</InlineChip>,
+                  codexDir: <InlineChip monospace wrap size="xs">.codex</InlineChip>,
                 }}
               />
             ) : undefined

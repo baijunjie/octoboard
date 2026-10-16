@@ -1,42 +1,57 @@
 import { Alert } from "@heroui/react";
 import React from "react";
 
-import { CodeBlock, InlineCode } from "../components/InlineCode";
+import { CodeBlock } from "../components/CodeBlock";
+import { InlineChip, type InlineChipSize } from "../components/InlineChip";
 import { TintedAlert } from "../components/TintedAlert";
 import type { CodeColor } from "../components/codeTone";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 
 const COLORS: CodeColor[] = ["default", "primary", "secondary", "success", "warning", "danger"];
+const SIZES: InlineChipSize[] = ["xs", "sm", "md", "lg"];
 const STATUSES = ["default", "accent", "success", "warning", "danger"] as const;
 
-/** One settled comparison of the real code wrappers, both outside and inside alert contexts. */
+/** One settled comparison of the shared inline chips and code blocks, both outside and inside alert contexts. */
 export function CodeGallery(): React.ReactElement {
-  const region = useFadeRegion({ label: "Code colors and alert tones" });
+  const region = useFadeRegion({ label: "Inline chips, sizes and alert tones" });
   return (
     <main className={`flex h-full min-h-0 flex-col ${region.focused ? "ring-2 ring-app-focus ring-inset" : ""}`}>
       <FadedScroller region={region} className="min-h-0 flex-1 p-6">
         <div className="mx-auto flex max-w-5xl flex-col gap-6">
-          <h1 className="text-lg font-semibold">Code colors and alert tones</h1>
+          <h1 className="text-lg font-semibold">Inline chips, sizes and alert tones</h1>
+          <section className="flex flex-col gap-3" aria-labelledby="chip-sizes-title">
+            <h2 id="chip-sizes-title" className="font-semibold">Four sizes, regular and monospace</h2>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {SIZES.map((size) => (
+                <div key={size} data-chip-size-sample={size} className="flex min-w-0 flex-col items-start gap-3 rounded-lg border border-separator p-3">
+                  <h3 className="text-sm font-medium">{size}</h3>
+                  <InlineChip size={size}>Ready</InlineChip>
+                  <InlineChip size={size} monospace>AGENTS.md</InlineChip>
+                  <p className="w-full min-w-0 text-sm">Path: <InlineChip size={size} monospace wrap>/Users/dev/Projects/octoboard/packages/ui/src/components/InlineChip.tsx</InlineChip></p>
+                </div>
+              ))}
+            </div>
+          </section>
           <section className="flex flex-col gap-3" aria-labelledby="code-colors-title">
             <h2 id="code-colors-title" className="font-semibold">Six colors outside alerts</h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {COLORS.map((color) => (
                 <div key={color} data-code-sample={color} className="min-w-0 rounded-lg border border-separator p-3">
-                  <p className="mb-2 text-sm">{color}: <InlineCode color={color}>VITE_DAEMON_PORT</InlineCode></p>
+                  <p className="mb-2 text-sm">{color}: <InlineChip monospace wrap size="xs" color={color}>VITE_DAEMON_PORT</InlineChip></p>
                   <CodeBlock color={color}>{"env -0\nOCTOBOARD_DAEMON_PORT=5174"}</CodeBlock>
                 </div>
               ))}
             </div>
           </section>
           <section className="flex flex-col gap-3" aria-labelledby="alert-tones-title">
-            <h2 id="alert-tones-title" className="font-semibold">Alert tone overrides each requested code color</h2>
+            <h2 id="alert-tones-title" className="font-semibold">Alert tone overrides each requested chip color</h2>
             {STATUSES.map((status) => (
               <TintedAlert key={status} status={status} data-alert-sample={status}>
                 <Alert.Indicator aria-hidden="true" />
                 <Alert.Content className="min-w-0">
                   <h3 className="mb-3 font-semibold">{status}</h3>
                   <div className="flex flex-wrap gap-3">
-                    {COLORS.map((color) => <span key={color} className="text-sm">{color}: <InlineCode color={color}>CLAUDE.md</InlineCode></span>)}
+                    {COLORS.map((color) => <span key={color} className="text-sm">{color}: <InlineChip monospace wrap size="xs" color={color}>CLAUDE.md</InlineChip></span>)}
                   </div>
                   <CodeBlock>{"env -0 && printf '%s' 'OCTOBOARD-ENV-SNAPSHOT-END-12345678-1234-1234-1234-123456789abc'"}</CodeBlock>
                 </Alert.Content>
@@ -44,17 +59,17 @@ export function CodeGallery(): React.ReactElement {
             ))}
           </section>
           <section className="flex flex-col gap-3" aria-labelledby="nested-tones-title">
-            <h2 id="nested-tones-title" className="font-semibold">Nearest alert wins; outside code keeps its own tone</h2>
+            <h2 id="nested-tones-title" className="font-semibold">Nearest alert wins; outside chips keep their own tone</h2>
             <TintedAlert status="warning" data-nested-sample="outer">
               <Alert.Content className="flex min-w-0 flex-col gap-3">
-                <p>Outer warning: <InlineCode color="danger">AGENTS.md</InlineCode></p>
+                <p>Outer warning: <InlineChip monospace wrap size="xs" color="danger">AGENTS.md</InlineChip></p>
                 <TintedAlert status="success" data-nested-sample="inner">
-                  <Alert.Content>Inner success: <InlineCode color="danger">.claude</InlineCode></Alert.Content>
+                  <Alert.Content>Inner success: <InlineChip monospace wrap size="xs" color="danger">.claude</InlineChip></Alert.Content>
                 </TintedAlert>
-                <p>Outer warning again: <InlineCode color="primary">.codex</InlineCode></p>
+                <p>Outer warning again: <InlineChip monospace wrap size="xs" color="primary">.codex</InlineChip></p>
               </Alert.Content>
             </TintedAlert>
-            <p>After both alerts: <InlineCode color="secondary">~/Projects</InlineCode></p>
+            <p>After both alerts: <InlineChip monospace wrap size="xs" color="secondary">~/Projects</InlineChip></p>
           </section>
         </div>
       </FadedScroller>

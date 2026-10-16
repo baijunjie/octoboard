@@ -1,7 +1,7 @@
 import { Button } from "@heroui/react";
 import React, { useEffect, useRef, useState } from "react";
 
-import { InlineCode } from "../components/InlineCode";
+import { InlineChip } from "../components/InlineChip";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "../dialogs/Dialog";
 import { dialogAround } from "../dialogs/dialogElement";
 import { Message, useT } from "../i18n/react";
@@ -42,7 +42,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   const { error, setError, busy, run } = useDialogAction();
   // The name of a file that is not JSON, which its failure line sets as code.
   const [notJson, setNotJson] = useState<string>();
-  const failure = notJson === undefined ? error : <Message id="configuration.import.notJson" params={{ name: <InlineCode>{notJson}</InlineCode> }} />;
+  const failure = notJson === undefined ? error : <Message id="configuration.import.notJson" params={{ name: <InlineChip monospace wrap size="xs">{notJson}</InlineChip> }} />;
   const { shown, attempt } = useSubmitValidation();
   const [stage, setStage] = useState<Stage>({ kind: "choose" });
   const [review, setReview] = useState<ReviewState>([]);

@@ -1,7 +1,8 @@
-import { Button, Chip, Input, ListBox } from "@heroui/react";
+import { Button, Input, ListBox } from "@heroui/react";
 import { CornerLeftUp, Folder } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
+import { InlineChip } from "../components/InlineChip";
 import { DaemonRequestError } from "../daemon-client";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { useScrollFade } from "../components/scrollFade";
@@ -146,9 +147,9 @@ export function DirectoryPicker({
                 {entry.name}
               </FadeOverflow>
               {entry.is_git_repo && (
-                <Chip size="sm" variant="soft" className="ms-auto">
+                <InlineChip size="sm" variant="soft" className="ms-auto">
                   git
-                </Chip>
+                </InlineChip>
               )}
             </ListBox.Item>
           ))}

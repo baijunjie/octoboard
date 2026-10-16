@@ -3,7 +3,8 @@ import React, { useState } from "react";
 
 import { ContentPanel } from "./components/ContentPanel";
 import { ErrorAlert } from "./components/ErrorAlert";
-import { CodeBlock, InlineCode } from "./components/InlineCode";
+import { CodeBlock } from "./components/CodeBlock";
+import { InlineChip } from "./components/InlineChip";
 import { BareTitleBar } from "./components/TitleBar";
 import { FadedScroller, useFadeRegion } from "./components/scrollFade";
 import { Message, useT } from "./i18n/react";
@@ -74,7 +75,7 @@ export function DaemonFailedMessage({ error }: { error: string }): React.ReactEl
 /** What the screen says when there is no daemon address to connect to, and how to give it one. */
 export function NoAddressMessage(): React.ReactElement {
   const t = useT();
-  const code = (text: string) => <InlineCode>{text}</InlineCode>;
+  const code = (text: string) => <InlineChip monospace wrap size="xs">{text}</InlineChip>;
   return (
     <ErrorAlert title={t("startup.noAddress.title")} headingLevel={1} announce={false}>
       <p>

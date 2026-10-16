@@ -4,7 +4,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
-import { CodeBlock, InlineCode } from "./InlineCode";
+import { CodeBlock } from "./CodeBlock";
+import { InlineChip } from "./InlineChip";
 import { TintedAlert } from "./TintedAlert";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -23,14 +24,14 @@ function mount(children: React.ReactNode) {
 it("inherits the closest alert tone even when the caller requests a conflicting color", () => {
   const container = mount(
     <>
-      <InlineCode>neutral</InlineCode>
-      <InlineCode color="secondary">purple</InlineCode>
+      <InlineChip monospace wrap size="xs">neutral</InlineChip>
+      <InlineChip monospace wrap size="xs" color="secondary">purple</InlineChip>
       <TintedAlert status="danger">
-        <InlineCode color="success">outer</InlineCode>
-        <TintedAlert status="warning"><InlineCode color="danger">inner</InlineCode></TintedAlert>
+        <InlineChip monospace wrap size="xs" color="success">outer</InlineChip>
+        <TintedAlert status="warning"><InlineChip monospace wrap size="xs" color="danger">inner</InlineChip></TintedAlert>
         <CodeBlock color="primary">outer block</CodeBlock>
       </TintedAlert>
-      <InlineCode>after</InlineCode>
+      <InlineChip monospace wrap size="xs">after</InlineChip>
     </>,
   );
   expect(Array.from(container.querySelectorAll("code")).map((el) => el.dataset.color)).toEqual([
@@ -42,8 +43,8 @@ it("inherits the closest alert tone even when the caller requests a conflicting 
 it("maps accent to primary and lets a neutral alert override explicit color", () => {
   const container = mount(
     <>
-      <TintedAlert status="accent"><InlineCode>accent</InlineCode></TintedAlert>
-      <TintedAlert><InlineCode color="danger">neutral</InlineCode></TintedAlert>
+      <TintedAlert status="accent"><InlineChip monospace wrap size="xs">accent</InlineChip></TintedAlert>
+      <TintedAlert><InlineChip monospace wrap size="xs" color="danger">neutral</InlineChip></TintedAlert>
     </>,
   );
   expect(Array.from(container.querySelectorAll("code")).map((el) => el.dataset.color)).toEqual(["primary", "default"]);
@@ -52,9 +53,9 @@ it("maps accent to primary and lets a neutral alert override explicit color", ()
 it("isolates code typography without consuming the field's description slot", () => {
   const container = mount(
     <TextField>
-      <Label>Directory <InlineCode>~/Projects</InlineCode></Label>
+      <Label>Directory <InlineChip monospace wrap size="xs">~/Projects</InlineChip></Label>
       <Input />
-      <Description>Read <InlineCode>AGENTS.md</InlineCode> first.</Description>
+      <Description>Read <InlineChip monospace wrap size="xs">AGENTS.md</InlineChip> first.</Description>
     </TextField>,
   );
   const description = container.querySelector('[data-slot="description"]')!;
@@ -65,6 +66,14 @@ it("isolates code typography without consuming the field's description slot", ()
     expect(code.classList.contains("select-text")).toBe(true);
     expect(code.hasAttribute("slot")).toBe(false);
   }
+});
+
+it("preserves URL text and repeated separators while allowing paths to wrap", () => {
+  const literal = "https://example.test/projects//日本語/";
+  const container = mount(<InlineChip monospace wrap size="xs">{literal}</InlineChip>);
+  const code = container.querySelector("code")!;
+  expect(code.textContent).toBe(literal);
+  expect(code.querySelector("wbr")).not.toBeNull();
 });
 
 it("preserves diagnostic lines and supports wrapping or a full-width scrollable trace", () => {

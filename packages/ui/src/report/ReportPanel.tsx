@@ -1,8 +1,9 @@
-import { Button, Chip } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { errorPresentation } from "../errorPresentation";
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
+import { InlineChip } from "../components/InlineChip";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
@@ -174,9 +175,9 @@ export function ReportPanel({
           {new Date(page.created_at).toLocaleString(language)}
         </FadeOverflow>
         {isHistory && (
-          <Chip size="sm" variant="soft" color="warning" className="shrink-0">
+          <InlineChip size="sm" variant="soft" color="warning" className="shrink-0">
             {t("report.readOnly")}
-          </Chip>
+          </InlineChip>
         )}
       </div>
       <PageFrame

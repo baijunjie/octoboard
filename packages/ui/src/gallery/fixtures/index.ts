@@ -46,8 +46,8 @@ export const SCENARIOS: Scenario[] = [
     id: "code-colors",
     group: "Component colors",
     category: "normal",
-    title: "Code colors and alert tones",
-    description: "Six code colors outside alerts, all requested colors inside each alert tone, wrapping blocks, nested tone priority and a code token after the alerts. Scroll to compare the complete palette; theme and language controls show the same view in dark and right-to-left layouts.",
+    title: "Inline chips, sizes and alert tones",
+    description: "Four inline chip sizes with regular and monospace text and wrapping paths, six colors outside alerts, all requested colors inside each alert tone, code blocks and nested tone priority. Scroll to compare the complete palette; theme and language controls show the same view in dark and right-to-left layouts.",
     codePalette: true,
   },
 ];

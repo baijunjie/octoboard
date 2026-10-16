@@ -3,7 +3,7 @@ import { Info } from "lucide-react";
 import React, { useId, useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
-import { InlineCode } from "../components/InlineCode";
+import { InlineChip } from "../components/InlineChip";
 import { TILDE_PARAMS } from "../components/literalParams";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
@@ -57,27 +57,6 @@ const APPLY_ALL: {
   { choice: "clone", label: "configuration.import.all.clone" },
   { choice: "skip", label: "configuration.import.all.skip" },
 ];
-
-/** A path from a document or from this machine: always read left to right. A long one breaks after
- * a slash, so each line ends on a whole directory name; only a name too long for a line is broken
- * inside. A `span`, so it can stand inside a sentence. */
-function PathText({ children }: { children: string }): React.ReactElement {
-  const parts = children.split("/");
-  return (
-    <span dir="ltr" className="font-mono text-foreground [overflow-wrap:anywhere]">
-      {parts.map((part, i) => (
-        <React.Fragment key={i}>
-          {i > 0 && (
-            <>
-              /<wbr />
-            </>
-          )}
-          {part}
-        </React.Fragment>
-      ))}
-    </span>
-  );
-}
 
 /** An account reference that names no account of this machine, and what happens to it. */
 function FallbackNote({ fallback }: { fallback: AccountFallback }): React.ReactElement {
@@ -136,7 +115,7 @@ function ProjectRow({
               ? "configuration.import.project.exportedPathUsed"
               : "configuration.import.project.exportedPath"
           }
-          params={{ path: <PathText>{project.path}</PathText> }}
+          params={{ path: <InlineChip monospace wrap size="xs">{project.path}</InlineChip> }}
         />
         {/* A project found at its exported path and placed there is already said by the path's own line. */}
         {!(inPlace && project.default === "exported_path") && <span>{t(STATE_LABEL[project.default ?? "none"])}</span>}
@@ -159,12 +138,12 @@ function ProjectRow({
         <p>
           <Message
             id="configuration.import.target.clone"
-            params={{ url: <PathText>{project.remote_url ?? ""}</PathText>, path: <PathText>{target ?? ""}</PathText> }}
+            params={{ url: <InlineChip monospace wrap size="xs">{project.remote_url ?? ""}</InlineChip>, path: <InlineChip monospace wrap size="xs">{target ?? ""}</InlineChip> }}
           />
         </p>
       ) : inPlace ? null : (
         <p>
-          <Message id="configuration.import.target.place" params={{ path: <PathText>{target ?? ""}</PathText> }} />
+          <Message id="configuration.import.target.place" params={{ path: <InlineChip monospace wrap size="xs">{target ?? ""}</InlineChip> }} />
         </p>
       )}
       {project.account_fallbacks.map((fallback) => (
@@ -281,7 +260,7 @@ export function ImportReview({
     <>
       <StatusAnnouncer text={announcement} />
       <p className="text-sm">
-        <Message id="configuration.import.review.intro" params={{ file: <InlineCode>{fileName}</InlineCode> }} />
+        <Message id="configuration.import.review.intro" params={{ file: <InlineChip monospace wrap size="xs">{fileName}</InlineChip> }} />
       </p>
       <LabelledGroup label={t("configuration.import.all.label")}>
         <div className="flex flex-wrap gap-2">

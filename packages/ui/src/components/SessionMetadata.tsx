@@ -4,7 +4,7 @@ import { isolate } from "../i18n/isolate";
 import { joinPhrases } from "../i18n/joinPhrases";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Session, SessionUsage } from "../protocol";
-import { NEUTRAL_CHIP_COLOR_CLASS } from "./chipClasses";
+import { InlineChip } from "./InlineChip";
 import { IndicatorTooltip } from "./IndicatorTooltip";
 
 export function hasVisibleUsage(usage: SessionUsage | null | undefined): usage is SessionUsage {
@@ -52,11 +52,10 @@ export function SessionUsageLabel({ usage }: { usage?: SessionUsage | null }): R
   const compact = new Intl.NumberFormat(language, { notation: "compact", maximumFractionDigits: 1 });
   // The chip's own `.sidebar-fills` keep its fill visible on the sidebar's `--panel-sidebar` and on
   // `--panel` (Focus cards, the archive): 1.19:1 to 1.24:1 resting, the same stacked on a hovered
-  // or selected row. It is the smallest chip there is (HeroUI's `chip--sm` padding, its label's
-  // included), one text line tall, so it sits in the metadata line without growing it.
+  // or selected row. The compact size sits in the metadata line without growing it.
   return (
-    <IndicatorTooltip tooltip={tooltip} label={details} className={`sidebar-fills shrink-0 rounded-2xl px-1.5 text-xs leading-4 font-medium ${NEUTRAL_CHIP_COLOR_CLASS}`}>
-      <span aria-hidden="true">{compact.format(usage.total_tokens)}</span>
+    <IndicatorTooltip tooltip={tooltip} label={details} className="flex shrink-0">
+      <InlineChip size="xs" aria-hidden="true" className="sidebar-fills">{compact.format(usage.total_tokens)}</InlineChip>
     </IndicatorTooltip>
   );
 }
