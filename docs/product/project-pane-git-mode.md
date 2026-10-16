@@ -165,9 +165,8 @@ focus or as the viewer's selected change stays clear of both (see "The edge that
   past them (see "Moving between changes" below), as it moves past the changes under a folded folder.
 - Grouped by folder, **the folders inside a folded section keep the state they were in** and come back as they were
   when the section is unfolded (see "Flat or grouped by folder" below).
-- The heading shows **the same chevron a folder's row shows**, pointing right while the section is folded and down
-  while it is not; here it is not a control of its own, the whole band being one. Assistive technology is told whether
-  the section is unfolded. The band **carries no tooltip**, saying in text what it holds, and answers a hover with
+- The heading shows **a chevron**, pointing right while the section is folded and down while it is not; here it is
+  not a control of its own, the whole band being one. Assistive technology is told whether the section is unfolded. The band **carries no tooltip**, saying in text what it holds, and answers a hover with
   nothing: the chevron is what marks it as a control.
 - **The band is no tab stop of its own.** The change list is one tab stop, as "Rows and the keyboard" above says: a
   heading is reached by arrowing onto it with Up or Down, and **Enter** or **Space** on it folds and unfolds the
@@ -194,8 +193,9 @@ and Untracked, the comparison's one section — and within each section the chan
 - Within a folder, folders come first and then changes, each in the order the flat list has them (see "What is
   listed" above).
 - A chain of folders that each hold nothing but the next is one row, named by the whole chain — `tools/release`.
-- A folder's row is a chevron, a folder icon and its name. A change's row is as it is in the flat list, less the
-  folder its parent row now carries.
+- A folder's row is a folder icon, open or closed with the folder, and its name; the icon is the folder's expand
+  control, so the row has no chevron. A change's row is as it is in the flat list, less the folder its parent row now
+  carries.
 - Folders start open, and which ones the user folded away is kept per project for as long as the window is open: a
   reload or a restart opens them all again. A fold survives switching to the other view and back, and belongs to the
   section it was made in, so the same folder under another section stays open.
@@ -204,7 +204,7 @@ The rows take the keyboard as the Files mode's tree does (see "Rows and the keyb
 `docs/product/project-pane.md`): Up and Down move through them and the section headings between them, Home and End
 through the rows alone, typing a name's first letters moves to one, Right and Left open and close a folder (the other
 way round under a right-to-left language), and Enter opens a change or opens and closes a folder. A folder's row tells
-assistive technology whether it is open, and its chevron is named Expand or Collapse (see "Tooltips on icon-only
+assistive technology whether it is open, and its folder icon is named Expand or Collapse (see "Tooltips on icon-only
 controls" in `docs/product/labels-and-tooltips.md`).
 
 A change under a folded folder has no row, and it is the rows that the viewer moves through (see "Moving between

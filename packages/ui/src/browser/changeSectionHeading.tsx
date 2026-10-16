@@ -77,8 +77,8 @@ function keepHeadingFocus(band: HTMLButtonElement | null): void {
 
 /**
  * What a section's heading holds, in both layouts: one button filling the band, which folds the
- * section's rows away and unfolds them again (its key in `collapsed` is `sectionKey`), showing the
- * chevron a folder of the Files tree shows, the section's name and its count.
+ * section's rows away and unfolds them again (its key in `collapsed` is `sectionKey`), showing a
+ * chevron, the section's name and its count.
  *
  * The button is the whole band rather than a chevron inside it, which settles three things at once:
  * a press anywhere on the heading folds the section, the pointer target is the band itself rather
@@ -86,12 +86,11 @@ function keepHeadingFocus(band: HTMLButtonElement | null): void {
  * name assistive technology announces is the band's own text, so no label of its own has to repeat
  * the count beside the section's name (the same document's "Accessible names"). It is a react-aria
  * button rather than HeroUI's because HeroUI's brings a fill, a size and a padding of its own, where
- * this one has to be the band. It carries no tooltip, the band saying in text what a folder's
- * chevron needs one for; which state it is in reaches assistive technology through `aria-expanded`
- * and the eye through the chevron. The band answers a hover with nothing, where every row of the
- * lists tints: the chevron is the affordance here, as it is on a folder of the Files tree, and a
- * fill over the heading's control fill is a contrast pair nobody has measured. Measure it before adding
- * one.
+ * this one has to be the band. It carries no tooltip, the band saying in text what a folder row's
+ * icon needs one for; which state it is in reaches assistive technology through `aria-expanded` and
+ * the eye through the chevron. The band answers a hover with nothing, where every row of the lists
+ * tints: the chevron is the affordance here, and a fill over the heading's control fill is a
+ * contrast pair nobody has measured. Measure it before adding one.
  *
  * It is no tab stop of its own, as a control inside a collection's row is none: the list is one tab
  * stop, and `moveAcrossSectionHeadings`, which finds it by the `data-section-heading` it carries,
@@ -141,8 +140,7 @@ export function ChangeSectionHeading({
       onPress={toggle}
       className="flex h-full w-full min-w-0 items-center gap-2 px-3 text-start outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-app-focus data-[focus-visible]:ring-inset"
     >
-      {/* The chevron points the way the Files tree's does, and mirrors under right-to-left while
-          it points along the text. */}
+      {/* The chevron mirrors under right-to-left while it points along the text. */}
       {isCollapsed ? (
         <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 rtl:-scale-x-100" />
       ) : (

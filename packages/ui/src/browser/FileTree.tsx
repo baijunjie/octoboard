@@ -109,9 +109,9 @@ export function FileTree({
   const fade = useScrollFade({ ref: treeRef, className: "min-h-0 flex-1 overflow-auto py-1 outline-none" });
   // react-aria-components 1.21.1 decides whether a row can expand — its `aria-expanded` and Left /
   // Right — from the children it holds, not from `hasChildItems`, which it hands only to the
-  // chevron. So a collapsed directory, whose rows are not built, holds one stand-in row that is never
-  // on screen (a collapsed row's children are not rows of the tree), the same object every time. It
-  // costs the tree's `aria-rowcount` one row per collapsed directory.
+  // chevron slot (the folder icon). So a collapsed directory, whose rows are not built, holds one
+  // stand-in row that is never on screen (a collapsed row's children are not rows of the tree), the
+  // same object every time. It costs the tree's `aria-rowcount` one row per collapsed directory.
   // TODO: drop the stand-ins once react-aria-components hands `hasChildItems` to `useTreeItem`.
   const standIns = useMemo(() => new Map<string, TreeNode[]>(), []);
   const childrenOf = (node: Extract<TreeNode, { type: "directory" }>): TreeNode[] => {
@@ -185,7 +185,6 @@ export function FileTree({
       <TreeItem id={node.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS}>
         <TreeItemContent>
           <RowContent>
-            <span className="size-4 shrink-0" />
             <Icon aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
             <RowName name={name} className={missing ? "text-app-muted line-through" : undefined} />
             {missing && <span className="shrink-0 text-xs text-app-muted">{missing}</span>}
@@ -231,7 +230,6 @@ function StatusItem({ node }: { node: Extract<TreeNode, { type: "status" }> }): 
     <TreeItem id={node.key} textValue={node.status === "error" ? (node.message ?? "") : text} className={ROW_CLASS}>
       <TreeItemContent>
         <RowContent>
-          <span className="size-4 shrink-0" />
           {node.status === "loading" ? (
             <Spinner size="sm" aria-hidden="true" className="size-4 shrink-0" />
           ) : node.status === "error" ? (

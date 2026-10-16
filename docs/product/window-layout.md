@@ -486,8 +486,8 @@ parts of the window:
   on its own side, the breadcrumb's separators, the report panel's previous-page and next-page buttons, the file
   viewer's Previous file and Next file buttons and its wrap control, focus mode's back button, the directory browser's
   parent-directory entry, an action menu's submenu chevron, which points towards the side the submenu opens on — left
-  here — and the chevron of a collapsed project row or of a collapsed folder in a project pane's file tree or its
-  change tree, which points left. An expanded row's chevron points down, as in left-to-right.
+  here — and the chevron of a collapsed project row, which points left. An expanded row's chevron points down, as
+  in left-to-right.
 - Glyphs that hang their rows or lines off the leading side are mirrored too: the Projects heading's Expand all
   projects / Collapse all projects button, whose own chevrons stay vertical, the Git mode's Group by folder toggle in
   either of its two states, and the "View all" glyph of an archive submenu and of a focus mode's archived list.

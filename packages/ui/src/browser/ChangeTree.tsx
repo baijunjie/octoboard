@@ -132,7 +132,6 @@ function ChangeTreeRow({ item, isSelected }: { item: ChangeItem; isSelected: boo
     <TreeItem id={item.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS}>
       <TreeItemContent>
         <RowContent>
-          <span className="size-4 shrink-0" />
           <ChangeRowBody item={item} name={name} detail={detail} />
         </RowContent>
       </TreeItemContent>

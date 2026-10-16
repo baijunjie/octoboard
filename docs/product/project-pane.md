@@ -82,7 +82,7 @@ that read the same are always kept in the same order. The file viewer moves thro
 
 ### Rows and the keyboard
 
-- A folder opens and closes with a click, Enter, its chevron, or Right and Left (the other way round under a
+- A folder opens and closes with a click, Enter, its folder icon, or Right and Left (the other way round under a
   right-to-left language). A file opens in the file viewer with a click or Enter.
 - At a file or folder row's end is the button of its own actions, reached with the same Right and Left; a collapsed
   folder is expanded first (see "A row's actions" below).

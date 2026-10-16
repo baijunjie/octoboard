@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Folder, FolderOpen, FolderSymlink } from "lucide-react";
+import { Folder, FolderOpen, FolderSymlink } from "lucide-react";
 import React from "react";
 import { Button } from "react-aria-components";
 
@@ -11,24 +11,25 @@ import { useT } from "../i18n/react";
  * position alone. It includes `RowContent`'s `h-7` and the row's `my-0.5` margins. */
 export const ROW_HEIGHT = 32;
 
-/** The content of a directory's row: a chevron, a folder icon, the name and optional actions. */
+/** The content of a directory's row: a folder icon, the name and optional actions. The folder icon
+ * is the row's expand control and opens with the directory, so the row needs no chevron too; a
+ * symlinked directory's icon has no open form and stays the same. */
 export function DirectoryRow({ name, isExpanded, link = false, children }: { name: string; isExpanded: boolean; link?: boolean; children?: React.ReactNode }): React.ReactElement {
   const t = useT();
-  const chevronTitle = isExpanded ? t("browser.tree.collapse") : t("browser.tree.expand");
+  const toggleTitle = isExpanded ? t("browser.tree.collapse") : t("browser.tree.expand");
   const Icon = link ? FolderSymlink : isExpanded ? FolderOpen : Folder;
   return (
     <RowContent>
-      {/* React Aria keeps the chevron out of the tab order; the row does the same on a press,
-          so the chevron is for the pointer alone. React Aria's own label is a translation of
-          "Expand" that disagrees with the tooltip's wording (zh-CN "扩展"), so the label is the
-          tooltip's word from the catalog; React Aria appends the row's name through
-          aria-labelledby, which gives "Expand src". */}
-      <TitledControl title={chevronTitle}>
-        <Button slot="chevron" aria-label={chevronTitle} className="flex size-4 shrink-0 items-center justify-center text-app-muted outline-none">
-          {isExpanded ? <ChevronDown aria-hidden="true" className="size-3.5" /> : <ChevronRight aria-hidden="true" className="size-3.5 rtl:-scale-x-100" />}
+      {/* The folder icon fills React Aria's chevron slot. React Aria keeps it out of the tab
+          order; the row does the same on a press, so it is for the pointer alone. React Aria's own
+          label is a translation of "Expand" that disagrees with the tooltip's wording (zh-CN
+          "扩展"), so the label is the tooltip's word from the catalog; React Aria appends the row's
+          name through aria-labelledby, which gives "Expand src". */}
+      <TitledControl title={toggleTitle}>
+        <Button slot="chevron" aria-label={toggleTitle} className="flex size-4 shrink-0 items-center justify-center text-app-muted outline-none">
+          <Icon aria-hidden="true" className="size-4" />
         </Button>
       </TitledControl>
-      <Icon aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
       <RowName name={name} />
       {children}
     </RowContent>

@@ -46,7 +46,7 @@ Tab is how a control is reached, except for a control inside the row of a react-
 itself (a `GridList`, a `Tree`). There the row is the tab stop and Tab moves past the whole list, while the arrow key
 that runs along the row (`keyboardNavigationBehavior` defaults to `"arrow"`) moves between the row and its controls.
 That is the grid and tree pattern and it meets this rule. The row actions of the change list and of the Files tree,
-and the Files tree's chevron, all rely on it, so do not give such a control a tab stop of its own.
+and the Files tree's folder icons, all rely on it, so do not give such a control a tab stop of its own.
 
 `preventFocusOnPress` only keeps a *mouse* press from taking focus; the control still has to be reachable.
 
