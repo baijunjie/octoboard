@@ -90,6 +90,15 @@ export const connectionScenarios: Scenario[] = [
     steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(400), (ui) => ui.hoverTerminalLink("layout notes")],
   },
   {
+    id: "terminal-broken-url-hover",
+    group: TERMINAL,
+    category: "normal",
+    title: "Hovering a URL the program broke across rows",
+    description: "The pointer is on the last row of an address the program itself broke onto the next rows: the whole address, on every row it spans, is underlined, and Cmd/Ctrl+click opens the full address. The window's width decides where it breaks.",
+    state: connected("open"),
+    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(400), (ui) => ui.hoverTerminalUrl("lang=zh-Hans")],
+  },
+  {
     id: "terminal-reconnecting",
     group: TERMINAL,
     category: "exceptional",

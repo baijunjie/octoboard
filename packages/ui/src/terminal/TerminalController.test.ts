@@ -30,6 +30,7 @@ const { FakeTerminal } = vi.hoisted(() => {
     }
 
     loadAddon(): void {}
+    registerLinkProvider(): void {}
     onScroll(): void {}
     keyHandler?: (event: KeyboardEvent) => boolean;
     wheelHandler?: () => boolean;

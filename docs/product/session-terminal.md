@@ -141,9 +141,16 @@ Web addresses in a session's terminal are links:
   dormant session's preview replacing the screen. It also closes on any key press or pointer press, so pressing
   `Cmd` or `Ctrl` to open the link closes it. The target reaches no assistive technology, as none of the terminal's
   output does.
-- **An address the program itself breaks onto the next line is cut**: when the program ends the line partway through
-  an address — as Claude Code does inside a table's cells — only the part on the first line is recognised, and that
-  is what opens. An address that runs onto the next row only because the terminal is too narrow for it is recognised
+- **An address the program itself breaks onto the next line is joined**: when the program ends a row partway through
+  an address and carries on with it on the next row — as Claude Code does with a long line of text, usually after an
+  indent — the pieces are one link, which covers the rows it spans and opens the whole address. This holds when the
+  first piece runs to the terminal's last column, the next row's first non-blank text is made of address characters,
+  and the next row is not just the terminal's own wrap of the first; the continuation runs to the first character that
+  ends an address, and goes on to a further row when it too reaches the last column. An address that happens to end
+  exactly at the last column takes along a word that starts the next row, as the two cannot be told apart. An address
+  that stops short of the last column, one followed by a blank or a non-address character on the next row, and one
+  broken inside a table's cells (a border character follows it) are cut at the end of the first row, and that part is
+  what opens. An address that runs onto the next row only because the terminal is too narrow for it is recognised
   whole.
 
 ## A console with nothing in it
