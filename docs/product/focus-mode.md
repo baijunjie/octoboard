@@ -53,8 +53,10 @@ console session above them (see "A project's focus mode" below and "The binding 
 the parent-session preview described in "The archive view" in `docs/product/sidebar.md`, each row showing its
 agent's icon and its title on one compact line, with native token usage at the trailing end when its total is positive (see
 "Native session usage" in `docs/product/session-usage.md`). These preview rows show no creation or archive time.
-The heading counts every archived session in the view's scope, including children omitted from the preview. Clicking a row selects it. Its action menu offers **Rename**
-and **Delete** (which asks for confirmation; see "Deleting archived sessions" in `docs/product/deleting-sessions.md`).
+The heading counts every archived session in the view's scope, including children omitted from the preview. Clicking a
+row selects it while leaving it archived. Its action menu offers **Reopen**, which selects and resumes the session,
+and after a separator **Delete** (which asks for confirmation; see "Deleting archived sessions" in
+`docs/product/deleting-sessions.md`). Reopening follows "Archiving, interruption and resuming" in `docs/product/sessions.md`.
 Whenever any archived session is omitted — a child or a parent beyond the first ten — **View all** follows the
 preview as a row with the same alignment, hover feedback and keyboard focus treatment as the session rows; it
 opens the archive view and carries no count. With only archived children, the section shows its count and View all

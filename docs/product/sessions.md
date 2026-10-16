@@ -517,9 +517,9 @@ its prompt, at work or waiting for the user does have one.
 "Interrupted, archived and dormant sessions" in `docs/product/session-terminal.md`, which also names the two ways of showing an interrupted session that do not resume it).
 **Reopening** an archived session is the same relaunch, but selecting an archived session does not do it:
 the session is shown, still archived, and is reopened by typing into its terminal, by pressing "Reopen" on its
-terminal's card, or by pressing "Reopen" in the archive view (see "The archive view" in
-`docs/product/sidebar.md`). Either relaunches the same agent in the same directory and reassembles everything
-Octoboard injects.
+terminal's card, in a focus mode's archived-row action menu (see "What both views show" in
+`docs/product/focus-mode.md`), or in the archive view (see "The archive view" in `docs/product/sidebar.md`). Each
+relaunches the same agent in the same directory and reassembles everything Octoboard injects.
 
 - Where the agent has a stored conversation, that conversation is resumed.
 - A session that **nobody ever typed into** has no stored conversation on the agent's side; resuming it opens a fresh
@@ -625,9 +625,10 @@ How each of those looks and behaves is in "Project rows" and "The archive view" 
 
 ## Renaming a session
 
-A session's created name can be changed at any time, archived sessions included. The rename field contains that
-name alone; an empty name is rejected. An agent's terminal title remains separate (see "Displayed names" in
-`docs/product/session-titles.md`).
+A session that is not archived offers **Rename** in its action menu; an archived session's menu has no Rename item.
+The rename field contains the created name alone; an empty name is rejected. The daemon's `rename_session` request
+and an owner's `rename_session` tool still accept archived sessions. An agent's terminal title remains separate
+(see "Displayed names" in `docs/product/session-titles.md`).
 
 ## The terminal
 

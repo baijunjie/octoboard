@@ -125,6 +125,7 @@ export function Sidebar({
   onLoadProjectBranches,
   onSetSessionColour,
   onSetPinned,
+  onReopenSession,
   onArchiveSession,
   onOpenSettings,
 }: SidebarProps): React.ReactElement {
@@ -148,6 +149,7 @@ export function Sidebar({
     onLoadProjectBranches,
     onSetSessionColour,
     onSetPinned,
+    onReopenSession,
     onArchiveSession,
     onOpenSettings,
   } satisfies Record<keyof SidebarHandlers, unknown>;

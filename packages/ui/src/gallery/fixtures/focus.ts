@@ -249,6 +249,16 @@ export const focusScenarios: Scenario[] = [
     description: "The headings count zero live sessions and ten archived parents. All ten parents appear without View all. Compact archive rows omit dates and show bare usage only for positive totals. Long preview titles scroll only while the pointer is over their text; icons and row controls do not start them. The Show all project sessions switch is absent even when its saved preference is on.",
   },
   {
+    id: "focus-archived-session-menu",
+    group: GROUP,
+    category: "normal",
+    title: "Archived session actions",
+    state: archivePreviewTen,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
+    description: "The archived row's menu offers Reopen and destructive Delete, separated by a divider. Reopen selects the session and moves it from Archived to Sessions.",
+    steps: [(ui) => ui.press(ui.t("sidebar.session.actions", { title: previewLead.title }))],
+  },
+  {
     id: "focus-project-archive-overflow",
     group: GROUP,
     category: "normal",

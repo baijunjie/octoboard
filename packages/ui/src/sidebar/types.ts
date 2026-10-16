@@ -27,6 +27,7 @@ export interface SidebarHandlers {
   /** The project whose browser is currently visible, including a drawer or floating pane. */
   visibleBrowserProjectId?: string;
   onSelectSession: (session: Session) => void;
+  onReopenSession: (session: Session) => void;
   /** Enters a console session's focus mode and selects it, as one navigation. */
   onSwitchConsoleSession: (session: Session) => void;
   onOpenConsoleSession: (console: Console) => void;

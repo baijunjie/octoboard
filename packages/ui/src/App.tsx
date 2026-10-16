@@ -708,6 +708,7 @@ export function App(): React.ReactElement {
                 onLoadProjectBranches={loadProjectBranches}
                 onSetSessionColour={stableSetSessionColour}
                 onSetPinned={setPinned}
+                onReopenSession={stableReopenSession}
                 onArchiveSession={stableArchiveSession}
                 onOpenSettings={openSettingsAt}
                 open={panes.sidebarOpen}

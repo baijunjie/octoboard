@@ -7,6 +7,21 @@ import { createFixtureDaemon } from "./fixtureDaemon";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore";
 import { consoleOf, gitStatusOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 
+describe("the fixture daemon's session reopening", () => {
+  it("restores an archived session and its archived owners while preserving its children", async () => {
+    const owner = sessionOf("owner", "c", undefined, "Hub", "archived", { ended_at: 10 });
+    const lead = sessionOf("lead", "c", "p", "Lead", "archived", { bound_to: owner.id, ended_at: 20 });
+    const child = sessionOf("child", "c", "p", "Child", "archived", { bound_to: lead.id, ended_at: 30 });
+    const daemon = createFixtureDaemon({ id: "reopen", group: "Focus mode", category: "normal", title: "", state: snapshotState({ sessions: [owner, lead, child] }) });
+    await expect(daemon.request({ type: "resume_session", session: lead.id })).resolves.toEqual({ type: "ack" });
+    expect(daemon.store.getState().sessions.get(lead.id)).toEqual({ ...lead, status: "idle", ended_at: undefined });
+    expect(daemon.store.getState().sessions.get(owner.id)).toEqual({ ...owner, status: "idle", ended_at: undefined });
+    expect(daemon.store.getState().sessions.get(child.id)).toEqual(child);
+    await expect(daemon.request({ type: "resume_session", session: lead.id })).rejects.toMatchObject({ code: "session_already_running" });
+    await expect(daemon.request({ type: "resume_session", session: "missing" })).rejects.toMatchObject({ code: "unknown_session" });
+  });
+});
+
 describe("the fixture daemon's system directory action", () => {
   const project = projectOf("p", "c", "Website");
   const state = snapshotState({ projects: [project] });

@@ -16,8 +16,8 @@ switch chips, the archive view and the selected session's breadcrumb. Session-ow
 and the archive, account-switch and delete confirmations identify the session by the same name. Names in these
 surfaces' accessible labels and full-name tooltips follow the visible name.
 
-**Rename** edits the created name alone, including for an archived session; it does not replace the agent's terminal
-title (see "Renaming a session" in `docs/product/sessions.md`).
+**Rename** edits the created name alone; it does not replace the agent's terminal title. Its availability is described
+in "Renaming a session" in `docs/product/sessions.md`.
 
 ## Following an agent's title
 

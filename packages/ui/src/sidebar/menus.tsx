@@ -1,4 +1,4 @@
-import { Archive, ArrowLeftRight, Copy, Download, Focus, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Palette, Pencil, Pin, PinOff, Settings2, Terminal, Trash2, Undo2, Upload } from "lucide-react";
+import { Archive, ArrowLeftRight, Copy, Download, Focus, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Palette, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Upload } from "lucide-react";
 
 import { switchEntries } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/ActionMenu";
@@ -192,10 +192,9 @@ function colourSubmenu(t: Translate, handlers: SidebarHandlers, session: Session
 /** A session's actions: pin, rename, colour (a console session's), focus mode, switch account and
  * archive; an archived session (listed in focus mode) and one never used offer deleting instead.
  * `hasBoundSessions` says whether any session is bound to this one, which makes it used. Resuming
- * or reopening is no item: selecting an interrupted session resumes it, and an archived one is
- * reopened by typing to it or from the archive view. Shared by a project session's row and a
- * console session's row (`ConsoleSessionsSection` in `Sidebar.tsx`) — a console session cannot
- * archive itself (see "The console session's tools" in `docs/product/hub-orchestration.md`), so
+ * an interrupted session happens on selection; an archived session offers Reopen and Delete. Shared by a
+ * project session's row and a console session's row (`ConsoleSessionsSection` in `Sidebar.tsx`) —
+ * a console session cannot archive itself (see "The console session's tools" in `docs/product/hub-orchestration.md`), so
  * this is the only way to archive one, and the only place to switch its account. Focus mode is
  * offered for a console session alone; its own focus mode's header (`placement` `focused`) leaves
  * out Focus mode and Pin / Unpin. */
@@ -211,8 +210,9 @@ export function sessionMenu(
   const switchAccount = archived ? undefined : switchAccountSubmenu(t, handlers, session, accounts);
   const focusable = session.role === "console" && !archived && !focused;
   return [
+    ...(archived ? [{ label: t("sidebar.session.reopen"), icon: RotateCcw, onClick: () => handlers.onReopenSession(session) }] : []),
     ...(archived || focused ? [] : [pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned))]),
-    { label: t("sidebar.session.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) },
+    ...(!archived ? [{ label: t("sidebar.session.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }] : []),
     ...(session.role === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
     ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
     ...(switchAccount ? [switchAccount] : []),

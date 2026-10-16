@@ -146,6 +146,25 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
       const fromConfiguration = configurationReply(body);
       if (fromConfiguration !== undefined) return fromConfiguration;
       switch (body.type) {
+        case "resume_session": {
+          const current = store.getState();
+          const session = current.sessions.get(body.session);
+          if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
+          if (session.status !== "archived" && session.status !== "interrupted") return fail({ code: "session_already_running", params: { session: body.session }, message: "this session is not interrupted or archived" });
+          // Reopening a child brings back archived owners, while siblings stay archived.
+          const sessions = new Map(current.sessions);
+          const reopen = (record: Session) => sessions.set(record.id, { ...record, status: "idle", ended_at: undefined });
+          reopen(session);
+          let owner = session.bound_to;
+          while (owner) {
+            const record = sessions.get(owner);
+            if (!record || record.status !== "archived") break;
+            reopen(record);
+            owner = record.bound_to;
+          }
+          store.setState({ sessions });
+          return { type: "ack" };
+        }
         case "switch_project_branch": {
           if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
           const result = scenario.projectBranchSwitches?.[body.project]?.[body.branch];
