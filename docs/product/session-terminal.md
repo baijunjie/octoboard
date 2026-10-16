@@ -121,6 +121,13 @@ Web addresses in a session's terminal are links:
 - **What is a link**: an `http` or `https` address written out as plain text, and an OSC 8 hyperlink the program
   emits, whose visible text may differ from the address it leads to. An OSC 8 hyperlink to any other scheme is not a
   link at all. A link is underlined while the pointer is on it.
+- **Where a plain-text address ends**: at the first non-ASCII character, or at an ASCII delimiter such as whitespace,
+  a quote mark, a parenthesis, a brace or an angle bracket; a trailing punctuation mark such as `.`, `,`, `:`, `!` or
+  `?` is left out. So an address written straight into CJK
+  prose stops before the full-width bracket or the words that follow it. An address that spells its host or path in
+  raw non-ASCII characters is cut short at the first one, and one whose host starts with one (`http://例え.jp`) is
+  not a link at all; a percent-encoded address is recognised whole. An OSC 8 hyperlink is not affected, its target
+  being the one the program gives.
 - **A link opens only with the shortcut modifier held**: `Cmd`+click on a Mac, `Ctrl`+click elsewhere. A click with
   both `Cmd` and `Ctrl` held opens nothing. The address opens in the user's own browser — to a new tab, in the UI
   opened in a browser — as a web link in a Markdown document does (see "A Markdown file as a document" in

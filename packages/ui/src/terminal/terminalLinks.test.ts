@@ -2,7 +2,7 @@
 import { expect, it, vi } from "vitest";
 
 import { IS_MAC } from "../useWindowShortcut";
-import { linkBox, terminalLinkHandler } from "./terminalLinks";
+import { linkBox, TERMINAL_URL_REGEX, terminalLinkHandler } from "./terminalLinks";
 
 it("opens a link only on the platform's shortcut modifier", () => {
   const open = vi.fn(async () => {});
@@ -18,4 +18,10 @@ it("boxes a link from the cell grid", () => {
   expect(linkBox("u", { start: { x: 3, y: 22 }, end: { x: 5, y: 22 } }, grid)).toEqual({
     uri: "u", left: 120, top: 70, width: 30, height: 20,
   });
+});
+
+it("ends a plain-text address at the first non-ASCII character", () => {
+  const match = (text: string) => TERMINAL_URL_REGEX.exec(text)?.[0];
+  expect(match("看 http://localhost:5301/a.html?s=x（加&t=d")).toBe("http://localhost:5301/a.html?s=x");
+  expect(match("http://localhost:5301/a.html看深色")).toBe("http://localhost:5301/a.html");
 });

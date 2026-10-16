@@ -2,7 +2,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { type IBufferRange, Terminal } from "@xterm/xterm";
 
-import { type HoveredTerminalLink, linkBox, terminalLinkHandler } from "./terminalLinks";
+import { type HoveredTerminalLink, linkBox, TERMINAL_URL_REGEX, terminalLinkHandler } from "./terminalLinks";
 import { XTERM_THEMES } from "./xtermThemes";
 
 /** Shift, Ctrl, Alt: the keys xterm itself treats as modifier-only. */
@@ -198,7 +198,7 @@ export class TerminalController {
     });
     this.fitAddon = new FitAddon();
     this.term.loadAddon(this.fitAddon);
-    this.term.loadAddon(new WebLinksAddon(onLinkClick));
+    this.term.loadAddon(new WebLinksAddon(onLinkClick, { urlRegex: TERMINAL_URL_REGEX }));
     // The tooltip is placed against the viewport, so a scroll under the pointer leaves it behind.
     // xterm reports every line feed that scrolls the buffer, even while the view stays put under a
     // streaming output, so only a view that has actually moved counts.
