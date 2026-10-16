@@ -8,7 +8,7 @@ import type { Translate } from "../i18n/catalog";
 import type { Account, Console, Project, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { FocusShortcutKbd } from "./focusShortcut";
-import { archivedSessions, archivePreviewSessions } from "./order";
+import { archivePreviewSessions } from "./order";
 import { SessionColourSwatches } from "./SessionColourSwatches";
 import type { SidebarHandlers } from "./types";
 
@@ -47,19 +47,18 @@ function pinItem(t: Translate, pinned: boolean, onToggle: () => void): ActionMen
 export type ConsoleMenuHandlers = Pick<SidebarHandlers, "onOpenDialog" | "onSelectSession" | "onOpenArchive">;
 
 /** A console's actions, in the sidebar's header and on the console's avatar in the rail: among
- * them the console's archived console sessions, out of `sessions` (every session of the console,
- * live owners included). */
+ * them the console's archived console sessions, which `archived` lists (the callers pass exactly
+ * those, in no particular order). */
 export function consoleMenu(
   t: Translate,
   console: Console,
   handlers: ConsoleMenuHandlers,
-  sessions: Session[],
+  archived: Session[],
 ): ActionMenuEntry[] {
-  const archived = archivedSessions(sessions.filter((s) => s.role === "console"));
   return [
     { label: t("sidebar.console.addProject"), icon: FolderPlus, onClick: () => handlers.onOpenDialog({ kind: "new-project", console }) },
     { label: t("sidebar.console.edit"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "edit-console", console }) },
-    archiveSubmenu(t, t("sidebar.archive.consoleSessions"), archived, sessions, handlers.onSelectSession, () =>
+    archiveSubmenu(t, t("sidebar.archive.consoleSessions"), archived, archived, handlers.onSelectSession, () =>
       handlers.onOpenArchive({ console: console.id }),
     ),
     "separator",
@@ -164,8 +163,10 @@ function switchAccountSubmenu(
  * never been used — no conversation on the agent's side (no turn taken, none resumed at open),
  * bound to no owner and no session bound to it — and is deleted outright. One bound to an owner
  * keeps Archive even before its first prompt lands, since it reports to that owner, and so does an
- * owner that already has a session under it. */
+ * owner that already has a session under it. One still starting keeps Archive too: the daemon
+ * refuses to delete it, and archiving it works. */
 export function offersDelete(session: Session, hasBoundSessions: boolean): boolean {
+  if (session.status === "starting") return false;
   return session.status === "archived" || (!session.has_conversation && !session.bound_to && !hasBoundSessions);
 }
 
@@ -207,7 +208,8 @@ export function sessionMenu(
 ): ActionMenuEntry[] {
   const focused = placement === "focused";
   const archived = session.status === "archived";
-  const switchAccount = archived ? undefined : switchAccountSubmenu(t, handlers, session, accounts);
+  // The daemon refuses to switch the account of a session that is still starting (see `offersDelete`).
+  const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts);
   const focusable = session.role === "console" && !archived && !focused;
   return [
     ...(archived ? [{ label: t("sidebar.session.reopen"), icon: RotateCcw, onClick: () => handlers.onReopenSession(session) }] : []),

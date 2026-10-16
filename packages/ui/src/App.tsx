@@ -2,8 +2,9 @@ import { FadeOverflow } from "./components/FadeOverflow";
 import { GitBranch } from "lucide-react";
 import type { ActionMenuEntry } from "./components/ActionMenu";
 import { displayWirePath } from "./wirePath";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { setInteractionModality } from "react-aria";
+import { useShallow } from "zustand/react/shallow";
 import { errorPresentation } from "./errorPresentation";
 import { flushSync } from "react-dom";
 
@@ -51,15 +52,20 @@ import { belongsToFocus, focusAfterSelect, focusFor, focusKey, followsStartedCon
 import { useFocusShortcut } from "./sidebar/focusShortcut";
 import { useLastSessionPerConsole } from "./sidebar/lastSessionPerConsole";
 import { archiveNeedsConfirmation, consoleSessionAbove, switchStrip } from "./sidebar/order";
+import { useSession, useWaitingCount } from "./sessions/useSessions";
+import { indexSessions, sessionsOf } from "./sessions/sessionIndex";
 import { Sidebar } from "./sidebar/Sidebar";
 import { useSidebarView } from "./sidebar/sidebarView";
 import { useSwitchShortcut } from "./sidebar/switchShortcut";
 import type { ArchiveScope } from "./sidebar/types";
-import { useDaemon, useDaemonStore } from "./store";
+import { useDaemon, useDaemonStore, useDaemonStoreEqual } from "./store";
 import { terminalEmptyState } from "./terminal/emptyState";
 import { TerminalPane, type TerminalPaneHandle } from "./terminal/TerminalPane";
 import { nextWaitingSession, waitingSessionsInTreeOrder } from "./waiting";
 import { WelcomeScreen, type WelcomeScreenHandle } from "./WelcomeScreen";
+
+/** Shared and never changed, so that no sessions is the same value every time. */
+const NO_SESSIONS: Session[] = [];
 
 export function App(): React.ReactElement {
   const t = useT();
@@ -69,7 +75,6 @@ export function App(): React.ReactElement {
   const hosts = useDaemonStore((s) => s.hosts);
   const consoles = useDaemonStore((s) => s.consoles);
   const projects = useDaemonStore((s) => s.projects);
-  const sessions = useDaemonStore((s) => s.sessions);
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const accounts = useDaemonStore((s) => s.settings.accounts);
   // Keeps Settings out of the way of the question's dialog.
@@ -98,29 +103,44 @@ export function App(): React.ReactElement {
   // Only one of the two is mounted: the welcome screen stands in for the terminal while there is no console.
   const focusTerminal = () => (terminalRef.current ?? welcomeRef.current)?.focus();
 
-  const consoleList = useMemo(() => Array.from(consoles.values()), [consoles]);
-  const projectList = useMemo(() => Array.from(projects.values()), [projects]);
-  const sessionList = useMemo(() => Array.from(sessions.values()), [sessions]);
-  const selectedSession = selectedSessionId ? sessions.get(selectedSessionId) : undefined;
+  const consoleList = Array.from(consoles.values());
+  const projectList = Array.from(projects.values());
+  // The sessions are not read here as a whole: every status change of every session would render
+  // this component and everything it lays out. What it needs of them — the selected one, the
+  // aside owner's, a count — is read as that alone, and the rest looked up in the store by whoever
+  // acts (`allSessions`).
+  const selectedSession = useSession(selectedSessionId);
+  const allSessions = () => Array.from(store.getState().sessions.values());
   // Who the aside belongs to (`asideOwner.ts`): set by what the user does, and gone with what it
   // names. Computed here (rather than where it is consumed below) because the pane toggles, the
   // region cycle and the panes' width clamps need it too.
   const [asideOwnerState, setAsideOwner] = useState<AsideOwner>();
-  const asideOwner = liveOwner(asideOwnerState, projects, sessions);
+  const asideOwner = useDaemonStore((s) => liveOwner(asideOwnerState, s.projects, s.sessions));
   const asideProject = asideOwner?.kind === "project" ? projects.get(asideOwner.project) : undefined;
   const hasAside = asideOwner !== undefined;
-  const sidebarView = useSidebarView(consoleList, projects, sessions);
+  const sidebarView = useSidebarView(consoleList);
   useGitStatusSchedule(sidebarView.currentConsole?.id);
   const archiveConsole = archiveScope ? consoles.get(archiveScope.console) : undefined;
   const archiveProjectId = archiveScope && "project" in archiveScope ? archiveScope.project : undefined;
   const archiveProject = archiveProjectId ? projects.get(archiveProjectId) : undefined;
   const archiveConsoleSessionId = archiveScope && "consoleSession" in archiveScope ? archiveScope.consoleSession : undefined;
-  const archiveBoundTo = archiveConsoleSessionId ? sessions.get(archiveConsoleSessionId) : undefined;
+  const archiveBoundTo = useSession(archiveConsoleSessionId);
   // The archive view closes by itself once what it lists is gone.
   const archiveOpen =
     archiveConsole !== undefined &&
     (archiveProjectId === undefined || archiveProject !== undefined) &&
     (archiveConsoleSessionId === undefined || archiveBoundTo !== undefined);
+  // What the archive view lists, read here only while it is open, and the same array until one of
+  // those sessions changes.
+  const archiveSessions = useDaemonStore(
+    useShallow((s) => {
+      if (!archiveOpen || !archiveConsole) return NO_SESSIONS;
+      const index = indexSessions(s.sessions);
+      if (archiveProject) return sessionsOf(index.byProject, archiveProject.id);
+      const inConsole = sessionsOf(index.byConsole, archiveConsole.id);
+      return archiveBoundTo ? inConsole : inConsole.filter((session) => session.role === "console");
+    }),
+  );
 
   // `currentConsole` falls back to the first console (`sidebarView.ts`), so it is missing exactly
   // when there is no console at all, and `shownConsole` below with it. No console means no project
@@ -147,9 +167,11 @@ export function App(): React.ReactElement {
 
   // The terminal offers the next action for the current console and focus scope, even while the
   // sidebar previews another console. A selected session or an archive keeps that offer hidden.
-  const emptyState = selectedSession === undefined && !archiveOpen
-    ? terminalEmptyState(hosts !== undefined, currentConsole, sidebarView.focus, projectList, sessionList, agentAvailability)
-    : undefined;
+  const emptyState = useDaemonStoreEqual((s) =>
+    selectedSession === undefined && !archiveOpen
+      ? terminalEmptyState(hosts !== undefined, currentConsole, sidebarView.focus, projectList, currentConsole ? sessionsOf(indexSessions(s.sessions).byConsole, currentConsole.id) : NO_SESSIONS, agentAvailability)
+      : undefined,
+  );
   const emptyHasAction = emptyState !== undefined && emptyState.kind !== "no-agents";
   // A region off screen is skipped by F6: a hidden docked pane, a closed drawer, and a floating pane
   // too, which is only a hover away rather than shown. The top bar and the rail are always there.
@@ -193,7 +215,7 @@ export function App(): React.ReactElement {
   useEffect(() => {
     if (asideOwnerState && !asideOwner && hosts) setAsideOwner(undefined);
   }, [asideOwnerState, asideOwner, hosts]);
-  const lastSessionIn = useLastSessionPerConsole(selectedSession, sessions);
+  const lastSessionIn = useLastSessionPerConsole(selectedSession, () => store.getState().sessions);
   /** Shows the session last selected in `consoleId`, if it is still there, and the aside of that
    * session; each part only where `choices` says so. Like Back and Forward it only shows it: an
    * interrupted session is not resumed, an archived one not reopened. */
@@ -242,13 +264,8 @@ export function App(): React.ReactElement {
   // What the aside showed goes with its owner; focus that was inside it goes to the terminal.
   useEffect(() => refocusIfLost(focusTerminal), [ownerKey(asideOwner)]);
 
-  useWaitingNotifications(sessionList, consoles, projects, hosts !== undefined);
+  useWaitingNotifications(consoles, projects, hosts !== undefined);
   useStatusItemMenu({
-    consoles: consoleList,
-    projects: projectList,
-    sessions: sessionList,
-    consoleMap: consoles,
-    projectMap: projects,
     ready: hosts !== undefined,
     onSessionChosen: (session) => {
       selectSession(session);
@@ -260,7 +277,7 @@ export function App(): React.ReactElement {
   // window quittable. Only its confirmation is needed here: the main app has no separate "Quit"
   // control.
   const { exitConfirmOpen, closeExitConfirm, confirmExit } = useAppExit({
-    getSessions: () => sessionList,
+    getSessions: allSessions,
     requestShutdown: () => request({ type: "shutdown" }),
     toastError,
   });
@@ -343,7 +360,7 @@ export function App(): React.ReactElement {
     // the session: its console is the one shown, and focus mode on something the session does not
     // belong to is left, unless `enterFocus` asks for the focus mode of this console session itself.
     sidebarView.selectConsole(session.console_id);
-    const nextFocus = focusAfterSelect(sidebarView.focus, session, enterFocus, sessions);
+    const nextFocus = focusAfterSelect(sidebarView.focus, session, enterFocus, store.getState().sessions);
     if (nextFocus !== sidebarView.focus) sidebarView.setFocus(nextFocus);
     if (archiveOpen) {
       setArchiveScope(undefined);
@@ -447,9 +464,11 @@ export function App(): React.ReactElement {
   // dependency of its own. The whole session map is not: entering focus mode through a summary
   // chip deliberately keeps the selection, and an unrelated status event must not drop that view.
   // Project context includes its hidden console-bound sessions, whatever the card visibility.
-  const consoleSessionAboveSelection = selectedSession && consoleSessionAbove(selectedSession, (id) => sessions.get(id))?.id;
+  const consoleSessionAboveSelection = useDaemonStore(
+    (s) => selectedSession && consoleSessionAbove(selectedSession, (id) => s.sessions.get(id))?.id,
+  );
   useEffect(() => {
-    if (sidebarView.focus && selectedSession && !belongsToFocus(sidebarView.focus, selectedSession, sessions)) {
+    if (sidebarView.focus && selectedSession && !belongsToFocus(sidebarView.focus, selectedSession, store.getState().sessions)) {
       sidebarView.setFocus(undefined);
     }
   }, [selectedSession?.id, selectedSession?.status, selectedSession?.bound_to, consoleSessionAboveSelection]);
@@ -465,9 +484,14 @@ export function App(): React.ReactElement {
   // The console sessions a console session's focus mode offers to switch between (its switch strip),
   // for ⌃Tab.
   const currentConsoleId = sidebarView.currentConsole?.id;
-  const switchableConsoleSessions = useMemo(
-    () => (currentConsoleId !== undefined ? switchStrip(sessionList, currentConsoleId).map((e) => e.consoleSession) : []),
-    [sessionList, currentConsoleId],
+  // Only while a console session is in focus, where the strip is on screen and the shortcut exists.
+  const stripConsoleId = sidebarView.focus && "consoleSession" in sidebarView.focus ? currentConsoleId : undefined;
+  const switchableConsoleSessions = useDaemonStore(
+    useShallow((s) =>
+      stripConsoleId !== undefined
+        ? switchStrip(sessionsOf(indexSessions(s.sessions).byConsole, stripConsoleId), stripConsoleId).map((e) => e.consoleSession)
+        : NO_SESSIONS,
+    ),
   );
   // Pressing a chip is a selection like pressing the session's row, which also enters its focus mode.
   const switchConsoleSession = (session: Session) => selectSession(session, { enterFocus: true });
@@ -501,11 +525,12 @@ export function App(): React.ReactElement {
   const navigation = useNavigationHistory({
     location,
     ready: hosts !== undefined,
-    isLive: (target) => isLive(target, { consoles, projects, sessions }),
+    isLive: (target, sessions) => isLive(target, { consoles, projects, sessions }),
     // Sets the state straight, not through `selectSession`: going back to an interrupted session
     // must not resume it. A focus mode outside the session's context is left, as selecting does.
     apply: (target) => {
       if (target.console) sidebarView.selectConsole(target.console);
+      const sessions = store.getState().sessions;
       const session = target.session ? sessions.get(target.session) : undefined;
       sidebarView.setFocus(focusFor(resolveFocus(target.focus, target.console, projects, sessions), session, sessions));
       setSelectedSessionId(target.session);
@@ -547,43 +572,41 @@ export function App(): React.ReactElement {
 
   // Archiving at once takes the row away from under a menu that returns focus to its trigger in
   // that row, so once the session reads archived focus is handed to the terminal, where the
-  // keyboard user works next.
-  const archivedAtOnce = useRef<string | undefined>(undefined);
+  // keyboard user works next. The session's status is read here, as a value, because nothing else
+  // renders this component for a session that is not selected.
+  const [archivingId, setArchivingId] = useState<string>();
+  const archivingStatus = useDaemonStore((s) => (archivingId ? s.sessions.get(archivingId)?.status : undefined));
   useEffect(() => {
-    const id = archivedAtOnce.current;
-    if (!id || sessions.get(id)?.status !== "archived") return;
-    archivedAtOnce.current = undefined;
+    if (archivingStatus !== "archived") return;
+    setArchivingId(undefined);
     if (document.activeElement !== document.body) return;
     setInteractionModality("keyboard");
     focusTerminal();
-  });
+  }, [archivingStatus]);
   // A session being resumed still asks: archiving it would cut the resume short.
   const archiveSession = (session: Session) => {
-    const live = sessions.get(session.id) ?? session;
-    if (resumingIds.has(live.id) || archiveNeedsConfirmation(sessionList, live)) {
+    const live = store.getState().sessions.get(session.id) ?? session;
+    if (resumingIds.has(live.id) || archiveNeedsConfirmation(allSessions(), live)) {
       openDialog({ kind: "archive-session", session });
       return;
     }
-    archivedAtOnce.current = live.id;
+    setArchivingId(live.id);
     request({ type: "archive_session", session: live.id }).catch((err: unknown) => {
-      archivedAtOnce.current = undefined;
+      setArchivingId(undefined);
       toastError(errorPresentation(err as Error));
     });
   };
 
-  const waitingSessions = useMemo(
-    () => waitingSessionsInTreeOrder(consoleList, projectList, sessionList),
-    [consoleList, projectList, sessionList],
-  );
+  const waitingCount = useWaitingCount();
   const selectNextWaiting = () => {
-    const next = nextWaitingSession(waitingSessions, selectedSessionId);
+    const next = nextWaitingSession(waitingSessionsInTreeOrder(consoleList, projectList, allSessions()), selectedSessionId);
     if (next) selectSession(next);
   };
 
   // Handed to the sidebar's and the rail's rows, the archive view's rows and the top bar. The React
-  // Compiler cannot keep these closures from changing with every daemon event (they capture the
-  // store's maps, or write refs), so each is one function for good: an event then renders again
-  // only the rows whose own records it changed.
+  // Compiler cannot keep these closures from changing with every render (they capture the selected
+  // session, the focus, or write refs), so each is one function for good: the memoised rows are then
+  // rendered again only for their own records.
   const stableSelectSession = useStableHandler((session: Session) => selectSession(session));
   const stableSwitchConsoleSession = useStableHandler(switchConsoleSession);
   const stableOpenConsoleSession = useStableHandler(openConsoleSession);
@@ -598,6 +621,15 @@ export function App(): React.ReactElement {
   const stableNextWaiting = useStableHandler(selectNextWaiting);
   const stableToggleSidebar = useStableHandler(panes.toggleSidebar);
   const stableToggleAside = useStableHandler(panes.toggleAside);
+  const stableFocus = useStableHandler(sidebarView.setFocus);
+  const stableOpenProjectDirectory = useStableHandler(openProjectDirectory);
+  const stableOpenProjectTerminal = useStableHandler(openProjectTerminal);
+  const stableCopyProjectName = useStableHandler((project: Project) => copyProjectName?.(project));
+  const stablePullProjectBranch = useStableHandler(pullProjectBranch);
+  const stablePushProjectBranch = useStableHandler(pushProjectBranch);
+  const stableLoadProjectBranches = useStableHandler(loadProjectBranches);
+  const stableSetPinned = useStableHandler(setPinned);
+  const stableOpenSettingsAt = useStableHandler(openSettingsAt);
   const stableBack = useStableHandler(navigation.back);
   const stableForward = useStableHandler(navigation.forward);
 
@@ -658,7 +690,6 @@ export function App(): React.ReactElement {
       <div className="flex min-h-0 flex-1">
         <Rail
           consoles={consoleList}
-          sessions={sessionList}
           currentConsoleId={sidebarView.currentConsole?.id}
           onSelectConsole={stableSwitchConsole}
           onConsoleEnter={panes.sidebarPeek.hoverConsole}
@@ -667,7 +698,7 @@ export function App(): React.ReactElement {
           onOpenDialog={stableOpenDialog}
           onSelectSession={stableSelectSession}
           onOpenArchive={stableOpenArchive}
-          waitingCount={waitingSessions.length}
+          waitingCount={waitingCount}
           onNextWaiting={stableNextWaiting}
           onOpenSettings={openSettings}
           focusTerminal={focusTerminal}
@@ -688,7 +719,6 @@ export function App(): React.ReactElement {
               {panes.sidebarOpen && <Scrim label={t("app.closeSessions")} onClose={panes.closeSidebar} />}
               <Sidebar
                 projects={projectList}
-                sessions={sessionList}
                 selectedSessionId={selectedSessionId}
                 shownConsole={shownConsole}
                 focus={previewing ? undefined : sidebarView.focus}
@@ -696,21 +726,21 @@ export function App(): React.ReactElement {
                 onSwitchConsoleSession={stableSwitchConsoleSession}
                 onOpenConsoleSession={stableOpenConsoleSession}
                 onOpenDialog={stableOpenDialog}
-                onFocus={sidebarView.setFocus}
+                onFocus={stableFocus}
                 onOpenArchive={stableOpenArchive}
                 visibleBrowserProjectId={panes.asideShown || panes.asidePeek.active ? asideProject?.id : undefined}
                 onBrowseProject={stableBrowseProject}
-                onOpenProjectDirectory={openProjectDirectory}
-                onOpenProjectTerminal={openProjectTerminal}
-                onCopyProjectName={copyProjectName}
-                onPullProjectBranch={pullProjectBranch}
-                onPushProjectBranch={pushProjectBranch}
-                onLoadProjectBranches={loadProjectBranches}
+                onOpenProjectDirectory={stableOpenProjectDirectory}
+                onOpenProjectTerminal={stableOpenProjectTerminal}
+                onCopyProjectName={clipboard ? stableCopyProjectName : undefined}
+                onPullProjectBranch={stablePullProjectBranch}
+                onPushProjectBranch={stablePushProjectBranch}
+                onLoadProjectBranches={stableLoadProjectBranches}
                 onSetSessionColour={stableSetSessionColour}
-                onSetPinned={setPinned}
+                onSetPinned={stableSetPinned}
                 onReopenSession={stableReopenSession}
                 onArchiveSession={stableArchiveSession}
-                onOpenSettings={openSettingsAt}
+                onOpenSettings={stableOpenSettingsAt}
                 open={panes.sidebarOpen}
                 peek={panes.sidebarDocked ? undefined : panes.sidebarPeek}
                 onPeekPress={stableCommitPreview}
@@ -750,11 +780,7 @@ export function App(): React.ReactElement {
                       console: archiveConsole,
                       project: archiveProject,
                       boundTo: archiveBoundTo,
-                      sessions: archiveProject
-                        ? sessionList.filter((s) => s.project_id === archiveProject.id)
-                        : archiveBoundTo
-                          ? sessionList.filter((s) => s.console_id === archiveConsole.id)
-                          : sessionList.filter((s) => s.console_id === archiveConsole.id && s.role === "console"),
+                      sessions: archiveSessions,
                       accounts,
                       selectedSessionId,
                       onSelect: stableSelectSession,

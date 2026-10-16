@@ -1,7 +1,7 @@
 import { DaemonRequestError } from "../daemon-client";
 import { consoleAccount, inheritedAccount } from "../accountChoices";
 import { daemonMessage } from "../daemonMessage";
-import { errorPresentation } from "../errorPresentation";
+import { errorPresentation, noticeErrorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
 import { currentLanguage } from "../i18n/language";
 import type { BrowseEntry, Console, DirEntry, Event, RequestBody, Session, SessionRecordsPresence } from "../protocol";
@@ -102,10 +102,14 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
     if (toastsRaised) return;
     toastsRaised = true;
     for (const { code, params, message, ...toast } of scenario.toasts ?? []) {
+      const failure = code && toast.kind === "notice" ? noticeErrorPresentation(code, params ?? {}, message) : undefined;
       emitToast({
         ...toast,
-        ...(code && { daemonError: new DaemonRequestError(message, code, params ?? {}) }),
-        message: code ? daemonMessage(currentLanguage(), code, params ?? {}, message, store.getState()) : message,
+        // As the store presents a daemon's: a failed launch as the failure it reports.
+        ...(code && {
+          daemonError: failure ?? new DaemonRequestError(message, code, params ?? {}),
+        }),
+        message: code ? daemonMessage(currentLanguage(), failure ? `${code}.title` : code, params ?? {}, message, store.getState()) : message,
       });
     }
   };

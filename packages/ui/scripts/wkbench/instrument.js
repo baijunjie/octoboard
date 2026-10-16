@@ -1,6 +1,7 @@
 // Injected before the page's own scripts. Records animation frames, terminal-socket traffic,
 // control-socket requests and React commits, and offers the waits, the lookups and the press the
-// scenarios build on. It only observes: nothing here needs a hook in the app.
+// scenarios build on. It only observes: the one thing it reads from the app is the terminal's
+// text view, which the WebGL renderer leaves out of the DOM.
 (() => {
   const P = (window.__perf = { frames: [], ws: [], commits: [], reqs: [], ctlIn: [] });
   const loop = () => {
@@ -102,8 +103,16 @@
 
   // The stand-in agent prints its pid once, in the status line under the transcript, after its spinner has
   // stopped redrawing: the pid in the terminal's rows says which session the terminal shows and that the
-  // end of its replay has been parsed.
-  P.terminalPid = () => /pid (\d+)/.exec(document.querySelector(".xterm-rows")?.textContent ?? "")?.[1];
+  // end of its replay has been parsed. The text is read from xterm's buffer through the read-only view the
+  // controller hangs on the terminal's element, since the WebGL renderer draws no row elements.
+  P.terminalText = () => {
+    const view = document.querySelector(".xterm")?.octoboardTerminalText;
+    if (!view) return "";
+    let text = "";
+    for (let y = 0; y < view.rows(); y++) text += view.row(y) + "\n";
+    return text;
+  };
+  P.terminalPid = () => /pid (\d+)/.exec(P.terminalText())?.[1];
   // Resolves, with the time or `null` on timeout, once the terminal shows a session other than `before`.
   P.waitTerminalChange = (before, timeoutMs = 30000) =>
     new Promise((resolve) => {

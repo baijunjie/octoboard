@@ -3,8 +3,10 @@ import { useEffect, useRef } from "react";
 import { useLatest } from "../components/useLatest";
 import { t } from "../i18n/language";
 import { usePlatform } from "../platform/react";
-import type { Console, Project, Session } from "../protocol";
+import type { Console, Project } from "../protocol";
 import { sessionWithLocation } from "../sessionLabel";
+import { useWaitingIds } from "../sessions/useSessions";
+import { useDaemon } from "../store";
 
 /**
  * Fires a system notification and keeps the Dock badge at the number of sessions currently
@@ -24,14 +26,19 @@ import { sessionWithLocation } from "../sessionLabel";
  * the platform has none (a browser without notifications, any browser's badge) the feature is
  * absent, and with the permission declined or a call failing they are swallowed rather than
  * surfaced, since the tree's own raised-hand marker already carries the same information.
+ *
+ * It reads the sessions from the store itself, as the ids of the waiting ones, which are the same
+ * array until a session starts or stops waiting: a status event that changes nothing about who
+ * waits does not render the caller.
  */
 export function useWaitingNotifications(
-  sessions: Session[],
   consoles: Map<string, Console>,
   projects: Map<string, Project>,
   ready: boolean,
 ): void {
   const { notifications, badge } = usePlatform();
+  const { store } = useDaemon();
+  const waitingList = useWaitingIds();
   const previousWaitingRef = useRef<Set<string> | undefined>(undefined);
   const lastBadgeCountRef = useRef<number | undefined>(undefined);
   // `consoles`/`projects` only feed the notification body text, not the waiting/newly-waiting diff
@@ -42,8 +49,7 @@ export function useWaitingNotifications(
   useEffect(() => {
     if ((!notifications && !badge) || !ready) return;
 
-    const waiting = sessions.filter((s) => s.status === "waiting_user");
-    const waitingIds = new Set(waiting.map((s) => s.id));
+    const waitingIds = new Set(waitingList);
     const previousIds = previousWaitingRef.current;
     previousWaitingRef.current = waitingIds;
 
@@ -59,7 +65,9 @@ export function useWaitingNotifications(
     }
 
     if (!notifications || previousIds === undefined) return;
-    const newlyWaiting = waiting.filter((s) => !previousIds.has(s.id));
+    const newlyWaiting = waitingList
+      .filter((id) => !previousIds.has(id))
+      .flatMap((id) => store.getState().sessions.get(id) ?? []);
     if (newlyWaiting.length === 0) return;
 
     void (async () => {
@@ -76,5 +84,5 @@ export function useWaitingNotifications(
         }
       }
     })();
-  }, [sessions, ready, notifications, badge]);
+  }, [waitingList, ready, notifications, badge]);
 }

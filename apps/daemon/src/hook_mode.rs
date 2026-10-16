@@ -1,5 +1,6 @@
-//! `octoboardd hook` — what the per-session hook script execs. It reads the agent's hook payload
-//! from stdin and posts it to the daemon.
+//! `octoboardd hook` — what the per-session hook script execs, and what Claude Code's command hook
+//! execs directly. It reads the agent's hook payload from stdin and posts it to the daemon. A
+//! Claude Code that takes HTTP hooks posts to the daemon itself and never runs this.
 //!
 //! Its only hard requirement is to be invisible when anything goes wrong: every one of the three
 //! agents renders a failing hook to the user (an error block on Claude Code, a scrollback line on

@@ -5,6 +5,9 @@ import { toast } from "@heroui/react";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
+import { daemonMessage } from "../daemonMessage";
+import { noticeErrorPresentation } from "../errorPresentation";
+import { isolate } from "../i18n/isolate";
 import { sessionOf } from "../gallery/fixtures/builders";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { Toasts } from "./Toasts";
@@ -103,6 +106,7 @@ it("renders a coded shell timeout with a separate title and command while plain 
     expect(description?.querySelector("code")?.textContent).toBe("/bin/zsh -l -i -c 'env -0'");
     expect(description?.textContent).toContain("10s");
     expect(description?.textContent).not.toContain("plain fallback");
+    expect(description?.querySelector("h3")).toBeNull();
     act(() => deliver({ kind: "error", message: "a plain failure" }));
     expect([...document.querySelectorAll('[data-slot="toast-title"]')].some((element) => element.textContent === "a plain failure")).toBe(true);
   } finally {
@@ -154,6 +158,60 @@ it("shows a coded notice under the session's location, the path as code in the d
     const description = document.querySelector('[data-slot="toast-description"]');
     expect(description?.querySelector("code")?.textContent).toBe("/Users/dev/code");
     expect(document.querySelector('[data-slot="toast-title"]')?.querySelector("code")).toBeNull();
+  } finally {
+    act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
+it("shows a failed launch's shell timeout once: the title names the launch, the details sit beneath it", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  stubWidth(1280);
+  let deliver!: (request: import("../store").ToastRequest) => void;
+  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /></DaemonProvider>));
+    // Worded as the store does: the title without the reason, since the details carry it.
+    const params = { title: "Draft the notes", reason_code: "shell_environment_timeout", shell: "/bin/zsh", command: "env -0", timeout: "10s" };
+    const error = noticeErrorPresentation("launch_failed", params, "fallback");
+    const message = daemonMessage("en", "launch_failed.title", params, "fallback", daemon.store.getState());
+    act(() => deliver({ kind: "notice", message, daemonError: error }));
+    expect(document.querySelector('[data-slot="toast-title"]')?.textContent).toBe(`Could not start “${isolate("Draft the notes")}”`);
+    const description = document.querySelector('[data-slot="toast-description"]');
+    expect(description?.querySelector("h3")).toBeNull();
+    expect(description?.querySelector("code")?.textContent).toBe("/bin/zsh -l -i -c 'env -0'");
+    expect(document.body.textContent?.split("did not finish within").length).toBe(2);
+  } finally {
+    act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
+it("shows the error heading above a structured error's details when the toast is titled by its session's location", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  stubWidth(1280);
+  let deliver!: (request: import("../store").ToastRequest) => void;
+  const session = { id: "s1", console_id: "c1", project_id: "p1" } as unknown as import("../protocol").Session;
+  const source: Daemon = {
+    ...daemon,
+    store: createStateStore({ sessions: new Map([["s1", session]]) }),
+    onToast: (listener) => { deliver = listener; return () => {}; },
+  };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /></DaemonProvider>));
+    const error = new DaemonRequestError("fallback", "shell_environment_timeout", { shell: "/bin/zsh", command: "env -0", timeout: "10s" });
+    act(() => deliver({ kind: "error", message: error.message, session: "s1", daemonError: error }));
+    const description = document.querySelector('[data-slot="toast-description"]');
+    expect(description?.querySelector("h3")?.textContent).toBe("Shell environment timed out");
+    expect(description?.querySelector("code")?.textContent).toBe("/bin/zsh -l -i -c 'env -0'");
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
     act(() => root.unmount());

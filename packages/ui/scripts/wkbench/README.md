@@ -123,11 +123,12 @@ code.
 1. In `driver.js`, add a branch on `scenario` that ends in `log({ done: true })`, using `step(name, target, attach)` for
    a timed press (`attach` waits for the terminal to change session) and `P.summarize(t0, t1)` for frame pacing;
    `P.card`, `P.avatar` and `P.press` find and press the app's controls.
-   Anything the scenario needs from the page must come from the DOM or the daemon's fixtures, never from a hook in
-   the app. Needing more fixtures means a change in `fixtures.mjs` (a stand-in's behaviour per project is its
-   `.standin.json`: `lines`, `spinner_secs`, `fps`, `winch_reprint`, `append_every`). Give every session a finite
-   `spinner_secs`: a spinner that never stops keeps filling the daemon's replay buffer, and the replay a step measures
-   would change with the run's age.
+   Anything the scenario needs from the page must come from the DOM or the daemon's fixtures; the one hook in the app
+   is the terminal's read-only text view (`octoboardTerminalText` on `.xterm`, `P.terminalText`), because the WebGL
+   renderer leaves the DOM without the terminal's text. Needing more fixtures means a change in `fixtures.mjs` (a
+   stand-in's behaviour per project is its `.standin.json`: `lines`, `spinner_secs`, `fps`, `winch_reprint`,
+   `append_every`). Give every session a finite `spinner_secs`: a spinner that never stops keeps filling the daemon's
+   replay buffer, and the replay a step measures would change with the run's age.
 2. Add its name to `SCENARIOS` in `run.mjs` and a branch in `printResults` for how its lines become a table (a
    scenario whose steps carry `pressJs` is already printed by the generic one). A separate script, like `domcost.js`,
    is wired in `runScenario`'s `script` choice.

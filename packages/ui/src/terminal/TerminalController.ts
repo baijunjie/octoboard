@@ -1,5 +1,6 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { type IBufferRange, Terminal } from "@xterm/xterm";
 
 import { TerminalLinkColors } from "./linkColors";
@@ -94,6 +95,15 @@ const WRITE_SLICE_BYTES = 64 * 1024;
 
 /** How long the terminal's size must hold still before `syncSize` reports it to the daemon. */
 const RESIZE_SETTLE_MS = 120;
+
+/** What `exposeReadOnlyView` hangs on the terminal's element. */
+export interface TerminalTextView {
+  cols: () => number;
+  rows: () => number;
+  /** The text of viewport row `y`, one character per column. */
+  row: (y: number) => string;
+}
+export type TerminalElement = HTMLElement & { octoboardTerminalText?: TerminalTextView };
 
 export type TermStatus = "connecting" | "open" | "closed" | "not_running";
 
@@ -294,6 +304,7 @@ export class TerminalController {
   mount(container: HTMLElement): void {
     this.container = container;
     this.term.open(container);
+    this.exposeReadOnlyView();
     // Observed: fitting or clearing the terminal in the same task as `open()` throws from inside
     // xterm's own scheduled work, where no caller's `try` can catch it — and an uncaught throw
     // there takes the whole window down with it. Deferring by a frame avoids it. This is anchored
@@ -302,8 +313,53 @@ export class TerminalController {
     this.openFrame = requestAnimationFrame(() => {
       this.openFrame = undefined;
       this.touchable = true;
+      this.useWebglRenderer();
       this.fit();
     });
+  }
+
+  /**
+   * Hangs a read-only view of the screen's text on the terminal's element, for the gallery's pointer
+   * steps and the wkbench harness: the WebGL renderer leaves `.xterm-rows` empty, so the DOM no
+   * longer says what the terminal shows. It reads the buffer and changes nothing.
+   */
+  private exposeReadOnlyView(): void {
+    const { term } = this;
+    const view: TerminalTextView = {
+      cols: () => term.cols,
+      rows: () => term.rows,
+      // A wide character's second cell and an empty cell both read as a space, so a string index
+      // is a column (for text of single UTF-16 units).
+      row: (y) => {
+        const line = term.buffer.active.getLine(term.buffer.active.viewportY + y);
+        if (!line) return "";
+        let text = "";
+        for (let x = 0; x < term.cols; x++) {
+          const cell = line.getCell(x);
+          text += cell?.getChars() || " ";
+        }
+        return text;
+      },
+    };
+    if (term.element) (term.element as TerminalElement).octoboardTerminalText = view;
+  }
+
+  /**
+   * Draws the terminal on the GPU instead of with DOM elements: a streaming agent repaints
+   * constantly, and the DOM renderer's per-row elements are the costly way to do that. Loaded after
+   * `open()`, as the addon needs the terminal's element, and given up on without a trace where the
+   * webview has no WebGL 2 or loses the context later: xterm then goes on with its DOM renderer,
+   * which costs more per repaint for a streaming agent and may draw some details, such as
+   * glyph edges, a little differently from the GPU renderer.
+   */
+  private useWebglRenderer(): void {
+    try {
+      const webgl = new WebglAddon();
+      webgl.onContextLoss(() => webgl.dispose());
+      this.term.loadAddon(webgl);
+    } catch {
+      // Stays on the DOM renderer.
+    }
   }
 
   dispose(): void {

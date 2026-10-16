@@ -1,22 +1,23 @@
 //! Checking a project's git status against its remote, on request — the daemon keeps no timer of
 //! its own for that; the client drives the schedule and asks with `refresh_git_status` (see
 //! `apps/daemon/PROTOCOL.md`'s "Daemon behaviour, per project"). Each project is checked at most
-//! once at a time, concurrently with the others of its console, and at most once every
-//! `GIT_CHECK_MIN_INTERVAL`. What a check does not go to the remote for, the local branch header,
-//! is also re-read on its own when the project's refs change (`crate::git_watch`) and around a
-//! push or a switch (`publish_reread`).
+//! once at a time, at most `SWEEP_WIDTH` projects at once across every console and client, and at
+//! most once every `GIT_CHECK_MIN_INTERVAL`. What a check does not go to the remote for, the local
+//! branch header, is also re-read on its own when the project's refs change (`crate::git_watch`)
+//! and around a push or a switch (`publish_reread`).
 //!
 //! `pull_project_now` is the manual entry point, driven by `pull_project_branch`: one project's
-//! ordinary check, but past the floor above and fast-forwarding whatever the setting says.
+//! ordinary check, but past the floor above, ahead of the places a sweep waits for, and
+//! fast-forwarding whatever the setting says.
 //!
 //! `pull_behind_projects` is the module's third entry point, driven by `update_settings` the
 //! moment **Automatically pull repositories** is turned on: it only fast-forwards branches already
 //! behind their upstream, goes nowhere near the remote, and is therefore outside the floor above —
-//! sharing the in-flight claim with the checks, but not their minimum interval.
+//! sharing the in-flight claim and the places with the checks, but not their minimum interval.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::Context;
@@ -25,7 +26,7 @@ use crate::env_shell;
 use crate::git_remote::{self, Remote};
 use crate::hostfs;
 use crate::protocol::{GitActivity, GitStatus, Project};
-use crate::state::AppState;
+use crate::state::{AppState, GitCheckClaim};
 
 /// Upper bound on one `git` subprocess (`fetch`, `status`, `merge`). `GIT_TERMINAL_PROMPT=0` and
 /// `ssh -oBatchMode=yes` (see `crate::git_env`) turn a missing credential or an unknown host key
@@ -47,25 +48,73 @@ const GIT_COMMAND_TIMEOUT: Duration = Duration::from_secs(120);
 /// 5-minute pollers can multiply the work.
 const GIT_CHECK_MIN_INTERVAL: Duration = Duration::from_secs(60);
 
-/// Checks every one of `projects`' git status, concurrently; a project already being checked, or
-/// one whose last check completed less than `GIT_CHECK_MIN_INTERVAL` ago, is skipped. Fire-and-
-/// forget: each check reports itself through `AppState::publish_git_status` as it progresses, and
-/// there is nothing here for a caller to wait on.
+/// How long a check runs before its project's badge swaps to the in-flight icon. A check that
+/// needs no network answers well inside it, so the badge goes from the last status to the new one
+/// in a single event instead of two, which across a console of projects is two events each per
+/// sweep.
+const CHECKING_PUBLISH_DELAY: Duration = Duration::from_millis(400);
+
+/// How many projects the sweeps work on at once, across every sweep of every client. Each check
+/// starts several `git` and `ssh` processes, so a console of dozens of projects all checked at
+/// once starts hundreds of them together and holds the blocking pool, which every user-visible path
+/// shares, for as long as the slowest remote takes.
+const SWEEP_WIDTH: usize = 4;
+
+/// The places `SWEEP_WIDTH` allows, held by a sweep's check from the moment it starts until it is
+/// over.
+static SWEEP_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(SWEEP_WIDTH);
+
+/// Checks every one of `projects`' git status, at most `SWEEP_WIDTH` at a time, the rest waiting
+/// for a place; a project already being checked, or one whose last check completed less than
+/// `GIT_CHECK_MIN_INTERVAL` ago, is skipped. Fire-and-forget: each check reports itself through
+/// `AppState::publish_git_status` as it progresses, and there is nothing here for a caller to wait
+/// on. A waiting project holds its claim, so another sweep does not queue it twice.
 pub fn refresh(state: &Arc<AppState>, projects: Vec<Project>) {
     for project in projects {
-        spawn_check(state, project, false);
+        let Some(claim) = claim_if_due(state, &project, false) else {
+            continue;
+        };
+        tokio::spawn(run_when_placed(state.clone(), project, claim));
     }
 }
 
-/// Claims the project's check, or does nothing if one is already running, then runs it on a
-/// blocking thread: every step below shells out to `git`, which blocks. The claim is held by the
-/// closure itself and released by `release_unless_rerun_owed` after each check, or on drop if a
-/// step panics, so a panic still frees the project for the next sweep instead of excluding it
-/// forever. Unless `force`, the project must also be due (`GIT_CHECK_MIN_INTERVAL`), and the
-/// fast-forward follows the setting; `force` is the manual pull, which ignores both. A forced
-/// request that finds a check running leaves it to that check, which runs once more, forced,
-/// before releasing the claim.
-fn spawn_check(state: &Arc<AppState>, project: Project, force: bool) {
+/// Waits for a sweep place, or for a manual pull to promote the claim past the wait, then starts
+/// the claim. Returns the place (none when promoted), whether the check is forced, and the project
+/// read again, since the wait may have been long: a project removed meanwhile must not be
+/// fetched, and one that cannot be read back is skipped for the same reason as in
+/// `pull_behind_projects`. `None` when the semaphore is closed or the project is gone.
+async fn wait_for_place(
+    state: &AppState,
+    project: &Project,
+    claim: &mut GitCheckClaim,
+) -> Option<(Option<tokio::sync::SemaphorePermit<'static>>, bool, Project)> {
+    let slot = tokio::select! {
+        slot = SWEEP_SLOTS.acquire() => Some(slot.ok()?),
+        () = claim.promoted() => None,
+    };
+    let force = claim.start();
+    let Ok(Some(project)) = state.store.get_project(&project.id) else {
+        return None;
+    };
+    Some((slot, force, project))
+}
+
+/// A sweep's check, waiting for a place before it runs. A manual pull that arrives while it waits
+/// ends the wait and makes this the forced check, with no place of its own, so the pull is one
+/// fetch and does not queue behind the sweep.
+async fn run_when_placed(state: Arc<AppState>, project: Project, mut claim: GitCheckClaim) {
+    let Some((slot, force, project)) = wait_for_place(&state, &project, &mut claim).await else {
+        return;
+    };
+    // The place is held until the check is over, panicked or not: the claim, which the blocking
+    // task owns, is what a panic must release, and it does so on drop.
+    let _ = tokio::task::spawn_blocking(move || run_checks(&state, project, claim, force)).await;
+    drop(slot);
+}
+
+/// The project's claim for a check, or `None` when it is not due (unless `force`) or one already
+/// holds it. Unless `force`, the claim is a queued one, for a check that waits for a place.
+fn claim_if_due(state: &Arc<AppState>, project: &Project, force: bool) -> Option<GitCheckClaim> {
     if !force
         && !due_for_check(
             state.git_check_completed_at(&project.id),
@@ -73,48 +122,57 @@ fn spawn_check(state: &Arc<AppState>, project: Project, force: bool) {
             GIT_CHECK_MIN_INTERVAL,
         )
     {
-        return;
+        return None;
     }
-    let claim = if force {
+    if force {
         state.claim_git_check_forced(&project.id)
     } else {
-        state.claim_git_check(&project.id)
-    };
-    let Some(mut claim) = claim else {
-        return;
-    };
-    let state = state.clone();
-    tokio::task::spawn_blocking(move || {
-        let mut project = project;
-        let mut force = force;
-        loop {
-            check_project(&state, &project, force);
-            // A repository made, or reachable, after the daemon started is not watched yet.
-            crate::git_watch::watch_now(&state, &project);
-            if !claim.release_unless_rerun_owed() {
-                break;
-            }
-            // The rerun comes after an arbitrary wait: the project may have been removed meanwhile,
-            // and a removed project's directory must not be fetched or merged. Dropping the claim
-            // here releases it.
-            match state.store.get_project(&project.id) {
-                Ok(Some(fresh)) => project = fresh,
-                _ => break,
-            }
-            force = true;
+        state.claim_git_check_queued(&project.id)
+    }
+}
+
+/// Runs the project's check on the current (blocking) thread: every step below shells out to
+/// `git`, which blocks. The claim is held by this function and released by
+/// `release_unless_rerun_owed` after each check, or on drop if a step panics, so a panic still
+/// frees the project for the next sweep instead of excluding it forever. The fast-forward follows
+/// the setting unless `force`, the manual pull, which ignores it. A forced request that finds a
+/// check running leaves it to that check, which runs once more, forced, before releasing the claim;
+/// found queued for a place, it makes that check run forced at once instead.
+fn run_checks(state: &Arc<AppState>, project: Project, mut claim: GitCheckClaim, force: bool) {
+    let mut project = project;
+    let mut force = force;
+    loop {
+        check_project(state, &project, force);
+        // A repository made, or reachable, after the daemon started is not watched yet.
+        crate::git_watch::watch_now(state, &project);
+        if !claim.release_unless_rerun_owed() {
+            break;
         }
-    });
+        // The rerun comes after an arbitrary wait: the project may have been removed meanwhile,
+        // and a removed project's directory must not be fetched or merged. Dropping the claim
+        // here releases it.
+        match state.store.get_project(&project.id) {
+            Ok(Some(fresh)) => project = fresh,
+            _ => break,
+        }
+        force = true;
+    }
 }
 
 /// One project's check and fast-forward, started right now at the user's request: the same work
 /// `refresh` does, but it ignores `GIT_CHECK_MIN_INTERVAL` and the **Automatically pull
 /// repositories** setting — asking for it is the consent the setting would otherwise give. A
-/// project already being checked gets one more forced check once that one ends, so the request
-/// results in a fast-forward attempt, except while the settings-triggered `pull_behind_projects`
-/// pass holds the claim: the request is left to that pass, which makes no rerun.
+/// project already running its check gets one more forced check once that one ends, and one still
+/// waiting for a place in a sweep, or in the settings-triggered `pull_behind_projects` pass, runs
+/// forced at once in its stead, so the request results in a fast-forward attempt either way.
 /// Fire-and-forget, like `refresh`.
 pub fn pull_project_now(state: &Arc<AppState>, project: Project) {
-    spawn_check(state, project, true);
+    // One project at the user's request, so it does not wait for a place behind a sweep.
+    let Some(claim) = claim_if_due(state, &project, true) else {
+        return;
+    };
+    let state = state.clone();
+    tokio::task::spawn_blocking(move || run_checks(&state, project, claim, true));
 }
 
 /// Whether a project last completed at `last_completed` is due for another check at `now`, given
@@ -131,7 +189,7 @@ fn due_for_check(last_completed: Option<Instant>, now: Instant, floor: Duration)
 /// outright: every step that can fail records its message on `GitStatus.error` and the check
 /// continues, so a transient fetch failure still leaves the branch name and last known numbers
 /// showing. `force_pull` fast-forwards a pullable branch whether or not the setting is on.
-fn check_project(state: &AppState, project: &Project, force_pull: bool) {
+fn check_project(state: &Arc<AppState>, project: &Project, force_pull: bool) {
     let path = PathBuf::from(&project.path);
 
     // Checked before the first publish, not after it: publishing `repository: true` and only then
@@ -169,20 +227,14 @@ fn check_project(state: &AppState, project: &Project, force_pull: bool) {
         activity: GitActivity::Checking,
         error: None,
     };
-    // Only the published in-flight status carries the last check's branch, counts and error, so
-    // the badge swaps just its glyph while the check runs instead of blanking for its duration.
-    // The working `status` stays blank: it is what the fast-forward gate reads, and a `git status`
-    // that fails below must not leave cached numbers standing as that gate. Taken from the cache
-    // rather than read from the repository, since one more `git` process here would hold the
-    // spinner back by however long a process takes to start.
-    let in_flight = match state.git_status(&project.id).filter(|s| s.repository) {
-        Some(previous) => GitStatus {
-            activity: GitActivity::Checking,
-            ..previous
-        },
-        None => status.clone(),
+    // Published once the check has been running for `CHECKING_PUBLISH_DELAY`, not at once — except
+    // for the user's own request, whose click is answered by the in-flight icon straight away.
+    let delay = if force_pull {
+        Duration::ZERO
+    } else {
+        CHECKING_PUBLISH_DELAY
     };
-    state.publish_git_status(in_flight);
+    let checking = DelayedChecking::start(state, status.clone(), delay);
 
     // The remotes are read with their URLs by the same call that tells which one to fetch, so
     // keeping the recorded URL current costs the check no `git` of its own.
@@ -204,6 +256,8 @@ fn check_project(state: &AppState, project: &Project, force_pull: bool) {
         }
     }
     read_branch_header(&path, &mut status);
+    // From here the published statuses are the check's own: Pulling, then the final one.
+    checking.cancel();
 
     if (force_pull || auto_pull_enabled(state)) && pullable(&status) {
         fast_forward(state, &path, &mut status);
@@ -217,7 +271,62 @@ fn check_project(state: &AppState, project: &Project, force_pull: bool) {
     state.publish_git_status(status);
 }
 
-/// Fast-forwards every project already behind its upstream, concurrently — what turning
+/// The in-flight status of a check, published only if the check is still running after the delay
+/// it is started with. Only the published in-flight status carries the last check's branch,
+/// counts and error, so the badge swaps just its glyph while the check runs instead of blanking for
+/// its duration; it is taken from the cache when it is published rather than read from the
+/// repository, since one more `git` process would hold the spinner back by however long a process
+/// takes to start. The working status of the check stays blank: it is what the fast-forward gate
+/// reads, and a `git status` that fails must not leave cached numbers standing as that gate.
+struct DelayedChecking {
+    cancelled: Arc<Mutex<bool>>,
+}
+
+impl DelayedChecking {
+    /// Starts the timer from a blocking thread of the runtime; without one (outside the daemon)
+    /// the in-flight status is simply never published. `blank` is the in-flight status of a
+    /// project with no previous one.
+    fn start(state: &Arc<AppState>, blank: GitStatus, delay: Duration) -> Self {
+        let cancelled = Arc::new(Mutex::new(false));
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            let (state, cancelled) = (state.clone(), cancelled.clone());
+            runtime.spawn(async move {
+                tokio::time::sleep(delay).await;
+                // Held across the publish, so a `cancel` that returns has left nothing of this
+                // timer to publish after the check's own statuses.
+                let cancelled = cancelled.lock().expect("checking flag lock poisoned");
+                if *cancelled {
+                    return;
+                }
+                let in_flight = match state.git_status(&blank.project).filter(|s| s.repository) {
+                    Some(previous) => GitStatus {
+                        activity: GitActivity::Checking,
+                        ..previous
+                    },
+                    None => blank,
+                };
+                state.publish_git_status(in_flight);
+            });
+        }
+        Self { cancelled }
+    }
+
+    /// Stops the timer from publishing, waiting out a publish already under way.
+    fn cancel(&self) {
+        *self.cancelled.lock().expect("checking flag lock poisoned") = true;
+    }
+}
+
+/// A check that panics must not leave its timer to publish an in-flight status nothing will end.
+impl Drop for DelayedChecking {
+    fn drop(&mut self) {
+        if let Ok(mut cancelled) = self.cancelled.lock() {
+            *cancelled = true;
+        }
+    }
+}
+
+/// Fast-forwards every project already behind its upstream, at most `SWEEP_WIDTH` at a time — what turning
 /// **Automatically pull repositories** on does right away, instead of leaving the branches to wait
 /// for the client's next five-minute sweep. The statuses held in `AppState` only pick which
 /// projects are worth visiting, and nothing here goes to the remote: a fetch would duplicate the
@@ -240,15 +349,43 @@ pub fn pull_behind_projects(state: &Arc<AppState>) {
         let Ok(Some(project)) = state.store.get_project(&status.project) else {
             continue;
         };
-        let Some(claim) = state.claim_git_check(&project.id) else {
+        let Some(claim) = state.claim_git_check_queued(&project.id) else {
             continue;
         };
-        let state = state.clone();
-        tokio::task::spawn_blocking(move || {
-            let _claim = claim;
-            pull_project(&state, &project, status);
-        });
+        tokio::spawn(pull_when_placed(state.clone(), project, status, claim));
     }
+}
+
+/// One `pull_behind_projects` project, waiting for a place as a sweep's check does, and for the
+/// same reasons: the claim is queued, so a manual pull that arrives meanwhile ends the wait and
+/// makes this its forced check instead of queueing behind the pass. The setting and the project
+/// are read again once the place is won, since the wait may have been long: the user may have
+/// turned the setting off again, or removed the project. A manual pull that arrives while the
+/// fast-forward runs is owed a forced check, which runs before the claim is let go.
+async fn pull_when_placed(
+    state: Arc<AppState>,
+    project: Project,
+    status: GitStatus,
+    mut claim: GitCheckClaim,
+) {
+    let Some((slot, force, project)) = wait_for_place(&state, &project, &mut claim).await else {
+        return;
+    };
+    let _ = tokio::task::spawn_blocking(move || {
+        if force {
+            return run_checks(&state, project, claim, true);
+        }
+        if auto_pull_enabled(&state) {
+            pull_project(&state, &project, status);
+        }
+        if claim.release_unless_rerun_owed() {
+            if let Ok(Some(fresh)) = state.store.get_project(&project.id) {
+                run_checks(&state, fresh, claim, true);
+            }
+        }
+    })
+    .await;
+    drop(slot);
 }
 
 /// One project's immediate fast-forward. The cached `status` picked the project out, but the gate

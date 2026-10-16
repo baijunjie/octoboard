@@ -236,12 +236,16 @@ export function TerminalPane({
   }, [colorTheme]);
 
   const isDormant = session ? isDormantStatus(session.status) : false;
+  // A starting session's agent is still being launched, so there is no process to connect to and
+  // nothing saved to show. The pane waits, covered, for the status that says it is up, and
+  // attaches then.
+  const isStarting = session?.status === "starting";
   // Whether the session's socket should currently be up at all, per the session's own stored
   // status rather than the controller's last-known socket outcome — a reattach can land on
   // `not_running` by losing a race against the session genuinely ending, so only the authoritative
   // `Session` record decides between offering Resume (truly dormant) and Reconnect (still live,
   // just not connected right now).
-  const sessionIsLive = session ? isLive(session.status) : false;
+  const sessionIsLive = session ? isLive(session.status) && !isStarting : false;
 
   // Keyed on the id alone, so a status change does not produce a new callback.
   const attachedId = session?.id;
@@ -266,6 +270,14 @@ export function TerminalPane({
     // connect the terminal socket to for a session with no running process
     // (`apps/daemon/PROTOCOL.md`), only the output its last one left. Once the resume's
     // `session_upserted` broadcast flips the status, this effect re-runs and attaches for real.
+    if (session && isStarting) {
+      // Nothing to connect to yet, and the broadcast that ends it re-runs this effect, which
+      // attaches for real. The screen is cleared: it may hold the session shown before.
+      reconnectAttemptsRef.current = 0;
+      controller.detach({});
+      controller.disarmWake();
+      return;
+    }
     if (!session || isDormant) {
       // `detach` loads the saved screen once on entering dormancy, then keeps that snapshot.
       // Whatever attempts were spent belonged to the process that is gone.
@@ -291,7 +303,7 @@ export function TerminalPane({
     // terminal on every status update. Only the user's Reconnect (`reconnectNow`) retries then.
     if (controller.currentSessionId === session.id && reconnectAttemptsRef.current >= MAX_AUTO_RECONNECT_ATTEMPTS) return;
     attachCurrent(true);
-  }, [session, isDormant, attachCurrent, terminalUrl]);
+  }, [session, isDormant, isStarting, attachCurrent, terminalUrl]);
 
   // A fresh snapshot (the control connection came back, possibly after an outage longer than the
   // automatic attempts' budget) is a deliberate chance to recover a terminal that gave up: the
@@ -383,7 +395,7 @@ export function TerminalPane({
   const cover: { text: string; spinner: boolean } | undefined = trouble
     ? { text: t(trouble === "disconnected" ? "terminal.disconnected" : "terminal.reconnecting"), spinner: trouble === "reconnecting" }
     : loading
-      ? { text: t(resuming ? "terminal.resuming" : "terminal.loading"), spinner: true }
+      ? { text: t(resuming ? "terminal.resuming" : isStarting ? "terminal.starting" : "terminal.loading"), spinner: true }
       : undefined;
 
   return (

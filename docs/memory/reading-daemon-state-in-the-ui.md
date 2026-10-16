@@ -21,8 +21,29 @@ memo whose body reads the map, or `x.y` where its dependencies say `x?.y`, makes
 component ("Existing memoization could not be preserved"), with no lint finding. A `useEffect` of that shape compiles
 and may keep reading the map in its body.
 
-The exception is a derivation whose job is to re-run on every event of that kind — the menu bar's session list, the
-waiting notifications, a rail badge's activity — which does take the map itself.
+A derivation whose job is to re-run on every event of that kind does not take the map through a render either: the
+menu bar's session list subscribes to the store itself (`store.subscribe` in `useStatusItemMenu`) and rebuilds from
+`getState()`, and the waiting notifications select the ids of the waiting sessions, an array that keeps its identity
+until a session starts or stops waiting (`useShallow`).
+
+## Read a session through the narrowest selector that answers the question
+
+`App` does not subscribe to the `sessions` map: that would render the whole window on every status event of every
+session. It reads the one session it needs (`useSession`), counts or derives a value inside a selector (the waiting
+count, the aside owner, the archive's list), and calls `store.getState().sessions` inside a handler or effect that acts
+on all of them. A list component reads its own group from the session index (`useProjectSessions`,
+`useConsoleSessions`) and a row reads what it alone depends on (`useHasBoundSessions`, `useSession(bound_to)`). A
+selector that builds a new object each call is wrapped in `useShallow`, or in `useDaemonStoreEqual` when the result
+holds objects of its own. The daemon client hands the events that arrive within one frame to the store as one batch, and
+the reducer keeps the record it holds when an upsert repeats it, so an event that changes nothing renders nothing.
+
+So nothing may count on `App`, or on a list's parent such as the sidebar's `ConsoleBody`, rendering again when some
+session changes. Code that worked only because they used to — an effect with no dependency list that checks a ref
+against the store on every render, a hook that measures its children on each of its owner's renders — silently stops
+running, and nothing fails. Select the value such code waits for, so that its change renders the component (as
+`archivingStatus` in `packages/ui/src/App.tsx` does), or have it watch the DOM itself (`useFlip`'s
+`ResizeObserver`). Code brought in from a branch that still reads the whole `sessions` map in such a component is
+rewritten the same way when it is merged, never given the map back.
 
 ## An empty collection means "nothing has arrived yet" until `hosts` is set
 
@@ -42,11 +63,14 @@ visible at the call site in `App.tsx`, or drive the pre-snapshot inputs directly
 ## A request's reply arrives after its own change is already in the store
 
 A mutating request's handler in `apps/daemon/src/coordinator.rs` broadcasts the change first and answers the caller
-second, and those are two separate messages on the one control socket. `DaemonClient` applies each event to the store as
-it arrives and resolves `request` only on the correlated reply, so by the time the code after an `await request(...)`
-runs, the store already holds the change — and React may already have rendered on it, which is what decides whether the
-component that sent the request, or anything the new state hides, is still mounted. That interleaving is not fixed, and
-nothing fails loudly when it goes the other way.
+second, and those are two separate messages on the one control socket. `DaemonClient` does not apply a broadcast the
+moment it arrives: it queues broadcasts and hands them to the store as one batch on the next animation frame (after
+250 ms at the latest, where frames are not running). A reply is different: `receive()` first flushes the queued
+broadcasts, so the store holds every change that came ahead of the reply, and then settles the request. So by the time
+the code after an `await request(...)` runs, the store already holds the change, but React may have rendered on it
+already (the frame's flush came first) or may not have yet (the reply flushed it a moment ago), which is what decides
+whether the component that sent the request, or anything the new state hides, is still mounted. That interleaving is
+not fixed, and nothing fails loudly when it goes the other way.
 
 So write what follows an `await request(...)` to be correct under either order: do not sample "has it happened yet?"
 once, and do not assume the sender, or the surface the change replaces, is still there to act on. When something has to
@@ -65,13 +89,11 @@ Stamp such events from a counter that grows on every read instead — the Git mo
 `packages/ui/src/browser/gitRequests.ts`, or one of the same shape outside it — and keep clocks for durations and
 wall-clock time only (refresh intervals, relative times, expiry).
 
-## A session's terminal title is not steady text: key nothing disruptive off it as sent
+## A session's terminal title arrives without its spinner glyph
 
 Agent CLIs animate a glyph at the start of their terminal title while they work (Claude Code cycles ◐◓◑◒ and shows ✳
-when idle; Codex and other terminal tools use braille spinners), and each frame reaches the UI as a new
-`terminal_title` on the session. So a working session's title changes continually even when nothing the user cares
-about has changed. Anything that treats a title change as a real change — rebuilding a native menu or other surface
-that resets when replaced, firing a notification, deduplicating by the title text, sending it on over IPC — churns at
-the spinner's rate. Where a derived value must stay put while the session works, strip the leading glyphs first with
-`withoutSpinnerGlyphs` (`packages/ui/src/lifecycle/statusItemMenu.ts`) rather than writing another pattern, and keep
-showing the title as sent wherever the product docs say it is shown as the agent sent it.
+when idle; Codex and other terminal tools use braille spinners). The daemon strips those leading glyphs before it
+stores or publishes the title (`apps/daemon/src/terminal_title.rs`), so a working session does not send a
+`terminal_title` update per frame and no UI code needs to strip them again: the title in the store is the steady text,
+and deduplicating by it, rebuilding a native menu from it or notifying on it does not churn at the spinner's rate.
+Do not add a glyph pattern to the UI; if one slips through, fix the daemon's list.

@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import * as reactAria from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { App } from "./App";
 import { setProjectBrowserMode, useProjectBrowserState } from "./browser/browserState";
 import { mountForTooltip } from "./components/tooltipTestSupport";
-import { consoleOf, projectOf, snapshotState } from "./gallery/fixtures/builders";
+import { consoleOf, projectOf, sessionOf, snapshotState } from "./gallery/fixtures/builders";
 import { isolate } from "./i18n/isolate";
 import { PlatformProvider } from "./platform/react";
 import type { Project } from "./protocol";
@@ -14,6 +15,10 @@ import { ThemeProvider } from "./theme";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+vi.mock("react-aria", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-aria")>();
+  return { ...actual, setInteractionModality: vi.fn(actual.setInteractionModality) };
+});
 vi.mock("./browser/LazyProjectBrowser", () => ({
   LazyProjectBrowser: ({ project }: { project: Project }) => {
     const state = useProjectBrowserState(project.id);
@@ -32,7 +37,7 @@ vi.mock("./terminal/TerminalController", () => ({
   },
 }));
 
-function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Promise<void> }) {
+function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Promise<void> }, withSession = false) {
   vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: !narrow && media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   document.documentElement.style.setProperty("--rail-width", "48px");
   document.documentElement.style.setProperty("--breakpoint-docked", "1148px");
@@ -43,8 +48,9 @@ function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Pro
   });
   const console_ = consoleOf("c-actions", "Main");
   const projects = [projectOf("p-actions", console_.id, "Website"), projectOf("p-other", console_.id, "API")];
+  const sessions = withSession ? [sessionOf("s-archive", console_.id, "p-actions", "Fix bug", "idle")] : [];
   const daemon: Daemon = {
-    store: createStateStore(snapshotState({ consoles: [console_], projects })),
+    store: createStateStore(snapshotState({ consoles: [console_], projects, sessions })),
     request: vi.fn(async () => ({ type: "ack" })) as Daemon["request"],
     toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
     dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
@@ -165,4 +171,18 @@ it("keeps the restore confirmation open and displays a refusal", async () => {
   await act(async () => document.querySelector('[role="alertdialog"] form')!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Finish the merge first.");
   expect(daemon.toastNotice).not.toHaveBeenCalled();
+});
+
+it("hands focus on once an unselected session archived from its menu reads archived", async () => {
+  const { daemon } = mountApp(false, undefined, true);
+  await press(`Actions for session ${isolate("Fix bug")}`);
+  vi.mocked(reactAria.setInteractionModality).mockClear();
+  await press("Archive");
+  expect(daemon.request).toHaveBeenCalledWith({ type: "archive_session", session: "s-archive" });
+  expect(reactAria.setInteractionModality).not.toHaveBeenCalled();
+  (document.activeElement as HTMLElement | null)?.blur();
+  await act(async () => daemon.store.setState((state) => ({
+    sessions: new Map(state.sessions).set("s-archive", { ...state.sessions.get("s-archive")!, status: "archived" }),
+  })));
+  expect(reactAria.setInteractionModality).toHaveBeenCalledWith("keyboard");
 });

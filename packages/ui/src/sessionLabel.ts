@@ -53,6 +53,7 @@ export function sessionWithLocation(
  * docs/product/sessions.md. A row's own `aria-label` wins over one on an element nested inside it,
  * so the wire enum must never be the only place a status is put into words. */
 const STATUS_KEY = {
+  starting: "session.status.starting",
   working: "session.status.working",
   waiting_user: "session.status.waitingUser",
   idle: "session.status.idle",

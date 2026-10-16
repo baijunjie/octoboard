@@ -46,9 +46,13 @@ What it holds, in this order:
 
 **While a check is in flight the badge keeps what it was showing** — the branch name (or short commit id), the
 counts and a failed check's message — and only its glyph turns into the spinning refresh glyph, the warning triangle
-included; the whole badge is replaced once the check finishes. Meanwhile a local re-read can still update the branch
-and the counts (see "Following changes to the repository's refs" below). A project with no status yet has nothing to
-keep, so until its first check finishes the badge shows the spinning glyph alone.
+included; the whole badge is replaced once the check finishes. The glyph turns only once the check has been running
+for about 0.4 seconds, so a check that finishes sooner goes straight from the old state to the new one without
+showing as in flight; a check asked for with **Pull current branch** shows as in flight at once. A project waiting
+for its turn (see "When a project is checked" below) is not yet in flight. Meanwhile a local re-read can still update
+the branch and the counts (see "Following changes to the repository's refs" below). A project with no status yet has
+nothing to keep, so once its first check shows as in flight the badge shows the spinning glyph alone, and nothing
+before that.
 
 **While a push is in flight the badge describes the push**, including over a check or pull running at the same
 time. All three use the same leading refresh glyph; the tooltip, accessible name and animated count arrow follow the
@@ -101,10 +105,13 @@ Nothing is checked while no client is connected either: the schedule belongs to 
 daemon. Turning **Automatically pull repositories** on is not a check and is not limited this way; see "Turning the
 switch on" below.
 
-The daemon will not start a second check of a project while one is already running, and skips a project whose last
-check finished less than a minute ago — so several open windows, each on its own interval, cannot multiply the work. A
-project skipped that way simply keeps the status it already had. Pull current branch is the exception to both (see
-"Pulling one project by hand" below). **The five-minute interval and the one-minute floor are fixed**, not settings.
+**At most four projects are checked at once**, across every window and console; the rest of a round wait their
+turn, so a console with many projects is worked through four at a time. The daemon will not start a second check of
+a project while one is already running or waiting its turn, and skips a project whose last check finished less than a
+minute ago — so several open windows, each on its own interval, cannot multiply the work. A project skipped that way
+simply keeps the status it already had. Pull current branch is the exception to all three (see "Pulling one project
+by hand" below). **The five-minute interval, the one-minute floor and the four at once are
+fixed**, not settings.
 
 A status is never stored: after a daemon restart there is none for any project, and a project's badge shows nothing
 again until its next check, or until its refs change (see "Following changes to the repository's refs" below).
@@ -230,14 +237,13 @@ without waiting; a success is not toasted. It runs that project's check right aw
 under exactly the rules above, whether or not **Automatically pull repositories** is on; choosing it is the consent
 the switch would otherwise give. The one-minute floor does not apply.
 
-If a check of the project is already running, nothing starts alongside it: as soon as it ends, one more check runs,
-with the fast-forward, so the request ends in a fast-forward attempt. However many requests arrive meanwhile, they
-share that one extra check, and it does not run at all if the project has been removed in the meantime.
-
-The one exception is a request that arrives while the project is being visited by the pass that turning
-**Automatically pull repositories** on starts (see "Turning the switch on" below). The request is left to that pass:
-no check follows it and nothing is fetched, so the branch moves only if the pass's own local re-read finds it behind
-its upstream with no commits of its own.
+Pull current branch does not wait its turn behind the four at once (see "When a project is checked" above). If a
+check of the project is only waiting its turn — in a round of checks, or in the pass that turning **Automatically
+pull repositories** on starts (see "Turning the switch on" below) — that check starts at once as this request's
+check, with the fast-forward, in its place. If a check of the project is already running, or that pass is already
+fast-forwarding it, nothing starts alongside it: as soon as it ends, one more check runs, with the fast-forward, so
+the request ends in a fast-forward attempt either way. However many requests arrive meanwhile, they share that one
+extra check, and it does not run at all if the project has been removed in the meantime.
 
 The badge shows the check and the pull in flight as for any check, and a failed fetch or a fast-forward `git`
 refuses records its message for the badge the same way.
@@ -260,8 +266,8 @@ longer a git repository is left alone; and so is one whose local re-read fails, 
 rule that could not be checked.
 
 The one-minute floor between checks (see "When a project is checked" above) does not apply to this pass, which goes
-nowhere near the remote. A project whose check is in flight is skipped and left to that check, which reads the switch
-itself.
+nowhere near the remote; the four at once does, shared with the checks. A project whose check is in flight or waiting
+its turn is skipped and left to that check, which reads the switch itself.
 
 The badge shows the pull in flight exactly as during a check, and a fast-forward `git` refuses records its
 message for the badge the same way. A warning the last check left stays on the badge: it stands for that check

@@ -1,13 +1,14 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useState } from "react";
 import { createStore, type StoreApi } from "zustand";
 import { useStore } from "zustand/react";
 
 import { DaemonClient, DaemonRequestError, type ConnectionState } from "./daemon-client";
 import { daemonMessage } from "./daemonMessage";
-import { errorPresentation } from "./errorPresentation";
+import { errorPresentation, noticeErrorPresentation } from "./errorPresentation";
 import { errorText } from "./errorText";
 import { currentLanguage } from "./i18n/language";
 import { daemonWsUrl, type DaemonOrigin } from "./daemon";
+import { sameValue } from "./sameValue";
 import {
   isLive,
   type Agent,
@@ -168,6 +169,19 @@ export function createStateStore(initial: Partial<State> = {}): StoreApi<State> 
   return createStore<State>(() => ({ ...initialState, ...initial }));
 }
 
+/** The map of `records` by `idOf`, each one the record `previous` already holds for its id when that
+ * is the same data. A snapshot (the first, or a lag recovery) names everything again, and what it
+ * repeats unchanged must not look new to the components holding it. */
+function keepSame<T>(previous: Map<string, T>, records: T[], idOf: (record: T) => string): Map<string, T> {
+  return new Map(
+    records.map((record) => {
+      const id = idOf(record);
+      const held = previous.get(id);
+      return [id, held !== undefined && sameValue(held, record) ? held : record];
+    }),
+  );
+}
+
 function reducer(state: State, action: Action): State {
   switch (action.kind) {
     case "connection":
@@ -181,9 +195,9 @@ function reducer(state: State, action: Action): State {
           return {
             ...state,
             hosts: new Map(event.hosts.map((h) => [h.id, h])),
-            consoles: new Map(event.consoles.map((c) => [c.id, c])),
-            projects: new Map(event.projects.map((p) => [p.id, p])),
-            sessions: new Map(event.sessions.map((s) => [s.id, s])),
+            consoles: keepSame(state.consoles, event.consoles, (c) => c.id),
+            projects: keepSame(state.projects, event.projects, (p) => p.id),
+            sessions: keepSame(state.sessions, event.sessions, (s) => s.id),
             // A snapshot means either first connect or a lag recovery, and carries no pages either
             // way (see `Page` in protocol.ts). Cleared rather than kept, because a console session
             // that was deleted while this client was behind would otherwise go on holding its
@@ -194,7 +208,7 @@ function reducer(state: State, action: Action): State {
             trustPrompts: [],
             trustedDirectories: event.trusted_directories,
             consoleRequests: [],
-            gitStatuses: new Map(event.git_statuses.map((s) => [s.project, s])),
+            gitStatuses: keepSame(state.gitStatuses, event.git_statuses, (s) => s.project),
             settings: event.settings,
             agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])),
             homeDir: event.home_dir,
@@ -208,6 +222,7 @@ function reducer(state: State, action: Action): State {
             trustPrompts: state.trustPrompts.filter((p) => !isUnderAny(p.path, event.trusted_directories)),
           };
         case "console_upserted": {
+          if (sameValue(state.consoles.get(event.console.id), event.console)) return state;
           const consoles = new Map(state.consoles);
           consoles.set(event.console.id, event.console);
           return { ...state, consoles };
@@ -244,6 +259,7 @@ function reducer(state: State, action: Action): State {
           return { ...state, sessions };
         }
         case "project_upserted": {
+          if (sameValue(state.projects.get(event.project.id), event.project)) return state;
           const projects = new Map(state.projects);
           projects.set(event.project.id, event.project);
           // A project that now has the permission has nothing left to ask: the daemon presses its
@@ -266,6 +282,8 @@ function reducer(state: State, action: Action): State {
           return { ...state, projects, sessions, gitStatuses };
         }
         case "session_upserted": {
+          // A session's status broadcasts repeat what the store holds as often as they change it.
+          if (sameValue(state.sessions.get(event.session.id), event.session)) return state;
           const sessions = new Map(state.sessions);
           sessions.set(event.session.id, event.session);
           // A session that no longer runs is no longer at a confirmation anyone can answer.
@@ -349,6 +367,7 @@ function reducer(state: State, action: Action): State {
           return { ...state, pages };
         }
         case "project_git_status": {
+          if (sameValue(state.gitStatuses.get(event.status.project), event.status)) return state;
           const gitStatuses = new Map(state.gitStatuses);
           gitStatuses.set(event.status.project, event.status);
           return { ...state, gitStatuses };
@@ -402,18 +421,24 @@ export interface Daemon {
 export function createDaemon(origin: DaemonOrigin): Daemon {
   const store = createStateStore();
   const dispatch = (action: Action) => store.setState((state) => reducer(state, action));
+  // The events that arrived together are one update: a burst renders once, not once per event.
+  const dispatchEvents = (events: Event[]) =>
+    store.setState((state) => events.reduce((current, event) => reducer(current, { kind: "event", event }), state));
 
   const client = new DaemonClient(daemonWsUrl(origin, "/ws/control"));
   const toastListeners = new Set<(toast: ToastRequest) => void>();
   const emitToast = (toast: ToastRequest) => toastListeners.forEach((listener) => listener(toast));
 
+  client.onEvents(dispatchEvents);
   client.onEvent((event) => {
-    dispatch({ kind: "event", event });
     if (event.type === "session_notice") {
+      // A failed launch is presented as the failure it reports, laid out beneath a title that does
+      // not repeat the reason; any other notice as itself.
+      const failure = noticeErrorPresentation(event.code, event.params, event.message);
       emitToast({
         kind: "notice",
-        daemonError: new DaemonRequestError(event.message, event.code, event.params),
-        message: daemonMessage(currentLanguage(), event.code, event.params, event.message, store.getState()),
+        message: daemonMessage(currentLanguage(), failure ? `${event.code}.title` : event.code, event.params, event.message, store.getState()),
+        daemonError: failure ?? new DaemonRequestError(event.message, event.code, event.params),
         session: event.session,
       });
     } else if (event.type === "error" && !event.id) {
@@ -469,4 +494,23 @@ export function useDaemon(): Daemon {
  * wrapped in zustand's `useShallow`, or the component re-renders on every change. */
 export function useDaemonStore<T>(selector: (state: State) => T): T {
   return useStore(useDaemon().store, selector);
+}
+
+/** A selector's result that is the same value as the last one it gave, whatever new objects it was
+ * built from, is that last result. */
+function keepingSameValue<T>(): (next: T) => T {
+  let last: { value: T } | undefined;
+  return (next) => {
+    if (last && sameValue(last.value, next)) return last.value;
+    last = { value: next };
+    return next;
+  };
+}
+
+/** `useDaemonStore` for a selector that derives something new from the state each time — an object
+ * with others inside it, say, which `useShallow` would take as changed every time: the component
+ * renders again only when the result differs in what it holds. */
+export function useDaemonStoreEqual<T>(selector: (state: State) => T): T {
+  const [same] = useState(keepingSameValue<T>);
+  return useDaemonStore((state) => same(selector(state)));
 }

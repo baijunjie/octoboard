@@ -78,8 +78,9 @@ focus between regions with F6" in `docs/product/moving-focus-between-regions.md`
 ## Loading
 
 **Until the session's first output is on screen, the terminal is covered by a loading state** — a spinner and a
-line saying the session is being resumed, while a resume of it is under way or it has no process yet, and that the
-terminal is loading otherwise. It covers whatever comes before that first output, every time the terminal attaches
+line saying the session is being resumed, while a resume of it is under way or it has no process yet; that the session
+is starting, while it is still *starting* (see "Session statuses" in `docs/product/sessions.md`), during which there is
+nothing to connect to and the terminal attaches once the agent is up; and that the terminal is loading otherwise. It covers whatever comes before that first output, every time the terminal attaches
 — when a session is selected, resumed or reconnected: the resume starting the process, the connection being made,
 and a freshly started agent drawing its first screen. An agent that prints nothing does not keep it up: once the
 terminal has been connected for 10 seconds without output, the bare terminal is shown. While the terminal is not

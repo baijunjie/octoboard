@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Project, Session, SessionStatus } from "../protocol";
-import { archiveNeedsConfirmation, archivePreviewSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sortProjects, switchStrip } from "./order";
+import { archiveNeedsConfirmation, consoleActivity, INACTIVE_PROJECT_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sortProjects, switchStrip } from "./order";
 
 const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to?: string): Session => ({
   id,
@@ -46,6 +46,18 @@ describe("liveSessions", () => {
       session("pinned", "interrupted", 0, true),
     ]);
     expect(ordered.map((s) => s.id)).toEqual(["pinned", "waiting", "new-idle", "old-idle", "working", "interrupted"]);
+  });
+
+  it("counts a session that is still starting as a running one, not as no session at all", () => {
+    const starting = [session("starting", "starting", 1)];
+    expect(liveSessions(starting).map((s) => s.id)).toEqual(["starting"]);
+    expect(projectRank(starting)).not.toBe(INACTIVE_PROJECT_RANK);
+    expect(consoleActivity(starting)).toBe("running");
+  });
+
+  it("does not offer a console session that is still starting as an owner", () => {
+    const owners = ["starting", "idle", "archived"].map((status) => ({ ...session(status, status as SessionStatus, 1), role: "console" as const }));
+    expect(liveConsoleSessions(owners, "c").map((s) => s.id)).toEqual(["idle"]);
   });
 });
 

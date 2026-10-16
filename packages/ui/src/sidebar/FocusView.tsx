@@ -1,6 +1,6 @@
 import { Badge, Button, Switch, Tooltip } from "@heroui/react";
 import { ArrowLeft, FolderOpen, FolderPlus, List, MessageSquarePlus, Plus } from "lucide-react";
-import React, { useId, useLayoutEffect, useRef } from "react";
+import React, { memo, useId, useLayoutEffect, useRef } from "react";
 
 import { AGENT_LABEL } from "../agents";
 import { ActionMenu } from "../components/ActionMenu";
@@ -20,13 +20,15 @@ import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
 import { activityLabelKey, sessionAccountTooltip, sessionAriaLabel, sessionDisplayTitle, statusLabel } from "../sessionLabel";
-import { useDaemonStore } from "../store";
+import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
+import { useHasBoundSessions, useProjectSessions, useSessionProjectId } from "../sessions/useSessions";
+import { useDaemon, useDaemonStore, useDaemonStoreEqual } from "../store";
 import { useNow } from "../useNow";
 import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu, sessionMenu } from "./menus";
 import { SessionActions } from "./SessionActions";
-import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroups, hasBoundSessions, liveSessionRows, type NestedSession, notUnderConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
+import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroupRows, focusGroups, hasBoundSessions, liveSessionRows, type NestedSession, notUnderConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
 import { NESTED_INSET_CLASS, PinButton, RowIconButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
@@ -217,7 +219,12 @@ export function ConsoleSessionFocusView({
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
+  // The groups are ordered by how urgent their sessions are, which changes while the view is open.
+  const groupsRef = useFlip<HTMLDivElement>();
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  // Only the group holding the selected session is told which one it is, so a selection moving
+  // between two sessions renders those groups alone.
+  const selectedProjectId = useSessionProjectId(selectedSessionId);
   const groups = focusGroups(projects, sessions, consoleSession.id);
   const liveCount = groups.reduce((sum, group) => sum + group.sessions.length, 0);
   const archived = boundArchivedSessions(sessions, consoleSession.id);
@@ -226,8 +233,6 @@ export function ConsoleSessionFocusView({
   const viewAll = () => handlers.onOpenArchive({ console: parentConsole.id, consoleSession: consoleSession.id });
   const newSessionLabel = t("sidebar.focus.newSession");
   const strip = switchStrip(sessions, parentConsole.id);
-  // The groups are ordered by how urgent their sessions are, which changes while the view is open.
-  const groupsRef = useFlip<HTMLDivElement>();
   const headerRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -286,16 +291,14 @@ export function ConsoleSessionFocusView({
             <EmptyPanel compact icon={MessageSquarePlus} message={t("sidebar.focus.noBoundSessions")} />
           ) : (
             <div ref={groupsRef} className="relative flex flex-col gap-2">
-              {groups.map(({ project, sessions: boundHere }) => (
+              {groups.map(({ project }) => (
                 <div key={project.id} data-flip={project.id}>
                   <FocusProjectGroup
                     handlers={handlers}
+                    console={parentConsole}
+                    consoleSessionId={consoleSession.id}
                     project={project}
-                    boundHere={boundHere}
-                    archived={archivedSessions(sessions.filter((s) => s.project_id === project.id))}
-                    sessions={sessions}
-                    onOpenSession={() => openSession(project)}
-                    selectedSessionId={selectedSessionId}
+                    selectedSessionId={project.id === selectedProjectId ? selectedSessionId : undefined}
                   />
                 </div>
               ))}
@@ -379,28 +382,35 @@ function SwitchStrip({
 
 /** One project of a console session's focus mode: its name with its own new-session button and
  * actions, over the cards of the sessions bound to the console session, each lead session among
- * them carrying its own sessions under it. `archived` is all the project's archived sessions, for
- * its "View archive" submenu. */
-function FocusProjectGroup({
+ * them carrying its own sessions under it. Memoised, and reading its own sessions from the store
+ * (the rows as `focusGroupRows` gives them, the project's archive for its "View archive" submenu),
+ * so an event about another project's session leaves it alone. */
+const FocusProjectGroup = memo(function FocusProjectGroup({
   handlers,
+  console: parentConsole,
+  consoleSessionId,
   project,
-  boundHere,
-  archived,
-  sessions,
-  onOpenSession,
   selectedSessionId,
 }: {
   handlers: SidebarHandlers;
+  console: Console;
+  /** The console session, by id: its record changes with every status event, which would render
+   * every group, and a press reads it from the store. */
+  consoleSessionId: string;
   project: Project;
-  boundHere: NestedSession[];
-  archived: Session[];
-  sessions: Session[];
-  onOpenSession: () => void;
   selectedSessionId?: string;
 }): React.ReactElement {
   const t = useT();
+  const { store } = useDaemon();
   // Read as `ProjectFocusView` does, for the Git submenu.
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
+  const boundHere = useDaemonStoreEqual((s) => focusGroupRows(sessionsOf(indexSessions(s.sessions).byConsole, parentConsole.id), project, consoleSessionId));
+  const sessions = useProjectSessions(project.id);
+  const archived = archivedSessions(sessions);
+  const onOpenSession = () => {
+    const consoleSession = store.getState().sessions.get(consoleSessionId);
+    if (consoleSession) handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project, binding: { kind: "bound", to: consoleSession } });
+  };
   const headerRef = useRef<HTMLDivElement>(null);
   // Where focus goes when the pin button, ahead of it, is unpinned away.
   const openSessionHolder = useRef<HTMLDivElement>(null);
@@ -426,7 +436,7 @@ function FocusProjectGroup({
       <SessionCards handlers={handlers} sessions={boundHere} selectedSessionId={selectedSessionId} />
     </>
   );
-}
+});
 
 /** What a project's focus mode carries for the sessions it leaves out: a line saying how many are
  * under console sessions, over a chip for each console session, with how many of the project's
@@ -556,7 +566,7 @@ function ArchivedList({
  * fading line, and when it started. The combined project view also names and marks its console owner.
  * `under`, the project session this one is bound to and is inset below, goes into its accessible name,
  * which is what carries that nesting to assistive technology. */
-function SessionCard({
+const SessionCard = memo(function SessionCard({
   handlers,
   session,
   under,
@@ -574,7 +584,7 @@ function SessionCard({
   const language = useCurrentLanguage();
   const now = useNow();
   const accounts = useDaemonStore((s) => s.settings.accounts);
-  const hasBound = useDaemonStore((s) => hasBoundSessions(s.sessions.values(), session.id));
+  const hasBound = useHasBoundSessions(session.id);
   const rowRef = useRef<HTMLDivElement>(null);
   const label = sessionAriaLabel(t, language, session, accounts, under ?? consoleOwner);
   return (
@@ -617,7 +627,7 @@ function SessionCard({
       </RowIconLine>
     </TreeRow>
   );
-}
+});
 
 /** One parent session in a focus mode's archive preview. */
 function ArchivedRow({

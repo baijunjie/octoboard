@@ -33,9 +33,9 @@ use crate::mcp;
 use crate::open_directory;
 use crate::open_terminal;
 use crate::protocol::{
-    error_code, now_millis, Account, Agent, Availability, CodedError, Console,
-    ConsoleSessionColour, Event, Origin, Present, Project, ProjectAccount, ProjectSource,
-    RequestBody, Role, Session, SessionStatus,
+    error_code, error_parts, notice_code, now_millis, Account, Agent, Availability, CodedError,
+    Console, ConsoleSessionColour, Event, Notice, Origin, Present, Project, ProjectAccount,
+    ProjectSource, RequestBody, Role, Session, SessionStatus,
 };
 use crate::relocate;
 use crate::reporting;
@@ -46,11 +46,37 @@ use crate::term;
 use crate::trust;
 
 /// Handles one request. The returned event, when there is one, is the answer to that request and
-/// goes to the asking socket only; everything that changed state has already been broadcast.
+/// goes to the asking socket only; everything that changed state has already been broadcast. For
+/// the tests, which have no socket to queue a reply on; the server uses [`handle_deferred`].
+#[cfg(test)]
 pub async fn handle(
     state: &Arc<AppState>,
     request_id: Option<String>,
     body: RequestBody,
+) -> Result<Option<Event>> {
+    // Any follow-up runs as it is dropped, here: this caller has no reply to queue first.
+    handle_deferred(state, request_id, body)
+        .await
+        .map(|(reply, _followup)| reply)
+}
+
+/// [`handle`], for a caller that sends the reply itself: what a request still has to do after its
+/// reply has been queued comes back as a [`Followup`], to drop once the reply is on its way.
+pub async fn handle_deferred(
+    state: &Arc<AppState>,
+    request_id: Option<String>,
+    body: RequestBody,
+) -> Result<(Option<Event>, Option<Followup>)> {
+    let mut followup = None;
+    let reply = handle_inner(state, request_id, body, &mut followup).await?;
+    Ok((reply, followup))
+}
+
+async fn handle_inner(
+    state: &Arc<AppState>,
+    request_id: Option<String>,
+    body: RequestBody,
+    followup: &mut Option<Followup>,
 ) -> Result<Option<Event>> {
     match body {
         RequestBody::CreateConsole {
@@ -444,7 +470,7 @@ pub async fn handle(
             bound_to,
             resume_agent_session_id,
         } => {
-            let session = open_session(
+            let (session, launch) = open_session_detached(
                 state,
                 OpenRequest {
                     console_id,
@@ -461,6 +487,7 @@ pub async fn handle(
                 },
             )
             .await?;
+            *followup = Some(launch);
             Ok(Some(Event::SessionOpened {
                 id: request_id,
                 session,
@@ -478,7 +505,7 @@ pub async fn handle(
         }
 
         RequestBody::SwitchSessionAccount { session, account } => {
-            switch_session_account(state, &session, account, env_shell::snapshot).await?;
+            switch_session_account(state, &session, account, env_shell::launch_snapshot).await?;
             Ok(None)
         }
 
@@ -1429,7 +1456,8 @@ fn agent_is_available(state: &Arc<AppState>, agent: Agent) -> bool {
 /// must not be let through to be discovered later. A project session with the role of a bound one
 /// is refused as an owner for the same reason, and this is where the depth limit is enforced, not
 /// only by which tools are offered: a session bound to a lead session would otherwise make a
-/// third level.
+/// third level. A session still starting is refused too: its launch may fail, and a failed launch
+/// deletes the session whatever is bound to it.
 fn resolve_bound_to(
     state: &Arc<AppState>,
     console_id: &str,
@@ -1448,6 +1476,7 @@ fn resolve_bound_to(
         .get_session(&target_id)?
         .filter(|target| {
             target.console_id == console_id
+                && target.status != SessionStatus::Starting
                 && match target.role {
                     Role::Console => true,
                     Role::Project => {
@@ -1615,7 +1644,144 @@ fn locate_conversation_to_resume(
     Ok(shell_env)
 }
 
+/// A session that is recorded and published as `starting`, whose agent process is still to be
+/// launched. The launch claim is held from here until [`finish_open`] has settled it, so nothing
+/// else launches, switches or deletes the session meanwhile.
+struct StartingSession {
+    claim: crate::state::LaunchClaim,
+    session: Session,
+    cwd: PathBuf,
+    task: Option<String>,
+    /// The outside conversation the session continues, if it was opened with one.
+    resume_agent_session_id: Option<String>,
+    /// The login-shell snapshot that conversation's record was found with, which the launch must
+    /// use too (see [`term::LaunchRequest::preresolved_shell_env`]).
+    resume_shell_env: Option<HashMap<String, String>>,
+}
+
+/// Opens a session and returns it once it has launched: running, or with the launch's refusal
+/// as the error and nothing left behind. For a caller that has nothing to show before the agent
+/// is up — an agent's `start_session` tool, or the approval of a console session request — which
+/// would otherwise be told of a session that may yet vanish. The user's own request is
+/// [`open_session_detached`].
 pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result<Session> {
+    let starting = begin_open(state, request).await?;
+    finish_open(state, starting, term::launch)
+        .await
+        .map_err(OpenError::into_error)
+}
+
+/// What is left to do for a session [`open_session_detached`] recorded: launching its agent. It
+/// starts once the reply that tells the client of the session has been queued, so that a launch
+/// that fails at once cannot have the session deleted on the client before the client has been
+/// told it exists. Run by [`Followup::start`]; dropping one nobody got to — a connection that went
+/// away — runs it too, so the session never stays `starting` for want of it. The launch is spawned
+/// on the runtime the follow-up was made on, so a drop outside any runtime does not panic.
+pub struct Followup(Option<Box<dyn FnOnce() + Send>>);
+
+impl Followup {
+    pub fn start(mut self) {
+        self.run();
+    }
+
+    fn run(&mut self) {
+        if let Some(start) = self.0.take() {
+            start();
+        }
+    }
+}
+
+impl Drop for Followup {
+    fn drop(&mut self) {
+        self.run();
+    }
+}
+
+/// Opens a session and returns it as soon as it is recorded and published as `starting`, so a
+/// client can show it at once: launching snapshots the user's shell environment and forks the
+/// agent, which can take seconds on a busy machine. The launch is the returned [`Followup`]'s, to
+/// run once the session has been handed to the client; the session's `session_upserted` then says
+/// it is up, and one that could not be launched is deleted again and reported with a
+/// `launch_failed` `session_notice`.
+pub async fn open_session_detached(
+    state: &Arc<AppState>,
+    request: OpenRequest,
+) -> Result<(Session, Followup)> {
+    open_detached_with(state, request, term::launch).await
+}
+
+/// [`open_session_detached`], launching through `launch`: `term::launch` outside the tests, which
+/// cannot start an agent.
+async fn open_detached_with(
+    state: &Arc<AppState>,
+    request: OpenRequest,
+    launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
+) -> Result<(Session, Followup)> {
+    let starting = begin_open(state, request).await?;
+    let opened = starting.session.clone();
+    let state = state.clone();
+    let runtime = tokio::runtime::Handle::current();
+    let followup = Followup(Some(Box::new(move || {
+        runtime.spawn(async move {
+            let session = starting.session.clone();
+            match finish_open(&state, starting, launch).await {
+                Ok(_) => {}
+                Err(OpenError::Launch(err)) => report_failed_launch(&state, &session, &err),
+                // The process is up and the session stays; only settling it after the launch failed.
+                Err(OpenError::Settling(err)) => {
+                    tracing::warn!(session = %session.id, %err, "settling a launched session failed");
+                }
+            }
+        });
+    })));
+    Ok((opened, followup))
+}
+
+/// Tells every client that the launch of `session` failed with `err`. The session is normally
+/// already deleted; if it could not be deleted it is left interrupted, and the notice is sent all
+/// the same. The notice carries the failure's own code as `reason_code` and its params beside
+/// `title` and `reason` (the English account), so a client words the reason itself.
+fn report_failed_launch(state: &Arc<AppState>, session: &Session, err: &anyhow::Error) {
+    let (code, coded, reason) = error_parts(err);
+    let mut pairs: Vec<(&str, &str)> = coded
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+        .collect();
+    // After the failure's own, which a later pair of the same name replaces.
+    pairs.extend([
+        ("title", session.title.as_str()),
+        ("reason", reason.as_str()),
+        ("reason_code", code.as_str()),
+    ]);
+    state.broadcast(
+        Notice::new(
+            notice_code::LAUNCH_FAILED,
+            format!("could not start {}: {reason}", session.title),
+            &pairs,
+        )
+        .about(&session.id),
+    );
+}
+
+/// Why [`finish_open`] did not leave a running session.
+enum OpenError {
+    /// The agent could not be launched, and the session is deleted again.
+    Launch(anyhow::Error),
+    /// The agent is up, but recording that failed.
+    Settling(anyhow::Error),
+}
+
+impl OpenError {
+    fn into_error(self) -> anyhow::Error {
+        match self {
+            Self::Launch(err) | Self::Settling(err) => err,
+        }
+    }
+}
+
+/// Everything of opening a session that precedes launching its agent: the refusals, the record
+/// (`starting`) and its publication.
+async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<StartingSession> {
     let OpenRequest {
         console_id,
         project_id,
@@ -1670,7 +1836,12 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         Some(id) => {
             let dir = config_dir.clone();
             tokio::task::spawn_blocking(move || {
-                locate_conversation_to_resume(agent, dir.as_deref(), &id, env_shell::snapshot)
+                locate_conversation_to_resume(
+                    agent,
+                    dir.as_deref(),
+                    &id,
+                    env_shell::launch_snapshot,
+                )
             })
             .await??
         }
@@ -1713,14 +1884,8 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         role,
         origin,
         title: title.clone().unwrap_or_else(|| default_title.clone()),
-        // A session opened without a task is sitting at its prompt, not working. This also
-        // matters for Codex specifically: its `SessionStart` hook does not fire until the first
-        // prompt submission, so an optimistic `working` here would stay until the user typed.
-        status: if task.is_some() {
-            SessionStatus::Working
-        } else {
-            SessionStatus::Idle
-        },
+        // Until the process is up; `finish_open` moves it to what the launch implies.
+        status: SessionStatus::Starting,
         terminal_title: None,
         usage: None,
         has_conversation: resume_agent_session_id.is_some(),
@@ -1759,8 +1924,8 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
             }
         }
         // `bound_to` was resolved before the launch check above awaited, so an unused owner may
-        // have been deleted since. Once this row exists the owner can no longer be deleted (it has
-        // a session bound to it), so one that is gone now is gone for good. Nothing has been
+        // have been deleted since. Once this row exists the owner can no longer be deleted (it
+        // has a session bound to it), so one that is gone now is gone for good. Nothing has been
         // launched yet.
         if let Some(owner) = &session.bound_to {
             if state.store.get_session(owner)?.is_none() {
@@ -1771,36 +1936,118 @@ pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result
         session
     };
     let claim = state.begin_launch(&session.id)?;
-
-    let resume_id = resume_agent_session_id.as_deref();
-    match start_process(
-        state,
-        &claim,
-        &session,
-        &cwd,
-        task.as_deref(),
-        resume_id,
+    state.publish_session(&session);
+    Ok(StartingSession {
+        claim,
+        session,
+        cwd,
+        task,
+        resume_agent_session_id,
         resume_shell_env,
-    )
-    .await
-    {
-        Ok(()) => {
-            // Re-read rather than publish the record we built: launching may have learned the
-            // agent's own session id, and publishing the stale copy would tell every client the
-            // session has none.
-            let started = state.session_record(&session.id)?;
-            state.publish_session(&started);
-            Ok(started)
+    })
+}
+
+/// Launches the agent of a session [`begin_open`] recorded, through `launch`, and publishes it
+/// running. Without a process the session is deleted again: nothing ran, so there is nothing to
+/// resume, and a session in the tree that never existed would only mislead.
+async fn finish_open(
+    state: &Arc<AppState>,
+    starting: StartingSession,
+    launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
+) -> Result<Session, OpenError> {
+    let StartingSession {
+        claim,
+        session,
+        cwd,
+        task,
+        resume_agent_session_id,
+        resume_shell_env,
+    } = starting;
+    // Read inside the launch's own result: a failure here is one before anything ran, which is
+    // the same as a launch that failed, and must delete the session the same way.
+    let started = async {
+        let recorded = state.session_record(&session.id)?;
+        // Archived in the moment before the launch began: the user has already said they do not
+        // want it, and there is nothing to end.
+        if recorded.status != SessionStatus::Starting {
+            return Ok(Some(recorded));
         }
+        start_process(
+            state,
+            &claim,
+            &session,
+            &cwd,
+            task.as_deref(),
+            resume_agent_session_id.as_deref(),
+            // The snapshot the conversation to resume was found with is the one the launch must use.
+            move |request| {
+                launch(term::LaunchRequest {
+                    preresolved_shell_env: resume_shell_env,
+                    ..request
+                })
+            },
+        )
+        .await
+        .map(|()| None)
+    }
+    .await;
+    match started {
+        Ok(Some(archived)) => Ok(archived),
+        Ok(None) => settle_started(state, &session, task.is_some()).map_err(OpenError::Settling),
         Err(err) => {
-            // Nothing ran, so there is nothing to resume: drop the record rather than leave a
-            // session in the tree that never existed.
-            state.store.delete_session(&session.id)?;
-            state.forget_saved_output(&session.id);
             state.revoke_mcp_tokens(&session.id);
-            Err(err)
+            state.discard_outbox(&session.id);
+            // The claim is held through the deletion, so nothing acts on the session half-gone.
+            if let Err(discard_err) = state.discard_session(&session.id) {
+                tracing::warn!(session = %session.id, err = %discard_err, "deleting a session whose launch failed failed");
+                // The row stays, so it must not stay `starting`: nothing would ever move it, and
+                // `starting` sessions refuse deletion and resume.
+                mark_interrupted(state, &session.id);
+            }
+            drop(claim);
+            Err(OpenError::Launch(err))
         }
     }
+}
+
+/// Moves a session that has no process out of `starting`, to the status a click resumes from.
+fn mark_interrupted(state: &Arc<AppState>, id: &str) {
+    let result = state.session_record(id).and_then(|mut session| {
+        session.status = SessionStatus::Interrupted;
+        session.ended_at = Some(now_millis());
+        state.save_session(&session)
+    });
+    if let Err(err) = result {
+        tracing::warn!(session = %id, %err, "marking a session that failed to launch interrupted failed");
+    }
+}
+
+/// Moves a session whose process is up from `starting` to what the launch implies, and returns its
+/// record.
+fn settle_started(state: &Arc<AppState>, session: &Session, has_task: bool) -> Result<Session> {
+    // A session opened without a task is sitting at its prompt, not working. This also matters for
+    // Codex specifically: its `SessionStart` hook does not fire until the first prompt submission,
+    // so an optimistic `working` here would stay until the user typed. Conditional on it still
+    // starting: the agent's own first hook may have moved it on already, and an archive that landed
+    // while the process was being forked stands.
+    let up = if has_task {
+        SessionStatus::Working
+    } else {
+        SessionStatus::Idle
+    };
+    if !state.apply_reported_status_if(&session.id, SessionStatus::Starting, up)? {
+        let record = state.session_record(&session.id)?;
+        if record.status == SessionStatus::Archived {
+            // Archived while the process was being forked, when there was none to end.
+            if let Some(live) = state.live_session(&session.id) {
+                stop_process(live);
+            }
+        }
+        return Ok(record);
+    }
+    // Re-read rather than return the record we built: launching may have learned the agent's own
+    // session id, and the stale copy has none.
+    state.session_record(&session.id)
 }
 
 /// Binds the unbound project session `session_id` to the running console session
@@ -2019,7 +2266,13 @@ async fn relaunch_session(
         &cwd,
         None,
         resume_id.as_deref(),
-        shell_env,
+        // The snapshot the caller resolved something from is the one the launch must use.
+        move |request| {
+            term::launch(term::LaunchRequest {
+                preresolved_shell_env: shell_env,
+                ..request
+            })
+        },
     )
     .await
     {
@@ -2123,7 +2376,8 @@ fn launch_settings(
     ))
 }
 
-/// Launches the agent for an already-stored session and starts watching it.
+/// Launches the agent for an already-stored session, through `launch` (`term::launch` outside the
+/// tests, which cannot start an agent), and starts watching it.
 async fn start_process(
     state: &Arc<AppState>,
     _claim: &crate::state::LaunchClaim,
@@ -2131,7 +2385,7 @@ async fn start_process(
     cwd: &Path,
     task: Option<&str>,
     resume_agent_session_id: Option<&str>,
-    shell_env: Option<HashMap<String, String>>,
+    launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<()> {
     // Refresh the instruction file on every console launch, resume and account switch. A missing
     // directory is left to the launch, whose refusal names it, rather than failing here on the write.
@@ -2153,7 +2407,7 @@ async fn start_process(
         config_dir: session.config_dir.as_ref().map(PathBuf::from),
         model,
         effort,
-        preresolved_shell_env: shell_env,
+        preresolved_shell_env: None,
         daemon_port: state.port,
         self_exe: state.self_exe.clone(),
         // Issued per launch: the previous process is gone, and a token outliving it would let a
@@ -2163,7 +2417,7 @@ async fn start_process(
 
     // Launching snapshots the user's shell environment and forks a process, so it goes off the
     // runtime rather than holding up the socket it was asked on.
-    let launch = tokio::task::spawn_blocking(move || term::launch(request)).await??;
+    let launch = tokio::task::spawn_blocking(move || launch(request)).await??;
 
     // The live map now says the session is running; `claim` stays with the caller, which drops it
     // when it is done with the launch.
@@ -2207,7 +2461,7 @@ pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
     let session = state.session_record(id)?;
     // "Not running" is taken to mean interrupted by exclusion: a status that is neither archived
     // nor backed by a process would be archived here without anyone having decided so. One gap is
-    // left open: `open_session` inserts the session record, `bound_to` included, before it takes
+    // left open: `begin_open` inserts the session record, `bound_to` included, before it takes
     // the launch claim, so in between a bound session reads as neither archived nor
     // process-backed. Nothing awaits in that gap, so no archive can land in it, and it is not
     // closed.
@@ -7117,5 +7371,352 @@ mod tests {
             .recent_output(8 * 1024)
             .windows(5)
             .any(|window| window == b"a-new"));
+    }
+
+    // -- opening a session without waiting for its agent --------------------------------------
+
+    /// What opens a console session of the console `state_for_opening` sets up.
+    fn open_request() -> OpenRequest {
+        OpenRequest {
+            console_id: "console-1".to_string(),
+            project_id: None,
+            agent: None,
+            account: None,
+            model: None,
+            effort: None,
+            task: None,
+            title: None,
+            origin: Origin::User,
+            bound_to: None,
+            resume_agent_session_id: None,
+        }
+    }
+
+    fn state_for_opening(name: &str) -> (Arc<AppState>, ScratchDir) {
+        let (state, dir) = crate::test_support::app_state(name);
+        let workdir = console_workdir(&dir);
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &workdir))
+            .unwrap();
+        (state, dir)
+    }
+
+    /// A launch that waits for `release` and then hands over `live` as the process it started.
+    fn launch_after(
+        release: std::sync::mpsc::Receiver<()>,
+        live: Arc<LiveSession>,
+    ) -> impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static {
+        move |_| {
+            release.recv().expect("released");
+            Ok(term::Launch {
+                session: live,
+                agent_session_id: None,
+                notice: None,
+            })
+        }
+    }
+
+    /// [`open_detached_with`], with the launch started as soon as the session is returned.
+    async fn open_started(
+        state: &Arc<AppState>,
+        request: OpenRequest,
+        launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
+    ) -> Result<Session> {
+        let (session, followup) = open_detached_with(state, request, launch).await?;
+        drop(followup);
+        Ok(session)
+    }
+
+    async fn wait_until(mut done: impl FnMut() -> bool) {
+        let deadline = Instant::now() + crate::test_support::PATIENCE;
+        while !done() {
+            assert!(Instant::now() < deadline, "timed out");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    /// The reply, and the broadcast, come while the agent is still being launched, with the session
+    /// `starting`; the launch settling then moves it to the status a fresh session has.
+    #[tokio::test]
+    async fn a_session_is_shown_as_starting_while_its_agent_is_still_being_launched() {
+        let (state, _dir) = state_for_opening("coordinator-open-detached");
+        let mut events = state.subscribe();
+        // Not known until the session is: the stand-in is made once the launch is asked for it.
+        let (release, released) = std::sync::mpsc::channel();
+        let (live_tx, live_rx) = std::sync::mpsc::channel::<Arc<LiveSession>>();
+        let opened = open_started(&state, open_request(), move |request| {
+            launch_after(released, live_rx.recv().expect("a process"))(request)
+        })
+        .await
+        .expect("opened");
+
+        assert_eq!(opened.status, SessionStatus::Starting);
+        let stored = state.store.get_session(&opened.id).unwrap().unwrap();
+        assert_eq!(stored.status, SessionStatus::Starting);
+        assert!(state.is_launching(&opened.id));
+        assert!(state.live_session(&opened.id).is_none());
+        let published = loop {
+            match events.try_recv().expect("the session was published") {
+                Event::SessionUpserted { session } => break session,
+                _ => continue,
+            }
+        };
+        assert_eq!(published.status, SessionStatus::Starting);
+
+        let stand_in = crate::test_support::idle_stand_in(&opened.id);
+        live_tx.send((*stand_in).clone()).unwrap();
+        release.send(()).unwrap();
+        wait_until(|| !state.is_launching(&opened.id)).await;
+        assert_eq!(
+            state.store.get_session(&opened.id).unwrap().unwrap().status,
+            SessionStatus::Idle
+        );
+        assert!(state.live_session(&opened.id).is_some());
+    }
+
+    /// A launch that fails leaves nothing behind: the session is deleted again, and the user is told
+    /// why by a notice that names the session by its title, which no longer exists to be looked up.
+    #[tokio::test]
+    async fn a_launch_that_fails_deletes_the_session_and_says_why() {
+        let (state, _dir) = state_for_opening("coordinator-open-detached-fails");
+        let mut events = state.subscribe();
+        let opened = open_started(&state, open_request(), |_| {
+            Err(anyhow::anyhow!("the agent is not installed"))
+        })
+        .await
+        .expect("replied before the launch");
+
+        wait_until(|| state.store.get_session(&opened.id).unwrap().is_none()).await;
+        assert!(!state.is_launching(&opened.id));
+        let (mut deleted, mut notice) = (false, None);
+        while let Ok(event) = events.try_recv() {
+            match event {
+                Event::SessionDeleted { session } if session == opened.id => deleted = true,
+                Event::SessionNotice {
+                    session,
+                    code,
+                    params,
+                    ..
+                } if session == opened.id => notice = Some((code, params)),
+                _ => {}
+            }
+        }
+        assert!(deleted, "clients drop the row they were shown");
+        let (code, params) = notice.expect("a notice");
+        assert_eq!(code, notice_code::LAUNCH_FAILED);
+        assert_eq!(params["reason"], "the agent is not installed");
+        assert_eq!(params["title"], opened.title);
+    }
+
+    /// The caller that waits for the launch gets its refusal as the error, as it always did, and no
+    /// notice besides: the error is how it is told.
+    #[tokio::test]
+    async fn a_session_opened_by_a_caller_that_waits_reports_a_failed_launch_as_its_error() {
+        let (state, _dir) = state_for_opening("coordinator-open-waits");
+        let mut events = state.subscribe();
+        let starting = begin_open(&state, open_request()).await.expect("recorded");
+        let id = starting.session.id.clone();
+        let err = finish_open(&state, starting, |_| Err(anyhow::anyhow!("no binary")))
+            .await
+            .map_err(OpenError::into_error)
+            .expect_err("refused");
+        assert_eq!(format!("{err}"), "no binary");
+        assert!(state.store.get_session(&id).unwrap().is_none());
+        while let Ok(event) = events.try_recv() {
+            assert!(!matches!(event, Event::SessionNotice { .. }));
+        }
+    }
+
+    /// Archiving a session that is still starting stands: when the process comes up it is ended
+    /// rather than left running under a session in the archive.
+    #[tokio::test]
+    async fn a_session_archived_while_starting_does_not_keep_the_process_it_launched() {
+        let (state, _dir) = state_for_opening("coordinator-open-archived-meanwhile");
+        let (release, released) = std::sync::mpsc::channel();
+        let (live_tx, live_rx) = std::sync::mpsc::channel::<Arc<LiveSession>>();
+        let (started_tx, started) = std::sync::mpsc::channel();
+        let opened = open_started(&state, open_request(), move |request| {
+            started_tx.send(()).unwrap();
+            launch_after(released, live_rx.recv().expect("a process"))(request)
+        })
+        .await
+        .expect("opened");
+        wait_until(|| started.try_recv().is_ok()).await;
+
+        archive_session(&state, &opened.id).expect("archived while starting");
+        let stand_in = crate::test_support::idle_stand_in(&opened.id);
+        live_tx.send((*stand_in).clone()).unwrap();
+        release.send(()).unwrap();
+
+        wait_until(|| !state.is_launching(&opened.id)).await;
+        wait_until(|| stand_in.poll_exit()).await;
+        wait_until(|| state.live_session(&opened.id).is_none()).await;
+        assert_eq!(
+            state.store.get_session(&opened.id).unwrap().unwrap().status,
+            SessionStatus::Archived
+        );
+    }
+
+    /// Archived before the launch has begun, a session is not launched at all.
+    #[tokio::test]
+    async fn a_session_archived_before_its_launch_begins_is_never_launched() {
+        let (state, _dir) = state_for_opening("coordinator-open-archived-before");
+        let launched = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let opened = open_started(&state, open_request(), {
+            let launched = launched.clone();
+            move |_| {
+                launched.store(true, std::sync::atomic::Ordering::SeqCst);
+                Err(anyhow::anyhow!("launched"))
+            }
+        })
+        .await
+        .expect("opened");
+        archive_session(&state, &opened.id).expect("archived while starting");
+
+        wait_until(|| !state.is_launching(&opened.id)).await;
+        assert_eq!(
+            state.store.get_session(&opened.id).unwrap().unwrap().status,
+            SessionStatus::Archived
+        );
+        assert!(!launched.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(state.live_session(&opened.id).is_none());
+    }
+
+    /// A session opened to continue an outside conversation is launched with it, after the reply.
+    #[tokio::test]
+    async fn a_conversation_to_resume_reaches_the_launch_after_the_reply() {
+        const ID: &str = "11111111-2222-3333-4444-555555555555";
+        let (state, dir) = switch_fixture("resume-id-launched");
+        let record = dir
+            .join("claude-a/projects/slug")
+            .join(format!("{ID}.jsonl"));
+        std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        std::fs::write(&record, "").unwrap();
+        let (asked_tx, asked) = std::sync::mpsc::channel();
+        let opened = open_started(
+            &state,
+            OpenRequest {
+                project_id: Some("project-1".to_string()),
+                account: Some(Some("claude-a".to_string())),
+                resume_agent_session_id: Some(ID.to_string()),
+                ..open_request()
+            },
+            move |request| {
+                asked_tx.send(request.resume_agent_session_id).unwrap();
+                Err(anyhow::anyhow!("no agent in the tests"))
+            },
+        )
+        .await
+        .expect("opened");
+
+        assert_eq!(opened.status, SessionStatus::Starting);
+        assert_eq!(opened.agent_session_id.as_deref(), Some(ID));
+        assert!(opened.has_conversation);
+        let mut resumed = None;
+        wait_until(|| {
+            resumed = asked.try_recv().ok();
+            resumed.is_some()
+        })
+        .await;
+        assert_eq!(resumed.flatten().as_deref(), Some(ID));
+    }
+
+    /// A session that is starting cannot be deleted or relaunched out from under its launch.
+    #[tokio::test]
+    async fn a_starting_session_is_not_deleted_or_resumed() {
+        let (state, _dir) = state_for_opening("coordinator-open-starting-refusals");
+        let (release, released) = std::sync::mpsc::channel();
+        let (live_tx, live_rx) = std::sync::mpsc::channel::<Arc<LiveSession>>();
+        let opened = open_started(&state, open_request(), move |request| {
+            launch_after(released, live_rx.recv().expect("a process"))(request)
+        })
+        .await
+        .expect("opened");
+
+        let err = delete_session(&state, &opened.id).expect_err("not while starting");
+        assert_eq!(code_of(&err), error_code::SESSION_NOT_DELETABLE);
+        let err = resume_session(&state, &opened.id, None)
+            .await
+            .expect_err("already being started");
+        assert_eq!(code_of(&err), error_code::SESSION_ALREADY_STARTING);
+
+        let stand_in = crate::test_support::idle_stand_in(&opened.id);
+        live_tx.send((*stand_in).clone()).unwrap();
+        release.send(()).unwrap();
+        wait_until(|| !state.is_launching(&opened.id)).await;
+    }
+
+    /// The launch is the reply's follow-up: nothing is launched while it is held, so a launch that
+    /// fails at once cannot delete the session on a client before the reply has told it of it.
+    #[tokio::test]
+    async fn the_launch_waits_for_the_reply_to_be_queued() {
+        let (state, _dir) = state_for_opening("coordinator-open-after-reply");
+        let launched = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (opened, followup) = open_detached_with(&state, open_request(), {
+            let launched = launched.clone();
+            move |_| {
+                launched.store(true, std::sync::atomic::Ordering::SeqCst);
+                Err(anyhow::anyhow!("no binary"))
+            }
+        })
+        .await
+        .expect("opened");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(!launched.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(state.store.get_session(&opened.id).unwrap().is_some());
+
+        drop(followup);
+        wait_until(|| state.store.get_session(&opened.id).unwrap().is_none()).await;
+        assert!(launched.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    /// The failure's own code and params travel in the notice, for a client to word the reason.
+    #[tokio::test]
+    async fn a_failed_launch_notice_carries_the_failures_code_and_params() {
+        let (state, _dir) = state_for_opening("coordinator-open-notice-params");
+        let mut events = state.subscribe();
+        let opened = open_started(&state, open_request(), |_| {
+            Err(CodedError::raised(
+                error_code::BINARY_NOT_FOUND,
+                "`claude` was not found".to_string(),
+                &[("binary", "claude")],
+            ))
+        })
+        .await
+        .expect("opened");
+        wait_until(|| state.store.get_session(&opened.id).unwrap().is_none()).await;
+        let params = loop {
+            if let Event::SessionNotice { params, .. } = events.try_recv().expect("a notice") {
+                break params;
+            }
+        };
+        assert_eq!(params["reason_code"], error_code::BINARY_NOT_FOUND);
+        assert_eq!(params["binary"], "claude");
+        assert_eq!(params["reason"], "`claude` was not found");
+        assert_eq!(params["title"], opened.title);
+    }
+
+    /// A session still starting is refused as an owner: its launch may fail, which deletes it
+    /// whatever is bound to it.
+    #[tokio::test]
+    async fn a_starting_session_is_refused_as_an_owner() {
+        let (state, _dir) = state_for_opening("coordinator-open-starting-owner");
+        let (owner, followup) = open_detached_with(&state, open_request(), |_| {
+            Err(anyhow::anyhow!("never launched"))
+        })
+        .await
+        .expect("opened");
+        let err = resolve_bound_to(
+            &state,
+            "console-1",
+            Some("project-1"),
+            Role::Project,
+            Some(owner.id.clone()),
+        )
+        .expect_err("starting");
+        assert_eq!(code_of(&err), error_code::UNKNOWN_SESSION);
+        drop(followup);
+        wait_until(|| !state.is_launching(&owner.id)).await;
     }
 }

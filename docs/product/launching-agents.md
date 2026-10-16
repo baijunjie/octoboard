@@ -85,9 +85,16 @@ environment" below):
   so an unbound project session still has `report`, and calling it is refused while it is unbound (see "Reporting" and
   "The unbound project session's tools" in `docs/product/hub-orchestration.md`).
 
-The injected hooks are built to be invisible. They never steer the agent, never print anything, never fail the turn,
-and carry a short timeout (3 seconds) so a daemon that is unreachable costs a turn a fraction of a second rather than
-stalling it.
+The injected hooks are built to be invisible. They never steer the agent, print nothing (with the one exception
+below), never fail the turn, and carry a short timeout (3 seconds) so a daemon that is unreachable costs a turn a
+fraction of a second rather than stalling it. A Claude Code that can post hooks itself (2.1.63 or later) is given the daemon's address instead of a
+command, so its hooks start no process; an older one, or one whose version Octoboard cannot tell from where it is
+installed, gets the command. So does one whose settings restrict the addresses hooks may post to
+(`allowedHttpHookUrls`, in the user's, the project's or the managed settings files) to a list that leaves out the
+daemon's loopback address, since Claude Code would skip such hooks silently; a restriction delivered by other means
+than those files is not seen. The one exception to printing nothing is the address form with a daemon that cannot be
+reached or does not answer in time: Claude Code shows its own non-blocking notice about the failed hook, where the
+command form stays silent.
 
 **A session's role is fixed for its lifetime.** Two of the three agents record the injected role text
 into the conversation on its first turn and replay it on every resume afterwards, so changing a
@@ -165,10 +172,19 @@ the three do differs, and is worth knowing before a value is set:
 ## The launch environment
 
 The agent is launched directly, not through a shell, with an environment captured from the user's **login +
-interactive** shell at the moment of the launch. That is what makes agents installed under a version manager or in
-`~/.local/bin` findable, and it is what carries the user's API keys and other settings into the session. The snapshot
-is taken per launch, so a change to the user's shell configuration takes effect on the next session rather than
-requiring a restart.
+interactive** shell. That is what makes agents installed under a version manager or in `~/.local/bin` findable, and
+it is what carries the user's API keys and other settings into the session. Starting that shell can take seconds, so
+a launch does not wait for one when it can avoid it: it uses the most recent capture Octoboard holds (the daemon's own
+at start-up, or one taken since) while that capture is under ten minutes old and every `PATH` directory it found still
+exists, and, when that capture is more than a minute old, captures afresh in the background for the launches after
+it. A change to the user's shell configuration is therefore picked up without a restart, though not necessarily by
+the very next launch: in steady use by the one after it, and in any case once the capture in hand is ten minutes old.
+When there is no usable capture the launch waits for a fresh one, as below.
+
+A new session is listed before any of that has happened: it is recorded and shown as *starting* immediately, and the
+launch — the environment capture, the injected files and the agent process — carries on behind it, so a slow capture
+holds up nothing the user sees. What a *starting* session allows, and what happens to it when the launch is refused for
+any reason named below, is in "Opening a session" and "Session statuses" in `docs/product/sessions.md`.
 
 **Capturing it is bounded at ten seconds, and a capture that does not complete refuses the launch.** Octoboard
 refuses rather than starting an agent with a half-built environment, because a session missing the user's `PATH` or
@@ -226,7 +242,8 @@ snapshot's `PATH`, and reads what each agent's default account resolves to from 
 directory holds a login is never checked, since a user may sign in through an API key from their shell, a credential
 helper or an organization's gateway, none of which shows in the directory. This does not hold up the daemon's start:
 the application is served immediately, and the result follows once it lands, typically within a couple of seconds
-and budgeted the same ten seconds a launch's own snapshot is. Until it lands every agent reads as *not yet
+and budgeted the same ten seconds a launch's own snapshot is. That snapshot is also the one the first launch can
+reuse. Until it lands every agent reads as *not yet
 determined*, during which nothing is refused for being unavailable — a launch whose agent turns out to have no binary
 is refused by the ordinary path above, which already covers it. A snapshot that does not complete leaves availability
 not yet determined for the rest of that run rather than marking every agent unavailable. With every agent determined

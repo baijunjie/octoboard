@@ -15,14 +15,15 @@ export function sessionToRestore(
 }
 
 /** Remembers the session last selected in each console, in memory, whichever way it was selected.
- * Returns the lookup of the one to bring back when a console is made current. */
+ * Returns the lookup of the one to bring back when a console is made current, which asks
+ * `getSessions` for the sessions as they are when it is called. */
 export function useLastSessionPerConsole(
   selected: Session | undefined,
-  sessions: ReadonlyMap<string, Session>,
+  getSessions: () => ReadonlyMap<string, Session>,
 ): (consoleId: string) => Session | undefined {
   const lastByConsole = useRef(new Map<string, string>());
   useEffect(() => {
     if (selected) lastByConsole.current.set(selected.console_id, selected.id);
   }, [selected?.id]);
-  return (consoleId) => sessionToRestore(lastByConsole.current, consoleId, sessions);
+  return (consoleId) => sessionToRestore(lastByConsole.current, consoleId, getSessions());
 }

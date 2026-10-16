@@ -14,6 +14,8 @@ use tokio::sync::{broadcast, mpsc};
 use crate::browse::budget;
 use crate::browse::git::GitEnv;
 use crate::browse::lane::{Frame, Lane};
+use crate::coordinator::Followup;
+use crate::hook_queue::Push;
 use crate::hooks;
 use crate::protocol::{
     Agent, BrowseBody, BrowseRequest, Event, Request, SessionStatus, TermControl,
@@ -135,8 +137,15 @@ async fn handle_control(socket: WebSocket, state: Arc<AppState>) {
                 let state = state.clone();
                 let outbound = outbound.clone();
                 tokio::spawn(async move {
-                    let reply = handle_request(&state, &text).await;
+                    let (reply, followup) = handle_request(&state, &text).await;
                     let _ = outbound.send(reply).await;
+                    // After the reply is queued, never before: what the follow-up does (a launch
+                    // that fails at once deletes the session just opened) is broadcast on a path
+                    // of its own, and must not reach the client ahead of the reply that tells it
+                    // the session exists.
+                    if let Some(followup) = followup {
+                        followup.start();
+                    }
                 });
             }
             Ok(Message::Close(_)) => break,
@@ -303,17 +312,18 @@ fn pending_questions(state: &AppState) -> Vec<Event> {
     questions
 }
 
-/// Parses and runs one request, and returns what goes back on the asking socket.
-async fn handle_request(state: &Arc<AppState>, text: &str) -> Event {
+/// Parses and runs one request, and returns what goes back on the asking socket, with what the
+/// request still has to do once that has been sent.
+async fn handle_request(state: &Arc<AppState>, text: &str) -> (Event, Option<Followup>) {
     let request: Request = match serde_json::from_str(text) {
         Ok(request) => request,
-        Err(err) => return Event::unreadable_request(&err.to_string()),
+        Err(err) => return (Event::unreadable_request(&err.to_string()), None),
     };
     let id = request.id.clone();
-    match crate::coordinator::handle(state, request.id, request.body).await {
-        Ok(Some(event)) => event,
-        Ok(None) => Event::Ack { id },
-        Err(err) => Event::from_error(id, &err),
+    match crate::coordinator::handle_deferred(state, request.id, request.body).await {
+        Ok((Some(event), followup)) => (event, followup),
+        Ok((None, followup)) => (Event::Ack { id }, followup),
+        Err(err) => (Event::from_error(id, &err), None),
     }
 }
 
@@ -420,54 +430,106 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, session_id: St
 
 // -- /hook/:session ----------------------------------------------------------
 
-/// The hook callback. It answers `200` immediately whatever happens: every one of the three agents
-/// renders a failing hook to the user, and the daemon being busy or confused is not something to
-/// show them. The event name comes from the payload, because the hook script is argument-free.
+/// The hook callback. It answers `200` with an empty body at once whatever happens, and applies the
+/// event afterwards on the session's own queue, in the order the events arrived. Every one of the
+/// three agents renders a failing hook to the user, and the daemon being busy or confused is not
+/// something to show them; for Claude Code's own HTTP hook, which is synchronous, an answer that
+/// waited would also hold the turn, and one that never came (an unreachable daemon, the hook's
+/// timeout) shows a non-blocking error notice in the transcript. An empty `200` is read there as
+/// "no decision", so the event cannot steer the turn either.
 async fn hook_callback(
     Path(session_id): Path<String>,
     State(state): State<Arc<AppState>>,
     body: Bytes,
 ) -> impl IntoResponse {
+    match state.hook_queues.push(&session_id, body) {
+        Push::StartWorker => {
+            // Applying an event is blocking work on the store, so the drain runs on the blocking
+            // pool; the tasks `apply_hook` starts find the runtime from there.
+            tokio::task::spawn_blocking(move || drain_hook_queue(&state, &session_id));
+        }
+        Push::Queued => {}
+        Push::Coalesced => {
+            tracing::warn!(session = %session_id, "the hook queue is full; the last event in line was replaced")
+        }
+    }
+    axum::http::StatusCode::OK
+}
+
+/// Applies a session's queued hook events one after another until none is left. Applying one is
+/// ordinary blocking work on the store, as it was when the route did it before answering.
+fn drain_hook_queue(state: &Arc<AppState>, session_id: &str) {
+    /// Releases the queue if applying an event panics, so the session's later events start a worker
+    /// of their own instead of waiting on one that is gone.
+    struct Abandon<'a> {
+        state: &'a AppState,
+        session_id: &'a str,
+        drained: bool,
+    }
+    impl Drop for Abandon<'_> {
+        fn drop(&mut self) {
+            if !self.drained {
+                self.state.hook_queues.abandon(self.session_id);
+            }
+        }
+    }
+    let mut guard = Abandon {
+        state,
+        session_id,
+        drained: false,
+    };
+    while let Some(body) = state.hook_queues.next(session_id) {
+        apply_hook(state, session_id, &body);
+        if !state.hook_queues.complete(session_id) {
+            break;
+        }
+    }
+    guard.drained = true;
+}
+
+/// Applies one hook event to its session. The event name comes from the payload, because the hook
+/// script is argument-free.
+fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
     let payload: serde_json::Value =
-        serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
+        serde_json::from_slice(body).unwrap_or(serde_json::Value::Null);
 
     // Claude Code and Grok run no hook before their trust confirmation has been answered, so the
     // first one means that screen is gone — and anything on the terminal that looks like it is not
     // it. Codex runs none around its own, but its first hook still comes only once the session is
     // past it. A Grok screen the person answered in the terminal has its trust entry carried over
     // from here (`trust::on_hook`).
-    if let Some(live) = state.live_session(&session_id) {
-        crate::trust::on_hook(&state, &live);
+    if let Some(live) = state.live_session(session_id) {
+        crate::trust::on_hook(state, &live);
     }
 
     // A subagent's events are the agent's internal business and carry the subagent's own ids.
     if hooks::is_subagent(&payload) {
-        return axum::http::StatusCode::OK;
+        return;
     }
 
     if let Some(agent_session_id) = hooks::agent_session_id(&payload) {
-        if let Err(err) = state.set_agent_session_id(&session_id, &agent_session_id) {
+        if let Err(err) = state.set_agent_session_id(session_id, &agent_session_id) {
             tracing::debug!(session = %session_id, %err, "recording the agent's session id failed");
         }
     }
 
-    crate::agent_records::on_hook(&state, &session_id, &payload);
+    crate::agent_records::on_hook(state, session_id, &payload);
 
     match hooks::event_name(&payload) {
         Some(event) => {
             let agent = state
-                .live_session(&session_id)
+                .live_session(session_id)
                 .map(|live| live.agent)
                 .or_else(|| {
                     state
                         .store
-                        .get_session(&session_id)
+                        .get_session(session_id)
                         .ok()
                         .flatten()
                         .map(|session| session.agent)
                 });
             if hooks::starts_conversation(&event) {
-                if let Err(err) = state.mark_conversation_started(&session_id) {
+                if let Err(err) = state.mark_conversation_started(session_id) {
                     tracing::debug!(session = %session_id, %err, "recording the session's first turn failed");
                 }
                 let prompt = agent.and_then(|agent| hooks::submitted_prompt(agent, &payload));
@@ -475,23 +537,19 @@ async fn hook_callback(
                 // when it opens could find the previous turn's failure and close this one. Codex
                 // only: Claude's watch retires itself once the session leaves `WaitingUser`.
                 if agent == Some(Agent::Codex) {
-                    state.end_record_watch(&session_id);
+                    state.end_record_watch(session_id);
                 }
-                state.turn_started(&session_id, prompt);
+                state.turn_started(session_id, prompt);
             }
             if let Some(agent) = agent {
                 crate::console_request::note_backgrounded(
-                    &state,
-                    &session_id,
-                    agent,
-                    &event,
-                    &payload,
+                    state, session_id, agent, &event, &payload,
                 );
-                let believable = read_turn_boundary(&state, &session_id, agent, &event, &payload);
+                let believable = read_turn_boundary(state, session_id, agent, &event, &payload);
                 if believable {
                     if let Some(status) = hooks::status_from_event(agent, &event, &payload) {
-                        let status = suppress_unanswerable_hand(&state, &session_id, status);
-                        if let Err(err) = state.apply_hook_status(&session_id, status) {
+                        let status = suppress_unanswerable_hand(state, session_id, status);
+                        if let Err(err) = state.apply_hook_status(session_id, status) {
                             tracing::debug!(session = %session_id, %event, %err, "applying the hook status failed");
                         }
                         // Claude Code emits no hook event at all for a rejected permission prompt
@@ -500,8 +558,8 @@ async fn hook_callback(
                         // response, which the adapters' few-second hook timeout would not allow.
                         if agent == Agent::Claude && status == SessionStatus::WaitingUser {
                             transcript::watch_for_rejection(
-                                &state,
-                                &session_id,
+                                state,
+                                session_id,
                                 payload
                                     .get("transcript_path")
                                     .and_then(serde_json::Value::as_str),
@@ -511,8 +569,8 @@ async fn hook_callback(
                         // `UserPromptSubmit`, so its own rollout is the only place that says so.
                         if agent == Agent::Codex && event == "UserPromptSubmit" {
                             rollout::watch_for_failure(
-                                &state,
-                                &session_id,
+                                state,
+                                session_id,
                                 payload
                                     .get("transcript_path")
                                     .and_then(serde_json::Value::as_str),
@@ -522,7 +580,7 @@ async fn hook_callback(
                         // Releasing a message queued while the session could not take one writes
                         // into its PTY, which blocks; it must not sit on this response, where the
                         // adapters' few-second hook timeout would surface as agent-visible noise.
-                        state.spawn_flush_outbox(&session_id, status);
+                        state.spawn_flush_outbox(session_id, status);
                     }
                 }
             } else {
@@ -531,8 +589,6 @@ async fn hook_callback(
         }
         None => tracing::debug!(session = %session_id, "hook payload carried no event name"),
     }
-
-    axum::http::StatusCode::OK
 }
 
 /// Acts on what this event says about the session's current turn, and says whether anything else it
@@ -957,6 +1013,39 @@ mod tests {
             assert_eq!(status_of(port, "POST /mcp/x", &[&host]), 200);
         });
         tests.await.expect("the checks ran");
+    }
+
+    /// What Claude Code's own `"type": "http"` hook sends: the event's JSON as a POST with no
+    /// `Origin`. It must get an empty `200`, which Claude Code reads as "no decision", and a page
+    /// posting the same thing from a browser must still be refused.
+    #[tokio::test]
+    async fn a_claude_http_hook_post_is_answered_with_an_empty_200() {
+        let port = serve("http-hook").await;
+        tokio::task::spawn_blocking(move || {
+            let payload = br#"{"hook_event_name":"Notification","notification_type":"idle_prompt","session_id":"agent-1"}"#;
+            let post = |origin: Option<&str>| {
+                let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
+                write!(
+                    stream,
+                    "POST /hook/s HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n{}\
+                     Content-Type: application/json\r\nContent-Length: {}\r\n\
+                     Connection: close\r\n\r\n",
+                    origin.map(|o| format!("Origin: {o}\r\n")).unwrap_or_default(),
+                    payload.len()
+                )
+                .expect("write head");
+                stream.write_all(payload).expect("write body");
+                let mut response = String::new();
+                std::io::Read::read_to_string(&mut stream, &mut response).expect("read");
+                response
+            };
+            let accepted = post(None);
+            assert!(accepted.starts_with("HTTP/1.1 200"), "{accepted}");
+            assert!(accepted.ends_with("\r\n\r\n"), "{accepted}");
+            assert!(post(Some("https://evil.example")).starts_with("HTTP/1.1 403"));
+        })
+        .await
+        .expect("the checks ran");
     }
 
     /// The handshake a browser sends: a refusal must come before the upgrade, and an allowed

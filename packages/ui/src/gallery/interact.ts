@@ -5,6 +5,7 @@ import { DORMANT_STATUSES, LIVE_STATUSES, type GitStatus } from "../protocol";
 import { activityLabel, statusLabel } from "../sessionLabel";
 import { ACTIVITIES } from "../sidebar/order";
 import type { Daemon } from "../store";
+import type { TerminalElement } from "../terminal/TerminalController";
 import { STATUS_LABELS, type StatusKey } from "../viewer/statusMarks";
 
 /** Everything a pressable thing is looked up among. A hand-built row is a `role="button"`, a tag
@@ -189,7 +190,7 @@ export interface Ui {
   hoverTerminalLink: (text: string) => Promise<void>;
   /** Moves the pointer onto the terminal's text `text`, as `hoverTerminalLink` does, for a plain-text
    * address, which has no tooltip but is underlined, on every row it spans, under the pointer.
-   * Fails if the row holding `text` is not underlined once the pointer is there. */
+   * Fails if the terminal does not show the pointer cursor of a link once the pointer is there. */
   hoverTerminalUrl: (text: string) => Promise<void>;
   /** Moves focus onto the first control named `matcher`, waiting for it to appear, with the keyboard
    * as its source, so that the focus ring is drawn as it is for a user who tabbed there, and a key
@@ -304,31 +305,30 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
 
   /** Puts the pointer on the terminal's text `text`, waiting for a row that holds it. */
   const pointTerminalText = async (text: string): Promise<void> => {
-    // xterm's own DOM renderer draws one element per row, its text in one or more spans (a space
-    // as a no-break space), and finds the link under the pointer from the coordinates of a
-    // `mousemove` alone.
-    const range = await waitFor(() => {
-      for (const row of doc.querySelectorAll(".xterm-rows > div")) {
-        const start = (row.textContent ?? "").replaceAll("\u00a0", " ").indexOf(text);
-        if (start < 0) continue;
-        const found = doc.createRange();
-        let offset = 0;
-        const nodes = doc.createTreeWalker(row, NodeFilter.SHOW_TEXT);
-        for (let node = nodes.nextNode(); node; node = nodes.nextNode()) {
-          const length = node.textContent?.length ?? 0;
-          if (start >= offset && start < offset + length) found.setStart(node, start - offset);
-          if (start + text.length > offset && start + text.length <= offset + length) {
-            found.setEnd(node, start + text.length - offset);
-            return found;
-          }
-          offset += length;
-        }
+    // The text comes from the terminal's buffer, which says the same under the DOM renderer and
+    // under WebGL (whose `.xterm-rows` is empty), and the pointer goes to a cell computed from the
+    // screen's box. xterm finds the link under the pointer from the coordinates of a `mousemove`
+    // alone.
+    const found = await waitFor(() => {
+      const view = (doc.querySelector(".xterm") as TerminalElement | null)?.octoboardTerminalText;
+      if (!view) return undefined;
+      for (let y = 0; y < view.rows(); y++) {
+        const col = view.row(y).indexOf(text);
+        if (col >= 0) return { view, col, y };
       }
       return undefined;
     }, `No terminal row holds ${text}`);
-    const box = range.getBoundingClientRect();
-    range.startContainer.parentElement?.dispatchEvent(
-      new MouseEvent("mousemove", { bubbles: true, clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 }),
+    const screen = doc.querySelector(".xterm-screen");
+    if (!screen) throw new Error("The terminal has no screen");
+    const box = screen.getBoundingClientRect();
+    const cellWidth = box.width / found.view.cols();
+    const cellHeight = box.height / found.view.rows();
+    screen.dispatchEvent(
+      new MouseEvent("mousemove", {
+        bubbles: true,
+        clientX: box.x + (found.col + text.length / 2) * cellWidth,
+        clientY: box.y + (found.y + 0.5) * cellHeight,
+      }),
     );
   };
 
@@ -533,12 +533,11 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async hoverTerminalUrl(text) {
       await pointTerminalText(text);
+      // xterm marks its element with the pointer cursor while the pointer is on a link, whichever
+      // renderer draws the underline.
       await waitFor(
-        () =>
-          [...doc.querySelectorAll(".xterm-rows > div")].find(
-            (row) => (row.textContent ?? "").replaceAll("\u00a0", " ").includes(text) && row.querySelector("[style*='underline']"),
-          ),
-        `Hovering ${text} in the terminal did not underline its row: it is not a link`,
+        () => doc.querySelector(".xterm-cursor-pointer") ?? undefined,
+        `Hovering ${text} in the terminal did not give xterm its link pointer cursor: it is not a link`,
       );
     },
     async hoverChangeStatus(row, status) {

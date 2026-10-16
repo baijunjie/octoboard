@@ -61,6 +61,8 @@ notify = "8.2"
 rustix = { version = "0.38", features = ["std"] }
 
 [dev-dependencies]
+# Paused time for tests that would otherwise wait out a real timeout.
+tokio = { version = "1", features = ["full", "test-util"] }
 # A WebSocket client for tests that drive the control socket end to end; the version axum's own
 # server side already resolves, with only the client handshake added.
 tokio-tungstenite = { version = "=0.24.0", default-features = false, features = ["connect"] }

@@ -9,6 +9,7 @@ import { enter, leave, mountForTooltip, openTooltip, trigger, withFakeTimers } f
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const STATUS_TEXT: Array<[SessionStatus, string]> = [
+  ["starting", "Starting"],
   ["working", "Working"],
   ["waiting_user", "Waiting for you"],
   ["idle", "Awaiting instructions"],

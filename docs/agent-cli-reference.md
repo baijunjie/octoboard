@@ -128,6 +128,27 @@ keeps working across versions.
 never shown. `exit 2` *blocks*, event-specifically, and feeds stderr to the model. A hook entry with no `timeout`
 field blocks the turn for its full duration; the implicit default is over 30 s.
 
+**Hook handler types.** A handler is a `command` (run through a shell) or, from **2.1.63**, an `http` one that POSTs
+the event's JSON to a URL from inside Claude Code's own process, so an event costs no process. An HTTP hook is always
+synchronous: it has no `async` field, and the turn waits for the answer within the handler's `timeout`. A `2xx` with
+an empty body is success with **no decision** (the same as exit 0 with no output), a JSON object body is read as a
+command's output would be, and a `2xx` with any other body, a non-`2xx` status, a connection failure and a timeout are
+each a **non-blocking error** that shows a notice in the transcript and lets the turn proceed. From **2.1.139** a
+`command` handler with an `args` list is run in *exec form*: the command is resolved as an executable and spawned
+directly with `args` as its argument vector, with no shell.
+
+**`allowedHttpHookUrls` can switch every HTTP hook off.** When that setting is defined in any settings file (user,
+project, local or managed; the arrays merge), Claude Code runs an HTTP hook only if its URL matches one of the patterns
+(`*` is a wildcard) and skips the rest without running them; an empty array skips every HTTP hook. So a user or managed
+setting that allowlists other URLs without the loopback hook URL leaves an injected HTTP hook doing nothing, and with
+it every status change. Octoboard reads the user, project and managed files at launch and keeps the command handler
+when the allowlist leaves its URL out; a policy delivered through an MDM profile or the claude.ai console is not
+readable from a file and stays a known gap.
+
+**`Notification` takes a matcher on its `notification_type`** (from **2.0.37**): a hook registered with
+`"matcher": "idle_prompt"` is delivered only for that type, which keeps the other notifications from reaching a
+handler that reads one.
+
 **Project configuration layering**: hooks injected through `--settings` merge with the project's
 `.claude/settings.json` hooks rather than replacing them, and injected `permissions` merge with the project's.
 Precedence among permission rules is by rule *kind* rather than by source — `deny` > `ask` > `allow` — so an injected

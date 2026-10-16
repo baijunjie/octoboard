@@ -6,6 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { expectIndependentMarquees, stubMarquee } from "../components/marqueeTestSupport";
 import { isolate } from "../i18n/isolate";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import type { Session } from "../protocol";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { sessionColourHex } from "../sessionColours";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
@@ -46,9 +47,11 @@ const underLead = sessionOf("web-under-lead", main.id, web.id, "Chase the flaky 
 const underFree = sessionOf("web-under-free", main.id, web.id, "Measure the first paint", "idle", { bound_to: "web-free" });
 const withTeams = [...sessions, lead, underLead, underFree];
 
-function mount(render: (handlers: SidebarHandlers) => React.ReactElement): { text: () => string; container: HTMLElement; handlers: SidebarHandlers; unmount: () => void } {
+/** `stored` is what the store holds of the console's sessions, which a console session's focus mode's
+ * project groups read themselves. */
+function mount(render: (handlers: SidebarHandlers) => React.ReactElement, stored: Session[] = []): { text: () => string; container: HTMLElement; handlers: SidebarHandlers; unmount: () => void } {
   const daemon: Daemon = {
-    store: createStateStore({ settings: { auto_pull_repositories: false, default_clone_dir: "/p", accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/w" }] } }),
+    store: createStateStore({ sessions: new Map(stored.map((session) => [session.id, session])), settings: { auto_pull_repositories: false, default_clone_dir: "/p", accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/w" }] } }),
     request: vi.fn(),
     toastError: vi.fn(),
     toastNotice: vi.fn(),
@@ -126,7 +129,7 @@ it("removing the last live console-bound session hides the switch, restores focu
 it("a console session's focus mode shows only its projects and sessions without inline account names", () => {
   const { container, text, handlers, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions} />
-  ));
+  ), sessions);
   const labels = sessionLabels(container);
   expect(labels.filter((l) => l.includes(" session,") && !l.startsWith(isolate("Hub"))).map((l) => l.split(" session,")[0]).sort()).toEqual(
     ["Add idempotency keys", "An old bound spike", "Fix the layout"].map(isolate).sort(),
@@ -145,7 +148,7 @@ it("a console session's focus mode shows only its projects and sessions without 
 it("a console session's focus mode offers neither a project's own focus mode nor the project filter", () => {
   const { container, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub2} projects={[web, api]} sessions={sessions} />
-  ));
+  ), sessions);
   expect(container.querySelector('[aria-label*="Filter"]')).toBeNull();
   unmount();
 });
@@ -156,7 +159,7 @@ const chips = (container: HTMLElement) =>
 it("a console session's focus mode has a strip of the console's console sessions, the one in focus marked", () => {
   const { container, handlers, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions} />
-  ));
+  ), sessions);
   // Hub's own bound session is working; Hub 2's console session is merely running; Hub 3 is archived.
   expect(chips(container).map((chip) => [chip.getAttribute("aria-label"), chip.getAttribute("aria-current")])).toEqual([
     [`${isolate("Hub")}, a session is working`, "true"],
@@ -171,7 +174,7 @@ it("a console session's focus mode has a strip of the console's console sessions
 it("a console session's focus mode has no strip when it is the console's only console session", () => {
   const { container, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions.filter((s) => s.id !== hub2.id)} />
-  ));
+  ), sessions.filter((s) => s.id !== hub2.id));
   expect(container.querySelector('[aria-label="Switch console session"]')).toBeNull();
   unmount();
 });
@@ -209,7 +212,7 @@ it("a project's focus mode nests an unbound session's own sessions under it and 
 it("a console session's focus mode nests a lead session's own sessions under it", () => {
   const { container, text, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={withTeams} />
-  ));
+  ), withTeams);
   const cards = Array.from(container.querySelectorAll<HTMLElement>("div[role=button]")).filter((card) =>
     card.className.includes("flex-col"),
   );
@@ -238,7 +241,7 @@ it("project focus uses a clickable empty row beside its archive instead of a sec
 it.each([false, true])("console focus keeps its empty nested list compact (projects present: %s)", (hasProjects) => {
   const { container, handlers, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={hasProjects ? [web] : []} sessions={[hub1]} />
-  ));
+  ), [hub1]);
   expect(Array.from(container.querySelectorAll("h2,h3")).map((heading) => heading.textContent)).toEqual(["Hub", "Sessions (0)"]);
   if (!hasProjects) {
     const row = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("No projects yet"));
@@ -289,7 +292,7 @@ it.each(["project", "console"] as const)("%s focus previews ten archived parents
     <ProjectFocusView handlers={h} console={main} project={web} sessions={context.filter((s) => s.project_id === web.id)} owners={owners} />
   ) : (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web]} sessions={context} />
-  ));
+  ), context);
   expect(text()).toContain("Archived (11)");
   const rows = Array.from(container.querySelectorAll<HTMLElement>('div[role="button"]'))
     .filter((row) => row.getAttribute("aria-label")?.includes("Archived parent"));

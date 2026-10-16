@@ -95,8 +95,10 @@ function paramText(records: RecordNames, name: string, value: string): string {
  * (`UI_PARAMS`), each shown as plain text (see `paramText`). A numeric `count` param is a number,
  * which selects the message's plural form. A `reason_code` param is worded from the catalog's
  * `daemon.trust_reason.<code>` and replaces `reason`, which stays the daemon's English account for a
- * reason code the catalog lacks. With `mark`, a param the message shows as code (`CODE_PARAMS`) is
- * what `mark` makes of its raw value instead. */
+ * reason code the catalog lacks. A `launch_failed` notice's `reason_code` is the code of the error
+ * the launch failed with, so its `reason` is worded from that code's own `daemon.<code>` message, with
+ * the failure's params that arrive beside it and that code's `UI_PARAMS`. With `mark`, a param the
+ * message shows as code (`CODE_PARAMS`) is what `mark` makes of its raw value instead. */
 export function daemonParams<V = never>(
   language: Language,
   code: string,
@@ -104,7 +106,8 @@ export function daemonParams<V = never>(
   records: RecordNames,
   mark?: (value: string) => V,
 ): Record<string, string | number | V> {
-  const all = withUiParams(code, params);
+  // A failed launch carries its failure's params, which take the UI's own for the failure's code.
+  const all = code === "launch_failed" && params.reason_code ? withUiParams(params.reason_code, params) : withUiParams(code, params);
   const shown: Record<string, string | number> = Object.fromEntries(
     Object.entries(all).map(([name, value]) => [name, paramText(records, name, value)]),
   );
@@ -112,6 +115,8 @@ export function daemonParams<V = never>(
   if (/^\d+$/.test(all.count ?? "")) shown.count = Number(all.count);
   const reasonKey = `daemon.trust_reason.${all.reason_code}`;
   if (isMessageKey(reasonKey)) shown.reason = format(language, reasonKey, shown);
+  const failureKey = `daemon.${messageCode(all.reason_code ?? "", all)}`;
+  if (code === "launch_failed" && isMessageKey(failureKey)) shown.reason = format(language, failureKey, shown);
   if (!mark) return shown;
   const marked: Record<string, string | number | V> = { ...shown };
   for (const name of CODE_PARAMS[messageCode(code, all)] ?? []) if (name in all) marked[name] = mark(all[name]);

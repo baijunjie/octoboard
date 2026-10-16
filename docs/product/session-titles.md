@@ -30,3 +30,16 @@ created name alone.
 The terminal title comes from OSC 0 or OSC 2 with a BEL or ST terminator. Octoboard accepts valid UTF-8 titles of at
 most 4096 bytes without control characters. Other terminal strings and malformed or oversized titles leave the
 saved title unchanged. Title observation does not remove or change the output shown in the terminal.
+
+## Leading activity glyphs
+
+Agents animate glyphs at the start of their terminal title to show what they are doing. A run of the following
+characters at the very start of a title, together with the whitespace after it, is not part of the title Octoboard
+follows: braille patterns (U+2800–U+28FF, the usual terminal spinners ⠋⠙⠹…), the half-filled circles ◐◓◑◒
+(U+25D0–U+25D3) and U+25F0–U+25F7, the stars and asterisks U+2722–U+2727 and U+2729–U+273D (among them ✳ ✶ ✻ ✽ ✦),
+and · • ● ○ ◉ ◎ ◆ ◇. The run is left out only when the title goes on after whitespace or ends there: a title that
+starts with such a character followed directly by text keeps it, and such characters further into the title are
+kept.
+
+So the saved title, and every place that shows it, never carries these glyphs; a title that only changes its glyph is
+not a change, and one that is nothing but such glyphs clears the title, leaving the created name alone.

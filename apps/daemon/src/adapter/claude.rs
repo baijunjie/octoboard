@@ -26,7 +26,9 @@ use std::path::{Path, PathBuf};
 
 use serde_json::json;
 
-use super::{AgentAdapter, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
+use super::{
+    hook_command, hook_url, AgentAdapter, AgentVersion, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS,
+};
 use crate::mcp;
 use crate::protocol::{notice_code, Agent, Notice};
 
@@ -48,26 +50,66 @@ const HOOK_EVENTS: &[&str] = &[
     "StopFailure",
 ];
 
+/// The first Claude Code that takes a `"type": "http"` hook handler, which posts the event's JSON
+/// to a URL from inside the agent's own process. Older ones only run commands.
+const HTTP_HOOKS_SINCE: AgentVersion = (2, 1, 63);
+
 pub struct ClaudeAdapter;
 
+/// Reads a version that is exactly `major.minor.patch` and nothing else.
+fn parse_version(text: &str) -> Option<AgentVersion> {
+    let mut parts = text.split('.');
+    let version = (
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+    );
+    parts.next().is_none().then_some(version)
+}
+
 impl ClaudeAdapter {
-    /// The `--settings` JSON. `async` keeps a slow hook off the turn's critical path (a 30 s hook
-    /// took a turn from 6.8 s to 36.7 s without it) and `timeout` bounds it regardless.
-    fn settings_json(spec: &LaunchSpec<'_>) -> String {
-        let command = spec.hook_script.to_string_lossy().into_owned();
+    /// The `--settings` JSON. A Claude Code that takes HTTP hooks posts each event to the daemon
+    /// itself, so a hook costs no process at all; with an older or unknown version, or when a
+    /// settings file's `allowedHttpHookUrls` leaves the daemon's URL out (Claude Code then skips
+    /// every HTTP hook silently), each event runs a command instead. `async` keeps a slow command
+    /// off the turn's critical path (a 30 s hook took a turn from 6.8 s to 36.7 s without it) and
+    /// `timeout` bounds it regardless; an HTTP hook has no `async`, and is kept off the critical
+    /// path by the route answering before the event is applied (see `server::hook_callback`).
+    /// Claude Code runs a command through a shell, so the daemon is exec'd by the command itself
+    /// rather than through the per-session hook script, which would be one more process to start
+    /// per event.
+    ///
+    /// A daemon that cannot be reached, or does not answer within the timeout, shows a
+    /// non-blocking error notice in Claude Code for an HTTP hook, where the command form swallows
+    /// it. That is accepted: the daemon owns the session's terminal, so one that is gone has taken
+    /// the session with it.
+    fn settings_json(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> String {
+        let url = hook_url(spec.session_id, spec.daemon_port);
+        let http = spec.agent_version.is_some_and(|v| v >= HTTP_HOOKS_SINCE)
+            && http_hooks_allowed(&url, &settings_files(spec, pinned));
+        let handler = if http {
+            json!({
+                "type": "http",
+                "url": url,
+                "timeout": HOOK_TIMEOUT_SECS,
+            })
+        } else {
+            json!({
+                "type": "command",
+                "command": hook_command(spec.self_exe, spec.session_id, spec.daemon_port),
+                "async": true,
+                "timeout": HOOK_TIMEOUT_SECS,
+            })
+        };
         let mut hooks = serde_json::Map::new();
         for event in HOOK_EVENTS {
-            hooks.insert(
-                (*event).to_string(),
-                json!([{
-                    "hooks": [{
-                        "type": "command",
-                        "command": command,
-                        "async": true,
-                        "timeout": HOOK_TIMEOUT_SECS,
-                    }]
-                }]),
-            );
+            let mut group = json!({ "hooks": [handler] });
+            // Only `idle_prompt` is read (see `crate::hooks`); the matcher keeps the other
+            // notifications from being delivered for nothing.
+            if *event == "Notification" {
+                group["matcher"] = json!("idle_prompt");
+            }
+            hooks.insert((*event).to_string(), json!([group]));
         }
         json!({ "hooks": hooks }).to_string()
     }
@@ -98,6 +140,33 @@ impl AgentAdapter for ClaudeAdapter {
         true
     }
 
+    /// Two layouts, each matched exactly, since a guess that is wrong switches hook mechanisms on
+    /// a Claude Code that cannot take them. A native install keeps each release as a file named
+    /// for its version in a directory called `versions` (`~/.local/share/claude/versions/2.1.301`,
+    /// which `~/.local/bin/claude` links to). A package install keeps the version in the
+    /// `package.json` of the nearest `claude-code` directory the binary resolves into, looked for
+    /// no further out than the enclosing `node_modules`. Any other layout, or a path that cannot be
+    /// followed, is `None`.
+    fn installed_version(&self, binary: &str) -> Option<AgentVersion> {
+        let resolved = std::fs::canonicalize(binary).ok()?;
+        let parent = resolved.parent()?;
+        if parent.file_name().is_some_and(|name| name == "versions") {
+            return parse_version(resolved.file_name()?.to_str()?);
+        }
+        for dir in parent.ancestors() {
+            let name = dir.file_name()?;
+            if name == "node_modules" {
+                return None;
+            }
+            if name == "claude-code" {
+                let manifest = std::fs::read_to_string(dir.join("package.json")).ok()?;
+                let manifest: serde_json::Value = serde_json::from_str(&manifest).ok()?;
+                return parse_version(manifest.get("version")?.as_str()?);
+            }
+        }
+        None
+    }
+
     fn plan(&self, spec: &LaunchSpec<'_>) -> anyhow::Result<LaunchPlan> {
         let pinned = super::pinned_config_dir(spec, Agent::Claude)?;
         let mut args = Vec::new();
@@ -121,7 +190,7 @@ impl AgentAdapter for ClaudeAdapter {
             }
         }
         args.push("--settings".to_string());
-        args.push(Self::settings_json(spec));
+        args.push(Self::settings_json(spec, pinned));
         args.push("--mcp-config".to_string());
         args.push(Self::mcp_config_json(spec));
         args.push("--append-system-prompt".to_string());
@@ -157,6 +226,93 @@ impl AgentAdapter for ClaudeAdapter {
             ..LaunchPlan::default()
         })
     }
+}
+
+/// The settings files whose `allowedHttpHookUrls` this launch's Claude Code would merge: the
+/// user's, the project's two, and the managed file and drop-in directory. Policy delivered through
+/// an MDM profile or the claude.ai console is in none of them and cannot be read from here.
+fn settings_files(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Vec<PathBuf> {
+    let user = pinned
+        .map(PathBuf::from)
+        .or_else(|| {
+            spec.shell_env
+                .get("CLAUDE_CONFIG_DIR")
+                .filter(|dir| !dir.is_empty())
+                .map(PathBuf::from)
+        })
+        .unwrap_or_else(|| {
+            spec.shell_env
+                .get("HOME")
+                .filter(|home| !home.is_empty())
+                .map(PathBuf::from)
+                .unwrap_or_else(crate::paths::home_dir)
+                .join(".claude")
+        });
+    let managed = Path::new(if cfg!(target_os = "macos") {
+        "/Library/Application Support/ClaudeCode"
+    } else {
+        "/etc/claude-code"
+    });
+    let mut files = vec![
+        user.join("settings.json"),
+        spec.cwd.join(".claude/settings.json"),
+        spec.cwd.join(".claude/settings.local.json"),
+        managed.join("managed-settings.json"),
+    ];
+    if let Ok(entries) = std::fs::read_dir(managed.join("managed-settings.d")) {
+        files.extend(entries.flatten().map(|entry| entry.path()));
+    }
+    files
+}
+
+/// Whether Claude Code would run an HTTP hook for `url` given `files`: it does unless some file
+/// defines `allowedHttpHookUrls`, whose arrays merge across files, and no merged pattern matches.
+/// A pattern's `*` stands for anything; a file that cannot be read or parsed counts for nothing.
+fn http_hooks_allowed(url: &str, files: &[PathBuf]) -> bool {
+    let mut patterns: Option<Vec<String>> = None;
+    for file in files {
+        let Some(settings) = std::fs::read_to_string(file)
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        else {
+            continue;
+        };
+        if let Some(list) = settings
+            .get("allowedHttpHookUrls")
+            .and_then(serde_json::Value::as_array)
+        {
+            patterns.get_or_insert_with(Vec::new).extend(
+                list.iter()
+                    .filter_map(|p| p.as_str().map(str::to_lowercase)),
+            );
+        }
+    }
+    let url = url.to_lowercase();
+    patterns.is_none_or(|patterns| {
+        patterns
+            .iter()
+            .any(|pattern| wildcard_matches(pattern, &url))
+    })
+}
+
+/// Whether `text` matches `pattern`, in which `*` stands for any run of characters.
+fn wildcard_matches(pattern: &str, text: &str) -> bool {
+    let mut parts = pattern.split('*');
+    let first = parts.next().unwrap_or_default();
+    let Some(mut rest) = text.strip_prefix(first) else {
+        return false;
+    };
+    let mut parts = parts.peekable();
+    while let Some(part) = parts.next() {
+        if parts.peek().is_none() {
+            return rest.ends_with(part);
+        }
+        match rest.find(part) {
+            Some(at) => rest = &rest[at + part.len()..],
+            None => return false,
+        }
+    }
+    rest.is_empty()
 }
 
 /// The global config file this launch's Claude Code will read: inside the configuration directory
@@ -435,9 +591,8 @@ mod tests {
         assert!(warns(&fixture));
     }
 
-    #[test]
-    fn injects_every_hook_event_as_a_fast_silent_command() {
-        let fixture = spec_fixture();
+    /// The `hooks` table of the `--settings` this launch passes.
+    fn injected_hooks(fixture: &crate::adapter::tests::SpecFixture) -> serde_json::Value {
         let plan = ClaudeAdapter.plan(&fixture.spec()).expect("plan");
         let settings_index = plan
             .args
@@ -446,7 +601,14 @@ mod tests {
             .expect("--settings is passed");
         let settings: serde_json::Value =
             serde_json::from_str(&plan.args[settings_index + 1]).expect("the settings are JSON");
-        let hooks = settings["hooks"].as_object().expect("a hooks table");
+        settings["hooks"].clone()
+    }
+
+    #[test]
+    fn injects_every_hook_event_as_a_fast_silent_command() {
+        let fixture = spec_fixture();
+        let hooks = injected_hooks(&fixture);
+        let hooks = hooks.as_object().expect("a hooks table");
         assert_eq!(hooks.len(), HOOK_EVENTS.len());
         for event in HOOK_EVENTS {
             let handler = &hooks[*event][0]["hooks"][0];
@@ -455,8 +617,130 @@ mod tests {
             assert_eq!(handler["timeout"], HOOK_TIMEOUT_SECS);
             assert_eq!(
                 handler["command"].as_str().unwrap(),
-                fixture.hook_script.to_string_lossy()
+                "exec '/opt/octoboard/octoboardd' hook --session 'session-1' --port 4321 2>/dev/null"
             );
+            // Only `idle_prompt` of the notifications is read.
+            assert_eq!(
+                hooks[*event][0].get("matcher").and_then(|m| m.as_str()),
+                (*event == "Notification").then_some("idle_prompt")
+            );
+        }
+    }
+
+    /// An `allowedHttpHookUrls` that leaves the daemon's URL out keeps the command form, whichever
+    /// file defines it.
+    #[test]
+    fn an_http_hook_allowlist_without_the_daemon_keeps_the_command_form() {
+        let url = "http://127.0.0.1:4321/hook/session-1";
+        let dir = crate::test_support::ScratchDir::new("hook-allowlist");
+        let file = |name: &str, content: &str| {
+            let path = dir.join(name);
+            std::fs::write(&path, content).expect("settings");
+            path
+        };
+        let none = file("none.json", "{}");
+        let broken = file("broken.json", "{");
+        let other = file(
+            "other.json",
+            r#"{"allowedHttpHookUrls":["https://hooks.example.com/*"]}"#,
+        );
+        let loopback = file(
+            "loopback.json",
+            r#"{"allowedHttpHookUrls":["http://127.0.0.1:*"]}"#,
+        );
+        let empty = file("empty.json", r#"{"allowedHttpHookUrls":[]}"#);
+        let missing = dir.join("missing.json");
+
+        assert!(http_hooks_allowed(url, &[none.clone(), broken, missing]));
+        assert!(!http_hooks_allowed(url, std::slice::from_ref(&other)));
+        assert!(!http_hooks_allowed(url, &[empty]));
+        assert!(http_hooks_allowed(url, std::slice::from_ref(&loopback)));
+        // The arrays merge, so one file naming the daemon is enough.
+        assert!(http_hooks_allowed(url, &[other, none, loopback]));
+        assert!(wildcard_matches("http://*/hook/*", url));
+        assert!(!wildcard_matches("http://*/hook", url));
+    }
+
+    /// Both layouts match exactly, and a binary whose install tells nothing has no version.
+    #[test]
+    fn a_binary_version_comes_from_its_install_location() {
+        let root = crate::test_support::ScratchDir::new("binary-version");
+        let version_of =
+            |path: &std::path::Path| ClaudeAdapter.installed_version(&path.to_string_lossy());
+        std::fs::create_dir_all(root.join("bin")).expect("bin");
+
+        let versions = root.join("share/versions");
+        std::fs::create_dir_all(&versions).expect("versions");
+        std::fs::write(versions.join("2.1.301"), "").expect("binary");
+        let native = root.join("bin/claude");
+        std::os::unix::fs::symlink(versions.join("2.1.301"), &native).expect("link");
+        assert_eq!(version_of(&native), Some((2, 1, 301)));
+
+        // A file in a directory of another name, or one that is not named exactly for a version,
+        // is not read as one.
+        let elsewhere = root.join("share/builds");
+        std::fs::create_dir_all(&elsewhere).expect("builds");
+        std::fs::write(elsewhere.join("2.1.301"), "").expect("binary");
+        assert_eq!(version_of(&elsewhere.join("2.1.301")), None);
+        for name in ["v2.1.301", "2.1.301-beta", "2.1", "2.1.3.1"] {
+            std::fs::write(versions.join(name), "").expect("binary");
+            assert_eq!(version_of(&versions.join(name)), None, "{name}");
+        }
+
+        let package = root.join("lib/node_modules/@anthropic-ai/claude-code");
+        std::fs::create_dir_all(package.join("bin")).expect("package");
+        std::fs::write(package.join("package.json"), r#"{"version":"2.1.100"}"#).expect("manifest");
+        std::fs::write(package.join("bin/claude.js"), "").expect("entry");
+        let npm = root.join("bin/claude-npm");
+        std::os::unix::fs::symlink(package.join("bin/claude.js"), &npm).expect("link");
+        assert_eq!(version_of(&npm), Some((2, 1, 100)));
+
+        // The walk stops at `node_modules`, so another package's manifest further out is not read.
+        let other = root.join("lib/node_modules/other");
+        std::fs::create_dir_all(&other).expect("other");
+        std::fs::write(root.join("lib/package.json"), r#"{"version":"9.9.9"}"#).expect("manifest");
+        std::fs::write(other.join("cli.js"), "").expect("entry");
+        assert_eq!(version_of(&other.join("cli.js")), None);
+
+        let plain = root.join("bin/plain");
+        std::fs::write(&plain, "").expect("binary");
+        assert_eq!(version_of(&plain), None);
+    }
+
+    /// A Claude Code that takes HTTP hooks gets the daemon's hook route, with no process behind any
+    /// event; one older than that, or of a version nobody could tell, keeps the command.
+    #[test]
+    fn http_hooks_are_injected_from_the_version_that_takes_them() {
+        let mut fixture = spec_fixture();
+        for (version, http) in [
+            (Some((2, 1, 63)), true),
+            (Some((2, 1, 301)), true),
+            (Some((3, 0, 0)), true),
+            (Some((2, 1, 62)), false),
+            (Some((1, 9, 99)), false),
+            (None, false),
+        ] {
+            fixture.agent_version = version;
+            let hooks = injected_hooks(&fixture);
+            for event in HOOK_EVENTS {
+                let handler = &hooks[*event][0]["hooks"][0];
+                assert_eq!(handler["timeout"], HOOK_TIMEOUT_SECS);
+                if http {
+                    assert_eq!(handler["type"], "http", "{version:?}");
+                    assert_eq!(
+                        handler["url"], "http://127.0.0.1:4321/hook/session-1",
+                        "{version:?}"
+                    );
+                    assert!(handler.get("async").is_none(), "{version:?}");
+                    assert!(handler.get("command").is_none(), "{version:?}");
+                } else {
+                    assert_eq!(handler["type"], "command", "{version:?}");
+                }
+                assert_eq!(
+                    hooks[*event][0].get("matcher").and_then(|m| m.as_str()),
+                    (*event == "Notification").then_some("idle_prompt")
+                );
+            }
         }
     }
 

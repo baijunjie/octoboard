@@ -10,7 +10,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { setInteractionModality } from "react-aria";
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { noAgentAvailable } from "../agents";
@@ -24,7 +24,6 @@ import { RowControls, RowIconGroup, RowIconSlot } from "../components/RowControl
 import { FadedScroller } from "../components/scrollFade";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { StatusIcon } from "../components/StatusIcon";
-import { useStableHandler } from "../components/useLatest";
 import { withGitBadge } from "../gitStatusLabel";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
@@ -35,19 +34,21 @@ import type { PanePeek } from "../layout/usePaneToggles";
 import { effectiveTags, matchesFilter, tagVocabulary } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
 import { activityLabelKey, sessionAccountTooltip, sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
+import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
 import { consoleMenu, projectMenu } from "./menus";
 import { SessionActions } from "./SessionActions";
-import { archivedSessions, consoleActivity, hasBoundSessions, isInactiveProject, liveSessionRows, liveSessions, sortProjects } from "./order";
+import { archivedSessions, consoleActivity, INACTIVE_PROJECT_RANK, liveSessionRows, liveSessions, projectRank, sortProjectsByRank } from "./order";
 import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterSummary } from "./ProjectFilter";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
 import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, PinButton, RowIconButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
 import { focusTargetId } from "./focus";
 import type { FocusTarget, SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
+import { useArchivedOwnerSessions, useConsoleSessions, useHasBoundSessions, useOwnerSessions, useProjectSessions, useSession, useSessionProjectId } from "../sessions/useSessions";
 
 /** The clip the docked column sits in. `min-w-0` lets the flex item reach 0 while the sidebar
  * inside keeps its full width, so the list does not reflow.
@@ -64,7 +65,6 @@ function columnClipClass(easing: boolean): string {
 
 interface SidebarProps extends SidebarHandlers {
   projects: Project[];
-  sessions: Session[];
   selectedSessionId?: string;
   /** The console the sidebar shows: the current one, or while the hidden sidebar floats in, the one
    * whose avatar the pointer is on. The caller resolves it to an existing one, and does not render
@@ -100,7 +100,6 @@ interface SidebarProps extends SidebarHandlers {
  * it. */
 export function Sidebar({
   projects,
-  sessions,
   selectedSessionId,
   shownConsole,
   focus,
@@ -262,33 +261,23 @@ export function Sidebar({
     viewRef.current?.animate([{ ...from, opacity: 0 }, {}], { duration: 240, easing: "cubic-bezier(0.2, 0, 0, 1)" });
   }, [viewKey]);
 
-  const consoleSessions = sessions.filter((s) => s.console_id === shownConsole.id);
-  // Every project session's binding badge names the console session it is bound to (`bound_to`) by
-  // looking it up here, once, rather than each row searching the console's sessions itself. Every
-  // project row takes it, so it is kept while the console sessions stay the same.
-  const ownerSessions = useSameList(consoleSessions.filter((s) => s.role === "console"));
-  const owners = new Map(ownerSessions.map((s) => [s.id, s]));
-
   let content: React.ReactNode;
   if (focus && "project" in focus) {
     content = (
-      <ProjectFocusView
+      <ProjectFocus
         handlers={handlers}
         console={shownConsole}
         project={focus.project}
-        sessions={consoleSessions.filter((s) => s.project_id === focus.project.id)}
-        owners={owners}
         selectedSessionId={selectedSessionId}
       />
     );
   } else if (focus) {
     content = (
-      <ConsoleSessionFocusView
+      <ConsoleSessionFocus
         handlers={handlers}
         console={shownConsole}
         consoleSession={focus.consoleSession}
         projects={projects.filter((p) => p.console_id === shownConsole.id)}
-        sessions={consoleSessions}
         selectedSessionId={selectedSessionId}
       />
     );
@@ -303,14 +292,12 @@ export function Sidebar({
     );
     content = (
       <>
-        <ConsoleHeader handlers={handlers} current={shownConsole} sessions={consoleSessions} />
+        <ConsoleHeader handlers={handlers} current={shownConsole} />
         <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT} className="min-h-0 flex-1 px-2 pb-2">
           <ConsoleBody
             handlers={handlers}
             console={shownConsole}
             projects={consoleProjects}
-            sessions={consoleSessions}
-            owners={owners}
             selectedSessionId={selectedSessionId}
             collapsed={collapsed}
             toggle={toggle}
@@ -402,10 +389,11 @@ export function Sidebar({
 /** The header naming the console shown, with the console's own actions beside it. Its name only:
  * the console's avatar is already marked as the current one on the rail (`Rail.tsx`), which also
  * switches consoles and carries what is going on in every console. */
-function ConsoleHeader({ handlers, current, sessions }: { handlers: SidebarHandlers; current: Console; sessions: Session[] }): React.ReactElement {
+function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers; current: Console }): React.ReactElement {
   const t = useT();
   const headerRef = useRef<HTMLDivElement>(null);
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
+  const sessions = useArchivedOwnerSessions(current.id);
   return (
     // The list under this header is inset twice — the scroll area, then each heading and row — so
     // the end padding matches that and this menu lines up with the rows' menus.
@@ -429,8 +417,6 @@ function ConsoleBody({
   handlers,
   console: thisConsole,
   projects,
-  sessions,
-  owners,
   selectedSessionId,
   collapsed,
   toggle,
@@ -443,10 +429,6 @@ function ConsoleBody({
   handlers: SidebarHandlers;
   console: Console;
   projects: Project[];
-  sessions: Session[];
-  /** Every console session of this console, by id — a project session's binding badge is looked up
-   * here by its `bound_to`. */
-  owners: Map<string, Session>;
   selectedSessionId?: string;
   collapsed: Set<string>;
   toggle: (id: string) => void;
@@ -460,16 +442,20 @@ function ConsoleBody({
 }): React.ReactElement {
   const t = useT();
   const listRef = useFlip<HTMLDivElement>();
+  const ranks = useProjectRanks(projects);
+  // Only the project holding the selected session is told which one it is, so a selection moving
+  // between two sessions renders those projects alone.
+  const selectedProjectId = useSessionProjectId(selectedSessionId);
   const foldButton = useRef<HTMLSpanElement>(null);
-  const sessionsOf = (project: Project) => sessions.filter((s) => s.project_id === project.id);
   // The tags to pick from are the ones the console's projects carry now; a picked tag none of them
   // carries any more is dropped here, so it neither filters nor shows, yet it stays in the stored
   // selection, which every change to the filter is applied to.
   const vocabulary = tagVocabulary(projects);
   const filter = { keyword: stored.keyword, tags: effectiveTags(stored.tags, vocabulary) };
-  const ordered = sortProjects(
+  const rankOf = new Map(projects.map((p, i) => [p.id, ranks[i]]));
+  const ordered = sortProjectsByRank(
     projects.filter((p) => matchesFilter(p, filter.keyword, filter.tags)),
-    sessionsOf,
+    rankOf,
   );
   const orderedIds = ordered.map((p) => p.id);
   const noMatch = projects.length > 0 && ordered.length === 0 ? t("sidebar.filter.noMatch") : undefined;
@@ -490,7 +476,7 @@ function ConsoleBody({
 
   return (
     <>
-      <ConsoleSessionsSection handlers={handlers} console={thisConsole} sessions={sessions} selectedSessionId={selectedSessionId} />
+      <ConsoleSessionsSection handlers={handlers} console={thisConsole} selectedSessionId={selectedSessionId} />
       <section className="flow-root">
         <StickySectionHeading
           inline={projects.length > 0 && isFiltering(filter) && <ProjectFilterSummary filter={filter} />}
@@ -555,7 +541,7 @@ function ConsoleBody({
               <div
                 key={project.id}
                 data-flip={project.id}
-                data-inactive={isInactiveProject(sessionsOf(project)) || undefined}
+                data-inactive={rankOf.get(project.id) === INACTIVE_PROJECT_RANK || undefined}
                 // Dimmed by a veil of the sidebar's own colour laid over it, not by `opacity`: WebKit
                 // composites an element that fades in or out (a row's hover controls, its chevron)
                 // inside a translucent ancestor wrongly, painting it as a blank tile. The veil is
@@ -568,11 +554,9 @@ function ConsoleBody({
                   handlers={handlers}
                   project={project}
                   parentConsole={thisConsole}
-                  sessions={sessionsOf(project)}
-                  owners={owners}
-                  selectedSessionId={selectedSessionId}
+                  selectedSessionId={project.id === selectedProjectId ? selectedSessionId : undefined}
                   isCollapsed={collapsed.has(project.id)}
-                  onToggle={() => toggle(project.id)}
+                  onToggle={toggle}
                 />
               </div>
             ))}
@@ -590,16 +574,16 @@ function ConsoleBody({
 function ConsoleSessionsSection({
   handlers,
   console: thisConsole,
-  sessions,
   selectedSessionId,
 }: {
   handlers: SidebarHandlers;
   console: Console;
-  sessions: Session[];
   selectedSessionId?: string;
 }): React.ReactElement {
   const t = useT();
+  const listRef = useFlip<HTMLDivElement>();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
+  const consoleSessions = useOwnerSessions(thisConsole.id);
   // With no agent on the machine at all, starting a console session would only be refused by the
   // daemon the moment it tried — so the action is disabled here instead, and `agents.noneFound` is
   // shown. It is rendered whenever the console is blocked, not only when `live` is empty, because a
@@ -607,10 +591,8 @@ function ConsoleSessionsSection({
   // interrupted (an agent removed, or a `PATH` change) stays live and keeps `liveSessions` from
   // being empty.
   const blocked = noAgentAvailable(agentAvailability);
-  const consoleSessions = sessions.filter((s) => s.role === "console");
   const live = liveSessions(consoleSessions);
   const openNew = () => handlers.onOpenConsoleSession(thisConsole);
-  const listRef = useFlip<HTMLDivElement>();
 
   return (
     <section className="flow-root">
@@ -632,7 +614,7 @@ function ConsoleSessionsSection({
         <div ref={listRef} className="relative flex flex-col gap-0.5">
           {live.map((session) => (
             <div key={session.id} data-flip={session.id}>
-              <SessionRow handlers={handlers} session={session} selectedSessionId={selectedSessionId} />
+              <SessionRow handlers={handlers} session={session} selected={session.id === selectedSessionId} />
             </div>
           ))}
         </div>
@@ -641,12 +623,79 @@ function ConsoleSessionsSection({
   );
 }
 
-function ProjectNode({
+/** A project's rank (`projectRank`) for each of `projects`, in their order. Read from the store as
+ * numbers, so an event that leaves every project's rank as it was does not render the list. */
+function useProjectRanks(projects: Project[]): number[] {
+  return useDaemonStore(
+    useShallow((s) => {
+      const { byProject } = indexSessions(s.sessions);
+      return projects.map((p) => projectRank(sessionsOf(byProject, p.id)));
+    }),
+  );
+}
+
+/** A project's focus mode over the project's sessions and the console's console sessions. */
+function ProjectFocus({
+  handlers,
+  console: thisConsole,
+  project,
+  selectedSessionId,
+}: {
+  handlers: SidebarHandlers;
+  console: Console;
+  project: Project;
+  selectedSessionId?: string;
+}): React.ReactElement {
+  const sessions = useProjectSessions(project.id);
+  const ownerSessions = useOwnerSessions(thisConsole.id);
+  // Every project row takes it, so it is kept while the console sessions stay the same.
+  const owners = new Map(ownerSessions.map((s) => [s.id, s]));
+  return (
+    <ProjectFocusView
+      handlers={handlers}
+      console={thisConsole}
+      project={project}
+      sessions={sessions}
+      owners={owners}
+      selectedSessionId={selectedSessionId}
+    />
+  );
+}
+
+/** A console session's focus mode over every session of the console. */
+function ConsoleSessionFocus({
+  handlers,
+  console: thisConsole,
+  consoleSession,
+  projects,
+  selectedSessionId,
+}: {
+  handlers: SidebarHandlers;
+  console: Console;
+  consoleSession: Session;
+  projects: Project[];
+  selectedSessionId?: string;
+}): React.ReactElement {
+  const sessions = useConsoleSessions(thisConsole.id);
+  return (
+    <ConsoleSessionFocusView
+      handlers={handlers}
+      console={thisConsole}
+      consoleSession={consoleSession}
+      projects={projects}
+      sessions={sessions}
+      selectedSessionId={selectedSessionId}
+    />
+  );
+}
+
+/** A project and its sessions. Memoised: it renders again only for its own project's change, its
+ * sessions' (read from the store here, not handed down), the selection reaching or leaving it, or
+ * a handler changing. */
+const ProjectNode = memo(function ProjectNode({
   handlers,
   project,
   parentConsole,
-  sessions: listed,
-  owners,
   selectedSessionId,
   isCollapsed,
   onToggle,
@@ -654,28 +703,21 @@ function ProjectNode({
   handlers: SidebarHandlers;
   project: Project;
   parentConsole: Console;
-  sessions: Session[];
-  owners: Map<string, Session>;
   selectedSessionId?: string;
   isCollapsed: boolean;
-  onToggle: () => void;
+  onToggle: (projectId: string) => void;
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
+  const listRef = useFlip<HTMLDivElement>();
   // Read directly rather than taking it as a prop passed down from `App.tsx`: a status change
   // then only re-renders the one row it is about, instead of the whole tree (the selector returns
   // the same `GitStatus` reference until this project's own entry changes, so no `useShallow` is
   // needed).
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
-  // Every project is handed newly filtered lists on every session event in the console. Held as the
-  // same arrays while this project's own records stay the same, so its rows and its menu are left
-  // alone by an event about another project.
-  const sessions = useSameList(listed);
-  const menuSessions = useSameList([...sessions, ...owners.values()]);
-  const toggle = useStableHandler(onToggle);
-  // The hooks come before anything derived here: the React Compiler keeps no value whose
-  // computation spans a hook call.
-  const listRef = useFlip<HTMLDivElement>();
+  // The same array until a session of this project changes, so an event about another project's
+  // session leaves this row, its menu and its rows alone.
+  const sessions = useProjectSessions(project.id);
   const rowRef = useRef<HTMLDivElement>(null);
   const rows = liveSessionRows(sessions);
   const lastRootIndex = rows.reduce((last, row, index) => row.under ? last : index, -1);
@@ -695,7 +737,7 @@ function ProjectNode({
       <TreeRow
         ref={rowRef}
         ariaLabel={withGitBadge(language, t, nameLabel, gitStatus)}
-        onActivate={toggle}
+        onActivate={() => onToggle(project.id)}
         expanded={!isCollapsed}
       >
         {/* `min-w-16` is the floor itself: it has to sit on this flex item (`flex-1`'s basis is
@@ -721,7 +763,7 @@ function ProjectNode({
         {isCollapsed && <ActivityMarker activity={activity} />}
         <RowControls fixed={project.pinned ? <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={rowRef} /> : undefined}>
           <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />
-          <ActionMenu label={t("sidebar.project.actions", { name: isolate(project.name) })} items={projectMenu(t, handlers, project, archived, menuSessions, { gitRepository: gitStatus?.repository })} contextTargetRef={rowRef} />
+          <ActionMenu label={t("sidebar.project.actions", { name: isolate(project.name) })} items={projectMenu(t, handlers, project, archived, sessions, { gitRepository: gitStatus?.repository })} contextTargetRef={rowRef} />
         </RowControls>
       </TreeRow>
       {!isCollapsed && (
@@ -747,8 +789,8 @@ function ProjectNode({
                   <SessionRow
                     handlers={handlers}
                     session={session}
-                    owner={under ?? (session.bound_to ? owners.get(session.bound_to) : undefined)}
-                    selectedSessionId={selectedSessionId}
+                    under={under}
+                    selected={session.id === selectedSessionId}
                   />
                 </div>
               ))}
@@ -758,47 +800,43 @@ function ProjectNode({
       )}
     </div>
   );
-}
-
-const sameList = (list: Session[]): Session[] => list;
-
-/** `list`, or the array it returned last time while that holds the same records in the same order.
- * A hook rather than a bare `useShallow` call so that the React Compiler takes what it returns as
- * settled and keeps what is derived from it. */
-function useSameList(list: Session[]): Session[] {
-  return useShallow(sameList)(list);
-}
+});
 
 /** A session row: a project session's own, or one of the console's console sessions
  * (`ConsoleSessionsSection`), which share the row and its menu — pin, rename, archive, no resume —
  * since both are ordinary sessions once the row stops being a console session's sole, special one.
- * `owner`, given only for a bound project session, is the session it reports to: a console session
- * is drawn as the binding badge in its colour, while a project session — a lead session, or any
- * project session that started this one — is not, since the row is already listed under it; either
- * way the row's own accessible name names it, which is what carries the nesting to assistive
- * technology. */
-function SessionRow({
+ * The session a bound one reports to is its `under` when that is the project session listed right
+ * above it, otherwise the console session it is bound to, read from the store here, so that a change
+ * of another session never renders this row: a console session is drawn as the binding badge in its
+ * colour, while a project session — a lead session, or any project session that started this
+ * one — is not, since the row is already listed under it; either way the row's own accessible name
+ * names it, which is what carries the nesting to assistive technology. Memoised, with `selected` a
+ * flag rather than the selected id, so a change of selection renders only the two rows it moves
+ * between. */
+const SessionRow = memo(function SessionRow({
   handlers,
   session,
-  owner,
-  selectedSessionId,
+  under,
+  selected,
 }: {
   handlers: SidebarHandlers;
   session: Session;
-  owner?: Session;
-  selectedSessionId?: string;
+  under?: Session;
+  selected: boolean;
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
   const accounts = useDaemonStore((s) => s.settings.accounts);
-  const hasBound = useDaemonStore((s) => hasBoundSessions(s.sessions.values(), session.id));
+  const hasBound = useHasBoundSessions(session.id);
+  const bound = useSession(session.bound_to);
+  const owner = under ?? (bound?.role === "console" ? bound : undefined);
   const rowRef = useRef<HTMLDivElement>(null);
   const badgeOwner = session.role === "console" ? session : owner?.role === "console" ? owner : undefined;
   return (
     <TreeRow
       ref={rowRef}
       ariaLabel={sessionAriaLabel(t, language, session, accounts, owner)}
-      selected={session.id === selectedSessionId}
+      selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
     >
       <StatusIcon status={session.status} decorative withTooltip />
@@ -817,4 +855,4 @@ function SessionRow({
       </RowControls>
     </TreeRow>
   );
-}
+});

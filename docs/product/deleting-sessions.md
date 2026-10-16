@@ -50,6 +50,9 @@ A session is unused, whatever its status, while all of these hold:
   keeps Archive even before its first prompt lands, since it reports to that owner.
 - **No session is bound to it.** A live owner with any session under it, in any status, keeps Archive.
 
+A session still *starting* (see "Session statuses" in `docs/product/sessions.md`) is offered **Archive**, not Delete,
+even while all of these hold: deleting it is refused until its launch has settled, while archiving it goes through.
+
 **Deleting first checks for the agent's own records**, including when the unused session is archived. While the check
 is pending, no confirmation is shown. When their absence is proved, deletion goes through without confirmation and
 without moving any agent records to the Trash. The session is checked again at deletion: it must still be the same

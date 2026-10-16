@@ -1,14 +1,14 @@
 import { Badge, Button } from "@heroui/react";
 import { Hand, Plus, Settings } from "lucide-react";
-import React, { useMemo, useRef } from "react";
+import React, { memo, useRef } from "react";
 
 import { isolate } from "../i18n/isolate";
 import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
-import type { Console, Session } from "../protocol";
+import type { Console } from "../protocol";
 import { activityLabelKey } from "../sessionLabel";
 import { consoleMenu, type ConsoleMenuHandlers } from "../sidebar/menus";
-import { type Activity, consoleActivity } from "../sidebar/order";
+import { useArchivedOwnerSessions, useConsoleActivity } from "../sessions/useSessions";
 import { ActionMenu } from "./ActionMenu";
 import { ActivityBadge } from "./ActivityMarker";
 import { CHROME_BUTTON_FILLS, CHROME_CURRENT_FILLS, ChromeButton } from "./ChromeButton";
@@ -64,18 +64,15 @@ const AVATAR_CUT_OUT =
  * activity folded in, so the badge, which is decorative, gets its words without a tooltip of its
  * own. A right-click offers the console's own actions, from a menu whose trigger is not drawn: the
  * sidebar's header has the same menu on a visible button. */
-function ConsoleTile({
+const ConsoleTile = memo(function ConsoleTile({
   console: thisConsole,
-  activity,
   current,
   onSelect,
   onHoverChange,
   hoverOpensSidebar,
   handlers,
-  sessions,
 }: {
   console: Console;
-  activity: Activity;
   current: boolean;
   onSelect: () => void;
   /** A mouse pointer entered or left the avatar; touch and pen are ignored. */
@@ -86,10 +83,11 @@ function ConsoleTile({
    * is reachable there only from the session rows' own status glyphs. */
   hoverOpensSidebar: boolean;
   handlers: ConsoleMenuHandlers;
-  /** The console's own sessions, for the archived console sessions in its menu. */
-  sessions: Session[];
 }): React.ReactElement {
   const t = useT();
+  // Read here rather than handed down, so an event about a session renders only its console's tile.
+  const activity = useConsoleActivity(thisConsole.id);
+  const sessions = useArchivedOwnerSessions(thisConsole.id);
   const tileRef = useRef<HTMLDivElement>(null);
   const activityKey = activityLabelKey(activity);
   const label = activityKey ? t(activityKey, { name: isolate(thisConsole.name) }) : thisConsole.name;
@@ -127,12 +125,11 @@ function ConsoleTile({
       />
     </div>
   );
-}
+});
 
 /** The console menu's handlers serve the avatars' menus; `onOpenDialog` also opens New console. */
 interface RailProps extends ConsoleMenuHandlers {
   consoles: Console[];
-  sessions: Session[];
   /** The current console, which the sidebar shows unless it is previewing another. */
   currentConsoleId?: string;
   onSelectConsole: (consoleId: string) => void;
@@ -158,7 +155,6 @@ interface RailProps extends ConsoleMenuHandlers {
  */
 export function Rail({
   consoles,
-  sessions,
   currentConsoleId,
   onSelectConsole,
   onConsoleEnter,
@@ -175,16 +171,6 @@ export function Rail({
   const t = useT();
   const rtl = textDirection(useCurrentLanguage()) === "rtl";
   const overflow = waitingCount > 99;
-  const byConsole = useMemo(() => {
-    const groups = new Map<string, Session[]>();
-    for (const session of sessions) {
-      const group = groups.get(session.console_id);
-      if (group) group.push(session);
-      else groups.set(session.console_id, [session]);
-    }
-    return groups;
-  }, [sessions]);
-  const activities = useMemo(() => new Map(consoles.map((c) => [c.id, consoleActivity(byConsole.get(c.id) ?? [])])), [consoles, byConsole]);
 
   return (
     <nav
@@ -202,13 +188,11 @@ export function Rail({
             <ConsoleTile
               key={c.id}
               console={c}
-              activity={activities.get(c.id)}
               current={c.id === currentConsoleId}
               onSelect={() => onSelectConsole(c.id)}
               hoverOpensSidebar={hoverOpensSidebar}
               onHoverChange={(hovered) => (hovered ? onConsoleEnter(c.id) : onConsoleLeave())}
               handlers={{ onOpenDialog, onSelectSession, onOpenArchive }}
-              sessions={byConsole.get(c.id) ?? []}
             />
           ))}
         </FadedScroller>

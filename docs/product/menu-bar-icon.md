@@ -17,7 +17,8 @@ From top to bottom:
 
 1. **The running sessions**, one group per status, each group under a heading that cannot be chosen and that names the
    status with the number of sessions in it: **Waiting for you (n)**, then **Working (n)**, then **Awaiting
-   instructions (n)**. A group with no session is left out. Interrupted and archived sessions are never listed.
+   instructions (n)**. A group with no session is left out. Sessions still starting, interrupted and archived sessions
+   are never listed.
    - **Pictures.** Each heading has a still glyph for its status — the accent dot for working, the waving hand for
      waiting for you, the speech bubble for awaiting instructions — and each session line has the mark of its agent
      (Claude Code, Codex, Grok), as the sidebar draws them. The menu cannot animate, so the working dot does not pulse.
@@ -28,21 +29,14 @@ From top to bottom:
      projects and sessions" in `docs/product/sidebar.md`). Every console is included, not only the one the sidebar
      shows.
    - Each session reads as its title and where it is — the project it runs in, or the console whose console session it
-     is — worded as its system notification names it (see "The raised hand" in `docs/product/sessions.md`), except
-     that its terminal title is read without the activity glyphs described below. A session titled after its project
-     reads as the title alone rather than naming it twice.
-   - **Activity glyphs.** A run of the following characters at the very start of a session's terminal title is left
-     out of the menu, together with the whitespace after it: braille patterns (U+2800–U+28FF, the usual terminal
-     spinners ⠋⠙⠹…), the half-filled circles ◐◓◑◒ (U+25D0–U+25D3) and U+25F0–U+25F7, the stars and asterisks
-     U+2722–U+2727 and U+2729–U+273D (among them ✳ ✶ ✻ ✽ ✦), and · • ● ○ ◉ ◎ ◆ ◇. The run is left out only when the
-     title goes on after whitespace or ends there: a title that starts with such a character followed directly by
-     text keeps it, and such characters further into the title are kept. What remains is shown as described under
-     "Displayed names" in `docs/product/session-titles.md`, so a terminal title that is nothing but such glyphs reads
-     as the created name alone. Only this menu leaves them out; the sidebar, notifications and every other place show
-     the terminal title as the agent sent it.
+     is — worded as its system notification names it (see "The raised hand" in `docs/product/sessions.md`). A session
+     titled after its project reads as the title alone rather than naming it twice. Like every other place, it reads
+     the terminal title without the glyphs an agent animates at its start (see "Leading activity glyphs" in
+     `docs/product/session-titles.md`).
    - A group names at most **10** sessions. Beyond that, a last line that cannot be chosen says how many more there are
      ("N more…"); the heading's number still counts them all.
-   - With no session running at all, this part is a single line that cannot be chosen: **No sessions running**.
+   - With no session in any of these groups — none running, or only ones still starting — this part is a single line
+     that cannot be chosen: **No sessions running**.
 2. **Open Octoboard**, which brings a window closed into the background back, as described under "Closing the window"
    in `docs/product/application-lifecycle.md`. A window that is shown, or minimized, is brought to the front, restored
    first if it was minimized.

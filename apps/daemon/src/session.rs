@@ -295,9 +295,14 @@ impl LiveSession {
         {
             let mut observer = self.title.lock().expect("title observer lock poisoned");
             if let Some(title) = observer.parser.feed(data) {
+                // A title that only spun since the last one changes nothing, so it does not reach
+                // the store's lock.
+                let changed = observer.latest.as_ref() != Some(&title);
                 observer.latest = Some(title.clone());
-                if let Some(state) = observer.state.upgrade() {
-                    state.record_terminal_title(self, title.as_deref());
+                if changed {
+                    if let Some(state) = observer.state.upgrade() {
+                        state.record_terminal_title(self, title.as_deref());
+                    }
                 }
             }
         }

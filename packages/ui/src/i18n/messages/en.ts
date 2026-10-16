@@ -242,6 +242,9 @@ export const en = {
     "Claude Code has not been trusted with this directory, so this project's own {allow} permission rules are ignored until Claude Code's trust confirmation is answered. Its {deny} rules still apply, so a session is only more restrictive, never less. {appName} presses that confirmation for you once you have agreed to it.",
   "daemon.queued_messages_dropped":
     "{appName} dropped what it had queued for this session. The session's input line may be holding part of a message {appName} could not finish writing. The next message written into the session will be run together with it, so check the session before sending anything else.",
+  "daemon.launch_failed": "Could not start “{title}”: {reason}",
+  // The same notice's title when its failure is laid out beneath it, which says the reason itself.
+  "daemon.launch_failed.title": "Could not start “{title}”",
   "daemon.trust_answer_failed": "{appName} could not press {agent}'s trust confirmation ({reason}). Answer it in the terminal.",
   "daemon.trust_not_carried_over":
     "{appName} could not copy {agent}'s trust for this folder into {path} ({reason}), so {agent} will ask again the next time it opens this folder.",
@@ -283,6 +286,7 @@ export const en = {
   "session.location.project": "a project",
   "session.location.consoleSession": "{console}'s console session",
   "session.location.ownConsoleSession": "its console's console session",
+  "session.status.starting": "Starting",
   "session.status.working": "Working",
   "session.status.waitingUser": "Waiting for you",
   "session.status.idle": "Awaiting instructions",
@@ -482,6 +486,7 @@ export const en = {
   "terminal.input": "Terminal input",
   "terminal.loading": "Loading terminal…",
   "terminal.resuming": "Resuming session…",
+  "terminal.starting": "Starting session…",
   "terminal.reconnecting": "Reconnecting the terminal…",
   "terminal.disconnected": "Terminal disconnected",
   "terminal.archived": "Archived. Type to reopen it.",

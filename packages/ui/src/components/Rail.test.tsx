@@ -6,6 +6,7 @@ import { consoleOf, sessionOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import { PlatformProvider } from "../platform/react";
 import type { SessionStatus } from "../protocol";
+import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { Rail } from "./Rail";
 import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "./tooltipTestSupport";
 
@@ -17,24 +18,26 @@ const main = consoleOf("c-1", "Main");
  * hover floats the hidden sidebar in when `hoverOpensSidebar`. Returns the console's avatar button. */
 function avatarOf(statuses: SessionStatus[], hoverOpensSidebar = false): HTMLButtonElement {
   const sessions = statuses.map((status, index) => sessionOf(`s-${index}`, main.id, undefined, `Hub ${index}`, status));
+  const daemon = { store: createStateStore({ sessions: new Map(sessions.map((session) => [session.id, session])) }) } as Daemon;
   const container = mountForTooltip(
     <PlatformProvider value={{ kind: "browser" }}>
-      <Rail
-        consoles={[main]}
-        sessions={sessions}
-        currentConsoleId={main.id}
-        onSelectConsole={() => {}}
-        onConsoleEnter={() => {}}
-        onConsoleLeave={() => {}}
-        hoverOpensSidebar={hoverOpensSidebar}
-        onOpenDialog={() => {}}
-        onSelectSession={() => {}}
-        onOpenArchive={() => {}}
-        waitingCount={0}
-        onNextWaiting={() => {}}
-        onOpenSettings={() => {}}
-        focusTerminal={() => {}}
-      />
+      <DaemonProvider value={daemon}>
+        <Rail
+          consoles={[main]}
+          currentConsoleId={main.id}
+          onSelectConsole={() => {}}
+          onConsoleEnter={() => {}}
+          onConsoleLeave={() => {}}
+          hoverOpensSidebar={hoverOpensSidebar}
+          onOpenDialog={() => {}}
+          onSelectSession={() => {}}
+          onOpenArchive={() => {}}
+          waitingCount={0}
+          onNextWaiting={() => {}}
+          onOpenSettings={() => {}}
+          focusTerminal={() => {}}
+        />
+      </DaemonProvider>
     </PlatformProvider>,
   );
   return container.querySelector<HTMLButtonElement>("[data-sidebar-peek-keep]")!;

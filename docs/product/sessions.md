@@ -108,10 +108,12 @@ Both dialogs offer these fields in this order:
   Switching agents returns focus to the Agent picker even when the account picker appears or disappears. If the last
   named account is removed while focus is on the account picker or one of its open options, focus returns to Agent.
 - **Report to** (project sessions only; a choice, "No console session" by default) — one of the console's console
-  sessions that are not archived, the most recently started first, each shown beside its colour, the same one the session's binding badge
+  sessions that are neither archived nor still *starting*, the most recently started first, each shown beside its colour, the same one the session's binding badge
   will carry (see "The binding badge" in `docs/product/sidebar.md`), or none. A chosen console session receives this
-  session's reports, instead of the session staying outside the orchestration. A console with no console session that
-  is not archived shows no choice at all, and the session is unbound. A binding, once set, is never changed or undone.
+  session's reports, instead of the session staying outside the orchestration. A console with no such console session
+  shows no choice at all, and the session is unbound. A session still starting is not offered because its launch may
+  yet fail and remove it; `open_session` refuses one named as the owner (`unknown_session`). A binding, once set, is
+  never changed or undone.
   A session the console session itself starts is always bound to it, and one an unbound project session
   starts is bound to that project session; see "Which sessions an owner drives" in
   `docs/product/hub-orchestration.md`. The choice is offered from the project list and the terminal's **New session** offer outside focus
@@ -129,10 +131,20 @@ A console session has no project or Report to field and is never bound to anothe
 protocol's `open_session` accepts an explicit agent and account as the dialog does. Its `title` is stored trimmed, and
 one that is absent, `null` or blank uses the console's current name, as the dialog's empty name does.
 
-The dialog takes no task: a session the user opens by hand starts in *awaiting instructions*, sitting at the agent's
-prompt, and is given its work by typing into its terminal. Only a session started with `start_session` — by a console
-session or a project session — is handed an opening prompt, the brief it is started with (see "Handing out a
-task: the brief" in `docs/product/hub-orchestration.md`); it starts in *working*.
+**Every new session is listed at once as *starting*,** before its agent has been launched, and the launch goes on
+behind it (see "The launch environment" in `docs/product/launching-agents.md`). The dialog does not wait for the
+launch: it closes as soon as the session is recorded, and the session's terminal says it is starting until the agent
+is up (see "Loading" in `docs/product/session-terminal.md`). A refusal that can be known before anything is recorded —
+an unknown owner, an unavailable agent, a model the agent does not offer, the refusals about a conversation to resume
+below — is still shown in the dialog, which stays open. A session an agent opens with `start_session`, and the console
+session an approved request for one starts (see "On approval" in `docs/product/requesting-a-console-session.md`), are
+listed as *starting* the same way, but the agent's call, or the approval, is answered only once the launch has
+settled, with the launch's own refusal when it fails.
+
+The dialog takes no task: once up, a session the user opens by hand is in *awaiting instructions*, sitting at the
+agent's prompt, and is given its work by typing into its terminal. Only a session started with `start_session` — by a
+console session or a project session — is handed an opening prompt, the brief it is started with (see "Handing out a
+task: the brief" in `docs/product/hub-orchestration.md`); once up, it is in *working*.
 
 A session in a folder its agent has not been told to trust can first stop on that agent's own trust confirmation,
 before it takes up its task or reaches its prompt. A resumed session can stop on it as well; since a session left
@@ -143,9 +155,16 @@ under, whichever agent asked — or asks them first; see `docs/product/folder-tr
 If the launch itself fails — the directory cannot be reached, the agent binary is not on the user's `PATH`, the user's
 shell environment could not be captured (see "The launch environment" in `docs/product/launching-agents.md`), or, for
 Grok Build only, the account the session would hold pins a directory that is not an initialized Grok home (see "Agent
-config directories" in `docs/product/consoles-and-projects.md`) — no session appears in the sidebar and the failure is
-reported. A missing config directory does not fail a brand new session for the other two agents: it has no conversation
-to lose, so Claude Code creates the directory itself and Octoboard creates it for Codex.
+config directories" in `docs/product/consoles-and-projects.md`) — the *starting* session is removed again and no
+session is left behind. For a session opened from the dialog the failure is reported as a notice toast that names
+the session and gives the reason, worded from the failure's own code in the UI's language; for a shell environment
+capture that ran out of time, the title names the session alone and the explanation is laid out beneath it — the
+command that did not finish and its time limit, the likely cause, and what to fix. Should the session's record itself
+fail to be removed, it is left *interrupted* instead, and the notice is shown all the same. For `start_session` and an
+approved console-session request the failure is reported through that call instead (see "On approval" in
+`docs/product/requesting-a-console-session.md` for the latter). A missing config directory does not fail a brand new
+session for the other two agents: it has no conversation to lose, so Claude Code creates the directory itself and
+Octoboard creates it for Codex.
 
 **With every agent determined unavailable, opening a session is refused outright, before any of that**: the dialog
 cannot be submitted, the console header's new-session action is disabled, and a console session's
@@ -265,19 +284,21 @@ tools are there; whether the role description takes effect in it is in "What is 
 
 | Status | Wire value | Glyph | Meaning |
 |---|---|---|---|
+| Starting | `starting` | a muted arc turning | A newly opened session — from the dialog, by an agent's `start_session`, or by an approved request for a console session — whose agent is still being launched; it has no process yet. It becomes *awaiting instructions*, or *working* for a session started with a brief, once the process is up, and is removed again if the launch fails (see "Opening a session"). |
 | Working | `working` | an accent-coloured dot pulsing a fading copy of itself outward | The agent is executing a turn. |
 | Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a request for a console session (see "The call" in `docs/product/requesting-a-console-session.md`). |
 | Awaiting instructions | `idle` | a green speech bubble | The process is running and sitting at its prompt. |
 | Interrupted | `interrupted` | a pause sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
 | Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming"). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" below) and can be reopened. |
 
-The first three mean a process is running; the last two mean none is, and both can be resumed.
+*Working*, *waiting for the user* and *awaiting instructions* mean a process is running, and *starting* means one is
+about to be; the last two mean none is, and both can be resumed.
 
 The glyph stands for the status wherever one is shown — the sidebar's rows, focus mode's cards, the top bar's
 breadcrumb and a confirmation's list of the sessions it affects. In a confirmation, archived sessions omit the
 status glyph; the warning identifies them as archived. The waving hand and the outward pulse stand still
 where the system asks for reduced motion, leaving the working glyph a plain accent-coloured dot; working and awaiting
-instructions still differ by shape as well as by colour.
+instructions still differ by shape as well as by colour. The starting arc stands still there too and differs from the rest by shape.
 
 **How the status reaches a user who does not read the glyph** differs by placement:
 
@@ -292,8 +313,9 @@ instructions still differ by shape as well as by colour.
 
 Transitions:
 
-- Opening a session puts it in *working* when it is handed an opening prompt (a session started with `start_session`),
-  and in *awaiting instructions* otherwise (see "Opening a session").
+- Opening a session puts it in *starting*; once its process is up it moves to *working* when it is handed an opening
+  prompt (a session started with `start_session`), and to *awaiting instructions* otherwise, unless the agent's own
+  first report has already moved it on (see "Opening a session"). A launch that fails removes the session.
 - While the process runs, reports from the agent move the session between *working*, *waiting for the user* and
   *awaiting instructions* — except while a request for a console session holds it at *waiting for the user* (see
   "What the statuses are derived from" below).
@@ -487,8 +509,10 @@ exit first and is killed only if it does not; a kill takes the agent's tool subp
 Archiving is available for any session that is not already archived, including an interrupted one;
 a console session is archived from its own row's menu, like any other (see "Console sessions and
 project sessions" above). The user archives a session from its row's menu. A session at its prompt or
-interrupted, with no unarchived session under it, is archived at once, since nothing is cut short; one at work,
-waiting for the user, being resumed, or with an unarchived session under it asks for confirmation first. A session that has never been used offers **Delete** there instead (see "Deleting an unused session" in `docs/product/deleting-sessions.md`).
+interrupted, with no unarchived session under it, is archived at once, since nothing is cut short; one starting, at
+work, waiting for the user, being resumed, or with an unarchived session under it asks for confirmation first. A session that has never been used offers **Delete** there instead, unless it is still starting (see "Deleting an unused session" in `docs/product/deleting-sessions.md`).
+Archiving a session that is still *starting* stands: it is archived at once, and its agent's process is ended as soon
+as it comes up.
 An archived session keeps its pin, if it had one (see "Order of projects and sessions" in `docs/product/sidebar.md`).
 
 Besides the user, two things archive a session: its owner, explicitly, and a project session's own report saying the

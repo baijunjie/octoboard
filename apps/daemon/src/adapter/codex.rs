@@ -85,6 +85,10 @@ impl AgentAdapter for CodexAdapter {
         false
     }
 
+    fn uses_hook_script(&self) -> bool {
+        true
+    }
+
     fn plan(&self, spec: &LaunchSpec<'_>) -> anyhow::Result<LaunchPlan> {
         let pinned = super::pinned_config_dir(spec, Agent::Codex)?;
         // Unlike Claude Code, Codex refuses a `CODEX_HOME` that does not exist rather than creating

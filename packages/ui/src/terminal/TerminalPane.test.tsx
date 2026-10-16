@@ -311,3 +311,24 @@ it("shows the installation step without a creation control when no agent is avai
   expect(container.textContent).not.toContain("Select a session");
   expect(container.querySelector("button")).toBeNull();
 });
+
+it("covers a starting session with its own message and attaches only once it is up", () => {
+  const starting = sessionOf("s-1", "c-1", undefined, "Work", "starting");
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  render(root, starting);
+  const controller = FakeController.last;
+  expect(controller.attaches).toBe(0);
+  expect(status(container)).toBe("Starting session…");
+  expect(container.querySelector("[data-slot=spinner]")).not.toBeNull();
+  // No process to connect to, so no error cover, no Reconnect and no unavailable message.
+  act(() => void vi.advanceTimersByTime(60_000));
+  expect(status(container)).toBe("Starting session…");
+  expect(container.querySelector("button")).toBeNull();
+  expect(controller.attaches).toBe(0);
+
+  render(root, { ...starting, status: "idle" });
+  expect(controller.attaches).toBe(1);
+  expect(status(container)).toBe("Loading terminal…");
+});

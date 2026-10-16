@@ -15,7 +15,7 @@
     await P.waitIdle(500);
     const regions = {
       document: "html", sidebar: '[data-region="sidebar"]', rail: '[data-region="rail"]',
-      terminal: '[data-region="terminal"]', xtermRows: ".xterm-rows", aside: '[data-region="aside"]',
+      terminal: '[data-region="terminal"]', xtermScreen: ".xterm-screen", aside: '[data-region="aside"]',
     };
     const elements = (sel) => { const el = document.querySelector(sel); return el ? el.querySelectorAll("*").length + 1 : 0; };
     const counts = Object.fromEntries(Object.entries(regions).map(([k, s]) => [k, elements(s)]));
@@ -39,11 +39,14 @@
     };
     const costs = {};
     for (const [k, s] of Object.entries(regions)) { const el = document.querySelector(s); costs[k] = el ? time(el) : null; }
-    const rows = document.querySelector(".xterm-rows");
-    rows.style.display = "none";
-    const withoutRows = time(document.documentElement);
-    rows.style.display = "";
-    log({ step: "restyle", counts, cssRules: rules, restyleLayoutMs: costs, documentWithoutXtermRowsMs: withoutRows, dpr: devicePixelRatio, ua: navigator.userAgent });
+    // What the terminal adds to the document's cost: under the DOM renderer, one element per row under
+    // `.xterm-screen`; under WebGL, just the canvases, so the two numbers (this and the region's own
+    // `xtermScreen` count) say which renderer the run measured.
+    const screen = document.querySelector(".xterm-screen");
+    screen.style.display = "none";
+    const withoutScreen = time(document.documentElement);
+    screen.style.display = "";
+    log({ step: "restyle", counts, cssRules: rules, restyleLayoutMs: costs, documentWithoutXtermScreenMs: withoutScreen, dpr: devicePixelRatio, ua: navigator.userAgent });
   } catch (e) { log({ error: String(e.stack || e) }); }
   log({ done: true });
 })();

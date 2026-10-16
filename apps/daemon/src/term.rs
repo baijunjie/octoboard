@@ -115,7 +115,9 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
 
     let shell_env = match preresolved_shell_env {
         Some(shell_env) => shell_env,
-        None => env_shell::snapshot().context("snapshotting the user's shell environment")?,
+        None => {
+            env_shell::launch_snapshot().context("snapshotting the user's shell environment")?
+        }
     };
 
     let scratch = paths::session_scratch(session_id);
@@ -124,11 +126,19 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     }
     std::fs::create_dir_all(&scratch).with_context(|| format!("creating {}", scratch.display()))?;
 
-    let hook_script = adapter::write_hook_script(&scratch, &self_exe, session_id, daemon_port)
-        .context("writing the session's hook script")?;
+    let adapter = adapter::adapter_for(agent);
+    let hook_script = if adapter.uses_hook_script() {
+        adapter::write_hook_script(&scratch, &self_exe, session_id, daemon_port)
+            .context("writing the session's hook script")?
+    } else {
+        adapter::hook_script_path(&scratch)
+    };
 
     let new_agent_session_id = Uuid::new_v4().to_string();
-    let adapter = adapter::adapter_for(agent);
+    // Resolved ahead of the plan because the agent's version, read from where the binary is
+    // installed, decides how some adapters inject; a failure is raised only after the plan, so a
+    // plan's own error (a missing pinned directory, say) is the one the user is told about.
+    let binary = env_shell::resolve_binary(adapter.binary(), &shell_env);
     let spec = LaunchSpec {
         session_id,
         role,
@@ -143,13 +153,17 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         config_dir: config_dir.as_deref(),
         model: model.as_deref(),
         effort: effort.as_deref(),
+        agent_version: binary
+            .as_ref()
+            .ok()
+            .and_then(|binary| adapter.installed_version(binary)),
         self_exe: &self_exe,
         daemon_port,
         mcp_token: &mcp_token,
     };
     let plan = adapter.plan(&spec)?;
 
-    let binary = env_shell::resolve_binary(adapter.binary(), &shell_env)?;
+    let binary = binary?;
 
     let pty = native_pty_system()
         .openpty(PtySize {

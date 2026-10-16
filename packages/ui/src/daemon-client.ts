@@ -2,6 +2,7 @@ import { t } from "./i18n/language";
 import type { Event, MessageParams, Request, RequestBody } from "./protocol";
 
 type Listener = (event: Event) => void;
+type BatchListener = (events: Event[]) => void;
 type PendingReply = { resolve: (event: Event) => void; reject: (error: Error) => void };
 
 const MAX_RECONNECT_ATTEMPTS = 2;
@@ -11,6 +12,9 @@ const RECONNECT_BASE_DELAY_MS = 500;
  * importantly `shutdown` during the quit flow — would hang forever once the reconnect budget above
  * is spent and no further `close` event ever arrives to reject it. */
 const QUEUED_REQUEST_TIMEOUT_MS = 5000;
+/** How long a queued broadcast may wait for an animation frame before it is delivered anyway. A
+ * hidden window gets no frames, and its state must not fall behind for as long as it stays hidden. */
+const BROADCAST_FLUSH_FALLBACK_MS = 250;
 
 /** `connecting` is the first attempt, before the socket has ever been open — distinct from
  * `reconnecting`, so a window that has never connected does not claim to be re-trying. */
@@ -53,6 +57,13 @@ export class DaemonClient {
   /** Bumped on every `connect()`; a socket's listeners no-op once their generation is stale. */
   private generation = 0;
   private listeners = new Set<Listener>();
+  private batchListeners = new Set<BatchListener>();
+  /** Broadcasts received since the last delivery, in arrival order. With many sessions at work the
+   * daemon's events come in bursts: they are delivered together once per frame, so a burst costs
+   * one state update and one render, not one each. */
+  private queuedBroadcasts: Event[] = [];
+  private flushFrame?: number;
+  private flushTimer?: ReturnType<typeof setTimeout>;
   private connectionListeners = new Set<(state: ConnectionState) => void>();
   private pending = new Map<string, PendingReply>();
   /** Requests made before the socket reaches `OPEN` are queued rather than dropped or thrown. */
@@ -97,10 +108,12 @@ export class DaemonClient {
     });
     socket.addEventListener("message", (ev) => {
       if (!current()) return;
-      this.dispatch(JSON.parse(ev.data as string) as Event);
+      this.receive(JSON.parse(ev.data as string) as Event);
     });
     socket.addEventListener("close", () => {
       if (!current()) return;
+      // What arrived before the drop is delivered ahead of the state change it precedes.
+      this.flushBroadcasts();
       // Whatever this socket had outstanding cannot be answered by a reconnect's new socket — the
       // daemon has no memory of a prior connection's in-flight requests — so these are rejected
       // unconditionally rather than held pending a retry.
@@ -141,21 +154,54 @@ export class DaemonClient {
     for (const listener of this.connectionListeners) listener(state);
   }
 
-  private dispatch(event: Event): void {
+  /** A broadcast waits for the next frame; a reply to a request settles its request and goes out at
+   * once, behind the broadcasts that arrived before it, so it is never answered ahead of the state
+   * it follows. */
+  private receive(event: Event): void {
     const id = "id" in event ? event.id : undefined;
-    if (id && this.pending.has(id)) {
-      const pending = this.pending.get(id)!;
+    const pending = id ? this.pending.get(id) : undefined;
+    if (id && pending) {
+      this.flushBroadcasts();
       this.pending.delete(id);
       if (event.type === "error") pending.reject(new DaemonRequestError(event.message, event.code, event.params));
       else pending.resolve(event);
+      this.deliver([event]);
+      return;
     }
-    for (const listener of this.listeners) listener(event);
+    this.queuedBroadcasts.push(event);
+    if (this.flushFrame === undefined) {
+      this.flushFrame = requestAnimationFrame(() => this.flushBroadcasts());
+      this.flushTimer = setTimeout(() => this.flushBroadcasts(), BROADCAST_FLUSH_FALLBACK_MS);
+    }
+  }
+
+  private flushBroadcasts(): void {
+    if (this.flushFrame !== undefined) cancelAnimationFrame(this.flushFrame);
+    clearTimeout(this.flushTimer);
+    this.flushFrame = undefined;
+    this.flushTimer = undefined;
+    if (this.queuedBroadcasts.length === 0) return;
+    this.deliver(this.queuedBroadcasts.splice(0));
+  }
+
+  private deliver(events: Event[]): void {
+    for (const listener of this.batchListeners) listener(events);
+    for (const event of events) {
+      for (const listener of this.listeners) listener(event);
+    }
   }
 
   /** Subscribes to every event the daemon sends, including broadcasts with no correlation id. */
   onEvent(listener: Listener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /** Like `onEvent`, but hears the events that arrived together as one array, in arrival order,
+   * so a subscriber can apply them in a single update. */
+  onEvents(listener: BatchListener): () => void {
+    this.batchListeners.add(listener);
+    return () => this.batchListeners.delete(listener);
   }
 
   /** Subscribes to connection state, reporting the current state straight away: a subscriber that
@@ -202,6 +248,7 @@ export class DaemonClient {
 
   close(): void {
     this.closedPermanently = true;
+    this.flushBroadcasts();
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.socket?.close();
   }

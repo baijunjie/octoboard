@@ -2,6 +2,32 @@
 
 const MAX_TITLE_BYTES: usize = 4096;
 
+/// Whether `c` is one of the glyphs an agent puts at the start of its title to show what it is
+/// doing: Claude Code's rotating circle and its idle star, the braille spinners Codex and other
+/// terminal tools use, and the star and diamond markers other agent CLIs use. The set is
+/// specified in `docs/product/session-titles.md`'s "Leading activity glyphs" section.
+fn is_spinner_glyph(c: char) -> bool {
+    matches!(c,
+        '\u{2800}'..='\u{28FF}'
+        | '\u{25D0}'..='\u{25D3}'
+        | '\u{25F0}'..='\u{25F7}'
+        | '\u{2722}'..='\u{2727}'
+        | '\u{2729}'..='\u{273D}'
+        | '\u{00B7}' | '\u{2022}' | '\u{25CF}' | '\u{25CB}' | '\u{25C9}' | '\u{25CE}'
+        | '\u{25C6}' | '\u{25C7}')
+}
+
+/// The title without the animated glyphs it starts with, so a title that only spins compares equal
+/// from one frame to the next and is neither stored nor announced again. The rule for which leading
+/// runs count is in `docs/product/session-titles.md`'s "Leading activity glyphs" section.
+fn without_spinner_glyphs(title: &str) -> &str {
+    let rest = title.trim_start_matches(is_spinner_glyph);
+    if rest.len() == title.len() || !(rest.is_empty() || rest.starts_with(char::is_whitespace)) {
+        return title;
+    }
+    rest.trim_start()
+}
+
 #[derive(Default)]
 enum Mode {
     #[default]
@@ -102,7 +128,7 @@ impl Parser {
         {
             if let Ok(text) = std::str::from_utf8(bytes) {
                 if !text.chars().any(char::is_control) {
-                    let title = text.trim();
+                    let title = without_spinner_glyphs(text.trim());
                     *latest = Some((!title.is_empty()).then(|| title.to_owned()));
                 }
             }
@@ -129,6 +155,25 @@ mod tests {
         }
         let mut parser = Parser::default();
         assert_eq!(parser.feed(b"\x1b]2;old\x07\x1b]2; \x07"), Some(None));
+    }
+
+    #[test]
+    fn leading_spinner_glyphs_are_not_part_of_the_title() {
+        let mut parser = Parser::default();
+        for (sent, kept) in [
+            ("\x1b]2;◐ Fix the build\x07", Some("Fix the build")),
+            ("\x1b]2;◑ Fix the build\x07", Some("Fix the build")),
+            ("\x1b]2;⠙⠹  Build\x07", Some("Build")),
+            ("\x1b]2;✳\x07", None),
+            ("\x1b]2;●Recording\x07", Some("●Recording")),
+            ("\x1b]2;Build ◐ done\x07", Some("Build ◐ done")),
+        ] {
+            assert_eq!(
+                parser.feed(sent.as_bytes()),
+                Some(kept.map(str::to_owned)),
+                "{sent:?}"
+            );
+        }
     }
 
     #[test]

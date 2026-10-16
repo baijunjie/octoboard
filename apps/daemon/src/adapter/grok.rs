@@ -102,6 +102,10 @@ impl AgentAdapter for GrokAdapter {
         true
     }
 
+    fn uses_hook_script(&self) -> bool {
+        true
+    }
+
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
         let pinned = super::pinned_config_dir(spec, Agent::Grok)?;
         // Unlike the other two agents, an account Grok has never been run against cannot simply be

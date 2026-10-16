@@ -90,7 +90,7 @@ export const noticeScenarios: Scenario[] = [
     category: "exceptional",
     title: "Warning notices and recovery",
     description:
-      "Deliberate warning notices: an untrusted workspace workaround naming its allow and deny settings as code, a failed trust confirmation and a trust entry blocked by a locked store. Session links identify where recovery is needed, and the trust file's path is set as code.",
+      "Deliberate warning notices: an untrusted workspace workaround naming its allow and deny settings as code, a failed trust confirmation, a trust entry blocked by a locked store and a session whose launch failed after it appeared (named by its title, with no session link, since it is gone). Session links identify where recovery is needed, and the trust file's path is set as code.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
       { kind: "notice", code: "claude_workspace_untrusted", params: {}, message: "", session: "s-web-1" },
@@ -112,6 +112,30 @@ export const noticeScenarios: Scenario[] = [
         },
         message: "",
         session: grokSession.id,
+      },
+      {
+        kind: "notice",
+        code: "launch_failed",
+        params: {
+          title: "Draft the release notes",
+          reason: "`codex` was not found on PATH in the snapshotted shell environment",
+          reason_code: "binary_not_found",
+          binary: "codex",
+        },
+        message: "",
+      },
+      {
+        kind: "notice",
+        code: "launch_failed",
+        params: {
+          title: "Draft the release notes",
+          reason: "the shell environment did not finish within 10s",
+          reason_code: "shell_environment_timeout",
+          shell: "/bin/zsh",
+          command: "env -0 && printf octoboard-env-end",
+          timeout: "10s",
+        },
+        message: "",
       },
     ],
   },

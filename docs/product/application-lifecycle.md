@@ -245,8 +245,8 @@ system logout were not tried by hand; an AppleEvent quit, which goes through the
 path, was, and asked the same way. A quit by closing the window was seen to ask while a session ran, and to end the
 application on confirmation (see "Closing the window" above).
 
-- **While any session has a running process, quitting asks for confirmation.** The message says that quitting
-  interrupts those sessions and that each stays resumable next time. Asking brings Octoboard to the front first,
+- **While any session has a running process, or is still starting, quitting asks for confirmation.** The message
+  says that quitting interrupts those sessions and that each stays resumable next time. Asking brings Octoboard to the front first,
   restoring its window if it was minimized and bringing it back if it was closed into the background, so a quit from
   outside the window — the Dock icon's own Quit while another application covers it, the menu bar icon's Quit or a
   logout while the window is closed — does not leave the question unseen. The menu bar icon's Quit with the window

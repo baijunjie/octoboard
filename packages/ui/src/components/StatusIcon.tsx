@@ -1,4 +1,4 @@
-import { Archive, MessageCircleMore, Pause } from "lucide-react";
+import { Archive, LoaderCircle, MessageCircleMore, Pause } from "lucide-react";
 import React from "react";
 
 import { useT } from "../i18n/react";
@@ -16,10 +16,15 @@ type Naming = { "aria-hidden": true } | { role: "img"; "aria-label": string };
 /** The glyph itself, one per status in the "Session statuses" table of docs/product/sessions.md, as
  * lucide glyphs and dots rather than emoji (the project keeps user-facing UI free of decorative
  * emoji, the same convention `CLAUDE.md` sets for committed prose). Idle is a speech bubble
- * (sitting at the prompt, waiting to be told), and interrupted a pause sign (stopped where it was,
+ * (sitting at the prompt, waiting to be told), starting a turning arc (the agent is still being
+ * launched), and interrupted a pause sign (stopped where it was,
  * and can be resumed from there). */
 function statusGlyph(status: SessionStatus, naming: Naming): React.ReactElement {
   switch (status) {
+    case "starting":
+      // An arc turning in the muted ink: coming up, with nothing to answer for yet. The arc's
+      // shape tells it from the other glyphs where the system asks for reduced motion.
+      return <LoaderCircle {...naming} className={`${ICON_CLASS} text-app-muted motion-safe:animate-spin`} />;
     case "working":
       return (
         <span {...naming} className="flex shrink-0">

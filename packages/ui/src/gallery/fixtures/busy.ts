@@ -5,7 +5,7 @@ import { consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./bu
 const GROUP = "Sidebar sessions";
 
 const AGENTS: Agent[] = ["claude", "codex", "grok"];
-const STATUSES: SessionStatus[] = ["working", "idle", "waiting_user", "interrupted", "archived", "idle"];
+const STATUSES: SessionStatus[] = ["working", "idle", "waiting_user", "interrupted", "archived", "starting"];
 
 const LONG_TITLE =
   "Investigate why the nightly indexing job double-counts documents that were updated across a shard boundary";
@@ -74,7 +74,7 @@ export const busyScenarios: Scenario[] = [
     category: "normal",
     title: "Many consoles, projects and sessions",
     description:
-      "Twelve projects with long and pinned names and long paths, a pinned session, all three agents. Sessions in every status the list shows (Working, Waiting for you, Awaiting instructions, Interrupted), one of them waiting in another console. A session of Media gateway with a title far wider than the sidebar row is selected: the breadcrumb in the top bar and its row both have to fit it.",
+      "Twelve projects with long and pinned names and long paths, a pinned session, all three agents. Sessions in every status the list shows (Working, Waiting for you, Awaiting instructions, Interrupted, and Starting with a muted turning arc), one of them waiting in another console. A session of Media gateway with a title far wider than the sidebar row is selected: the breadcrumb in the top bar and its row both have to fit it.",
     state,
     steps: [(ui) => ui.press(ui.session(SECOND_LONG_TITLE))],
   },

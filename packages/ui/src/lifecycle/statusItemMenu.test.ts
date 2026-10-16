@@ -5,7 +5,7 @@ import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Session, SessionStatus } from "../protocol";
-import { buildStatusItemMenu, MAX_PER_SECTION, withoutSpinnerGlyphs } from "./statusItemMenu";
+import { buildStatusItemMenu, MAX_PER_SECTION } from "./statusItemMenu";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
 
@@ -59,28 +59,5 @@ describe("buildStatusItemMenu", () => {
     expect(section.heading).toBe(`Working (${many.length})`);
     expect(section.items).toHaveLength(MAX_PER_SECTION + 1);
     expect(section.items.at(-1)).toEqual({ label: "3 more…" });
-  });
-
-  it("reads the same while an agent animates the glyph in front of its terminal title", () => {
-    const frames = ["◐", "◓", "◑", "◒", "⠂", "⠐", "⠋", "✳", "✶", "✻"].map((glyph) =>
-      menuOf([inProject("a", "working", "Fix bug", `${glyph} Refactor parser`)]),
-    );
-    for (const menu of frames) expect(menu).toEqual(frames[0]);
-    expect(frames[0].sections[0].items[0].label).toContain("Refactor parser");
-  });
-});
-
-describe("withoutSpinnerGlyphs", () => {
-  it("removes the leading glyphs and the space after them", () => {
-    expect(withoutSpinnerGlyphs("◐ Topbar")).toBe("Topbar");
-    expect(withoutSpinnerGlyphs("⠙⠹  Build")).toBe("Build");
-    expect(withoutSpinnerGlyphs("✦ Working…")).toBe("Working…");
-    expect(withoutSpinnerGlyphs("✳")).toBe("");
-  });
-
-  it("keeps a glyph the title goes straight on from, and glyphs further in", () => {
-    expect(withoutSpinnerGlyphs("●Recording")).toBe("●Recording");
-    expect(withoutSpinnerGlyphs("Build ◐ done")).toBe("Build ◐ done");
-    expect(withoutSpinnerGlyphs("- list")).toBe("- list");
   });
 });

@@ -576,7 +576,9 @@ where
     };
 
     // The request is this round's report, so the round ending without another is not reported on
-    // a second time.
+    // a second time. After the lead session's queued hooks, which the turn start among them would
+    // otherwise reset it.
+    state.hook_queues.settled(&lead.id).await;
     state.mark_reported(&lead.id);
     let delivered = {
         let state = state.clone();
@@ -1097,8 +1099,8 @@ mod tests {
     }
 
     /// Posts one hook payload of Claude Code's to `/hook/:session`, and returns once the daemon has
-    /// applied what it says.
-    async fn post_hook(port: u16, session: &str, name: &str, mut payload: Value) {
+    /// applied what it says: the route answers before that, so the hook queue is waited out.
+    async fn post_hook(state: &AppState, port: u16, session: &str, name: &str, mut payload: Value) {
         payload["hook_event_name"] = json!(name);
         payload["session_id"] = json!("claude-session");
         let body = serde_json::to_vec(&payload).unwrap();
@@ -1107,6 +1109,14 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
+        let deadline = std::time::Instant::now() + PATIENCE;
+        while state.hook_queues.is_busy() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the hook was never applied"
+            );
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
     }
 
     async fn serve_hooks(state: &Arc<AppState>) -> u16 {
@@ -1135,8 +1145,8 @@ mod tests {
         let (call, request_id) = ask_in_background(&state, "asker", ANSWER_TIME_LIMIT).await;
         assert_eq!(status_of(&state, "asker"), SessionStatus::WaitingUser);
 
-        post_hook(port, "asker", "PostToolUse", json!({})).await;
-        post_hook(port, "asker", "PostToolBatch", json!({})).await;
+        post_hook(&state, port, "asker", "PostToolUse", json!({})).await;
+        post_hook(&state, port, "asker", "PostToolBatch", json!({})).await;
         let task = json!({
             "id": "kdn46xv43",
             "type": "MCP task",
@@ -1145,9 +1155,17 @@ mod tests {
             "server": "octoboard",
             "tool": "request_console_session",
         });
-        post_hook(port, "asker", "Stop", json!({ "background_tasks": [task] })).await;
+        post_hook(
+            &state,
+            port,
+            "asker",
+            "Stop",
+            json!({ "background_tasks": [task] }),
+        )
+        .await;
         assert_eq!(status_of(&state, "asker"), SessionStatus::WaitingUser);
         post_hook(
+            &state,
             port,
             "asker",
             "Notification",
@@ -1170,7 +1188,7 @@ mod tests {
 
         answer_by(&launcher, &request_id, false).await.unwrap();
         assert_eq!(status_of(&state, "asker"), SessionStatus::Idle);
-        post_hook(port, "asker", "PreToolUse", json!({})).await;
+        post_hook(&state, port, "asker", "PreToolUse", json!({})).await;
         assert_eq!(status_of(&state, "asker"), SessionStatus::Working);
         let _ = outcome_of(call).await;
     }
@@ -1193,7 +1211,7 @@ mod tests {
             let port = serve_hooks(&state).await;
             let (call, _request_id) =
                 ask_in_background(&state, "asker", Duration::from_millis(300)).await;
-            post_hook(port, "asker", "PostToolUse", json!({})).await;
+            post_hook(&state, port, "asker", "PostToolUse", json!({})).await;
             if !state.console_requests.is_waiting_for("asker")
                 || status_of(&state, "asker") != SessionStatus::WaitingUser
             {

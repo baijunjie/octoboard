@@ -152,6 +152,8 @@ class FakeSocket extends EventTarget {
 vi.mock("@xterm/xterm", () => ({ Terminal: FakeTerminal }));
 vi.mock("@xterm/addon-fit", () => ({ FitAddon: class { fit(): void {} } }));
 vi.mock("@xterm/addon-web-links", () => ({ WebLinksAddon: class {} }));
+// Stands in for the WebGL renderer, which jsdom cannot create.
+vi.mock("@xterm/addon-webgl", () => ({ WebglAddon: class { onContextLoss(): void {} dispose(): void {} } }));
 
 const url = (session: string) => `ws://daemon/ws/term/${session}`;
 const lastSocket = () => FakeSocket.all[FakeSocket.all.length - 1];

@@ -69,6 +69,20 @@ So run the items through a bounded runner instead — a `JoinSet` held at a fixe
 as any one finishes — and give each item a deadline of its own, so one that stalls holds a single place rather than
 the pass. Four at a time is this daemon's figure everywhere it does this.
 
+## Keep process starts off every path that runs per launch, per hook event or per sweep item
+
+Applies to daemon code that would start a process — a `--version` or `--help` probe, a login shell, a hook forwarder,
+a `git` per project — on a path that runs for every session launch, every hook event, or every item of a periodic pass.
+On a Mac running endpoint-security software, as managed machines do, each exec can stall for seconds (and a login-shell
+snapshot is a serial chain of them), so a process that costs milliseconds on a development
+machine is what the user waits on, multiplied by the number of sessions.
+
+So look for a route with no process first: read what is wanted from where it is installed or stored (as
+`AgentAdapter::installed_version` reads an agent's version without running it), serve a cached result (the
+`env_shell` snapshots, never a fresh login shell per call), or let the other side call the daemon (a Claude Code that
+takes HTTP hooks posts to the hook route with no forwarder process behind it). Where a process cannot be avoided, run
+it off the path the user waits on, cache what it returns, and bound how many run at once.
+
 ## A request handler is never alone with the state: re-check after a step, or hold a claim
 
 Every control request is handled on a task of its own (`apps/daemon/src/server.rs`) on a multi-threaded runtime

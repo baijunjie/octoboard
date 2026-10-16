@@ -499,7 +499,9 @@ async fn report(
     let open_items = string_list(arguments, "open_items");
 
     // Recorded before delivery: the session is credited with having reported even if its owner
-    // cannot take the message yet, so its stop does not also produce a synthesised report.
+    // cannot take the message yet, so its stop does not also produce a synthesised report. After
+    // the session's queued hooks, whose turn start would otherwise reset the mark.
+    state.hook_queues.settled(&session.id).await;
     state.mark_reported(&session.id);
 
     let summary = summary.to_string();

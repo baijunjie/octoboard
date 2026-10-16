@@ -35,8 +35,8 @@ sessions, its console sessions included, so a raised hand in a console that is n
 |---|---|
 | A waving hand | at least one session is waiting for the user |
 | The *working* glyph | otherwise, at least one session is working |
-| A green speech bubble | otherwise, at least one session is running and awaiting instructions |
-| none | no session has a running process |
+| A green speech bubble | otherwise, at least one session is running and awaiting instructions, or still starting |
+| none | no session has a running process or is starting |
 
 The name assistive technology announces for an avatar is the console's name together with what its badge means, and
 **the avatar's tooltip is that same text** — the bare console name while nothing is going on. When that tooltip opens,
@@ -376,7 +376,7 @@ action menu offers:
   at the Agent accounts section. A session whose account has since been removed still shows it, checked and named by
   the directory the session recorded. The entry is present for a console session's row as well as a project session's,
   and only when the session's agent has more than one account to be on; with just the default account it is left out
-  rather than shown disabled. A session in the archive has no such entry.
+  rather than shown disabled. A session in the archive has no such entry, and neither has one still starting.
 - **Archive** — archives the session (see "Archiving, interruption and resuming" in `docs/product/sessions.md`). A
   session at its prompt or interrupted, with no unarchived session under it, is archived at once; any other asks for
   confirmation first, and so does one still being resumed. When the archived row takes keyboard focus with it, focus
@@ -387,8 +387,9 @@ action menu offers:
   archive is refused, with the sessions named, while any session under it has a process running. A project session that
   has started sessions is archived under the same rule, with the same confirmation while any of them is unarchived.
 - **Delete**, in place of Archive for a session that has never been used — no turn yet, bound to no owner and with no
-  session bound to it; it stops the session and deletes it outright, leaving nothing in the archive. The record check
-  and when confirmation is needed are described in "Deleting an unused session" in `docs/product/deleting-sessions.md`.
+  session bound to it — and is not still starting; it stops the session and deletes it outright, leaving nothing in
+  the archive. The record check and when confirmation is needed are described in "Deleting an unused session" in
+  `docs/product/deleting-sessions.md`.
 
 **The Delete or Archive button.** Just before its action-menu button, a session row — a console session's included —
 carries a **Delete** button whenever its menu offers Delete. Pressing it takes the same deletion action as the menu
@@ -499,8 +500,8 @@ project session has no colour to choose.
 1. pinned projects first;
 2. then a project with a session waiting for the user;
 3. then a project with a session working;
-4. then a project with a session running and awaiting instructions;
-5. then the **inactive** projects — those with no session whose process is running;
+4. then a project with a session running and awaiting instructions, or still starting;
+5. then the **inactive** projects — those with no session whose process is running or that is starting;
 6. within each of those, by name, case-insensitively and in natural order, so that "item 2" comes before "item 10".
 
 Each rule applies only among projects the rules before it leave tied, so pinned projects come first whatever their
@@ -512,7 +513,8 @@ one, or an open menu in one brings the whole group back to full strength while i
 **Sessions** within a project are listed, by the same scheme:
 
 1. pinned sessions first;
-2. then by status: waiting for the user, awaiting instructions, working, interrupted;
+2. then by status: waiting for the user, then awaiting instructions and starting alike, then working, then
+   interrupted;
 3. then the most recently started first.
 
 The console sessions section lists its console sessions by that same session scheme.

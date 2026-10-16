@@ -12,6 +12,8 @@ const sessions = [
 const connected = (connectionState: "open" | "reconnecting" | "closed") =>
   snapshotState({ consoles: [console_], projects: [project], sessions, connectionState });
 
+const starting = sessionOf("s-starting", console_.id, project.id, "Just created, still launching", "starting");
+
 const STARTUP_AND_CONNECTION = "Startup and connection";
 const TERMINAL = "Terminal";
 
@@ -97,6 +99,15 @@ export const connectionScenarios: Scenario[] = [
     description: "The pointer is on the last row of an address the program itself broke onto the next rows: the whole address, on every row it spans, is underlined, and Cmd/Ctrl+click opens the full address. The window's width decides where it breaks.",
     state: connected("open"),
     steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(400), (ui) => ui.hoverTerminalUrl("lang=zh-Hans")],
+  },
+  {
+    id: "terminal-starting",
+    group: TERMINAL,
+    category: "normal",
+    title: "Terminal of a session still starting",
+    description: "The selected session's agent is still being launched: the terminal is covered by a spinner and \"Starting session…\", with no Reconnect button. Its sidebar row shows the muted turning arc.",
+    state: snapshotState({ consoles: [console_], projects: [project], sessions: [...sessions, starting] }),
+    steps: [(ui) => ui.press(ui.session(starting.title))],
   },
   {
     id: "terminal-reconnecting",

@@ -224,7 +224,8 @@ pub fn clone_repo(remote_url: &str, parent: &Path) -> Result<PathBuf> {
     }
     std::fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
 
-    let shell_env = crate::env_shell::snapshot().context("snapshotting the shell environment")?;
+    let shell_env =
+        crate::env_shell::launch_snapshot().context("snapshotting the shell environment")?;
     let mut command = git_command(&shell_env)?;
     command.arg("clone").arg("--").arg(remote_url).arg(&target);
     let output = crate::subprocess::run_with_timeout(&mut command, CLONE_TIMEOUT)

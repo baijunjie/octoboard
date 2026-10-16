@@ -10,6 +10,7 @@ import { isolate } from "../i18n/isolate";
 import { PANE_ID } from "../layout/paneOverlay";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { PlatformProvider } from "../platform/react";
+import type { Session } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { Sidebar } from "./Sidebar";
 import type { FocusTarget, SidebarHandlers } from "./types";
@@ -42,11 +43,16 @@ beforeEach(() => {
   document.documentElement.style.setProperty("--peek-gap", "8px");
 });
 
+/** The sidebar's props, and the sessions the stand-in daemon holds, which the sidebar reads from its store. */
+type SidebarTestProps = Partial<ComponentProps<typeof Sidebar>> & { sessions?: Session[] };
+
+const sessionMap = (list: Session[]) => new Map(list.map((session) => [session.id, session]));
+
 /** Mounts the sidebar over a stand-in daemon, `beside` next to it; `render` mounts it again with
  * other props. */
-function mountSidebar(initial: Partial<ComponentProps<typeof Sidebar>>, beside?: React.ReactNode) {
+function mountSidebar(initial: SidebarTestProps, beside?: React.ReactNode) {
   const daemon: Daemon = {
-    store: createStateStore({}),
+    store: createStateStore({ sessions: sessionMap(sessions) }),
     request: vi.fn(),
     toastError: vi.fn(),
     toastNotice: vi.fn(),
@@ -62,17 +68,18 @@ function mountSidebar(initial: Partial<ComponentProps<typeof Sidebar>>, beside?:
     act(() => root.unmount());
     container.remove();
   });
-  const render = (props: Partial<ComponentProps<typeof Sidebar>>) =>
-    act(() =>
+  const render = ({ sessions: held, ...props }: SidebarTestProps) =>
+    act(() => {
+      if (held) daemon.store.setState({ sessions: sessionMap(held) });
       root.render(
         <PlatformProvider value={{ kind: "browser" }}>
           <DaemonProvider value={daemon}>
             {beside}
-            <Sidebar {...handlers} projects={[web]} sessions={sessions} shownConsole={main} open sidebarWidth={sidebarWidth} {...props} />
+            <Sidebar {...handlers} projects={[web]} shownConsole={main} open sidebarWidth={sidebarWidth} {...props} />
           </DaemonProvider>
         </PlatformProvider>,
-      ),
-    );
+      );
+    });
   render(initial);
   return { container, root, render };
 }
@@ -270,7 +277,6 @@ function mountPeeking() {
       </ChromeButton>
       <Rail
         consoles={[main]}
-        sessions={sessions}
         currentConsoleId={main.id}
         onSelectConsole={vi.fn()}
         onConsoleEnter={vi.fn()}

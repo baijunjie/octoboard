@@ -21,11 +21,12 @@
 //!   because Claude Code re-renders its snapshot from whatever *that* launch passed after a
 //!   compaction.
 //! - **Hooks must fail fast and silently.** Every agent surfaces a failing hook to the user, and a
-//!   hook with no timeout blocks the turn for its full duration. Octoboard owns the hook script
-//!   (`hook_script` below, generated per session), which exits 0 unconditionally and writes
-//!   nothing.
+//!   hook with no timeout blocks the turn for its full duration. Octoboard owns the hook command
+//!   (`hook_command` below; Codex and Grok run it as the per-session `hook_script`, Claude Code
+//!   inline, or not at all when its version posts hooks over HTTP itself), which exits 0
+//!   unconditionally and writes nothing.
 //!
-//! The hook script itself takes no arguments: it derives the event from the payload on stdin, so
+//! The hook command takes no event argument: it derives the event from the payload on stdin, so
 //! one constant command serves every event, and adding or removing an event never changes what an
 //! adapter has to generate beyond the event name itself.
 
@@ -66,7 +67,9 @@ pub struct LaunchSpec<'a> {
     /// Per-session scratch directory, already created. Adapters may write into it whatever their
     /// injection needs; it is removed when the session's process is gone.
     pub scratch: &'a Path,
-    /// Absolute path of the generated hook script for this session.
+    /// Absolute path of the hook script for this session. Written only for an adapter whose
+    /// [`AgentAdapter::uses_hook_script`] is true; for any other it is where the script would be,
+    /// and nothing is there.
     pub hook_script: &'a Path,
     /// The filtered snapshot of the user's shell environment this launch will use. Adapters read
     /// the user's own settings from here rather than from the daemon's own environment, which may
@@ -86,6 +89,10 @@ pub struct LaunchSpec<'a> {
     /// The reasoning effort to launch with, in the agent's own spelling; `None` leaves it to the
     /// agent. Set under the same conditions as [`Self::model`].
     pub effort: Option<&'a str>,
+    /// The version of the agent binary this launch starts, when it could be told without running
+    /// it (see [`AgentAdapter::installed_version`]); `None` makes an adapter fall back to what
+    /// every version takes.
+    pub agent_version: Option<AgentVersion>,
     /// The daemon binary, which is also the MCP server and the hook forwarder.
     pub self_exe: &'a str,
     /// Where the daemon is listening, for the MCP server this launch registers.
@@ -254,6 +261,20 @@ pub trait AgentAdapter {
     fn preallocates_session_id(&self) -> bool;
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan>;
+
+    /// True when the plan runs the per-session hook script ([`write_hook_script`]) for its hooks,
+    /// so a launch writes one only for such an agent.
+    fn uses_hook_script(&self) -> bool {
+        false
+    }
+
+    /// The version of the resolved `binary`, read from where it is installed instead of by running
+    /// it: a process start is exactly what the caller is trying to avoid, and on a machine whose
+    /// endpoint security stalls every exec a `--version` probe costs seconds. `None` when this
+    /// agent's launch does not depend on its version, or when the install does not tell it.
+    fn installed_version(&self, _binary: &str) -> Option<AgentVersion> {
+        None
+    }
 }
 
 pub fn adapter_for(agent: Agent) -> Box<dyn AgentAdapter> {
@@ -270,6 +291,29 @@ pub fn adapter_for(agent: Agent) -> Box<dyn AgentAdapter> {
 /// and prints a visible warning for anything above it.
 pub const HOOK_TIMEOUT_SECS: u32 = 3;
 
+/// An agent's version as major, minor, patch.
+pub type AgentVersion = (u32, u32, u32);
+
+/// Where an agent that posts its hooks itself sends them: the daemon's own hook route, which
+/// takes the same body the forwarder would have posted.
+pub fn hook_url(session_id: &str, daemon_port: u16) -> String {
+    format!("http://127.0.0.1:{daemon_port}/hook/{session_id}")
+}
+
+/// The shell command that forwards one hook payload to the daemon: the body of the hook script,
+/// and for an agent that runs its hook command through a shell, the whole hook, so the script's
+/// own `/bin/sh` is not started on top of it. `exec` rather than a plain call so no shell lingers,
+/// and stderr is dropped at the command level as well as inside the binary: a single stderr line
+/// is enough to render an error cell in every one of the three agents.
+pub fn hook_command(self_exe: &str, session_id: &str, daemon_port: u16) -> String {
+    format!(
+        "exec {} hook --session {} --port {} 2>/dev/null",
+        shell_quote(self_exe),
+        shell_quote(session_id),
+        daemon_port
+    )
+}
+
 /// Writes the per-session hook script and returns its path. One script per session rather than a
 /// shared one, because it carries the session's identity and the daemon's port; it is removed with
 /// the session's scratch directory.
@@ -281,28 +325,24 @@ pub fn write_hook_script(
     self_exe: &str,
     session_id: &str,
     daemon_port: u16,
-) -> Result<std::path::PathBuf> {
+) -> Result<PathBuf> {
     use std::io::Write;
     use std::os::unix::fs::PermissionsExt;
 
-    let path = scratch.join("hook");
+    let path = hook_script_path(scratch);
     let mut file = std::fs::File::create(&path)?;
     writeln!(file, "#!/bin/sh")?;
-    // `exec` rather than a plain call so no shell lingers, and stderr is dropped at the script
-    // level as well as inside the binary: a single stderr line is enough to render an error cell
-    // in every one of the three agents.
-    writeln!(
-        file,
-        "exec {} hook --session {} --port {} 2>/dev/null",
-        shell_quote(self_exe),
-        shell_quote(session_id),
-        daemon_port
-    )?;
+    writeln!(file, "{}", hook_command(self_exe, session_id, daemon_port))?;
     file.flush()?;
     let mut perms = file.metadata()?.permissions();
     perms.set_mode(0o700);
     std::fs::set_permissions(&path, perms)?;
     Ok(path)
+}
+
+/// Where a session's hook script is, or would be, in its scratch directory.
+pub fn hook_script_path(scratch: &Path) -> PathBuf {
+    scratch.join("hook")
 }
 
 pub(crate) fn shell_quote(value: &str) -> String {
@@ -331,6 +371,7 @@ pub mod tests {
         pub config_dir: Option<PathBuf>,
         pub model: Option<String>,
         pub effort: Option<String>,
+        pub agent_version: Option<super::AgentVersion>,
         pub self_exe: String,
         pub mcp_token: String,
     }
@@ -351,6 +392,7 @@ pub mod tests {
                 config_dir: self.config_dir.as_deref(),
                 model: self.model.as_deref(),
                 effort: self.effort.as_deref(),
+                agent_version: self.agent_version,
                 self_exe: &self.self_exe,
                 daemon_port: 4321,
                 mcp_token: &self.mcp_token,
@@ -379,6 +421,7 @@ pub mod tests {
             config_dir: None,
             model: None,
             effort: None,
+            agent_version: None,
             self_exe: "/opt/octoboard/octoboardd".to_string(),
             mcp_token: "token-1".to_string(),
         }

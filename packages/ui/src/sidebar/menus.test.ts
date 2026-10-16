@@ -26,6 +26,7 @@ describe("the Switch account entry", () => {
     ["the session is on an account that was removed, and the default is somewhere to go", project({ account_id: "gone", config_dir: "/x" }), [], true],
     ["it is a console session of an agent with a stored account", consoleSession, [account("w", "claude")], true],
     ["the session is archived", project({ status: "archived" }), [account("w", "claude")], false],
+    ["the session is still starting", project({ status: "starting" }), [account("w", "claude")], false],
   ] as const)("is present exactly when there is somewhere to go: %s", (_, session, accounts, shown) => {
     expect(submenu(session, [...accounts])?.label === "Switch account").toBe(shown);
   });
@@ -42,6 +43,15 @@ describe("the Switch account entry", () => {
     expect(handlers.onOpenDialog).toHaveBeenCalledWith(expect.objectContaining({ kind: "switch-account", account: "w", accountName: "w" }));
     (manage as { onClick: () => void }).onClick();
     expect(handlers.onOpenSettings).toHaveBeenCalledWith("accounts");
+  });
+});
+
+describe("a session that is still starting", () => {
+  it("offers Archive, never Delete, even when it was never used", () => {
+    const starting = sessionOf("s", "c", "p", "Title", "starting");
+    const labels = sessionMenu(t, {} as SidebarHandlers, starting, []).map((entry) => (entry === "separator" ? entry : entry.label));
+    expect(labels).toContain("Archive");
+    expect(labels).not.toContain("Delete");
   });
 });
 
@@ -196,8 +206,7 @@ describe("a console's menu", () => {
   it("lists Add project, Edit console, the archived console sessions and Delete console", () => {
     const handlers = { onOpenDialog: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn() };
     const hub = sessionOf("hub", "c", undefined, "Old hub", "archived", { role: "console" });
-    const projectSession = sessionOf("work", "c", "p", "Project work", "archived");
-    const menu = consoleMenu(t, consoleOf("c", "Main"), handlers, [hub, projectSession]);
+    const menu = consoleMenu(t, consoleOf("c", "Main"), handlers, [hub]);
     const labels = menu.map((entry) => (entry === "separator" ? entry : entry.label));
     expect(labels).toEqual(["Add project", "Edit console", "Archived console sessions", "separator", "Delete console"]);
     const archive = menu[2] as { items: { label: string; onClick: () => void }[] };

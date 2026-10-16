@@ -4,6 +4,8 @@ import { flushSync } from "react-dom";
 import { refocusIfLost } from "../components/refocusIfLost";
 import { MODAL_OPEN } from "../layout/useRegionCycle";
 import { usePlatform } from "../platform/react";
+import type { Session } from "../protocol";
+import { useDaemon, useDaemonStore } from "../store";
 import { IS_MAC, useWindowShortcut } from "../useWindowShortcut";
 import { canGo, EMPTY_HISTORY, go, type Location, locationKey, push, replaceCurrent } from "./history";
 
@@ -43,8 +45,10 @@ export interface Navigation {
  * A change the user did not make takes the place of the entry on screen instead of adding one: when
  * what that entry names has gone (the selected session deleted, the console shown deleted, a focus
  * mode that can no longer be shown), the UI falls back by itself and the fallback is what the entry
- * now stands for. `isLive` says whether an entry still names things that exist; those that do not
- * are passed over when moving.
+ * now stands for. `isLive` says, given the store's sessions, whether an entry still names things
+ * that exist; those that do not are passed over when moving. Whether Back and Forward have
+ * somewhere to go is selected from the store with it, so it follows a session's removal without a
+ * render of the caller.
  *
  * Moving calls `apply` with the location to show, which sets the UI's state to it without
  * selecting anything the way a click would (an interrupted session is not resumed by going back to
@@ -68,11 +72,12 @@ export function useNavigationHistory({
 }: {
   location: Location;
   ready: boolean;
-  isLive: (location: Location) => boolean;
+  isLive: (location: Location, sessions: Map<string, Session>) => boolean;
   apply: (location: Location) => void;
   focusTerminal: () => void;
 }): Navigation {
   const { windowChrome } = usePlatform();
+  const { store } = useDaemon();
   const [history, setHistory] = useState(EMPTY_HISTORY);
   // Set while a move is being applied, so that the location it arrives at is not a visit.
   const moving = useRef(false);
@@ -96,12 +101,12 @@ export function useNavigationHistory({
     setHistory((h) => {
       const current = h.entries[h.index];
       if (moved) return current && locationKey(current) === key ? h : replaceCurrent(h, location);
-      return replacesJoined || (current && !isLive(current)) ? replaceCurrent(h, location) : push(h, location);
+      return replacesJoined || (current && !isLive(current, store.getState().sessions)) ? replaceCurrent(h, location) : push(h, location);
     });
   });
 
   const move = (direction: -1 | 1) => {
-    const target = go(history, direction, isLive);
+    const target = go(history, direction, (target) => isLive(target, store.getState().sessions));
     if (!target) return;
     moving.current = true;
     flushSync(() => {
@@ -143,9 +148,12 @@ export function useNavigationHistory({
   };
   useWindowShortcut(shortcutDirection, (direction) => moveByShortcut(direction === -1), windowChrome !== undefined);
 
+  const canGoBack = useDaemonStore((s) => canGo(history, -1, (target) => isLive(target, s.sessions)));
+  const canGoForward = useDaemonStore((s) => canGo(history, 1, (target) => isLive(target, s.sessions)));
+
   return {
-    canGoBack: canGo(history, -1, isLive),
-    canGoForward: canGo(history, 1, isLive),
+    canGoBack,
+    canGoForward,
     back: () => move(-1),
     forward: () => move(1),
     moveByShortcut,

@@ -10,7 +10,7 @@ export type SessionRecordsPresence = "present" | "absent" | "unknown";
 export type Agent = "claude" | "codex" | "grok";
 export type Role = "console" | "project";
 export type Origin = "console" | "user";
-export type SessionStatus = "working" | "waiting_user" | "idle" | "interrupted" | "archived";
+export type SessionStatus = "starting" | "working" | "waiting_user" | "idle" | "interrupted" | "archived";
 export type HostKind = "local" | "ssh";
 export type ProjectSource = "local" | "parent" | "git";
 
@@ -24,8 +24,10 @@ export const CONSOLE_SESSION_COLOURS = [
 ] as const;
 export type ConsoleSessionColour = (typeof CONSOLE_SESSION_COLOURS)[number];
 
-/** Statuses meaning the session has a running process. The complement of `DORMANT_STATUSES`. */
-export const LIVE_STATUSES: ReadonlySet<SessionStatus> = new Set(["working", "waiting_user", "idle"]);
+/** Statuses meaning the session has a running process or is about to: `starting` is one whose agent
+ * is still being launched, so it has no terminal to attach to yet. The complement of
+ * `DORMANT_STATUSES`. */
+export const LIVE_STATUSES: ReadonlySet<SessionStatus> = new Set(["starting", "working", "waiting_user", "idle"]);
 
 /** Statuses meaning no process is running for this session — both are resumable via
  * `resume_session`. */

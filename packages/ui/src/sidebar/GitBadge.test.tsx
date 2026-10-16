@@ -39,7 +39,7 @@ interface Placement {
 
 function daemonWith(status: GitStatus): Daemon {
   return {
-    store: createStateStore({ gitStatuses: new Map([[web.id, status]]) }),
+    store: createStateStore({ gitStatuses: new Map([[web.id, status]]), sessions: new Map(sessions.map((session) => [session.id, session])) }),
     request: vi.fn(),
     toastError: vi.fn(),
     toastNotice: vi.fn(),
@@ -78,7 +78,7 @@ const PLACEMENTS: Placement[] = [
   {
     name: "a sidebar project row",
     mount: (status, glyph) =>
-      badgeOf(mountOver(status, <Sidebar {...handlers()} projects={[web]} sessions={sessions} shownConsole={main} open sidebarWidth={sidebarWidth} />), glyph),
+      badgeOf(mountOver(status, <Sidebar {...handlers()} projects={[web]} shownConsole={main} open sidebarWidth={sidebarWidth} />), glyph),
     named: (container) => container.querySelector("div[role=button]"),
   },
   {

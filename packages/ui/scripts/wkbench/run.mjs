@@ -384,7 +384,7 @@ function printResults(scenario, results) {
       ["region", "elements", "ms"], Object.keys(r.restyleLayoutMs).map((k) => [k, r.counts[k], r.restyleLayoutMs[k]]));
     const hidden = Object.keys(r.restyleLayoutMs).filter((k) => r.restyleLayoutMs[k] === null);
     if (hidden.length) console.log(`(-) not shown on the page, so not measured: ${hidden.join(", ")}`);
-    console.log(`document without .xterm-rows: ${r.documentWithoutXtermRowsMs} ms; ${r.cssRules} CSS rules; devicePixelRatio ${r.dpr}`);
+    console.log(`document without .xterm-screen: ${r.documentWithoutXtermScreenMs} ms; ${r.cssRules} CSS rules; devicePixelRatio ${r.dpr}`);
   }
 }
 

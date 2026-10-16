@@ -12,20 +12,6 @@ const SECTION_ORDER: SessionStatus[] = ["waiting_user", "working", "idle"];
  * menu on screen however many sessions run. */
 export const MAX_PER_SECTION = 10;
 
-/** Glyphs an agent puts at the start of its terminal title to show what it is doing — Claude Code's
- * rotating circle and its idle star, the braille spinners Codex and other terminal tools use, and
- * the star and diamond markers other agent CLIs use. Read into the menu as they are, they would
- * change its text several times a second, and each change replaces the menu, which closes it if it
- * is open. */
-const SPINNER_GLYPHS = /^[\u2800-\u28FF\u25D0-\u25D3\u25F0-\u25F7\u2722-\u2727\u2729-\u273D\u00B7\u2022\u25CF\u25CB\u25C9\u25CE\u25C6\u25C7]+(?:\s+|$)/u;
-
-/** A terminal title with the animated glyphs it starts with removed; a glyph only counts when the
- * title goes on after a space or ends there, so a title that merely begins with such a character
- * keeps it. */
-export function withoutSpinnerGlyphs(title: string): string {
-  return title.replace(SPINNER_GLYPHS, "");
-}
-
 /** The menu before its pictures are drawn: lines name them by key (`statusItemIconKeys.ts`), and
  * `withIcons` (`statusItemIcons.ts`) draws the keys in use. */
 export type StatusItemMenuDraft = Omit<StatusItemMenu, "icons">;
@@ -38,11 +24,6 @@ export interface StatusItemMenuSource {
   projectMap: Map<string, Project>;
 }
 
-function steadyTitle(session: Session): Session {
-  if (!session.terminal_title) return session;
-  return { ...session, terminal_title: withoutSpinnerGlyphs(session.terminal_title) };
-}
-
 /** The live sessions — waiting for the user, working, awaiting instructions — in the sidebar's
  * order, each status under its own heading. */
 export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource): StatusItemMenuDraft {
@@ -53,7 +34,7 @@ export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource):
     const items: StatusItemEntry[] = listed
       .slice(0, MAX_PER_SECTION)
       .map((session) => ({
-        label: sessionWithLocation(t, steadyTitle(session), consoleMap, projectMap),
+        label: sessionWithLocation(t, session, consoleMap, projectMap),
         icon: agentIconKey(session.agent),
         session: session.id,
       }));

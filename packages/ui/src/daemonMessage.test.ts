@@ -36,6 +36,16 @@ it("words a trust answer's failure from its reason code, keeping the English rea
   );
 });
 
+it("words a failed launch's reason from the failure's own code and params, keeping the English reason for an unknown code", () => {
+  const params = { title: "Hub", reason: "the English account", reason_code: "binary_not_found", binary: "codex" };
+  expect(daemonMessage("en", "launch_failed", params, "x", records)).toBe(
+    `Could not start “${isolate("Hub")}”: ${isolate("codex")} was not found on ${isolate("PATH")} in the snapshotted shell environment.`,
+  );
+  expect(daemonMessage("en", "launch_failed", { ...params, reason_code: "newer" }, "x", records)).toBe(
+    `Could not start “${isolate("Hub")}”: ${isolate("the English account")}`,
+  );
+});
+
 it("shows the daemon's own text for a code the catalog does not have", () => {
   expect(daemonMessage("en", "a_newer_code", {}, "the English text", records)).toBe("the English text");
 });

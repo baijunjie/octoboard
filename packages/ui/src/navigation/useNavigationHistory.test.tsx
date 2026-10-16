@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vite
 
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
+import { createStateStore, type Daemon, DaemonProvider } from "../store";
 import type { Location } from "./history";
 import { type Navigation, useNavigationHistory } from "./useNavigationHistory";
 
@@ -19,6 +20,8 @@ interface Harness {
   /** A Back button as the title bar renders it: disabled when there is nothing to go back to. */
   backButton: () => HTMLButtonElement;
 }
+
+const daemon = () => ({ store: createStateStore() }) as Daemon;
 
 let root: Root | undefined;
 let container: HTMLElement | undefined;
@@ -69,7 +72,7 @@ function mount({
   }
   container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
-  act(() => root!.render(<PlatformProvider value={platform}><Host /></PlatformProvider>));
+  act(() => root!.render(<DaemonProvider value={daemon()}><PlatformProvider value={platform}><Host /></PlatformProvider></DaemonProvider>));
   harness.backButton = () => container!.querySelector<HTMLButtonElement>('[data-testid="back"]')!;
   return harness;
 }
@@ -240,7 +243,7 @@ describe("joinPressVisits", () => {
     }
     container = document.body.appendChild(document.createElement("div"));
     root = createRoot(container);
-    act(() => root!.render(<PlatformProvider value={{ kind: "browser" }}><Host /></PlatformProvider>));
+    act(() => root!.render(<DaemonProvider value={daemon()}><PlatformProvider value={{ kind: "browser" }}><Host /></PlatformProvider></DaemonProvider>));
     return { navigation: () => navigation, setConsole: (id: string) => act(() => setConsole(id)), setSession: (id: string) => act(() => setSession(id)), setSessionNow: (id: string) => setSession(id) };
   }
   const release = (type = "pointerup") => {

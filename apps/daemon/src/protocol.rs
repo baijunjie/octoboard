@@ -122,6 +122,12 @@ impl ConsoleSessionColour {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionStatus {
+    /// Recorded and shown, its agent process still being launched; the status of a session
+    /// opened by `open_session` until the process is up (one opened for an agent's own
+    /// `start_session` or for an approved console session request is recorded the same way, though
+    /// its caller is answered only once the launch has settled). No agent has reported anything
+    /// yet.
+    Starting,
     Working,
     WaitingUser,
     Idle,
@@ -1634,7 +1640,8 @@ pub enum Event {
         title: String,
     },
     /// The reply to `open_session`, and to an approving `answer_console_session_request`: the
-    /// session that was started. The same record is broadcast as
+    /// session that was opened. For `open_session` it is `starting`, the launch still going on; for
+    /// an approving answer the launch has settled and it is running. The same record is broadcast as
     /// `session_upserted` as well, but a broadcast carries no request id, so this is the only way
     /// the client that asked can tell which of the sessions appearing in the tree is the one it
     /// just opened — and therefore the only way it can select it.
@@ -2330,6 +2337,7 @@ pub mod trust_reason {
 /// Codes carried by `Event::SessionNotice`; `PROTOCOL.md` lists each with its params. Like an error
 /// code, each needs a `daemon.<code>` message in the UI's catalogs.
 pub mod notice_code {
+    pub const LAUNCH_FAILED: &str = "launch_failed";
     pub const CLAUDE_WORKSPACE_UNTRUSTED: &str = "claude_workspace_untrusted";
     pub const QUEUED_MESSAGES_DROPPED: &str = "queued_messages_dropped";
     pub const TRUST_ANSWER_FAILED: &str = "trust_answer_failed";

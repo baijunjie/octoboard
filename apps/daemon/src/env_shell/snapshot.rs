@@ -1,6 +1,4 @@
-//! Capturing the user's real shell environment, which every agent is then launched with, and
-//! resolving a binary on its `PATH`. Running a subprocess the daemon spawns directly, within a
-//! deadline and output bounds, is `crate::subprocess`'s.
+//! The login-shell snapshot itself: running the user's shell and parsing the environment it dumps.
 //!
 //! `$SHELL -l -c ...` is not enough: tool paths such as `grok`, `codex` and a node-version
 //! manager's shims are set up in `~/.zshrc`, which a login-only non-interactive zsh never sources.
@@ -13,67 +11,19 @@
 //! any other variable, and an agent inheriting `TERM=dumb` downgrades its own renderer, colour
 //! handling and mouse reporting. `SNAPSHOT_ONLY_VARS` is dropped from the snapshot and the PTY
 //! command sets its own `TERM` instead.
-//!
-//! `snapshot()` itself is taken per call rather than cached: a node-version manager's `PATH` entry
-//! can point at a per-shell-instance directory, and a long-running daemon would otherwise never
-//! pick up an edit the user makes to their shell configuration. Agent launches are human-paced, so
-//! the extra `fork+exec` is immaterial there. A caller driven on someone else's schedule instead —
-//! the git-status sweep `refresh_git_status` runs every five minutes for as long as a console
-//! stays shown — goes through `cached_snapshot` below, which reuses one snapshot for a while
-//! rather than re-forking the login shell on every call.
 
 use std::collections::HashMap;
 use std::io::{self, Read};
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::{mpsc, Mutex};
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 
-use crate::subprocess::{PIPE_CHUNK_SIZE, REAP_GRACE};
-
 use crate::protocol::{error_code, CodedError};
-
-/// How long [`cached_snapshot`] reuses a snapshot before retaking it. An hour picks up a `PATH`
-/// edit within the hour instead of never, while still amortising the fork across many sweeps of
-/// whatever is calling it on its own schedule — the daemon itself owns no timer that would call
-/// for a shorter or longer number here.
-const CACHED_SNAPSHOT_TTL: Duration = Duration::from_secs(60 * 60);
-
-/// A cached attempt at [`snapshot`]: both its outcome and when it was made. A failed or timed-out
-/// attempt is cached exactly like a successful one — see [`cached_snapshot`] for why.
-struct CachedSnapshot {
-    outcome: Result<HashMap<String, String>, String>,
-    attempted_at: Instant,
-}
-
-static SNAPSHOT_CACHE: Mutex<Option<CachedSnapshot>> = Mutex::new(None);
-
-/// [`snapshot`], reused across calls for [`CACHED_SNAPSHOT_TTL`] instead of re-forking the login
-/// shell every time. For a caller paced by a human (an agent launch), that fork is immaterial and
-/// `snapshot()` itself is the right call — see the module doc. For one paced by something else,
-/// such as a periodic sweep, re-forking on every call would not be: ten projects in one sweep
-/// hitting a slow or wedged rc file would otherwise serialize behind this module's own one-shell-
-/// at-a-time nature for ten attempts' worth of [`SNAPSHOT_TIMEOUT`] instead of one, which is why a
-/// *failed* attempt is cached too, for the same TTL, rather than retried on every call.
-pub fn cached_snapshot() -> Result<HashMap<String, String>> {
-    let mut cache = SNAPSHOT_CACHE
-        .lock()
-        .expect("shell env cache lock poisoned");
-    if let Some(cached) = cache.as_ref() {
-        if cached.attempted_at.elapsed() < CACHED_SNAPSHOT_TTL {
-            return cached.outcome.clone().map_err(|err| anyhow::anyhow!(err));
-        }
-    }
-    let outcome = snapshot().map_err(|err| format!("{err:#}"));
-    *cache = Some(CachedSnapshot {
-        outcome: outcome.clone(),
-        attempted_at: Instant::now(),
-    });
-    outcome.map_err(|err| anyhow::anyhow!(err))
-}
+use crate::subprocess::{PIPE_CHUNK_SIZE, REAP_GRACE};
 
 /// Upper bound on how long the login-shell snapshot may run. An rc file waiting on a version
 /// manager or a network call is routinely a second or two; this leaves a wide margin above that
@@ -158,11 +108,11 @@ fn snapshot_marker() -> String {
 
 /// Runs `$SHELL -l -i -c 'env -0 && printf <marker>'` and returns the parsed environment with the
 /// filtered variables already removed.
-pub fn snapshot() -> Result<HashMap<String, String>> {
+pub fn take() -> Result<HashMap<String, String>> {
     snapshot_with(&shell_path(), SNAPSHOT_TIMEOUT)
 }
 
-/// `snapshot()`'s body, with the shell and the timeout as parameters so a test can point both at
+/// `take()`'s body, with the shell and the timeout as parameters so a test can point both at
 /// something under its control instead of the user's real login shell and a ten-second wait.
 fn snapshot_with(shell: &str, timeout: Duration) -> Result<HashMap<String, String>> {
     let marker = snapshot_marker();
@@ -469,34 +419,6 @@ fn kill_group_after_timeout(
             ("timeout", &format!("{timeout:?}")),
         ],
     )
-}
-
-/// Resolves a bare binary name to an absolute path by searching the snapshot's `PATH`, mirroring
-/// what the login shell would have found. Deliberately does not leave resolution to
-/// `portable_pty`, whose own search tries `cwd.join(exe)` first and accepts it on `.exists()`
-/// alone — so a project file named `claude` would silently shadow the real CLI.
-pub fn resolve_binary(name: &str, env: &HashMap<String, String>) -> Result<String> {
-    use std::os::unix::fs::PermissionsExt;
-
-    let path_var = env.get("PATH").map(String::as_str).unwrap_or_default();
-    for dir in path_var.split(':') {
-        if dir.is_empty() {
-            continue;
-        }
-        let candidate = std::path::Path::new(dir).join(name);
-        let executable = candidate
-            .metadata()
-            .map(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
-            .unwrap_or(false);
-        if executable {
-            return Ok(candidate.to_string_lossy().into_owned());
-        }
-    }
-    Err(CodedError::raised(
-        error_code::BINARY_NOT_FOUND,
-        format!("`{name}` was not found on PATH in the snapshotted shell environment"),
-        &[("binary", name)],
-    ))
 }
 
 #[cfg(test)]

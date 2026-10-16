@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
-import type { Project } from "../protocol";
+import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { type SidebarView, useSidebarView } from "./sidebarView";
 import type { FocusTarget } from "./types";
 
@@ -19,6 +19,7 @@ const unbound = sessionOf("s-unbound", main.id, project.id, "Unbound", "idle");
 const byId = <T extends { id: string }>(items: T[]) => new Map(items.map((item) => [item.id, item]));
 const projects = byId([project, projectOf("p-2", other.id, "Elsewhere")]);
 const sessions = byId([hub, bound, unbound, { ...hub, id: "s-archived-hub", status: "archived" as const }]);
+const daemonOver = () => ({ store: createStateStore({ projects, sessions }) }) as Daemon;
 
 const projectFocus: FocusTarget = { project };
 const hubFocus: FocusTarget = { consoleSession: hub };
@@ -27,12 +28,13 @@ const hubFocus: FocusTarget = { consoleSession: hub };
 function mountView(): { view: () => SidebarView; unmount: () => void } {
   let latest!: SidebarView;
   function Probe() {
-    latest = useSidebarView([main, other], projects as Map<string, Project>, sessions);
+    latest = useSidebarView([main, other]);
     return null;
   }
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  act(() => root.render(<Probe />));
+  const daemon = daemonOver();
+  act(() => root.render(<DaemonProvider value={daemon}><Probe /></DaemonProvider>));
   return { view: () => latest, unmount: () => (act(() => root.unmount()), container.remove()) };
 }
 
@@ -51,22 +53,20 @@ describe("the remembered focus mode", () => {
 });
 
 it("forgets a console session that was archived while in focus, so reopening it does not bring focus mode back", () => {
-  let all = sessions;
   let latest!: SidebarView;
   function Probe() {
-    latest = useSidebarView([main, other], projects as Map<string, Project>, all);
+    latest = useSidebarView([main, other]);
     return null;
   }
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  act(() => root.render(<Probe />));
+  const daemon = daemonOver();
+  act(() => root.render(<DaemonProvider value={daemon}><Probe /></DaemonProvider>));
   act(() => latest.selectConsole(main.id));
   act(() => latest.setFocus(hubFocus));
-  all = byId([{ ...hub, status: "archived" as const }, bound, unbound]);
-  act(() => root.render(<Probe />));
+  act(() => daemon.store.setState({ sessions: byId([{ ...hub, status: "archived" as const }, bound, unbound]) }));
   expect(latest.focus).toBeUndefined();
-  all = sessions;
-  act(() => root.render(<Probe />));
+  act(() => daemon.store.setState({ sessions }));
   expect(latest.focus).toBeUndefined();
   act(() => root.unmount());
   container.remove();

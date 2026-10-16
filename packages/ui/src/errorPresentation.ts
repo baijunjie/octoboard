@@ -18,6 +18,15 @@ export function hasCodeParams(error: { code: string; params: MessageParams }): b
   return CODE_PARAMS[messageCode(error.code, params)]?.every((name) => !!params[name]) ?? false;
 }
 
+/** The structured form of a `session_notice` that reports a failure the daemon words as an `error`
+ * too: a `launch_failed` whose `reason_code` is a shell environment timeout, whose params arrive
+ * beside it. `undefined` for any other notice, which is presented with its own code and params. */
+export function noticeErrorPresentation(code: string, params: MessageParams, message: string): DaemonRequestError | undefined {
+  if (code !== "launch_failed") return undefined;
+  const error = new DaemonRequestError(message, params.reason_code ?? "", params);
+  return hasShellTimeoutDetails(error) ? error : undefined;
+}
+
 export function errorPresentation(error: Error): ErrorPresentation {
   return error instanceof DaemonRequestError && (hasShellTimeoutDetails(error) || hasCodeParams(error)) ? error : error.message;
 }

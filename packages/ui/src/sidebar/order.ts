@@ -1,10 +1,12 @@
-import { isLive, type Console, type Project, type Session, type SessionStatus } from "../protocol";
+import { type Console, type Project, type Session, type SessionStatus } from "../protocol";
 
 /** How urgently a status asks for the user's attention: a raised hand first, then one sitting
- * at its prompt, then a session at work, then one with no process. Archived sessions are listed
+ * at its prompt or still coming up (it is about to be one), then a session at work, then one with
+ * no process. Archived sessions are listed
  * apart and never ranked against the others. */
 const STATUS_RANK: Record<SessionStatus, number> = {
   waiting_user: 0,
+  starting: 1,
   idle: 1,
   working: 2,
   interrupted: 3,
@@ -20,26 +22,29 @@ export function compareSessions(a: Session, b: Session): number {
   );
 }
 
+/** The rank of a project with no session that has a running process, which ends the list. */
+export const INACTIVE_PROJECT_RANK = 3;
+
 /** A project's rank by the most urgent of its sessions: one with a raised hand, then one with a
  * session at work, then one with a session merely running, then the inactive ones (no session
- * with a running process), which therefore end the list after the pinned ones. */
-function projectRank(sessions: Session[]): number {
+ * with a running process, `INACTIVE_PROJECT_RANK`), which therefore end the list after the pinned
+ * ones. */
+export function projectRank(sessions: Session[]): number {
   if (sessions.some((s) => s.status === "waiting_user")) return 0;
   if (sessions.some((s) => s.status === "working")) return 1;
-  if (sessions.some((s) => s.status === "idle")) return 2;
-  return 3;
-}
-
-/** Whether a project has no session with a running process. */
-export function isInactiveProject(sessions: Session[]): boolean {
-  return !sessions.some((s) => isLive(s.status));
+  if (sessions.some((s) => s.status === "idle" || s.status === "starting")) return 2;
+  return INACTIVE_PROJECT_RANK;
 }
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
 /** The projects in sidebar order: pinned first; then by `projectRank`; then by name. */
 export function sortProjects(projects: Project[], sessionsOf: (project: Project) => Session[]): Project[] {
-  const rank = new Map(projects.map((p) => [p.id, projectRank(sessionsOf(p))]));
+  return sortProjectsByRank(projects, new Map(projects.map((p) => [p.id, projectRank(sessionsOf(p))])));
+}
+
+/** `sortProjects` for a caller that already holds each project's `projectRank`, by project id. */
+export function sortProjectsByRank(projects: Project[], rank: ReadonlyMap<string, number>): Project[] {
   return [...projects].sort(
     (a, b) =>
       Number(b.pinned) - Number(a.pinned) ||
@@ -112,13 +117,13 @@ export function archivedSessionRows(sessions: Session[]): NestedSession[] {
   return nest(archivedSessions(sessions));
 }
 
-/** A console's live console sessions (not archived), newest first. Several may exist at once; this
- * is the new-session dialog's list of owners to choose from, not the sidebar's order (see "The
- * console sessions section and the project list" in `docs/product/sidebar.md` for that one,
- * `compareSessions` via `liveSessions`). */
+/** A console's live console sessions (not archived, and not one still starting), newest first.
+ * Several may exist at once; this is the new-session dialog's list of owners to choose from, not
+ * the sidebar's order (see "The console sessions section and the project list" in
+ * `docs/product/sidebar.md` for that one, `compareSessions` via `liveSessions`). */
 export function liveConsoleSessions(sessions: Session[], consoleId: string): Session[] {
   return sessions
-    .filter((s) => s.console_id === consoleId && s.role === "console" && s.status !== "archived")
+    .filter((s) => s.console_id === consoleId && s.role === "console" && s.status !== "archived" && s.status !== "starting")
     .sort((a, b) => b.started_at - a.started_at);
 }
 
@@ -234,6 +239,16 @@ export function boundElsewhere(
   return { count, owners: [...counts.values()].sort((a, b) => compareSessions(a.owner, b.owner)) };
 }
 
+/** The sessions a console session's focus mode lists, in whatever project and status: those bound
+ * to `consoleSessionId`, and those bound to them. */
+function focusListed(sessions: Session[], consoleSessionId: string): Session[] {
+  const bound = new Set(boundSessions(sessions, consoleSessionId).map((s) => s.id));
+  return sessions.filter((s) => bound.has(s.id) || (!!s.bound_to && bound.has(s.bound_to)));
+}
+
+const liveInProject = (listed: Session[], project: Project) =>
+  listed.filter((s) => s.project_id === project.id && s.status !== "archived");
+
 /** What a console session's focus mode lists: the console's projects that have a live session bound
  * to `consoleSessionId`, in the order of `sortProjects`, each with only those sessions — a lead
  * session among them carrying the sessions bound to it, nested under it, since the console session
@@ -244,13 +259,17 @@ export function focusGroups(
   sessions: Session[],
   consoleSessionId: string,
 ): { project: Project; sessions: NestedSession[] }[] {
-  const bound = new Set(boundSessions(sessions, consoleSessionId).map((s) => s.id));
-  const listed = sessions.filter((s) => bound.has(s.id) || (!!s.bound_to && bound.has(s.bound_to)));
-  const sessionsOf = (project: Project) => listed.filter((s) => s.project_id === project.id && s.status !== "archived");
+  const listed = focusListed(sessions, consoleSessionId);
+  const sessionsOf = (project: Project) => liveInProject(listed, project);
   return sortProjects(
     projects.filter((p) => sessionsOf(p).length > 0),
     sessionsOf,
   ).map((project) => ({ project, sessions: liveSessionRows(sessionsOf(project)) }));
+}
+
+/** One group of `focusGroups`: the rows of `project` alone, out of every session of the console. */
+export function focusGroupRows(sessions: Session[], project: Project, consoleSessionId: string): NestedSession[] {
+  return liveSessionRows(liveInProject(focusListed(sessions, consoleSessionId), project));
 }
 
 /** Every activity there is, most pressing first. The type is derived from the list rather than
@@ -263,7 +282,7 @@ export type Activity = (typeof ACTIVITIES)[number] | undefined;
 export function consoleActivity(sessions: Session[]): Activity {
   if (sessions.some((s) => s.status === "waiting_user")) return "waiting";
   if (sessions.some((s) => s.status === "working")) return "working";
-  if (sessions.some((s) => s.status === "idle")) return "running";
+  if (sessions.some((s) => s.status === "idle" || s.status === "starting")) return "running";
   return undefined;
 }
 

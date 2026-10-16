@@ -39,15 +39,17 @@ each with a comment saying so.
 
 ## Whatever every row of a list takes must keep its identity across daemon events
 
-Each daemon event replaces a store map, and a working session sends about one a second (its spinner title), so the
-compiler's memoization is what keeps an event from re-rendering every row of the sidebar and the rail. One prop that
-changes identity on every render re-renders every row again, with nothing to show for it but slowness:
+Each daemon event replaces a store map, and with many sessions the events arrive constantly (every status change is
+one), so the compiler's memoization is what keeps an event from re-rendering every row of the sidebar and the rail.
+One prop that changes identity on every render re-renders every row again, with nothing to show for it but slowness:
 
 - A handler that captures a store map, or anything else that changes per event, is wrapped in `useStableHandler`
   before it is passed to rows.
 - An object handed to every row is built from named members, never gathered with a rest pattern (`...rest`), which
   is a new object on every render.
-- A per-group array filtered out of a store map is kept identity-stable while its records are the same, through
-  `useShallow` (as `useSameList` in `packages/ui/src/sidebar/Sidebar.tsx` does).
+- A per-group array of sessions comes from the store's session index (`indexSessions` in
+  `packages/ui/src/sessions/sessionIndex.ts`, read through `packages/ui/src/sessions/useSessions.ts`), whose arrays
+  keep their identity until a session in them changes; any other array filtered out of a store map is kept
+  identity-stable while its records are the same, through `useShallow`.
 - Hooks come before the values derived from their inputs: the compiler keeps no value whose computation spans a hook
   call.
