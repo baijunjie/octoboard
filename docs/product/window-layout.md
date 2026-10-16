@@ -463,7 +463,7 @@ the terminal's area **scrolls horizontally** rather than squeezing the terminal 
 ## Right-click menus
 
 **In the desktop app** a right-click (or Control-click) shows the system's own menu only in an input field, a text area
-or editable text, and in the terminal, where it is how text is copied and pasted. Anywhere else it shows nothing, unless
+or editable text outside the terminal. In the terminal it shows no system menu. Anywhere else it shows nothing, unless
 what was clicked offers its own action menu: the sidebar's rows and headers open theirs at the pointer (see "Rows, names
 and keyboard focus" in `docs/product/sidebar.md`), and so do the consoles' avatars on the rail (see "The console
 switcher" in `docs/product/sidebar.md`). The project pane's file and change rows also open their own menu (see

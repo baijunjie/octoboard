@@ -1,7 +1,7 @@
 import type { PlatformAdapter } from "./platform";
 
 /** Where the webview's own context menu stays: it is how text is copied and pasted there. */
-const NATIVE_MENU = 'input, textarea, [contenteditable]:not([contenteditable="false"]), .xterm';
+const NATIVE_MENU = 'input, textarea, [contenteditable]:not([contenteditable="false"])';
 
 /**
  * Suppresses the webview's right-click menu, whose Back / Reload / Inspect entries make the window
@@ -11,7 +11,8 @@ const NATIVE_MENU = 'input, textarea, [contenteditable]:not([contenteditable="fa
 export function suppressNativeContextMenu(platform: PlatformAdapter): void {
   if (platform.kind !== "tauri") return;
   document.addEventListener("contextmenu", (event) => {
-    if (event.target instanceof Element && event.target.closest(NATIVE_MENU)) return;
+    // xterm's hidden textarea cannot use the native editing menu either.
+    if (event.target instanceof Element && !event.target.closest(".xterm") && event.target.closest(NATIVE_MENU)) return;
     event.preventDefault();
   });
 }
