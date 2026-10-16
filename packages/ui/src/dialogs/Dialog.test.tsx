@@ -417,3 +417,30 @@ it("scrolls a dialog's failure line into view once it appears", async () => {
   act(() => root.render(<DialogError message="Something failed" />));
   await vi.waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest", behavior: "smooth" }));
 });
+
+// Having picked from a select, the user presses Enter to go ahead: it submits from a control that holds
+// a choice, but a button that acts keeps it, and nothing is submitted while the submit button is disabled or pending.
+it.each([
+  ["a closed select", '<button type="button" aria-haspopup="listbox" aria-expanded="false">Agent</button>', {}, 1],
+  ["an open select", '<button type="button" aria-haspopup="listbox" aria-expanded="true">Agent</button>', {}, 0],
+  ["a button that acts", '<button type="button">Advanced</button>', {}, 0],
+  ["a closed select with nothing to submit", '<button type="button" aria-haspopup="listbox" aria-expanded="false">Agent</button>', { submitDisabled: true }, 0],
+  ["a closed select while busy", '<button type="button" aria-haspopup="listbox" aria-expanded="false">Agent</button>', { busy: true }, 0],
+])("Enter on %s", (_name, html, props, submits) => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  const submit = vi.fn();
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  render(root, (
+    <Dialog title="Open session" onClose={() => {}} submitLabel="Open" onSubmit={submit} {...props}>
+      <div dangerouslySetInnerHTML={{ __html: html }} />
+    </Dialog>
+  ));
+  const control = [...document.querySelectorAll("button")].find((b) => b.textContent === "Agent" || b.textContent === "Advanced");
+  expect(control).toBeDefined();
+  act(() => control?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })));
+  expect(submit).toHaveBeenCalledTimes(submits);
+});

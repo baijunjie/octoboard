@@ -92,6 +92,13 @@ on that picker. A form dialog with no text field opens with focus on its submit 
 **Export** button, and the import dialog's **Choose file** button in its first step (see "In the window" in
 `docs/product/configuration-export-and-import.md`).
 
+**What Enter submits in a form dialog.** Enter submits a form dialog from a control that holds a choice as well as
+from a text field or a checkbox: a closed picker (such as the agent, account, console-session or model picker), a tab
+(such as **New conversation** and **Resume conversation**), a radio button or a switch. Space and the arrow keys still
+open or operate the control, and Enter in a picker's open list still picks the option. A button that acts, such as
+**Cancel**, a disclosure such as **Advanced** or a close button, keeps Enter for itself. While the submit button is
+disabled or the dialog is busy, Enter submits nothing.
+
 **A held Enter or Space does not confirm.** Every confirmation and every form dialog ignores the auto-repeats of a
 held Enter or Space, so the press that opened it (a menu item acts as the key goes down) cannot go on to confirm it; a
 fresh press still does. Where text is being typed the repeats stay: Space in any text field, Enter in a multi-line one.

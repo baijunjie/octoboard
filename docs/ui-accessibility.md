@@ -32,10 +32,14 @@ title.
 
 ## Keyboard
 
-Every interactive control is reachable from the keyboard and operable with Enter / Space, with one exception the
-platform imposes: a checkbox inside a dialog's form takes Space, while Enter submits the dialog from it, as Enter does
-from every other control in that form. So a dialog whose confirm button carries weight does not also rely on Enter to
-settle a choice a checkbox holds.
+Every interactive control is reachable from the keyboard and operable with Enter / Space, with one exception inside a
+dialog's form: a control that holds a choice there (a checkbox, a radio, a switch, a closed select, a tab) takes Space,
+and the arrow keys where it has them, while Enter submits the dialog from it, as Enter does from a text field. The
+platform does this for the native ones (a checkbox, a radio, a switch), and the dialog does it for a closed select, a
+tab and a radio that is not a native input, so that having picked an agent the user presses Enter to go ahead rather
+than to open the picker again. A button that acts (Cancel, a disclosure) keeps Enter, and so does an open popover's
+list. So a dialog whose confirm button carries weight does not also rely on Enter to settle a choice one of these
+controls holds.
 
 A confirmation dialog opens with focus on its confirm button, so Enter confirms it at once. Two kinds do not, and keep
 focus on the dialog itself, so an Enter pressed before the user has moved focus onto one of its controls does nothing: a

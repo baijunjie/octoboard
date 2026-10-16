@@ -137,6 +137,29 @@ function isTextEntry(target: EventTarget): boolean {
   return target instanceof HTMLInputElement && !NOT_TYPED_INTO.has(target.type);
 }
 
+/** A control that holds a choice rather than acting: a closed select, a tab, a radio, a switch. */
+const CHOICE_CONTROL = '[aria-haspopup="listbox"]:not([aria-expanded="true"]), [role="tab"], [role="radio"], [role="switch"]';
+
+/**
+ * Enter on a control that holds a choice submits the dialog, as it already does from a text field or a
+ * checkbox: having made a choice, the user presses Enter to go ahead, not to open the picker again.
+ * The control keeps Space and the arrow keys. A button that acts (Cancel, a disclosure) keeps Enter, and
+ * so does whatever is open in a popover, which is outside the form's own elements. While the submit
+ * button is disabled, or pending (react-aria then makes it a plain button), the key falls back to the
+ * control.
+ */
+function submitsFromChoice(e: React.KeyboardEvent<HTMLFormElement>): boolean {
+  if (e.key !== "Enter" || e.repeat) return false;
+  const form = e.currentTarget;
+  if (!(e.target instanceof Element) || !form.contains(e.target) || !e.target.matches(CHOICE_CONTROL)) return false;
+  const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+  if (!submit || submit.disabled) return false;
+  e.preventDefault();
+  e.stopPropagation();
+  form.requestSubmit(submit);
+  return true;
+}
+
 /** How many `Dialog`s are mounted, so a nested one can tell it is not the last to close. */
 let openDialogs = 0;
 
@@ -329,6 +352,7 @@ export function Dialog({
             <form
               className="contents"
               onKeyDownCapture={(e) => {
+                if (submitsFromChoice(e)) return;
                 if (!e.repeat) return;
                 const enter = e.key === "Enter" && !(e.target instanceof HTMLTextAreaElement);
                 if (enter || (e.key === " " && !isTextEntry(e.target))) e.preventDefault();
