@@ -109,6 +109,11 @@ interface TitleBarProps {
   sidebarShown: boolean;
   /** Whether there is a sidebar at all; with no console there is none, and its toggle would control nothing. */
   hasSidebar: boolean;
+  /** The docked sidebar column's target width in px (0 while hidden), which the start segment
+   * follows above the `docked` breakpoint. */
+  sidebarSpan: number;
+  /** The column is easing to `sidebarSpan`, so the segment eases with it instead of jumping. */
+  sidebarEasing: boolean;
   onToggleSidebar: () => void;
   /** The pointer is on the sidebar's toggle: with the docked sidebar hidden, that floats it in
    * showing the current console. */
@@ -147,6 +152,8 @@ interface TitleBarProps {
 export function TitleBar({
   sidebarShown,
   hasSidebar,
+  sidebarSpan,
+  sidebarEasing,
   onToggleSidebar,
   onSidebarToggleEnter,
   onSidebarToggleLeave,
@@ -168,7 +175,10 @@ export function TitleBar({
       {/* Above the `docked` breakpoint, as wide as the rail plus the sidebar's clip, and never
           narrower than these buttons. The breadcrumb after it stays over the main area while the
           column eases; below the breakpoint the class does not apply. */}
-      <div className="title-bar-start flex shrink-0 items-center">
+      <div
+        className={`title-bar-start flex shrink-0 items-center ${sidebarEasing ? "title-bar-start-easing" : ""}`}
+        style={{ "--sidebar-span": `${sidebarSpan}px` } as React.CSSProperties}
+      >
         <LeftInset />
         <div className="flex items-center gap-1 px-2">
           <ChromeButton label={t("titleBar.back")} onPress={onBack} isDisabled={!canGoBack}>

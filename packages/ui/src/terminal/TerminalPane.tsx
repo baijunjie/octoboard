@@ -34,6 +34,10 @@ interface TerminalPaneProps {
   newSession?: { message: string; label: string; onPress: () => void };
   /** No supported agent is installed, so creating a session cannot be offered. */
   noAgents?: boolean;
+  /** A docked pane beside the terminal is easing, which resizes the terminal every frame. The
+   * terminal keeps its size until the ease ends, then fits once: a refit per frame rebuilds
+   * xterm's dimension styles each time, which costs a full restyle in WebKit. */
+  resizing?: boolean;
   ref?: React.Ref<TerminalPaneHandle>;
 }
 
@@ -57,6 +61,11 @@ const BASE_RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_DELAY_MS = 8000;
 const STABLE_CONNECTION_MS = 10000;
 
+function fitController(controller: TerminalController): void {
+  controller.fit();
+  controller.syncSize();
+}
+
 /**
  * React boundary around `TerminalController`: one controller instance for the life of the
  * component (not per session — see the controller's own doc comment for why session/socket/status
@@ -70,6 +79,7 @@ export function TerminalPane({
   onAddProject,
   newSession,
   noAgents,
+  resizing = false,
   ref,
 }: TerminalPaneProps): React.ReactElement {
   const t = useT();
@@ -81,6 +91,7 @@ export function TerminalPane({
   const coverRef = useRef<HTMLDivElement>(null);
   const emptyRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<TerminalController | undefined>(undefined);
+  const resizingRef = useLatest(resizing);
   const [status, setStatus] = useState<TermStatus>("closed");
   const [painted, setPainted] = useState(false);
   // Where the OSC 8 link hover goes: the tooltip holds the state itself, so hovering does not render the pane.
@@ -179,8 +190,10 @@ export function TerminalPane({
     if (containerRef.current) controller.mount(containerRef.current);
 
     const resizeObserver = new ResizeObserver(() => {
-      controller.fit();
-      controller.syncSize();
+      // The observer does not fire again after the last size of the ease, so the effect below
+      // fits once the ease has ended.
+      if (resizingRef.current) return;
+      fitController(controller);
     });
     if (containerRef.current) resizeObserver.observe(containerRef.current);
 
@@ -191,6 +204,14 @@ export function TerminalPane({
     };
     // `handleStatusChange` is stable (its own deps are empty); this effect is mount/unmount-only.
   }, []);
+
+  const wasResizingRef = useRef(false);
+  useEffect(() => {
+    const ended = wasResizingRef.current && !resizing;
+    wasResizingRef.current = resizing;
+    if (!ended) return;
+    if (controllerRef.current) fitController(controllerRef.current);
+  }, [resizing]);
 
   // Names the terminal's input in the UI language; it follows a language change in place, as
   // xterm only names the input once, when it opens.

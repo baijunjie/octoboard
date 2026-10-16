@@ -345,8 +345,8 @@ below the width the user chose, it can grow into that room as the room appears. 
 pane again as soon as the sidebar is shown, when the window cannot afford both panes their chosen widths, and the
 opening column takes its own width from the terminal as it eases open. A closing right pane keeps the sidebar's
 width constrained until that column has closed. Either pane opening takes width from the terminal; either pane
-closing returns it. The terminal is resized by these changes, as in
-"Pane widths at 1148 px and wider" above.
+closing returns it. The terminal is not refitted while the column moves: it keeps its size through the ease and
+is fitted once the column comes to rest (see "Output, scrollback and size" in `docs/product/session-terminal.md`).
 
 ### A hidden pane floats in on hover
 

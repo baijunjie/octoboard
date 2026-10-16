@@ -55,6 +55,21 @@ while Chrome and Playwright's WebKit showed only a fraction of it. This applies 
   bare `*`, against the count before. About 150 remain from HeroUI component states, toasts, Tailwind's
   `space-y`/`divide-y` and the typography plugin's sibling and child shapes; a jump of dozens is the thing to fix.
 
+## Ease the real property, and keep the terminal's fit out of a layout ease
+
+In the app's WKWebView, a running transition of a registered custom property (`@property`) jumps to its end value
+whenever any stylesheet is rewritten rather than appended to (a `<style>` element's text replaced, or `insertRule`),
+while a transition of an ordinary property such as `width` keeps running; Chrome shows neither. xterm's DOM renderer
+rewrites its dimensions `<style>` on every fit of the terminal, so in this app such an ease running while the
+terminal is resized snaps to its end after a frame or two.
+
+- To animate a value, transition the real property on each element that needs it, as the docked columns' clips and
+  the title bar's start segment transition `width`. Do not ease a registered custom property, not even to share one
+  value between several elements.
+- A layout animation that changes the terminal's size has to be counted in the `resizing` prop `App` passes to
+  `TerminalPane`, which holds the fit until the ease ends and then fits once. A fit on every frame rebuilds xterm's
+  dimension styles each time, a full restyle in WebKit (about 28 ms a frame against 16 ms without).
+
 ## Measure UI latency in the system WKWebView; Playwright's WebKit and Chrome under-report it
 
 Only the system WKWebView the app runs in gives real style-recalculation cost. Playwright's headless WebKit reports

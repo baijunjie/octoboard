@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useRef } from "react";
 
 import { AsidePeekHotZone, drawerClass, PANE_ID, usePanePeekPointer } from "./paneOverlay";
-import { columnSpan, usePaneDockMotion, type DockPhase } from "./paneDockMotion";
+import { COLUMN_EASE_CLASS, columnSpan, isDockEasing, usePaneDockMotion, type DockPhase } from "./paneDockMotion";
 import type { PanePeek } from "./usePaneToggles";
 
 /** Where and how the aside is on screen right now; `App.tsx` builds it from `usePaneToggles` and
@@ -91,7 +91,7 @@ export function AsidePane({
     <>
       <div
         ref={clipRef}
-        className={dock.inset ? "contents" : `contents docked:flex docked:justify-end docked:h-full docked:min-h-0 docked:overflow-hidden ${dock.phase === "open" ? "docked:w-[var(--aside-rendered-width,var(--aside-span))] docked:min-w-[300px] docked:flex-[0_1_var(--aside-span)]" : "docked:w-(--aside-span) docked:min-w-0 docked:shrink-0"} ${dock.phase === "opening" || dock.phase === "closing" ? " docked:transition-[width] docked:duration-200 docked:ease-in-out motion-reduce:transition-none" : ""}`}
+        className={dock.inset ? "contents" : `contents docked:flex docked:justify-end docked:h-full docked:min-h-0 docked:overflow-hidden ${dock.phase === "open" ? "docked:w-[var(--aside-rendered-width,var(--aside-span))] docked:min-w-[300px] docked:flex-[0_1_var(--aside-span)]" : "docked:w-(--aside-span) docked:min-w-0 docked:shrink-0"} ${isDockEasing(dock.phase) ? COLUMN_EASE_CLASS : ""}`}
         style={{ "--aside-span": `${columnSpan(dock.phase, width)}px` } as React.CSSProperties}
         onTransitionEnd={dock.onColumnTransitionEnd}
       >

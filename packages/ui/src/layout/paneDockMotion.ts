@@ -6,6 +6,10 @@ import { prefersReducedMotion } from "../reducedMotion";
 /** Matches the column's CSS width ease and the drawer's `duration-200`. */
 export const PANE_SPAN_MS = 200;
 
+/** The classes that ease a docked column's width over `PANE_SPAN_MS`. Kept a literal so Tailwind
+ * finds the classes. */
+export const COLUMN_EASE_CLASS = "docked:transition-[width] docked:duration-200 docked:ease-in-out motion-reduce:transition-none";
+
 /** A little past the ease, so a transition that never reports its end (a backgrounded tab, a
  * browser that skips the event) cannot leave the column mid-gesture. */
 const SPAN_END_SLACK_MS = 50;
@@ -142,6 +146,11 @@ function applyPainted(state: Machine): Machine {
   return state.pending === null ? state : { ...state, pending: null };
 }
 
+/** The column's width is moving, so whatever sizes itself from the space beside it is resized every frame. */
+export function isDockEasing(phase: DockPhase): boolean {
+  return phase === "opening" || phase === "closing";
+}
+
 /** The hover card takes no space in the row. */
 export function columnSpan(phase: DockPhase, width: number): number {
   return phase === "open" || phase === "opening" ? width : 0;
@@ -151,7 +160,6 @@ export interface PaneDockMotion extends DockMotion {
   /** Hide the newly fixed card without animating from its preceding column geometry. */
   preparingInset: boolean;
   onColumnTransitionEnd: (event: React.TransitionEvent<HTMLElement>) => void;
-  onColumnEnd: () => void;
   onInsetTransitionEnd: (event: React.TransitionEvent<HTMLElement>) => void;
 }
 
@@ -178,6 +186,10 @@ export function usePaneDockMotion(
     onPhaseRef.current?.(state.phase);
   }, [state.phase]);
 
+  // A consumer that learns the phase only from here must not be left believing the ease is still
+  // running once this pane is gone.
+  useLayoutEffect(() => () => onPhaseRef.current?.("closed"), []);
+
   useEffect(() => {
     if (state.pending === null) return;
     // React can flush effects before paint after a layout-effect update. Two frames leave the
@@ -191,7 +203,7 @@ export function usePaneDockMotion(
   }, [state.pending]);
 
   useEffect(() => {
-    if (state.phase !== "opening" && state.phase !== "closing") return;
+    if (!isDockEasing(state.phase)) return;
     const reduce = prefersReducedMotion();
     const timer = setTimeout(
       () => setState((current) => reduceDockMotion(current, { type: "column-end", reduce })),
@@ -214,7 +226,6 @@ export function usePaneDockMotion(
     preparingInset: state.pending === "show-inset",
     inset: state.inset,
     insetShown: state.insetShown,
-    onColumnEnd: () => setState((current) => reduceDockMotion(current, { type: "column-end", reduce: prefersReducedMotion() })),
     onColumnTransitionEnd: (event) => {
       if (event.target !== event.currentTarget || event.propertyName !== "width") return;
       setState((current) => reduceDockMotion(current, { type: "column-end", reduce: prefersReducedMotion() }));

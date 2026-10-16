@@ -30,8 +30,7 @@ import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { drawerClass, PANE_ID, RailClip, usePanePeekPointer } from "../layout/paneOverlay";
 import type { PaneWidth } from "../layout/paneWidth";
-import { columnClipClass, useSidebarDockMotion } from "../layout/sidebarDockMotion";
-import type { DockPhase } from "../layout/paneDockMotion";
+import { COLUMN_EASE_CLASS, columnSpan, isDockEasing, usePaneDockMotion, type DockPhase } from "../layout/paneDockMotion";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { effectiveTags, matchesFilter, tagVocabulary } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
@@ -49,6 +48,19 @@ import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, PinButton, RowIconBu
 import { focusTargetId } from "./focus";
 import type { FocusTarget, SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
+
+/** The clip the docked column sits in. `min-w-0` lets the flex item reach 0 while the sidebar
+ * inside keeps its full width, so the list does not reflow.
+ *
+ * While `easing`, the clip's own `width` transitions. A registered custom property must not drive
+ * it: WebKit snaps a running transition of one to its end whenever a stylesheet is rewritten, as
+ * xterm does on a refit. */
+function columnClipClass(easing: boolean): string {
+  return (
+    "contents docked:block docked:h-full docked:min-h-0 docked:min-w-0 docked:shrink-0 docked:overflow-hidden" +
+    (easing ? ` ${COLUMN_EASE_CLASS}` : "")
+  );
+}
 
 interface SidebarProps extends SidebarHandlers {
   projects: Project[];
@@ -216,7 +228,7 @@ export function Sidebar({
   usePanePeekPointer("sidebar", peek, "[data-sidebar-peek-keep]");
   // `peek` being passed means the docked sidebar is targeted hidden. The column eases to and from
   // that; the inset card is a later state, only once the column is out of the row.
-  const dock = useSidebarDockMotion(peek === undefined, peek?.active ?? false, sidebarWidth.width, onColumnPhase);
+  const dock = usePaneDockMotion(peek === undefined, peek?.active ?? false, onColumnPhase);
   const drawerClassName = dock.inset
     ? `docked:rounded-xl docked:border ${drawerClass("start", "floating", open, dock.insetShown)}${dock.preparingInset ? " docked:transition-none" : ""}`
     : `${drawerClass("start", "drawer", open)} docked:h-full`;
@@ -328,10 +340,12 @@ export function Sidebar({
           the fixed pane is laid out as if this wrapper were not there. At the docked breakpoint it
           is the column's width. The sidebar inside stays at its full width, against the rail, and
           the clip uncovers it: the list does not reflow and the column does not become the card.
-          `--sidebar-span` is set on the document element by `useSidebarDockMotion`. */}
+          The clip's width eases between the sidebar's and 0; the top bar's start segment eases
+          to the same target (`App`). */}
       <div
-        className={dock.inset ? "contents" : columnClipClass()}
-        style={dock.inset ? undefined : { width: "var(--sidebar-span)" }}
+        className={dock.inset ? "contents" : columnClipClass(isDockEasing(dock.phase))}
+        style={dock.inset ? undefined : { width: columnSpan(dock.phase, sidebarWidth.width) }}
+        onTransitionEnd={dock.onColumnTransitionEnd}
       >
         <nav
           // Below the `docked` breakpoint this is a fixed overlay, closed by default, slid on and off

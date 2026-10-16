@@ -3,13 +3,13 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { useSidebarDockMotion } from "./sidebarDockMotion";
+import { usePaneDockMotion, type DockPhase } from "./paneDockMotion";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 afterEach(() => vi.unstubAllGlobals());
 
-function mount(reduce = false) {
+function mount(reduce = false, onPhase?: (phase: DockPhase) => void) {
   // Frames advance only on demand, unlike effects, so a test can observe the frame that must
   // paint before the browser receives the transition's destination.
   const frames = new Map<number, FrameRequestCallback>();
@@ -21,7 +21,7 @@ function mount(reduce = false) {
   vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
   vi.stubGlobal("matchMedia", () => ({ matches: reduce }));
   function Probe({ shown, peek }: { shown: boolean; peek: boolean }) {
-    const motion = useSidebarDockMotion(shown, peek, 280);
+    const motion = usePaneDockMotion(shown, peek, onPhase);
     return <div data-inset={motion.inset} data-shown={motion.insetShown} data-phase={motion.phase} data-preparing={motion.preparingInset} />;
   }
   const container = document.body.appendChild(document.createElement("div"));
@@ -74,12 +74,9 @@ it("paints the zero-width column before opening it from the hover card", () => {
   test.render(true, false);
   expect(test.pane().dataset.inset).toBe("false");
   expect(test.pane().dataset.phase).toBe("closed");
-  expect(document.documentElement.style.getPropertyValue("--sidebar-span")).toBe("0px");
   test.frame();
-  expect(document.documentElement.style.getPropertyValue("--sidebar-span")).toBe("0px");
   test.frame();
   expect(test.pane().dataset.phase).toBe("opening");
-  expect(document.documentElement.style.getPropertyValue("--sidebar-span")).toBe("280px");
 });
 
 it.each([0, 1])("cancels a hover reveal reversed after %i frames", (elapsed) => {
@@ -105,7 +102,6 @@ it("cancels a pending column opening when the target reverses", () => {
   expect(test.pendingFrames()).toBe(0);
   test.frame();
   expect(test.pane().dataset.phase).toBe("closed");
-  expect(document.documentElement.style.getPropertyValue("--sidebar-span")).toBe("0px");
 });
 
 it.each([0, 1])("cancels the queued reveal when unmounted after %i frames", (elapsed) => {
@@ -124,4 +120,13 @@ it("reveals and docks immediately with reduced motion", () => {
   test.render(true, false);
   expect(test.pane().dataset.phase).toBe("open");
   expect(test.pendingFrames()).toBe(0);
+});
+
+it("reports a settled phase when unmounted mid-ease", () => {
+  const phases: DockPhase[] = [];
+  const test = mount(false, (phase) => phases.push(phase));
+  test.render(true, false);
+  expect(phases.at(-1)).toBe("opening");
+  test.unmount();
+  expect(phases.at(-1)).toBe("closed");
 });

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React, { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { sessionOf } from "../gallery/fixtures/builders";
 import { currentLanguage, setLanguage } from "../i18n/language";
@@ -24,7 +24,10 @@ const { FakeController } = vi.hoisted(() => {
     setInputLabel(label: string): void {
       this.inputLabel = label;
     }
-    fit(): void {}
+    fits = 0;
+    fit(): void {
+      this.fits += 1;
+    }
     syncSize(): void {}
     dispose(): void {}
     focuses = 0;
@@ -177,6 +180,32 @@ it("recovers a terminal that gave up when a fresh snapshot arrives", () => {
   store.snapshotEpoch = 1;
   render(root);
   expect(FakeController.last.attaches).toBe(attaches + 1);
+});
+
+it("holds its size while a docked pane eases, then fits once", () => {
+  const observers: (() => void)[] = [];
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(callback: () => void) {
+      observers.push(callback);
+    }
+    observe(): void {}
+    disconnect(): void {}
+  });
+  onTestFinished(() => {
+    vi.unstubAllGlobals();
+  });
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  const show = (resizing: boolean) => act(() => root.render(<TerminalPane session={session} resizing={resizing} onResume={async () => true} />));
+  show(true);
+  const fits = FakeController.last.fits;
+  observers.forEach((notify) => notify());
+  expect(FakeController.last.fits).toBe(fits);
+  show(false);
+  expect(FakeController.last.fits).toBe(fits + 1);
+  observers.forEach((notify) => notify());
+  expect(FakeController.last.fits).toBe(fits + 2);
 });
 
 it("names the terminal's input in the UI language, and follows a language change", () => {

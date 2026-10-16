@@ -31,7 +31,7 @@ import { useT } from "./i18n/react";
 import type { AsideLayout } from "./layout/AsidePane";
 import { ASIDE_LABELS, liveOwner, ownerAfterMove, ownerForSession, ownerKey, sameOwner, type AsideOwner } from "./layout/asideOwner";
 import { usePaneWidth } from "./layout/paneWidth";
-import type { DockPhase } from "./layout/paneDockMotion";
+import { columnSpan, isDockEasing, type DockPhase } from "./layout/paneDockMotion";
 import { type HeldChoices, useConsoleSwitchFollowUp } from "./layout/useConsoleSwitchFollowUp";
 import { usePaneToggles } from "./layout/usePaneToggles";
 import { useRegionCycle } from "./layout/useRegionCycle";
@@ -630,6 +630,8 @@ export function App(): React.ReactElement {
       <TitleBar
         sidebarShown={panes.sidebarShown}
         hasSidebar={!noConsoles}
+        sidebarSpan={noConsoles ? 0 : columnSpan(sidebarColumnPhase, sidebarWidth.width)}
+        sidebarEasing={isDockEasing(sidebarColumnPhase)}
         onToggleSidebar={stableToggleSidebar}
         onSidebarToggleEnter={panes.sidebarPeek.reveal}
         onSidebarToggleLeave={panes.sidebarPeek.leave}
@@ -767,6 +769,7 @@ export function App(): React.ReactElement {
                   />
                   <TerminalPane
                     ref={terminalRef}
+                    resizing={isDockEasing(sidebarColumnPhase) || isDockEasing(asideColumnPhase)}
                     session={selectedSession}
                     onResume={resumeSession}
                     resuming={selectedSessionId !== undefined && resumingIds.has(selectedSessionId)}
