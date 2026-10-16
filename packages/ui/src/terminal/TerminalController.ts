@@ -2,6 +2,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { type IBufferRange, Terminal } from "@xterm/xterm";
 
+import { TerminalLinkColors } from "./linkColors";
 import {
   brokenUrlLinkProvider,
   type HoveredTerminalLink,
@@ -139,6 +140,7 @@ export class TerminalController {
   private container?: HTMLElement;
   /** The buffer line on the first row when the hovered OSC 8 link was reported. */
   private hoveredViewportY = 0;
+  private readonly linkColors: TerminalLinkColors;
   /** False until a frame has passed since `open()`; see `mount`. */
   private touchable = false;
   private openFrame?: number;
@@ -193,6 +195,8 @@ export class TerminalController {
       // An Option+click sends cursor-move arrow keys marked as the user's input, which would
       // reopen a dormant session; it is only on from `attach` until `detach`.
       altClickMovesCursor: false,
+      // Decorations, which colour the links, are an experimental API xterm gates behind this.
+      allowProposedApi: true,
       // Leaving `allowNonHttpProtocols` unset is what keeps an OSC 8 link to any other scheme
       // (`file:`, a custom app scheme) from being offered at all. A handler of our own also replaces
       // xterm's default, which asks with `confirm()` before opening; the target tooltip stands in.
@@ -213,6 +217,7 @@ export class TerminalController {
     this.term.onScroll(() => {
       if (this.term.buffer.active.viewportY !== this.hoveredViewportY) this.handlers.onLinkHover?.(undefined);
     });
+    this.linkColors = new TerminalLinkColors(this.term, initialColorTheme);
 
     const keepModifiersFromArming = keepModifiersFromArmingKeyDownSeen(this.term);
 
@@ -306,6 +311,7 @@ export class TerminalController {
     // exactly the uncatchable kind this class defers around in the first place.
     if (this.openFrame !== undefined) cancelAnimationFrame(this.openFrame);
     clearTimeout(this.resizeTimer);
+    this.linkColors.dispose();
     this.disposed = true;
     this.generation++;
     this.socket?.close();
@@ -341,6 +347,7 @@ export class TerminalController {
    */
   setColorTheme(mode: "light" | "dark"): void {
     this.term.options.theme = XTERM_THEMES[mode];
+    this.linkColors.setTheme(mode);
   }
 
   /**
@@ -529,6 +536,7 @@ export class TerminalController {
       this.savedWritesInFlight--;
       if (this.disposed) return;
       this.term.reset();
+      this.linkColors.reset();
       this.handlers.onLinkHover?.(undefined);
     });
   }

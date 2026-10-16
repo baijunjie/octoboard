@@ -32,9 +32,14 @@ const { FakeTerminal } = vi.hoisted(() => {
     loadAddon(): void {}
     registerLinkProvider(): void {}
     onScroll(): void {}
+    onWriteParsed(): void {}
+    onResize(): void {}
     keyHandler?: (event: KeyboardEvent) => boolean;
     wheelHandler?: () => boolean;
-    buffer = { active: { type: "normal" } };
+    buffer = {
+      onBufferChange: () => {},
+      active: { type: "normal", viewportY: 0, baseY: 0, cursorY: 0, getLine: () => undefined, getNullCell: () => ({}) },
+    };
 
     attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean): void {
       this.keyHandler = handler;

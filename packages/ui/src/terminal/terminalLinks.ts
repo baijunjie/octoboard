@@ -142,7 +142,11 @@ export function brokenUrlsAt(rowAt: (y: number) => TerminalRow | undefined, y: n
     const aboveReaches = brokenStartCol(above) >= 0 || urlRun(above.cells, indentOf(above)) === above.cells.length;
     if (!aboveReaches || !URL_CHAR_CELL.test(row.cells[indentOf(row)])) break;
   }
-  // An address written inside another one's continuation belongs to that one.
+  return outermost(found);
+}
+
+/** Without the addresses written inside another one's continuation, which belong to that one. */
+function outermost(found: BrokenUrl[]): BrokenUrl[] {
   return found.filter(
     (url) =>
       !found.some(
@@ -187,6 +191,158 @@ function brokenUrlFrom(rowAt: (y: number) => TerminalRow | undefined, y: number)
   return undefined;
 }
 
+/** Some of one row's cells that belong to a link: `y` is the 1-based buffer line, `col` the
+ * 0-based first column, `width` the number of cells. */
+export interface LinkSegment {
+  y: number;
+  col: number;
+  width: number;
+}
+
+/** What identifies a segment on screen. */
+export function segmentKey(y: number, col: number, width: number): string {
+  return `${y}:${col}:${width}`;
+}
+
+const URL_GLOBAL = new RegExp(TERMINAL_URL_REGEX.source, "g");
+
+/** How many characters of a logical line are read beyond the rows being looked at, as the
+ * web-links addon bounds its own lookup. A soft-wrapped line can be megabytes long. */
+const LOGICAL_LINE_MARGIN_CHARS = 2048;
+
+/** Whether `text` parses as an address whose scheme and host are what was written: the web-links
+ * addon's own test, which leaves out text that matches the pattern but would not open. */
+function isUrl(text: string): boolean {
+  try {
+    const url = new URL(text);
+    const auth = url.password && url.username ? `${url.username}:${url.password}@` : url.username ? `${url.username}@` : "";
+    return text.toLowerCase().startsWith(`${url.protocol}//${auth}${url.host}`.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+/** The cells of the plain-text addresses in one logical line, given as the rows it fills (a row
+ * and the rows xterm soft-wrapped after it): one segment per row an address crosses. An address
+ * is ASCII, so each of its characters is one cell. */
+function plainUrlSegments(rows: { y: number; row: TerminalRow }[]): LinkSegment[] {
+  let text = "";
+  const at: { y: number; col: number }[] = [];
+  for (const { y, row } of rows) {
+    row.cells.forEach((cell, col) => {
+      if (cell === "") return;
+      for (let i = 0; i < cell.length; i++) at.push({ y, col });
+      text += cell;
+    });
+  }
+  const segments: LinkSegment[] = [];
+  for (const match of text.matchAll(URL_GLOBAL)) {
+    if (!isUrl(match[0])) continue;
+    for (let i = match.index; i < match.index + match[0].length; i++) {
+      const last = segments[segments.length - 1];
+      if (i > match.index && last.y === at[i].y && last.col + last.width === at[i].col) last.width++;
+      else segments.push({ y: at[i].y, col: at[i].col, width: 1 });
+    }
+  }
+  return segments;
+}
+
+/** The cells a broken address fills, one segment per row. */
+function brokenUrlSegments(found: BrokenUrl, rowAt: (y: number) => TerminalRow | undefined): LinkSegment[] {
+  const { start, end } = found.range;
+  const segments: LinkSegment[] = [];
+  for (let y = start.y; y <= end.y; y++) {
+    const row = rowAt(y);
+    if (!row) continue;
+    const col = y === start.y ? start.x - 1 : indentOf(row);
+    const to = y === end.y ? end.x : row.cells.length;
+    segments.push({ y, col, width: to - col });
+  }
+  return segments;
+}
+
+/** The broken addresses that cover any of the rows `from` to `to`: those covering `from`, and
+ * those starting after it. */
+function brokenUrlsIn(rowAt: (y: number) => TerminalRow | undefined, from: number, to: number): BrokenUrl[] {
+  const found = brokenUrlsAt(rowAt, from);
+  for (let y = from + 1; y <= to; y++) {
+    const url = brokenUrlFrom(rowAt, y);
+    if (url) found.push(url);
+  }
+  return outermost(found);
+}
+
+/** Joins the segments that overlap on a row into one, and sorts them. */
+function mergeSegments(segments: LinkSegment[]): LinkSegment[] {
+  const merged: LinkSegment[] = [];
+  for (const segment of [...segments].sort((a, b) => a.y - b.y || a.col - b.col)) {
+    const last = merged[merged.length - 1];
+    if (last && last.y === segment.y && segment.col < last.col + last.width) {
+      last.width = Math.max(last.width, segment.col + segment.width - last.col);
+    } else {
+      merged.push({ ...segment });
+    }
+  }
+  return merged;
+}
+
+/**
+ * The cells of every address `TERMINAL_URL_REGEX` finds (and `new URL` accepts), soft-wrapped ones
+ * included, and of every one the program broke across rows (see `brokenUrlsAt`), on the rows
+ * `from` to `to` (1-based buffer lines, both inclusive). A segment lies on one row, and none
+ * overlaps another.
+ */
+export function linkSegmentsIn(
+  rowAt: (y: number) => TerminalRow | undefined,
+  from: number,
+  to: number,
+): LinkSegment[] {
+  const cache = new Map<number, TerminalRow | undefined>();
+  const read = (y: number): TerminalRow | undefined => {
+    if (!cache.has(y)) cache.set(y, rowAt(y));
+    return cache.get(y);
+  };
+  const segments: LinkSegment[] = [];
+
+  // A logical line starts on a row that is not a continuation, the first row shown may be one;
+  // how far it is followed either way is bounded.
+  const margin = Math.ceil(LOGICAL_LINE_MARGIN_CHARS / Math.max(1, read(from)?.cells.length ?? 1));
+  let y = from;
+  while (y > 1 && from - y < margin && read(y)?.wrapped) y--;
+  while (y <= to) {
+    const lines: { y: number; row: TerminalRow }[] = [];
+    for (let row = read(y); row && (lines.length === 0 || (row.wrapped && y <= to + margin)); row = read(y)) {
+      lines.push({ y, row });
+      y++;
+    }
+    if (lines.length === 0) break;
+    segments.push(...plainUrlSegments(lines));
+  }
+  for (const url of brokenUrlsIn(read, from, to)) segments.push(...brokenUrlSegments(url, read));
+  return mergeSegments(segments.filter((segment) => segment.width > 0 && segment.y >= from && segment.y <= to));
+}
+
+/** Reads buffer line `y` (1-based) of `term`'s active buffer as a `TerminalRow`. */
+function terminalRowReader(term: Terminal): (y: number) => TerminalRow | undefined {
+  const cell = term.buffer.active.getNullCell();
+  return (y) => {
+    const line = term.buffer.active.getLine(y - 1);
+    if (!line) return undefined;
+    const cells: string[] = [];
+    for (let x = 0; x < term.cols; x++) {
+      const c = line.getCell(x, cell);
+      cells.push(!c || c.getWidth() === 0 ? "" : c.getChars() || " ");
+    }
+    return { cells, wrapped: line.isWrapped };
+  };
+}
+
+/** The cells to colour as links in the rows `term` is showing now. */
+export function visibleLinkSegments(term: Terminal): LinkSegment[] {
+  const { viewportY } = term.buffer.active;
+  return linkSegmentsIn(terminalRowReader(term), viewportY + 1, viewportY + term.rows);
+}
+
 /**
  * The link provider for addresses the program broke across rows (see `brokenUrlsAt`). Registered
  * ahead of the web-links addon, whose link for the first piece alone then loses to this one,
@@ -196,16 +352,7 @@ export function brokenUrlLinkProvider(
   term: Terminal,
   activate: (event: MouseEvent, uri: string) => void,
 ): ILinkProvider {
-  const rowAt = (y: number): TerminalRow | undefined => {
-    const line = term.buffer.active.getLine(y - 1);
-    if (!line) return undefined;
-    const cells: string[] = [];
-    for (let x = 0; x < term.cols; x++) {
-      const cell = line.getCell(x);
-      cells.push(!cell || cell.getWidth() === 0 ? "" : cell.getChars() || " ");
-    }
-    return { cells, wrapped: line.isWrapped };
-  };
+  const rowAt = terminalRowReader(term);
   return {
     provideLinks(y, callback) {
       const links: ILink[] = brokenUrlsAt(rowAt, y).map((found) => ({ range: found.range, text: found.url, activate }));

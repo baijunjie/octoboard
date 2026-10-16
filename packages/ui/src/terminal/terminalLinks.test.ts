@@ -2,7 +2,7 @@
 import { expect, it, vi } from "vitest";
 
 import { IS_MAC } from "../useWindowShortcut";
-import { brokenUrlsAt, linkBox, type TerminalRow, TERMINAL_URL_REGEX, terminalLinkHandler } from "./terminalLinks";
+import { brokenUrlsAt, linkBox, linkSegmentsIn, type TerminalRow, TERMINAL_URL_REGEX, terminalLinkHandler } from "./terminalLinks";
 
 it("opens a link only on the platform's shortcut modifier", () => {
   const open = vi.fn(async () => {});
@@ -87,4 +87,31 @@ it.each([
 ])("leaves an address alone when %s", (_rule, rows) => {
   expect(brokenAt(rows, 1)).toEqual([]);
   expect(brokenAt(rows, 2)).toEqual([]);
+});
+
+function segmentsOf(rows: TerminalRow[], from = 1, to = rows.length) {
+  return linkSegmentsIn((at) => rows[at - 1], from, to);
+}
+
+it("segments a plain address, past a double-width prefix", () => {
+  expect(segmentsOf([row("看 http://a.dev/x, ok")])).toEqual([{ y: 1, col: 3, width: 14 }]);
+});
+
+it("segments an address xterm wrapped across rows, even when only its tail is in view", () => {
+  const rows = [row("see http://a.dev/xxxxxxx"), row("yyyy and more", true)];
+  const expected = [
+    { y: 1, col: 4, width: 20 },
+    { y: 2, col: 0, width: 4 },
+  ];
+  expect(segmentsOf(rows)).toEqual(expected);
+  expect(segmentsOf(rows, 2, 2)).toEqual([expected[1]]);
+});
+
+it("segments an address the program broke, each row from its indent, once", () => {
+  const rows = [row("see http://a.dev/xxxxxxx"), row("  yyyyyyyyyyyyyyyyyyyyyy"), row("  zz")];
+  expect(segmentsOf(rows)).toEqual([
+    { y: 1, col: 4, width: 20 },
+    { y: 2, col: 2, width: 22 },
+    { y: 3, col: 2, width: 2 },
+  ]);
 });
