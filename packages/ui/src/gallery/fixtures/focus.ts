@@ -143,7 +143,7 @@ const scrollingFocusState = {
 // ten-root boundary has no hidden children; the eleven-root overflow also has two hidden children.
 const previewHub = sessionOf("s-preview-hub", console_.id, undefined, "Hub", "idle", { colour: "teal" });
 const previewLead = sessionOf("s-preview-lead", console_.id, emptyProject.id, "Archived lead session", "archived", { bound_to: previewHub.id, ended_at: minutesAgo(8), usage: { input_tokens: 184_320, output_tokens: 16_384, total_tokens: 200_704 } });
-function archivePreviewState(count: 10 | 11) {
+function archivePreviewState(count: 10 | 11, includeUnused = false) {
   return snapshotState({
     consoles: [console_],
     projects: [emptyProject],
@@ -151,12 +151,17 @@ function archivePreviewState(count: 10 | 11) {
       previewHub,
       previewLead,
       ...Array.from({ length: count === 11 ? 2 : 0 }, (_, i) => sessionOf(`s-preview-child-${i}`, console_.id, emptyProject.id, `Session ${i + 1} of the archived lead`, "archived", { bound_to: previewLead.id, agent: i === 1 ? "codex" : "claude", ended_at: minutesAgo(2 + i * 3) })),
-      ...Array.from({ length: count - 1 }, (_, i) => sessionOf(`s-preview-${i}`, console_.id, emptyProject.id, (i === 0 ? "A completed search investigation with a long archived preview title" : i === 1 ? "A completed search investigation whose long archived title scrolls only when hovering the text" : `Bound archived session ${i + 1}`), "archived", { bound_to: previewHub.id, ended_at: minutesAgo(10 + i * 5), ...(i === 0 ? { usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } } : {}) })),
+      ...Array.from({ length: count - 1 }, (_, i) => {
+        const unused = includeUnused && i === 2;
+        return sessionOf(`s-preview-${i}`, console_.id, emptyProject.id, unused ? "Unused archived draft" : (i === 0 ? "A completed search investigation with a long archived preview title" : i === 1 ? "A completed search investigation whose long archived title scrolls only when hovering the text" : `Bound archived session ${i + 1}`), "archived", { bound_to: unused ? undefined : previewHub.id, has_conversation: !unused, ended_at: minutesAgo(10 + i * 5), ...(i === 0 ? { usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } } : {}) });
+      }),
     ],
   });
 }
 const archivePreviewTen = archivePreviewState(10);
 const archivePreviewEleven = archivePreviewState(11);
+const projectArchivePreviewTen = archivePreviewState(10, true);
+const projectArchivePreviewEleven = archivePreviewState(11, true);
 
 // Long bound titles exercise the single-line fade and full-title hover without displacing the owner badge.
 const combinedState = {
@@ -280,9 +285,10 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Project archive preview, exactly ten parents",
-    state: archivePreviewTen,
+    state: projectArchivePreviewTen,
+    sessionRecords: { "s-preview-2": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The headings count zero live sessions and ten archived parents. All ten parents appear without View all. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus a row to see its Delete shortcut immediately before the menu. Long preview titles scroll only while the pointer is over their text; icons and row controls do not start them. The Show all project sessions switch is absent even when its saved preference is on.",
+    description: "The headings count zero live sessions and ten archived parents. All ten parents appear without View all. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus Unused archived draft to see the Delete shortcut immediately before its menu: it has no conversation and its native records are verified absent, so it deletes without confirmation. Used archived rows have only their actions menu, where Delete still requires confirmation. Long preview titles scroll only while the pointer is over their text; icons and row controls do not start them. The Show all project sessions switch is absent even when its saved preference is on.",
   },
   {
     id: "focus-archived-session-menu",
@@ -291,7 +297,7 @@ export const focusScenarios: Scenario[] = [
     title: "Archived session actions",
     state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "A Delete shortcut appears immediately before each archived row’s actions menu and opens the existing confirmation. The menu offers Reopen, Copy session ID and destructive Delete, with a divider before Delete. Reopen selects the session and moves it from Archived to Sessions.",
+    description: "Used archived rows have no Delete shortcut because deletion requires confirmation. The menu offers Reopen, Copy session ID and destructive Delete, with a divider before Delete. Reopen selects the session and moves it from Archived to Sessions.",
     steps: [(ui) => ui.press(ui.t("sidebar.session.actions", { title: previewLead.title }))],
   },
   {
@@ -299,9 +305,10 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Project archive preview, eleven parents with children",
-    state: archivePreviewEleven,
+    state: projectArchivePreviewEleven,
+    sessionRecords: { "s-preview-2": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}` },
-    description: "The heading counts thirteen archived sessions: eleven parents and two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus a row to see its Delete shortcut immediately before the menu. Ten parent rows precede View all; children of the archived lead appear only in the full archive.",
+    description: "The heading counts thirteen archived sessions: eleven parents and two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus Unused archived draft to see the Delete shortcut immediately before its menu: it has no conversation and its native records are verified absent, so it deletes without confirmation. Used archived rows have only their actions menu, where Delete still requires confirmation. Ten parent rows precede View all; children of the archived lead appear only in the full archive.",
   },
   {
     id: "focus-console-archive-five",
@@ -310,7 +317,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console archive preview, exactly ten parents",
     state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The headings count zero live sessions and ten directly bound archived parents. All ten appear without View all. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus a row to see its Delete shortcut immediately before the menu. Long preview titles scroll only while their text is hovered; icons and controls leave them still.",
+    description: "The headings count zero live sessions and ten directly bound archived parents. All ten appear without View all. Compact archive rows omit dates and show a usage chip only for positive totals. Used archived rows have no Delete shortcut; their actions menu retains Delete with confirmation and Reopen. Long preview titles scroll only while their text is hovered; icons and controls leave them still.",
   },
   {
     id: "focus-console-archive-overflow",
@@ -319,7 +326,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console archive preview, eleven parents with children",
     state: archivePreviewEleven,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The heading counts thirteen bound archived sessions, including two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus a row to see its Delete shortcut immediately before the menu. Only ten of eleven parent rows appear before View all; the full archive keeps children under their archived lead.",
+    description: "The heading counts thirteen bound archived sessions, including two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show a usage chip only for positive totals. Used archived rows have no Delete shortcut; their actions menu retains Delete with confirmation and Reopen. Only ten of eleven parent rows appear before View all; the full archive keeps children under their archived lead.",
   },
   {
     id: "focus-project-empty",

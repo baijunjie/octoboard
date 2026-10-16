@@ -6,16 +6,22 @@ import { useDaemon } from "../store";
 
 /** Checks the files for the whole deletion scope. An unused session is deleted without opening a
  * confirmation only after the daemon proves absence and accepts its guarded deletion request. */
-export function useSessionRecords(sessionIds: string[], unusedSession: string | undefined, onDeleted: () => void): {
+export function useSessionRecords(
+  sessionIds: string[],
+  unusedSession: string | undefined,
+  onDeleted: () => void,
+  { enabled = true, revision = "" }: { enabled?: boolean; revision?: string } = {},
+): {
   pending: boolean;
   presence: SessionRecordsPresence;
 } {
   const { request } = useDaemon();
   const deleted = useStableHandler(onDeleted);
   const key = JSON.stringify([...sessionIds].sort());
-  const checkKey = JSON.stringify([key, unusedSession]);
+  const checkKey = JSON.stringify([key, unusedSession, enabled, revision]);
   const [checked, setChecked] = useState<{ key: string; presence: SessionRecordsPresence }>();
   useEffect(() => {
+    if (!enabled) return;
     let active = true;
     const inspect = async (): Promise<SessionRecordsPresence> => {
       try {
@@ -41,6 +47,6 @@ export function useSessionRecords(sessionIds: string[], unusedSession: string | 
       if (active) setChecked({ key: checkKey, presence });
     })();
     return () => { active = false; };
-  }, [key, checkKey, unusedSession, request, deleted]);
+  }, [key, checkKey, unusedSession, enabled, request, deleted]);
   return { pending: checked?.key !== checkKey, presence: checked?.key === checkKey ? checked.presence : "unknown" };
 }

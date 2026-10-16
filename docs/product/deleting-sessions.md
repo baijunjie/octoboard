@@ -40,7 +40,9 @@ Removing a project or deleting a console also deletes its archived sessions alon
 
 A session that has **never been used** is deleted rather than archived: its action menu offers **Delete** in place of
 **Archive** — on its sidebar row, on its card in a focus mode and, for a console session, in its focus mode's header.
-Its row and card also offer a Delete shortcut (see "Session rows" in `docs/product/sidebar.md`).
+Its row and card offer a Delete shortcut only once the agent's records have been proved absent and deletion needs
+no confirmation (see "Session rows" in `docs/product/sidebar.md`); this also applies to archived preview rows in
+focus mode.
 A session is unused, whatever its status, while all of these hold:
 
 - **It has no conversation yet.** The first prompt its agent reports as submitted makes it used for good, whether the

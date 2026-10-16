@@ -297,8 +297,8 @@ it.each(["archived", "on-target", "removed"] as const)("skips a snapshotted sess
 });
 
 
-it("deletes an unused session without a confirmation only after a guarded file check", async () => {
-  const unused = { ...owner, has_conversation: false };
+it.each(["idle", "archived"] as const)("deletes an unused %s session without a confirmation only after a guarded file check", async (status) => {
+  const unused = { ...owner, status, has_conversation: false };
   const onClose = vi.fn();
   const { daemon } = mount({ kind: "delete-session", session: unused }, [unused], [], {
     onClose,

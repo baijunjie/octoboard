@@ -396,9 +396,12 @@ action menu offers:
   `docs/product/deleting-sessions.md`.
 
 **The Delete or Archive button.** Just before its action-menu button, a session row — a console session's included —
-carries a **Delete** button whenever its menu offers Delete. Pressing it takes the same deletion action as the menu
-(see "Deleting an unused session" and "Deleting archived sessions" in `docs/product/deleting-sessions.md`). Otherwise
-it carries an Archive button, a one-click shortcut for the menu's **Archive**, while archiving would go through without a
+carries a **Delete** button only while deletion would go through without confirmation: the session is unused,
+not still starting, and its agent records have been proved absent (see "Deleting an unused session" in
+`docs/product/deleting-sessions.md`). While that record check is pending, or when records are present or their
+absence cannot be proved, Delete remains in the menu alone. Being archived does not qualify a session for the
+shortcut. Pressing it takes the same deletion action as the menu, including the guarded recheck before deletion.
+A row whose menu offers **Archive** instead carries an Archive button while archiving would go through without a
 confirmation: the session is at its prompt or interrupted, no unarchived session is bound to it or to a session
 bound to it, and it has been used. Pressing Archive does what the menu's **Archive** does — a session still being
 resumed asks for confirmation first there too — and when the row leaves with keyboard focus, focus goes to the terminal.
