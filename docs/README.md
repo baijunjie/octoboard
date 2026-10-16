@@ -74,13 +74,20 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   emulator on Linux, when the request finishes, and when it is refused.
 - [Orchestration](product/hub-orchestration.md) — how an owner (a console session, or an unbound project session in
   its own project) starts and drives sessions: each one's tools and a bound session's `report`, lead sessions (a
-  project session bound to a console session that keeps its own sessions, two levels deep), the brief a task is
-  handed over as, the reporting loop and what happens when a session stops without reporting, automatic archiving,
-  which sessions an owner drives, and the information sessions of one project share with each other.
-- [Requesting a console session](product/requesting-a-console-session.md) — how an unbound project session asks for a
-  console session with `request_console_session` and becomes a lead session: who is offered the tool, the call and its
-  8-minute wait, how a request ends (approval, refusal, time limit, withdrawal), what approval does, and the
-  confirmation dialog.
+  project session bound to a console session that keeps its own sessions, two levels deep), changing a session's owner
+  (who can own a session, handing a session to another owner, an unbound session binding itself, and what a session is
+  told when its binding changes while it runs), the brief a task is handed over as, the reporting loop and what
+  happens when a session stops without reporting, automatic archiving, and which sessions an owner drives.
+- [Information between sessions](product/information-between-sessions.md) — listing the running sessions of every
+  console with `list_sessions` and writing information into any of them with `share_info`: why it reaches a session as
+  information rather than an instruction, and the copy its owner is sent.
+- [Message delivery](product/message-delivery.md) — how a message written into a session is delivered: what is
+  sanitized, when it is queued until the session can take it, the hold while a trust confirmation may be up, and a
+  write that only partly lands.
+- [Session requests](product/session-requests.md) — how any session asks with `request_session` for a session that has
+  no owner, in any project or as a console session: who is offered the tool, its arguments and the refusals before the
+  user is asked, the 8-minute wait and the raised hand, each agent's own time limit, how a request ends (approval,
+  refusal, time limit, withdrawal), what approval does, the outcome message, and the confirmation dialog.
 - [Settings tools for agents](product/agent-settings-tools.md) — which settings a console session can read and change
   through its tools (projects, its own console, the application-wide settings), the read-only `get_project` every
   project session has, the `accounts` and `launch` argument shapes, when a change takes effect, and what is never

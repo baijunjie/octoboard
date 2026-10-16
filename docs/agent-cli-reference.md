@@ -299,7 +299,7 @@ outlasting 660 s was not tried, so that end of the range is assumed.
 **The model is not held silent while an MCP call is outstanding.** Codex lets it take a turn roughly every 64 s for as
 long as the call sits in progress, each one saying only that the tool is still running. Those turns do **not** reset
 the time limit — in the control above it fired on schedule with four of them behind it. What this costs a call
-Octoboard deliberately keeps waiting is in "The call" of `docs/product/requesting-a-console-session.md`.
+Octoboard deliberately keeps waiting is in "Waiting for the answer" of `docs/product/session-requests.md`.
 
 **A Codex older than the *async* hook support Octoboard injects** (0.142.5 was seen, resolved through the login-shell
 `PATH`; inferred from the warning, since the session ended on an API error before status could be observed) prints
@@ -410,23 +410,23 @@ Measured on 1.0.50 against a recording stdio server that never answered `tools/c
 cancellation arrived at 20.65 s) and a tool that did answer in the same run as the control; the key is honoured in the
 block Octoboard appends to the `config.toml` copy, which is where the 20 s came from. Octoboard sets it to 660 there,
 its own 600 s forwarding limit plus a minute, so that its limit is the one that ends a call: a cancellation withdraws a
-waiting request for a console session, which would end the user's 8 minutes to answer early (see "The call" in
-`docs/product/requesting-a-console-session.md`). On 1.0.52 with a real account, the appended `[mcp_servers.octoboard]`
-block was read off a live farm carrying `tool_timeout_sec = 660`.
+waiting session request (`request_session`), which would end the user's 8 minutes to answer early (see "How a request ends" in `docs/product/session-requests.md`). On 1.0.52 with a
+real account, the appended `[mcp_servers.octoboard]` block was read off a live farm carrying
+`tool_timeout_sec = 660`.
 
 **The model is held silent while an MCP call is outstanding**, the opposite of Codex. Through a
-`request_console_session` call that Octoboard kept waiting the full 8 minutes, Grok sent its endpoint nothing between
-the turn's own request and the one carrying the tool's error: no turn of its own, no token spent (measured on 1.0.50
-against a stub inference endpoint).
+`request_console_session` call (the tool is now `request_session`, which waits the same way) that Octoboard kept
+waiting the full 8 minutes, Grok sent its endpoint nothing between the turn's own request and the one carrying the
+tool's error: no turn of its own, no token spent (measured on 1.0.50 against a stub inference endpoint).
 
 **What the model itself is handed, and what it calls** (1.0.50 against a stand-in endpoint, re-confirmed on 1.0.52
 against a real account): an MCP tool is **not** among the tools offered to the model. They are reached through Grok's
 own `use_tool`, whose `tool_name` is the qualified `<server key>__<tool>` and whose `tool_input` holds the arguments —
 the wrapper the `PreToolUse` payload shows — and a `search_tool` call first is not required, though 1.0.52 injects a
 system reminder of its own telling the model to call `search_tool` for a tool's input schema before `use_tool`. In four
-real Grok Build 1.0.52 sessions driven through `request_console_session` end to end, every one called `search_tool` at
-least once, and what a real model called was the `use_tool` wrapper with the qualified `octoboard__<tool>` name. Every
-chat request sets `stream: true`, so anything standing in for the endpoint has to answer as a stream. A turn is also
+real Grok Build 1.0.52 sessions driven through `request_console_session` (now `request_session`) end to end, every one
+called `search_tool` at least once, and what a real model called was the `use_tool` wrapper with the qualified
+`octoboard__<tool>` name. Every chat request sets `stream: true`, so anything standing in for the endpoint has to answer as a stream. A turn is also
 followed by requests that offer no tools at all and belong to the TUI rather than the agent: the dashboard summary line,
 the session title, and a prediction of the user's next line. Inference for one model can be routed on its own through a
 `[model.<name>]` entry carrying its own `base_url` (and `api_key`), without the `endpoints.models_base_url` that moves

@@ -481,7 +481,7 @@ mod tests {
         assert!(applied, "the rejection must be applied");
     }
 
-    /// A watch follows the agent's own status, not the record's: with a console-session request
+    /// A watch follows the agent's own status, not the record's: with a session request
     /// holding the hand up, a decline found in the transcript moves what the agent is remembered
     /// at, and the record keeps showing the request's `WaitingUser`.
     #[tokio::test]

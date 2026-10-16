@@ -1,12 +1,16 @@
 //! `octoboardd mcp` — the MCP server each adapter registers as a `command`-type server, one child
 //! process per session.
 //!
-//! It owns no state. The tool catalogue it announces comes from [`super::tools_for`] for the role
-//! and binding it was launched with, and every call is forwarded to the running daemon, which is
-//! where the sessions and the store actually are. The session's identity travels in argv rather
-//! than in the environment: Claude Code and Grok do export a session id to an MCP child, but Codex
-//! exports nothing, and Grok's `{{session_id}}` templating does not work — argv is the one route
-//! all three agree on, and the daemon is the one assigning the id anyway.
+//! It owns no state of its own but which catalogue it announces. That comes from
+//! [`super::tools_for`] for the role and binding it was launched with, and follows the binding as
+//! the daemon reports it with every answer: a session whose binding changes while it runs has its
+//! agent told the tool list changed (`notifications/tools/list_changed`), for an agent that reads
+//! it again on that. The daemon checks every call against the binding as it stands either way.
+//! Every call is forwarded to the running daemon, which is where the sessions and the store
+//! actually are. The session's identity travels in argv rather than in the environment: Claude
+//! Code and Grok do export a session id to an MCP child, but Codex exports nothing, and Grok's
+//! `{{session_id}}` templating does not work — argv is the one route all three agree on, and the
+//! daemon is the one assigning the id anyway.
 //!
 //! The token authenticates the child to the daemon, so the MCP surface is not reachable by any
 //! local process that happens to guess the port.
@@ -15,6 +19,7 @@
 //! this mode installs no tracing subscriber and reports its own failures on stderr.
 
 use std::borrow::Cow;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -49,7 +54,7 @@ pub fn run(
         let server = OctoboardMcp {
             session: Arc::new(session),
             role,
-            bound,
+            bound: Arc::new(AtomicBool::new(bound)),
             port,
             token: Arc::new(token),
         };
@@ -67,8 +72,9 @@ struct OctoboardMcp {
     session: Arc<String>,
     role: Role,
     /// Whether the session has the role of one bound to an owner, which decides the catalogue
-    /// along with the role. Fixed for the session's lifetime, so a launch argument can carry it.
-    bound: bool,
+    /// along with the role: the launch argument at first, then what the daemon's latest answer
+    /// said.
+    bound: Arc<AtomicBool>,
     port: u16,
     token: Arc<String>,
 }
@@ -77,7 +83,10 @@ impl ServerHandler for OctoboardMcp {
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
             protocol_version: ProtocolVersion::default(),
-            capabilities: ServerCapabilities::builder().enable_tools().build(),
+            capabilities: ServerCapabilities::builder()
+                .enable_tools()
+                .enable_tool_list_changed()
+                .build(),
             server_info: Implementation {
                 name: super::SERVER_KEY.to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
@@ -94,7 +103,7 @@ impl ServerHandler for OctoboardMcp {
         _request: Option<PaginatedRequestParam>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
-        let tools = super::tools_for(self.role, self.bound)
+        let tools = super::tools_for(self.role, self.bound.load(Ordering::Relaxed))
             .iter()
             .map(|tool| Tool {
                 name: Cow::Borrowed(tool.name),
@@ -125,7 +134,9 @@ impl ServerHandler for OctoboardMcp {
     ) -> Result<CallToolResult, ErrorData> {
         // A name outside this role's catalogue is a protocol-level mistake rather than a tool
         // that failed, so it does not come back as a tool result the model is invited to retry.
-        if super::tool_by_name(self.role, self.bound, &request.name).is_none() {
+        if super::tool_by_name(self.role, self.bound.load(Ordering::Relaxed), &request.name)
+            .is_none()
+        {
             return Err(ErrorData::invalid_params(
                 format!("`{}` is not a tool this session can call", request.name),
                 None,
@@ -138,10 +149,9 @@ impl ServerHandler for OctoboardMcp {
         }))
         .map_err(|err| ErrorData::internal_error(err.to_string(), None))?;
         let path = format!("/mcp/{}", self.token);
-        // Only a request for a console session is withdrawn when its call is cancelled. Any other
-        // call is left to finish in the daemon, as before: the daemon stops serving a call whose
-        // connection goes, and a `start_session` or a `report` cut off part-way would leave its
-        // work half done.
+        // Only a session request is withdrawn when its call is cancelled. Any other call is left to
+        // finish in the daemon: the daemon stops serving a call whose connection goes, and a
+        // `start_session` or a `report` cut off part-way would leave its work half done.
         let cancelled = async {
             if request.name == WITHDRAWN_ON_CANCEL {
                 context.ct.cancelled().await;
@@ -159,7 +169,14 @@ impl ServerHandler for OctoboardMcp {
         };
 
         Ok(match response {
-            Ok(body) => read_outcome(&body),
+            Ok(body) => {
+                if self.follow_binding(&body) {
+                    // Best effort: an agent that ignores it still has every call checked by the
+                    // daemon against the binding as it stands.
+                    let _ = context.peer.notify_tool_list_changed().await;
+                }
+                read_outcome(&body)
+            }
             // Octoboard itself being unreachable is the model's problem to work around, not a
             // protocol error: it should be able to say so to the user rather than have the call
             // fail opaquely.
@@ -170,6 +187,19 @@ impl ServerHandler for OctoboardMcp {
     }
 }
 
+impl OctoboardMcp {
+    /// Takes the binding the daemon's answer reports, and says whether it changed the catalogue.
+    fn follow_binding(&self, body: &[u8]) -> bool {
+        let Some(bound) = serde_json::from_slice::<Value>(body)
+            .ok()
+            .and_then(|outcome| outcome.get("bound").and_then(Value::as_bool))
+        else {
+            return false;
+        };
+        self.role == Role::Project && self.bound.swap(bound, Ordering::Relaxed) != bound
+    }
+}
+
 /// What became of a call forwarded to the daemon.
 enum Forwarded {
     Answered(std::io::Result<Vec<u8>>),
@@ -177,9 +207,9 @@ enum Forwarded {
     Cancelled,
 }
 
-/// The tool whose call the daemon has to learn the agent cancelled: a request for a console session
-/// waits in front of the user, and is withdrawn when its call's connection to the daemon goes.
-const WITHDRAWN_ON_CANCEL: &str = "request_console_session";
+/// The tool whose call the daemon has to learn the agent cancelled: a session request waits in
+/// front of the user, and is withdrawn when its call's connection to the daemon goes.
+const WITHDRAWN_ON_CANCEL: &str = "request_session";
 
 /// Forwards one call to the daemon and waits for its answer, unless `cancelled` completes first —
 /// for a call the agent cancels (`notifications/cancelled`, which cancels the call's context). A
@@ -329,6 +359,26 @@ mod tests {
         }
         let refused = failure_message("s-1", &Error::from(ErrorKind::ConnectionRefused));
         assert!(refused.contains("could not be reached for session s-1"));
+    }
+
+    /// The catalogue follows the binding each answer reports, and only a change of it is one the
+    /// agent is told of; a console session's never changes.
+    #[test]
+    fn the_catalogue_follows_the_binding_the_daemon_reports() {
+        let server = |role| OctoboardMcp {
+            session: Arc::new("s-1".to_string()),
+            role,
+            bound: Arc::new(AtomicBool::new(false)),
+            port: 0,
+            token: Arc::new("t".to_string()),
+        };
+        let project = server(Role::Project);
+        let bound = br#"{"ok":true,"result":{},"bound":true}"#;
+        assert!(project.follow_binding(bound));
+        assert!(!project.follow_binding(bound));
+        assert!(project.bound.load(Ordering::Relaxed));
+        assert!(!project.follow_binding(br#"{"ok":false,"error":"x"}"#));
+        assert!(!server(Role::Console).follow_binding(bound));
     }
 
     #[test]

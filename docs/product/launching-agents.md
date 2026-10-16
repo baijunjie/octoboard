@@ -76,14 +76,20 @@ environment" below):
   user's own instructions, which take precedence over the rest of the file wherever they disagree but never change
   what it does and does not do (see "The console session's instruction file" below). A project session bound to a console session is told that console session is waiting on its
   result and how to `report` to it; one bound to a project session is told which project session, by its id, dispatched it and
-  that it reports there. One the user opened without a console session to report to is told that it was opened directly,
-  that nobody is waiting on it, and not to call `report`, and that it may start sessions in its own project and drive
-  them, which report back to it. A lead session, bound to a console session only after it was opened, is given that
-  same unbound project session's text and tools on every launch, as at its first (see "Lead sessions" in
-  `docs/product/hub-orchestration.md`). All of this follows from what is fixed for the session's lifetime, so the text
-  never changes under it. The role and whether the session was opened bound decide which tools the session is offered,
-  so an unbound project session still has `report`, and calling it is refused while it is unbound (see "Reporting" and
-  "The unbound project session's tools" in `docs/product/hub-orchestration.md`).
+  that it reports there; either is told that its owner can hand it to another session, which Octoboard then tells it in
+  a message. One nobody owns — opened by hand without a console session to report to, or started on another session's
+  request — is told that no session dispatched it, that nobody but the user owns it, and not to call `report`; that it
+  may start sessions in its own project and drive them, which report back to it; and that if it binds itself to an
+  owner, that call's result tells it what changes. A lead session, bound to a console session only after it was opened,
+  is given that same unbound project session's text on every launch, as at its first (see "Lead sessions" in
+  `docs/product/hub-orchestration.md`). Every project session's text also sets out how it relates to other sessions:
+  `start_session` for a session of its own where it has it, `transfer_session` and `bind_to_session` where it has them,
+  `request_session` for a session that is nobody's, and `list_sessions` and `share_info` for information. The text is
+  written from who the session reports to when it launches, and says that what Octoboard tells it of a later change of
+  owner replaces what it says (see "When a binding changes while a session runs" in
+  `docs/product/hub-orchestration.md`). The role and the session's binding as it stands decide which tools the session
+  is offered, so an unbound project session still has `report`, and calling it is refused while it is unbound (see
+  "Reporting" and "The unbound project session's tools" in `docs/product/hub-orchestration.md`).
 
 The injected hooks are built to be invisible. They never steer the agent, print nothing (with the one exception
 below), never fail the turn, and carry a short timeout (3 seconds) so a daemon that is unreachable costs a turn a
@@ -286,8 +292,8 @@ conditions that are visible:
   raise no approval dialog. This covers Octoboard's tools alone; every other tool, the sandbox and
   the approval policy are untouched.
 - Codex's own time limit on a call to Octoboard's tools (300 s by default) is raised above Octoboard's own limit on a
-  forwarded call (the 10 minutes in "The call" of `docs/product/requesting-a-console-session.md`), so that a call that
-  waits for the user, such as a console-session request, can return its result. This is the limit on Octoboard's tools
+  forwarded call (the 10 minutes in "Waiting for the answer" of `docs/product/session-requests.md`), so that a call
+  that waits for the user, such as a session request, can return its result. This is the limit on Octoboard's tools
   alone; no other tool's limit changes.
 
 Whether Codex resolves approval requests by itself is read from `config.toml` in the Codex home that launch uses: the
@@ -309,9 +315,9 @@ Two of its files are **copies** taken at launch rather than links, with conseque
   Build's trust record" in `docs/product/folder-trust.md`).
 
 Octoboard's own MCP server is declared in that copy of the configuration file, and its entry sets **Grok Build's own
-time limit on a call to Octoboard's tools** above Octoboard's own limit on a forwarded call (the 10 minutes in "The
-call" of `docs/product/requesting-a-console-session.md`), so that a call which waits for the user, such as a
-console-session request, is ended by Octoboard's limit and not by Grok's — Grok cancels a call it gives up on, and a
+time limit on a call to Octoboard's tools** above Octoboard's own limit on a forwarded call (the 10 minutes in
+"Waiting for the answer" of `docs/product/session-requests.md`), so that a call which waits for the user, such as a
+session request, is ended by Octoboard's limit and not by Grok's — Grok cancels a call it gives up on, and a
 cancellation withdraws such a request. The limit is set on Octoboard's own entry alone; no other MCP server of the
 user's is touched, and the user's own configuration is untouched because only the copy is written.
 

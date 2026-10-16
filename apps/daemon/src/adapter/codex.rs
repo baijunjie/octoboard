@@ -236,7 +236,7 @@ impl AgentAdapter for CodexAdapter {
         ));
         // Codex abandons a tool call at a limit of its own and sends the server nothing when it
         // does, so a call that outlasts it never returns its result — and a call Octoboard holds
-        // for the user (`console_request::ANSWER_TIME_LIMIT`) alone outlasts Codex's default.
+        // for the user (`session_request::ANSWER_TIME_LIMIT`) alone outlasts Codex's default.
         // Hence `super::MCP_TOOL_TIMEOUT_SECS`, where the reasoning for the value is.
         args.push("-c".to_string());
         args.push(format!(

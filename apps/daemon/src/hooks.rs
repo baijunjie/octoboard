@@ -1,6 +1,6 @@
 //! Reading what one agent's hook event says: the session's status, where its turns begin and end,
-//! the prompt a turn was started with, where its tool calls start and end, the tool calls it moved
-//! to the background, and its working directory.
+//! the prompt a turn was started with, where its tool calls start and end, and its working
+//! directory.
 //!
 //! Each agent names its events and shapes its payloads differently, and each has traps that make a
 //! naive mapping wrong in a way nothing reports. What is handled here:
@@ -212,41 +212,6 @@ pub fn submitted_prompt(agent: Agent, payload: &Value) -> Option<&str> {
             .trim_start(),
         None => prompt,
     })
-}
-
-/// The id the agent gave a running call of `server`'s `tool` that it moved to the background, if
-/// this event is a paused `Stop` listing one. Only Claude Code is known to do this: (2.1.295) it
-/// moves an MCP call still running after 120 s to the background, lists it in `background_tasks`
-/// as `{"id", "type": "MCP task", "status": "running", "server", "tool", …}`, and later delivers
-/// its result as a turn of its own, opened by [`task_notification_opening`].
-pub fn backgrounded_mcp_call<'a>(
-    agent: Agent,
-    event: &str,
-    payload: &'a Value,
-    server: &str,
-    tool: &str,
-) -> Option<&'a str> {
-    if agent != Agent::Claude || event != "Stop" {
-        return None;
-    }
-    let field = |task: &'a Value, key: &str| task.get(key).and_then(Value::as_str);
-    payload
-        .get("background_tasks")?
-        .as_array()?
-        .iter()
-        .find(|task| {
-            field(task, "status") == Some("running")
-                && field(task, "server") == Some(server)
-                && field(task, "tool") == Some(tool)
-        })?
-        .get("id")?
-        .as_str()
-}
-
-/// How the prompt of the turn in which Claude Code (2.1.295) delivers a background task's result
-/// opens: `<task-notification>`, then the task's id on the next line.
-pub fn task_notification_opening(task_id: &str) -> String {
-    format!("<task-notification>\n<task-id>{task_id}</task-id>")
 }
 
 /// The event name as the payload itself reports it. This is the only source: the hook script is

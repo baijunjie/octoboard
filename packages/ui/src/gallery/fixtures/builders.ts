@@ -1,5 +1,5 @@
 import type { Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionStatus, Settings } from "../../protocol";
-import type { ConsoleRequest, State, TrustPrompt } from "../../store";
+import type { SessionRequest, State, TrustPrompt } from "../../store";
 
 const NOW = Date.now();
 
@@ -96,7 +96,7 @@ export function snapshotState(parts: {
   pages?: Record<string, Page[]>;
   trustPrompts?: TrustPrompt[];
   trustedDirectories?: string[];
-  consoleRequests?: ConsoleRequest[];
+  sessionRequests?: SessionRequest[];
   connectionState?: State["connectionState"];
   gitStatuses?: GitStatus[];
   settings?: Settings;
@@ -111,7 +111,7 @@ export function snapshotState(parts: {
     snapshotEpoch: 1,
     trustPrompts: parts.trustPrompts ?? [],
     trustedDirectories: parts.trustedDirectories ?? [],
-    consoleRequests: parts.consoleRequests ?? [],
+    sessionRequests: parts.sessionRequests ?? [],
     gitStatuses: new Map((parts.gitStatuses ?? []).map((g) => [g.project, g])),
     settings: parts.settings ?? { auto_pull_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts: [] },
     homeDir: "/Users/dev",

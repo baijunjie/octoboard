@@ -216,14 +216,6 @@ project and console session menus show it.
 - It does nothing while a dialog or a menu is open, and during an input-method composition.
 - The key combination never reaches the terminal, so the agent never receives it.
 
-## Approving a request for a console session
-
-A window that approves a project session's request for a console session (see
-`docs/product/requesting-a-console-session.md`) while it is in the focus mode of the requesting session's own project
-moves, once the console session has started, into that console session's focus mode with it selected. A window in
-another project's focus mode, in a console session's focus mode or not in focus mode stays as it is, and so does every
-other connected window.
-
 ## Keyboard focus on entering and leaving
 
 **Entering or leaving focus mode by selecting a session hands keyboard focus to that session's terminal**, as

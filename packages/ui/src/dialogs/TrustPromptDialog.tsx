@@ -121,7 +121,7 @@ function TrustDirCheckbox({
 
 /** What the dialog for a session waiting at its agent's folder-trust confirmation shows and does,
  * or nothing without a prompt. `sessionTitle` names the session when it is known. A hook rather
- * than a component, so the one dialog slot it shares with the requests for a console session
+ * than a component, so the one dialog slot it shares with the session requests
  * (`PendingQuestionDialog`) stays mounted between them. */
 export function useTrustPromptDialogProps(
   prompt: TrustPrompt | undefined,

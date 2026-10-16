@@ -173,8 +173,8 @@ impl Store {
                 -- would remove rows behind the daemon's back, so no `session_deleted` would be
                 -- broadcast and every client would keep a ghost row.
                 bound_to         TEXT,
-                -- 1 for a lead session: a project session bound to a console session after it
-                -- was opened (see `Session::lead`).
+                -- 1 for a lead session: a project session bound to a console session that can
+                -- still own sessions of its own (see `Session::lead`).
                 lead             INTEGER NOT NULL DEFAULT 0,
                 -- Set only for a console session (`role = 'console'`); NULL for a project session.
                 colour           TEXT,
@@ -895,6 +895,28 @@ impl Store {
         insert_session_row(&self.lock(), session)
     }
 
+    /// Inserts a project session bound to `owner`, only while `owner` can still own sessions — a
+    /// console session, or a project session that is unbound or a lead session, the condition
+    /// [`Self::set_binding`] keeps — and says whether it did. The check and the insert run under
+    /// one lock, so a binding that lands between the caller's own check and this write either
+    /// came first, and is seen here, or comes after, and sees the new session as a child of
+    /// `owner` (`set_binding`'s `childless`): orchestration cannot reach a third level either way.
+    /// `false` also covers an `owner` that is gone.
+    pub fn insert_session_under_owner(&self, session: &Session, owner: &str) -> Result<bool> {
+        let conn = self.lock();
+        let can_own: bool = conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM sessions AS owner WHERE owner.id = ?1
+                              AND (owner.role = ?2 OR owner.bound_to IS NULL OR owner.lead = 1))",
+            params![owner, enum_to_text(&Role::Console)],
+            |row| row.get(0),
+        )?;
+        if !can_own {
+            return Ok(false);
+        }
+        insert_session_row(&conn, session)?;
+        Ok(true)
+    }
+
     /// Reads the current console name without allocating a session ordinal.
     pub fn preview_console_session_title(&self, console_id: &str) -> Result<String> {
         self.get_console(console_id)?
@@ -952,12 +974,12 @@ impl Store {
 
     /// Writes back the fields that change over a session's life. Identity and placement
     /// (`console_id`, `project_id`, `role`, `origin`, `ordinal`, `model`, `effort`)
-    /// never change; `bound_to` and `lead` change only through [`Self::bind_session`], once, and `account_id` and
-    /// `config_dir` change only through [`Self::set_session_account`], the one write path a switch
-    /// of the session's account uses, so a record read before a switch can never write the old
-    /// account back over it. `pinned` is the user's own statement ([`Self::set_session_pinned`]),
-    /// which a record read earlier must not overwrite, and so is `colour`
-    /// ([`Self::set_session_colour`]).
+    /// never change; `bound_to` and `lead` change only through [`Self::set_binding`], and
+    /// `account_id` and `config_dir` change only through [`Self::set_session_account`], the one
+    /// write path a switch of the session's account uses, so a record read before a switch can
+    /// never write the old account back over it. `pinned` is the user's own statement
+    /// ([`Self::set_session_pinned`]), which a record read earlier must not overwrite, and so is
+    /// `colour` ([`Self::set_session_colour`]).
     /// Returns whether a row was written: `false` means the session is gone (deleted meanwhile).
     pub fn update_session(&self, session: &Session) -> Result<bool> {
         let changed = self.lock().execute(
@@ -1119,18 +1141,39 @@ impl Store {
             .optional()?)
     }
 
-    /// Binds the unbound project session `id` to `owner` and marks it a lead session, in one
-    /// statement that only matches while it is still an unbound project session, so of two
-    /// bindings racing for it only one lands. Returns the record as it now stands, or `None` when
-    /// nothing was bound: the session is gone, is a console session, is already bound, or `owner`
-    /// is gone. What `owner` may be is the caller's to check.
-    pub fn bind_session(&self, id: &str, owner: &str) -> Result<Option<Session>> {
+    /// Binds the project session `id`, currently bound to `from` (`None` for unbound), to `owner`,
+    /// with `lead` as its new lead flag, in one statement that matches only while that still holds,
+    /// so of two changes racing for it only one lands. It also matches only while `owner` can own
+    /// sessions — a console session, or a project session that is unbound or a lead session — and,
+    /// with `childless`, only while no session is bound to `id`: the two conditions that keep
+    /// orchestration two levels deep cannot be undone by a binding that lands between the
+    /// caller's check and this write. Returns the record as it now stands, or `None` when nothing
+    /// changed. What else `owner` may be is the caller's to check.
+    pub fn set_binding(
+        &self,
+        id: &str,
+        from: Option<&str>,
+        owner: &str,
+        lead: bool,
+        childless: bool,
+    ) -> Result<Option<Session>> {
         let conn = self.lock();
         let changed = conn.execute(
-            "UPDATE sessions SET bound_to = ?2, lead = 1
-             WHERE id = ?1 AND role = ?3 AND bound_to IS NULL
-               AND EXISTS (SELECT 1 FROM sessions WHERE id = ?2)",
-            params![id, owner, enum_to_text(&Role::Project)],
+            "UPDATE sessions SET bound_to = ?3, lead = ?4
+             WHERE id = ?1 AND role = ?5 AND bound_to IS ?2
+               AND EXISTS (SELECT 1 FROM sessions AS owner WHERE owner.id = ?3
+                             AND (owner.role = ?6 OR owner.bound_to IS NULL OR owner.lead = 1))
+               AND (?7 = 0
+                    OR NOT EXISTS (SELECT 1 FROM sessions AS bound WHERE bound.bound_to = ?1))",
+            params![
+                id,
+                from,
+                owner,
+                lead,
+                enum_to_text(&Role::Project),
+                enum_to_text(&Role::Console),
+                childless
+            ],
         )?;
         if changed == 0 {
             return Ok(None);
@@ -2857,6 +2900,67 @@ mod tests {
             ProjectSource::Git
         );
         assert_eq!(enum_to_text(&ProjectSource::Git), "git");
+    }
+
+    /// A project session record for the binding tests: unbound unless `bound_to` says otherwise.
+    fn project_session(id: &str, bound_to: Option<&str>) -> Session {
+        let mut built = session(None);
+        built.id = id.to_string();
+        built.role = Role::Project;
+        built.bound_to = bound_to.map(str::to_string);
+        built
+    }
+
+    /// A session opened under an owner is inserted only while the owner can still own sessions.
+    /// Whichever of the two lands first, a binding of the owner to a project session or the new
+    /// session's insert, orchestration stays two levels deep: this is the insert's side of the
+    /// race `set_binding`'s `childless` check covers from the other.
+    #[test]
+    fn a_session_is_inserted_under_an_owner_only_while_the_owner_can_own() {
+        let path = temp_db("insert-under-owner");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store
+            .insert_session(&session(None))
+            .expect("console session");
+        store
+            .insert_session(&project_session("owner", None))
+            .expect("owner");
+        store
+            .insert_session(&project_session("peer", None))
+            .expect("peer");
+
+        // The owner binds itself to a project session after the new session's owner was resolved.
+        store
+            .set_binding("owner", None, "peer", false, true)
+            .expect("binding")
+            .expect("the owner had no sessions of its own");
+        assert!(!store
+            .insert_session_under_owner(&project_session("child", Some("owner")), "owner")
+            .expect("insert"));
+        assert!(store.get_session("child").unwrap().is_none());
+
+        // One with no sessions of its own and no project session to answer to can own sessions.
+        store
+            .insert_session(&project_session("free", None))
+            .expect("free");
+        assert!(store
+            .insert_session_under_owner(&project_session("child", Some("free")), "free")
+            .expect("insert"));
+
+        // The other order: with the child in place, the owner can no longer be bound to a project
+        // session.
+        assert!(store
+            .set_binding("free", None, "peer", false, true)
+            .expect("binding")
+            .is_none());
+
+        // An owner that is gone owns nothing.
+        assert!(!store
+            .insert_session_under_owner(&project_session("orphan", Some("nobody")), "nobody")
+            .expect("insert"));
     }
 
     /// A console session to feed [`Store::insert_console_session`]: a plain `role: Console` record

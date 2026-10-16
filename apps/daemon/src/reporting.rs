@@ -20,7 +20,7 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 
 use crate::outbox::Drain;
-use crate::protocol::{error_code, CodedError, Role, Session, SessionStatus};
+use crate::protocol::{error_code, CodedError, Session, SessionStatus};
 use crate::state::{AppState, TurnClose};
 use crate::{coordinator, hooks, term};
 
@@ -111,7 +111,7 @@ pub fn write_message(
             &[("session", id)],
         ));
     }
-    // The agent's own status, not the record's: a console-session request's hand is answered in a
+    // The agent's own status, not the record's: a session request's hand is answered in a
     // dialog and leaves the agent's prompt as free to take a message as it was.
     let agent_status = state.agent_status(&session);
     let writable = matches!(agent_status, SessionStatus::Working | SessionStatus::Idle);
@@ -240,10 +240,7 @@ pub fn deliver_report(
         .store
         .get_session(bound_to)?
         .ok_or_else(|| anyhow::anyhow!("this session's owner is no longer on record"))?;
-    let owner_kind = match owner.role {
-        Role::Console => "console session",
-        Role::Project => "project session",
-    };
+    let owner_kind = format!("{} session", owner.role.kind());
 
     let project = match &session.project_id {
         Some(id) => state.store.get_project(id)?.map(|project| project.name),
@@ -336,6 +333,60 @@ fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::TurnE
     if let Err(err) = deliver_report(state, session_id, report) {
         tracing::debug!(session = %session_id, %err, "delivering a synthesised report failed");
     }
+}
+
+/// [`write_message`] for a caller on the runtime. The write blocks on the PTY for as long as the
+/// child is not draining, so it goes to a blocking thread rather than a runtime worker.
+pub async fn write_message_off_runtime(
+    state: &Arc<AppState>,
+    id: &str,
+    text: String,
+    when_blocked: WhenBlocked,
+) -> Result<Delivery> {
+    let state = state.clone();
+    let id = id.to_string();
+    tokio::task::spawn_blocking(move || write_message(&state, &id, &text, when_blocked)).await?
+}
+
+/// Delivers a report the session itself sent, for a caller on the runtime: what the `report` tool
+/// does, and what a session binding itself to an owner does with its summary.
+///
+/// The session is credited with having reported before delivery, even if its owner cannot take the
+/// message yet, so its stop does not also produce a synthesised report. The credit is given after
+/// the session's queued hooks, whose turn start would otherwise reset it, and is taken back
+/// whenever delivery failed, so the owner gets a synthesised report instead of neither. A failure
+/// after the owner already has the report would make that a duplicate, which is the better way
+/// round.
+pub async fn deliver_own_report(
+    state: &Arc<AppState>,
+    session_id: &str,
+    summary: String,
+    status: ReportStatus,
+    open_items: Vec<String>,
+) -> Result<String> {
+    state.hook_queues.settled(session_id).await;
+    state.mark_reported(session_id);
+    let delivered = {
+        let state = state.clone();
+        let session_id = session_id.to_string();
+        // Delivery writes into the owner's PTY, which blocks.
+        tokio::task::spawn_blocking(move || {
+            deliver_report(
+                &state,
+                &session_id,
+                Report {
+                    summary: &summary,
+                    status,
+                    open_items: &open_items,
+                    synthesised: false,
+                },
+            )
+        })
+        .await
+        .map_err(anyhow::Error::from)
+        .and_then(|delivered| delivered)
+    };
+    delivered.inspect_err(|_| state.clear_reported(session_id))
 }
 
 /// The report as it is written into the owner. Plain prose with the structured fields spelled out:

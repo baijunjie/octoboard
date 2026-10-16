@@ -1,5 +1,5 @@
-//! Information one project session shares with another: the message the receiver reads, and the
-//! copy its owner is sent.
+//! Information one session shares with another — any session with any other, console sessions
+//! included: the message the receiver reads, and the copy its owner is sent.
 //!
 //! Information is not instruction, and a message is only text written into the receiver's
 //! terminal, so the distinction can only be made plain, never enforced: every delivery names its
@@ -28,8 +28,8 @@ pub enum OwnerCopy {
     Failed(String),
 }
 
-/// Writes information one project session shares with another into the receiver, and a copy into
-/// the receiver's owner.
+/// Writes information one session shares with another into the receiver, and a copy into the
+/// receiver's owner.
 ///
 /// The copy exists because an owner's dispatched work could otherwise be steered by input it never
 /// sees. It never fails the delivery: the receiver has the information by then, and an owner that
@@ -80,16 +80,36 @@ fn copy_failure(err: &anyhow::Error) -> String {
     }
 }
 
-/// A title is the user's or a model's text and may be several lines, which would let it pass for
-/// the lines of Octoboard's own header around it.
-fn one_line(title: &str) -> String {
-    title.split_whitespace().collect::<Vec<_>>().join(" ")
+/// The text on one line, for quoting inline into a message. What a model or the user wrote may span
+/// several lines, which would let it pass for the lines of Octoboard's own around it.
+pub(crate) fn one_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Where `session` runs, for a message to name it: ` in the project "…"`, or ` in the console "…"`
+/// for a console session, and nothing when the record is gone.
+pub(crate) fn place_of(state: &Arc<AppState>, session: &Session) -> String {
+    match &session.project_id {
+        Some(id) => state
+            .store
+            .get_project(id)
+            .ok()
+            .flatten()
+            .map(|project| format!(" in the project \"{}\"", one_line(&project.name))),
+        None => state
+            .store
+            .get_console(&session.console_id)
+            .ok()
+            .flatten()
+            .map(|console| format!(" in the console \"{}\"", one_line(&console.name))),
+    }
+    .unwrap_or_default()
 }
 
 /// The body with every line quoted, blank ones included, so that no line of it can read as a
 /// header of Octoboard's own. U+2028 and U+2029 break lines too: control-character stripping
 /// leaves them in, and a model may read them as line breaks.
-fn quote(text: &str) -> String {
+pub(crate) fn quote(text: &str) -> String {
     text.split(['\n', '\u{2028}', '\u{2029}'])
         .map(|line| format!("> {}", line.strip_suffix('\r').unwrap_or(line)))
         .collect::<Vec<_>>()

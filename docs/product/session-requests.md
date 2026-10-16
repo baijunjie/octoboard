@@ -1,0 +1,212 @@
+# Session requests
+
+A **session request** is a session's `request_session` call asking the user to start a session that has **no owner**:
+it reports to the user, and neither the caller nor the caller's owner drives it (see "Which sessions an owner drives"
+in `docs/product/hub-orchestration.md`). It can be a project session in any project of any console, or a console
+session. A session the caller wants to drive itself is one its `start_session` starts, which needs no approval; a
+request is for a session that should be nobody's, or for one in a place `start_session` does not reach.
+
+**The user's confirmation is enforced by Octoboard, not by a prompt.** Nothing is started on the call alone: the call
+waits while the user is asked, and only the user's approval starts anything.
+
+## Who is offered the tool
+
+Every session is offered `request_session`: a console session, an unbound project session, a lead session, and a
+project session bound to an owner. The role description of every project session and the console session's
+instruction file describe it.
+
+## The call
+
+| Argument | Required | Contents |
+|---|---|---|
+| `kind` | yes | `project` for a session in a project, `console` for a console session. No other value is accepted. |
+| `project` | no | For `project`: the project, by id in any console, or by a name that is unambiguous among the caller's own console's projects, else among every console's. Defaults to a project session's own project; a console session has to give it. Refused with `kind: console`. |
+| `console` | no | For `console`: the console, by id or by an unambiguous name. Defaults to the caller's own console. Refused with `kind: project`, whose session is in its project's console. |
+| `brief` | yes | The task, as `start_session`'s brief (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md`). |
+| `agent`, `account`, `model`, `effort` | no | Overrides for the new session, exactly as `start_session` takes them (see "The console session's tools" in `docs/product/hub-orchestration.md`); `account` is read among the accounts of the agent the new session will run. |
+
+**A request that could never be carried out is refused before the user is asked**, with the reason in prose and no
+dialog shown: whatever `start_session` would refuse for the same brief and overrides — a missing brief or a blank
+goal, an unknown agent or account, an account of another agent, an agent determined unavailable on this machine (never
+while that determination is still pending), a model or effort the agent does not offer — and a `kind` that is neither
+value, a `project` or `console` given for the other kind, a project or console that does not exist, a name that names
+more than one, and a console session asking for a project session without naming the project.
+
+## Waiting for the answer
+
+The call **waits for the user's answer for up to 8 minutes**. The limit is Octoboard's own, the same for every agent,
+and lies below the 10 minutes within which Octoboard forwards any tool call from the session to the daemon, leaving
+room for an approval given at the last moment to be carried out. Octoboard does not obey an agent's own time limit on a
+tool call; where the agent has one, Octoboard sets it above Octoboard's own instead (see below).
+
+**While the call waits, the session reads *waiting for the user*.** The hand goes up as the call starts waiting and
+comes down as the request ends — when the user answers, and equally when the request times out or is withdrawn; a
+request that takes an earlier one's place continues the same wait. It is the ordinary raised hand throughout: shown
+wherever a hand is shown, counted in the rail's waiting count and firing the same system notification as any other
+(see "The raised hand" in `docs/product/sessions.md`). What answers it is the dialog, not the session's terminal, so
+unlike a hand the agent itself raised it holds nothing back: a message addressed to the session is still accepted
+rather than queued (see "Messages held until a session can take them" in `docs/product/message-delivery.md`).
+
+Once the request has ended, the session's status follows its own agent again, from wherever the agent was last seen to
+be while the hand was up — *working* where it is still in the turn that made the call, *awaiting instructions* where
+it has since reported itself at its prompt, or where a Claude Code prompt declined during the wait left it (see
+"Declining a Claude Code prompt or question" in `docs/product/sessions.md`). That is also where the session is left
+when no further event from the agent arrives at all — as when a request times out after its agent gave up on the call.
+
+Claude Code (observed on 2.1.295) moves an MCP tool call that is still running after 120 seconds to the background:
+its turn ends with the call still waiting, and the call's result reaches it later as the background task's
+notification. None of that moves the session out of *waiting for the user* while the request is waiting.
+
+**Codex and Grok Build each have a time limit of their own on an MCP tool call, and for a session Octoboard starts
+that limit is set above Octoboard's own when the session launches**, so the call is never what gives up first (see
+"Per-agent specifics a user will notice" in `docs/product/launching-agents.md`; for each agent's own default see
+`docs/agent-cli-reference.md`). It is set because the two agents end an abandoned call differently, and only one of
+the two endings leaves the request alive:
+
+- **Codex sends nothing at all** when it gives up — no cancellation, no end of the connection, no frame of any kind.
+  Octoboard is left unaware, and nothing about the request changes: the dialog stays up, the request goes on waiting,
+  and an approval given after that point is still carried out in full. All the caller loses is the call's result,
+  which the outcome written into its session as a message covers (see "The outcome message" below).
+- **Grok Build cancels the call over MCP**, which withdraws the request like any other cancellation (see "How a request
+  ends" below): the dialog closes with nothing started, and an approval given after that point starts nothing. The
+  limit Octoboard sets is what keeps Octoboard's 8 minutes, and not Grok Build's own limit, deciding when the wait
+  ends.
+
+**A Codex session is not held silent while its call waits.** For as long as the request is waiting, that session goes
+on taking short turns of its own, one after another at its own interval, each saying only that the tool is still
+running. So a request left on the dialog until the 8 minutes run out costs that session several such turns — tokens on
+its account, and activity in its terminal — and none of them answers the request or shortens the wait (the interval,
+and what was measured, are in "Codex" in `docs/agent-cli-reference.md`).
+
+**A Grok Build session is held silent.** Between the turn that makes the call and the turn that carries its outcome it
+takes no turns of its own and spends no tokens, however long the request waits, so a request left on the dialog until
+the 8 minutes run out costs that session nothing.
+
+## How a request ends
+
+A request is held by the daemon, in memory only, until one of the following happens. Each closes its dialog in every
+connected window.
+
+| Ending | What the call returns | What changes |
+|---|---|---|
+| The user approves | The result described under "On approval" below. | The session is started, as described there. |
+| The user refuses — the **Refuse** button, Escape, the dialog's close button or a click outside it | A tool error in fixed prose saying the user refused the request and nothing was started; it ends by telling the agent not to ask again unless the user tells it to, to carry on with its own work, and to tell the user in its terminal what it wanted the session for. | Nothing. |
+| Nobody answers within the time limit | A tool error of the same shape, saying the user did not respond within the limit. | Nothing. |
+| The request is withdrawn | A tool error saying the request was withdrawn before the user answered and nothing was started, where the call is still there to receive it. | Nothing. |
+
+The user is not asked for a reason when refusing.
+
+A request is **withdrawn** on the signals Octoboard sees for every agent alike:
+
+- the caller's process ends — it is interrupted, archived, deleted or exits;
+- the call's connection to the daemon is dropped;
+- the agent cancels the call over MCP, which gets it a tool error saying the call was cancelled. This holds for
+  `request_session` only: a cancelled call of any other Octoboard tool is left to finish in the daemon;
+- the same session makes another request.
+
+**A session has at most one request waiting.** A new request takes the place of the one the session already has
+waiting, which is withdrawn; the hand stays up through the change.
+
+A request made while an approval of the same session's earlier request is being carried out is refused, saying the
+earlier request has just been approved and is being carried out, and that its outcome will arrive in the session's
+terminal as a message.
+
+Nothing about a request is persisted. Every agent process ends with the daemon, so a daemon restart leaves no call
+waiting.
+
+## On approval
+
+Once the user approves, the dialog closes everywhere at once, and then:
+
+1. **The session is started where the request named, exactly as `start_session` would start it** with the same brief
+   and overrides: titled from its goal, the overrides applied, listed as *starting* until its launch settles, and its
+   folder-trust confirmation handled the same way (see "Handing out a task: the brief" in
+   `docs/product/hub-orchestration.md`). A console session is started in the named console, with that console's badge
+   colour assigned as for any console session. The approval is answered only once the launch has settled, with the
+   launch's own refusal when it fails (see "Opening a session" in `docs/product/sessions.md`).
+2. **It has no owner.** A project session is an ordinary unbound project session, which the user owns and which can
+   start and drive sessions of its own project (see "The unbound project session's tools" in
+   `docs/product/hub-orchestration.md`); a console session is an ordinary console session of its console.
+3. **Its opening prompt says who asked for it.** The brief is preceded by a paragraph naming the requesting session by
+   id and title, saying the session was started at that session's request with the user's approval, that nobody owns
+   it but the user, and that the requesting session is not its owner and the two can only share information with each
+   other.
+4. **The caller carries on as it was.** It keeps running and is not archived, and the approval does not count as a
+   report. It does not own the new session, so `send_message`, `archive_session`, `reopen_session` and the other tools
+   that act on a session of the caller's own refuse it; `share_info` reaches it (see
+   `docs/product/information-between-sessions.md`), and `get_session` reads it where the caller has that tool.
+
+The call returns:
+
+| Field | Contents |
+|---|---|
+| `session` | The new session's id. |
+| `role` | `project` or `console`. |
+| `agent` | The agent it runs. |
+| `title` | Its title. |
+| `console` | The console it is in. |
+| `project` | The project it is in, or null for a console session. |
+| `note` | Prose telling the caller that the user approved and which session was started — its kind, id, title, agent and project or console; that it has no owner and reports to the user, not to the caller; that it is not the caller's to drive and the caller goes on with its own work; that `share_info` tells it something that touches its work, and, where the caller has `get_session`, that it reads it. Where the caller is unbound, has `bind_to_session`, and could be bound to the new session under the rules a binding keeps, the note adds that `bind_to_session` with the new session as `owner` makes the caller one of its sessions — the way a project session comes to be driven by a console session it asked for (see "Lead sessions" in `docs/product/hub-orchestration.md`). |
+
+**No window follows the new session.** Approving selects nothing and changes no window's view or focus mode: the
+requesting session carries on, and the new session is not one the user asked to open.
+
+## The outcome message
+
+**An approval's outcome is also written into the caller's session as a message**, after the call's result, through
+the delivery every message takes (see "Messages held until a session can take them" in
+`docs/product/message-delivery.md`). It carries the same note as the result, says it is from Octoboard about the
+`request_session` call, and that there is nothing more to do if the call already returned it. This is how a caller
+whose agent gave up on the call by a time limit of its own, without any signal reaching Octoboard, still learns what
+came of its request (see "Waiting for the answer" above).
+
+No report is synthesised for the turn this message starts (see "When a session does not report" in
+`docs/product/hub-orchestration.md`). On Claude Code that turn is recognised by the prompt it opens with; with Codex
+and Grok Build, whose prompts Octoboard does not read, the next turn to start is the one spared a report instead.
+
+The turn in which Claude Code delivers the call's result after moving the call to the background, as described above,
+is not spared: the caller carries on with its own work there, and that turn is reported on as any other.
+
+## When an approval cannot be carried out
+
+When an approval cannot be carried out, nothing is started, the call returns a tool error saying the user approved but
+it could not be carried out, with the reason, and the window that approved shows the reason as a toast about the
+requesting session. It is for one of these reasons:
+
+- the caller's process ended before the session could be started, which gives the same error as an approval after a
+  withdrawal (see "The confirmation dialog" below);
+- the session could not be launched — including any refusal opening it meets at that moment, such as an agent that has
+  become unavailable meanwhile.
+
+## The confirmation dialog
+
+A plain confirmation titled "Start a session?", with two buttons, **Refuse** and **Start session**.
+
+- **One sentence says who asks and for what.** It names the requesting session by its title (its id where the window
+  does not know it) and where that session lives — its project for a project session, plus its console only where
+  that is not the console the new session would be in, since a request can come from any project or console; then
+  the agent the new session would run and where it would be — a project and that project's console, or, for a console
+  session, the console alone; and it ends saying the new session would report to the user. The console is so named
+  once where both sessions share it. A project or console the window does not know is named by its id.
+- **Nothing the agent wrote is shown**, its brief included: the dialog is the one place the user's approval is
+  enforced, so it says only what Octoboard knows. The names in the sentence are the ones the user gave, each in
+  quotation marks. What the agent wants the session for is for the requesting session to say, in its own terminal.
+- The sentence wraps anywhere, so a long unbroken title does not widen the dialog.
+
+It behaves as follows:
+
+- **Keyboard focus starts on the dialog itself** rather than on a button, for each request it shows, so Enter answers
+  nothing until the user moves focus onto a control (see "Where keyboard focus starts in a confirmation" in
+  `docs/product/window-layout.md`).
+- **One dialog at a time.** Requests wait in one line, shown oldest first by when they were made, after any waiting
+  folder-trust prompts (see "The trust dialog" in `docs/product/folder-trust.md`). A request already on screen stays
+  there while it is waiting, whatever arrives — a trust prompt, or a request that sorts before it — and what arrived
+  follows it.
+- **Shown in every connected window**, and again whenever the application reloads its state (a connect, a reconnect, or
+  catching up after falling behind) for every request still waiting.
+- **The first answer from any window wins** and closes the dialog everywhere. The dialog closes as soon as the daemon
+  takes the answer, before the session has started. An answer that arrives after another window's is ignored without
+  a message.
+- **An approval that comes too late** — the request was withdrawn or timed out — starts nothing, and a toast about the
+  requesting session says it is no longer waiting for an answer, so the session it asked for was not started. A
+  refusal that comes too late shows nothing.

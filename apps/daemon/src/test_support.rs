@@ -189,6 +189,27 @@ pub(crate) fn idle_stand_in(id: &str) -> StandIn {
     fake_live_session(id, Agent::Claude, 80, 24, "sleep 30")
 }
 
+/// A stand-in session for `id` that is registered with `state` and has its output read, so a test
+/// can wait for what was written into it with [`output_containing`].
+pub(crate) fn running(state: &Arc<AppState>, id: &str) -> StandIn {
+    let live = idle_stand_in(id);
+    state.register_live(live.clone());
+    crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
+    live
+}
+
+/// Polls a stand-in session's output until it holds `needle`.
+pub(crate) fn output_containing(live: &LiveSession, needle: &str) -> String {
+    let deadline = Instant::now() + PATIENCE;
+    loop {
+        let output = String::from_utf8_lossy(&live.recent_output(8 * 1024)).into_owned();
+        if output.contains(needle) || Instant::now() >= deadline {
+            return output;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
 /// A stand-in live session on a real PTY, with `/bin/bash` running `script` behind it instead of a
 /// real agent: enough for whatever a test needs a `LiveSession` to write into, read from, or just
 /// stay alive on. `LiveSession` has no `Drop` that ends its process, so this guard does: the

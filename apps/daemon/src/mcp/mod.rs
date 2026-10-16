@@ -1,8 +1,7 @@
 //! The Octoboard MCP server: the orchestration and settings tools the console session drives
-//! Octoboard with, the narrower set an unbound project session drives its own project with and asks
-//! for a console session through, the reporting tool a bound project session answers through, and
-//! the tools every project session shares information with its project's other sessions through and
-//! reads its own project's settings with.
+//! Octoboard with, the narrower set a project session that can own sessions drives its own project
+//! with, the reporting tool a bound project session answers through, and the tools every session
+//! shares information through and asks the user for a session with no owner through.
 //!
 //! **Transport is a stdio child process, not an HTTP endpoint the agent connects to.** Each
 //! adapter registers `octoboardd mcp --session … --role … --port … --token …` as a `command`-type
@@ -23,6 +22,7 @@
 //! role text spelling a prefix out.
 
 mod args;
+mod bindings;
 pub mod console_instructions;
 pub mod exec;
 pub mod role;
@@ -38,8 +38,11 @@ use crate::protocol::{Agent, Role};
 /// spawned.
 pub const SERVER_KEY: &str = "octoboard";
 
-/// Who a session with the role of a bound one reports to, as far as what the session is told
-/// depends on it. Fixed for the session's lifetime, like the binding itself.
+/// Who a session with the role of a bound one reports to at launch, as far as what the session is
+/// told depends on it. A binding can change while the session runs, and the session is told of
+/// that change in a message (`crate::mcp::bindings`), or, when it binds itself, in the call's
+/// result; its role text, recorded once by some agents, is written so that it still holds
+/// afterwards.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Owner {
     Console,
@@ -64,9 +67,12 @@ pub struct ToolDef {
 /// session cannot start or archive sessions and the console session cannot report to itself.
 ///
 /// `bound` says whether the session has the role of a bound one (`Session::has_bound_role`): it
-/// reports to another session and owns none. That is fixed for the session's lifetime, which is
-/// what lets the catalogue follow from it: a lead session, bound only after it was launched
-/// unbound, keeps the unbound set. A console session is never bound, and it is ignored for one.
+/// reports to another session and owns none. A lead session, bound to a console session while
+/// keeping sessions of its own, does not, and keeps the unbound set. A console session is never
+/// bound, and it is ignored for one. The flag follows the binding as it stands, so it can change
+/// while a session runs — when it binds itself to a project session, or is handed to one — and the
+/// daemon checks every call against the set as it is then (`exec::call`); the session's MCP child
+/// is told with each answer and tells its agent the list changed (`stdio`).
 pub fn tools_for(role: Role, bound: bool) -> &'static [ToolDef] {
     match (role, bound) {
         (Role::Console, _) => CONSOLE_SESSION_TOOLS,
@@ -267,10 +273,13 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         name: "start_session",
-        description: "Start a session in one of this console's projects and hand it a task. \
-                      Returns the new session's id. The brief is rendered into the session's \
-                      opening prompt. The new session reports to this console session, \
-                      which is its owner.",
+        description: "Start a session in one of this console's projects and hand it a task. It \
+                      is yours for its whole life: it reports to this console session, its \
+                      owner, and you instruct it with `send_message`, archive it once it is done \
+                      and reopen it with `reopen_session` when it has another task. Needs no \
+                      approval. Returns the new session's id. The brief is rendered into the \
+                      session's opening prompt. A session that should not report to you is one \
+                      `request_session` asks the user for.",
         schema: || start_session_schema(true),
     },
     SEND_MESSAGE,
@@ -279,7 +288,8 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         description: "The session's status, plus a tail of what it has printed (a session that \
                       has ended keeps its last output; `null` if none was kept). Use it to \
                       follow up; a session that is waiting for the user must be left alone until \
-                      they have answered. Any session can be read, but one with `yours: false` is \
+                      they have answered. Any session can be read, of any console, but one with \
+                      `yours: false` is \
                       not this caller's to act on, whether it is unbound (`owner: null` on a \
                       project session) or reports to a different session, console or project: \
                       leave it alone. `owner` says whose it is, `owner_kind` whether that is a \
@@ -316,6 +326,10 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         },
     },
     REOPEN_SESSION,
+    TRANSFER_SESSION,
+    REQUEST_SESSION,
+    LIST_SESSIONS,
+    SHARE_INFO,
     ToolDef {
         name: "show_page",
         description: "Push a page to the report panel the user sees beside this session. Every \
@@ -436,12 +450,12 @@ const REOPEN_SESSION: ToolDef = ToolDef {
 
 const REPORT: ToolDef = ToolDef {
     name: "report",
-    description: "Report the round of work back to the session that dispatched this one, a \
-                  console session or a project session. `summary` is natural language; `status` \
-                  and `open_items` are what the session that dispatched this one acts on. With \
-                  `done` and no open items the session is archived once the report is delivered; \
-                  anything else leaves it running and awaiting instructions. Refused for a \
-                  session nobody dispatched.",
+    description: "Report the round of work back to your owner, the session this one is bound to: \
+                  a console session or a project session. `summary` is natural language; `status` \
+                  and `open_items` are what your owner acts on. With `done` and no open items the \
+                  session is archived once the report is delivered; anything else leaves it \
+                  running and awaiting instructions. Refused while this session is unbound: \
+                  nobody owns it but the user.",
     schema: || {
         object_schema(
             json!({
@@ -453,8 +467,8 @@ const REPORT: ToolDef = ToolDef {
                     "type": "string",
                     "enum": ["done", "failed", "needs_decision"],
                     "description": "`done` when the task is finished, `failed` when it could not \
-                                    be, `needs_decision` when the session that dispatched this one \
-                                    has to choose before it can go on.",
+                                    be, `needs_decision` when your owner has to choose before you \
+                                    can go on.",
                 },
                 "open_items": {
                     "type": "array",
@@ -467,29 +481,32 @@ const REPORT: ToolDef = ToolDef {
     },
 };
 
-/// What every project session, bound or not, may do with the other sessions of its project:
-/// look at them, and tell them things. Kept apart from `send_message` so that a message arriving
-/// in a session is framed by which tool sent it: an instruction comes from its owner, and
-/// information from anyone.
-const LIST_PROJECT_SESSIONS: ToolDef = ToolDef {
-    name: "list_project_sessions",
-    description: "List the running sessions of this project other than this one: id, title, \
-                  agent, status, and `owner` (the session it reports to, `owner_kind` saying \
-                  whether that is a console or a project session; null when the user opened it \
-                  themselves). `your_owner` marks the session that owns this one, and is also \
-                  given at the top level. Use it to find who to share information with.",
+/// What every session, of whatever kind, may do with every other running session: look at them,
+/// and tell them things. Kept apart from `send_message` so that a message arriving in a session is
+/// framed by which tool sent it: an instruction comes from its owner, and information from anyone.
+const LIST_SESSIONS: ToolDef = ToolDef {
+    name: "list_sessions",
+    description: "List the running sessions other than this one, in every console and project, \
+                  console sessions included: id, title, agent, status, `role` (a console or a \
+                  project session), `console`, `project` (null for a console session), and \
+                  `owner` (the session it reports to, `owner_kind` saying whether that is a \
+                  console or a project session; null when nobody owns it and it reports to the \
+                  user). `yours` marks a session that reports to you, and `your_owner` the \
+                  session you report to, which is also given at the top level. Use it to find \
+                  who to share information with, or an owner to hand a session to or bind to.",
     schema: || object_schema(json!({}), &[]),
 };
 
 const SHARE_INFO: ToolDef = ToolDef {
     name: "share_info",
-    description: "Tell a running session of this project something it may find useful: what you \
-                  found, decided or changed that touches its work. It is delivered marked as \
-                  information from you, not as an instruction, and the session it is for takes \
-                  work only from its owner. When that session reports to another session, that \
-                  owner is sent a copy. Held until the user is done when the session is waiting \
-                  for them. Refused for a session of another project, a console session, and \
-                  this session itself.",
+    description: "Tell a running session something it may find useful: what you found, decided \
+                  or changed that touches its work. Any session can be told, in any project or \
+                  console, console sessions included; no session needs to own the other. It is \
+                  delivered marked as information from you, not as an instruction, and the \
+                  session it is for takes work only from its owner. When that session reports to \
+                  another session, that owner is sent a copy. Held until the user is done when \
+                  the session is waiting for them. Refused for this session itself, and for a \
+                  session with no process running.",
     schema: || {
         object_schema(
             json!({
@@ -516,34 +533,120 @@ const GET_PROJECT: ToolDef = ToolDef {
     schema: || object_schema(json!({}), &[]),
 };
 
-/// A project session that reports to another session has the one tool it answers through, the
-/// two it shares information with, and the read of its project.
-const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] =
-    &[REPORT, LIST_PROJECT_SESSIONS, SHARE_INFO, GET_PROJECT];
+/// How an owner — a console session, or a project session that can own sessions — passes one of
+/// its sessions to another owner, without the user: the session is its to pass, and the rules a
+/// binding keeps are checked as for any binding.
+const TRANSFER_SESSION: ToolDef = ToolDef {
+    name: "transfer_session",
+    description: "Hand one of your sessions (`yours: true`) to another owner, to pass its task \
+                  over: from then on it reports to that owner, which drives it, and it is no \
+                  longer yours. Needs no approval. The new owner is a console session of this \
+                  console, or a project session of the session's own project that can own \
+                  sessions (unbound, or bound to a console session while keeping sessions of its \
+                  own); a session that has sessions of its own can go only to a console session. \
+                  Both must be running. The session is told who its owner now is, and the new \
+                  owner is sent `note`.",
+    schema: || {
+        object_schema(
+            json!({
+                "session": {
+                    "type": "string",
+                    "description": "The id of the session of yours to hand over.",
+                },
+                "to": { "type": "string", "description": "The new owner's session id." },
+                "note": {
+                    "type": "string",
+                    "description": "The handover, in natural language, for the new owner: what \
+                                    the session is doing, where it stands and what is left.",
+                },
+            }),
+            &["session", "to", "note"],
+        )
+    },
+};
 
-/// A project session nobody dispatched drives its own project the way a console session drives
-/// its console's, and what it starts reports back to it. `report` is announced too, though a call
-/// is refused: the catalogue follows from role and binding, and the role text says not to call it.
+/// How an unbound project session becomes one of another session's, without the user: it puts
+/// itself under that owner, and the rules a binding keeps are checked as for any binding.
+const BIND_TO_SESSION: ToolDef = ToolDef {
+    name: "bind_to_session",
+    description: "Bind this session, while it is unbound, to an owner and become one of its \
+                  sessions: from then on you report to it with `report` and take work from it. \
+                  Needs no approval. The owner is a console session of this console — you then \
+                  keep the sessions you started and go on driving them — or a project session of \
+                  this project that can own sessions; only a session with no sessions of its own \
+                  may join one of those, and it can no longer start or drive sessions afterwards. \
+                  The owner must be running, and is sent `summary` as your first report. The \
+                  result says which tools you have from then on. Refused once this session is \
+                  bound. To tell a session something without binding, use `share_info`.",
+    schema: || {
+        object_schema(
+            json!({
+                "owner": { "type": "string", "description": "The owner's session id." },
+                "summary": {
+                    "type": "string",
+                    "description": "What you are doing and what you need from the owner, in \
+                                    natural language. It reaches the owner as your first report.",
+                },
+            }),
+            &["owner", "summary"],
+        )
+    },
+};
+
+/// How every session, of whatever kind, has a session started that is nobody's: through a
+/// confirmation the user gives. The brief and the overrides are `start_session`'s, and are checked
+/// the same way before the user is asked.
+const REQUEST_SESSION: ToolDef = ToolDef {
+    name: "request_session",
+    description: "Ask the user to start a session that is nobody's — neither yours nor your \
+                  owner's: it reports to the user, and you and it can only exchange information \
+                  (`share_info`). It can be a project session in any project of any console, or a \
+                  console session. A session you want to drive yourself is one `start_session` \
+                  starts, where you have it. The user is asked first, and the call waits for \
+                  their answer, for several minutes at most. On approval Octoboard starts it with \
+                  your brief as its opening prompt, and you carry on as you were. A refusal, or no \
+                  answer in time, comes back as an error and changes nothing.",
+    schema: request_session_schema,
+};
+
+/// A project session that reports to another session has the one tool it answers through, the
+/// two it shares information with, the read of its project, and the request for a session with no
+/// owner.
+const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
+    REPORT,
+    LIST_SESSIONS,
+    SHARE_INFO,
+    GET_PROJECT,
+    REQUEST_SESSION,
+];
+
+/// A project session that can own sessions — unbound, or a lead session — drives its own project
+/// the way a console session drives its console's, and what it starts reports back to it.
+/// `report` is announced too, though a call is refused while the session is unbound: the
+/// catalogue does not change when an unbound session binds itself to a console session.
 const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "start_session",
-        description: "Start a session in this project and hand it a task. Any available agent \
-                      can be chosen, not only this session's own. Returns the new session's id. \
-                      The brief is rendered into the session's opening prompt. The new session \
-                      reports to this session, which is its owner, and you can instruct, read, \
-                      archive and reopen it. A session started this way cannot start sessions \
-                      of its own, and only this project is available.",
+        description: "Start a session in this project and hand it a task. It is yours for its \
+                      whole life: it reports to this session, its owner, and you instruct it with \
+                      `send_message`, archive it once it is done and reopen it with \
+                      `reopen_session` when it has another task. Needs no approval. Any available \
+                      agent can be chosen, not only this session's own. Returns the new session's \
+                      id. The brief is rendered into the session's opening prompt. A session \
+                      started this way cannot start sessions of its own, and only this project is \
+                      available; a session elsewhere, or one that should not report to you, is \
+                      one `request_session` asks the user for.",
         schema: || start_session_schema(false),
     },
     SEND_MESSAGE,
     ToolDef {
         name: "get_session",
         description: "The session's status, plus a tail of what it has printed (a session that \
-                      has ended keeps its last output; `null` if none was kept). Any session of \
-                      this project can be read, but one with `yours: false` is not yours to \
-                      act on, whether it is unbound (`owner: null`) or reports to a different \
-                      session: leave it alone. `owner` says whose it is and `owner_kind` \
-                      whether that is a console or a project session.",
+                      has ended keeps its last output; `null` if none was kept). Any session can \
+                      be read, in any project or console, but one with `yours: false` is not \
+                      yours to act on, whether nobody owns it (`owner: null`) or it reports to a \
+                      different session: leave it alone. `owner` says whose it is and \
+                      `owner_kind` whether that is a console or a project session.",
         schema: || {
             object_schema(
                 json!({
@@ -557,53 +660,37 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     REOPEN_SESSION,
     RENAME_SESSION,
     SET_SESSION_PINNED,
-    REQUEST_CONSOLE_SESSION,
+    TRANSFER_SESSION,
+    BIND_TO_SESSION,
+    REQUEST_SESSION,
     REPORT,
-    LIST_PROJECT_SESSIONS,
+    LIST_SESSIONS,
     SHARE_INFO,
     GET_PROJECT,
 ];
 
-/// How a project session nobody dispatched reaches other projects: through a console session the
-/// user agrees to start for it. Announced to a lead session too, which keeps the unbound set, and
-/// refused there in prose. Its arguments are shaped like a report, since what it hands over reaches
-/// the console session as the caller's first report.
-const REQUEST_CONSOLE_SESSION: ToolDef = ToolDef {
-    name: "request_console_session",
-    description: "Ask for a console session, when this work needs sessions in other projects of \
-                  this console: you can start sessions only in this project. The user is asked \
-                  first, and the call waits for their answer, for several minutes at most. On \
-                  approval Octoboard starts a console session in this console and binds this \
-                  session to it: what you hand over here reaches it as your first report, it \
-                  dispatches the work in the other projects, and from then on you report to it \
-                  with the `report` tool, keeping and driving the sessions you started here. A \
-                  refusal, or no answer in time, comes back as an error and changes nothing. \
-                  Refused once this session is bound to a console session.",
-    schema: || {
-        object_schema(
-            json!({
-                "request": {
-                    "type": "string",
-                    "description": "What you need done that takes sessions in other projects, in \
-                                    natural language: the outcome, and which projects or what \
-                                    kind of work it involves where you know.",
-                },
-                "summary": {
-                    "type": "string",
-                    "description": "What you have done and found out so far that the console \
-                                    session needs to know, in natural language.",
-                },
-                "open_items": {
-                    "type": "array",
-                    "items": { "type": "string" },
-                    "description": "The separate pieces of work you need done elsewhere, when it \
-                                    divides into several. Empty when it does not.",
-                },
-            }),
-            &["request", "summary"],
-        )
-    },
-};
+/// The schema of `request_session`: `start_session`'s, and where the new session is to be.
+fn request_session_schema() -> Value {
+    let mut schema = start_session_schema(false);
+    schema["properties"]["kind"] = json!({
+        "type": "string",
+        "enum": ["project", "console"],
+        "description": "`project` for a session in a project, `console` for a console session.",
+    });
+    schema["properties"]["project"] = json!({
+        "type": "string",
+        "description": "For `project`: the project's id, or its name when that is unambiguous. \
+                        Defaults to this session's own project; a console session has to give \
+                        it.",
+    });
+    schema["properties"]["console"] = json!({
+        "type": "string",
+        "description": "For `console`: the console's id, or its name when that is unambiguous. \
+                        Defaults to this session's own console.",
+    });
+    schema["required"] = json!(["kind", "brief"]);
+    schema
+}
 
 /// The schema of `start_session`. `with_project` is for the console session, which chooses a
 /// project; a project session always starts in its own, so it is not asked.
@@ -733,9 +820,10 @@ fn object_schema(properties: Value, required: &[&str]) -> Value {
 mod tests {
     use super::*;
 
-    /// What a session is offered follows from its role and whether it is bound: only an unbound
-    /// project session may start sessions, only a project session can report, and every project
-    /// session may share information with its project.
+    /// What a session is offered follows from its role and whether it is bound: only a session that
+    /// can own sessions starts, hands over or drives them, only an unbound one binds itself, only a
+    /// project session can report, and every session shares information and asks for a session
+    /// with no owner.
     #[test]
     fn the_tools_offered_follow_from_role_and_binding() {
         let names = |role, bound| -> Vec<&'static str> {
@@ -748,9 +836,10 @@ mod tests {
             names(Role::Project, true),
             [
                 "report",
-                "list_project_sessions",
+                "list_sessions",
                 "share_info",
-                "get_project"
+                "get_project",
+                "request_session"
             ]
         );
         assert_eq!(
@@ -763,9 +852,11 @@ mod tests {
                 "reopen_session",
                 "rename_session",
                 "set_session_pinned",
-                "request_console_session",
+                "transfer_session",
+                "bind_to_session",
+                "request_session",
                 "report",
-                "list_project_sessions",
+                "list_sessions",
                 "share_info",
                 "get_project"
             ]
@@ -788,28 +879,21 @@ mod tests {
                 "archive_session",
                 "list_archived",
                 "reopen_session",
+                "transfer_session",
+                "request_session",
+                "list_sessions",
+                "share_info",
                 "show_page"
             ]
         );
         // Console sessions are never bound, so the flag changes nothing for them.
         assert_eq!(names(Role::Console, false), names(Role::Console, true));
-        assert!(tool_by_name(Role::Console, false, "start_session").is_some());
-        assert!(tool_by_name(Role::Console, false, "report").is_none());
-        assert!(tool_by_name(Role::Project, true, "start_session").is_none());
-        // Asking for a console session is for a session nobody dispatched; a console session
-        // already is one.
-        assert!(tool_by_name(Role::Project, true, "request_console_session").is_none());
-        assert!(tool_by_name(Role::Console, false, "request_console_session").is_none());
-        assert!(tool_by_name(Role::Project, false, "list_projects").is_none());
-        // Settings and other projects are the console session's; a project session reads only its
-        // own project, and a bound one cannot touch another session's title or pin.
-        assert!(tool_by_name(Role::Project, false, "update_project").is_none());
-        assert!(tool_by_name(Role::Project, false, "update_settings").is_none());
-        assert!(tool_by_name(Role::Project, true, "rename_session").is_none());
-        assert!(tool_by_name(Role::Console, false, "get_project").is_none());
-        // Console sessions are outside every project, so they take no part in the exchange.
-        assert!(tool_by_name(Role::Console, false, "share_info").is_none());
-        assert!(tool_by_name(Role::Console, false, "list_project_sessions").is_none());
+        // A bound project session is a subset of what it may have had while it could own sessions,
+        // so a session whose binding changes while it runs never calls a tool its child did not
+        // announce.
+        for tool in names(Role::Project, true) {
+            assert!(names(Role::Project, false).contains(&tool), "{tool}");
+        }
     }
 
     /// An unbound project session starts sessions only in its own project, so it is not asked

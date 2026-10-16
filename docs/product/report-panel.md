@@ -126,7 +126,7 @@ the page it came from, then one `key: value` line per field. A form with no name
 delivered, with `{}` in place of the field lines.
 
 Delivery takes the same path as every other write into a running session (see "Messages held until a
-session can take them" in `docs/product/hub-orchestration.md`): written straight away while the
+session can take them" in `docs/product/message-delivery.md`): written straight away while the
 console session is working or awaiting instructions, and **queued** while the console session is
 waiting for the user — queued rather than refused, because the user is the one submitting and there
 is nobody to ask to answer the console session's prompt first.

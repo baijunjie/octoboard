@@ -61,16 +61,16 @@ are checked again and a confirmation is offered. A check that finds records or c
 offers confirmation (see "Moving the agent's own records to the Trash" below).
 
 Deleting removes the session's record as described in "Deleting archived sessions" above. Its process is stopped,
-and nothing is left in the archive. A trust confirmation or console-session request of the session's that is still
-waiting is dropped with it.
+and nothing is left in the archive. A trust confirmation or session request of the session's that is still waiting is
+dropped with it (see "How a request ends" in `docs/product/session-requests.md`).
 
 - The check is made at the moment of the delete: a session that has become used by then — a prompt submitted at the
   same moment wins — is refused as in "Deleting archived sessions" above, and keeps its record and its process. So is a
   session being launched, resumed or switched to another account at that moment.
 - An unused session can stop existing while a session is being bound to it. Opening a session bound to an owner that
-  was deleted meanwhile is refused, with nothing launched; an approved console-session request whose new console
-  session was deleted before the caller could be bound fails as described in "On approval" in
-  `docs/product/requesting-a-console-session.md`.
+  was deleted meanwhile is refused, with nothing launched; binding or handing a session to an owner that was deleted
+  meanwhile is refused, and changes nothing (see "Changing a session's owner" in
+  `docs/product/hub-orchestration.md`).
 
 ## Moving the agent's own records to the Trash
 

@@ -42,22 +42,24 @@ Octoboard's orchestration tools and dispatches work to sessions in the console's
 `docs/product/hub-orchestration.md`. Because it belongs to no project, archived console sessions
 belong to the console rather than to any project.
 
-A project session opened bound to a console session carries that console session's **binding badge**
+A project session bound to a console session carries that console session's **binding badge**
 wherever it is listed, and the console session's own row shows the same colour (see "The binding
 badge" in `docs/product/sidebar.md`).
 
 An **unbound** project session — one the user opened by hand without choosing a console session under **Report to**
-(see "Opening a session" below) — is given a narrower set of the orchestration tools, scoped to its own project: it can
-start sessions there, which are bound to it and report to it, and drive them (see "The unbound project session's
-tools" in `docs/product/hub-orchestration.md`). A session it starts carries no binding badge and cannot start sessions
-of its own. A session's **owner** is the session it is bound to: a console session, or the project session that started
-it (an unbound session's own owner is the user). A project session opened unbound can later become bound to a console
-session while keeping the sessions it started, which makes it a **lead session**: it asks for a console session, and
-once the user approves, Octoboard starts one and binds it there (see `docs/product/requesting-a-console-session.md`);
-orchestration is at most two levels deep (see "Lead sessions" in `docs/product/hub-orchestration.md`). Every project session, bound or not, can also list the other
-running sessions of its project and share information with them; it takes work only from its owner, and what comes from
-another session is information to weigh (see "Information between sessions of a project" in
-`docs/product/hub-orchestration.md`).
+(see "Opening a session" below), or one started on another session's request that the user approved — is given a
+narrower set of the orchestration tools, scoped to its own project: it can start sessions there, which are bound to it
+and report to it, and drive them (see "The unbound project session's tools" in `docs/product/hub-orchestration.md`). A
+session it starts carries no binding badge and cannot start sessions of its own. A session's **owner** is the session
+it is bound to: a console session or a project session (an unbound session's own owner is the user). An owner can hand
+a session of its own to another owner, and an unbound project session can bind itself to one; bound to a console
+session while keeping the sessions it started, it is a **lead session**. Neither asks the user, and orchestration stays
+at most two levels deep (see "Lead sessions" and "Changing a session's owner" in `docs/product/hub-orchestration.md`).
+Every session, of whatever kind, can also list the other running sessions, in every console and project, and share
+information with any of them; it takes work only from its owner, and what comes from another session is information to
+weigh (see `docs/product/information-between-sessions.md`). Every session can also ask the user
+to start a session that is nobody's, in any project or a console session, which reports to the user (see
+`docs/product/session-requests.md`).
 
 Selecting a session also fills the window's right pane, beside the terminal: with a console session's own **report
 panel** (see `docs/product/report-panel.md`), or with a project session's project's **project pane**, its files (see
@@ -113,10 +115,11 @@ Both dialogs offer these fields in this order:
   will carry (see "The binding badge" in `docs/product/sidebar.md`), or none. A chosen console session receives this
   session's reports, instead of the session staying outside the orchestration. A console with no such console session
   shows no choice at all, and the session is unbound. A session still starting is not offered because its launch may
-  yet fail and remove it; `open_session` refuses one named as the owner (`unknown_session`). A binding, once set, is
-  never changed or undone.
-  A session the console session itself starts is always bound to it, and one an unbound project session
-  starts is bound to that project session; see "Which sessions an owner drives" in
+  yet fail and remove it; `open_session` refuses one named as the owner (`unknown_session`). A binding is never undone;
+  it changes afterwards only when the owner hands the session to another, or when an unbound session binds itself to
+  one. A session the console session itself starts is always bound to it, and one a project session starts is bound
+  to that project session; one started on another session's request is bound to nobody; see "Which sessions an owner
+  drives" in
   `docs/product/hub-orchestration.md`. The choice is offered from the project list and the terminal's **New session** offer outside focus
   mode. Opened from a project's focus mode the dialog has no such field and the session is always unbound; opened from a console session's focus mode it
   has none either, and shows a line saying the session reports to that console session instead, which is the binding
@@ -137,15 +140,16 @@ behind it (see "The launch environment" in `docs/product/launching-agents.md`). 
 launch: it closes as soon as the session is recorded, and the session's terminal says it is starting until the agent
 is up (see "Loading" in `docs/product/session-terminal.md`). A refusal that can be known before anything is recorded —
 an unknown owner, an unavailable agent, a model the agent does not offer, the refusals about a conversation to resume
-below — is still shown in the dialog, which stays open. A session an agent opens with `start_session`, and the console
-session an approved request for one starts (see "On approval" in `docs/product/requesting-a-console-session.md`), are
-listed as *starting* the same way, but the agent's call, or the approval, is answered only once the launch has
-settled, with the launch's own refusal when it fails.
+below — is still shown in the dialog, which stays open. A session an agent opens with `start_session`, and the session
+an approved request for one starts (see "On approval" in `docs/product/session-requests.md`), are listed as *starting*
+the same way, but the agent's call, or the approval, is answered only once the launch has settled, with the launch's
+own refusal when it fails.
 
 The dialog takes no task: once up, a session the user opens by hand is in *awaiting instructions*, sitting at the
 agent's prompt, and is given its work by typing into its terminal. Only a session started with `start_session` — by a
-console session or a project session — is handed an opening prompt, the brief it is started with (see "Handing out a
-task: the brief" in `docs/product/hub-orchestration.md`); once up, it is in *working*.
+console session or a project session — or on another session's request that the user approved is handed an opening
+prompt, the brief it is started with (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md` and
+"On approval" in `docs/product/session-requests.md`); once up, it is in *working*.
 
 A session in a folder its agent has not been told to trust can first stop on that agent's own trust confirmation,
 before it takes up its task or reaches its prompt. A resumed session can stop on it as well; since a session left
@@ -162,8 +166,8 @@ the session and gives the reason, worded from the failure's own code in the UI's
 capture that ran out of time, the title names the session alone and the explanation is laid out beneath it — the
 command that did not finish and its time limit, the likely cause, and what to fix. Should the session's record itself
 fail to be removed, it is left *interrupted* instead, and the notice is shown all the same. For `start_session` and an
-approved console-session request the failure is reported through that call instead (see "On approval" in
-`docs/product/requesting-a-console-session.md` for the latter). A missing config directory does not fail a brand new
+approved session request the failure is reported through that call instead (see "When an approval cannot be carried
+out" in `docs/product/session-requests.md` for the latter). A missing config directory does not fail a brand new
 session for the other two agents: it has no conversation to lose, so Claude Code creates the directory itself and
 Octoboard creates it for Codex.
 
@@ -211,7 +215,8 @@ neither pins anything. The session's account is identified by its agent icon's t
 name, without an account suffix in visible session metadata (see "Session rows" in `docs/product/sidebar.md`).
 
 A session that makes no choice of its own — one a console session or a project session starts with its own
-`start_session` tool — takes the project's setting. The dialog that opens a session by hand always makes a choice,
+`start_session` tool, or one started on another session's request, without an `account` — takes the project's
+setting. The dialog that opens a session by hand always makes a choice,
 opening on the account the rest of the chain resolves to (the project's setting for the agent, else the console's, else
 the agent's default account) and sending that as the session's own choice, so a session opened there runs under that
 account unless the user picks another in the account picker.
@@ -285,9 +290,9 @@ tools are there; whether the role description takes effect in it is in "What is 
 
 | Status | Wire value | Glyph | Meaning |
 |---|---|---|---|
-| Starting | `starting` | a muted arc turning | A newly opened session — from the dialog, by an agent's `start_session`, or by an approved request for a console session — whose agent is still being launched; it has no process yet. It becomes *awaiting instructions*, or *working* for a session started with a brief, once the process is up, and is removed again if the launch fails (see "Opening a session"). |
+| Starting | `starting` | a muted arc turning | A newly opened session — from the dialog, by an agent's `start_session`, or by an approved session request — whose agent is still being launched; it has no process yet. It becomes *awaiting instructions*, or *working* for a session started with a brief, once the process is up, and is removed again if the launch fails (see "Opening a session"). |
 | Working | `working` | an accent-coloured dot pulsing a fading copy of itself outward | The agent is executing a turn. |
-| Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a request for a console session (see "The call" in `docs/product/requesting-a-console-session.md`). |
+| Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a session request (see "Waiting for the answer" in `docs/product/session-requests.md`). |
 | Awaiting instructions | `idle` | a green speech bubble | The process is running and sitting at its prompt. |
 | Interrupted | `interrupted` | a pause sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
 | Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming"). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" below) and can be reopened. |
@@ -315,10 +320,11 @@ instructions still differ by shape as well as by colour. The starting arc stands
 Transitions:
 
 - Opening a session puts it in *starting*; once its process is up it moves to *working* when it is handed an opening
-  prompt (a session started with `start_session`), and to *awaiting instructions* otherwise, unless the agent's own
-  first report has already moved it on (see "Opening a session"). A launch that fails removes the session.
+  prompt (a session started with `start_session`, or on another session's request that the user approved), and to
+  *awaiting instructions* otherwise, unless the agent's own first report has already moved it on (see "Opening a
+  session"). A launch that fails removes the session.
 - While the process runs, reports from the agent move the session between *working*, *waiting for the user* and
-  *awaiting instructions* — except while a request for a console session holds it at *waiting for the user* (see
+  *awaiting instructions* — except while a session request holds it at *waiting for the user* (see
   "What the statuses are derived from" below).
 - The process ending for any reason other than archiving — the agent exiting on its own, a crash, the application
   quitting — leaves the session *interrupted*.
@@ -344,9 +350,10 @@ output. Three things besides those events bear on a running session's status, an
 - While a **Codex** session has a turn open, Octoboard also reads that session's own rollout file — the record Codex
   keeps of the session, again not its rendered output — because a turn that ends in an error is reported by no hook
   event at all; see "A Codex turn that ends in an error" below.
-- A `request_console_session` call waiting for the user's answer holds its session at *waiting for the user* for the
-  whole wait, whatever the agent's own events say meanwhile; when the request ends the session goes back to where its
-  agent was last seen to be (see "The call" in `docs/product/requesting-a-console-session.md`).
+- A session request — a `request_session` call — waiting for the user's answer holds
+  its session at *waiting for the user* for the whole wait, whatever the agent's own events say meanwhile; when the
+  request ends the session goes back to where its agent was last seen to be (see "Waiting for the answer" in
+  `docs/product/session-requests.md`).
 
 A session's end is not taken from a hook either: the process is observed directly.
 
@@ -411,7 +418,7 @@ the user* on the agent's next event — or, where the answer was a decline and n
 up in the agent's own record of the conversation, which only Claude Code sessions are read for (see "Declining a
 Claude Code prompt or question" below). Nobody can answer for them: a session driving others — a console session, or a
 project session that started sessions — is told to leave such a session alone, and a message addressed to it is held
-until the user is done — see "Messages held until a session can take them" in `docs/product/hub-orchestration.md`.
+until the user is done — see "Messages held until a session can take them" in `docs/product/message-delivery.md`.
 
 **A granted permission prompt lowers the hand only once the call it let through has finished.** The user answering *yes*
 is itself reported by no event, so the next event the session produces is normally the end of that tool call — the hand
@@ -422,8 +429,8 @@ earlier signal to read: the delay is in what the agents report, not in how often
 0.160.0 and on Claude Code 2.1.274; Grok Build was not measured. A prompt the user *declines* is not delayed this way:
 the decline ends the turn, and the hand comes down right after the answer.
 
-A hand Octoboard raised for a waiting request for a console session is answered in that request's dialog instead, so a
-message addressed to such a session is not held (see "The call" in `docs/product/requesting-a-console-session.md`).
+A hand Octoboard raised for a waiting session request is answered in that request's dialog instead, so a message
+addressed to such a session is not held (see "Waiting for the answer" in `docs/product/session-requests.md`).
 
 Where the user's own Codex configuration **resolves approval requests by itself**, Octoboard raises
 no hand at all: the permission event still fires, but Codex resolves the request, no dialog ever
@@ -443,7 +450,7 @@ are covered: a permission prompt and its own ask-the-user question.
 What follows from that move is nothing special to this path: the raised hand comes down wherever the
 sidebar showed it, the Dock badge count drops, and a message queued
 for the session while its hand was up is released (see "Messages held until a session can take them"
-in `docs/product/hub-orchestration.md`). A later prompt or question in the same session raises the
+in `docs/product/message-delivery.md`). A later prompt or question in the same session raises the
 hand and notifies afresh, as any other does.
 
 - The agent prints that the turn was interrupted, but its process is still running, so the session is
@@ -461,8 +468,8 @@ hand and notifies afresh, as any other does.
 - If the record cannot be read — the pending-decision event named no transcript file, or the file is
   unreadable — nothing lowers the hand, and the session keeps it up until something else moves its
   status.
-- A decline is noticed the same way while a request for a console session holds that session's hand
-  up (see "The call" in `docs/product/requesting-a-console-session.md`). The hand stays up until the
+- A decline is noticed the same way while a session request holds that session's hand up (see
+  "Waiting for the answer" in `docs/product/session-requests.md`). The hand stays up until the
   request ends, since it is the request's own; the session is then *awaiting instructions*, where the
   decline left its agent.
 

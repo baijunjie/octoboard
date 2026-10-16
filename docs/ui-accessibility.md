@@ -39,11 +39,11 @@ settle a choice a checkbox holds.
 
 A confirmation dialog opens with focus on its confirm button, so Enter confirms it at once. Two kinds do not, and keep
 focus on the dialog itself, so an Enter pressed before the user has moved focus onto one of its controls does nothing: a
-destructive one, and a question the user did not ask for (a folder trust prompt, a request for a console session), which
-can come up while they are typing elsewhere. The latter starts on the dialog again for each queued question it moves on
-to. One that asks for a word to be typed opens with focus in that field. A dialog's form ignores the repeats of a held
-Enter or Space, except Space in a text field and Enter in a multi-line one, so the press that opened it cannot go on to
-submit it.
+destructive one, and a question the user did not ask for (a folder trust prompt, a session request), which can come up
+while they are typing elsewhere. The latter starts on the dialog again for each queued question it moves on to. One that
+asks for a word to be typed opens with focus in that field. A dialog's form ignores the repeats of a held Enter or
+Space, except Space in a text field and Enter in a multi-line one, so the press that opened it cannot go on to submit
+it.
 
 ### Reaching a control with Tab
 

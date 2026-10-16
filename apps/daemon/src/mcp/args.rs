@@ -123,9 +123,28 @@ pub(super) fn console_projects(state: &Arc<AppState>, console_id: &str) -> Resul
         .collect())
 }
 
-/// Finds a project by id, or by name when that names exactly one. The console session works from
-/// what `list_projects` told it, which is both, and a name it half-remembers must not resolve to
-/// whichever project happens to sort first.
+/// The one of `named`, which are the records whose name is `wanted`, or `None` for none; more than
+/// one is refused, because a name half-remembered must not resolve to whichever record happens to
+/// sort first. `kind` and `scope` word the refusal: "projects" and " in this console".
+fn unique<'a, T>(
+    named: impl Iterator<Item = &'a T>,
+    wanted: &str,
+    kind: &str,
+    scope: &str,
+) -> Result<Option<&'a T>> {
+    let named: Vec<&T> = named.collect();
+    match named.as_slice() {
+        [] => Ok(None),
+        [one] => Ok(Some(*one)),
+        _ => bail!(
+            "`{wanted}` names {} {kind}s{scope}; use the {kind}'s id instead",
+            named.len()
+        ),
+    }
+}
+
+/// Finds a project of the console by id, or by name when that names exactly one. The console
+/// session works from what `list_projects` told it, which is both.
 pub(super) fn resolve_project(
     state: &Arc<AppState>,
     console_id: &str,
@@ -135,17 +154,46 @@ pub(super) fn resolve_project(
     if let Some(project) = projects.iter().find(|project| project.id == wanted) {
         return Ok(project.clone());
     }
-    let matches: Vec<&Project> = projects
-        .iter()
-        .filter(|project| project.name == wanted)
-        .collect();
-    match matches.as_slice() {
-        [project] => Ok((*project).clone()),
-        [] => bail!("this console has no project `{wanted}`"),
-        _ => bail!(
-            "`{wanted}` names {} projects in this console; use the project's id instead",
-            matches.len()
-        ),
+    let named = projects.iter().filter(|project| project.name == wanted);
+    match unique(named, wanted, "project", " in this console")? {
+        Some(project) => Ok(project.clone()),
+        None => bail!("this console has no project `{wanted}`"),
+    }
+}
+
+/// A project by id in any console, or by a name that is unambiguous in the caller's own console,
+/// else in all of them.
+pub(super) fn find_project(
+    state: &Arc<AppState>,
+    caller: &Session,
+    wanted: &str,
+) -> Result<Project> {
+    let projects = state.store.list_projects()?;
+    if let Some(project) = projects.iter().find(|project| project.id == wanted) {
+        return Ok(project.clone());
+    }
+    let named = || projects.iter().filter(|project| project.name == wanted);
+    let own = named().filter(|project| project.console_id == caller.console_id);
+    let found = match unique(own, wanted, "project", "")? {
+        Some(project) => Some(project),
+        None => unique(named(), wanted, "project", "")?,
+    };
+    match found {
+        Some(project) => Ok(project.clone()),
+        None => bail!("there is no project `{wanted}`"),
+    }
+}
+
+/// A console by id, or by a name that is unambiguous.
+pub(super) fn find_console(state: &Arc<AppState>, wanted: &str) -> Result<Console> {
+    let consoles = state.store.list_consoles()?;
+    if let Some(console) = consoles.iter().find(|console| console.id == wanted) {
+        return Ok(console.clone());
+    }
+    let named = consoles.iter().filter(|console| console.name == wanted);
+    match unique(named, wanted, "console", "")? {
+        Some(console) => Ok(console.clone()),
+        None => bail!("there is no console `{wanted}`"),
     }
 }
 

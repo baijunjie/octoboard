@@ -1,41 +1,36 @@
 import React, { useEffect, useState } from "react";
 
-import type { Session } from "../protocol";
 import { useDaemonStore } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { useConsoleRequestDialogProps } from "./ConsoleRequestDialog";
+import { useSessionRequestDialogProps } from "./SessionRequestDialog";
 import { useTrustPromptDialogProps } from "./TrustPromptDialog";
 
 /**
  * The one dialog for what the daemon is waiting on the user for: the trust prompts, oldest first,
- * then the requests for a console session, oldest first. One `ConfirmDialog` serves them all and
- * stays mounted from one to the next, its `resetKey` naming the current one, because remounting the
- * modal would leave its focus scope restoring focus to an element no longer in the page. Every
- * one of them comes up unasked, so none of them takes an Enter before the user moves focus.
+ * then the session requests, oldest first. One `ConfirmDialog` serves them all and stays mounted
+ * from one to the next, its `resetKey` naming the current one, because remounting the modal would
+ * leave its focus scope restoring focus to an element no longer in the page. Every one of them
+ * comes up unasked, so none of them takes an Enter before the user moves focus.
  *
- * A request for a console session already on screen stays there when a trust prompt arrives,
- * rather than being swapped for it under the user's pointer; the trust prompt follows it.
+ * A request already on screen stays there while it is waiting, rather than being swapped under the
+ * user's pointer for a trust prompt or for a request that sorts before it; the next one follows.
  */
-export function PendingQuestionDialog({
-  onConsoleSessionStarted,
-}: {
-  onConsoleSessionStarted: (consoleSession: Session, requestingProject: string | null) => void;
-}): React.ReactElement | null {
+export function PendingQuestionDialog(): React.ReactElement | null {
   const trustPrompt = useDaemonStore((s) => s.trustPrompts[0]);
-  const consoleRequest = useDaemonStore((s) => s.consoleRequests[0]);
+  const requests = useDaemonStore((s) => s.sessionRequests);
   const sessionTitle = useDaemonStore((s) => (trustPrompt ? s.sessions.get(trustPrompt.session)?.title : undefined));
   const [onScreen, setOnScreen] = useState<string>();
-  const requestFirst =
-    consoleRequest !== undefined && (trustPrompt === undefined || onScreen === consoleRequest.requestId);
+  const request = requests.find((r) => r.requestId === onScreen) ?? requests[0];
+  const requestFirst = request !== undefined && (trustPrompt === undefined || onScreen === request.requestId);
   const trust = useTrustPromptDialogProps(requestFirst ? undefined : trustPrompt, sessionTitle);
-  const request = useConsoleRequestDialogProps(requestFirst ? consoleRequest : undefined, onConsoleSessionStarted);
-  const shownRequest = requestFirst ? consoleRequest?.requestId : undefined;
+  const requestDialog = useSessionRequestDialogProps(requestFirst ? request : undefined);
+  const shownRequest = requestFirst ? request.requestId : undefined;
   useEffect(() => setOnScreen(shownRequest), [shownRequest]);
-  const props = trust ?? request;
+  const props = trust ?? requestDialog;
   return props ? <ConfirmDialog {...props} unprompted /> : null;
 }
 
 /** Whether `PendingQuestionDialog` shows anything, for whatever keeps out of a modal's way. */
 export function usePendingQuestion(): boolean {
-  return useDaemonStore((s) => s.trustPrompts.length > 0 || s.consoleRequests.length > 0);
+  return useDaemonStore((s) => s.trustPrompts.length > 0 || s.sessionRequests.length > 0);
 }

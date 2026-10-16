@@ -1,10 +1,9 @@
-// Shared by the tests of the two questions `PendingQuestionDialog` serves — the trust prompts and
-// the requests for a console session — which answer the same dialog and so change together.
+// Shared by the tests of the questions `PendingQuestionDialog` serves — the trust prompts and the
+// session requests — which answer the same dialog and so change together.
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { onTestFinished, vi } from "vitest";
 
-import type { Session } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import { PendingQuestionDialog } from "./PendingQuestionDialog";
 
@@ -14,8 +13,6 @@ export interface MountedDialog {
   sent: () => unknown[];
   /** The arguments of each `toastError` call. */
   toasts: () => unknown[][];
-  /** The console sessions the dialog handed on as started. */
-  started: () => unknown[];
   /** Whether a dialog is on screen. */
   onScreen: () => boolean;
 }
@@ -26,7 +23,6 @@ export interface MountedDialog {
  * the caller's own steps, so a failure in the middle of them still leaves nothing mounted.
  */
 export function mountPendingQuestionDialog(state: Partial<State>, reply: () => Promise<unknown>): MountedDialog {
-  const started: unknown[] = [];
   const daemon: Daemon = {
     store: createStateStore(state),
     request: vi.fn(reply) as never,
@@ -51,7 +47,7 @@ export function mountPendingQuestionDialog(state: Partial<State>, reply: () => P
   act(() =>
     root.render(
       <DaemonProvider value={daemon}>
-        <PendingQuestionDialog onConsoleSessionStarted={(session: Session) => started.push(session)} />
+        <PendingQuestionDialog />
       </DaemonProvider>,
     ),
   );
@@ -59,7 +55,6 @@ export function mountPendingQuestionDialog(state: Partial<State>, reply: () => P
     store: daemon.store,
     sent: () => vi.mocked(daemon.request).mock.calls.map(([body]) => body),
     toasts: () => vi.mocked(daemon.toastError).mock.calls,
-    started: () => started,
     onScreen: () => document.body.querySelector("[role=alertdialog]") !== null,
   };
 }

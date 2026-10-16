@@ -147,7 +147,7 @@ comes first — the confirmation is among the first things each agent prints, so
 session are never taken for it.
 
 What Octoboard writes into a session while its confirmation may be up is held; see "Messages held until a session can
-take them" in `docs/product/hub-orchestration.md`.
+take them" in `docs/product/message-delivery.md`.
 
 ## Carrying Grok Build's trust record
 

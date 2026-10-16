@@ -62,6 +62,16 @@ pub enum Role {
     Project,
 }
 
+impl Role {
+    /// The kind of session this role makes, as the tools and the messages to a session name it.
+    pub fn kind(self) -> &'static str {
+        match self {
+            Role::Console => "console",
+            Role::Project => "project",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Origin {
@@ -124,7 +134,7 @@ impl ConsoleSessionColour {
 pub enum SessionStatus {
     /// Recorded and shown, its agent process still being launched; the status of a session
     /// opened by `open_session` until the process is up (one opened for an agent's own
-    /// `start_session` or for an approved console session request is recorded the same way, though
+    /// `start_session` or for an approved session request is recorded the same way, though
     /// its caller is answered only once the launch has settled). No agent has reported anything
     /// yet.
     Starting,
@@ -510,22 +520,24 @@ pub struct Session {
     /// conversation rather than failing.
     pub has_conversation: bool,
     /// The session this session is bound to — its owner, which it reports to — or `None` for one
-    /// outside the orchestration. The owner is a console session, or a project session of the
-    /// same project that started this one and is unbound or a lead session (see [`Self::lead`]),
-    /// so orchestration is at most two levels deep. Set when the session is created, or later
-    /// exactly once for a lead session, and never changed or cleared afterwards; a console session
-    /// is never bound, so this is always `None` for one of those. Reports are routed by this field
+    /// with no owner, which the user owns. The owner is a console session of the same console, or
+    /// a project session of the same project that can own sessions (see [`Self::has_bound_role`]),
+    /// so orchestration is at most two levels deep. Set when the session is created, and changed
+    /// afterwards only by the session binding itself to an owner
+    /// (`crate::coordinator::bind_session`) or by its owner handing it to another
+    /// (`crate::coordinator::transfer_session`); never cleared. A console session is never bound,
+    /// so this is always `None` for one of those. Reports are routed by this field
     /// (`crate::reporting::deliver_report`): a binding names who to report to directly, rather
     /// than asking whether the console happens to have one console session to find by lookup.
     pub bound_to: Option<String>,
-    /// Whether this is a lead session: a project session that was opened unbound and bound to a
-    /// console session afterwards (`crate::coordinator::bind_to_console_session`). It keeps the
-    /// role description and tools of an unbound project session on every launch, since the ones
-    /// it was first launched with are what its conversation holds, and it may own sessions of its
-    /// own project while it reports to its console session. Stored rather than worked out from
-    /// whether it owns sessions, because a lead session that has started none yet, or whose
-    /// sessions have all been deleted, is still one. Daemon-only: not part of the record clients
-    /// are sent.
+    /// Whether this is a lead session: a project session bound to a console session that can still
+    /// own sessions of its own project, having been unbound when it was opened and bound only
+    /// afterwards. It keeps the tools of an unbound project session, and reports to its console
+    /// session. Stored rather than worked out from whether it owns sessions, because a lead
+    /// session that has started none yet, or whose sessions have all been deleted, is still one.
+    /// Set by binding to a console session, kept by a transfer to another console session, and
+    /// cleared by a transfer to a project session, which leaves it unable to own any. Daemon-only:
+    /// not part of the record clients are sent.
     #[serde(skip)]
     pub lead: bool,
     /// A console session's badge colour, assigned on creation and changed afterwards only by
@@ -571,7 +583,9 @@ pub struct Session {
 
 impl Session {
     /// Whether this session has the role of a session bound to an owner: it reports, and can own
-    /// no session of its own. A lead session is bound and does not have it.
+    /// no session of its own, so it is offered the bound project session's tools. A lead session
+    /// is bound and does not have it. It follows the binding as it stands, so it can change while
+    /// the session runs: binding to a project session, or being handed to one, gives it.
     pub fn has_bound_role(&self) -> bool {
         self.bound_to.is_some() && !self.lead
     }
@@ -1435,13 +1449,12 @@ pub enum RequestBody {
     RemoveTrustedDirectory {
         path: String,
     },
-    /// The user's answer to a `console_session_request`. `approve` starts a console session in the
-    /// requesting session's console and binds the requesting session to it; anything else,
-    /// dismissing the dialog included, refuses it and changes nothing. The first answer wins: one
-    /// for a request already answered, timed out or withdrawn changes nothing and is refused.
-    /// An approval is answered with `session_opened` for the console session it started, a refusal
-    /// with an ack.
-    AnswerConsoleSessionRequest {
+    /// The user's answer to a `session_request`. `approve` starts the session the request
+    /// describes, unbound; anything else, dismissing the dialog included, refuses it and changes
+    /// nothing. The first answer wins: one for a request already answered, timed out or withdrawn
+    /// changes nothing and is refused. An approval is answered with `session_opened` for the
+    /// session it started, a refusal with an ack.
+    AnswerSessionRequest {
         request_id: String,
         approve: bool,
     },
@@ -1623,35 +1636,37 @@ pub enum Event {
         path: String,
         trust_dir: Option<String>,
     },
-    /// An unbound project session asked for a console session with `request_console_session`, and
-    /// its call is waiting for the user's answer. Broadcast once, when the call is made, and sent
-    /// again to a client after each `snapshot`, oldest first, for every request still waiting.
-    /// `request`, `summary` and `open_items` are the call's own arguments, model-written text.
-    ConsoleSessionRequest {
+    /// A session asked with `request_session` for a session that has no owner, and its call is
+    /// waiting for the user's answer. Broadcast once, when the call is made, and sent again to a
+    /// client after each `snapshot`, oldest first, for every request still waiting.
+    SessionRequest {
         request_id: String,
         /// The requesting session.
         session: String,
+        /// Whether the session asked for would be a console session or a project session.
+        role: Role,
+        /// The console the new session would be in.
         console: String,
+        /// The project the new session would be in; null for a console session.
         project: Option<String>,
-        request: String,
-        summary: String,
-        open_items: Vec<String>,
+        /// The agent the new session would run.
+        agent: Agent,
         /// Milliseconds since the epoch, which is what orders several requests oldest first.
         requested_at: i64,
     },
-    /// A `console_session_request` is no longer waiting: every client closes its dialog.
-    ConsoleSessionRequestClosed {
+    /// A `session_request` is no longer waiting: every client closes its dialog.
+    SessionRequestClosed {
         request_id: String,
-        reason: ConsoleRequestEnding,
+        reason: SessionRequestEnding,
     },
     ConsoleSessionTitle {
         id: Option<String>,
         console: String,
         title: String,
     },
-    /// The reply to `open_session`, and to an approving `answer_console_session_request`: the
-    /// session that was opened. For `open_session` it is `starting`, the launch still going on; for
-    /// an approving answer the launch has settled and it is running. The same record is broadcast as
+    /// The reply to `open_session`, and to an approving `answer_session_request`: the session that
+    /// was opened. For `open_session` it is `starting`, the launch still going on; for an approving
+    /// answer the launch has settled and it is running. The same record is broadcast as
     /// `session_upserted` as well, but a broadcast carries no request id, so this is the only way
     /// the client that asked can tell which of the sessions appearing in the tree is the one it
     /// just opened — and therefore the only way it can select it.
@@ -1931,10 +1946,10 @@ impl Notice {
     }
 }
 
-/// Why a `console_session_request` stopped waiting.
+/// Why a `session_request` stopped waiting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ConsoleRequestEnding {
+pub enum SessionRequestEnding {
     Approved,
     /// Refused by the user, dismissing the dialog included.
     Refused,
@@ -2248,12 +2263,12 @@ pub mod error_code {
     /// compared ignoring letter case — the default account's name takes part. `params` names
     /// `agent` and the `name` of the account it collides with.
     pub const ACCOUNT_NAME_TAKEN: &str = "account_name_taken";
-    /// An approval of a `console_session_request` whose session is no longer waiting for it — the
-    /// request was withdrawn or timed out — so nothing was started. `params` names the `session`.
-    pub const CONSOLE_REQUEST_NOT_WAITING: &str = "console_request_not_waiting";
-    /// An answer to a `console_session_request` that has already been answered, from this client
-    /// or another, or that the daemon does not know. Nothing changed, and nothing is wrong.
-    pub const CONSOLE_REQUEST_ANSWERED: &str = "console_request_answered";
+    /// An approval of a `session_request` whose session is no longer waiting for it — the request
+    /// was withdrawn or timed out — so nothing was started. `params` names the `session`.
+    pub const SESSION_REQUEST_NOT_WAITING: &str = "session_request_not_waiting";
+    /// An answer to a `session_request` that has already been answered, from this client or
+    /// another, or that the daemon does not know. Nothing changed, and nothing is wrong.
+    pub const SESSION_REQUEST_ANSWERED: &str = "session_request_answered";
 
     // -- browse requests ---------------------------------------------------------------------
 

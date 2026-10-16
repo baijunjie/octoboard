@@ -296,11 +296,11 @@ fn append_mcp_server(config: &Path, spec: &LaunchSpec<'_>) -> Result<()> {
         content.push('\n');
     }
     // Grok abandons a tool call at a limit of its own, and tells the server with a
-    // `notifications/cancelled` — which withdraws a waiting request for a console session, ending
+    // `notifications/cancelled` — which withdraws a waiting session request, ending
     // the wait before the user can answer and leaving a later approval nothing to act on. That
     // makes giving up destructive here, unlike Codex, which loses only the call's result, and
     // Grok's own default is documented far above a call Octoboard holds for the user
-    // (`console_request::ANSWER_TIME_LIMIT`), but its exact value was never measured, so where it
+    // (`session_request::ANSWER_TIME_LIMIT`), but its exact value was never measured, so where it
     // truly falls is unknown (the "Grok Build" section of `docs/agent-cli-reference.md` has what is
     // and is not established). The limit is therefore pinned to a known value rather than left to
     // that default. Hence `super::MCP_TOOL_TIMEOUT_SECS`, where the reasoning for the value is.

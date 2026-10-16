@@ -177,20 +177,28 @@ confirmations, settings and sessions would each need an owner and an authorizati
 - **Information between sessions is a channel of its own, because "not an instruction" cannot be enforced.** A message
   is text written into the receiving terminal, so any session that can write to another could steer it. Commanding is
   therefore the only hard-enforced boundary (`send_message`, `archive_session` and `reopen_session` act on the caller's
-  own sessions). Sharing information is a separate tool, offered to every project session and confined to one project;
-  it is delivered under a header naming the sender and saying the text is information to weigh, role descriptions tell
-  each session whose work it takes, and the receiver's owner is copied so it is never blind to what reaches its
-  sessions. Octoboard makes the distinction plain; whether a model keeps to it is the model's call.
-- **A project session whose work needs other projects asks for a console session rather than being given more reach.**
-  Two alternatives were set aside. Letting it drive sessions in other projects directly breaks the assumption that an
-  owner and its bound sessions share a project — removing a project would leave dangling bindings, and a project's bulk
-  archive delete would reach sessions elsewhere — and hands a session the user opened by hand the console's whole reach
-  without asking. Promoting the session itself into a console session cannot work either, because a session's role
-  description cannot change on resume: Claude Code replays its appended system prompt verbatim and Grok Build stores its
-  `--rules` in the session record, so the session would get a console session's tools while still being told it is a
-  project session. What it does instead is bounded: it may become bound exactly once, by its own call, and because the
-  caller's own tool call is what caused it, the outcome can be told to it in the call's result and its fixed role
-  description is left alone. The behaviour is in `docs/product/requesting-a-console-session.md`.
+  own sessions). Sharing information is a separate tool, offered to every session and reaching any running session in
+  any console or project (see `docs/product/information-between-sessions.md`); it is delivered under a header naming
+  the sender and saying the text is information to weigh, role descriptions tell each session whose work it takes, and
+  the receiver's owner is copied so it is never blind to what reaches its sessions. Octoboard makes the distinction
+  plain; whether a model keeps to it is the model's call.
+- **A session whose work needs somewhere it does not reach asks the user for a session rather than being given more
+  reach.** Two alternatives were set aside. Letting a project session drive sessions in other projects directly breaks
+  the assumption that an owner and its bound sessions share a project — removing a project would leave dangling
+  bindings, and a project's bulk archive delete would reach sessions elsewhere — and hands a session the user opened by
+  hand the console's whole reach without asking. Promoting the session itself into a console session cannot work
+  either, because a session's role description cannot change on resume: Claude Code replays its appended system prompt
+  verbatim and Grok Build stores its `--rules` in the session record, so the session would get a console session's
+  tools while still being told it is a project session. What it does instead is bounded. `request_session`, offered to
+  every session, asks the user to start a session with no owner — in any project, or a console session — and only the
+  user's approval starts it. `start_session` starts a session the caller owns, with no approval, where the caller
+  already has reach. A binding changes after launch only by a call of the session concerned: an owner hands a session
+  of its own to another owner with `transfer_session`, and an unbound project session binds itself to a console
+  session or a project session of its own project with `bind_to_session` (how a session that asked for a console
+  session comes to be driven by it). Because the caller's own tool call is what causes the change, the outcome can be
+  told to it in the call's result or a message and its fixed role description is left alone. The behaviour of a request
+  is in `docs/product/session-requests.md`, and the rules a binding keeps in "Changing a session's owner" in
+  `docs/product/hub-orchestration.md`.
 - **A project session goes to the user directly for permissions and questions, not through the console session.**
   Relaying through the console session only creates confusion when several projects ask at once. "Needs a console
   session decision" (the agent calls `report(status: needs_decision)`) and "needs a user decision" (a permission
@@ -273,13 +281,14 @@ Entities: console, host, project, session, account, report, report-panel page, a
   pre-allocate an id.
 - `Session.bound_to` is the id of the session a session reports to — a console session, or an unbound project session
   or lead session of the same project — or unset. It is always set to the starting session for a session started
-  through `start_session`, and once set it is never changed or undone. An unbound project session may be bound to a
-  console session once, after launch, which makes it a lead session: it keeps the sessions bound to it, so
-  orchestration is at most two levels deep. `Session.lead` (stored, never sent to clients) marks such a session,
-  because nothing else in the record tells a session bound later from one opened bound, and only the former keeps
-  the unbound project session's role description and tools on every launch. A console session itself is never
-  bound, and a session bound to a lead session owns no other. Reports are routed by this field rather than by a
-  lookup for "the" console session of a console, because a console may hold several at once.
+  through `start_session`. Once set it is never cleared, but it can change: `transfer_session` hands a session to
+  another owner, and `bind_to_session` binds an unbound project session to an owner. An unbound project session bound
+  to a console session becomes a lead session: it keeps the sessions bound to it, so orchestration is at most two
+  levels deep. `Session.lead` (stored, never sent to clients) marks such a session, because nothing else in the record
+  tells a session bound later from one opened bound, and only the former keeps the unbound project session's role
+  description and tools on every launch. A console session itself is never bound, and a session bound to a lead session
+  owns no other. Reports are routed by this field rather than by a lookup for "the" console session of a console,
+  because a console may hold several at once.
 - `Session.colour` and `Session.ordinal` are set only for a console session: a badge colour from a fixed palette,
   assigned on creation and never reused while still in use among the console's other console sessions, and a
   per-console ordinal that is one past the highest ever handed out there — kept on the console record itself

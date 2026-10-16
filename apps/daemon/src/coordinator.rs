@@ -624,12 +624,12 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::AnswerConsoleSessionRequest {
+        // An approval is answered with the session it started, a refusal with an ack.
+        RequestBody::AnswerSessionRequest {
             request_id: asked,
             approve,
         } => {
-            // An approval is answered with the console session it started, a refusal with an ack.
-            let started = crate::console_request::answer(state, &asked, approve).await?;
+            let started = crate::session_request::answer(state, &asked, approve).await?;
             Ok(started.map(|session| Event::SessionOpened {
                 id: request_id,
                 session: state.wire_session(session),
@@ -1451,13 +1451,13 @@ fn agent_is_available(state: &Arc<AppState>, agent: Agent) -> bool {
 /// What a new session should be bound to: always `None` for a console session, which is never
 /// bound; for a project session, whatever `requested` names, which must be a console session of
 /// `console_id`, or a project session of the new session's own project that is unbound or a lead
-/// session, or the request is refused with `unknown_session` — a binding is fixed for the
-/// session's lifetime once set, so naming one that does not exist, or belongs to another console,
-/// must not be let through to be discovered later. A project session with the role of a bound one
-/// is refused as an owner for the same reason, and this is where the depth limit is enforced, not
-/// only by which tools are offered: a session bound to a lead session would otherwise make a
-/// third level. A session still starting is refused too: its launch may fail, and a failed launch
-/// deletes the session whatever is bound to it.
+/// session, or the request is refused with `unknown_session` — a binding changes afterwards only
+/// at the session's or its owner's own request, so naming one that does not exist, or belongs to
+/// another console, must not be let through to be discovered later. A project session with the
+/// role of a bound one is refused as an owner for the same reason, and this is where the depth
+/// limit is enforced, not only by which tools are offered: a session bound to a lead session would
+/// otherwise make a third level. A session still starting is refused too: its launch may fail, and
+/// a failed launch deletes the session whatever is bound to it.
 fn resolve_bound_to(
     state: &Arc<AppState>,
     console_id: &str,
@@ -1493,6 +1493,7 @@ fn resolve_bound_to(
 /// One session to open. A struct rather than a parameter list because the two callers differ in
 /// more than one field — the user opening a session by hand, and the console session dispatching
 /// one — and the fields that differ are all optional strings that would otherwise be positional.
+#[derive(Clone)]
 pub struct OpenRequest {
     pub console_id: String,
     pub project_id: Option<String>,
@@ -1661,7 +1662,7 @@ struct StartingSession {
 
 /// Opens a session and returns it once it has launched: running, or with the launch's refusal
 /// as the error and nothing left behind. For a caller that has nothing to show before the agent
-/// is up — an agent's `start_session` tool, or the approval of a console session request — which
+/// is up — an agent's `start_session` tool, or the approval of a session request — which
 /// would otherwise be told of a session that may yet vanish. The user's own request is
 /// [`open_session_detached`].
 pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result<Session> {
@@ -1779,28 +1780,30 @@ impl OpenError {
     }
 }
 
-/// Everything of opening a session that precedes launching its agent: the refusals, the record
-/// (`starting`) and its publication.
-async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<StartingSession> {
-    let OpenRequest {
-        console_id,
-        project_id,
-        agent,
-        account,
-        model,
-        effort,
-        task,
-        title,
-        origin,
-        bound_to,
-        resume_agent_session_id,
-    } = request;
+/// What opening a session settles from its request before anything is awaited, launched or
+/// recorded, and refuses for what cannot be opened.
+struct ResolvedOpen {
+    role: Role,
+    cwd: PathBuf,
+    project: Option<Project>,
+    console: Console,
+    default_title: String,
+    resume_agent_session_id: Option<String>,
+    bound_to: Option<String>,
+    agent: Agent,
+    account_id: Option<String>,
+    config_dir: Option<String>,
+}
+
+/// Resolves what [`open_session`] opens from `request`, refusing an unknown console, project or
+/// owner, an agent that is not available, and an account of another agent.
+fn resolve_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<ResolvedOpen> {
     let console = state
         .store
-        .get_console(&console_id)?
-        .ok_or_else(|| CodedError::unknown_console(&console_id))?;
+        .get_console(&request.console_id)?
+        .ok_or_else(|| CodedError::unknown_console(&request.console_id))?;
 
-    let (role, cwd, project, default_title) = match &project_id {
+    let (role, cwd, project, default_title) = match &request.project_id {
         Some(project_id) => {
             let project = state
                 .store
@@ -1821,17 +1824,67 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
     let resume_agent_session_id = checked_resume_id(
         state,
         role,
-        project_id.as_deref(),
-        bound_to.as_deref(),
-        resume_agent_session_id,
+        request.project_id.as_deref(),
+        request.bound_to.as_deref(),
+        request.resume_agent_session_id.clone(),
     )?;
-    let bound_to = resolve_bound_to(state, &console_id, project_id.as_deref(), role, bound_to)?;
+    let bound_to = resolve_bound_to(
+        state,
+        &request.console_id,
+        request.project_id.as_deref(),
+        role,
+        request.bound_to.clone(),
+    )?;
 
-    let agent = session_agent(agent, project.as_ref(), &console);
+    let agent = session_agent(request.agent, project.as_ref(), &console);
     refuse_if_agent_unavailable(state, agent)?;
 
-    let (account_id, config_dir) =
-        session_account(state, agent, &console, project.as_ref(), account)?;
+    let (account_id, config_dir) = session_account(
+        state,
+        agent,
+        &console,
+        project.as_ref(),
+        request.account.clone(),
+    )?;
+    Ok(ResolvedOpen {
+        role,
+        cwd,
+        project,
+        console,
+        default_title,
+        resume_agent_session_id,
+        bound_to,
+        agent,
+        account_id,
+        config_dir,
+    })
+}
+
+/// Everything of opening a session that precedes launching its agent: the refusals, the record
+/// (`starting`) and its publication.
+async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<StartingSession> {
+    let ResolvedOpen {
+        role,
+        cwd,
+        project,
+        console,
+        default_title,
+        resume_agent_session_id,
+        bound_to,
+        agent,
+        account_id,
+        config_dir,
+    } = resolve_open(state, &request)?;
+    let OpenRequest {
+        console_id,
+        project_id,
+        model,
+        effort,
+        task,
+        title,
+        origin,
+        ..
+    } = request;
     let resume_shell_env = match resume_agent_session_id.clone() {
         Some(id) => {
             let dir = config_dir.clone();
@@ -1847,26 +1900,15 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         }
         None => None,
     };
-    let (model, effort) = (
-        normalize_session_launch_setting(model),
-        normalize_session_launch_setting(effort),
-    );
-    // A session that chose no model takes the project's, or for a console session the console's.
-    let effective_model = match &model {
-        Some(model) => model.clone(),
-        None => match &project {
-            Some(project) => project.launch(agent).0.clone(),
-            None => console.launch(agent).0.clone(),
-        },
-    };
-    LaunchCheck {
+    let (model, effort) = check_launch_settings(
+        state,
         agent,
-        account_id: account_id.clone(),
-        model: model.clone().flatten(),
-        effort: effort.clone().flatten(),
-        effective_model,
-    }
-    .run(state)
+        account_id.clone(),
+        project.as_ref(),
+        &console,
+        model,
+        effort,
+    )
     .await?;
     let title = title
         .map(|title| title.trim().to_string())
@@ -1910,7 +1952,25 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
     let session = if role == Role::Console {
         state.store.insert_console_session(session, title)?
     } else {
-        state.store.insert_session(&session)?;
+        // `bound_to` was resolved before the launch check above awaited, so the owner may since
+        // have been deleted, or have bound itself to a project session or been handed to one, and
+        // so can no longer own sessions: a binding that lands in between must not leave a third
+        // level. The store checks the owner in the insert itself, and once this row exists the
+        // owner can neither be deleted nor change either way. Nothing has been launched yet.
+        match &session.bound_to {
+            Some(owner) => {
+                if !state.store.insert_session_under_owner(&session, owner)? {
+                    return Err(match state.store.get_session(owner)? {
+                        None => CodedError::unknown_session(owner),
+                        Some(_) => anyhow::anyhow!(
+                            "`{owner}` can no longer own sessions: it was bound to a project \
+                             session while this one was being opened"
+                        ),
+                    });
+                }
+            }
+            None => state.store.insert_session(&session)?,
+        }
         // The duplicate check ran before the awaits above, so another request may have recorded
         // the same conversation since. Nothing has been launched yet.
         if let Some(id) = &resume_agent_session_id {
@@ -1922,16 +1982,6 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
             ) {
                 state.store.delete_session(&session.id)?;
                 return Err(err);
-            }
-        }
-        // `bound_to` was resolved before the launch check above awaited, so an unused owner may
-        // have been deleted since. Once this row exists the owner can no longer be deleted (it
-        // has a session bound to it), so one that is gone now is gone for good. Nothing has been
-        // launched yet.
-        if let Some(owner) = &session.bound_to {
-            if state.store.get_session(owner)?.is_none() {
-                state.store.delete_session(&session.id)?;
-                return Err(CodedError::unknown_session(owner));
             }
         }
         session
@@ -2051,47 +2101,229 @@ fn settle_started(state: &Arc<AppState>, session: &Session, has_task: bool) -> R
     state.session_record(&session.id)
 }
 
-/// Binds the unbound project session `session_id` to the running console session
-/// `console_session_id` of the same console, making it a lead session, and tells every client.
-/// The sessions already bound to it stay bound to it: they were told at launch that it is their
-/// owner, and why they were started is in its conversation, not the console session's.
+/// Normalises a session's model and effort override and refuses one `agent` does not offer under
+/// `account_id`, as the launch of a session does.
+async fn check_launch_settings(
+    state: &Arc<AppState>,
+    agent: Agent,
+    account_id: Option<String>,
+    project: Option<&Project>,
+    console: &Console,
+    model: Option<Option<String>>,
+    effort: Option<Option<String>>,
+) -> Result<(Option<Option<String>>, Option<Option<String>>)> {
+    let (model, effort) = (
+        normalize_session_launch_setting(model),
+        normalize_session_launch_setting(effort),
+    );
+    // A session that chose no model takes the project's, or for a console session the console's.
+    let effective_model = match &model {
+        Some(model) => model.clone(),
+        None => match project {
+            Some(project) => project.launch(agent).0.clone(),
+            None => console.launch(agent).0.clone(),
+        },
+    };
+    LaunchCheck {
+        agent,
+        account_id,
+        model: model.clone().flatten(),
+        effort: effort.clone().flatten(),
+        effective_model,
+    }
+    .run(state)
+    .await?;
+    Ok((model, effort))
+}
+
+/// Refuses a session that [`open_session`] would refuse for what `request` asks, a console session
+/// included, before anything is launched or recorded: an unknown console, project or owner, an
+/// agent that is not available, an account of another agent, a model or effort the agent does not
+/// offer. For a session whose opening waits on the user's answer, so that a request which could
+/// never be carried out is refused to the asker rather than put to the user. Returns the agent the
+/// session would be of.
+pub async fn check_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<Agent> {
+    let ResolvedOpen {
+        project,
+        console,
+        agent,
+        account_id,
+        ..
+    } = resolve_open(state, request)?;
+    check_launch_settings(
+        state,
+        agent,
+        account_id,
+        project.as_ref(),
+        &console,
+        request.model.clone(),
+        request.effort.clone(),
+    )
+    .await?;
+    Ok(agent)
+}
+
+/// Why `owner` cannot own `session`, in prose for the model, or `None` when it can. These are the
+/// rules every binding made after a session was opened keeps, whether the session binds itself
+/// ([`bind_session`]) or its owner hands it to another ([`transfer_session`]): an owner is a
+/// running console session of the session's console, or a running project session of its project
+/// that can own sessions (unbound, or a lead session); and a session bound to a project session
+/// owns none, so one that has sessions of its own, archived ones included since its owner can
+/// reopen them, can only be bound to a console session. Orchestration stays at most two levels
+/// deep, and no binding can close a cycle.
+pub(crate) fn owner_refusal(
+    state: &Arc<AppState>,
+    session: &Session,
+    owner: &Session,
+) -> Result<Option<String>> {
+    let named = |session: &Session| {
+        format!(
+            "`{}` (\"{}\")",
+            session.id,
+            crate::sharing::one_line(&session.title)
+        )
+    };
+    if owner.id == session.id {
+        return Ok(Some(format!("{} cannot be its own owner", named(session))));
+    }
+    if owner.console_id != session.console_id {
+        return Ok(Some(format!(
+            "{} belongs to another console, and an owner must be in the console of the session \
+             it owns",
+            named(owner)
+        )));
+    }
+    if owner.role == Role::Project {
+        if owner.project_id != session.project_id {
+            return Ok(Some(format!(
+                "{} is a session of another project, and a project session owns only sessions of \
+                 its own project",
+                named(owner)
+            )));
+        }
+        if owner.has_bound_role() {
+            return Ok(Some(format!(
+                "{} reports to a session and cannot own sessions of its own: orchestration is at \
+                 most two levels deep",
+                named(owner)
+            )));
+        }
+        let owned = bound_sessions(state, session)?;
+        if !owned.is_empty() {
+            return Ok(Some(format!(
+                "{} has sessions of its own ({}), and a session bound to a project session cannot \
+                 own any: only a console session can own it",
+                named(session),
+                owned
+                    .iter()
+                    .map(|owned| format!("`{}`", owned.id))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )));
+        }
+    }
+    // A session still starting is not running yet either: its launch may fail, and a failed
+    // launch deletes the session whatever is bound to it.
+    if owner.status.is_dormant()
+        || owner.status == SessionStatus::Starting
+        || !state.has_process(&owner.id)
+    {
+        return Ok(Some(format!("{} is not running", named(owner))));
+    }
+    Ok(None)
+}
+
+/// Binds the unbound project session `session_id` to `owner_id`, at its own request, and tells
+/// every client. Bound to a console session it becomes a lead session, keeping the sessions it
+/// started and the tools it drives them with; bound to a project session it becomes an ordinary
+/// bound session, which only one with no sessions of its own may (see [`owner_refusal`]).
 ///
-/// Refused, with the reason in prose and nothing changed, for a session that is already bound, a
-/// console session, an owner that is not a console session, is not running or belongs to another
-/// console. Nothing undoes a binding.
-pub fn bind_to_console_session(
+/// Refused, with the reason in prose and nothing changed, for a console session, a session that
+/// is already bound, and an owner [`owner_refusal`] refuses. Returns the session as it is now
+/// bound, and the owner as it was checked.
+pub fn bind_session(
     state: &Arc<AppState>,
     session_id: &str,
-    console_session_id: &str,
-) -> Result<Session> {
+    owner_id: &str,
+) -> Result<(Session, Session)> {
     let session = state.session_record(session_id)?;
     if session.role == Role::Console {
         anyhow::bail!("a console session cannot be bound to another session");
     }
-    if session.bound_to.is_some() {
-        anyhow::bail!("this session is already bound to a session, and a binding is never changed");
+    if let Some(owner) = &session.bound_to {
+        anyhow::bail!(
+            "this session is already bound to `{owner}`: only an unbound session binds itself to \
+             an owner"
+        );
     }
-    let owner = state.session_record(console_session_id)?;
-    if owner.role != Role::Console {
-        anyhow::bail!("a project session can only be bound to a console session this way");
+    let owner = state.session_record(owner_id)?;
+    if let Some(reason) = owner_refusal(state, &session, &owner)? {
+        anyhow::bail!(reason);
     }
-    if owner.console_id != session.console_id {
-        anyhow::bail!("the console session belongs to another console");
-    }
-    if owner.status.is_dormant() || !state.has_process(&owner.id) {
-        anyhow::bail!("the console session is not running");
-    }
+    let lead = owner.role == Role::Console;
     let bound = state
         .store
-        .bind_session(session_id, console_session_id)?
-        // Bound, or either session gone, since they were read just now.
+        .set_binding(session_id, None, owner_id, lead, !lead)?
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "this session is already bound to a session, or it or its owner is gone"
+                "the binding changed while it was being made — this session was bound, it gained \
+                 sessions of its own, or `{owner_id}` can no longer own sessions; look again \
+                 before retrying"
             )
         })?;
     state.publish_session(&bound);
-    Ok(bound)
+    Ok((bound, owner))
+}
+
+/// Hands `session_id`, bound to `from_id`, to the owner `to_id`, at `from_id`'s request, and tells
+/// every client. What the session is bound to changes and nothing else: the sessions bound to it
+/// stay bound to it. A lead session handed to another console session stays one; handed to a
+/// project session it no longer can own sessions, which only one with none of its own may be (see
+/// [`owner_refusal`]).
+///
+/// Refused, with the reason in prose and nothing changed, for a session that is not bound to
+/// `from_id`, one with no process running, or one still starting — it is told of its new owner,
+/// which it could not be — handing a session to the owner it already has, and an owner [`owner_refusal`] refuses. Returns
+/// the session as it is now bound, and its new owner as it was checked.
+pub fn transfer_session(
+    state: &Arc<AppState>,
+    session_id: &str,
+    from_id: &str,
+    to_id: &str,
+) -> Result<(Session, Session)> {
+    let session = state.session_record(session_id)?;
+    if session.bound_to.as_deref() != Some(from_id) {
+        anyhow::bail!("`{session_id}` is not bound to `{from_id}`, so it is not its to hand over");
+    }
+    if to_id == from_id {
+        anyhow::bail!("`{session_id}` is already bound to `{to_id}`");
+    }
+    // Live, not merely claimed: one still starting, resuming or being switched cannot be told yet,
+    // and a launch under way goes on from the record it captured, which names the old owner.
+    if session.status.is_dormant() || state.live_session(&session.id).is_none() {
+        anyhow::bail!(
+            "`{session_id}` is not running, so it could not be told of its new owner: reopen it \
+             first"
+        );
+    }
+    let owner = state.session_record(to_id)?;
+    if let Some(reason) = owner_refusal(state, &session, &owner)? {
+        anyhow::bail!(reason);
+    }
+    let lead = owner.role == Role::Console && session.lead;
+    let to_project = owner.role == Role::Project;
+    let bound = state
+        .store
+        .set_binding(session_id, Some(from_id), to_id, lead, to_project)?
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "the binding changed while it was being handed over — `{session_id}` was bound \
+                 elsewhere, it gained sessions of its own, or `{to_id}` can no longer own \
+                 sessions; look again before retrying"
+            )
+        })?;
+    state.publish_session(&bound);
+    Ok((bound, owner))
 }
 
 /// Who `session` reports to, for the launch that tells it so: `None` for a session that launches
@@ -4549,9 +4781,10 @@ mod tests {
         assert_eq!(bound, Some("console-session-1".to_string()));
     }
 
-    /// A binding is fixed for the session's lifetime once set, so naming one that turns out not to
-    /// exist, to belong to another console, or to be a project session outside the new session's
-    /// own project must be refused outright rather than silently dropped or discovered later.
+    /// A binding changes afterwards only at the session's or its owner's request, so naming one
+    /// that turns out not to exist, to belong to another console, or to be a project session
+    /// outside the new session's own project must be refused outright rather than silently dropped
+    /// or discovered later.
     #[test]
     fn binding_to_an_invalid_target_is_refused() {
         let (state, _dir) = crate::test_support::app_state("coordinator-resolve-bound-to-invalid");
@@ -7055,14 +7288,14 @@ mod tests {
         assert_eq!(session_ids(&state), ["hub", "unbound"]);
     }
 
-    /// Binding an unbound project session to a running console session of its console makes it a
-    /// lead session and leaves the sessions bound to it bound to it. Each refusal names its reason
-    /// and changes nothing: a session already bound, a console session, an owner that is not a
-    /// console session, one of another console, and one that is not running.
-    #[tokio::test]
-    async fn binding_makes_a_lead_session_that_keeps_its_own_sessions() {
-        use SessionStatus::{Idle, Interrupted};
-        let (state, dir) = switch_fixture("bind");
+    /// `switch_fixture` plus a second console and a second project of the first, with `sessions`
+    /// recorded and the ones in `live` given a stand-in process.
+    fn binding_fixture(
+        name: &str,
+        sessions: Vec<Session>,
+        live: &[&str],
+    ) -> (Arc<AppState>, ScratchDir, Vec<crate::test_support::StandIn>) {
+        let (state, dir) = switch_fixture(name);
         state
             .store
             .insert_console(&Console {
@@ -7070,53 +7303,178 @@ mod tests {
                 ..console(Agent::Claude, &dir.join("no-such-workdir-2"))
             })
             .unwrap();
-        for session in [
-            console_session("hub", Idle),
-            console_session("sleeping-hub", Interrupted),
-            Session {
-                console_id: "console-2".to_string(),
-                ..console_session("foreign-hub", Idle)
-            },
-            project_session("starter", Agent::Claude, Idle),
-            project_session("other-starter", Agent::Claude, Idle),
-            bound_session("mine", Idle, "starter"),
-            bound_session("bound", Idle, "hub"),
-        ] {
-            state.store.insert_session(&session).unwrap();
+        let project_1 = state.store.get_project("project-1").unwrap().unwrap();
+        state
+            .store
+            .insert_project(&Project {
+                id: "project-2".to_string(),
+                ..project_1
+            })
+            .unwrap();
+        for session in &sessions {
+            state.store.insert_session(session).unwrap();
         }
-        let hub = idle_stand_in("hub");
-        let foreign_hub = idle_stand_in("foreign-hub");
-        state.register_live(hub.clone());
-        state.register_live(foreign_hub.clone());
+        let stand_ins = live
+            .iter()
+            .map(|id| {
+                let stand_in = idle_stand_in(id);
+                state.register_live(stand_in.clone());
+                stand_in
+            })
+            .collect();
+        (state, dir, stand_ins)
+    }
+
+    /// An unbound project session binds itself to a running console session of its console and
+    /// becomes a lead session keeping its own sessions, or, with none of its own, to a running
+    /// project session of its project that can own sessions and becomes an ordinary bound one.
+    /// Each refusal names its reason and changes nothing.
+    #[tokio::test]
+    async fn a_session_binds_itself_only_where_orchestration_stays_two_levels_deep() {
+        use SessionStatus::{Idle, Interrupted, Starting};
+        let (state, _dir, _live) = binding_fixture(
+            "bind",
+            vec![
+                console_session("hub", Idle),
+                console_session("sleeping-hub", Interrupted),
+                console_session("starting-hub", Starting),
+                Session {
+                    console_id: "console-2".to_string(),
+                    ..console_session("foreign-hub", Idle)
+                },
+                project_session("starter", Agent::Claude, Idle),
+                project_session("other-starter", Agent::Claude, Idle),
+                project_session("loner", Agent::Claude, Idle),
+                Session {
+                    project_id: Some("project-2".to_string()),
+                    ..project_session("elsewhere", Agent::Claude, Idle)
+                },
+                bound_session("mine", Idle, "starter"),
+                bound_session("bound", Idle, "hub"),
+            ],
+            &[
+                "hub",
+                "starting-hub",
+                "foreign-hub",
+                "other-starter",
+                "elsewhere",
+                "mine",
+            ],
+        );
 
         for (session, owner, reason) in [
             ("bound", "hub", "already bound"),
-            ("hub", "hub", "console session cannot be bound"),
+            ("hub", "starter", "console session cannot be bound"),
             (
                 "starter",
                 "other-starter",
-                "only be bound to a console session",
+                "has sessions of its own (`mine`)",
             ),
-            ("starter", "foreign-hub", "another console"),
-            ("starter", "sleeping-hub", "not running"),
+            ("loner", "mine", "cannot own sessions"),
+            ("loner", "elsewhere", "another project"),
+            ("loner", "foreign-hub", "another console"),
+            ("loner", "sleeping-hub", "not running"),
+            ("loner", "starting-hub", "not running"),
+            ("loner", "loner", "its own owner"),
         ] {
-            let err = bind_to_console_session(&state, session, owner).expect_err(reason);
+            let err = bind_session(&state, session, owner).expect_err(reason);
             assert!(err.to_string().contains(reason), "{session} {owner}: {err}");
         }
-        let starter = state.store.get_session("starter").unwrap().unwrap();
-        assert_eq!((starter.bound_to, starter.lead), (None, false));
+        let loner = state.store.get_session("loner").unwrap().unwrap();
+        assert_eq!((loner.bound_to, loner.lead), (None, false));
 
-        let lead = bind_to_console_session(&state, "starter", "hub").unwrap();
+        let (lead, _) = bind_session(&state, "starter", "hub").unwrap();
         assert_eq!((lead.bound_to.as_deref(), lead.lead), (Some("hub"), true));
-        let stored = state.store.get_session("starter").unwrap().unwrap();
-        assert_eq!(
-            (stored.bound_to.as_deref(), stored.lead),
-            (Some("hub"), true)
-        );
+        assert!(!lead.has_bound_role());
         let mine = state.store.get_session("mine").unwrap().unwrap();
         assert_eq!(mine.bound_to.as_deref(), Some("starter"));
-        let again = bind_to_console_session(&state, "starter", "hub").expect_err("bound once");
+
+        let (joined, _) = bind_session(&state, "loner", "other-starter").unwrap();
+        assert_eq!(
+            (joined.bound_to.as_deref(), joined.lead),
+            (Some("other-starter"), false)
+        );
+        assert!(joined.has_bound_role());
+        let again = bind_session(&state, "loner", "hub").expect_err("bound already");
         assert!(again.to_string().contains("already bound"), "{again}");
+    }
+
+    /// An owner hands a running session of its own to another running owner under the same rules:
+    /// a lead session keeps being one under another console session, goes to a project session only
+    /// once it has no sessions of its own, and then can own none. Each refusal names its reason
+    /// and changes nothing.
+    #[tokio::test]
+    async fn an_owner_hands_a_session_over_only_where_orchestration_stays_two_levels_deep() {
+        use SessionStatus::{Idle, Interrupted, Starting};
+        let (state, _dir, _live) = binding_fixture(
+            "transfer",
+            vec![
+                console_session("hub", Idle),
+                console_session("hub-2", Idle),
+                console_session("sleeping-hub", Interrupted),
+                console_session("starting-hub", Starting),
+                Session {
+                    console_id: "console-2".to_string(),
+                    ..console_session("foreign-hub", Idle)
+                },
+                lead_session("lead", Idle, "hub"),
+                bound_session("child", Idle, "lead"),
+                lead_session("spare-lead", Idle, "hub"),
+                bound_session("plain", Idle, "hub"),
+                bound_session("dormant", Interrupted, "hub"),
+                bound_session("starting", Starting, "hub"),
+                project_session("peer", Agent::Claude, Idle),
+            ],
+            &[
+                "hub",
+                "hub-2",
+                "foreign-hub",
+                "lead",
+                "child",
+                "spare-lead",
+                "plain",
+                "peer",
+            ],
+        );
+
+        // A session being launched holds the launch claim and has no live process yet.
+        let _claim = state.begin_launch("starting").unwrap();
+        for (session, from, to, reason) in [
+            ("lead", "hub", "peer", "has sessions of its own (`child`)"),
+            ("plain", "hub", "child", "cannot own sessions"),
+            ("plain", "hub", "foreign-hub", "another console"),
+            ("plain", "hub", "sleeping-hub", "not running"),
+            ("plain", "hub", "starting-hub", "not running"),
+            ("plain", "hub", "hub", "already bound"),
+            ("plain", "hub", "plain", "its own owner"),
+            ("dormant", "hub", "hub-2", "not running"),
+            ("starting", "hub", "hub-2", "not running"),
+            ("child", "hub", "hub-2", "not bound to `hub`"),
+        ] {
+            let before = state.store.get_session(session).unwrap().unwrap();
+            let err = transfer_session(&state, session, from, to).expect_err(reason);
+            assert!(err.to_string().contains(reason), "{session} to {to}: {err}");
+            let after = state.store.get_session(session).unwrap().unwrap();
+            assert_eq!((before.bound_to, before.lead), (after.bound_to, after.lead));
+        }
+
+        let (lead, _) = transfer_session(&state, "lead", "hub", "hub-2").unwrap();
+        assert_eq!((lead.bound_to.as_deref(), lead.lead), (Some("hub-2"), true));
+        let child = state.store.get_session("child").unwrap().unwrap();
+        assert_eq!(child.bound_to.as_deref(), Some("lead"));
+
+        let (plain, _) = transfer_session(&state, "plain", "hub", "peer").unwrap();
+        assert_eq!(
+            (plain.bound_to.as_deref(), plain.lead),
+            (Some("peer"), false)
+        );
+        let (spare, owner) = transfer_session(&state, "spare-lead", "hub", "peer").unwrap();
+        assert_eq!(
+            (spare.bound_to.as_deref(), spare.lead),
+            (Some("peer"), false)
+        );
+        assert!(spare.has_bound_role());
+        assert_eq!(owner.id, "peer");
     }
 
     /// Every launch of a session — opening, resuming, reopening, a switch of its account — tells it

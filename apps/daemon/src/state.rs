@@ -3,8 +3,8 @@
 //! tokens, the turn bookkeeping a synthesised report rests on, a facade over the write queue in
 //! `crate::outbox`, and each project's live git status together with the claim that keeps two
 //! checks of one project from racing and the timestamp that keeps them from piling up across
-//! several clients, each ended session's saved terminal output, and the requests for a console
-//! session waiting for the user's answer (`crate::console_request`) together with the status
+//! several clients, each ended session's saved terminal output, and the session requests waiting
+//! for the user's answer (`crate::session_request`) together with the status
 //! each of those sessions' agents is at while the request holds the record at waiting for the
 //! user.
 
@@ -100,16 +100,16 @@ pub struct AppState {
     /// The bounds every connection's browse requests share: how many reads run at once, and how
     /// many bytes their replies may hold before they are written.
     pub browse_gate: Arc<crate::browse::lane::Gate>,
-    /// The `request_console_session` calls waiting for the user's answer; see
-    /// `crate::console_request`. Held in memory only: no caller outlives the daemon.
-    pub console_requests: crate::console_request::ConsoleRequests,
+    /// The `request_session` calls waiting for the user's answer; see `crate::session_request`.
+    /// Held in memory only: no caller outlives the daemon.
+    pub session_requests: crate::session_request::SessionRequests,
     /// The model lists read lately, per agent and account directory (`crate::agent_models`).
     pub agent_models: crate::agent_models::ModelCache,
-    /// For each session with a console-session request waiting, the status its agent's own events
+    /// For each session with a session request waiting, the status its agent's own events
     /// say it has, while the record shows `WaitingUser` for the request. Kept so that the daemon's
     /// decisions about the agent (can a message be written, did a turn end) keep reading the agent
     /// rather than the hand, and so the status can be restored when the request ends. Always taken
-    /// before `console_requests`, never after. Dropped with the session's other bookkeeping.
+    /// before `session_requests`, never after. Dropped with the session's other bookkeeping.
     request_hands: Mutex<HashMap<String, SessionStatus>>,
     events: broadcast::Sender<Event>,
     /// Serializes session readback with event sends, including deletions, so a stale reader
@@ -205,7 +205,7 @@ impl AppState {
             saved_output: SavedOutput::new(saved_output_dir),
             consoles_dir,
             browse_gate: Arc::new(crate::browse::lane::Gate::with_budget()),
-            console_requests: Default::default(),
+            session_requests: Default::default(),
             agent_models: Default::default(),
             events,
             session_publication: Mutex::new(()),
@@ -481,7 +481,7 @@ impl AppState {
         drop(live);
         if is_current {
             // Its call has nobody left to return to.
-            crate::console_request::withdraw_for_session(self, &session.id);
+            crate::session_request::withdraw_for_session(self, &session.id);
         }
         self.forget_session_bookkeeping(&session.id);
     }
@@ -606,7 +606,7 @@ impl AppState {
         });
     }
 
-    /// Applies a status reported by a hook, unless a waiting console-session request is holding the
+    /// Applies a status reported by a hook, unless a waiting session request is holding the
     /// hand up: then the status is only remembered, as what the agent's events say, and the record
     /// keeps `WaitingUser`. Dormant statuses are never reached this way — a session becomes
     /// archived by the user's request and interrupted by its process going away, both of which are
@@ -632,7 +632,7 @@ impl AppState {
         self.save_session(&session)
     }
 
-    /// Raises the hand of a session whose console-session request has started waiting, remembering
+    /// Raises the hand of a session whose request for a session has started waiting, remembering
     /// the status its agent is at. A session with a request already held keeps what it remembered:
     /// the request replacing another one is the same wait. A dormant record is left alone, as in
     /// [`Self::apply_hook_status`].
@@ -661,7 +661,7 @@ impl AppState {
             .request_hands
             .lock()
             .expect("request hands lock poisoned");
-        if self.console_requests.is_waiting_for(id) {
+        if self.session_requests.is_waiting_for(id) {
             return;
         }
         let Some(remembered) = hands.remove(id) else {
@@ -671,7 +671,7 @@ impl AppState {
             if let Err(err) =
                 self.apply_reported_status_if(id, SessionStatus::WaitingUser, remembered)
             {
-                tracing::debug!(session = %id, %err, "lowering the console session request's hand failed");
+                tracing::debug!(session = %id, %err, "lowering the session request's hand failed");
                 return;
             }
         }
@@ -691,7 +691,7 @@ impl AppState {
             .remove(id);
     }
 
-    /// The status the session's agent is at, which is the record's except while a console-session
+    /// The status the session's agent is at, which is the record's except while a session
     /// request holds the hand up. Whatever the daemon decides about the agent itself reads this;
     /// the record is what the window shows.
     pub fn agent_status(&self, session: &Session) -> SessionStatus {
@@ -875,9 +875,8 @@ impl AppState {
         }
     }
 
-    /// Takes that credit back, for a report that turned out not to reach the console session. Left
-    /// set, the session's stop would produce no synthesised report either and the console session
-    /// would get nothing at all.
+    /// Takes that credit back, for a report that turned out not to reach its owner. Left set, the
+    /// session's stop would produce no synthesised report either and the owner would get nothing.
     pub fn clear_reported(&self, id: &str) {
         self.set_reported(id, false);
     }

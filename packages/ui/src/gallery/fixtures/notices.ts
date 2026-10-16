@@ -33,30 +33,48 @@ export const noticeScenarios: Scenario[] = [
     }),
   },
   {
-    id: "console-session-request",
+    id: "session-request-project",
     group: TRUST,
     category: "normal",
-    title: "Request for a console session, a second one queued",
+    title: "Request to start a session in another project",
     description:
-      "A project session asking for a console session; a second request waits behind it.",
+      "A session in Website asks for a Grok Build session in Search API: the requester's project and the target project differ, and the dialog names both.",
     state: snapshotState({
       consoles: [console_],
       projects: [web, api, grokProject],
-      sessions,
-      consoleRequests: [
+      sessions: sessions.map((s) => (s.id === "s-web-1" ? { ...s, status: "waiting_user" } : s)),
+      sessionRequests: [
         {
           requestId: "r-1",
           session: "s-web-1",
-          console: console_.id,
-          project: web.id,
-          requestedAt: 1,
-        },
-        {
-          requestId: "r-2",
-          session: codexSession.id,
+          role: "project",
           console: console_.id,
           project: api.id,
-          requestedAt: 2,
+          agent: "grok",
+          requestedAt: 1,
+        },
+      ],
+    }),
+  },
+  {
+    id: "session-request-console",
+    group: TRUST,
+    category: "normal",
+    title: "Request to start a console session",
+    description: "A console session asks for a Codex console session: the requester is named by its console and the target is a console, with no project in the sentence.",
+    state: snapshotState({
+      consoles: [console_],
+      projects: [web, api, grokProject],
+      sessions: sessions.map((s) => (s.id === SAMPLE.consoleSession.id ? { ...s, status: "waiting_user" } : s)),
+      sessionRequests: [
+        {
+          requestId: "r-1",
+          session: SAMPLE.consoleSession.id,
+          role: "console",
+          console: console_.id,
+          project: null,
+          agent: "codex",
+          requestedAt: 1,
         },
       ],
     }),
@@ -71,7 +89,7 @@ export const noticeScenarios: Scenario[] = [
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
       { kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "" },
-      { kind: "error", code: "console_request_not_waiting", params: { session: "s-web-1" }, message: "", session: "s-web-1" },
+      { kind: "error", code: "session_request_not_waiting", params: { session: "s-web-1" }, message: "", session: "s-web-1" },
       { kind: "error", code: "a_code_from_a_newer_daemon", params: {}, message: "The daemon's own English text, shown as is." },
     ],
   },

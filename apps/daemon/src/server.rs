@@ -307,10 +307,10 @@ async fn forward_broadcasts(
 }
 
 /// What the daemon is waiting on the user for, to put to a client again after a `snapshot`: the
-/// trust prompts, then the requests for a console session, oldest first.
+/// trust prompts, then the session requests, oldest first.
 fn pending_questions(state: &AppState) -> Vec<Event> {
     let mut questions = crate::trust::pending_prompts(state);
-    questions.extend(crate::console_request::pending_events(state));
+    questions.extend(crate::session_request::pending_events(state));
     questions
 }
 
@@ -549,9 +549,6 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
                 state.turn_started(session_id, prompt);
             }
             if let Some(agent) = agent {
-                crate::console_request::note_backgrounded(
-                    state, session_id, agent, &event, &payload,
-                );
                 let believable = read_turn_boundary(state, session_id, agent, &event, &payload);
                 if believable {
                     if let Some(status) = hooks::status_from_event(agent, &event, &payload) {
@@ -619,7 +616,7 @@ fn read_turn_boundary(
     }
     match hooks::turn_end(agent, event, payload) {
         // A session with its hand up has not finished its turn — it is waiting for a person (the
-        // agent's own hand: a console-session request's hand says nothing of its turn). Grok's
+        // agent's own hand: a session request's hand says nothing of its turn). Grok's
         // clock-attributed end would otherwise lower the hand and report "it said nothing" for any
         // prompt left unanswered longer than the backstop delay.
         Some(turn)
@@ -722,14 +719,20 @@ async fn mcp_call(
         serde_json::Value::Object(arguments) => arguments,
         _ => serde_json::Map::new(),
     };
-    axum::Json(
+    let mut answer =
         match crate::mcp::exec::call(&state, &session_id, &request.tool, &arguments).await {
             Ok(result) => serde_json::json!({ "ok": true, "result": result }),
             // The whole context chain, because this text is the only account the model gets of
             // why its call did not work.
             Err(err) => serde_json::json!({ "ok": false, "error": format!("{err:#}") }),
-        },
-    )
+        };
+    // Whether the session has a bound session's tools as it stands after the call, which its
+    // binding changing while it runs can have changed: the child announces the catalogue this
+    // names, and tells the agent when it differs from the one it announced.
+    if let Ok(session) = state.session_record(&session_id) {
+        answer["bound"] = serde_json::json!(session.has_bound_role());
+    }
+    axum::Json(answer)
 }
 
 #[derive(serde::Deserialize)]

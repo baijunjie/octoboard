@@ -77,8 +77,8 @@ Enter confirms at once. Three kinds start elsewhere:
   itself, so Enter does nothing until the user moves focus onto a control.
 - **A confirmation that asks for a word to be typed** opens with focus in its text field.
 - **A question the user did not ask for** — a folder trust prompt (see "The trust dialog" in
-  `docs/product/folder-trust.md`) or a request for a console session (see "The confirmation dialog" in
-  `docs/product/requesting-a-console-session.md`) — opens with focus on the dialog itself as well, and focus is put
+  `docs/product/folder-trust.md`) or a session request (see "The confirmation dialog" in
+  `docs/product/session-requests.md`) — opens with focus on the dialog itself as well, and focus is put
   back on the dialog each time it moves on to the next waiting question, so an Enter held past one answer does not
   answer the next.
 

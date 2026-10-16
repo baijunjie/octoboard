@@ -20,6 +20,7 @@ import {
   type Page,
   type Project,
   type RequestBody,
+  type Role,
   type Session,
   type Settings,
 } from "./protocol";
@@ -56,15 +57,26 @@ export interface TrustPrompt {
   trustDir: string | null;
 }
 
-/** An unbound project session's request for a console session, waiting for the user's answer. */
-export interface ConsoleRequest {
+/** A session's request for a session with no owner, waiting for the user's answer. */
+export interface SessionRequest {
   requestId: string;
   /** The requesting session. */
   session: string;
-  /** The console the console session would be started in: the requesting session's. */
+  /** Whether the session asked for would be a console session or a project session. */
+  role: Role;
+  /** The console the new session would be in. */
   console: string;
+  /** The project the new session would be in; null for a console session. */
   project: string | null;
+  /** The agent the new session would run. */
+  agent: Agent;
   requestedAt: number;
+}
+
+/** The requests with `request` added, kept in the order they were made whatever order the
+ * broadcast and the repeat after a snapshot arrive in. */
+function withRequest(requests: SessionRequest[], request: SessionRequest): SessionRequest[] {
+  return [...requests, request].sort((a, b) => a.requestedAt - b.requestedAt);
 }
 
 /** The components of an absolute path with `.` dropped and each `..` folded into the one before it,
@@ -117,10 +129,11 @@ export interface State {
   /** The directories whose projects Octoboard presses every agent's trust confirmation for, as the
    * last `snapshot` or `trusted_directories_updated` said. */
   trustedDirectories: string[];
-  /** Oldest first; the first is the one the dialog shows. Held by the daemon, not here: a request
-   * leaves only when the daemon says it stopped waiting (answered from any client, timed out or
-   * withdrawn), and on a `snapshot`, after which the daemon sends the ones still waiting again. */
-  consoleRequests: ConsoleRequest[];
+  /** Oldest first by `requestedAt`, the order the dialog takes them in after the trust prompts.
+   * Held by the daemon, not here: a request leaves only when the daemon says it stopped waiting
+   * (answered from any client, timed out or withdrawn), and on a `snapshot`, after which the daemon
+   * sends the ones still waiting again. */
+  sessionRequests: SessionRequest[];
   /** Keyed by project id. Absent for a project the daemon has not reported on yet, or that is not
    * a git repository at all. Dropped when its project is deleted — the daemon sends no deletion
    * event for a `GitStatus` (see `protocol.ts`), so the client has to drop it itself. */
@@ -157,7 +170,7 @@ const initialState: State = {
   snapshotEpoch: 0,
   trustPrompts: [],
   trustedDirectories: [],
-  consoleRequests: [],
+  sessionRequests: [],
   gitStatuses: new Map(),
   settings: { auto_pull_repositories: false, default_clone_dir: "", accounts: [] },
   agentAvailability: new Map(INITIAL_AGENT_AVAILABILITY.map((a) => [a.agent, a])),
@@ -207,7 +220,7 @@ function reducer(state: State, action: Action): State {
             snapshotEpoch: state.snapshotEpoch + 1,
             trustPrompts: [],
             trustedDirectories: event.trusted_directories,
-            consoleRequests: [],
+            sessionRequests: [],
             gitStatuses: keepSame(state.gitStatuses, event.git_statuses, (s) => s.project),
             settings: event.settings,
             agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])),
@@ -304,7 +317,7 @@ function reducer(state: State, action: Action): State {
             sessions,
             pages,
             trustPrompts: state.trustPrompts.filter((p) => p.session !== event.session),
-            consoleRequests: state.consoleRequests.filter((r) => r.session !== event.session),
+            sessionRequests: state.sessionRequests.filter((r) => r.session !== event.session),
           };
         }
         case "trust_prompt": {
@@ -322,24 +335,23 @@ function reducer(state: State, action: Action): State {
           };
           return { ...state, trustPrompts: [...state.trustPrompts, prompt] };
         }
-        case "console_session_request": {
-          if (state.consoleRequests.some((r) => r.requestId === event.request_id)) return state;
-          const request: ConsoleRequest = {
+        case "session_request": {
+          if (state.sessionRequests.some((r) => r.requestId === event.request_id)) return state;
+          const request: SessionRequest = {
             requestId: event.request_id,
             session: event.session,
+            role: event.role,
             console: event.console,
             project: event.project,
+            agent: event.agent,
             requestedAt: event.requested_at,
           };
-          // Kept in the order they were made, whatever order the broadcast and the repeat after a
-          // snapshot arrive in.
-          const consoleRequests = [...state.consoleRequests, request].sort((a, b) => a.requestedAt - b.requestedAt);
-          return { ...state, consoleRequests };
+          return { ...state, sessionRequests: withRequest(state.sessionRequests, request) };
         }
-        case "console_session_request_closed":
+        case "session_request_closed":
           return {
             ...state,
-            consoleRequests: state.consoleRequests.filter((r) => r.requestId !== event.request_id),
+            sessionRequests: state.sessionRequests.filter((r) => r.requestId !== event.request_id),
           };
         case "page_list": {
           // The reply to a `list_pages` request, but requests and broadcasts are not ordered

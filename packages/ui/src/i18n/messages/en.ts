@@ -225,8 +225,8 @@ export const en = {
   "daemon.trust_home_unknown": "The home directory could not be determined, so no folder can be checked against it.",
   "daemon.trust_not_waiting": "This session is no longer waiting at its agent's trust confirmation.",
   "daemon.console_session_trust_not_asked": "{appName} presses a console session's trust confirmation without asking.",
-  "daemon.console_request_not_waiting": "This session is no longer waiting for an answer, so no console session was started.",
-  "daemon.console_request_answered": "This request for a console session has already been answered.",
+  "daemon.session_request_not_waiting": "This session is no longer waiting for an answer, so the session it asked for was not started.",
+  "daemon.session_request_answered": "This request to start a session has already been answered.",
   "daemon.binary_not_found": "{binary} was not found on {pathVar} in the snapshotted shell environment.",
   "daemon.shell_environment_timeout":
     "{shell} -l -i -c '{command}' did not finish within {timeout}. A shell startup file is probably blocked on something other than stdin, or it left a background process holding the shell's output open. {appName} will not launch while the environment is unknown, because it will not guess at one. Fix or skip the slow step in the shell's rc files.",
@@ -893,11 +893,18 @@ export const en = {
     "This records the folder instead of this project, and covers every project under it, at any depth, including ones added there later, for every agent.",
   "dialog.trust.alreadyAnswered":
     "The trust confirmation was already answered, so this folder was not trusted. Use this dialog again for the next one.",
-  "dialog.consoleRequest.title": "Start a console session?",
-  "dialog.consoleRequest.question":
-    "The session “{session}” in {project} asks to start a console session in “{console}”.",
-  "dialog.consoleRequest.confirm": "Start console session",
-  "dialog.consoleRequest.refuse": "Refuse",
+  "dialog.sessionRequest.title": "Start a session?",
+  "dialog.sessionRequest.requester.project": "The session “{session}” in the project “{project}”",
+  "dialog.sessionRequest.requester.projectElsewhere": "The session “{session}” in the project “{project}” of the console “{console}”",
+  "dialog.sessionRequest.requester.console": "The console session “{session}”",
+  "dialog.sessionRequest.requester.consoleElsewhere": "The session “{session}” in the console “{console}”",
+  "dialog.sessionRequest.requester.unknown": "The session “{session}”",
+  "dialog.sessionRequest.question.project":
+    "{requester} asks to start a {agent} session in the project “{project}” of the console “{console}”. The new session would report to you.",
+  "dialog.sessionRequest.question.console":
+    "{requester} asks to start a {agent} console session in the console “{console}”. The new session would report to you.",
+  "dialog.sessionRequest.confirm": "Start session",
+  "dialog.sessionRequest.refuse": "Refuse",
 
   "directoryPicker.path": "Directory path",
   "directoryPicker.go": "Go",
