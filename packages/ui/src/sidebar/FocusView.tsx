@@ -599,7 +599,7 @@ function SessionCard({
         </FadeOverflow>
       </div>
       <RowIconLine
-        icon={<AgentIcon agent={session.agent} className="size-3.5" tooltip={sessionAccountTooltip(t, session, accounts)} />}
+        icon={<AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />}
         className="text-xs text-app-muted"
       >
         <FadeOverflow
