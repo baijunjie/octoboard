@@ -74,8 +74,10 @@ export function consoleMenu(
  * focus mode to enter from there. */
 export type MenuPlacement = "list" | "focused" | "nested";
 
-/** The project's actions, opening its files first, in the project row and in a focus mode (the
- * project's own header, and a console session's project headings); `placement` says which.
+/** The project's actions, in the project row and in a focus mode (the project's own header, and a
+ * console session's project headings); `placement` says which. Pin / Unpin comes first, as in a
+ * session's menu; then the actions are grouped as viewing the project inside the app (focus mode,
+ * files, archive), opening it in outside tools, managing the project itself, and removing it.
  * Git is a submenu, offered only while the project is known to be a git repository
  * (`gitRepository`, from its git status): pull the current branch, push the current branch, switch
  * to a local branch through its own submenu, and restore tracked file changes after confirmation. */
@@ -88,9 +90,15 @@ export function projectMenu(
   { placement = "list", gitRepository = false }: { placement?: MenuPlacement; gitRepository?: boolean } = {},
 ): ActionMenuEntry[] {
   return [
+    ...(placement === "focused" ? [] : [pinItem(t, project.pinned, () => handlers.onSetPinned({ project }, !project.pinned))]),
+    ...(placement === "list" ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ project }) }] : []),
     ...(handlers.visibleBrowserProjectId === project.id
       ? []
       : [{ label: t("sidebar.project.browse"), icon: FolderOpen, onClick: () => handlers.onBrowseProject(project) }]),
+    archiveSubmenu(t, t("sidebar.project.archive"), archived, sessions, handlers.onSelectSession, () =>
+      handlers.onOpenArchive({ console: project.console_id, project: project.id }),
+    ),
+    "separator",
     { label: t("sidebar.project.openDirectory"), icon: Folder, onClick: () => handlers.onOpenProjectDirectory(project) },
     { label: t("sidebar.project.openTerminal"), icon: Terminal, onClick: () => handlers.onOpenProjectTerminal(project) },
     ...(gitRepository
@@ -109,16 +117,11 @@ export function projectMenu(
       ]
       : []),
     "separator",
-    ...(placement === "focused" ? [] : [pinItem(t, project.pinned, () => handlers.onSetPinned({ project }, !project.pinned))]),
+    { label: t("sidebar.project.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-project", project }) },
     ...(handlers.onCopyProjectName
       ? [{ label: t("sidebar.project.copyName"), icon: Copy, onClick: () => handlers.onCopyProjectName!(project) }]
       : []),
-    { label: t("sidebar.project.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-project", project }) },
     { label: t("sidebar.project.edit"), icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-project", project }) },
-    ...(placement === "list" ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ project }) }] : []),
-    archiveSubmenu(t, t("sidebar.project.archive"), archived, sessions, handlers.onSelectSession, () =>
-      handlers.onOpenArchive({ console: project.console_id, project: project.id }),
-    ),
     "separator",
     { label: t("sidebar.project.remove"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-project", project }), destructive: true },
   ];

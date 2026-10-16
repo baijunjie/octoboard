@@ -230,11 +230,20 @@ At the row's end are a **+** button, **New session**, which opens the new-sessio
 "Opening a session" in `docs/product/sessions.md`), and the project's action menu. The same menu is the focused
 project's, and a project's heading in a console session's focus mode, apart from the items those views leave out
 (see "What both views show" and "A console session's focus mode" in `docs/product/focus-mode.md`). Choosing an action
-closes the menu at once; submenu entries open their next menu. The first group contains **Browse files** when
-offered, **Open in file manager**, **Open terminal** and, while the project's status says the directory is a git repository, **Git**.
+closes the menu at once; submenu entries open their next menu. Separators split it into four groups, in this order:
+the first holds **Pin** / **Unpin**, as in a session's menu, and the actions for viewing the project inside the app
+(**Focus mode**, **Browse files**, **View archive**); then opening it in outside tools (**Open in file manager**,
+**Open terminal**, **Git**); managing the project itself (**Rename**, **Copy project name**, **Project settings**);
+and **Remove project**. An item a view does not offer is left out without moving the others.
 
+- **Pin** / **Unpin** — see "Pinning" below.
+- **Focus mode** — see `docs/product/focus-mode.md`.
 - **Browse files** — see "Opening a project's files" in `docs/product/project-pane.md` for its visibility and the
   Files mode it opens.
+- **View archive** — a submenu of the project's archived parent-session preview (see "The archive view" below), each
+  with its agent's icon and its title; choosing one selects it (see "Selecting a session" below). After them,
+  **View all**, without a count, opens the archive view whenever the project has an archived session, including
+  when all of them fit in the submenu. A project with no archived session shows only a disabled item saying so.
 - **Open in file manager** — opens the project's directory in the system file manager on the daemon's host; see
   "Opening the system file manager" below.
 - **Open terminal** — every project, including one that is not a git repository and one whose git status has not
@@ -251,17 +260,11 @@ offered, **Open in file manager**, **Open terminal** and, while the project's st
   `docs/product/project-git-status.md`). Switch branch opens the third-level local branch menu; see "Switching the
   local branch" in `docs/product/project-git-status.md`. Restore file changes asks for confirmation before discarding tracked changes
   (see "Restoring file changes" in `docs/product/project-git-status.md`).
-- **Pin** / **Unpin** — see "Pinning" below.
-- **Copy project name** — before Rename, copies the project's name exactly to the clipboard. Available in all the
+- **Rename** — a dialog with the name alone; an empty name is rejected.
+- **Copy project name** — copies the project's name exactly to the clipboard. Available in all the
   project-menu placements above, including right-click menus, when the platform offers a clipboard; otherwise the
   item is absent. Success raises a notice toast; a refused copy raises an error toast.
-- **Rename** — a dialog with the name alone; an empty name is rejected.
 - **Project settings** — the project dialog, see "Editing a project" in `docs/product/consoles-and-projects.md`.
-- **Focus mode** — see `docs/product/focus-mode.md`.
-- **View archive** — a submenu of the project's archived parent-session preview (see "The archive view" below), each
-  with its agent's icon and its title; choosing one selects it (see "Selecting a session" below). After them,
-  **View all**, without a count, opens the archive view whenever the project has an archived session, including
-  when all of them fit in the submenu. A project with no archived session shows only a disabled item saying so.
 - **Remove project** — see "Removing a project" in `docs/product/consoles-and-projects.md`; it asks for confirmation
   first.
 

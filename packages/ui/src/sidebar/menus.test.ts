@@ -118,6 +118,17 @@ describe("a project's menu", () => {
     expect(labels("nested")).not.toContain("Focus mode");
   });
 
+  it("puts Pin first, then groups viewing in the app, outside tools, managing the project, and removing it", () => {
+    const handlers = { onCopyProjectName: () => {} } as unknown as SidebarHandlers;
+    const menu = projectMenu(t, handlers, { id: "p", pinned: false } as Project, [], [], { gitRepository: true });
+    expect(menu.map((entry) => (entry === "separator" ? entry : entry.label))).toEqual([
+      "Pin", "Focus mode", "Browse files", "View archive", "separator",
+      "Open in file manager", "Open terminal", "Git", "separator",
+      "Rename", "Copy project name", "Project settings", "separator",
+      "Remove project",
+    ]);
+  });
+
   it("offers Open terminal for every project", () => {
     expect(labels("list")).toContain("Open terminal");
     expect(labels("focused")).toContain("Open terminal");
