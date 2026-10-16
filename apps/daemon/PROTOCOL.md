@@ -1271,7 +1271,9 @@ had outstanding.
 ## `GET /ws/term/:session` — terminal stream
 
 - Daemon to client: **binary** frames carrying raw PTY output. On attach the session's ring buffer is replayed first,
-  then live output follows.
+  then live output follows. Once the ring has dropped its oldest output, the replay opens with escape sequences that
+  restore the terminal's current modes (alternate screen, mouse reporting, focus reporting, bracketed paste,
+  application cursor and keypad, a hidden cursor, disabled line wrap), since programs announce those only once.
 - Client to daemon: **binary** frames are raw PTY input, written through verbatim. **Text** frames are JSON control:
   `{"type":"resize","cols":N,"rows":N}`. Supported dimensions are 2–1,000 columns and 1–500 rows; other sizes are
   ignored and logged. Input and resizing are refused once the session's preview has been frozen.

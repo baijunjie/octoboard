@@ -174,8 +174,9 @@ impl LiveSession {
     }
 
     /// Registers a terminal client. The returned snapshot is everything buffered up to this
-    /// instant, and the receiver picks up with the very next byte after it. Once frozen, returns
-    /// the archived screen with a closed receiver, so exit cleanup cannot replace it.
+    /// instant, preceded by the terminal's current modes once the buffer no longer holds the
+    /// start, and the receiver picks up with the very next byte after it. Once frozen, returns the
+    /// archived screen with a closed receiver, so exit cleanup cannot replace it.
     pub fn attach(&self) -> (Vec<u8>, mpsc::Receiver<Bytes>) {
         let (tx, rx) = mpsc::channel(SUBSCRIBER_QUEUE);
         let mut fan = self.fan.lock().expect("fan mutex poisoned");
@@ -184,7 +185,16 @@ impl LiveSession {
         }
         let id = fan.next_id;
         fan.next_id += 1;
-        let snapshot = fan.ring.snapshot();
+        let mut snapshot = fan.ring.snapshot();
+        if fan.total > snapshot.len() as u64 {
+            // The ring has lost its head, and with it the mode sequences a program sends once at
+            // startup. The parsed terminal still knows them, and they describe the end of the
+            // window, which is where the replay leaves the client, so any toggles inside the
+            // window land on the same state.
+            let mut replay = fan.terminal.mode_preamble();
+            replay.append(&mut snapshot);
+            snapshot = replay;
+        }
         fan.subscribers.push(Subscriber { id, tx });
         (snapshot, rx)
     }
@@ -724,6 +734,29 @@ mod tests {
     use super::{is_terminal_protocol, send_with_backpressure, SUBSCRIBER_GRACE};
     use bytes::Bytes;
     use tokio::sync::mpsc;
+
+    #[test]
+    fn a_wrapped_ring_replays_behind_the_modes_it_lost() {
+        let live = crate::test_support::idle_stand_in("replay-modes");
+        live.on_output(b"\x1b[?1049h\x1b[?1000h\x1b[?1006h");
+        let (replay, _rx) = live.attach();
+        assert!(replay.starts_with(b"\x1b[?1049h\x1b[?1000h\x1b[?1006h"));
+        assert_eq!(
+            replay.len(),
+            24,
+            "a ring that has not wrapped is replayed as is"
+        );
+
+        let redraw = b"\r\x1b[2Kframe";
+        for _ in 0..super::RING_CAPACITY / redraw.len() + 1 {
+            live.on_output(redraw);
+        }
+        let (replay, _rx) = live.attach();
+        let head = String::from_utf8_lossy(&replay[..80]);
+        for expected in ["?1049h", "?1000h", "?1006h"] {
+            assert!(head.contains(expected), "{expected} missing from {head:?}");
+        }
+    }
 
     #[test]
     fn a_failed_record_update_rolls_back_only_its_own_freeze() {

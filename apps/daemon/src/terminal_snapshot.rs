@@ -1,4 +1,5 @@
-//! A bounded terminal state, flattened into ordinary scrolling output for archived previews.
+//! A bounded terminal state, flattened into ordinary scrolling output for archived previews, and
+//! the source of the mode preamble a live replay opens with once its ring has lost the start.
 
 use std::fmt::Write;
 use std::time::Duration;
@@ -7,7 +8,7 @@ use alacritty_terminal::event::VoidListener;
 use alacritty_terminal::grid::{Dimensions, Grid};
 use alacritty_terminal::index::{Column, Line};
 use alacritty_terminal::term::cell::{Cell, Flags};
-use alacritty_terminal::term::Config;
+use alacritty_terminal::term::{Config, TermMode};
 use alacritty_terminal::vte::ansi::{Color, NamedColor, Processor, Timeout};
 use alacritty_terminal::Term;
 
@@ -60,6 +61,10 @@ impl TerminalSnapshot {
         };
         Self {
             terminal: Term::new(
+                // `kitty_keyboard` stays off: in alacritty_terminal 0.25.0, `push_keyboard_mode`
+                // panics once the stack reaches 4096 entries, which a run of `CSI > 1 u` in agent
+                // output reaches, and the panic would land under the session's output lock. The
+                // client, xterm.js, has no kitty keyboard support to restore the flags into.
                 Config {
                     scrolling_history: SCROLLBACK_LINES,
                     ..Config::default()
@@ -104,6 +109,41 @@ impl TerminalSnapshot {
 
     pub fn output(&self) -> Vec<u8> {
         self.frozen.clone().unwrap_or_else(|| self.render())
+    }
+
+    /// Escape sequences that put a freshly reset terminal into the input and screen modes this
+    /// one is in now. Programs such as Codex announce them once at startup, so a replay window
+    /// that no longer reaches back that far has to be told them again or the client never learns
+    /// the alternate screen is active or that mouse reporting is on.
+    pub fn mode_preamble(&self) -> Vec<u8> {
+        let mode = *self.terminal.mode();
+        let mut output = String::new();
+        for (flag, set) in [
+            (TermMode::ALT_SCREEN, "\x1b[?1049h"),
+            (TermMode::MOUSE_REPORT_CLICK, "\x1b[?1000h"),
+            (TermMode::MOUSE_DRAG, "\x1b[?1002h"),
+            (TermMode::MOUSE_MOTION, "\x1b[?1003h"),
+            (TermMode::UTF8_MOUSE, "\x1b[?1005h"),
+            (TermMode::SGR_MOUSE, "\x1b[?1006h"),
+            (TermMode::FOCUS_IN_OUT, "\x1b[?1004h"),
+            (TermMode::BRACKETED_PASTE, "\x1b[?2004h"),
+            (TermMode::APP_CURSOR, "\x1b[?1h"),
+            (TermMode::APP_KEYPAD, "\x1b="),
+        ] {
+            if mode.contains(flag) {
+                output.push_str(set);
+            }
+        }
+        // A reset client has both on, so only their absence needs saying.
+        for (flag, reset) in [
+            (TermMode::SHOW_CURSOR, "\x1b[?25l"),
+            (TermMode::LINE_WRAP, "\x1b[?7l"),
+        ] {
+            if !mode.contains(flag) {
+                output.push_str(reset);
+            }
+        }
+        output.into_bytes()
     }
 
     fn render(&self) -> Vec<u8> {
@@ -282,6 +322,23 @@ mod tests {
             lines.pop();
         }
         lines.join("\n")
+    }
+
+    #[test]
+    fn the_mode_preamble_restores_the_modes_a_reset_terminal_lacks() {
+        let preamble = |output: &[u8]| {
+            let mut terminal = TerminalSnapshot::new(4, 20);
+            terminal.process(output);
+            String::from_utf8(terminal.mode_preamble()).unwrap()
+        };
+        assert_eq!(preamble(b"plain"), "");
+        let modes = preamble(b"\x1b[?1049h\x1b[?1002h\x1b[?1006h\x1b[?2004h\x1b[?25l\x1b[?7l");
+        for expected in ["?1049h", "?1002h", "?1006h", "?2004h", "?25l", "?7l"] {
+            assert!(
+                modes.contains(expected),
+                "{expected} missing from {modes:?}"
+            );
+        }
     }
 
     #[test]

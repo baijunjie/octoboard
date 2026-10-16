@@ -26,6 +26,11 @@ focus between regions with F6" in `docs/product/moving-focus-between-regions.md`
 - Attaching to a running session replays the **most recent 2 MiB** of that session's raw output, then follows live
   output. The terminal itself keeps 10,000 lines of scrollback. Dormant sessions show the saved preview described in
   "Interrupted, archived and dormant sessions" below.
+- **Once a session has written more than those 2 MiB, the replay first restores the terminal modes the agent has
+  on at that moment**, since agents announce them only once, at startup: the alternate screen, mouse reporting,
+  focus reporting, bracketed paste, application cursor and keypad keys, a hidden cursor and disabled line wrap. A
+  full-screen agent therefore stays full-screen and keeps answering the mouse, the wheel included, after a reattach.
+  Keyboard-protocol enhancements an agent asked for (the kitty keyboard flags) are not restored.
 - A reattach always redraws from the replay rather than appending to what is on screen, so scrollback older than the
   replay window is lost on every reconnect.
 - Whatever changes the terminal pane's size resizes the agent's terminal: resizing the window, resizing
