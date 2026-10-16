@@ -350,14 +350,16 @@
   --default-soft-hover: var(--control-fill-hover);
 }
 
-/* HeroUI's `--separator`, the 1px line between the panes, is set a step further from the surfaces
-   than HeroUI's own, whose dark value (L 0.25) is the dark sidebar's own colour and vanishes
-   there. The content panel's edge has no such line: it is set apart from the chrome by contrast
-   and a soft shadow (`--panel-shadow`). This is a quiet line on every surface it divides: 1.29 / 1.22 against `--panel` and
-   `--panel-sidebar` in light, 1.35 / 1.23 in dark, lighter than the dark surfaces rather than
-   darker so it reads as an edge. Not a control's boundary, so it is not held to 3:1. The light
-   selector excludes the dark theme rather than relying on order, since an unlayered root
-   declaration would otherwise beat the library's layered dark rule. */
+/* HeroUI's `--separator`, the 1px line that divides a pane's parts (under its header, between
+   its sections) and outlines a floating card or a drawer, is set a step further from the surfaces
+   than HeroUI's own, whose dark value (L 0.25) is the dark sidebar's own colour and vanishes there.
+   Neither the content panel's edge nor the docked panes' inner edges carry such a line: each is
+   set apart by contrast and the same soft shadow (`--panel-shadow`). This is a quiet line on
+   every surface it divides: 1.29 / 1.22 against `--panel` and `--panel-sidebar` in light,
+   1.35 / 1.23 in dark, lighter than the dark surfaces rather than darker so it reads as an edge.
+   Not a control's boundary, so it is not held to 3:1. The light selector excludes the dark theme
+   rather than relying on order, since an unlayered root declaration would otherwise beat the
+   library's layered dark rule. */
 :root:not(.dark):not([data-theme="dark"]) {
   --separator: oklch(0.9 0.004 286);
 }

@@ -107,7 +107,7 @@ export function AsidePane({
           onTransitionEnd={dock.onInsetTransitionEnd}
           onPointerEnter={peek?.keep}
           onPointerLeave={peek?.leave}
-          className={`flex min-h-0 flex-col border-s border-separator bg-panel-sidebar w-[420px] max-w-[92vw] max-docked:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] ${overlay} ${className}`}
+          className={`flex min-h-0 flex-col border-separator bg-panel-sidebar w-[420px] max-w-[92vw] max-docked:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] ${overlay} ${className}`}
         >
           {children}
         </div>

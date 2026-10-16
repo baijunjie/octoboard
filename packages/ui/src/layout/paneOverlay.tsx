@@ -157,7 +157,7 @@ function peekGapPx(): number {
  * upper edge is the bar's own; the toggle that floated the card in is not (see the hook).
  *
  * A pane still in the row while it eases out (`phase === "closing"`) is not yet `fixed`, so its
- * offsets are relative to its offsetParent (the sidebar's column clip, or `main` for the right
+ * offsets are relative to its offsetParent (the app root for the sidebar, `main` for the right
  * pane), which is never transformed; that parent's viewport position is added back. */
 function outsidePane(pane: Element | null, event: PointerEvent, gap: number): boolean {
   if (!(pane instanceof HTMLElement)) return true;

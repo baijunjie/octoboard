@@ -38,12 +38,11 @@ function physicalGrow(element: HTMLElement, grow: 1 | -1): 1 | -1 {
 
 /**
  * The drag handle on a docked pane's inner edge (the sidebar's end, the aside's start): a
- * thin hit area straddling the border, with a highlight line on hover, focus and while dragging.
+ * thin hit area straddling that edge, with a highlight line on hover, focus and while dragging.
  * Keyboard focus adds a ring around the handle and widens the line to fill it: the line alone is a
- * 2px stripe that, in the light theme, is under the 3:1 against the border pixel it replaces that
- * WCAG 2.2 SC 1.4.11 asks of a focus indicator, and smaller than SC 2.4.13 Focus Appearance (AAA)
- * suggests (an area at least that of a 2px perimeter around the control). It runs the pane's full
- * height, below the top bar and above the connection banner, so the line covers that border. It is
+ * 2px stripe, smaller than SC 2.4.13 Focus Appearance (AAA) suggests (an area at least that of a
+ * 2px perimeter around the control). It runs the pane's full height, below the top bar and above
+ * the connection banner, so the line covers the whole edge. It is
  * rendered right after its pane, so Tab reaches it next to the pane, but it is positioned against the
  * window: the nearest positioned ancestor must be the app root, as tall as the window, and no element
  * between them may be positioned. `App.tsx` renders it only while its pane is docked and shown. Hidden

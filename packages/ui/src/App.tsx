@@ -733,7 +733,14 @@ export function App(): React.ReactElement {
                     the same ~9.2px/column plus the same padding allowance, under which the terminal stops
                     being usable at all, so `overflow-x-auto` on `main` scrolls rather than squeezing it
                     further. */}
-                <div className="relative flex min-h-0 min-w-[398px] flex-[1_1_398px] docked:min-w-[520px] docked:flex-[1_1_520px]">
+                {/* At the breakpoint it casts the content panel's soft shadow (`--panel-shadow`) over the
+                    docked panes on either side, so the terminal reads as the layer above them. `z-1`
+                    lifts it, with what it holds, over everything in the panes, the aside's positioned
+                    content (sticky headings, scroll fades) included, which comes later in the row and
+                    would otherwise cover the shadow; it stays under the resize handles and the floating
+                    cards. The content panel clips the shadow on the other sides and wherever a pane is
+                    closed. */}
+                <div className="relative flex min-h-0 min-w-[398px] flex-[1_1_398px] docked:z-1 docked:min-w-[520px] docked:flex-[1_1_520px] docked:shadow-(--panel-shadow)">
                   <ArchiveLayer
                     focusTerminal={focusTerminal}
                     view={archiveOpen && archiveConsole ? {

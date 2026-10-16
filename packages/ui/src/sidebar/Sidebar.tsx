@@ -219,7 +219,7 @@ export function Sidebar({
   const dock = useSidebarDockMotion(peek === undefined, peek?.active ?? false, sidebarWidth.width, onColumnPhase);
   const drawerClassName = dock.inset
     ? `docked:rounded-xl docked:border ${drawerClass("start", "floating", open, dock.insetShown)}${dock.preparingInset ? " docked:transition-none" : ""}`
-    : `${drawerClass("start", "drawer", open)} docked:h-full docked:border-e-0`;
+    : `${drawerClass("start", "drawer", open)} docked:h-full`;
 
   // What the sidebar is showing, and how it arrived there: going down into a focus mode slides the
   // new view in from the end, coming back up slides it in from the start, and switching to another
@@ -366,7 +366,7 @@ export function Sidebar({
           id={PANE_ID.sidebar}
           data-pane="sidebar"
           data-region="sidebar"
-          className={`flex w-70 max-docked:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] flex-col overflow-hidden sidebar-fills border-e border-separator bg-panel-sidebar shrink-0 docked:w-(--sidebar-width) ${drawerClassName}${dock.phase === "closed" && !dock.inset ? " docked:invisible" : ""}`}
+          className={`flex w-70 max-docked:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] flex-col overflow-hidden sidebar-fills border-separator bg-panel-sidebar shrink-0 docked:w-(--sidebar-width) ${drawerClassName}${dock.phase === "closed" && !dock.inset ? " docked:invisible" : ""}`}
           onPointerEnter={peek?.keep}
           onPointerLeave={peek?.leave}
           onPointerDownCapture={peek ? onPeekPress : undefined}

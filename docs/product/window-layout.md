@@ -42,8 +42,10 @@ of the breadcrumb.
 The **content panel** is always opaque, whatever is behind the window. Its top left corner (top right under a
 right-to-left language), where the top bar meets the rail, is rounded. No line runs along its edges: it is set apart
 from the chrome by the contrast between its surfaces and the chrome and by a soft shadow along its edges, and it reaches
-the window's other side and its bottom (or the connection banner) with no gap. Inside it a thin line runs down the
-inner edge of the docked sidebar and of the docked right pane, setting each apart from the terminal's area. The
+the window's other side and its bottom (or the connection banner) with no gap. Inside it no line runs down the inner
+edge of the docked sidebar or of the docked right pane either: at 1148 px and wider the terminal's area casts the same
+soft shadow as the panel's edges over the docked panes on either side, so the terminal reads as the layer above them.
+Where a pane is closed the terminal's area reaches the content panel's edge and casts no shadow on that side. The
 terminal's area is the colour of the terminal's own background. The sidebar and the right pane share the same background — a touch greyer than the terminal
 in the light appearance, a touch lighter in the dark one — whether docked, floating or shown as drawers. A report page
 keeps its own light surface inside the right pane (see "A report page stays on a light surface in both appearances" in
@@ -334,8 +336,8 @@ During the ease each pane stays a full-height column, from below the top bar to 
 banner is shown, and does not become the rounded card in "A hidden pane floats in on hover" below. Its contents stay at
 the width the open column is drawn at, including where the window is holding that width back (see "Pane widths at
 1148 px and wider" above), anchored against the rail for the sidebar and the window's edge for the right pane. The inner
-edge covers them as the column closes and uncovers them as it opens, so the text does not reflow. The sidebar's thin
-line rides its column's inner edge through the ease and is gone once the column has closed. A hover card comes up only
+edge covers them as the column closes and uncovers them as it opens, so the text does not reflow. The shadow the terminal's
+area casts over the pane follows the column's inner edge through the ease and is gone once the column has closed. A hover card comes up only
 once its column has closed.
 
 As the sidebar's column closes, the width it gives up goes to the terminal. When the right pane is docked and had been held
