@@ -73,10 +73,13 @@ export function LaunchSettingsFields({
       {/* The model field's note changes with no action of the user's, and its picker is locked while
           the note says "loading", so it cannot be reached to be read: say it from a status region. */}
       <StatusAnnouncer text={modelDescription} />
+      {/* The trigger spans the row so the whole row expands the section; HeroUI pushes its
+          indicator to the far end with an auto margin, which `ms-0` cancels so the chevron follows
+          the label. */}
       <Disclosure.Heading>
-        <Disclosure.Trigger className="flex w-full items-center">
+        <Disclosure.Trigger className="flex w-full items-center gap-1">
           {t("dialog.agentSettings.advanced")}
-          <Disclosure.Indicator />
+          <Disclosure.Indicator className="ms-0" />
         </Disclosure.Trigger>
       </Disclosure.Heading>
       {/* HeroUI pads the body by 8px on every side and the content clips what overflows it, so that
