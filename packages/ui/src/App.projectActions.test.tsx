@@ -137,7 +137,7 @@ async function openRestoreConfirmation() {
   })));
   await openProjectMenu(project.name);
   await press("Git");
-  await press("Restore file changes…");
+  await press("Restore file changes");
   return mounted;
 }
 

@@ -50,7 +50,7 @@ function type(input: HTMLInputElement, value: string): void {
 
 async function reviewing(options: Parameters<typeof mount>[0] = {}) {
   const mounted = mount(options);
-  await press("Choose file…");
+  await press("Choose file");
   return mounted;
 }
 
@@ -176,7 +176,7 @@ it("tells each project's result in a table row, with the reason beside a failure
 // A browser without the file input's `cancel` event never answers for a dismissed picker.
 it("can be dismissed while the open dialog has not answered", async () => {
   const mounted = mount({ unanswered: true });
-  await press("Choose file…");
+  await press("Choose file");
   await act(async () => {
     document.body.querySelector("[role=dialog]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   });
@@ -200,16 +200,16 @@ it("announces which choice was applied to how many, so two presses with the same
 
 it("ignores another press of Choose file while the open dialog has not answered, and shows that it waits", async () => {
   const mounted = mount({ unanswered: true });
-  const choose = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Choose file…")!;
+  const choose = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Choose file")!;
   // Two presses before the render that shows the first: only the dialog's own guard can stop the
   // second.
   await act(async () => {
     choose().click();
     choose().click();
   });
-  await press("Choose file…");
+  await press("Choose file");
   expect(mounted.open).toHaveBeenCalledOnce();
-  expect(Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Choose file…")?.hasAttribute("data-pending")).toBe(true);
+  expect(Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Choose file")?.hasAttribute("data-pending")).toBe(true);
 });
 
 it.each([
@@ -221,7 +221,7 @@ it.each([
     save: vi.fn(),
     open: vi.fn(async () => Promise.reject(error)),
   });
-  await press("Choose file…");
+  await press("Choose file");
   expect(text()).toContain(shown);
   expect(mounted.sent()).toEqual([]);
 });
@@ -239,15 +239,15 @@ it("takes the window regaining focus, with no file chosen, as the picker dismiss
   vi.useFakeTimers();
   onTestFinished(() => void vi.useRealTimers());
   const mounted = mount({ unanswered: true });
-  const choose = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Choose file…")!;
-  await press("Choose file…");
+  const choose = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Choose file")!;
+  await press("Choose file");
   expect(choose().hasAttribute("data-pending")).toBe(true);
   await act(async () => {
     window.dispatchEvent(new Event("focus"));
     await vi.advanceTimersByTimeAsync(600);
   });
   expect(choose().hasAttribute("data-pending")).toBe(false);
-  await press("Choose file…");
+  await press("Choose file");
   expect(mounted.open).toHaveBeenCalledTimes(2);
 });
 
@@ -259,12 +259,12 @@ it("ignores the answer of a picker it gave up on once a newer one has been opene
     save: vi.fn(),
     open: vi.fn(() => new Promise<{ name: string; text: string }>((resolve) => answers.push(resolve))),
   });
-  await press("Choose file…");
+  await press("Choose file");
   await act(async () => {
     window.dispatchEvent(new Event("focus"));
     await vi.advanceTimersByTimeAsync(600);
   });
-  await press("Choose file…");
+  await press("Choose file");
   // The first picker answers late, while the second is the one being waited for.
   await act(async () => answers[0]({ name: "late.json", text: JSON.stringify(DOCUMENT) }));
   expect(mounted.sent()).toEqual([]);

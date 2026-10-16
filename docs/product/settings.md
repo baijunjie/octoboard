@@ -191,8 +191,8 @@ in place at all.
 asking to let Octoboard control the computer, whose effect is that Octoboard appears in System Settings' own list, so
 the user only flips a switch there instead of adding the application by hand. The request reports back at once, while
 that dialog is still coming up, and normally reports the permission not granted, so the row moves to the System Settings
-wording straight after the press. Screen Recording's Grant… instead waits for the user to answer the prompt, and its
-button is marked pending until they have.
+wording straight after the press. Screen Recording's Grant… button instead waits for the user to answer the prompt, and
+is marked pending until they have.
 
 **A change made outside Octoboard is picked up when the window comes back.** The grants are read again every time the
 window regains focus, so one granted or revoked in System Settings — the only way Accessibility is ever granted — takes
@@ -206,8 +206,9 @@ ordinary quit (see "Quitting" in `docs/product/application-lifecycle.md`).
 
 **Nothing about these permissions is stored.** Every row's state comes from macOS alone. macOS cannot tell a permission
 that was never asked for from one the user refused, so a permission that is not granted starts at not granted with
-Grant…, and the System Settings wording appears only after a request made in this window has come back without the
-grant. Switching to another Settings section and back puts Grant… back; pressing it brings the guidance back with it —
+the Grant… button, and the System Settings wording appears only after a request made in this window has come back
+without the grant. Switching to another Settings section and back puts the Grant… button back; pressing it brings the
+guidance back with it —
 answered by macOS with a silent no for Screen Recording, and with that dialog again for Accessibility, which macOS
 keeps no refusal for.
 

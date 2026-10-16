@@ -9,7 +9,7 @@ repositories" below, and on whether the check was asked for by hand. Pushing the
 
 A project's uncommitted changes are inspected in the project pane's Git mode (see
 `docs/product/project-pane-git-mode.md`), which only reads the repository and has no part in these checks. The
-separate **Restore file changes…** action discards tracked changes after confirmation (see "Restoring file changes"
+separate **Restore file changes** action discards tracked changes after confirmation (see "Restoring file changes"
 below).
 
 ## The branch badge
@@ -337,7 +337,7 @@ reported branch changes (see "Files and Git" in `docs/product/project-pane.md`).
 
 ## Restoring file changes
 
-**Restore file changes…**, under **Git** in every project's action-menu placement, follows Switch branch
+**Restore file changes**, under **Git** in every project's action-menu placement, follows Switch branch
 after a separator (see "Project rows" in `docs/product/sidebar.md`). It opens a destructive confirmation dialog
 explaining that staged and unstaged tracked changes will be discarded, staged new files deleted, and untracked and
 ignored files kept, and that the discard cannot be undone. Cancelling makes no restore request. Confirming waits

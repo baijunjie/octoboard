@@ -3,10 +3,11 @@ import type { Translation } from "../catalog";
 /** The Simplified Chinese catalog, following Apple's zh-Hans macOS terminology: one half-width
  * space between Chinese and Latin text, numbers or placeholders, full-width punctuation in Chinese
  * sentences, and fixed terms — 控制台 console, 会话 session, 控制台会话 console session, 项目会话 project
- * session, 智能体 agent. Chinese has only the `other` plural category. */
+ * session, 智能体 agent. Chinese has only the `other` plural category. Ellipses follow the rule in the
+ * English catalog's header. */
 export const zhHans: Translation<"other"> = {
   "common.add": "添加",
-  "common.browse": "浏览…",
+  "common.browse": "浏览",
   "common.cancel": "取消",
   "common.clear": "清除",
   "common.close": "关闭",
@@ -304,7 +305,7 @@ export const zhHans: Translation<"other"> = {
   "sidebar.project.copyName": "复制项目名",
   "sidebar.project.nameCopied": "项目名已复制",
   "sidebar.project.copyNameFailed": "无法复制项目名",
-  "sidebar.project.restoreChanges": "还原文件变更…",
+  "sidebar.project.restoreChanges": "还原文件变更",
   "sidebar.project.changesRestored": "文件变更已还原",
   "dialog.restoreProjectChanges.title": "确认还原 {name} 的文件变更？",
   "dialog.restoreProjectChanges.message": "丢弃此项目工作树中已跟踪文件的所有已暂存和未暂存变更，并还原到当前提交。已暂存的新文件将被删除。未跟踪的文件和已忽略的文件将保留。此操作无法撤销。",
@@ -788,13 +789,13 @@ export const zhHans: Translation<"other"> = {
   "configuration.export.scope.all.description": "所有控制台及其项目，以及应用设置。",
   "configuration.export.paths.title": "文件包含项目路径",
   "configuration.export.paths.description": "每个项目的目录都会以运行 {appName} 的机器上的路径写入文件，该机器未必是当前窗口所在的机器。请只把文件分享给你愿意让其看到这些路径的人。",
-  "configuration.export.submit": "导出…",
+  "configuration.export.submit": "导出",
   "configuration.export.saved": "配置已保存为“{name}”。",
   "configuration.export.downloaded": "配置已下载。",
   "configuration.export.failed": "无法保存文件：{detail}",
   "configuration.import.title": "导入配置",
   "configuration.import.choose.intro": "请选择从 {appName} 导出的文件。在创建任何内容之前，你会先查看文件内容，并决定每个项目放在运行 {appName} 的机器上的什么位置。",
-  "configuration.import.choose.submit": "选择文件…",
+  "configuration.import.choose.submit": "选择文件",
   "configuration.import.readFailed": "无法读取文件：{detail}",
   "configuration.file.tooLarge": "文件过大，不可能是配置文件。",
   "configuration.file.notText": "该文件不是文本文件。",

@@ -14,14 +14,14 @@ This is the guarantee the whole design rests on:
   alone, unless the user chooses to move the folder to the system Trash with it (see "Moving the project folder to
   the Trash" in `docs/product/consoles-and-projects.md`).
   Octoboard changes a project's files only through an authorized fast-forward, **Switch branch** or
-  **Restore file changes…**, and does not push except at the user's word. A branch that is
+  **Restore file changes**, and does not push except at the user's word. A branch that is
   behind its upstream and has no commits of its own is fast-forwarded, which moves its working tree — on its own
   once **Automatically pull repositories** has been turned on, or for one project when the user chooses **Pull
   current branch** (see "Automatically pulling repositories" and "Pulling one project by hand" in
   `docs/product/project-git-status.md`). Separately, **Push current branch** pushes that one branch. That updates
   the remote and, in the repository, the remote-tracking refs `git` updates for that push; when the branch had no
   upstream, it records one. It does not edit the project's files and does not move the working tree (see "Pushing
-  the current branch" in `docs/product/project-git-status.md`). **Restore file changes…**, after confirmation,
+  the current branch" in `docs/product/project-git-status.md`). **Restore file changes**, after confirmation,
   discards staged and unstaged tracked changes in the project's own worktree, restoring files to `HEAD` without
   moving the branch or changing commits (see "Restoring file changes" in `docs/product/project-git-status.md`).
   **Switch branch** moves the project's own worktree to an existing local branch when chosen, preserving local

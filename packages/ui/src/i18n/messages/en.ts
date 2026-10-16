@@ -6,11 +6,13 @@
  * filled globally from `config/app.json`.
  *
  * Web UI is sentence case and uses no contractions. The macOS application menu is Title Case,
- * matching Apple's own menu items.
+ * matching Apple's own menu items. A command in the window takes a trailing ellipsis only when the
+ * action it names is not done when the press lands; the rule and its exceptions are the
+ * "Ellipsis" entry of "This project" in `.claude/skills/knowledge-i18n-copy/SKILL.md`.
  */
 export const en = {
   "common.add": "Add",
-  "common.browse": "Browse…",
+  "common.browse": "Browse",
   "common.cancel": "Cancel",
   "common.clear": "Clear",
   "common.close": "Close",
@@ -348,7 +350,7 @@ export const en = {
   "sidebar.project.copyName": "Copy project name",
   "sidebar.project.nameCopied": "Project name copied",
   "sidebar.project.copyNameFailed": "Could not copy the project name",
-  "sidebar.project.restoreChanges": "Restore file changes…",
+  "sidebar.project.restoreChanges": "Restore file changes",
   "sidebar.project.changesRestored": "File changes restored",
   "dialog.restoreProjectChanges.title": "Restore file changes in {name}?",
   "dialog.restoreProjectChanges.message": "Discard all staged and unstaged changes to tracked files in this project’s working tree and restore them to the current commit. Staged new files will be deleted. Untracked and ignored files will be kept. This cannot be undone.",
@@ -874,14 +876,14 @@ export const en = {
   "configuration.export.paths.title": "The file contains project paths",
   "configuration.export.paths.description":
     "Each project's directory is written into it as a path on the machine running {appName}, which may not be the one this window is on. Share the file only with people you are happy to show those paths to.",
-  "configuration.export.submit": "Export…",
+  "configuration.export.submit": "Export",
   "configuration.export.saved": "Configuration saved as “{name}”.",
   "configuration.export.downloaded": "Configuration downloaded.",
   "configuration.export.failed": "Could not save the file: {detail}",
   "configuration.import.title": "Import configuration",
   "configuration.import.choose.intro":
     "Choose a file exported from {appName}. You will review what it holds, and decide where each project goes on the machine running {appName}, before anything is created.",
-  "configuration.import.choose.submit": "Choose file…",
+  "configuration.import.choose.submit": "Choose file",
   "configuration.import.readFailed": "Could not read the file: {detail}",
   "configuration.file.tooLarge": "The file is too large to be a configuration file.",
   "configuration.file.notText": "The file is not a text file.",

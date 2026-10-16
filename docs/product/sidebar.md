@@ -243,7 +243,7 @@ offered, **Open in file manager**, **Open terminal** and, while the project's st
 - **Git** — a submenu, only while the project's status says its directory is a git repository, so not before the
   first status and not when the directory is not one (see "What one check does" in
   `docs/product/project-git-status.md`). It holds **Pull current branch**, then **Push current branch**, then
-  **Switch branch**, then, after a separator, the destructive **Restore file changes…** action. Pull current branch
+  **Switch branch**, then, after a separator, the destructive **Restore file changes** action. Pull current branch
   checks the project against its remote and fast-forwards it right now, is not waited on, and toasts nothing when it
   succeeds (see "Pulling one project by hand" in `docs/product/project-git-status.md`). Push current branch pushes
   that branch and is waited on until the push finishes; the window then shows a notice that the current branch was

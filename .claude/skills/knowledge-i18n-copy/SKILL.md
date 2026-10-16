@@ -502,6 +502,16 @@ are now wrong or it leaves out one thing, the meaning has changed.
   model wrote and is not localized. (`docs/product/language.md`, "What follows the language")
 - **Capitalization**: the UI is a web UI and uses sentence case (Close sessions, Try again); the macOS application
   menu's items follow Apple's Title Case (Hide Others, Select All). (`packages/ui/src/i18n/messages/en.ts`)
+- **Ellipsis**: this overrides the web default under "Ellipsis" above. A command in the window — a button or menu item —
+  takes a trailing ellipsis when the action it names is not done when the press lands: it leads into a flow of two or
+  more dialogs or screens (Export…: a scope, then a save location, as the desktop app asks it; Import…: a file, then its
+  review), or lands somewhere the user goes on to do it (Manage accounts… in Settings, Grant… finished in System
+  Settings). It takes none when it leads to a single dialog or chooser where the user enters or picks one thing and
+  confirms (Rename, Choose file), to a pure confirmation, or to a submenu, nor when its name is the navigation itself
+  and the landing completes it (Settings, View all, Browse files, Open terminal, Open System Settings). A dialog or
+  screen counts as one step, however many keystrokes it takes, and a label read only as an accessible name or tooltip
+  takes none. The macOS application menu keeps Apple's (Settings…), and in-progress text and the menu bar's "N more…"
+  line keep their own. (the user's decision; `packages/ui/src/i18n/messages/en.ts`)
 - **en contractions**: the en catalog uses no contractions — could not, is not, does not — overriding the default
   register above; keep new strings consistent with it. (`packages/ui/src/i18n/messages/en.ts`)
 - **Empty-state copy**: an empty state's title carries no punctuation at all, a comma inside it included, which is

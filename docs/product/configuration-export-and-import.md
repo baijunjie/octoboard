@@ -20,13 +20,13 @@ file picker. Where the window can do neither, the welcome screen's button is not
 says that exporting and importing are not available (see "Configuration" in `docs/product/settings.md`).
 
 **Exporting** opens a dialog that asks what to export: the console the sidebar shows, or everything; with no console
-there is only everything. Under that choice, before anything is saved, the dialog says that the file contains the path of each project on the
-machine running Octoboard, which may not be the one the window is on, so sharing it is a choice made knowing so.
-**Export…** then asks the daemon for the document and opens the save dialog. In the desktop app a toast names the file
-it was saved as. A browser files a download itself, under its own name and wherever its settings say, and does not
-report one that was blocked or cancelled, so there the toast says only that the configuration was downloaded and names
-no file. Dismissing the desktop app's save dialog saves nothing and leaves the export dialog open; a file that could not
-be written is said in the dialog.
+there is only everything. Under that choice, before anything is saved, the dialog says that the file contains the path
+of each project on the machine running Octoboard, which may not be the one the window is on, so sharing it is a choice
+made knowing so. The dialog's **Export** button then asks the daemon for the document and opens the save dialog. In the
+desktop app a toast names the file it was saved as. A browser files a download itself, under its own name and wherever
+its settings say, and does not report one that was blocked or cancelled, so there the toast says only that the
+configuration was downloaded and names no file. Dismissing the desktop app's save dialog saves nothing and leaves the
+export dialog open; a file that could not be written is said in the dialog.
 
 **Importing** opens a dialog in three steps. The user picks a file, and the window sends its document to the daemon to
 be inspected; a file that is not JSON, or that the daemon refuses (not a configuration, a version this Octoboard does
@@ -44,16 +44,16 @@ references that would fall back to a default account are listed on the console o
 document with application settings gets a checkbox for them, unchecked, whose note says what applying would change from
 what is set now.
 
-**Import** sends the document unchanged, with the choice of every project that is placed, in one request; a project left
-out is sent none. A directory the user typed that is not usable stops the import before any request and is marked on its
-row. The dialog cannot be dismissed while the request runs, which with clones can be long. The **result** replaces the
-review. It opens with a summary of the totals (only what happened, and that nothing failed when so) and, for a document
-that had application settings, whether they were applied. Under it a table has a line for each project, under its
-console, with its result (created, left out, failed, not tried) and a detail: how a created project was placed (at its
-exported path, in the default clone directory, cloned, in the directory chosen), why a failed one failed, or that a
-project was not tried because its console could not be created. A console that could not be created, or that came out
-with no projects, has a line of its own. In a narrow dialog each line becomes a block that names every value. Each
-account that fell back to a default account is listed under its own heading below.
+The review's **Import** button sends the document unchanged, with the choice of every project that is placed, in one
+request; a project left out is sent none. A directory the user typed that is not usable stops the import before any
+request and is marked on its row. The dialog cannot be dismissed while the request runs, which with clones can be long.
+The **result** replaces the review. It opens with a summary of the totals (only what happened, and that nothing failed
+when so) and, for a document that had application settings, whether they were applied. Under it a table has a line for
+each project, under its console, with its result (created, left out, failed, not tried) and a detail: how a created
+project was placed (at its exported path, in the default clone directory, cloned, in the directory chosen), why a failed
+one failed, or that a project was not tried because its console could not be created. A console that could not be
+created, or that came out with no projects, has a line of its own. In a narrow dialog each line becomes a block that
+names every value. Each account that fell back to a default account is listed under its own heading below.
 
 Exporting and importing are also requests of the daemon, which any program on its host can reach (see "Who can reach
 the daemon" in `docs/product/application-lifecycle.md`).

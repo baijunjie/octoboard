@@ -45,7 +45,7 @@ it.each([
     );
     await act(async () => radio?.click());
   }
-  await press("Export…");
+  await press("Export");
   expect(mounted.sent()).toEqual([sent]);
 });
 
@@ -56,7 +56,7 @@ it("offers only everything where there is no console in hand", () => {
 
 it("saves the document as the daemon sent it, under a name for the console, and says where it went", async () => {
   const mounted = mount();
-  await press("Export…");
+  await press("Export");
   expect(mounted.save).toHaveBeenCalledExactlyOnceWith("octoboard-Main.json", `${JSON.stringify(DOCUMENT, null, 2)}\n`);
   expect(mounted.notices()).toEqual(["Configuration saved as “octoboard-Main.json”."]);
   expect(mounted.closed()).toBe(1);
@@ -64,21 +64,21 @@ it("saves the document as the daemon sent it, under a name for the console, and 
 
 it("says only that the configuration was downloaded when the platform hands the file over without saying where", async () => {
   const mounted = mount(vi.fn<Save>(async () => ({ kind: "handedOver" })));
-  await press("Export…");
+  await press("Export");
   expect(mounted.notices()).toEqual(["Configuration downloaded."]);
   expect(mounted.closed()).toBe(1);
 });
 
 it("stays open, with no notice, when the save dialog is dismissed", async () => {
   const mounted = mount(vi.fn<Save>(async () => undefined));
-  await press("Export…");
+  await press("Export");
   expect(mounted.notices()).toEqual([]);
   expect(mounted.closed()).toBe(0);
 });
 
 it("shows why a file could not be written and stays open", async () => {
   const mounted = mount(vi.fn<Save>(async () => Promise.reject(new Error("Permission denied"))));
-  await press("Export…");
+  await press("Export");
   expect(text()).toContain("Could not save the file: Permission denied");
   expect(mounted.closed()).toBe(0);
 });
