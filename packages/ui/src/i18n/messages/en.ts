@@ -951,7 +951,7 @@ export const en = {
   "configuration.import.directory.placeholder": "~/code/website",
   "configuration.import.directory.required": "Enter a directory, or leave the project out.",
   "configuration.import.directory.notAbsolute": "Enter an absolute path, or one starting with {tilde}.",
-  "configuration.import.result.finished": "Import finished.",
+  "configuration.import.result.title": "Import finished",
   "configuration.import.result.consolesCreated": {
     one: "{count} console created.",
     other: "{count} consoles created.",

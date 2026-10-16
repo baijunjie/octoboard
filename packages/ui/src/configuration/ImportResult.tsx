@@ -3,7 +3,6 @@ import React, { useId } from "react";
 
 import { AGENT_LABEL } from "../agents";
 import { CodeToneContext } from "../components/codeTone";
-import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
 import type { Event, ImportChoiceKind, ImportedProject } from "../protocol";
@@ -145,10 +144,6 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
 
   return (
     <>
-      <StatusAnnouncer text={t("configuration.import.result.finished")} firstWriteDelayMs={400} />
-      <p aria-hidden="true" className="font-medium text-foreground">
-        {t("configuration.import.result.finished")}
-      </p>
       <p>{summary.join(t("configuration.import.result.summary.join"))}</p>
       {result.settings_applied && (
         <p>

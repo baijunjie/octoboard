@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { InlineCode } from "../components/InlineCode";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "../dialogs/Dialog";
+import { dialogAround } from "../dialogs/dialogElement";
 import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { useDaemon } from "../store";
@@ -76,6 +77,12 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   useEffect(() => {
     if (stopped > 0) bodyRef.current?.querySelector<HTMLElement>("input[aria-invalid=true]")?.focus();
   }, [stopped]);
+  // The result renames the dialog, and focus taken to it reads the new name out; focus left on the
+  // close button or the body while the import ran would otherwise hear nothing.
+  const finished = stage.kind === "result";
+  useEffect(() => {
+    if (finished) dialogAround(bodyRef)?.focus();
+  }, [finished]);
 
   const choose = async () => {
     if (!configurationFile || busy || waitingRef.current) return;
@@ -174,7 +181,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
 
   return (
     <Dialog
-      title={t("configuration.import.title")}
+      title={t(stage.kind === "result" ? "configuration.import.result.title" : "configuration.import.title")}
       onClose={busy ? () => {} : onClose}
       size={stage.kind === "choose" ? "md" : "wide"}
       resetKey={stage.kind}

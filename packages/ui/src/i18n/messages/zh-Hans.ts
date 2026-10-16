@@ -853,7 +853,7 @@ export const zhHans: Translation<"other"> = {
   "configuration.import.directory.placeholder": "~/code/website",
   "configuration.import.directory.required": "请输入目录，或选择不导入此项目。",
   "configuration.import.directory.notAbsolute": "请输入绝对路径，或以 {tilde} 开头的路径。",
-  "configuration.import.result.finished": "导入已完成。",
+  "configuration.import.result.title": "导入已完成",
   "configuration.import.result.consolesCreated": {
     other: "已创建 {count} 个控制台。",
   },

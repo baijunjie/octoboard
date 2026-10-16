@@ -474,6 +474,11 @@ element, an error from `role="alert"`.
   the one that matters here, made in System Settings and picked up on the way back — lands in a region that has been
   mounted all along. Put the subject inside the region when several of them can change independently: `role="status"`
   is atomic, so a bare "Granted." names nothing.
+- A dialog step whose title says what happened announces it by moving focus to the dialog, wherever focus was, so the
+  dialog is read out by its new name; it adds no `StatusAnnouncer`, which would say the same thing again. The import's
+  result step is the instance: its title becomes "Import finished" and the step focuses the dialog itself
+  (`packages/ui/src/configuration/ImportConfigurationDialog.tsx`). That VoiceOver reads the renamed dialog on this
+  focus move has not been listened to yet; confirm it once per "Reusing VoiceOver verification".
 - HeroUI's `Alert` renders no role at all, its name notwithstanding. An error that can appear in one after the user has
   moved on puts `role="alert"` on an element of your own inside it.
 

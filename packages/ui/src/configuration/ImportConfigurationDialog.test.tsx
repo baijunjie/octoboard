@@ -176,6 +176,21 @@ it("tells each project's result in a table row, with the reason beside a failure
   expect(text()).toContain("“Automatically pull repositories” is now on.");
 });
 
+it("names the result step in its title and takes focus to the dialog, wherever focus was while it ran", async () => {
+  let answer!: (event: Event) => void;
+  await reviewing({
+    reply: (body) => body.type === "import_configuration" ? new Promise((resolve) => (answer = resolve)) : reply(body),
+  });
+  const dialog = document.body.querySelector<HTMLElement>("[role=dialog]")!;
+  expect(dialog.querySelector("h2")?.textContent).toBe("Import configuration");
+  await press("Import");
+  const close = dialog.querySelector<HTMLElement>("button[slot=close], button[aria-label=Close]")!;
+  act(() => close.focus());
+  await act(async () => answer({ type: "configuration_imported", ...MIXED_RESULT }));
+  expect(dialog.querySelector("h2")?.textContent).toBe("Import finished");
+  expect(document.activeElement).toBe(dialog);
+});
+
 // A browser without the file input's `cancel` event never answers for a dismissed picker.
 it("can be dismissed while the open dialog has not answered", async () => {
   const mounted = mount({ unanswered: true });
