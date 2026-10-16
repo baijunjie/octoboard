@@ -30,18 +30,18 @@ Render any list whose order can change while one of its rows may hold focus thro
 
 A wrapper that renders nothing once its last child is gone takes focus down with it, and a library's own rescue does
 not reach that case: react-aria's `useTagGroup` focuses its list element when the last tag is removed, but a list
-that unmounts in the same commit is gone before the effect runs, and one laid out with `display: contents` (as both
-tag groups in `packages/ui` are, to flow their tags into a row of the parent's) cannot be counted on to take focus. So
-move focus to a named element yourself, in the removal handler, rather than leave it to the library: `ProjectFilterTags`
-in `packages/ui/src/sidebar/ProjectFilter.tsx` hands it to `returnFocusTo` through `handFocusOff`
-(`packages/ui/src/components/handFocusOff.ts`) on the removal that empties the group, and `TagsInput` in
-`packages/ui/src/dialogs/TagsInput.tsx` hands it to its text input on every removal, a dialog being where focus on
-`<body>` costs Escape and Tab as well. Where the element goes away from a state change rather than from a handler of
-its own — a region closed by a toggle pressed with `preventFocusOnPress`, a control removed by the answer it was
-waiting for — there is no removal handler to put focus back from, so wrap it in `useFocusHandoff`
-(`packages/ui/src/components/useFocusHandoff.ts`), which after each render notices that the element focus was on has
-left the document. Its caller has to stay mounted and render nothing for that check to run in, rather than unmount
-with the element.
+that unmounts in the same commit is gone before the effect runs, and one laid out with `display: contents` (as
+`TagsInput`'s is, in `packages/ui/src/dialogs/TagsInput.tsx`, to flow its tags into the field's row) cannot be counted
+on to take focus. So move focus to a named element yourself, in the removal handler, rather than leave it to the
+library — `TagsInput` hands it to its text input on every removal, a dialog being where focus on `<body>` costs Escape
+and Tab as well — and for any control a handler of its own takes away, call `handFocusOff`
+(`packages/ui/src/components/handFocusOff.ts`) before the removal, as `PinButton` in
+`packages/ui/src/sidebar/rows.tsx` and `AvatarField` in `packages/ui/src/dialogs/AvatarField.tsx` do. Where the
+element goes away from a state change rather than from a handler of its own — a region closed by a toggle pressed
+with `preventFocusOnPress`, a control removed by the answer it was waiting for — there is no removal handler to put
+focus back from, so wrap it in `useFocusHandoff` (`packages/ui/src/components/useFocusHandoff.ts`), which after each
+render notices that the element focus was on has left the document. Its caller has to stay mounted and render nothing
+for that check to run in, rather than unmount with the element.
 
 ## "Focus left" is three things: check `document.hasFocus()` before answering a `focusout` with no `relatedTarget`
 

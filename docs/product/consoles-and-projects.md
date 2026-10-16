@@ -234,10 +234,9 @@ ignoring case is dropped, the first spelling staying.
 
 ### Picked tags
 
-A tag the user has picked and can remove — in a project's Tags field, and under the sidebar's Projects heading while a
-tag filter is in force (see "Filtering the project list" in `docs/product/sidebar.md`) — looks and behaves the same in
-both places. The sidebar filter's keyword is shown as the same kind of tag, in a neutral grey instead of the accent
-tint (same section).
+A tag the user has picked and can remove, in a project's Tags field, looks and behaves as follows. The sidebar's
+Projects heading shows the tags of a filter in force in the same colours, but there they are not removable and the
+rules below do not apply (see "Filtering the project list" in `docs/product/sidebar.md`).
 
 - It is filled with a light accent tint and has accent-coloured text.
 - Its label is always one line. A label too long for its space fades out at its cut end and, while the mouse pointer is

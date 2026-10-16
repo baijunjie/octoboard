@@ -11,6 +11,13 @@ export const FADE_SIZE = 24;
 
 type Orientation = "vertical" | "horizontal";
 
+/** The top scroll padding of a list with sticky headings `headingHeight` tall: what scrolls into view
+ * stops clear of the heading and the fade below it. The controls inside the heading, pinned in view
+ * already, are exempted from it by `useStickyHeadingFocus`. */
+export function stickyScrollPaddingTop(headingHeight: number): number {
+  return headingHeight + FADE_SIZE;
+}
+
 /** The scroll padding that keeps whatever the browser or react-aria scrolls into view (a control
  * that takes focus) clear of the fade rather than under it; it goes on the axis that fades. */
 function scrollPadding(orientation: Orientation): CSSProperties {
@@ -157,7 +164,7 @@ export function FadedScroller({ orientation = "vertical", region, style, classNa
       {...region?.props}
       style={{ ...scrollPadding(orientation), ...style, ...(stickyHeadingHeight === undefined ? {} : {
         maskImage: "none", WebkitMaskImage: "none", animation: "none",
-        scrollPaddingTop: stickyHeadingHeight + FADE_SIZE,
+        scrollPaddingTop: stickyScrollPaddingTop(stickyHeadingHeight),
       }) }}
       className={joinClasses(className, region?.className)}
     />
@@ -216,7 +223,7 @@ export function useStickyScrollFade({ ref: forwarded, className, stickyHeadingHe
     return () => resize.disconnect();
   });
   return {
-    props: { ref, className, style: { ...scrollPadding("vertical"), scrollPaddingTop: stickyHeadingHeight + FADE_SIZE } },
+    props: { ref, className, style: { ...scrollPadding("vertical"), scrollPaddingTop: stickyScrollPaddingTop(stickyHeadingHeight) } },
     wrap: (children) => <StickyFadeFrame visibility={visibility} gutter={gutter} headingHeight={stickyHeadingHeight} bottomGutter={bottomGutter}>{children}</StickyFadeFrame>,
   };
 }

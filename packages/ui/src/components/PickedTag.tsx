@@ -9,12 +9,8 @@ import { TitledControl } from "./TitledControl";
 /** HeroUI has no accent variant for a removable tag, so this uses its selected tag's colour tokens
  * without introducing selection behaviour. The 3rem minimum applies only while the remove button
  * is visible, keeping a short label clear of the button and its fade while fitting the content at rest. */
-const ACCENT_TAG_CLASS =
+const TAG_CLASS =
   "group/tag min-w-0 hover:min-w-12 data-focus-visible:min-w-12 max-w-full bg-accent-soft text-accent-soft-foreground hover:bg-accent-soft-hover";
-
-/** The neutral look: HeroUI's default tag fill, which in the sidebar is its own fill
- * (`.sidebar-fills`). The minimum width is the accent look's, for the same reason. */
-const NEUTRAL_TAG_CLASS = "group/tag min-w-0 hover:min-w-12 data-focus-visible:min-w-12 max-w-full";
 
 /** Laid over the tag's end rather than in the row, so it does not reserve space in the row:
  * 0.25rem from the end, inside the tag's 0.5rem end padding, so the 0.75rem glyph
@@ -26,12 +22,9 @@ const NEUTRAL_TAG_CLASS = "group/tag min-w-0 hover:min-w-12 data-focus-visible:m
 const REMOVE_CLASS =
   "absolute inset-y-0 end-1 my-auto opacity-0 transition-opacity duration-100 motion-reduce:transition-none group-hover/tag:opacity-100 group-data-focus-visible/tag:opacity-100 bg-transparent";
 
-/** The glyph and its hover fill are drawn from each look's own foreground: HeroUI's
- * `bg-default-hover` is a translucent fill about as strong as the neutral tag's own and so would
- * add little on it. */
-const ACCENT_REMOVE_CLASS =
+/** The glyph and its hover fill are drawn from the tag's own foreground. */
+const REMOVE_COLOUR_CLASS =
   "text-accent-soft-foreground/80 hover:bg-accent-soft-foreground/15 hover:text-accent-soft-foreground";
-const NEUTRAL_REMOVE_CLASS = "text-foreground/80 hover:bg-foreground/10 hover:text-foreground";
 
 /** While the remove button shows, the label fades out ahead of it: opaque until 0.75rem before the
  * button's edge, fading to transparent at it, toward the tag's end, where the button sits.
@@ -58,44 +51,31 @@ function tagDirection(tag: string, ui: "ltr" | "rtl"): "ltr" | "rtl" {
 }
 
 /**
- * A tag the user has picked, removable, in the accent look; the neutral one sets apart a filter's
- * keyword shown beside its tags. It goes in a HeroUI `TagGroup`, whose `onRemove` receives its
- * `id`. The label is one line that fades out where it is cut off and, while the pointer is over the
- * tag, scrolls through its whole text. The remove button shows only while the pointer is over the
- * tag or the tag has keyboard focus (where Backspace and Delete also remove it), and then covers the
- * label's end (the end its text runs to, see `tagDirection`), which fades out ahead of it, so
- * short tags widen only while the button is visible.
+ * A tag the user has picked, removable, in the accent look. It goes in a HeroUI `TagGroup`, whose
+ * `onRemove` receives its text. The label is one line that fades out where it is cut off and, while
+ * the pointer is over the tag, scrolls through its whole text. The remove button shows only while
+ * the pointer is over the tag or the tag has keyboard focus (where Backspace and Delete also remove
+ * it), and then covers the label's end (the end its text runs to, see `tagDirection`), which fades
+ * out ahead of it, so short tags widen only while the button is visible.
  */
 export function PickedTag({
   tag,
-  id = tag,
   removeTitle,
-  removeLabel,
-  tone = "accent",
-  preventFocusOnPress,
 }: {
   tag: string;
-  /** The key `onRemove` receives; the tag's text by default. A tag whose text changes in place (a
-   * keyword being typed) needs a fixed one: react-aria throws when an item's id changes. */
-  id?: string;
-  /** The remove button's tooltip, naming the tag. */
+  /** The remove button's tooltip, naming the tag. Its accessible name is the bare verb; the row adds
+   * the tag's own text to it through react-aria's `aria-labelledby`, so it is not announced twice. */
   removeTitle: string;
-  /** The remove button's accessible name, the bare verb ("Remove tag" by default); the row adds the
-   * tag's own text to it through react-aria's `aria-labelledby`, so it is not announced twice. */
-  removeLabel?: string;
-  tone?: "accent" | "neutral";
-  /** Keeps a press on the remove button from taking focus (off the terminal). */
-  preventFocusOnPress?: boolean;
 }): React.ReactElement {
   const t = useT();
   const dir = tagDirection(tag, textDirection(useCurrentLanguage()));
   return (
     <Tag
-      id={id}
+      id={tag}
       dir={dir}
       textValue={tag}
       data-marquee-scope
-      className={tone === "accent" ? ACCENT_TAG_CLASS : NEUTRAL_TAG_CLASS}
+      className={TAG_CLASS}
     >
       {/* The function form: TagRoot only finds a remove button among its direct children, and would add
           a default one beside a wrapped button. */}
@@ -119,9 +99,8 @@ export function PickedTag({
           </span>
           <TitledControl title={removeTitle}>
             <Tag.RemoveButton
-              aria-label={removeLabel ?? t("common.removeTag")}
-              preventFocusOnPress={preventFocusOnPress}
-              className={`${REMOVE_CLASS} ${tone === "accent" ? ACCENT_REMOVE_CLASS : NEUTRAL_REMOVE_CLASS}`}
+              aria-label={t("common.removeTag")}
+              className={`${REMOVE_CLASS} ${REMOVE_COLOUR_CLASS}`}
             />
           </TitledControl>
         </>

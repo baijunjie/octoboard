@@ -154,7 +154,8 @@ The count follows the current project filter and shows zero when the console has
 The console sessions and Projects headings stay at the top of the scrolling list while their rows move underneath.
 As Projects approaches the top, it pushes the console sessions heading upward out of view and takes its place.
 Each heading has an opaque background; the edge fade begins below it, and keyboard focus scrolled into view stays
-below both the heading and the fade.
+below both the heading and the fade. Moving focus among the controls of a heading pinned at the top does not scroll
+the list (see "Scrolling a surface from the keyboard" in `docs/product/scrolling-surfaces.md`).
 
 ### Filtering the project list
 
@@ -174,17 +175,24 @@ stays open. Typing or picking a tag does not close the popover when a filter com
 a check mark, so it is not told apart by colour alone. Opening and closing it with
 the mouse leaves keyboard focus where it was.
 
-- While a filter is in force, a row under the Projects heading, across the sidebar's whole width, shows it; with no
-  filter the row is not there. This row scrolls with the project list below the sticky heading. The keyword, if there
-  is one, comes first, as a tag in a neutral grey which otherwise looks and behaves as the tags in a project's Tags field (see "Picked tags" in
-  `docs/product/consoles-and-projects.md`); removing it drops just the keyword and leaves the picked tags. The picked
-  tags follow it, in the accent look of those tags, so they are told apart from the keyword, and the row wraps onto
-  further lines when they do not fit. Removing a picked tag drops just that tag from the filter. The row has no
-  separate clear-all button; the search field's own clear button clears only the keyword.
-- Clicking the keyword, a tag, either's remove button or Clear filter with the mouse leaves keyboard focus where it
-  was. Removing the keyword, or the last tag, with the keyboard (Backspace or Delete while it has focus) moves focus
-  to the filter button; pressing Clear filter with the keyboard keeps focus there. In Tab order the row comes after
-  the heading's controls: the keyword, then the picked tags.
+- While a filter is in force, a strip in the Projects heading's own line, between "Projects (n)" and the controls at
+  the line's end, shows it; with no filter the strip is not there. Being part of the heading, it stays at the top
+  while the project list scrolls underneath. The keyword, if there is one, comes first, as a small tag in a neutral
+  grey; the picked tags follow it, filled with the light accent tint and accent-coloured text of a project's picked
+  tags (see "Picked tags" in `docs/product/consoles-and-projects.md`), so they are told apart from the keyword.
+- The strip only shows the filter: nothing in it is a control. Its tags have no remove buttons, take no keyboard
+  focus and are not Tab stops, and neither the keyword nor a single tag can be dropped from here. The way to drop
+  the filter from the heading is Clear filter, which drops the keyword and every picked tag together; the popover
+  changes them one at a time, and the search field's own clear button clears only the keyword.
+- The strip is one label, under the rules of "Names too long for their space" in
+  `docs/product/labels-and-tooltips.md`: it never wraps onto a further line and no tag in it is cut or fades on its
+  own. When it does not fit it is cut at its end and fades there; it does not scroll sideways. While the mouse
+  pointer is anywhere over the strip, the whole strip runs as one marquee, all its tags moving together. While cut,
+  it carries the whole filter as its tooltip — the keyword, then the picked tags, separated by commas; a strip that
+  fits has none. For assistive technology the keyword and the picked tags are two groups, named **Filter keyword**
+  and **Selected tags**.
+- Clicking Clear filter with the mouse leaves keyboard focus where it was; pressing it with the keyboard keeps focus
+  on it.
 - The tags offered are the distinct tags of the console's projects, in alphabetical order, so a tag that no project
   carries any more disappears from the choices, and from the filter if it was picked, without emptying the list. The
   pick is only hidden, not forgotten: if a project carries that tag again, it filters again.
@@ -197,8 +205,9 @@ the mouse leaves keyboard focus where it was.
 ### Expanding and collapsing the listed projects
 
 One icon-only button follows the filter button. Its name is whichever action it will take, **Collapse all projects**
-or **Expand all projects**. The Projects heading holds its label and project count and, at its end, the filter button
-followed by this button.
+or **Expand all projects**. The Projects heading holds its label and project count, then the strip of conditions
+while a filter is in force (see "Filtering the project list" above) and, at its end, the filter button followed by
+this button.
 
 - It shows while the console has projects **and** the list shows at least one of them. With a filter matching no
   project it is not there — there is nothing to act on — while the filter button beside it stays, as the way back.

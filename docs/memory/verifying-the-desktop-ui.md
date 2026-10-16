@@ -180,11 +180,14 @@ way round; every measurement passed, and the fix it passed still failed in the p
 defect or verifying its fix, put the steps in the order the report gives, and where a scenario cannot reach the state
 that way, extend it until it can rather than reporting the pass the other order gives.
 
-## Check the page in WebKit with real pointer input, and with long and CJK text
+## Check the page in WebKit with real pointer input and focus scrolling, and with long and CJK text
 
 The app renders in WKWebView, so a pass in Chrome says nothing: a HeroUI tag's remove button that ignored the mouse in
 WebKit passed a scripted click in Chrome. Run a browser check of the page in Playwright's `webkit` and drive the pointer
-through `page.mouse` rather than a click dispatched from script. Playwright is a pinned devDependency of `packages/ui`,
+through `page.mouse` rather than a click dispatched from script. The same holds for where focus scrolls a scroller:
+the engines' focus scrolls differ in timing and in what CSS they honour (see the "Focus scrolled to the edge of a
+scroller that fades there" section of `docs/ui-accessibility.md`), so a `scroll-margin` fix that holds a list still in
+Chrome can leave it jumping in WebKit. Playwright is a pinned devDependency of `packages/ui`,
 so `pnpm install` is all such a check needs from the repository; the dependency downloads no browser of its own, and the
 browser is fetched explicitly with `pnpm exec playwright install webkit`, run from `packages/ui` — from the workspace
 root `pnpm exec playwright` resolves to a machine-global Playwright or to nothing, and would silently fetch the wrong

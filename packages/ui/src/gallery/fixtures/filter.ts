@@ -9,7 +9,7 @@ const projects = [
   projectOf("p-1", console_.id, "Website", { tags: ["frontend", "customer-facing"] }),
   projectOf("p-2", console_.id, "Search API", { tags: ["backend", "customer-facing"] }),
   projectOf("p-3", console_.id, "Billing Service", { tags: ["backend", "payments"] }),
-  projectOf("p-4", console_.id, "Docs Site", { tags: ["frontend", "customer-facing", "docs", "x", "a-long-tag-for-checking-project-interface-layout"] }),
+  projectOf("p-4", console_.id, "Docs Site", { tags: ["frontend", "customer-facing", "docs", "a-long-tag-for-checking-project-interface-layout"] }),
   projectOf("p-5", console_.id, "Build Scripts"),
 ];
 const sessions = projects.map((p) => sessionOf(`s-${p.id}`, console_.id, p.id, `Work on ${p.name}`, "idle"));
@@ -34,8 +34,8 @@ const state = snapshotState({
   sessions: [...sessions, ...sessions.map((session) => ({ ...session, id: `crowded-${session.id}`, console_id: crowdedConsole.id, project_id: `crowded-${session.project_id}` }))],
 });
 
-// The matching project stays long enough for its filter chips to leave the viewport while
-// Projects remains pinned; the other filter previews retain their compact project lists.
+// The matching project stays long enough for its session list to scroll while the Projects
+// heading, with the conditions in force beside it, remains pinned.
 const scrollingMatchState = {
   ...state,
   sessions: new Map([
@@ -69,13 +69,29 @@ export const filterScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Matching projects",
-    description: "Projects (1) counts the single matching project. The heading's Funnel X clears the keyword and both tags together. Scroll the project sessions: Projects and its controls stay pinned above the fade while the filter chips scroll away below it. The keyword, short tag and long tag fit their content at rest; each remains removable on its own. Hover a short tag to reveal its remove button and minimum width.",
+    description: "Projects (1) counts the single matching project. The keyword and the tag sit beside the heading, between its label and the Funnel X, which clears them together; they are not interactive. Scroll the project sessions: the heading and its conditions stay pinned.",
     state: scrollingMatchState,
     preferences: { sidebarConsole: console_.id },
     steps: [
       openFilter,
       (ui) => ui.type("site"),
-      (ui) => ui.press("x"),
+      (ui) => ui.press("docs"),
+      (ui) => ui.key("Escape"),
+    ],
+  },
+  {
+    id: "filter-overflowing-tags",
+    group: GROUP,
+    category: "normal",
+    title: "Conditions wider than the heading",
+    description: "The keyword and three tags do not fit beside the Projects label. They stay on one line at full width and fade at the clipped end; hover the strip and all of it runs as one marquee, and its tooltip lists the whole filter.",
+    state,
+    preferences: { sidebarConsole: console_.id },
+    steps: [
+      openFilter,
+      (ui) => ui.type("site"),
+      (ui) => ui.press("customer-facing"),
+      (ui) => ui.press("docs"),
       (ui) => ui.press("a-long-tag-for-checking-project-interface-layout"),
       (ui) => ui.key("Escape"),
     ],

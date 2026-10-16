@@ -6,19 +6,16 @@ import {
   TagGroup,
 } from "@heroui/react";
 import { Check, Funnel, FunnelX, Tags } from "lucide-react";
-import type { Key } from "react-aria";
-import React, { type RefObject, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import { EmptyPanel } from "../components/EmptyPanel";
-import { handFocusOff } from "../components/handFocusOff";
-import { PickedTag } from "../components/PickedTag";
+import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import { usePointerFocusReturn } from "../components/usePointerFocusReturn";
 import { useScrollFade } from "../components/scrollFade";
 import { useTrimmedField } from "../dialogs/useTrimmedField";
 import { useT } from "../i18n/react";
 import { withoutTags, withTag } from "../projectFiltering";
-import { keepFocus } from "./rows";
 
 /** A console's project filter: the keyword a project's name must contain and the tags it must all
  * carry. */
@@ -42,19 +39,16 @@ export function isFiltering(filter: ProjectFilter): boolean {
  * project must carry every one picked. Escape closes it and keeps the filter, and so does Enter in
  * the field (on a tag, Enter picks or drops it). `filter.tags` is already narrowed to the vocabulary,
  * so changes go up as updates to apply to the stored filter, which still holds the tags no project
- * carries. `holderRef` is the element around the filter button, for removable conditions under the
- * heading to hand focus to. With a filter in force, the
- * heading button clears it; while the popover is open, it stays mounted as its fields change. */
+ * carries. With a filter in force, the heading button clears it; while the popover is open, it stays
+ * mounted as its fields change. */
 export function ProjectFilterButton({
   filter,
   vocabulary,
   onChange,
-  holderRef,
 }: {
   filter: ProjectFilter;
   vocabulary: string[];
   onChange: (update: FilterUpdate) => void;
-  holderRef: RefObject<HTMLDivElement | null>;
 }): React.ReactElement {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -64,7 +58,7 @@ export function ProjectFilterButton({
   // The button never takes focus on a press, and react-aria hands focus back to it when the popover
   // closes, which would pull it off the terminal; the element the press came from gets it back.
   const pointerFocus = usePointerFocusReturn();
-  const buttonHolder = holderRef;
+  const buttonHolder = useRef<HTMLDivElement>(null);
   const focusReturnListeners = useRef<AbortController | null>(null);
   useEffect(() => () => focusReturnListeners.current?.abort(), []);
   const keywordField = useTrimmedField(filter.keyword, (keyword) => onChange((f) => ({ ...f, keyword })));
@@ -105,10 +99,7 @@ export function ProjectFilterButton({
     }, 500);
   };
 
-  const clear = () => {
-    handFocusOff(document.activeElement?.closest("[data-project-filter]"), buttonHolder.current, true);
-    onChange(() => NO_FILTER);
-  };
+  const clear = () => onChange(() => NO_FILTER);
   // Keep the trigger mounted when its action changes so clearing or closing preserves keyboard
   // focus. A clear action has no popup; the controlled open callback handles that press instead.
   const trigger = (
@@ -239,100 +230,32 @@ function TagPicker({
   );
 }
 
-/** The keyword in force, first on the row under the Projects heading, as a tag in the neutral look
- * that drops just the keyword. A group of
- * its own, so it has a name of its own and is one tab stop apart from the picked tags. It goes
- * away with the keyword, so a removal while it holds focus moves focus to `returnFocusTo`, the
- * element around the filter button, rather than let it drop to `<body>`. The ring there follows
- * react-aria's interaction modality, not the browser's `:focus-visible`: a removal from the keyboard
- * shows it, a click on the remove button does not. */
-export function ProjectFilterTag({
-  keyword,
-  onRemove,
-  returnFocusTo,
-}: {
-  keyword: string;
-  onRemove: () => void;
-  returnFocusTo: RefObject<HTMLElement | null>;
-}): React.ReactElement {
-  const t = useT();
-  const group = useRef<HTMLDivElement>(null);
-  return (
-    <TagGroup
-      ref={group}
-      aria-label={t("sidebar.filter.keyword")}
-      size="sm"
-      // No box of its own, so the tag is an item of the wrapping row under the heading.
-      className="contents"
-      // Clicking the tag must not take keyboard focus off the terminal; the remove button still gets its click.
-      onMouseDownCapture={keepFocus}
-      onRemove={() => {
-        handFocusOff(group.current, returnFocusTo.current, false);
-        onRemove();
-      }}
-    >
-      <TagGroup.List className="contents">
-        <PickedTag
-          id="keyword"
-          tag={keyword}
-          tone="neutral"
-          removeTitle={t("sidebar.filter.removeKeyword", { keyword })}
-          removeLabel={t("common.remove")}
-          preventFocusOnPress
-        />
-      </TagGroup.List>
-    </TagGroup>
-  );
-}
+/** A small tag's shape and type (HeroUI's `tag--sm`), without the tag's hover, press and focus
+ * states, which belong to a tag that does something. */
+const CONDITION_CLASS = "shrink-0 rounded-xl px-2 py-0.5 text-xs font-medium";
 
-/** The tags picked in the filter, on the row under the Projects heading right after the keyword,
- * wrapping onto further lines when they do not fit, each removable on its own. They are filled with
- * the soft accent colour, which sets them apart from the keyword's neutral tag. The group goes away
- * with its last tag, so a removal that empties
- * it while it holds focus moves focus to `returnFocusTo`, the element around the filter button;
- * the tag unmounting would drop it to `<body>`, and the terminal would stop receiving keystrokes.
- * The filter button's focus ring follows react-aria's interaction modality, not the browser's
- * `:focus-visible`, so it shows for a removal from the keyboard and not for a click. */
-export function ProjectFilterTags({
-  tags,
-  onRemove,
-  returnFocusTo,
-}: {
-  tags: string[];
-  onRemove: (tags: string[]) => void;
-  returnFocusTo: RefObject<HTMLElement | null>;
-}): React.ReactElement {
+/** The filter in force, on the Projects heading's line between its label and its controls: the
+ * keyword first, in the neutral look, then the picked tags in the soft accent colour that sets them
+ * apart from it. Nothing here is interactive; the heading's Funnel X clears the filter. The
+ * conditions are one label to the pointer: clipped at the line's end, they fade there and run as one
+ * marquee while the pointer is over them, carrying the whole filter as a tooltip. Each kind is a
+ * named group, so a screen reader hears what the words are. */
+export function ProjectFilterSummary({ filter }: { filter: ProjectFilter }): React.ReactElement {
   const t = useT();
-  const group = useRef<HTMLDivElement>(null);
-  const remove = (keys: Set<Key>) => {
-    const removed = tags.filter((tag) => keys.has(tag));
-    // The group only goes away with its last tag.
-    const emptied = removed.length === tags.length;
-    handFocusOff(emptied ? group.current : null, returnFocusTo.current, false);
-    onRemove(removed);
-  };
   return (
-    <TagGroup
-      ref={group}
-      aria-label={t("sidebar.filter.picked")}
-      size="sm"
-      // The group and its list take no box of their own, so each tag is an item of the wrapping
-      // row under the heading and flows on right after the keyword.
-      className="contents"
-      // Clicking a tag must not take keyboard focus off the terminal; the remove button still gets its click.
-      onMouseDownCapture={keepFocus}
-      onRemove={remove}
-    >
-      <TagGroup.List className="contents">
-        {tags.map((tag) => (
-          <PickedTag
-            key={tag}
-            tag={tag}
-            removeTitle={t("sidebar.filter.removeTag", { tag })}
-            preventFocusOnPress
-          />
-        ))}
-      </TagGroup.List>
-    </TagGroup>
+    <FadeOverflow className="flex min-w-0 flex-1 items-center gap-1.5" titleWhenClipped={[filter.keyword, ...filter.tags].filter(Boolean).join(", ")}>
+      {filter.keyword !== "" && (
+        <span role="group" aria-label={t("sidebar.filter.keyword")} className="inline-flex shrink-0">
+          <span dir="auto" className={`${CONDITION_CLASS} bg-default text-default-foreground`}>{filter.keyword}</span>
+        </span>
+      )}
+      {filter.tags.length > 0 && (
+        <span role="group" aria-label={t("sidebar.filter.picked")} className="inline-flex shrink-0 gap-1.5">
+          {filter.tags.map((tag) => (
+            <span key={tag} dir="auto" className={`${CONDITION_CLASS} bg-accent-soft text-accent-soft-foreground`}>{tag}</span>
+          ))}
+        </span>
+      )}
+    </FadeOverflow>
   );
 }

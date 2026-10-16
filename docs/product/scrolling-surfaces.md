@@ -25,13 +25,13 @@ alone, are in "The surfaces that fade" below.
   `docs/product/project-pane-git-mode.md` for the headings' scrolling behavior.
 - Only the **top and bottom** edges fade, apart from the strips that scroll sideways and fade at their sideways
   edges: focus mode's strip of console session chips (see "The switch strip" in `docs/product/focus-mode.md`) and a
-  strip of tabs. The file viewer's long lines, read by scrolling sideways while wrapping is off, fade at neither side
-  (see "Wrapping long lines" in `docs/product/project-pane.md`).
+  strip of tabs. The file viewer's long lines, read by scrolling sideways while
+  wrapping is off, fade at neither side (see "Wrapping long lines" in `docs/product/project-pane.md`).
 
 **Some surfaces draw no scrollbar at all**, so the fade is what says there is more: the rail's column of console
 avatars, too narrow for a scrollbar (see "The rail" in `docs/product/window-layout.md`), focus mode's strip of chips,
-and a strip of tabs, which also shows a small chevron at each end that has more beyond it, pressed to scroll the
-strip that way; the chevrons are not keyboard stops.
+and a strip of tabs, which also shows a small chevron at each end that has
+more beyond it, pressed to scroll the strip that way; the chevrons are not keyboard stops.
 
 ## The surfaces that fade
 
@@ -100,3 +100,9 @@ covers. These are:
 the edge, clear of the fade, rather than arriving underneath. In focus mode's lists and the Git mode's change lists
 that space is measured below the section heading (see "What both views show" in `docs/product/focus-mode.md` and
 "Folding a section" in `docs/product/project-pane-git-mode.md`). A strip of tabs is the exception, as above.
+
+**A control in a section heading pinned at the top is not scrolled to**: in the sidebar and in focus mode, a
+heading that stays at the top of its list is in view already, so moving keyboard focus among its controls — the
+project filter's button, Collapse all projects, focus mode's switch — leaves the
+list where it is. Moving on from the heading to a row still scrolls that row into view, below the heading and the
+fade. A heading not yet at the top, further down the list, is scrolled into view as anything else is.

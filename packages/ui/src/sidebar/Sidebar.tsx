@@ -32,14 +32,14 @@ import type { PaneWidth } from "../layout/paneWidth";
 import { columnClipClass, useSidebarDockMotion } from "../layout/sidebarDockMotion";
 import type { DockPhase } from "../layout/paneDockMotion";
 import type { PanePeek } from "../layout/usePaneToggles";
-import { effectiveTags, matchesFilter, tagVocabulary, withoutTags } from "../projectFiltering";
+import { effectiveTags, matchesFilter, tagVocabulary } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
 import { activityLabelKey, sessionAccountTooltip, sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
 import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
-import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterTag, ProjectFilterTags } from "./ProjectFilter";
+import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterSummary } from "./ProjectFilter";
 import { consoleMenu, projectMenu, sessionMenu } from "./menus";
 import { archivedSessions, consoleActivity, hasBoundSessions, isInactiveProject, liveSessionRows, liveSessions, sortProjects } from "./order";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
@@ -442,7 +442,6 @@ function ConsoleBody({
 }): React.ReactElement {
   const t = useT();
   const listRef = useFlip<HTMLDivElement>();
-  const filterButton = useRef<HTMLDivElement>(null);
   const foldButton = useRef<HTMLSpanElement>(null);
   const sessionsOf = (project: Project) => sessions.filter((s) => s.project_id === project.id);
   // The tags to pick from are the ones the console's projects carry now; a picked tag none of them
@@ -476,29 +475,7 @@ function ConsoleBody({
       <ConsoleSessionsSection handlers={handlers} console={thisConsole} sessions={sessions} selectedSessionId={selectedSessionId} />
       <section className="flow-root">
         <StickySectionHeading
-          below={
-          // Only while the filter button is there (above): the keyword and tags hand focus
-          // to it when removed.
-            projects.length > 0 &&
-          isFiltering(filter) && (
-              <div data-project-filter className="contents">
-                {filter.keyword !== "" && (
-                  <ProjectFilterTag
-                    keyword={filter.keyword}
-                    returnFocusTo={filterButton}
-                    onRemove={() => setFilter((f) => ({ ...f, keyword: "" }))}
-                  />
-                )}
-                {filter.tags.length > 0 && (
-                  <ProjectFilterTags
-                    tags={filter.tags}
-                    returnFocusTo={filterButton}
-                    onRemove={(removed) => setFilter((f) => ({ ...f, tags: withoutTags(f.tags, removed) }))}
-                  />
-                )}
-              </div>
-            )
-          }
+          inline={projects.length > 0 && isFiltering(filter) && <ProjectFilterSummary filter={filter} />}
           action={
             projects.length > 0 && (
               <>
@@ -506,7 +483,6 @@ function ConsoleBody({
                   filter={filter}
                   vocabulary={vocabulary}
                   onChange={setFilter}
-                  holderRef={filterButton}
                 />
                 {/* Only with something listed: a filter matching nothing leaves them nothing to act
                   on, while the filter button beside them stays, as the way back. */}

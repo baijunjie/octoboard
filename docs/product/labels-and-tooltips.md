@@ -148,9 +148,10 @@ These are:
 A single-line name or label too long for its space — a sidebar row's name, a focus mode session card's title, the top
 bar's breadcrumb, a session listed in a confirmation, the report panel's page timestamp, a name in a project pane's
 file tree or its header, a name or what follows it in the Git mode's change list, a worktree's name or path in its
-worktree selector, a branch's name in its branch selectors, a picked tag's label and the sidebar filter's keyword
-(see "Picked tags" in `docs/product/consoles-and-projects.md`) — fades out where it is cut off rather than ending in
-an ellipsis. The same holds for action-menu items and submenu names, a select's current choice or placeholder and
+worktree selector, a branch's name in its branch selectors, a picked tag's label (see "Picked tags" in
+`docs/product/consoles-and-projects.md`) and the project filter's strip of conditions in the sidebar's Projects
+heading, which counts as one label (see "Filtering the project list" in `docs/product/sidebar.md`) — fades out where
+it is cut off rather than ending in an ellipsis. The same holds for action-menu items and submenu names, a select's current choice or placeholder and
 its listed options, directory-picker rows, the console name above a focus view's title, the archive view's heading
 and count, and the agent name on a focus mode card or full archive row. A fixed session-owner label and a
 diff's collapsed-line label follow the same fade and marquee rules.
@@ -178,7 +179,8 @@ state, shown whether or not the line is cut (see "The branch badge" in `docs/pro
   separate from the agent name's marquee.
 - An action-menu item or submenu item, a select's option or directory-picker row runs its one label while the pointer
   is anywhere over that item or row. A select's current choice or placeholder runs while the pointer is over its
-  trigger, and a picked tag while it is over the tag. A fixed session-owner label and a diff's collapsed-line label
+  trigger, and a picked tag while it is over the tag. The project filter's strip of conditions runs as a whole while
+  the pointer is anywhere over it, its tags moving together rather than each on its own. A fixed session-owner label and a diff's collapsed-line label
   run over their text controls.
 - After a short pause the text scrolls at reading speed, about 60 px a second, toward the edge it is cut at — a label
   cut at its end scrolls forward through its text, one cut at its start scrolls back toward its beginning — pauses

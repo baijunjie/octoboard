@@ -177,6 +177,13 @@ keys reach at the strip's edge does land under it.
 Where a sticky heading occupies the top of a faded list, the top scroll padding includes both the heading's height
 and the fade's size, so a focused row is visible below them. The heading itself stays clear of the fade.
 
+A control inside such a heading sits within that padding while it is pinned, so focusing it would scroll the list by
+the padding's depth on every focus move — seen on the Projects heading's Funnel X and Collapse all, the list jumping
+as Tab moved through them. The heading's controls are exempted: their scroll area is moved down by the padding's
+depth (`scroll-margin-block`), which Chromium honours, and since WebKit's own focus scroll ignores scroll margins and
+runs after the focus event, the list's position is held for a moment from that event while focus stays in the heading
+and the control was already in view. A heading not yet in view is still revealed.
+
 ### A scroller nothing else on screen scrolls takes focus itself
 
 A faded edge says there is more, so the keyboard has to be able to reach it. Where nothing else on the screen would
@@ -280,6 +287,10 @@ An entire menu item, selector, fixed-owner indicator, picked tag or diff's colla
 its single text label as one interaction target. Such a scope must contain only that label; a picked tag's remove
 button may share the scope so its text can scroll clear of the button. A row or header containing independent labels
 or actions is not a shared marquee target.
+
+The project filter's conditions on the Projects heading are one label in this sense: static tags, none of them a
+control, that fade and run as a single marquee over the whole strip, so a long tag scrolls into view with the rest
+rather than within its own pill.
 
 Use the shared fading label's own hover region by default. Add `data-marquee-scope` only for the single-target
 controls above, never to a general row, card or pane header. Verify long neighbouring labels with actual pointer
