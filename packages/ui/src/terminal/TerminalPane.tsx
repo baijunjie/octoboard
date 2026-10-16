@@ -419,8 +419,9 @@ export function TerminalPane({
     >
       {/* The padding sits on a wrapper, not on the element xterm is mounted in: the fit addon sizes
           the terminal from that element's computed height and width, padding included, so padding
-          there gives it rows and columns that the overflow then clips. */}
-      <div inert={!session} className="min-h-0 flex-1 px-3 py-2">
+          there gives it rows and columns that the overflow then clips. Isolation keeps xterm's
+          transparent link canvas below the pane's overlays so it cannot intercept their clicks. */}
+      <div inert={!session} className="isolate min-h-0 flex-1 px-3 py-2">
         {/* xterm lays its cells out left to right whatever the page's direction. */}
         <div dir="ltr" className="h-full overflow-hidden" ref={containerRef} />
       </div>
