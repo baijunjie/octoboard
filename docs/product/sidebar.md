@@ -188,8 +188,9 @@ the mouse leaves keyboard focus where it was.
   `docs/product/labels-and-tooltips.md`: it never wraps onto a further line and no tag in it is cut or fades on its
   own. When it does not fit it is cut at its end and fades there; it does not scroll sideways. While the mouse
   pointer is anywhere over the strip, the whole strip runs as one marquee, all its tags moving together. While cut,
-  it carries the whole filter as its tooltip — the keyword, then the picked tags, separated by commas; a strip that
-  fits has none. For assistive technology the keyword and the picked tags are two groups, named **Filter keyword**
+  it carries the whole filter as its tooltip, drawn as the same tags as the strip — the keyword in its neutral grey,
+  then the picked tags in the accent tint — but wrapped onto as many lines as the tooltip's width needs; a single tag
+  longer than a line is broken inside its tag. A strip that fits has no tooltip. For assistive technology the keyword and the picked tags are two groups, named **Filter keyword**
   and **Selected tags**.
 - Clicking Clear filter with the mouse leaves keyboard focus where it was; pressing it with the keyboard keeps focus
   on it.
@@ -605,7 +606,7 @@ scope and nesting are described below.
   the top bar's breadcrumb (see "The top bar" in `docs/product/window-layout.md`).
 - The list is in the order the sessions were archived, most recent first. It shows 30 rows and adds 30 more each time
   its end is scrolled into view. Each row shows the session's agent's icon, its title, and its agent's name,
-  followed by a dot separator and native token usage when its total is positive (see "Native session usage" in
+  followed by native token usage when its total is positive (see "Native session usage" in
   `docs/product/session-usage.md`). At the trailing end, a metadata block shows only dates: the archive date first,
   when known, then the creation date, each identified by its meaning. These are absolute dates with year, month, day,
   hour and minute, formatted in the current language and the client's local time zone. An unknown archive date is

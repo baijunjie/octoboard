@@ -329,11 +329,12 @@
    fill, and `--field-border` and `--field-focus`, which are still computed from the root's
    `--default`, would give a field edges that do not match its fill.
 
-   Everything a dialog or the pane draws from `--default` takes the fills: a neutral tag, a
-   secondary button, a tab list, a ghost button's hover, a toggle button, a search field and a select
-   in their secondary variant, and the file viewer's image checkerboard (`.viewer-checkerboard`),
-   whose squares step 1.10:1 from its ground in light and 1.28:1 in dark (1.04:1 and 1.05:1 on
-   HeroUI's own fill), inside the viewer's frame surface like every other frame. */
+   Everything a dialog, the pane or the project filter's tooltip (also on `--overlay`) draws from
+   `--default` takes the fills: a neutral tag, a secondary button, a tab list, a ghost button's
+   hover, a toggle button, a search field and a select in their secondary variant, and the file
+   viewer's image checkerboard (`.viewer-checkerboard`), whose squares step 1.10:1 from its ground
+   in light and 1.28:1 in dark (1.04:1 and 1.05:1 on HeroUI's own fill), inside the viewer's frame
+   surface like every other frame. */
 .control-fills {
   --default: var(--control-fill);
   --default-hover: var(--control-fill-hover);

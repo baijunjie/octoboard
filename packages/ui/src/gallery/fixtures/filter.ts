@@ -47,6 +47,13 @@ const scrollingMatchState = {
   ]),
 };
 
+// A tag longer than any line the filter's tooltip can give it, on the project the other long tag is on.
+const VERY_LONG_TAG = "a-tag-far-longer-than-the-tooltip-so-its-chip-has-to-break-inside-itself-to-stay-within-one-line";
+const overflowingState = {
+  ...state,
+  projects: new Map([...state.projects!].map(([id, project]) => [id, id === "p-4" ? { ...project, tags: [...project.tags, VERY_LONG_TAG] } : project])),
+};
+
 const openFilter = (ui: Ui) => ui.press(ui.t("sidebar.filter.open"));
 
 export const filterScenarios: Scenario[] = [
@@ -84,8 +91,8 @@ export const filterScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Conditions wider than the heading",
-    description: "The keyword and three tags do not fit beside the Projects label. They stay on one line at full width and fade at the clipped end; hover the strip and all of it runs as one marquee, and its tooltip lists the whole filter.",
-    state,
+    description: "The keyword and four tags do not fit beside the Projects label. They stay on one line at full width and fade at the clipped end; hovering the strip with a real pointer runs it as one marquee. Its tooltip shows the whole filter as the same chips as the heading, wrapped onto as many lines as it needs; the longest tag shrinks to the tooltip's width and breaks inside its own chip.",
+    state: overflowingState,
     preferences: { sidebarConsole: console_.id },
     steps: [
       openFilter,
@@ -93,7 +100,9 @@ export const filterScenarios: Scenario[] = [
       (ui) => ui.press("customer-facing"),
       (ui) => ui.press("docs"),
       (ui) => ui.press("a-long-tag-for-checking-project-interface-layout"),
+      (ui) => ui.press(VERY_LONG_TAG),
       (ui) => ui.key("Escape"),
+      (ui) => ui.hoverFilterConditions(),
     ],
   },
   {

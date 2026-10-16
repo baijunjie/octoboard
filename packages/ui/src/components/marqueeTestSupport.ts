@@ -41,11 +41,13 @@ export function expectIndependentMarquees(labels: HTMLElement[], chrome: Element
       }
     } finally {
       pointerOn(target, false);
-      act(() => {
-        vi.advanceTimersByTime(5000);
-        vi.runOnlyPendingTimers();
-        vi.runOnlyPendingTimers();
-      });
+      act(() => void vi.advanceTimersByTime(5000));
+      // A label that ran is measured clipped at both edges while it returns, then clipped at one
+      // again at rest. Each change re-renders it, and every render schedules one more measure to
+      // confirm the last; `act` commits those renders only as it exits, so each frame is drained
+      // in an `act` of its own. Two settle it; a measure that kept changing would leave a frame.
+      act(() => void vi.runOnlyPendingTimers());
+      act(() => void vi.runOnlyPendingTimers());
       expect(vi.getTimerCount()).toBe(0);
     }
     for (const label of labels) expect(label.scrollLeft).toBe(0);

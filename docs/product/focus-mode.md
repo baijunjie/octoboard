@@ -30,7 +30,7 @@ button is there and what it does), its title on one line, its agent's icon
 and name, and how long ago it was created at the trailing end of the agent line. Resuming or
 reopening does not reset that time. When native token usage has a positive total, it appears immediately before
 the creation time on that same agent line and updates while the session runs (see "Native session usage" in
-`docs/product/session-usage.md`). A dot separates usage from creation time; without visible usage, the trailing
+`docs/product/session-usage.md`), set apart from the creation time by spacing alone; without visible usage, the trailing
 block contains creation time alone. The agent name has no adjacent separator or visible account suffix. The status
 and agent lines share aligned leading icons and text starts. A title with a console-session colour dot shares that
 alignment;

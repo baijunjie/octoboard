@@ -8,6 +8,7 @@ import {
 import { Check, Funnel, FunnelX, Tags } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
+import { NEUTRAL_CHIP_COLOR_CLASS } from "../components/chipClasses";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
@@ -232,27 +233,55 @@ function TagPicker({
 
 /** A small tag's shape and type (HeroUI's `tag--sm`), without the tag's hover, press and focus
  * states, which belong to a tag that does something. */
-const CONDITION_CLASS = "shrink-0 rounded-xl px-2 py-0.5 text-xs font-medium";
+const CHIP_CLASS = "rounded-xl px-2 py-0.5 text-xs font-medium";
+const TAG_COLOR_CLASS = "bg-accent-soft text-accent-soft-foreground";
+/** How a chip takes its width: kept whole on the heading's line, where the line clips it, or
+ * shrunk to the tooltip's line, where a long one breaks inside itself. */
+const CHIP_FIT_CLASS = { whole: "shrink-0", wrapping: "min-w-0 max-w-full" };
+
+/** One condition of the filter: the keyword in the neutral look, a picked tag in the accent one. */
+function Chip({ kind, fit, children }: {
+  kind: "keyword" | "tag";
+  fit: keyof typeof CHIP_FIT_CLASS;
+  children: string;
+}): React.ReactElement {
+  const color = kind === "keyword" ? NEUTRAL_CHIP_COLOR_CLASS : TAG_COLOR_CLASS;
+  return <span dir="auto" className={`${CHIP_CLASS} ${CHIP_FIT_CLASS[fit]} ${color}`}>{children}</span>;
+}
+
+/** The whole filter as a tooltip: the same chips as the heading's line, wrapped onto as many lines
+ * as the tooltip's width needs instead of clipped at one. The chips are not `shrink-0` here, so a
+ * single tag longer than a line shrinks to the line and breaks inside itself. The tooltip's surface
+ * is a dialog's `--overlay`, so the chips take the fills of `.control-fills`: HeroUI's own
+ * `--default` lands at 1.19:1 against it and the keyword would barely read as a chip. */
+function ProjectFilterTooltip({ filter }: { filter: ProjectFilter }): React.ReactElement {
+  return (
+    <div className="control-fills flex flex-wrap gap-1.5">
+      {filter.keyword !== "" && <Chip kind="keyword" fit="wrapping">{filter.keyword}</Chip>}
+      {filter.tags.map((tag) => <Chip key={tag} kind="tag" fit="wrapping">{tag}</Chip>)}
+    </div>
+  );
+}
 
 /** The filter in force, on the Projects heading's line between its label and its controls: the
  * keyword first, in the neutral look, then the picked tags in the soft accent colour that sets them
  * apart from it. Nothing here is interactive; the heading's Funnel X clears the filter. The
- * conditions are one label to the pointer: clipped at the line's end, they fade there and run as one
- * marquee while the pointer is over them, carrying the whole filter as a tooltip. Each kind is a
- * named group, so a screen reader hears what the words are. */
+ * conditions are one label to the pointer: clipped at the line's end, they fade there and run as
+ * one marquee while the pointer is over them, carrying the whole filter as a tooltip of chips.
+ * Each kind is a named group, so a screen reader hears what the words are. */
 export function ProjectFilterSummary({ filter }: { filter: ProjectFilter }): React.ReactElement {
   const t = useT();
   return (
-    <FadeOverflow className="flex min-w-0 flex-1 items-center gap-1.5" titleWhenClipped={[filter.keyword, ...filter.tags].filter(Boolean).join(", ")}>
+    <FadeOverflow className="flex min-w-0 flex-1 items-center gap-1.5" titleWhenClipped={<ProjectFilterTooltip filter={filter} />}>
       {filter.keyword !== "" && (
         <span role="group" aria-label={t("sidebar.filter.keyword")} className="inline-flex shrink-0">
-          <span dir="auto" className={`${CONDITION_CLASS} bg-default text-default-foreground`}>{filter.keyword}</span>
+          <Chip kind="keyword" fit="whole">{filter.keyword}</Chip>
         </span>
       )}
       {filter.tags.length > 0 && (
         <span role="group" aria-label={t("sidebar.filter.picked")} className="inline-flex shrink-0 gap-1.5">
           {filter.tags.map((tag) => (
-            <span key={tag} dir="auto" className={`${CONDITION_CLASS} bg-accent-soft text-accent-soft-foreground`}>{tag}</span>
+            <Chip key={tag} kind="tag" fit="whole">{tag}</Chip>
           ))}
         </span>
       )}

@@ -610,11 +610,8 @@ function SessionCard({
         >
           {AGENT_LABEL[session.agent]}
         </FadeOverflow>
-        <div className="flex shrink-0 items-center gap-1">
-          {hasVisibleUsage(session.usage) && <>
-            <div id={metadataId}><SessionUsageLabel usage={session.usage} /></div>
-            <span aria-hidden="true">·</span>
-          </>}
+        <div className="flex shrink-0 items-center gap-2">
+          {hasVisibleUsage(session.usage) && <div id={metadataId}><SessionUsageLabel usage={session.usage} /></div>}
           <span>{formatRelativeTime(language, session.started_at, now)}</span>
         </div>
       </RowIconLine>

@@ -16,6 +16,9 @@ import React from "react";
  * way, but not what it wraps, so an indicator carrying text rather than a hidden glyph has to hide
  * its own contents, in a wrapper that leaves them the trigger's own layout children (`aria-hidden`
  * on a `display: contents` span). Nothing inside such a wrapper may be focusable.
+ *
+ * The `tooltip` is any content, for an indicator whose detail has a structure; the `label` stays a
+ * plain string, so the accessible name never depends on the tooltip's markup.
  */
 export function IndicatorTooltip({
   tooltip,
@@ -23,7 +26,7 @@ export function IndicatorTooltip({
   className,
   children,
 }: {
-  tooltip: string;
+  tooltip: React.ReactNode;
   label?: string;
   className?: string;
   children: React.ReactNode;

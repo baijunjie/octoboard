@@ -1,19 +1,21 @@
 // @vitest-environment jsdom
 import { Button } from "@heroui/react";
 import { act } from "react";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { change, changeViewFixture, mountRows } from "../browser/browserTestSupport";
 import { ChangeList } from "../browser/ChangeList";
 import { changeItems } from "../browser/changes";
 import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentIcon } from "../components/AgentIcon";
+import { SessionUsageLabel } from "../components/SessionMetadata";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
 import { leave, mountForTooltip, openTooltip } from "../components/tooltipTestSupport";
 import { gitBadgeAriaLabel } from "../gitStatusLabel";
 import type { ChangeEntry } from "../protocol";
 import { GitBadge } from "../sidebar/GitBadge";
+import { ProjectFilterSummary } from "../sidebar/ProjectFilter";
 import { gitStatusOf } from "./fixtures/builders";
 import { createUi } from "./interact";
 
@@ -111,6 +113,11 @@ async function settledLive(hover: Promise<void>): Promise<void> {
  * so that the test shows none still pending. */
 function release(target: Element): void {
   leave(target);
+  runOut();
+}
+
+/** Runs out the timers left, for a test that ends with no pointer on anything. */
+function runOut(): void {
   act(() => void vi.runOnlyPendingTimers());
   expect(openTooltip()).toBeNull();
   expect(vi.getTimerCount()).toBe(0);
@@ -373,7 +380,7 @@ it("hoverGitBadge fails for a header badge that says so in text and has no toolt
   const empty = gitStatusOf("p-1", { branch: null, upstream: null });
   mountFocusBadge(empty);
   await expect(createUi(document, "en").hoverGitBadge(empty, "glyph")).rejects.toThrow(/carries no tooltip/);
-  expect(openTooltip()).toBeNull();
+  runOut();
 });
 
 it("hoverGitBadge fails for a row that does not name the sentence of the status it was given", async () => {
@@ -382,7 +389,7 @@ it("hoverGitBadge fails for a row that does not name the sentence of the status 
   await expect(createUi(document, "en").hoverGitBadge(other, "glyph", (name) => name.startsWith("Website"))).rejects.toThrow(
     /does not name the badge's sentence/,
   );
-  expect(openTooltip()).toBeNull();
+  runOut();
 });
 
 it("hoverGitBadge fails where there is no such row", async () => {
@@ -398,7 +405,7 @@ it("hoverGitBadge says a row's badge has no tooltip rather than hover the activi
   await expect(createUi(document, "en").hoverGitBadge(empty, "glyph", (name) => name.startsWith("Website"))).rejects.toThrow(
     /has a badge that carries no tooltip/,
   );
-  expect(openTooltip()).toBeNull();
+  runOut();
 });
 
 it.each(["flat", "tree"] as const)("pressChangeStatus dismisses the %s tooltip without a pointerleave", async (layout) => {
@@ -412,4 +419,56 @@ it.each(["flat", "tree"] as const)("pressChangeStatus dismisses the %s tooltip w
   expect(events).toEqual(["pointerdown", "pointerup", "click"]);
   expect(document.querySelector("[data-anchored-tooltip]")).toBeNull();
   release(chip);
+});
+
+/** A session card as focus mode draws it, named by its title, with its token count among the
+ * metadata. A card without usage draws no count, as the real one does. */
+function mountCard(usage?: { input_tokens: number; output_tokens: number; cached_input_tokens?: number; total_tokens: number }): void {
+  mountForTooltip(
+    <div role="button" aria-label="Add idempotency keys, Claude Code, Working">
+      <StatusIcon status="working" decorative />
+      <SessionUsageLabel usage={usage} />
+    </div>,
+  );
+}
+
+it("hoverSessionUsage puts up the table of the card's token count", async () => {
+  mountCard({ input_tokens: 1200, output_tokens: 300, cached_input_tokens: 900, total_tokens: 1500 });
+  await settledLive(createUi(document, "en").hoverSessionUsage((name) => name.startsWith("Add idempotency keys")));
+  expect(Array.from(openTooltip()!.querySelectorAll("dt"), (term) => term.textContent)).toEqual(["Input", "Output", "Cached input"]);
+  release(document.querySelector("[role=img]")!);
+});
+
+it("hoverSessionUsage fails for a card whose usage is hidden", async () => {
+  mountCard({ input_tokens: 0, output_tokens: 0, total_tokens: 0 });
+  const done = expect(createUi(document, "en").hoverSessionUsage((name) => name.startsWith("Add idempotency keys"))).rejects.toThrow(/with a token count to hover/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await done;
+  runOut();
+});
+
+/** The filter's conditions on a heading line, which clips them where `clipped` and fits them
+ * otherwise: jsdom lays nothing out, so the box the strip measures is given its width. */
+function mountFilter(clipped: boolean): void {
+  for (const [name, width] of [["scrollWidth", 400], ["clientWidth", clipped ? 100 : 400]] as const) {
+    const own = Object.getOwnPropertyDescriptor(Element.prototype, name)!;
+    Object.defineProperty(Element.prototype, name, { configurable: true, get: () => width });
+    onTestFinished(() => void Object.defineProperty(Element.prototype, name, own));
+  }
+  mountForTooltip(<ProjectFilterSummary filter={{ keyword: "site", tags: ["docs", "customer-facing"] }} />);
+}
+
+it("hoverFilterConditions puts up the chips of the clipped filter", async () => {
+  mountFilter(true);
+  await settledLive(createUi(document, "en").hoverFilterConditions());
+  expect(Array.from(openTooltip()!.querySelectorAll("span"), (chip) => chip.textContent)).toEqual(["site", "docs", "customer-facing"]);
+  release(document.querySelector("[role=group]")!.parentElement!);
+});
+
+it("hoverFilterConditions fails for a filter that fits the heading's line", async () => {
+  mountFilter(false);
+  const done = expect(createUi(document, "en").hoverFilterConditions()).rejects.toThrow(/fit the heading's line/);
+  await vi.advanceTimersByTimeAsync(9000);
+  await done;
+  runOut();
 });

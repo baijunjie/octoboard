@@ -4,9 +4,12 @@
 
 Focus mode's live session cards, its archive preview rows and the full archive view show the session's token total
 only when its agent has recorded a positive total. The visible total is a compact, localized number without a unit
-label; its tooltip and accessible description identify it as token usage and provide the exact total, input and
-output counts, plus cache-read and cache-write input counts when available. A recorded zero remains valid saved
-usage, but zero and missing usage both omit the indicator and its usage-specific separator.
+label, shown in a small neutral chip (rounded, on a neutral fill) and set apart from neighbouring text by spacing
+alone, with no separator character. Its tooltip identifies it as token usage: a heading line with the exact total, a
+divider, then a table of labelled counts, one row each for **Input**, **Output** and, only when the agent reports
+them, **Cached input** and **Cache write**, the numbers aligned at the row's end. Its accessible name is one plain
+sentence carrying the same counts in the same order. A recorded zero remains valid saved usage, but zero and missing
+usage both omit the chip entirely.
 
 These are native token counts, not a price estimate, context-window size or elapsed duration. Input includes cached
 input; the separate cache counts are subsets of it. The agent's recorded total is authoritative when it provides

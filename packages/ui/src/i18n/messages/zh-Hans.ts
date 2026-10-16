@@ -397,10 +397,11 @@ export const zhHans: Translation<"other"> = {
   "session.meta.created": "创建于 {time}",
   "session.meta.archived": "归档于 {time}",
   "session.usage.total": "{tokens} Token",
-  "session.usage.input": "输入：{tokens}",
-  "session.usage.output": "输出：{tokens}",
-  "session.usage.cached": "缓存输入：{tokens}",
-  "session.usage.cacheWrite": "缓存写入：{tokens}",
+  "session.usage.input": "输入",
+  "session.usage.output": "输出",
+  "session.usage.cached": "缓存输入",
+  "session.usage.cacheWrite": "缓存写入",
+  "session.usage.entry": "{label}：{tokens}",
   "archive.loadingMore": "更多内容加载中…",
 
   // What the content area shows while there is no console: the only thing to do is make one.

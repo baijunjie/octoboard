@@ -253,11 +253,11 @@ function ArchiveRow({
         <FadeOverflow dir="auto" className="text-sm" titleWhenClipped={sessionDisplayTitle(t, session)}>
           {sessionDisplayTitle(t, session)}
         </FadeOverflow>
-        <div className="flex min-w-0 items-center gap-1 text-xs text-app-muted">
+        <div className="flex min-w-0 items-center gap-2 text-xs text-app-muted">
           <FadeOverflow className="min-w-0" titleWhenClipped={AGENT_LABEL[session.agent]}>
             <span aria-hidden="true">{AGENT_LABEL[session.agent]}</span>
           </FadeOverflow>
-          {usage && <><span aria-hidden="true">·</span><span id={usageId}><SessionUsageLabel usage={session.usage} /></span></>}
+          {usage && <span id={usageId}><SessionUsageLabel usage={session.usage} /></span>}
         </div>
       </div>
       {/* The actions and the dates move to a line of their own together, so a narrow pane still

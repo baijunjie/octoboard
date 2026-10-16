@@ -454,10 +454,11 @@ export const en = {
   "session.meta.created": "Created {time}",
   "session.meta.archived": "Archived {time}",
   "session.usage.total": "Tokens: {tokens}",
-  "session.usage.input": "Input: {tokens}",
-  "session.usage.output": "Output: {tokens}",
-  "session.usage.cached": "Cached input: {tokens}",
-  "session.usage.cacheWrite": "Cache write: {tokens}",
+  "session.usage.input": "Input",
+  "session.usage.output": "Output",
+  "session.usage.cached": "Cached input",
+  "session.usage.cacheWrite": "Cache write",
+  "session.usage.entry": "{label}: {tokens}",
   "archive.loadingMore": "Loading more…",
 
   // What the content area shows while there is no console: the only thing to do is make one.

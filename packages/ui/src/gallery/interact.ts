@@ -170,6 +170,18 @@ export interface Ui {
    * `status` that is not the one on screen. A badge that says "No commits yet" in visible text has
    * no tooltip, and fails here rather than hover the activity marker beside it. */
   hoverGitBadge: (status: GitStatus, over: "glyph" | "line", row?: Matcher) => Promise<void>;
+  /** Moves the pointer onto the token count of the session card or row named `row` and leaves it
+   * there, as `hoverIndicator` does, for the tooltip that breaks the usage down. The count is the
+   * `role="img"` trigger whose name carries the Input entry, which a card's status glyph does not,
+   * so a card or row with no count (usage hidden, or none reported) fails there, naming `row`. The
+   * step then fails if the tooltip that opens is not the usage table, one that has no Input entry. */
+  hoverSessionUsage: (row: Matcher) => Promise<void>;
+  /** Moves the pointer onto the project filter's conditions on the Projects heading's line and
+   * leaves it there, as `hoverIndicator` does, for the tooltip that carries the whole filter. The
+   * strip is the box around the keyword and tag groups; it carries a tooltip only while it is
+   * clipped, so the step fails when none opens, which is a filter that fits. It also fails when the
+   * tooltip that opens does not hold the strip's chips, naming both. */
+  hoverFilterConditions: () => Promise<void>;
   /** Moves the pointer onto the terminal's text `text` (a run of one terminal row, as the fake terminal
    * draws it, not copy) and leaves it there, for the tooltip an OSC 8 hyperlink there puts up with
    * its real target. Fails if no tooltip opens, which is also what a run of text that is not a
@@ -482,6 +494,36 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       const shown = doc.querySelector("[role=tooltip]")?.textContent;
       if (!shown || withoutIsolates(shown).trim() !== nameOf(control)) {
         throw new Error(`The control matching ${String(matcher)} has no tooltip of its name: its last tooltip is ${shown ? `"${shown}"` : "none"}`);
+      }
+    },
+    async hoverSessionUsage(row) {
+      const entry = t("session.usage.entry", { label: t("session.usage.input"), tokens: "\0" }).split("\0")[0];
+      await hover(
+        () =>
+          Array.from(find(row)?.querySelectorAll<HTMLElement>("[role=img]") ?? []).find((element) =>
+            withoutIsolates(element.getAttribute("aria-label") ?? "").includes(withoutIsolates(entry)),
+          ),
+        `No session card or row matching ${String(row)} with a token count to hover`,
+      );
+      const shown = Array.from(doc.querySelector("[role=tooltip]")?.querySelectorAll("dt") ?? [], (term) => term.textContent);
+      if (!shown.includes(t("session.usage.input"))) {
+        throw new Error(
+          `The token count of ${String(row)} did not open the usage table, which has an ${t("session.usage.input")} entry: ${shown.length > 0 ? `its entries are ${shown.join(", ")}` : "no table"} is up`,
+        );
+      }
+    },
+    async hoverFilterConditions() {
+      const strip = await hover(() => {
+        const names = [t("sidebar.filter.keyword"), t("sidebar.filter.picked")];
+        return Array.from(doc.querySelectorAll<HTMLElement>("[role=group]")).find((group) => names.includes(group.getAttribute("aria-label") ?? ""))
+          ?.parentElement ?? undefined;
+      }, "No project filter conditions beside the Projects heading to hover");
+      const tooltip = await waitFor(() => doc.querySelector("[data-anchored-tooltip]") ?? undefined, "The project filter's conditions opened no tooltip: they fit the heading's line");
+      const chipsOf = (root: Element, selector: string) => Array.from(root.querySelectorAll(selector), (chip) => chip.textContent).join(", ");
+      // The strip's chips sit in its named groups; the tooltip's sit in it directly.
+      const [expected, shown] = [chipsOf(strip, "[role=group] span"), chipsOf(tooltip, "span")];
+      if (shown !== expected) {
+        throw new Error(`The project filter's conditions (${expected}) opened another tooltip: it holds ${shown ? `"${shown}"` : "no chips"}`);
       }
     },
     async hoverTerminalLink(text) {

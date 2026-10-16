@@ -37,6 +37,12 @@ function restingOffset(element: HTMLElement, clip: "start" | "end"): number {
   return clip === "start" ? overflowExtent(element) : 0;
 }
 
+/** Whether a tooltip prop asks for a tooltip: `null` and `false` are what a conditional renders
+ * when there is none. */
+function hasTitle(title: React.ReactNode): boolean {
+  return title != null && title !== false;
+}
+
 function measure(element: HTMLElement): Clipped {
   const scrolled = scrolledFromStart(element);
   return {
@@ -78,6 +84,12 @@ function observe(element: Element, update: () => void): () => void {
     sharedObserver?.unobserve(element);
     updaters.delete(element);
     dirty.delete(element);
+    // The frame is dropped with the last updater, so that one discarded behind our back (fake
+    // timers being swapped out) cannot leave a dead id that blocks every later schedule.
+    if (updaters.size === 0 && flushFrame !== undefined) {
+      cancelAnimationFrame(flushFrame);
+      flushFrame = undefined;
+    }
   };
 }
 
@@ -268,12 +280,12 @@ interface FadeOverflowProps {
    * readable). */
   clip?: "start" | "end";
   /** The tooltip the text carries only while an edge is clipped, so a name that fits does not
-   * grow a tooltip repeating itself. */
-  titleWhenClipped?: string;
+   * grow a tooltip repeating itself. `null`, `false` and `undefined` mean none. */
+  titleWhenClipped?: React.ReactNode;
   /** The tooltip the text carries whatever is clipped, for text that stands for something longer
    * than it shows even while it fits (an abbreviated path); takes the place of
-   * `titleWhenClipped`. */
-  title?: string;
+   * `titleWhenClipped`. `null`, `false` and `undefined` mean none. */
+  title?: React.ReactNode;
   /** Off to keep a clipped label still on hover (see `useMarquee`); on by default. */
   marquee?: boolean;
   children: React.ReactNode;
@@ -367,11 +379,11 @@ export function FadeOverflow({
   useMarquee(ref, marquee, clip, marqueeHolds);
 
   const mask = maskImage(fade, clipped);
-  const tooltip = title ?? (clipped.start || clipped.end ? titleWhenClipped : undefined);
+  const tooltip = hasTitle(title) ? title : clipped.start || clipped.end ? titleWhenClipped : undefined;
   // The pointer is followed only where a tooltip was asked for, and from the prop rather than from
   // what is clipped right now, so that a label clipped while the pointer is already on it cannot
   // be left hovered for good.
-  const follows = title !== undefined || titleWhenClipped !== undefined;
+  const follows = hasTitle(title) || hasTitle(titleWhenClipped);
   return (
     <Tag
       ref={attach}
