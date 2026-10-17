@@ -64,6 +64,7 @@ console sessions are listed, are in "Console sessions and project sessions" in
 | `rename_session` | `session`, `title` | Changes the title of one of the caller's sessions, under the rules of "Renaming a session" in `docs/product/sessions.md`. Answers with the session's record. |
 | `set_session_pinned` | `session`, `pinned` | Pins or unpins one of the caller's sessions (see "Pinning" in `docs/product/sidebar.md`). Answers with the session's record. |
 | `archive_session` | `session` | Ends the process of one of the caller's sessions and archives it. |
+| `archive_self` | — | Ends the caller's own process and archives the caller, once every session under it is archived. See "A session archiving itself" below. |
 | `list_archived` | `project` | The archived sessions of one of this console's projects, whoever owns them, each with its owner. |
 | `reopen_session` | `session`, `text?` | Relaunches an archived or interrupted session of the caller's, continuing its conversation, and optionally hands it an instruction — its next task — delivered once the relaunched session can take one. The caller is the console session the session is bound to and is running, so reopening one never brings a console session back. |
 | `transfer_session` | `session`, `to`, `note` | Hands one of the caller's running sessions to another owner, without the user. See "Handing a session to another owner" below. |
@@ -92,7 +93,8 @@ null for a console session, which is never bound), `owner_kind` (`console` or `p
 is; null when it is unbound) and `yours` (whether that owner is the caller). `send_message`, `rename_session`,
 `set_session_pinned`, `archive_session`, `reopen_session` and `transfer_session` act only on a session bound to the
 caller; for any other — unbound, bound to another console session or to a project session, a console session, or the
-caller itself — they refuse, with a reason naming who owns it, and change nothing. `start_session` always binds the new
+caller itself — they refuse, with a reason naming who owns it, and change nothing. `archive_session` aimed at the
+caller itself is refused pointing to `archive_self` instead. `start_session` always binds the new
 session to the caller, so a console session cannot start one on another's behalf: it can hand one over afterwards with
 `transfer_session`, or ask the user for one that is nobody's with `request_session`. The reads are not narrowed because
 two console sessions can dispatch into the same project, and so the same working directory, at once; one that could not
@@ -115,6 +117,7 @@ own project and drive them, the way a console session drives its console's:
 | `send_message` | `session`, `text` | As the console session's. |
 | `get_session` | `session` | As the console session's: any session, of any project or console. |
 | `archive_session` | `session` | As the console session's. |
+| `archive_self` | — | As the console session's. Offered to a lead session too, but refused for it: it wraps up with `report` instead (see "A session archiving itself" below). |
 | `reopen_session` | `session`, `text?` | As the console session's. |
 | `rename_session` | `session`, `title` | As the console session's. |
 | `set_session_pinned` | `session`, `pinned` | As the console session's. |
@@ -132,7 +135,8 @@ It has no `list_projects`, `list_archived`, `add_project` or `show_page`, and no
 project or console, carrying `owner`, `owner_kind` and `yours` as above. `send_message`, `rename_session`,
 `set_session_pinned`, `archive_session`, `reopen_session` and `transfer_session` act only on a session bound to the
 caller, and refuse, with a reason naming who owns it, and change nothing, for any other: an unbound session, one bound
-to a console session or to another project session, the caller itself, or a console session.
+to a console session or to another project session, the caller itself, or a console session. For an unbound project
+session, `archive_session` aimed at itself is refused pointing to `archive_self` instead.
 
 A session a project session starts is bound to it, so it has the role of a bound one: it is offered `report`,
 `list_sessions`, `share_info`, `get_project` and `request_session`, and cannot start or drive sessions of its own, nor
@@ -406,3 +410,30 @@ that is unbound, or bound to any other session, is not this one's to drive: it c
 to leave it alone and is refused if it tries to act on it.
 
 A console session itself never reports anywhere, and neither does an unbound project session.
+
+## A session archiving itself
+
+A session that reports to nobody — a console session or an unbound project session — wraps itself up with
+`archive_self`, which takes no arguments: it ends the caller's own process and archives the caller. A session bound
+to an owner does not archive itself this way; it wraps up with a `done` report with no open items (see "Automatic
+archiving" above). A lead session is offered `archive_self` with the rest of the unbound project session's tools, but
+the call is refused, telling it to report `done` instead.
+
+An owner archives each of its sessions once its task is done (see "Which sessions an owner drives" above), so a
+session under the caller that is not archived means unfinished work. The call is refused, with the reason in prose,
+and changes nothing:
+
+- **while the caller, or any session under it, is locked** — a session under it counts even when it is archived
+  already. The refusal names the locked sessions under it, which the user has to unlock (see "Locking a session" in
+  `docs/product/sessions.md`). Locks are checked before what follows.
+- **while any session under it is not archived**, running or interrupted alike. The refusal names each such session
+  by id and title. Those bound to the caller come with the advice to finish them and archive them with
+  `archive_session` first. Those bound to a lead session bound to the caller are not the caller's to archive: they are
+  named grouped under their lead session, with the advice to wait for the lead session to finish them — its own
+  `done` report archives it — or to archive the lead session with `archive_session`, which takes along its sessions
+  that have no process running and is refused while any of them has one (see "Archiving, interruption and resuming"
+  in `docs/product/sessions.md`).
+
+Otherwise the call is answered first — with the caller's id, the status `archived` and a note that its process will
+now end — and then the caller's process is ended and the caller is archived, as an owner's explicit archive does.
+Only the caller is archived; nothing under it is touched.

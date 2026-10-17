@@ -226,11 +226,7 @@ pub fn deliver_report(
             .filter(|bound| bound.status != SessionStatus::Archived)
             .collect();
         if !unfinished.is_empty() {
-            let named = unfinished
-                .iter()
-                .map(|bound| format!("`{}` (\"{}\")", bound.id, bound.title))
-                .collect::<Vec<_>>()
-                .join(", ");
+            let named = coordinator::session_labels(&unfinished);
             bail!(
                 "a `done` report with no open items is refused while sessions bound to you are \
                  not archived: {named}. Each archives itself when it reports it is done; wait for \

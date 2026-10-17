@@ -1444,6 +1444,7 @@ the one waiting request a session may have, are described in `docs/product/sessi
 | `list_projects`, `add_project`, `update_project`, `get_console`, `update_console`, `get_settings`, `update_settings`, `list_archived`, `show_page` | yes | — | — |
 | `start_session`, `send_message`, `get_session`, `archive_session`, `reopen_session`, `rename_session`, `set_session_pinned` | yes | yes | — |
 | `list_sessions`, `share_info` | yes | yes | yes |
+| `archive_self` | yes | yes (refused once bound, a lead session included, which wraps up with `report`) | — |
 | `transfer_session` | yes | yes | — |
 | `bind_to_session` | — | yes (refused once bound, a lead session included) | — |
 | `request_session` | yes | yes | yes |
@@ -1459,6 +1460,13 @@ broadcasts are the same, and a write tool answers with the record as stored. The
   carry ids. The default account of an agent is the id `default` in `get_settings`.
 - `launch` is an object keyed by agent of `{"model": …, "effort": …}`; a field left out is left alone, `null` or blank
   is the agent's own default.
+
+`archive_self` takes no arguments and archives the caller, which only a session that reports to nobody does. It is
+refused, with nothing changed, while the caller, or any session under it (bound to it, or bound to a lead session
+bound to it), is locked, and while any session under it is not archived, running or interrupted alike. The refusal
+names those sessions: an owner archives its sessions once their tasks are done, so an unarchived one means its task is
+not finished. For one bound to a lead session, which the caller cannot archive itself, it advises waiting for the lead
+session to finish it or archiving the lead session. The answer is sent before the process is ended.
 
 Scope: a console session reads and changes only its own console and its projects; `get_console` never returns the avatar
 (`has_icon` says whether there is one) and `update_console` cannot set it, nor read or set the console's

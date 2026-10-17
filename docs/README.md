@@ -79,7 +79,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   project session bound to a console session that keeps its own sessions, two levels deep), changing a session's owner
   (who can own a session, handing a session to another owner, an unbound session binding itself, and what a session is
   told when its binding changes while it runs), the brief a task is handed over as, the reporting loop and what
-  happens when a session stops without reporting, automatic archiving, and which sessions an owner drives.
+  happens when a session stops without reporting, automatic archiving, which sessions an owner drives, and a session
+  that reports to nobody archiving itself once everything under it is archived.
 - [Information between sessions](product/information-between-sessions.md) — listing the running sessions of every
   console with `list_sessions` and writing information into any of them with `share_info`: why it reaches a session as
   information rather than an instruction, and the copy its owner is sent.

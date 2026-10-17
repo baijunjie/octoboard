@@ -58,6 +58,7 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            any console.\n\
          - `rename_session` / `set_session_pinned` — retitle or pin a session of yours.\n\
          - `archive_session` — end and archive a session you are done with.\n\
+         - `archive_self` — end and archive yourself once your sessions are all archived.\n\
          - `list_archived` / `reopen_session` — pick an earlier session back up instead of \
            starting over, handing it its next task.\n\
          - `transfer_session` — hand a session of yours to another owner, with a note on where it \

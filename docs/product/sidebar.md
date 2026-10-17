@@ -387,8 +387,9 @@ action menu offers:
 - **Archive** — archives the session (see "Archiving, interruption and resuming" in `docs/product/sessions.md`). A
   session at its prompt or interrupted, with no unarchived session under it, is archived at once; any other asks for
   confirmation first, and so does one still being resumed. When the archived row takes keyboard focus with it, focus
-  goes to the terminal. For a console session this is the only way to archive it, since it cannot archive
-  itself (see "The console session's tools" in `docs/product/hub-orchestration.md`); its confirmation lists the
+  goes to the terminal. For a console session this is the user's only way to archive it — the console session can
+  also archive itself once nothing under it is unarchived (see "A session archiving itself" in
+  `docs/product/hub-orchestration.md`); its confirmation lists the
   interrupted sessions under it — bound to it, or to a lead session bound to it (see "Lead sessions" in
   `docs/product/hub-orchestration.md`) — under a warning with their number, as the ones archived with it, and the
   archive is refused, with the sessions named, while any session under it has a process running. A project session that

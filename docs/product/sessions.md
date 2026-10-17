@@ -27,9 +27,9 @@ has never been used (see "Deleting an unused session" in `docs/product/deleting-
 console session's title is renameable, like a project session's; its default is under **Name** in "Opening a session"
 below.
 
-The console session cannot archive itself (see "The console session's tools" in
-`docs/product/hub-orchestration.md`), so the user archives it from its own row's menu, as any session
-is archived. Archiving it moves it among the console's archived console sessions; these are not reached
+The user archives a console session from its own row's menu, as any session is archived; the console
+session can also archive itself once every session under it is archived (see "A session archiving itself" in
+`docs/product/hub-orchestration.md`). Archiving it moves it among the console's archived console sessions; these are not reached
 from any one row, but from the console's own menu, which offers **Archived console sessions** — a
 submenu of the console's newest archived console sessions, each of which can be selected, and the way
 to the archive view of all of them (see "The console header" in `docs/product/sidebar.md`). The console
@@ -603,10 +603,11 @@ Archiving a session that is still *starting* stands: it is archived at once, and
 as it comes up.
 An archived session keeps its pin, if it had one (see "Order of projects and sessions" in `docs/product/sidebar.md`).
 
-Besides the user, two things archive a session: its owner, explicitly, and a project session's own report saying the
-work is finished with nothing left open (see "Automatic archiving" in `docs/product/hub-orchestration.md`). Both
-archive that one project session and nothing else, except that an owner archiving a lead session archives it as an
-owner, under the rules below.
+Besides the user, three things archive a session: its owner, explicitly; a project session's own report saying the
+work is finished with nothing left open (see "Automatic archiving" in `docs/product/hub-orchestration.md`); and a
+console session or unbound project session archiving itself, which it can do only once every session under it is
+archived (see "A session archiving itself" in `docs/product/hub-orchestration.md`). Each archives that one session and
+nothing else, except that an owner archiving a lead session archives it as an owner, under the rules below.
 
 **Archiving an owner — a console session, or a project session that has started sessions — goes along its bindings,
 and is decided by whether a process is running — not by the status.** It reaches every session **under** it: the

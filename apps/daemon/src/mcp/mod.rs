@@ -307,6 +307,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     RENAME_SESSION,
     SET_SESSION_PINNED,
     ARCHIVE_SESSION,
+    ARCHIVE_SELF,
     ToolDef {
         name: "list_archived",
         description: "List the archived sessions of one project, whichever session owns \
@@ -395,6 +396,21 @@ const ARCHIVE_SESSION: ToolDef = ToolDef {
             &["session"],
         )
     },
+};
+
+const ARCHIVE_SELF: ToolDef = ToolDef {
+    name: "archive_self",
+    description: "End this session's own process and archive it, once its work is finished. \
+                  Meant for a session that reports to nobody; one that reports to an owner (a \
+                  lead session) wraps up with `report` instead and is refused here. Refused \
+                  while any session under this one is not archived, running or interrupted: an \
+                  owner archives its sessions once their tasks are done, so an unarchived one \
+                  means its task is not finished. Finish it and archive it with \
+                  `archive_session` first; for one bound to a lead session, wait for the lead \
+                  session to finish it or archive the lead session with `archive_session`. \
+                  Refused while this session or a session under it is locked. The call is \
+                  answered before the process ends.",
+    schema: || object_schema(json!({}), &[]),
 };
 
 const RENAME_SESSION: ToolDef = ToolDef {
@@ -627,7 +643,8 @@ const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
 /// A project session that can own sessions — unbound, or a lead session — drives its own project
 /// the way a console session drives its console's, and what it starts reports back to it.
 /// `report` is announced too, though a call is refused while the session is unbound: the
-/// catalogue does not change when an unbound session binds itself to a console session.
+/// catalogue does not change when an unbound session binds itself to a console session. For the
+/// same reason `archive_self` is announced to a lead session and refused at the call.
 const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "start_session",
@@ -661,6 +678,7 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
         },
     },
     ARCHIVE_SESSION,
+    ARCHIVE_SELF,
     REOPEN_SESSION,
     RENAME_SESSION,
     SET_SESSION_PINNED,
@@ -862,6 +880,7 @@ mod tests {
                 "send_message",
                 "get_session",
                 "archive_session",
+                "archive_self",
                 "reopen_session",
                 "rename_session",
                 "set_session_pinned",
@@ -890,6 +909,7 @@ mod tests {
                 "rename_session",
                 "set_session_pinned",
                 "archive_session",
+                "archive_self",
                 "list_archived",
                 "reopen_session",
                 "transfer_session",

@@ -2932,6 +2932,15 @@ fn session_titles(sessions: &[Session]) -> String {
         .join(", ")
 }
 
+/// Each session as an id and its title, for a refusal that names sessions to the model.
+pub(crate) fn session_labels<'a>(sessions: impl IntoIterator<Item = &'a Session>) -> String {
+    sessions
+        .into_iter()
+        .map(|session| format!("`{}` (\"{}\")", session.id, session.title))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 /// Marks one session archived and ends its process, if it has one.
 fn archive_record(state: &Arc<AppState>, id: &str) -> Result<()> {
     let mut session = state.session_record(id)?;

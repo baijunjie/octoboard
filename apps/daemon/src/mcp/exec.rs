@@ -80,6 +80,7 @@ pub async fn call(
         "rename_session" => rename_session(state, &session, arguments),
         "set_session_pinned" => set_session_pinned(state, &session, arguments),
         "archive_session" => archive_session(state, &session, arguments),
+        "archive_self" => archive_self(state, &session),
         "list_archived" => list_archived(state, &session, arguments),
         "reopen_session" => reopen_session(state, &session, arguments).await,
         "show_page" => show_page(state, &session, arguments),
@@ -365,9 +366,109 @@ fn archive_session(
     caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
+    let wanted = required_str(arguments, "session")?;
+    if wanted == caller.id && caller.bound_to.is_none() {
+        bail!(
+            "session `{wanted}` is your own session, which `archive_session` does not archive; \
+             use `archive_self` to archive yourself"
+        );
+    }
+    let target = resolve_owned_session(state, caller, wanted)?;
     coordinator::archive_session(state, &target.id)?;
     Ok(json!({ "session": target.id, "status": SessionStatus::Archived }))
+}
+
+/// Archives the caller itself, which only a session that reports to nobody does: a lead session
+/// wraps up with `report` instead. Its own sessions must all be archived already, since an owner
+/// archives each once its task is done, so one that is not (running or interrupted alike) means
+/// unfinished work and the call is refused, changing nothing. Once the record is archived the
+/// process is ended off the caller's path, so this answer still reaches it.
+fn archive_self(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
+    // Held across the checks and the archive, so a lock set in between cannot slip past them.
+    let _removal = state.claim_session_removal();
+    let caller = state.session_record(&caller.id)?;
+    // A lead session is offered the tool with the unbound session's set, so being bound is checked
+    // here.
+    if caller.bound_to.is_some() {
+        bail!(
+            "this session reports to an owner, so it does not archive itself: call `report` with \
+             status `done` and no open items, which archives it once the report is accepted"
+        );
+    }
+    if caller.locked {
+        bail!("this session is locked, so it cannot be archived; the user has to unlock it first");
+    }
+    let team = coordinator::team(state, &caller)?;
+    let locked: Vec<Session> = team
+        .iter()
+        .filter(|session| session.locked)
+        .cloned()
+        .collect();
+    if !locked.is_empty() {
+        bail!(
+            "this session cannot archive itself while sessions under it are locked: {}. The user \
+             has to unlock them first",
+            coordinator::session_labels(&locked)
+        );
+    }
+    let unarchived: Vec<Session> = team
+        .into_iter()
+        .filter(|session| session.status != SessionStatus::Archived)
+        .collect();
+    if let Some(refusal) = unarchived_refusal(&caller.id, &unarchived) {
+        bail!(refusal);
+    }
+    coordinator::archive_session(state, &caller.id)?;
+    Ok(json!({
+        "session": caller.id,
+        "status": SessionStatus::Archived,
+        "note": "Archived; this session's process will now end.",
+    }))
+}
+
+/// What refuses `archive_self` while sessions under the caller are not archived, or `None` when
+/// there are none. A session bound to a lead session is not the caller's to archive, so it is named
+/// under its lead with different advice from the caller's direct sessions.
+fn unarchived_refusal(caller_id: &str, unarchived: &[Session]) -> Option<String> {
+    let (direct, under_leads): (Vec<&Session>, Vec<&Session>) = unarchived
+        .iter()
+        .partition(|session| session.bound_to.as_deref() == Some(caller_id));
+    let mut advice = Vec::new();
+    if !direct.is_empty() {
+        advice.push(format!(
+            "{}: an owner archives its sessions once their tasks are done, so an unarchived one \
+             means its task is not finished; finish it and archive it with `archive_session` first",
+            coordinator::session_labels(direct)
+        ));
+    }
+    let mut leads: Vec<&str> = under_leads
+        .iter()
+        .filter_map(|session| session.bound_to.as_deref())
+        .collect();
+    leads.sort_unstable();
+    leads.dedup();
+    for lead in leads {
+        let named = coordinator::session_labels(
+            under_leads
+                .iter()
+                .copied()
+                .filter(|session| session.bound_to.as_deref() == Some(lead)),
+        );
+        advice.push(format!(
+            "{} under the lead session `{lead}`: not yours to archive; wait for the lead session \
+             to finish them (its `done` report archives it), or archive `{lead}` with \
+             `archive_session`, which takes along its sessions that have no process running and \
+             is refused while any has one",
+            named
+        ));
+    }
+    (!advice.is_empty()).then(|| {
+        format!(
+            "this session cannot archive itself while sessions under it are not archived. {}. \
+             Then archive yourself",
+            advice.join(". ")
+        )
+    })
 }
 
 fn rename_session(
@@ -1691,6 +1792,130 @@ pub(super) mod tests {
             state.store.get_session("mine").unwrap().unwrap().status,
             SessionStatus::Idle
         );
+    }
+
+    /// The status of a session, set directly: the setup of the `archive_self` tests.
+    fn with_status(state: &Arc<AppState>, id: &str, status: SessionStatus) {
+        let mut session = state.store.get_session(id).unwrap().unwrap();
+        session.status = status;
+        state.store.update_session(&session).unwrap();
+    }
+
+    async fn archive_self_error(state: &Arc<AppState>, caller: &str) -> String {
+        call(state, caller, "archive_self", &Map::new())
+            .await
+            .expect_err("refused")
+            .to_string()
+    }
+
+    /// An owner archives its sessions once their tasks are done, so one that is not archived —
+    /// running or interrupted, under an unbound project session or two levels under a console
+    /// session, below its lead session — refuses the call, names that session alone, and changes
+    /// nothing.
+    #[tokio::test]
+    async fn a_session_with_an_unarchived_session_under_it_cannot_archive_itself() {
+        let (peers, _peers_dir) = peer_state("archive-self-unarchived-peer");
+        let (leads, _leads_dir) = lead_state("archive-self-unarchived-lead");
+        // `a` owns `of-a` and the lead session `starter`, which owns `mine`: the other two are
+        // archived, so `mine` is what is named.
+        with_status(&leads, "of-a", SessionStatus::Archived);
+        with_status(&leads, "starter", SessionStatus::Archived);
+        for (state, caller) in [(&peers, "starter"), (&leads, "a")] {
+            for status in [SessionStatus::Idle, SessionStatus::Interrupted] {
+                with_status(state, "mine", status);
+                let message = archive_self_error(state, caller).await;
+                assert!(message.contains("`mine` (\"Work mine\")"), "{message}");
+                assert!(!message.contains("`of-a`"), "{message}");
+                if caller == "a" {
+                    assert!(
+                        message.contains("under the lead session `starter`"),
+                        "{message}"
+                    );
+                } else {
+                    assert!(message.contains("`archive_session`"), "{message}");
+                }
+                let after = state.store.get_session(caller).unwrap().unwrap();
+                assert_ne!(after.status, SessionStatus::Archived, "{caller}");
+                assert!(after.ended_at.is_none(), "{caller}");
+            }
+        }
+    }
+
+    /// A lead session is offered the tool with the unbound session's set, yet it reports to its
+    /// console session and wraps up with `report`, so the call is refused in prose and changes
+    /// nothing.
+    #[tokio::test]
+    async fn a_lead_session_is_told_to_report_done_instead_of_archiving_itself() {
+        let (state, _dir) = lead_state("archive-self-lead");
+        // Archived, so that being bound is the only thing that could refuse it.
+        with_status(&state, "mine", SessionStatus::Archived);
+        let message = archive_self_error(&state, "starter").await;
+        assert!(message.contains("`report`"), "{message}");
+        let after = state.store.get_session("starter").unwrap().unwrap();
+        assert_ne!(after.status, SessionStatus::Archived);
+    }
+
+    /// A locked session is not archived, by itself either, and a locked session under it is
+    /// named.
+    #[tokio::test]
+    async fn a_locked_session_cannot_archive_itself() {
+        let (state, _dir) = peer_state("archive-self-locked");
+        with_status(&state, "mine", SessionStatus::Archived);
+        state.set_session_locked("mine", true).unwrap();
+        let message = archive_self_error(&state, "starter").await;
+        assert!(message.contains("`mine` (\"Work mine\")"), "{message}");
+        state.set_session_locked("mine", false).unwrap();
+        state.set_session_locked("starter", true).unwrap();
+        let message = archive_self_error(&state, "starter").await;
+        assert!(message.contains("is locked"), "{message}");
+        let after = state.store.get_session("starter").unwrap().unwrap();
+        assert_ne!(after.status, SessionStatus::Archived);
+    }
+
+    /// `archive_session` on the caller's own session points to `archive_self`.
+    #[tokio::test]
+    async fn archiving_ones_own_session_with_archive_session_points_to_archive_self() {
+        let (state, _dir) = peer_state("archive-self-pointer");
+        let err = call(
+            &state,
+            "starter",
+            "archive_session",
+            &arguments(json!({ "session": "starter" })),
+        )
+        .await
+        .expect_err("refused");
+        assert!(err.to_string().contains("`archive_self`"), "{err}");
+    }
+
+    /// With every session under it archived, the call archives the caller and nobody else, and its
+    /// process is ended, for a console session and an unbound project session alike.
+    #[tokio::test]
+    async fn archiving_oneself_archives_the_caller_alone() {
+        let (state, _dir) = peer_state("archive-self-success");
+        // `a` owns `of-a` and `archived-of-a`; `starter` owns `mine`.
+        with_status(&state, "of-a", SessionStatus::Archived);
+        with_status(&state, "mine", SessionStatus::Archived);
+        let live = running(&state, "starter");
+        for caller in ["a", "starter"] {
+            let answer = call(&state, caller, "archive_self", &Map::new())
+                .await
+                .unwrap();
+            assert_eq!(answer["session"], caller);
+            assert_eq!(answer["status"], "archived");
+            let after = state.store.get_session(caller).unwrap().unwrap();
+            assert_eq!(after.status, SessionStatus::Archived, "{caller}");
+            assert!(after.ended_at.is_some(), "{caller}");
+        }
+        for untouched in ["b", "of-b", "loose", "other-project"] {
+            let session = state.store.get_session(untouched).unwrap().unwrap();
+            assert_eq!(session.status, SessionStatus::Idle, "{untouched}");
+        }
+        // Ending the process is left to a blocking task; wait for it.
+        let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
+        while !live.poll_exit() && std::time::Instant::now() < deadline {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert!(live.poll_exit());
     }
 
     /// An unbound project session starts sessions only in its own project: another project of the

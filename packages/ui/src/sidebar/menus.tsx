@@ -195,8 +195,8 @@ function colourSubmenu(t: Translate, handlers: SidebarHandlers, session: Session
  * `hasBoundSessions` says whether any session is bound to this one, which makes it used. Resuming
  * an interrupted session happens on selection; an archived session offers Reopen and Delete. Shared by a
  * project session's row and a console session's row (`ConsoleSessionsSection` in `Sidebar.tsx`) —
- * a console session cannot archive itself (see "The console session's tools" in `docs/product/hub-orchestration.md`), so
- * this is the only way to archive one, and the only place to switch its account. Focus mode is
+ * this is the user's only way to archive a console session (see "A session archiving itself" in
+ * `docs/product/hub-orchestration.md`), and the only place to switch its account. Focus mode is
  * offered for a console session alone; its own focus mode's header (`placement` `focused`) leaves
  * out Focus mode and Pin / Unpin. */
 export function sessionMenu(
