@@ -5,6 +5,7 @@ import { AGENT_LABEL } from "../agents";
 import { InlineChip } from "../components/InlineChip";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { useListMotion } from "../components/useListMotion";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
@@ -39,6 +40,7 @@ export function SwitchAccountDialog({
   const [snapshot, setSnapshot] = useState<Session[]>();
   const [progress, setProgress] = useState<{ completed: number; total: number; current?: Session }>();
   const [failures, setFailures] = useState<SwitchFailure[]>([]);
+  const failuresRef = useListMotion<HTMLUListElement>();
   const completed = useRef(new Set<string>());
   const pending = useRef<Promise<void> | undefined>(undefined);
   const eligible = (candidate: Session) => candidate.console_id === session.console_id
@@ -113,9 +115,9 @@ export function SwitchAccountDialog({
           )}
           {failures.length > 0 && (
             <ErrorAlert title={t("dialog.switchAccount.failed", { count: failures.length })}>
-              <ul className="flex flex-col gap-2">
+              <ul ref={failuresRef} className="relative flex flex-col gap-2">
                 {failures.map((failure) => (
-                  <li key={failure.session.id}>
+                  <li key={failure.session.id} data-list-motion={failure.session.id}>
                     <p dir="auto" className="font-semibold">{sessionDisplayTitle(t, sessions.get(failure.session.id) ?? failure.session)}</p>
                     <DaemonErrorMessage error={failure.error} />
                   </li>

@@ -156,6 +156,27 @@ it("a console session's focus mode offers neither a project's own focus mode nor
 const chips = (container: HTMLElement) =>
   Array.from(container.querySelectorAll<HTMLElement>('[role=group][aria-label="Switch console session"] button'));
 
+it.each([120, -120])("centres a reordered switch chip at its layout offset %s while it animates", (left) => {
+  let pin!: () => void;
+  function View({ handlers }: { handlers: SidebarHandlers }) {
+    const [current, setCurrent] = useState(hub2);
+    pin = () => setCurrent({ ...hub2, pinned: true });
+    return <ConsoleSessionFocusView handlers={handlers} console={main} consoleSession={current} projects={[web]} sessions={[hub1, current]} />;
+  }
+  const { container } = mount((handlers) => <View handlers={handlers} />);
+  const strip = container.querySelector<HTMLElement>('[role=group][aria-label="Switch console session"]')!;
+  const current = chips(container).find((chip) => chip.getAttribute("aria-current") === "true")!;
+  Object.defineProperty(strip, "clientWidth", { configurable: true, value: 200 });
+  Object.defineProperties(current, {
+    offsetLeft: { configurable: true, value: left },
+    offsetWidth: { configurable: true, value: 40 },
+  });
+  // Its painted rectangle can still be at the position it is sliding away from.
+  vi.spyOn(current, "getBoundingClientRect").mockReturnValue({ left: 500, width: 40 } as DOMRect);
+  act(pin);
+  expect(strip.scrollLeft).toBe(left + 20 - 100);
+});
+
 it("a console session's focus mode has a strip of the console's console sessions, the one in focus marked", () => {
   const { container, handlers, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions} />

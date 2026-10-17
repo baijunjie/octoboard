@@ -72,6 +72,7 @@ export function PickedTag({
   return (
     <Tag
       id={tag}
+      data-list-motion={`tag:${tag}`}
       dir={dir}
       textValue={tag}
       data-marquee-scope

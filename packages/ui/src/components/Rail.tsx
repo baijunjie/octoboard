@@ -14,6 +14,7 @@ import { ActivityBadge } from "./ActivityMarker";
 import { CHROME_BUTTON_FILLS, CHROME_CURRENT_FILLS, ChromeButton } from "./ChromeButton";
 import { ConsoleAvatar } from "./ConsoleAvatar";
 import { NotificationsBell } from "./NotificationsBell";
+import { useListMotion } from "./useListMotion";
 import { TitledControl } from "./TitledControl";
 import { FadedScroller } from "./scrollFade";
 
@@ -92,7 +93,7 @@ const ConsoleTile = memo(function ConsoleTile({
   const activityKey = activityLabelKey(activity);
   const label = activityKey ? t(activityKey, { name: isolate(thisConsole.name) }) : thisConsole.name;
   return (
-    <div ref={tileRef} className="flex">
+    <div ref={tileRef} data-list-motion={thisConsole.id} className="flex">
       <TitledControl title={label} placement="end" focusOnly={hoverOpensSidebar}>
         <Button
           isIconOnly
@@ -171,6 +172,7 @@ export function Rail({
   const t = useT();
   const rtl = textDirection(useCurrentLanguage()) === "rtl";
   const overflow = waitingCount > 99;
+  const consolesRef = useListMotion<HTMLDivElement>({ descendants: true });
 
   return (
     <nav
@@ -180,10 +182,10 @@ export function Rail({
       aria-label={t("rail.label")}
       className="flex w-(--rail-width) shrink-0 flex-col items-center gap-1 pt-1 pb-2 select-none"
     >
-      <div className="flex min-h-0 flex-col items-center gap-1">
+      <div ref={consolesRef} className="relative flex min-h-0 flex-col items-center gap-1">
         {/* More consoles than fit scroll here, the scrollbar left out: the rail is too narrow for
             one, which leaves the fade as the only thing saying there are more. */}
-        <FadedScroller hideScrollBar className="flex min-h-0 flex-col items-center gap-1 overscroll-contain py-0.5">
+        <FadedScroller hideScrollBar className="relative flex min-h-0 flex-col items-center gap-1 overscroll-contain py-0.5">
           {consoles.map((c) => (
             <ConsoleTile
               key={c.id}
@@ -196,9 +198,11 @@ export function Rail({
             />
           ))}
         </FadedScroller>
-        <ChromeButton id={NEW_CONSOLE_ID} label={t("rail.newConsole")} onPress={() => onOpenDialog({ kind: "new-console" })} tooltipPlacement="end" className="shrink-0">
-          <Plus aria-hidden="true" className="size-4" />
-        </ChromeButton>
+        <div data-list-motion="new-console" className="flex shrink-0">
+          <ChromeButton id={NEW_CONSOLE_ID} label={t("rail.newConsole")} onPress={() => onOpenDialog({ kind: "new-console" })} tooltipPlacement="end" className="shrink-0">
+            <Plus aria-hidden="true" className="size-4" />
+          </ChromeButton>
+        </div>
       </div>
       <div className="mt-auto flex shrink-0 flex-col items-center gap-1">
         {waitingCount > 0 && (

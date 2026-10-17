@@ -12,6 +12,7 @@ import { ChangeRowBody, changeRowText } from "./changeRow";
 import { changeGroups, filterChanges, sectionKey, sections, visibleNodes, type ChangeItem, type ChangeSection } from "./changes";
 import { ChangeSectionHeading, ChangeSectionHeadingStops, ChangeListLayout, CHANGE_SCROLL_CLASS, HEADING_CLASS, HEADING_HEIGHT } from "./changeSectionHeading";
 import { ChangeTree } from "./ChangeTree";
+import { useBrowserListMotion } from "./useBrowserListMotion";
 import { ROW_CLASS, ROW_HEIGHT, RowContent } from "./treeRow";
 
 /** How far below the top of the list's content the row of `key` is, or nothing when the list has
@@ -118,7 +119,8 @@ function FlatChangeList({
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
 }): React.ReactElement {
   const language = useCurrentLanguage();
-  const { props: fade, wrap } = useStickyScrollFade({ ref: listRef, className: "min-h-0 flex-1 overflow-auto pb-1 outline-none " + CHANGE_SCROLL_CLASS, stickyHeadingHeight: HEADING_HEIGHT });
+  const motionRef = useBrowserListMotion(listRef);
+  const { props: fade, wrap } = useStickyScrollFade({ ref: motionRef, className: "min-h-0 flex-1 overflow-auto pb-1 outline-none " + CHANGE_SCROLL_CLASS, stickyHeadingHeight: HEADING_HEIGHT });
   // A section's `id` is what the collection keys it by; a change's own `key` keys its row.
   const groups = useMemo(() => sections(items).map((group) => ({ id: group.section, ...group })), [items]);
   const byKey = useMemo(() => new Map(items.map((item) => [item.key, item])), [items]);
@@ -179,7 +181,7 @@ function ChangeSectionView({
   const rows = collapsed.has(sectionKey(section)) ? [] : items;
   return (
     <GridListSection className="h-full" id={section}>
-      <GridListHeader className={HEADING_CLASS}>
+      <GridListHeader data-list-motion={`heading:${section}`} className={HEADING_CLASS}>
         <ChangeSectionHeading section={section} count={items.length} collapsed={collapsed} onCollapsedChange={onCollapsedChange} />
       </GridListHeader>
       <Collection items={rows} dependencies={[language, selected]}>
@@ -196,7 +198,7 @@ function ChangeRow({ item, isSelected }: { item: ChangeItem; isSelected: boolean
   // Marked `data-current`, not `data-selected`: react-aria-components writes the row's
   // `data-selected` itself, from a selection the list does not have.
   return (
-    <GridListItem id={item.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS} ref={rowRef}>
+    <GridListItem data-list-motion={item.key} id={item.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS} ref={rowRef}>
       <RowContent flat>
         <ChangeRowBody contextTargetRef={rowRef} item={item} name={name} detail={detail} />
       </RowContent>

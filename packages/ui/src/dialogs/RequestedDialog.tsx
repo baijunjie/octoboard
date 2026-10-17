@@ -1,6 +1,7 @@
 import { Alert } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
+import { useListMotion } from "../components/useListMotion";
 import { InlineChip } from "../components/InlineChip";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { AgentIcon } from "../components/AgentIcon";
@@ -31,6 +32,7 @@ import { useSessionRecords } from "./useSessionRecords";
  * callout unmarked. */
 function SessionCallout({ title, sessions }: { title: string; sessions?: Session[] }): React.ReactElement {
   const t = useT();
+  const sessionsRef = useListMotion<HTMLUListElement>();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   return (
     <TintedAlert status="warning" className="shadow-none">
@@ -40,9 +42,9 @@ function SessionCallout({ title, sessions }: { title: string; sessions?: Session
         {/* The list is a sibling of the description rather than inside it: the description is a
             `<span>`, which cannot hold a list. */}
         {sessions && (
-          <ul className="mt-1 flex min-w-0 flex-col gap-1 self-stretch text-sm text-foreground">
+          <ul ref={sessionsRef} className="relative mt-1 flex min-w-0 flex-col gap-1 self-stretch text-sm text-foreground">
             {sessions.map((session) => (
-              <li key={session.id} className="flex min-w-0 items-center gap-2">
+              <li key={session.id} data-list-motion={session.id} className="flex min-w-0 items-center gap-2">
                 {session.status !== "archived" && <StatusIcon status={session.status} withTooltip />}
                 <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
                 {/* The icon is decorative, and nothing else here names the agent. */}

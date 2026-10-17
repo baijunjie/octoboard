@@ -374,7 +374,7 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "A worktree's uncommitted changes",
     description:
-      "Staged, unstaged and untracked changes share the list. server.ts is selected: its rounded highlight has space on all four sides, matching Files and folder-grouped Git rows. Its actions button has a muted resting glyph and the shared subtle tint when hovered or open, matching the selected sidebar session and console header. Right-click a row for Open, Show in file manager and Copy path in the selected worktree. Open a file to inspect its viewer, or use the controls to explore filters, folders and status tooltips. The repository includes successful rename, expansion and budget cases. Choose Docked above the preview to inspect the 320px project pane at the 1168px minimum window width: tabs scroll horizontally when needed.",
+      "Staged, unstaged and untracked changes share the list. Collapse a section to watch following rows slide into place; scrolling keeps rows steady. server.ts is selected: its rounded highlight has space on all four sides, matching Files and folder-grouped Git rows. Its actions button has a muted resting glyph and the shared subtle tint when hovered or open, matching the selected sidebar session and console header. Right-click a row for Open, Show in file manager and Copy path in the selected worktree. Open a file to inspect its viewer, or use the controls to explore filters, folders and status tooltips. The repository includes successful rename, expansion and budget cases. Choose Docked above the preview to inspect the 320px project pane at the 1168px minimum window width: tabs scroll horizontally when needed.",
     state,
     steps: [...openGit, (ui) => ui.press(ui.changeRow("server.ts", "modified")), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
   },
@@ -569,7 +569,7 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Changes grouped by folder",
-    description: "Directories start expanded and config.ts is selected inside src. Its rounded highlight keeps the same space on all four sides as Files and the flat Git list, while file labels follow the folder indentation. Compare file actions buttons at rest, then hover or open their menus for the same subtle shared hover tint.",
+    description: "Directories start expanded and config.ts is selected inside src. Collapse and expand folders to watch following rows slide into place; scrolling keeps rows steady. Its rounded highlight keeps the same space on all four sides as Files and the flat Git list, while file labels follow the folder indentation. Compare file actions buttons at rest, then hover or open their menus for the same subtle shared hover tint.",
     state: state,
     preferences: { changeLayout: "tree" },
     steps: [

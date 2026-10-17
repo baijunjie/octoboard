@@ -9,6 +9,7 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { PathText } from "../components/PathText";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusHandoff } from "../components/useFocusHandoff";
+import { MotionListBox } from "../components/MotionListBox";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
@@ -221,7 +222,7 @@ function WorktreeSelect({
           <Select.Indicator />
         </Select.Trigger>
         <Select.Popover>
-          <ListBox>
+          <MotionListBox className="relative">
             {worktrees.map((worktree) => {
               const name = worktreeName(t, worktree);
               const shownName = worktree.id === own ? t("git.worktree.own", { name: worktree.branch === null ? name : isolate(name) }) : name;
@@ -229,7 +230,7 @@ function WorktreeSelect({
               // `pe-7` restores the room HeroUI reserves for the check mark, which its Select styles
               // override with a narrower padding, so a long name would run under the mark.
               return (
-                <ListBox.Item key={worktree.id} id={worktree.id} textValue={name} className="pe-7">
+                <ListBox.Item data-list-motion={worktree.id} key={worktree.id} id={worktree.id} textValue={name} className="pe-7">
                   <span className="flex min-w-0 flex-1 flex-col">
                     <FadeOverflow as="span" dir="auto" titleWhenClipped={shownName}>
                       {shownName}
@@ -241,7 +242,7 @@ function WorktreeSelect({
                 </ListBox.Item>
               );
             })}
-          </ListBox>
+          </MotionListBox>
         </Select.Popover>
       </Select>
     </div>

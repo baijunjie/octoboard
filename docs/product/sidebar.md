@@ -534,9 +534,9 @@ the rules put it (see "Project rows" above). So a pinned session comes first amo
 the whole project, and a session under an owner is never ranked against that owner. Everything walked in this order
 follows the nesting the same way, so a session bound to a project session comes after its owner wherever both appear.
 
-The order follows status changes as they happen. A row that moves slides to its new place over about a quarter of a
-second, and moves at once where the system asks for reduced motion. The rail's waiting count walks waiting sessions
-in this same order (see "The raised hand" in `docs/product/sessions.md`).
+The order follows status changes as they happen. Row movement follows "Items moving within a collection" in
+`docs/product/collection-motion.md`. The rail's waiting count walks waiting sessions in this same order (see
+"The raised hand" in `docs/product/sessions.md`).
 
 ### Pinning
 
@@ -654,6 +654,9 @@ scope and nesting are described below.
   `docs/product/deleting-sessions.md`.
 - With nothing archived — including after everything has been deleted — the view stays open and says there are no
   archived sessions.
+
+Archive rows, including inset sessions, follow "Items moving within a collection" in
+`docs/product/collection-motion.md`.
 
 **It closes** on its Close button, on `Escape` while keyboard focus is in it, when a session is selected (from it or
 from anywhere else, as in "Selecting a session" above), when this window opens a new session, when another console is

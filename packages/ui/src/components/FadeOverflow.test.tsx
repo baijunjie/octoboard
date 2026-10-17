@@ -127,6 +127,7 @@ function mount(
   clientWidth = 0,
 ): {
   container: HTMLElement;
+  unmount: () => void;
   label: Element;
   written: number[];
   overflowBy: (width: number) => void;
@@ -161,6 +162,7 @@ function mount(
   const settle = () => act(() => void vi.runOnlyPendingTimers());
   return {
     container,
+    unmount: () => act(() => root.unmount()),
     label,
     written,
     // Changes how much text is past the box, as a rename or a change of width would.
@@ -381,4 +383,27 @@ it("runs both labels of a hovered row, including one that overflows only after t
   act(() => void vi.advanceTimersByTime(5000));
   act(() => void vi.runOnlyPendingTimers());
   expect(vi.getTimerCount()).toBe(0);
+});
+
+
+it("forwards its own measured element and clears an object ref on unmount", () => {
+  const ref = React.createRef<HTMLElement>();
+  const { container, label, unmount, enter, settle, finish } = mount({ ref, children: "long label", titleWhenClipped: "long label" }, true);
+  expect(ref.current).toBe(label);
+  enter();
+  settle();
+  expect(tooltip()?.textContent).toBe("long label");
+  finish();
+  expect(container.firstElementChild).toBe(label);
+  unmount();
+  expect(ref.current).toBeNull();
+});
+
+it("preserves a forwarded callback ref's cleanup", () => {
+  const cleanup = vi.fn();
+  const ref = vi.fn((element: HTMLElement | null) => element ? cleanup : undefined);
+  const { label, unmount } = mount({ ref, children: "label" }, false);
+  expect(ref).toHaveBeenCalledWith(label);
+  unmount();
+  expect(cleanup).toHaveBeenCalledOnce();
 });

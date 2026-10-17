@@ -264,6 +264,7 @@ function useMarquee(
 }
 
 interface FadeOverflowProps {
+  ref?: React.Ref<HTMLElement>;
   /** Length of the fade at each clipped edge, in px. */
   fade?: number;
   /** The element to render. */
@@ -312,6 +313,7 @@ interface FadeOverflowProps {
  * never shows a hard cut.
  */
 export function FadeOverflow({
+  ref: forwarded,
   fade = 24,
   as: Tag = "div",
   className = "",
@@ -332,7 +334,15 @@ export function FadeOverflow({
   const attach = useCallback((element: HTMLElement | null) => {
     ref.current = element;
     anchor.current = element?.parentElement ?? element;
-  }, []);
+    if (typeof forwarded === "function") {
+      const cleanup = forwarded(element);
+      if (cleanup) return () => {
+        ref.current = null;
+        anchor.current = null;
+        cleanup();
+      };
+    } else if (forwarded) forwarded.current = element;
+  }, [forwarded]);
   const marqueeHolds = useRef(false);
   const [clipped, setClipped] = useState<Clipped>({ start: false, end: false, rtl: false, width: 0 });
   const [hovered, setHovered] = useState(false);

@@ -288,7 +288,7 @@ export const focusScenarios: Scenario[] = [
     state: projectArchivePreviewTen,
     sessionRecords: { "s-preview-2": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The headings count zero live sessions and ten archived parents. All ten parents appear without View all. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus Unused archived draft to see the Delete shortcut immediately before its menu: it has no conversation and its native records are verified absent, so it deletes without confirmation. Used archived rows have only their actions menu, where Delete still requires confirmation. Long preview titles scroll only while the pointer is over their text; icons and row controls do not start them. The Show all project sessions switch is absent even when its saved preference is on.",
+    description: "The headings count zero live sessions and ten archived parents. All ten parents appear without View all. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus Unused archived draft to see the Delete shortcut immediately before its menu: it has no conversation and its native records are verified absent, so it deletes without confirmation. Used archived rows have only their actions menu, where Delete still requires confirmation. Long preview titles scroll only while the pointer is over their text; icons and row controls do not start them. The Show all project sessions switch is absent even when its saved preference is on. Delete the unused draft or reopen a row, then archive it again: the remaining archive rows slide into place.",
   },
   {
     id: "focus-archived-session-menu",
@@ -308,7 +308,7 @@ export const focusScenarios: Scenario[] = [
     state: projectArchivePreviewEleven,
     sessionRecords: { "s-preview-2": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}` },
-    description: "The heading counts thirteen archived sessions: eleven parents and two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus Unused archived draft to see the Delete shortcut immediately before its menu: it has no conversation and its native records are verified absent, so it deletes without confirmation. Used archived rows have only their actions menu, where Delete still requires confirmation. Ten parent rows precede View all; children of the archived lead appear only in the full archive.",
+    description: "The heading counts thirteen archived sessions: eleven parents and two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus Unused archived draft to see the Delete shortcut immediately before its menu: it has no conversation and its native records are verified absent, so it deletes without confirmation. Used archived rows have only their actions menu, where Delete still requires confirmation. Ten parent rows precede View all; children of the archived lead appear only in the full archive. Delete the unused draft to bring the eleventh parent into the preview; reopen another row, then archive it again to watch the remaining rows and View all slide into place. View all remains while archived children are hidden.",
   },
   {
     id: "focus-console-archive-five",
@@ -317,7 +317,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console archive preview, exactly ten parents",
     state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The headings count zero live sessions and ten directly bound archived parents. All ten appear without View all. Compact archive rows omit dates and show a usage chip only for positive totals. Used archived rows have no Delete shortcut; their actions menu retains Delete with confirmation and Reopen. Long preview titles scroll only while their text is hovered; icons and controls leave them still.",
+    description: "The headings count zero live sessions and ten directly bound archived parents. All ten appear without View all. Compact archive rows omit dates and show a usage chip only for positive totals. Used archived rows have no Delete shortcut; their actions menu retains Delete with confirmation and Reopen. Long preview titles scroll only while their text is hovered; icons and controls leave them still. Reopen a row, then archive it again to see the remaining archive rows slide into place.",
   },
   {
     id: "focus-console-archive-overflow",
@@ -326,7 +326,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console archive preview, eleven parents with children",
     state: archivePreviewEleven,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The heading counts thirteen bound archived sessions, including two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show a usage chip only for positive totals. Used archived rows have no Delete shortcut; their actions menu retains Delete with confirmation and Reopen. Only ten of eleven parent rows appear before View all; the full archive keeps children under their archived lead.",
+    description: "The heading counts thirteen bound archived sessions, including two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show a usage chip only for positive totals. Used archived rows have no Delete shortcut; their actions menu retains Delete with confirmation and Reopen. Only ten of eleven parent rows appear before View all; the full archive keeps children under their archived lead. Reopen a parent without children, then archive it again: the remaining archive rows slide as the preview changes.",
   },
   {
     id: "focus-project-empty",
@@ -360,6 +360,7 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Overflowing console session strip",
+    description: "Archive a console session from its menu: the remaining markers slide horizontally. Scroll the strip to reveal other sessions without triggering list motion.",
     state: state,
     preferences: { sidebarConsole: crowdedConsole.id, sidebarFocus: `consoleSession:${crowd[5].id}` },
   },

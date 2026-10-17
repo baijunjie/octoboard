@@ -8,8 +8,10 @@ import {
 } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
+import { MotionListBox } from "../components/MotionListBox";
 import { PickedTag } from "../components/PickedTag";
 import { TitledControl } from "../components/TitledControl";
+import { useListMotion } from "../components/useListMotion";
 import { useT } from "../i18n/react";
 
 const GROUP_CLASS =
@@ -49,6 +51,7 @@ export function TagsInput({
 }): React.ReactElement {
   const t = useT();
   const [input, setInput] = useState("");
+  const tagsRef = useListMotion<HTMLDivElement>({ descendants: true });
   const inputRef = useRef<HTMLInputElement>(null);
 
   const has = (tags: string[], tag: string) =>
@@ -87,6 +90,7 @@ export function TagsInput({
           one HeroUI positions at the end edge, hence the end padding. HeroUI's input-group styles are not
           used for the frame: they key on their own input slot, which the combo box's input is not. */}
       <ComboBox.InputGroup
+        ref={tagsRef}
         className={isDisabled ? `${GROUP_CLASS} ${DISABLED_CLASS}` : GROUP_CLASS}
         // A press on the box's own padding, not on a tag or the input, goes to the input, as in a text field.
         onMouseDown={(e) => {
@@ -120,6 +124,7 @@ export function TagsInput({
         </TagGroup>
         <Input
           ref={inputRef}
+          data-list-motion="input"
           placeholder={placeholder}
           // The group's box carries the frame, background and focus ring; these undo the input's own.
           className="h-7 min-w-24 border-0 bg-transparent px-1 py-0 shadow-none hover:bg-transparent focus:bg-transparent focus:ring-0"
@@ -152,13 +157,13 @@ export function TagsInput({
         </TitledControl>
       </ComboBox.InputGroup>
       <ComboBox.Popover>
-        <ListBox>
+        <MotionListBox className="relative">
           {(item: { id: string }) => (
-            <ListBox.Item id={item.id} textValue={item.id}>
+            <ListBox.Item data-list-motion={item.id} id={item.id} textValue={item.id}>
               <span dir="auto">{item.id}</span>
             </ListBox.Item>
           )}
-        </ListBox>
+        </MotionListBox>
       </ComboBox.Popover>
       {description && <Description>{description}</Description>}
     </ComboBox>

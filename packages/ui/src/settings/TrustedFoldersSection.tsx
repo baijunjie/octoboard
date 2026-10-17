@@ -5,6 +5,7 @@ import React from "react";
 
 import { EmptyPanel } from "../components/EmptyPanel";
 import { MarkedPath } from "../components/MarkedPath";
+import { useListMotion } from "../components/useListMotion";
 import { TitledControl } from "../components/TitledControl";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
@@ -19,6 +20,7 @@ import { useSectionRefocus } from "./useSectionRefocus";
 export function TrustedFoldersSection(): React.ReactElement {
   const t = useT();
   const { request, toastError } = useDaemon();
+  const listRef = useListMotion<HTMLDivElement>();
   const directories = useDaemonStore((s) => s.trustedDirectories);
   useSectionRefocus([directories]);
   const remove = (path: string) =>
@@ -38,10 +40,11 @@ export function TrustedFoldersSection(): React.ReactElement {
           </div>
         </div>
       ) : (
-        <div className="border-t border-separator">
+        <div ref={listRef} className="relative border-t border-separator">
           {directories.map((path) => (
             <SettingRow
               key={path}
+              motionKey={path}
               label={<MarkedPath path={path} />}
               description={t("settings.trusted.rowDescription")}
             >

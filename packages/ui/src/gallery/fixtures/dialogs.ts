@@ -591,7 +591,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Project tag suggestions",
-    description: "Short and long tags share the field with the input. The short tag fits its content until hover or keyboard focus makes room for its remove button; unused project tags appear below.",
+    description: "Short and long tags share the field with the input. The short tag fits its content until hover or keyboard focus makes room for its remove button; unused project tags appear below. Add or remove tags to watch the chips slide between lines as they wrap, with the input staying in the flow.",
     steps: [
       ...editTaggedProject,
       (ui) => ui.press(ui.t("dialog.project.tagsSuggestions")),

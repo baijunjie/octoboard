@@ -12,6 +12,7 @@ import { InlineChip } from "../components/InlineChip";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
+import { useListMotion } from "../components/useListMotion";
 import { usePointerFocusReturn } from "../components/usePointerFocusReturn";
 import { useScrollFade } from "../components/scrollFade";
 import { useTrimmedField } from "../dialogs/useTrimmedField";
@@ -188,7 +189,8 @@ function TagPicker({
   onChange: (added: string[], removed: string[]) => void;
 }): React.ReactElement {
   const t = useT();
-  const fade = useScrollFade({ className: "max-h-40 overflow-y-auto px-4 py-1" });
+  const tagsRef = useListMotion<HTMLDivElement>();
+  const fade = useScrollFade({ ref: tagsRef, className: "relative max-h-40 overflow-y-auto px-4 py-1" });
   // The default heading level: the popover it fills is named by a label rather than by a heading,
   // so there is none above it for the panel's own to sit level with.
   if (vocabulary.length === 0) return <EmptyPanel icon={Tags} message={t("sidebar.filter.noTags")} description={t("sidebar.filter.noTags.description")} />;
@@ -214,7 +216,7 @@ function TagPicker({
           would wait for it forever. */}
       <TagGroup.List {...fade}>
         {vocabulary.map((tag) => (
-          <Tag key={tag} id={tag} textValue={tag}>
+          <Tag key={tag} id={tag} textValue={tag} data-list-motion={tag}>
             {({ isSelected }) => (
               <>
                 {/* Picked is shown by a glyph too, not by the fill alone. */}
@@ -236,12 +238,13 @@ function TagPicker({
 const CHIP_FIT_CLASS = { whole: "shrink-0", wrapping: "min-w-0 max-w-full" };
 
 /** One condition of the filter: the keyword in the neutral look, a picked tag in the accent one. */
-function Chip({ kind, fit, children }: {
+function Chip({ kind, fit, children, motionKey }: {
   kind: "keyword" | "tag";
   fit: keyof typeof CHIP_FIT_CLASS;
   children: string;
+  motionKey?: string;
 }): React.ReactElement {
-  return <InlineChip size="xs" color={kind === "keyword" ? "default" : "accent"} dir="auto" wrap={fit === "wrapping"} className={CHIP_FIT_CLASS[fit]}>{children}</InlineChip>;
+  return <InlineChip data-list-motion={motionKey} size="xs" color={kind === "keyword" ? "default" : "accent"} dir="auto" wrap={fit === "wrapping"} className={CHIP_FIT_CLASS[fit]}>{children}</InlineChip>;
 }
 
 /** The whole filter as a tooltip: the same chips as the heading's line, wrapped onto as many lines
@@ -250,10 +253,11 @@ function Chip({ kind, fit, children }: {
  * is a dialog's `--overlay`, so the chips take the fills of `.control-fills`: HeroUI's own
  * `--default` lands at 1.19:1 against it and the keyword would barely read as a chip. */
 function ProjectFilterTooltip({ filter }: { filter: ProjectFilter }): React.ReactElement {
+  const listRef = useListMotion<HTMLDivElement>();
   return (
-    <div className="control-fills flex flex-wrap gap-1.5">
-      {filter.keyword !== "" && <Chip kind="keyword" fit="wrapping">{filter.keyword}</Chip>}
-      {filter.tags.map((tag) => <Chip key={tag} kind="tag" fit="wrapping">{tag}</Chip>)}
+    <div ref={listRef} className="control-fills relative flex flex-wrap gap-1.5">
+      {filter.keyword !== "" && <Chip kind="keyword" fit="wrapping" motionKey="keyword">{filter.keyword}</Chip>}
+      {filter.tags.map((tag) => <Chip key={tag} kind="tag" fit="wrapping" motionKey={`tag:${tag}`}>{tag}</Chip>)}
     </div>
   );
 }
@@ -266,17 +270,18 @@ function ProjectFilterTooltip({ filter }: { filter: ProjectFilter }): React.Reac
  * Each kind is a named group, so a screen reader hears what the words are. */
 export function ProjectFilterSummary({ filter }: { filter: ProjectFilter }): React.ReactElement {
   const t = useT();
+  const listRef = useListMotion<HTMLElement>({ descendants: true });
   return (
-    <FadeOverflow className="flex min-w-0 flex-1 items-center gap-1.5" titleWhenClipped={<ProjectFilterTooltip filter={filter} />}>
+    <FadeOverflow ref={listRef} className="relative flex min-w-0 flex-1 items-center gap-1.5" titleWhenClipped={<ProjectFilterTooltip filter={filter} />}>
       {filter.keyword !== "" && (
         <span role="group" aria-label={t("sidebar.filter.keyword")} className="inline-flex shrink-0">
-          <Chip kind="keyword" fit="whole">{filter.keyword}</Chip>
+          <Chip kind="keyword" fit="whole" motionKey="keyword">{filter.keyword}</Chip>
         </span>
       )}
       {filter.tags.length > 0 && (
         <span role="group" aria-label={t("sidebar.filter.picked")} className="inline-flex shrink-0 gap-1.5">
           {filter.tags.map((tag) => (
-            <Chip key={tag} kind="tag" fit="whole">{tag}</Chip>
+            <Chip key={tag} kind="tag" fit="whole" motionKey={`tag:${tag}`}>{tag}</Chip>
           ))}
         </span>
       )}

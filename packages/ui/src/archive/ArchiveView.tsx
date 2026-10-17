@@ -18,6 +18,7 @@ import type { Account, Console, Project, Session } from "../protocol";
 import { sessionAccountTooltip, sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
 import { archivedSessionRows, boundArchivedSessions } from "../sidebar/order";
 import { NESTED_ROW_CLASS, TreeRow } from "../sidebar/rows";
+import { useFlip } from "../sidebar/useFlip";
 
 /** How many rows the list adds each time its end scrolls into view. */
 const PAGE = 30;
@@ -83,6 +84,7 @@ export function ArchiveView({
   active?: boolean;
 }): React.ReactElement {
   const t = useT();
+  const listRef = useFlip<HTMLUListElement>();
   const archived = archivedSessionRows(boundTo ? boundArchivedSessions(sessions, boundTo.id) : sessions);
   const [shown, setShown] = useState(restore?.shown ?? PAGE);
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -188,9 +190,9 @@ export function ArchiveView({
         {archived.length === 0 ? (
           <EmptyPanel icon={Archive} message={t("sidebar.archive.empty")} />
         ) : (
-          <ul className="flex flex-col gap-0.5 p-2">
+          <ul ref={listRef} className="relative flex flex-col gap-0.5 p-2">
             {archived.slice(0, shown).map(({ session, under }) => (
-              <li key={session.id} className={under ? NESTED_ROW_CLASS : ""}>
+              <li key={session.id} data-flip={session.id} className={under ? NESTED_ROW_CLASS : ""}>
                 <ArchiveRow
                   session={session}
                   under={under}

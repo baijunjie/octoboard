@@ -8,7 +8,26 @@ import type { RequestBody } from "../protocol";
 import { exportedDocument } from "./fixtureConfiguration";
 import { createFixtureDaemon } from "./fixtureDaemon";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore";
-import { consoleOf, gitStatusOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
+import { consoleOf, gitStatusOf, pageOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
+
+describe("the fixture daemon's session archiving", () => {
+  it("refuses running descendants, then archives the dormant team and supports reopening", async () => {
+    const owner = sessionOf("owner", "c", undefined, "Hub", "idle");
+    const lead = sessionOf("lead", "c", "p", "Lead", "interrupted", { bound_to: owner.id });
+    const child = sessionOf("child", "c", "p", "Child", "idle", { bound_to: lead.id });
+    const daemon = createFixtureDaemon({ id: "archive", group: "Focus mode", category: "normal", title: "", state: snapshotState({ sessions: [owner, lead, child] }) });
+    await expect(daemon.request({ type: "archive_session", session: owner.id })).rejects.toMatchObject({ code: "session_has_running_sessions", params: { session_ids: JSON.stringify([child.id]) } });
+    expect(daemon.store.getState().sessions.get(owner.id)).toEqual(owner);
+    await daemon.request({ type: "archive_session", session: child.id });
+    await daemon.request({ type: "archive_session", session: owner.id });
+    for (const id of [owner.id, lead.id, child.id]) expect(daemon.store.getState().sessions.get(id)).toMatchObject({ status: "archived", ended_at: expect.any(Number) });
+    await daemon.request({ type: "resume_session", session: lead.id });
+    expect(daemon.store.getState().sessions.get(lead.id)?.status).toBe("idle");
+    expect(daemon.store.getState().sessions.get(owner.id)?.status).toBe("idle");
+    expect(daemon.store.getState().sessions.get(child.id)?.status).toBe("archived");
+    await expect(daemon.request({ type: "archive_session", session: "missing" })).rejects.toMatchObject({ code: "unknown_session" });
+  });
+});
 
 describe("the fixture daemon's session reopening", () => {
   it("restores an archived session and its archived owners while preserving its children", async () => {
@@ -419,5 +438,41 @@ describe("the fixture daemon's structured notices", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("the fixture daemon's settings and rail removals", () => {
+  it("clears deleted account references while preserving explicit defaults and existing session directories", async () => {
+    const account = { id: "a", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" };
+    const console_ = consoleOf("c", "Main", { claude_account_id: account.id });
+    const project = projectOf("p", console_.id, "Website", { claude_account_id: { kind: "account", id: account.id }, codex_account_id: { kind: "default" } });
+    const session = sessionOf("s", console_.id, project.id, "Work", "idle", { account_id: account.id, config_dir: account.config_dir });
+    const daemon = createFixtureDaemon({ id: "account-removal", group: "Settings", category: "normal", title: "", state: { ...snapshotState({ consoles: [console_], projects: [project], sessions: [session] }), settings: { auto_pull_repositories: false, default_clone_dir: "", accounts: [account] } } });
+    await daemon.request({ type: "delete_account", account: account.id });
+    const current = daemon.store.getState();
+    expect(current.settings.accounts).toEqual([]);
+    expect(current.consoles.get(console_.id)?.claude_account_id).toBeNull();
+    expect(current.projects.get(project.id)?.claude_account_id).toEqual({ kind: "inherit" });
+    expect(current.projects.get(project.id)?.codex_account_id).toEqual({ kind: "default" });
+    expect(current.sessions.get(session.id)).toEqual(session);
+    await expect(daemon.request({ type: "delete_account", account: account.id })).rejects.toMatchObject({ code: "unknown_account" });
+  });
+
+  it("refuses console removal while sessions run, then removes its projects, archived sessions and pages", async () => {
+    const console_ = consoleOf("c", "Main");
+    const other = consoleOf("other", "Other");
+    const project = projectOf("p", console_.id, "Website");
+    const session = sessionOf("s", console_.id, project.id, "Work", "working");
+    const hub = sessionOf("hub", console_.id, undefined, "Hub", "archived");
+    const daemon = createFixtureDaemon({ id: "rail-removal", group: "Window layout", category: "normal", title: "", state: snapshotState({ consoles: [console_, other], projects: [project], sessions: [session, hub], pages: { [hub.id]: [pageOf("report", hub.id, "<p>Report</p>", 1)] }, gitStatuses: [gitStatusOf(project.id)] }) });
+    await expect(daemon.request({ type: "delete_console", console: console_.id })).rejects.toMatchObject({ code: "console_has_running_sessions" });
+    daemon.store.setState({ sessions: new Map([[session.id, { ...session, status: "archived" }], [hub.id, hub]]) });
+    await daemon.request({ type: "delete_console", console: console_.id });
+    expect([...daemon.store.getState().consoles.keys()]).toEqual([other.id]);
+    expect(daemon.store.getState().projects.size).toBe(0);
+    expect(daemon.store.getState().sessions.size).toBe(0);
+    expect(daemon.store.getState().pages.size).toBe(0);
+    expect(daemon.store.getState().gitStatuses.size).toBe(0);
+    await expect(daemon.request({ type: "delete_console", console: "missing" })).rejects.toMatchObject({ code: "unknown_console" });
   });
 });

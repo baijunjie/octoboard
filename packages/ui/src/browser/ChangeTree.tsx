@@ -6,6 +6,7 @@ import { useCurrentLanguage, useT } from "../i18n/react";
 import { ChangeRowBody, changeRowText } from "./changeRow";
 import { changeGroups, sectionKey, type ChangeItem, type ChangeNode } from "./changes";
 import { ChangeSectionHeading, ChangeSectionHeadingStops, ChangeListLayout, CHANGE_SCROLL_CLASS, HEADING_CLASS, HEADING_HEIGHT } from "./changeSectionHeading";
+import { useBrowserListMotion } from "./useBrowserListMotion";
 import { DirectoryRow, ROW_CLASS, ROW_HEIGHT, RowContent } from "./treeRow";
 
 /** The directories of `nodes` and everything under them. */
@@ -45,7 +46,8 @@ export function ChangeTree({
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
 }): React.ReactElement {
   const language = useCurrentLanguage();
-  const { props: fade, wrap } = useStickyScrollFade({ ref: listRef, className: "min-h-0 flex-1 overflow-auto pb-1 outline-none " + CHANGE_SCROLL_CLASS, stickyHeadingHeight: HEADING_HEIGHT });
+  const motionRef = useBrowserListMotion(listRef);
+  const { props: fade, wrap } = useStickyScrollFade({ ref: motionRef, className: "min-h-0 flex-1 overflow-auto pb-1 outline-none " + CHANGE_SCROLL_CLASS, stickyHeadingHeight: HEADING_HEIGHT });
   const groups = useMemo(() => changeGroups(items, "tree").map((group) => ({ id: group.section, ...group })), [items]);
   // Only the directories of the sections on screen: a folded section renders none of its rows, so
   // whether a directory inside one is folded is not this list's to decide. react-aria hands an
@@ -81,7 +83,7 @@ export function ChangeTree({
   const renderNode = (node: ChangeNode): React.ReactElement => {
     if (node.type === "directory") {
       return (
-        <TreeItem id={node.key} textValue={node.name} hasChildItems className={ROW_CLASS}>
+        <TreeItem data-list-motion={node.key} id={node.key} textValue={node.name} hasChildItems className={ROW_CLASS}>
           <TreeItemContent>{({ isExpanded }) => <DirectoryRow name={node.name} isExpanded={isExpanded} />}</TreeItemContent>
           <Collection items={node.children} dependencies={[language, selected]}>
             {renderNode}
@@ -108,7 +110,7 @@ export function ChangeTree({
         >
           {(group) => (
             <TreeSection className="h-full" id={group.section}>
-              <TreeHeader className={HEADING_CLASS}>
+              <TreeHeader data-list-motion={`heading:${group.section}`} className={HEADING_CLASS}>
                 <ChangeSectionHeading section={group.section} count={group.items.length} collapsed={collapsed} onCollapsedChange={onCollapsedChange} />
               </TreeHeader>
               {/* A folded section is its heading and nothing else, still counting what it holds. */}
@@ -130,7 +132,7 @@ function ChangeTreeRow({ item, isSelected }: { item: ChangeItem; isSelected: boo
   // Marked `data-current`, not `data-selected`: react-aria-components writes the row's
   // `data-selected` itself, from a selection the tree does not have.
   return (
-    <TreeItem id={item.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS} ref={rowRef}>
+    <TreeItem data-list-motion={item.key} id={item.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS} ref={rowRef}>
       <TreeItemContent>
         <RowContent>
           <ChangeRowBody contextTargetRef={rowRef} item={item} name={name} detail={detail} />

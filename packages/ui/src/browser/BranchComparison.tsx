@@ -9,6 +9,8 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { InlineChip } from "../components/InlineChip";
 import { TitledControl } from "../components/TitledControl";
 import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
+import { MotionListBox } from "../components/MotionListBox";
+import { useListMotion } from "../components/useListMotion";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useScrollFade } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
@@ -163,6 +165,7 @@ function ComparisonContent({
   changeView: ChangeViewState;
 }): React.ReactElement {
   const t = useT();
+  const noticesRef = useListMotion<HTMLDivElement>();
   if (comparison.state === "idle") {
     if (branches.state === "error") return <GitFailure title={t("git.compare.branchesFailed")} message={branches.message} onRetry={onRetry} />;
     if (noBranches) return <CenteredEmptyPanel icon={GitFork} message={t("git.compare.noBranches")} />;
@@ -181,9 +184,9 @@ function ComparisonContent({
         />
       </p>
       {/* Mounted for as long as the comparison is, so a notice appearing in it is announced. */}
-      <div role="status" className="flex shrink-0 flex-col gap-1 px-3 text-xs text-app-muted not-empty:pb-2">
+      <div ref={noticesRef} role="status" className="relative flex shrink-0 flex-col gap-1 px-3 text-xs text-app-muted not-empty:pb-2">
         {notices.map((notice) => (
-          <p key={notice.branch} className="flex items-start gap-1.5">
+          <p key={notice.branch} data-list-motion={notice.branch} className="flex items-start gap-1.5">
             <TriangleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0" />
             <span>
               {notice.kind === "moved" ? (
@@ -280,11 +283,11 @@ export function BranchSelect({
           {/* The fade goes on the list, never on the popover around it: the popover is what animates
               away, and the fade's scroll-timeline animation never ends, so the popover's exit
               transition would wait for it forever. */}
-          <ListBox items={branches} {...branchFade}>
+          <MotionListBox virtualized items={branches} {...branchFade}>
             {(branch) => {
               const branchName = displayWirePath(branch.name);
               return (
-                <ListBox.Item id={branch.name} textValue={branchName} className="mx-1.5 h-8 min-h-0 w-auto py-0 pe-7">
+                <ListBox.Item data-list-motion={branch.name} id={branch.name} textValue={branchName} className="mx-1.5 h-8 min-h-0 w-auto py-0 pe-7">
                   <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={branchName}>
                     {branchName}
                   </FadeOverflow>
@@ -296,7 +299,7 @@ export function BranchSelect({
                 </ListBox.Item>
               );
             }}
-          </ListBox>
+          </MotionListBox>
         </Virtualizer>
       </Select.Popover>
     </Select>

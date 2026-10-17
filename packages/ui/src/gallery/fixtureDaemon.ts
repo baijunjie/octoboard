@@ -4,7 +4,7 @@ import { daemonMessage } from "../daemonMessage";
 import { errorPresentation, noticeErrorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
 import { currentLanguage } from "../i18n/language";
-import type { BrowseEntry, Console, DirEntry, Event, RequestBody, Session, SessionRecordsPresence } from "../protocol";
+import { isLive, type BrowseEntry, type Console, type DirEntry, type Event, type RequestBody, type Session, type SessionRecordsPresence } from "../protocol";
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -160,6 +160,26 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
       const fromConfiguration = configurationReply(body);
       if (fromConfiguration !== undefined) return fromConfiguration;
       switch (body.type) {
+        case "archive_session": {
+          const current = store.getState();
+          const session = current.sessions.get(body.session);
+          if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: "Unknown session" });
+          // Match coordinator::team over the valid fixture hierarchy: owners reach two levels.
+          const childrenOf = (owner: Session) => [...current.sessions.values()].filter((child) => child.bound_to === owner.id);
+          const direct = childrenOf(session);
+          const descendants = [...direct.flatMap(childrenOf), ...direct].filter((child) => child.status !== "archived");
+          const running = descendants.filter((child) => isLive(child.status));
+          if (running.length) return fail({
+            code: "session_has_running_sessions",
+            params: { count: String(running.length), sessions: running.map((child) => child.title).join(", "), session_ids: JSON.stringify(running.map((child) => child.id)) },
+            message: "Sessions under this session still have running processes",
+          });
+          const sessions = new Map(current.sessions);
+          const ended_at = Date.now();
+          for (const record of [...descendants, session]) sessions.set(record.id, { ...record, status: "archived", ended_at });
+          store.setState({ sessions });
+          return { type: "ack" };
+        }
         case "resume_session": {
           const current = store.getState();
           const session = current.sessions.get(body.session);
@@ -303,6 +323,23 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           store.setState({ settings: { ...current.settings, auto_pull_repositories: body.auto_pull_repositories ?? current.settings.auto_pull_repositories, default_clone_dir: cloneDir } });
           return { type: "ack" };
         }
+        case "delete_account": {
+          const current = store.getState();
+          if (!current.settings.accounts.some((account) => account.id === body.account)) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
+          const fields = ["claude_account_id", "codex_account_id", "grok_account_id"] as const;
+          const consoles = new Map([...current.consoles].map(([id, console]) => {
+            const updated = { ...console };
+            for (const field of fields) if (updated[field] === body.account) updated[field] = null;
+            return [id, updated];
+          }));
+          const projects = new Map([...current.projects].map(([id, project]) => {
+            const updated = { ...project };
+            for (const field of fields) if (updated[field].kind === "account" && updated[field].id === body.account) updated[field] = { kind: "inherit" };
+            return [id, updated];
+          }));
+          store.setState({ consoles, projects, settings: { ...current.settings, accounts: current.settings.accounts.filter((account) => account.id !== body.account) } });
+          return { type: "ack" };
+        }
         case "remove_trusted_directory": {
           const expanded = body.path === "~" ? HOME : body.path.startsWith("~/") ? `${HOME}/${body.path.slice(2)}` : body.path;
           const parts: string[] = [];
@@ -384,6 +421,19 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
               default_agent: body.default_agent,
             }),
           }));
+          return { type: "ack" };
+        }
+        case "delete_console": {
+          const current = store.getState();
+          if (!current.consoles.has(body.console)) return fail({ code: "unknown_console", params: { console: body.console }, message: `unknown console ${body.console}` });
+          if ([...current.sessions.values()].some((session) => session.console_id === body.console && isLive(session.status))) return fail({ code: "console_has_running_sessions", params: {}, message: "This console still has running sessions" });
+          const consoles = new Map(current.consoles);
+          consoles.delete(body.console);
+          const projects = new Map([...current.projects].filter(([, project]) => project.console_id !== body.console));
+          const sessions = new Map([...current.sessions].filter(([, session]) => session.console_id !== body.console));
+          const pages = new Map([...current.pages].filter(([id]) => sessions.has(id)));
+          const gitStatuses = new Map([...current.gitStatuses].filter(([id]) => projects.has(id)));
+          store.setState({ consoles, projects, sessions, pages, gitStatuses });
           return { type: "ack" };
         }
         case "update_console": {

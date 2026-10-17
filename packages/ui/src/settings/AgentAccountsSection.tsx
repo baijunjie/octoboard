@@ -12,6 +12,7 @@ import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Account } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
+import { useListMotion } from "../components/useListMotion";
 import { AccountDialog } from "./AccountDialog";
 import { SettingRow } from "./SettingRow";
 import { useSectionRefocus } from "./useSectionRefocus";
@@ -23,6 +24,7 @@ import { useSectionRefocus } from "./useSectionRefocus";
 export function AgentAccountsSection(): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
+  const listRef = useListMotion<HTMLDivElement>({ descendants: true });
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const availability = useDaemonStore((s) => s.agentAvailability);
   // `undefined` is closed; `null` is the form for a new account.
@@ -42,69 +44,73 @@ export function AgentAccountsSection(): React.ReactElement {
       <Button size="sm" variant="outline" preventFocusOnPress onPress={() => setEditing(null)}>
         {t("settings.accounts.add")}
       </Button>
-      {accountsByAgent(accounts).map(({ agent, accounts: owned }) => {
-        const state = availability.get(agent);
-        const unavailable = state?.availability === "unavailable";
-        const notUsable = unavailable && (
-          <div><Message id="settings.accounts.notUsable" params={{ agent: AGENT_LABEL[agent], ...PATH_VAR_PARAMS }} /></div>
-        );
-        return (
-          <div key={agent} className="pt-6">
-            <h3 className="flex items-center gap-2 pb-2 text-sm font-semibold">
-              <AgentIcon agent={agent} />
-              {unavailable ? t("agents.notInstalled", { agent: AGENT_LABEL[agent] }) : AGENT_LABEL[agent]}
-            </h3>
-            <div className="border-t border-separator">
-              <SettingRow
-                label={t("settings.accounts.defaultName")}
-                description={
-                  <>
-                    <div>{t("settings.accounts.defaultDescription")}</div>
-                    {state?.default_account_dir && <MarkedPath path={state.default_account_dir} />}
-                  </>
-                }
-              />
-              {owned.map((account) => (
+      <div ref={listRef} className="relative">
+        {accountsByAgent(accounts).map(({ agent, accounts: owned }) => {
+          const state = availability.get(agent);
+          const unavailable = state?.availability === "unavailable";
+          const notUsable = unavailable && (
+            <div><Message id="settings.accounts.notUsable" params={{ agent: AGENT_LABEL[agent], ...PATH_VAR_PARAMS }} /></div>
+          );
+          return (
+            <div key={agent} className="pt-6">
+              <h3 data-list-motion={`heading:${agent}`} className="flex items-center gap-2 pb-2 text-sm font-semibold">
+                <AgentIcon agent={agent} />
+                {unavailable ? t("agents.notInstalled", { agent: AGENT_LABEL[agent] }) : AGENT_LABEL[agent]}
+              </h3>
+              <div className="border-t border-separator">
                 <SettingRow
-                  key={account.id}
-                  label={
-                    <FadeOverflow dir="auto" titleWhenClipped={account.name}>
-                      {account.name}
-                    </FadeOverflow>
-                  }
+                  motionKey={`default:${agent}`}
+                  label={t("settings.accounts.defaultName")}
                   description={
                     <>
-                      <MarkedPath path={account.config_dir} />
-                      {notUsable}
+                      <div>{t("settings.accounts.defaultDescription")}</div>
+                      {state?.default_account_dir && <MarkedPath path={state.default_account_dir} />}
                     </>
                   }
-                >
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      preventFocusOnPress
-                      aria-label={t("settings.accounts.editLabel", { name: isolate(account.name), agent: AGENT_LABEL[agent] })}
-                      onPress={() => setEditing(account)}
-                    >
-                      {t("common.edit")}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      preventFocusOnPress
-                      aria-label={t("settings.accounts.removeLabel", { name: isolate(account.name), agent: AGENT_LABEL[agent] })}
-                      onPress={() => setRemoving(account)}
-                    >
-                      {t("common.remove")}
-                    </Button>
-                  </div>
-                </SettingRow>
-              ))}
+                />
+                {owned.map((account) => (
+                  <SettingRow
+                    key={account.id}
+                    motionKey={account.id}
+                    label={
+                      <FadeOverflow dir="auto" titleWhenClipped={account.name}>
+                        {account.name}
+                      </FadeOverflow>
+                    }
+                    description={
+                      <>
+                        <MarkedPath path={account.config_dir} />
+                        {notUsable}
+                      </>
+                    }
+                  >
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        preventFocusOnPress
+                        aria-label={t("settings.accounts.editLabel", { name: isolate(account.name), agent: AGENT_LABEL[agent] })}
+                        onPress={() => setEditing(account)}
+                      >
+                        {t("common.edit")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        preventFocusOnPress
+                        aria-label={t("settings.accounts.removeLabel", { name: isolate(account.name), agent: AGENT_LABEL[agent] })}
+                        onPress={() => setRemoving(account)}
+                      >
+                        {t("common.remove")}
+                      </Button>
+                    </div>
+                  </SettingRow>
+                ))}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
       {editing !== undefined && <AccountDialog account={editing ?? undefined} onClose={() => setEditing(undefined)} />}
       {removing && (
         <ConfirmDialog

@@ -840,3 +840,29 @@ should not (see "The UI state gallery" in `packages/ui/README.md`).
 
 An animation or transition that is not essential stops under `prefers-reduced-motion: reduce` (Tailwind's
 `motion-safe:` / `motion-reduce:` variants).
+
+### Dynamic collections
+
+When items are added, removed, reordered or folded within a visible collection, surviving items that change
+position slide into place using the shared list-motion implementation. This applies to navigation lists, settings
+records, selected tags, wrapping chips and virtualized file and change collections. Use stable item identities,
+not array indices or translated labels. Horizontal and wrapping collections move on both axes, including under RTL.
+
+Use a 260 ms ease with `cubic-bezier(0.2, 0, 0, 1)`. New items appear immediately and removed items stop accepting
+input immediately; do not delay an action or keep a removed control reachable to play an exit animation. Preserve
+keyboard focus on surviving controls and retain the surface's focus handoff when the focused item is removed.
+
+Initial rendering, scrolling, viewport recycling and container resizing do not trigger item movement animations.
+Virtualized collections keep virtualization and animate only surviving rendered identities whose layout changes.
+Static choices, a replacement page or directory listing, and fixed result snapshots do not require collection
+motion. Collections whose component already provides the same behavior, such as the toast stack, keep that behavior.
+With reduced motion requested, update positions immediately and cancel any movement already running.
+
+Use `useListMotion` from `packages/ui/src/components/useListMotion.ts`, marking items with `data-list-motion`.
+Its descendant mode supports semantic wrappers and `display: contents`; its virtualized mode follows rendered
+identities without replacing the collection's layout transforms or focus management. Browser collections use
+`useBrowserListMotion` to preserve their existing scroll and focus refs. Keep animation timing and preference
+handling in the shared implementation rather than writing a separate transition at each caller.
+For a lazily mounted choice popup, use `MotionListBox` inside the popup so the observer mounts with the list and
+captures its initial positions before the first live choice update. Apply the same motion rule to choices that
+refresh while the popup remains open; a static choice list simply has no movement to animate.

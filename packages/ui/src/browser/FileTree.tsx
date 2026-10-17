@@ -22,6 +22,7 @@ import type { BrowseEntry } from "../protocol";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import { RowActions } from "./RowActions";
 import type { TreeNode } from "./tree";
+import { useBrowserListMotion } from "./useBrowserListMotion";
 import { DirectoryRow, ROW_CLASS, ROW_HEIGHT, RowContent, RowName } from "./treeRow";
 
 const IMAGE_NAME = /\.(png|jpe?g|gif|webp|bmp|ico|avif|svg)$/i;
@@ -112,7 +113,8 @@ export function FileTree({
 }): React.ReactElement {
   const language = useCurrentLanguage();
   const items = useStableNodes(nodes);
-  const fade = useScrollFade({ ref: treeRef, className: "min-h-0 flex-1 overflow-auto py-1 outline-none" });
+  const motionRef = useBrowserListMotion(treeRef);
+  const fade = useScrollFade({ ref: motionRef, className: "min-h-0 flex-1 overflow-auto py-1 outline-none" });
   // react-aria-components 1.21.1 decides whether a row can expand — its `aria-expanded` and Left /
   // Right — from the children it holds, not from `hasChildItems`, which it hands only to the
   // chevron slot (the folder icon). So a collapsed directory, whose rows are not built, holds one
@@ -191,7 +193,7 @@ function FileNodeRow({ node, showPaths, children }: {
   if (node.type === "directory") {
     const link = node.entry.kind === "symlink";
     return (
-      <TreeItem id={node.key} textValue={name} hasChildItems className={ROW_CLASS} ref={rowRef}>
+      <TreeItem data-list-motion={node.key} id={node.key} textValue={name} hasChildItems className={ROW_CLASS} ref={rowRef}>
         <TreeItemContent>
           {({ isExpanded }) => (
             <DirectoryRow name={name} isExpanded={isExpanded} link={link}>
@@ -216,7 +218,7 @@ function FileNodeRow({ node, showPaths, children }: {
   // Marked `data-current`, not `data-selected`: react-aria-components writes the row's
   // `data-selected` itself, from a selection the tree does not have.
   return (
-    <TreeItem id={node.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS} ref={rowRef}>
+    <TreeItem data-list-motion={node.key} id={node.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS} ref={rowRef}>
       <TreeItemContent>
         <RowContent>
           <FileIcon entry={node.entry} name={name} />
@@ -245,7 +247,7 @@ function StatusItem({ node }: { node: Extract<TreeNode, { type: "status" }> }): 
   return (
     // Named by the plain message, not by `text`: `textValue` is what react-aria collates for
     // type-to-select, which an isolate mark in the middle of would only get in the way of.
-    <TreeItem id={node.key} textValue={node.status === "error" ? message : text} className={ROW_CLASS}>
+    <TreeItem data-list-motion={node.key} id={node.key} textValue={node.status === "error" ? message : text} className={ROW_CLASS}>
       <TreeItemContent>
         <RowContent>
           {node.status === "loading" ? (

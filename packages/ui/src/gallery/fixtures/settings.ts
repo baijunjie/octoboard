@@ -127,7 +127,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts",
-    description: "The introduction displays PATH as code above the configured accounts and unavailable agents.",
+    description: "The introduction displays PATH as code above the configured accounts and unavailable agents. Remove Work or Client to watch the remaining accounts slide into place.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -188,6 +188,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: trustedFolders",
+    description: "Remove the first trusted folder to watch the remaining path slide into place.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

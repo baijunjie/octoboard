@@ -67,6 +67,9 @@ preview as a row with the same alignment, hover feedback and keyboard focus trea
 opens the archive view and carries no count. With only archived children, the section shows its count and View all
 without any preview rows. When every archived session fits in the preview, there is no View all row.
 
+The archive preview, including View all, follows "Items moving within a collection" in
+`docs/product/collection-motion.md`.
+
 Relative times ("5 minutes ago") are worded in the current language, and anything under a minute reads as now.
 
 **Where either view has nothing to list**, a single **compact empty row** takes the list's place, under its

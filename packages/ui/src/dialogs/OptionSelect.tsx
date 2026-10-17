@@ -2,6 +2,7 @@ import { Description, Label, ListBox, Select } from "@heroui/react";
 import React, { useId } from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
+import { MotionListBox } from "../components/MotionListBox";
 
 /** One choice of an `OptionSelect`. */
 export type Option<T extends string> = {
@@ -120,9 +121,9 @@ export function OptionSelect<T extends string>({
         <Select.Indicator />
       </Select.Trigger>
       <Select.Popover className="w-(--trigger-width) max-w-[calc(100vw-2rem)]">
-        <ListBox>
+        <MotionListBox className="relative">
           {options.map((option) => (
-            <ListBox.Item data-marquee-scope className="pe-7" key={option.value} id={option.value} textValue={option.label} isDisabled={option.isDisabled}>
+            <ListBox.Item data-list-motion={option.value} data-marquee-scope className="pe-7" key={option.value} id={option.value} textValue={option.label} isDisabled={option.isDisabled}>
               {option.icon && (
                 <span aria-hidden="true" className="flex shrink-0">
                   {option.icon}
@@ -134,7 +135,7 @@ export function OptionSelect<T extends string>({
               <ListBox.ItemIndicator />
             </ListBox.Item>
           ))}
-        </ListBox>
+        </MotionListBox>
       </Select.Popover>
       {description && <Description id={descriptionId}>{description}</Description>}
     </Select>

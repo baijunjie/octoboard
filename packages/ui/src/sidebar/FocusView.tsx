@@ -12,6 +12,7 @@ import { RowControls, RowIconGroup, RowIconLine, RowIconSlot } from "../componen
 import { hasVisibleUsage, SessionUsageLabel } from "../components/SessionMetadata";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
+import { useListMotion } from "../components/useListMotion";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { FadedScroller } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
@@ -326,19 +327,16 @@ function SwitchStrip({
   currentId: string;
 }): React.ReactElement {
   const t = useT();
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useListMotion<HTMLDivElement>();
   // Pinning or unpinning reorders the strip, which moves the current chip without changing it.
   const currentIndex = entries.findIndex((entry) => entry.consoleSession.id === currentId);
-  // Scrolls the strip's own `scrollLeft`, so no ancestor scrolls with it. Moved by the distance
-  // between the chip's centre and the strip's, which holds in a right-to-left layout too, where
-  // `scrollLeft` is negative.
+  // Use layout offsets rather than the chip's animated rectangle, so centring targets where a
+  // reordered chip will settle. The offset is physical, as scrollLeft is (negative under RTL).
   useLayoutEffect(() => {
     const scroller = ref.current;
     const chip = scroller?.querySelector<HTMLElement>("[data-switch-current]");
     if (!scroller || !chip) return;
-    const from = scroller.getBoundingClientRect();
-    const box = chip.getBoundingClientRect();
-    scroller.scrollLeft += box.left + box.width / 2 - (from.left + from.width / 2);
+    scroller.scrollLeft = chip.offsetLeft + chip.offsetWidth / 2 - scroller.clientWidth / 2;
   }, [currentId, currentIndex]);
   return (
     <FadedScroller
@@ -347,7 +345,7 @@ function SwitchStrip({
       hideScrollBar
       role="group"
       aria-label={t("sidebar.focus.switchStrip")}
-      className="flex shrink-0 gap-1 px-2 py-2"
+      className="relative flex shrink-0 gap-1 px-2 py-2"
     >
       {entries.map(({ consoleSession, activity }) => {
         const current = consoleSession.id === currentId;
@@ -355,6 +353,7 @@ function SwitchStrip({
         return (
           <Button
             key={consoleSession.id}
+            data-list-motion={consoleSession.id}
             size="sm"
             variant="tertiary"
             preventFocusOnPress
@@ -452,15 +451,17 @@ function BoundElsewhere({
   owners: { owner: Session; count: number }[];
 }): React.ReactElement {
   const t = useT();
+  const ownersRef = useListMotion<HTMLDivElement>();
   return (
     <div className="px-2 pt-3 pb-2">
       <p className="text-xs text-app-muted">
         {t("sidebar.focus.boundElsewhere", { count })}
       </p>
-      <div className="mt-1 flex flex-wrap gap-1">
+      <div ref={ownersRef} className="relative mt-1 flex flex-wrap gap-1">
         {owners.map(({ owner, count: bound }) => (
           <Button
             key={owner.id}
+            data-list-motion={owner.id}
             size="sm"
             variant="tertiary"
             preventFocusOnPress
@@ -540,22 +541,27 @@ function ArchivedList({
   onViewAll: () => void;
 }): React.ReactElement | null {
   const t = useT();
+  const listRef = useFlip<HTMLDivElement>();
   if (archived.length === 0) return null;
   const preview = archivePreviewSessions(archived, sessions, 10);
   return (
     <section>
       <StickySectionHeading>{t("sidebar.focus.archived", { count: archived.length })}</StickySectionHeading>
-      <div className="flex flex-col gap-0.5">
+      <div ref={listRef} className="relative flex flex-col gap-0.5">
         {preview.map((session) => (
-          <ArchivedRow key={session.id} handlers={handlers} session={session} selected={session.id === selectedSessionId} />
+          <div key={session.id} data-flip={session.id}>
+            <ArchivedRow handlers={handlers} session={session} selected={session.id === selectedSessionId} />
+          </div>
         ))}
         {archived.length > preview.length && (
-          <TreeRow ariaLabel={t("sidebar.archive.viewAll")} onActivate={onViewAll}>
-            <List aria-hidden="true" className="size-4 shrink-0 text-app-muted rtl:-scale-x-100" />
-            <RowLabel>
-              <span className="text-app-muted">{t("sidebar.archive.viewAll")}</span>
-            </RowLabel>
-          </TreeRow>
+          <div data-flip="view-all">
+            <TreeRow ariaLabel={t("sidebar.archive.viewAll")} onActivate={onViewAll}>
+              <List aria-hidden="true" className="size-4 shrink-0 text-app-muted rtl:-scale-x-100" />
+              <RowLabel>
+                <span className="text-app-muted">{t("sidebar.archive.viewAll")}</span>
+              </RowLabel>
+            </TreeRow>
+          </div>
         )}
       </div>
     </section>

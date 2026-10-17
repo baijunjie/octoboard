@@ -69,7 +69,7 @@ it("slides a child that a reorder moved, from where it was", () => {
   tops = { a: 40, b: 0 };
   list.rerender(["b", "a"]);
   expect(animate).toHaveBeenCalledTimes(2);
-  expect(animate.mock.calls.map((call) => (call[0] as { transform: string }[])[0].transform).sort()).toEqual(["translateY(-40px)", "translateY(40px)"]);
+  expect(animate.mock.calls.map((call) => (call[0] as { translate: string }[])[0].translate).sort()).toEqual(["0px -40px", "0px 40px"]);
 });
 
 it("slides a sibling a resize moved at the list's width, whether or not the owner rendered", () => {
@@ -100,7 +100,7 @@ it("moves children without sliding while the list's width changes, and slides fr
   // The positions were brought up to date: the next reorder slides from here.
   tops = { a: 0, b: 100, c: 60 };
   list.rerender(["a", "c", "b"]);
-  expect(animate.mock.calls.map((call) => (call[0] as { transform: string }[])[0].transform).sort()).toEqual(["translateY(-40px)", "translateY(40px)"]);
+  expect(animate.mock.calls.map((call) => (call[0] as { translate: string }[])[0].translate).sort()).toEqual(["0px -40px", "0px 40px"]);
 });
 
 it("leaves a child that just appeared alone and slides the ones it displaced", () => {
@@ -109,7 +109,7 @@ it("leaves a child that just appeared alone and slides the ones it displaced", (
   tops = { a: 0, n: 40, b: 80 };
   list.rerender(["a", "n", "b"]);
   expect(animate).toHaveBeenCalledTimes(1);
-  expect((animate.mock.calls[0][0] as { transform: string }[])[0].transform).toBe("translateY(-40px)");
+  expect((animate.mock.calls[0][0] as { translate: string }[])[0].translate).toBe("0px -40px");
 });
 
 it("does not slide where the system asks for reduced motion", () => {
