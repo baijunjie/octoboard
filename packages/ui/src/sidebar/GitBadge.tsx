@@ -72,7 +72,7 @@ export function GitBadge({ status, decorative }: { status: GitStatus | undefined
   // The project name has its own floor; this badge keeps giving way while the activity glyph
   // remains fixed. No cap: use the room the row offers before fading the shared text line. The
   // tooltip's trigger is the badge's own box, so it is the trigger that carries these.
-  const className = "flex min-w-0 items-center gap-1 overflow-hidden text-xs text-app-muted";
+  const className = "flex min-w-0 items-center gap-1 overflow-hidden px-1 text-xs text-app-muted";
   const content = (
     <>
       {status.activity !== "idle" ? (
