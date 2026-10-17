@@ -470,8 +470,11 @@ switcher" in `docs/product/sidebar.md`). The project pane's file and change rows
 "A row's actions" in `docs/product/project-pane.md`). A report page follows the same rule (see "Right-click inside a page"
 in `docs/product/report-panel.md`).
 
+**The terminal has its own editing menu** in both the desktop app and a browser (see "Copy, paste and selection" in
+`docs/product/session-terminal.md`).
+
 **In a browser** the browser's own menu stays everywhere except over the rows, headers and avatars that open an action
-menu.
+menu, and over the terminal.
 
 ## Right-to-left layout
 

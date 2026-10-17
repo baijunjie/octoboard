@@ -199,6 +199,10 @@ function tauriNotifications(): NotificationCapability {
  * context, and the packaged window's custom scheme is not reliably counted as one. */
 function tauriClipboard(): ClipboardCapability {
   return {
+    async readText() {
+      const { readText } = await import("@tauri-apps/plugin-clipboard-manager");
+      return readText();
+    },
     async writeText(text) {
       const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
       await writeText(text);

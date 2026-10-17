@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "enables the default permissions plus the exit-flow commands, the macOS privacy-permission commands, the menu labels, the menu bar icon's menu, raising the window for the exit confirmation, the run-in-background choice, the Dock badge, system notifications, writing text to the clipboard, saving and opening the configuration file the user picks in the system's dialog, opening a link in the system's browser, native window theming, revealing the window the shell creates hidden, and dragging and zooming it by the UI's own top bar",
+  "description": "enables the default permissions plus the exit-flow commands, the macOS privacy-permission commands, the menu labels, the menu bar icon's menu, raising the window for the exit confirmation, the run-in-background choice, the Dock badge, system notifications, reading and writing clipboard text, saving and opening the configuration file the user picks in the system's dialog, opening a link in the system's browser, native window theming, revealing the window the shell creates hidden, and dragging and zooming it by the UI's own top bar",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -18,6 +18,7 @@
     "core:window:allow-internal-toggle-maximize",
     "notification:default",
     "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-read-text",
     "shell:allow-open"
   ]
 }

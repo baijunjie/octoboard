@@ -176,9 +176,9 @@ export interface Scenario {
    * it is shown; the browser platform has none. */
   backgroundRun?: boolean;
   configuration?: ConfigurationFixture;
-  /** `"unavailable"` for a platform with no clipboard (a plain browser served over insecure http),
-   * so that nothing offers to copy; without it the browser platform's own clipboard stands. */
-  clipboard?: "unavailable";
+  /** `"unavailable"` for a platform with no clipboard; `text` gives a private, mutable clipboard
+   * for interactive copy and paste previews. Without either, the browser's clipboard stands. */
+  clipboard?: "unavailable" | { text: string };
   steps?: Step[];
   /** Renders the file viewer over the subjects `subjects` builds, in place of the app; built only
    * when the scenario opens. `loadDelay` shows each one's loading state for that many milliseconds

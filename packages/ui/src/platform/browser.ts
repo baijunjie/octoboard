@@ -79,7 +79,10 @@ function webLinks(): NonNullable<PlatformAdapter["links"]> {
  * absent where the page is not a secure context. */
 function webClipboard(): NonNullable<PlatformAdapter["clipboard"]> | undefined {
   if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return undefined;
-  return { writeText: (text) => navigator.clipboard.writeText(text) };
+  return {
+    writeText: (text) => navigator.clipboard.writeText(text),
+    ...(navigator.clipboard.readText && { readText: () => navigator.clipboard.readText() }),
+  };
 }
 
 function webNotifications(): NonNullable<PlatformAdapter["notifications"]> {

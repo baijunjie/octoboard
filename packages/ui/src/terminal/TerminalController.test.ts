@@ -53,6 +53,10 @@ const { FakeTerminal } = vi.hoisted(() => {
       this.textarea = document.createElement("textarea");
       this.textarea.setAttribute("aria-label", "Terminal input");
     }
+    getSelection(): string { return this.selection; }
+    selection = "";
+    selectAll(): void { this.selection = this.screen; }
+    paste(text: string): void { this.userTypes(`\x1b[200~${text}\x1b[201~`); }
     focus(): void {}
     dispose(): void {}
     modes = { mouseTrackingMode: "none" };
@@ -453,4 +457,40 @@ describe("the input's accessible name", () => {
     controller.setInputLabel("Terminal entrée");
     expect(term.textarea?.getAttribute("aria-label")).toBe("Terminal entrée");
   });
+});
+
+
+it("selects terminal content and reads its selection independently of the textarea", async () => {
+  term.write("saved terminal output");
+  await settle();
+  controller.selectAll();
+  expect(controller.selectedText).toContain("saved terminal output");
+});
+
+it("pastes through xterm into a connecting session, retaining bracketed paste", () => {
+  controller.attach("s-paste", url("s-paste"), false);
+  controller.paste("first\nsecond", "s-paste");
+  lastSocket().open();
+  const bytes = lastSocket().sent.filter((entry) => ArrayBuffer.isView(entry)) as Uint8Array[];
+  expect(bytes.map((entry) => new TextDecoder().decode(entry))).toEqual(["\x1b[200~first\nsecond\x1b[201~"]);
+});
+
+it("pasting into an archived session uses the wake pipeline", () => {
+  controller.detach({ keepScreenFor: "s-archived" });
+  controller.armWake("s-archived");
+  controller.paste("wake", "s-archived");
+  expect(wakes).toEqual(["s-archived"]);
+  controller.attach("s-archived", url("s-archived"), false);
+  lastSocket().open();
+  const bytes = lastSocket().sent.filter((entry) => ArrayBuffer.isView(entry)) as Uint8Array[];
+  expect(bytes.map((entry) => new TextDecoder().decode(entry))).toEqual(["\x1b[200~wake\x1b[201~"]);
+});
+
+it("drops paste after its destination changed or input became unavailable", () => {
+  controller.attach("s-new", url("s-new"), false);
+  lastSocket().open();
+  controller.paste("old text", "s-old");
+  controller.detach({ keepScreenFor: "s-new" });
+  controller.paste("stopped text", "s-new");
+  expect(lastSocket().sent.filter((entry) => ArrayBuffer.isView(entry))).toEqual([]);
 });

@@ -21,6 +21,26 @@ reporting works, so an agent's own mouse-driven TUI is usable. `Ctrl+C` reaches 
 `Shift+Tab`. `F6` and `Shift+F6` never do: they move keyboard focus to another region of the window (see "Moving
 focus between regions with F6" in `docs/product/moving-focus-between-regions.md`).
 
+## Copy, paste and selection
+
+With a session selected, right-clicking its terminal opens an editing menu in both the desktop app and a browser.
+On macOS, Control-click opens it too. With keyboard focus in the terminal, the context-menu key or `Shift+F10`
+opens the same menu; neither key is sent to the agent. Opening it preserves the terminal's selection, and closing it
+returns keyboard focus to the terminal. There is no separate menu button.
+
+- **Copy** copies the terminal text selected when the menu opened. It is disabled without a selection or clipboard
+  writing support.
+- **Paste** reads text from the clipboard and sends it as terminal input, respecting the running program's bracketed
+  paste mode. It is disabled without clipboard reading support or while the selected session cannot accept input.
+  Pasting into an archived session reopens it and holds the pasted input until it connects, as typing does (see
+  "Interrupted, archived and dormant sessions" below).
+- **Select all** selects the terminal's contents, including its available scrollback, for copying.
+
+The clipboard is read only when Paste is chosen, so merely opening the menu does not request clipboard access.
+If clipboard access completes after the user switches sessions or the original session can no longer accept input,
+the paste is discarded. It is never redirected to another session. A failed clipboard read or write shows an error
+toast.
+
 ## Output, scrollback and size
 
 - Attaching to a running session replays the **most recent 2 MiB** of that session's raw output, then follows live

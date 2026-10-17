@@ -377,6 +377,28 @@ export class TerminalController {
     this.term.dispose();
   }
 
+  /** Text selected in the terminal buffer, independent of the document's selection. */
+  get selectedText(): string {
+    return this.term.getSelection();
+  }
+
+  selectAll(): void {
+    if (this.touchable && !this.disposed) this.term.selectAll();
+  }
+
+  /** The session that can accept input now, including an archived one armed to reopen. */
+  get inputSessionId(): string | undefined {
+    if (this.disposed || !this.touchable) return undefined;
+    if (this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING) return this.sessionId;
+    return this.wakeFor;
+  }
+
+  /** Checks the destination again after a clipboard read and lets xterm apply bracketed paste. */
+  paste(text: string, sessionId: string): void {
+    if (this.inputSessionId !== sessionId || !text) return;
+    this.term.paste(text);
+  }
+
   /**
    * Names xterm's input textarea for assistive technology. xterm reads its name from a
    * process-wide English string once, in `open()`, so it can neither follow a language change nor

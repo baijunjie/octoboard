@@ -86,6 +86,8 @@ export interface Ui {
   press: (matcher: Matcher) => Promise<void>;
   /** Opens a row’s context menu at a point within the named control. */
   contextMenu: (matcher: Matcher) => Promise<void>;
+  /** Opens the terminal's edit menu once the terminal has rendered its output. */
+  terminalContextMenu: () => Promise<void>;
   /** Presses the button that submits the open dialog, waiting for it to appear and be enabled: for a
    * dialog whose confirming button is named as a control behind it, which `press` would find first.
    * A disabled button (`isDisabled`, such as Confirm before a `typeToConfirm` word is typed) is
@@ -599,6 +601,20 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       if (shown !== sentence) {
         throw new Error(`The git badge's tooltip is not its sentence "${sentence}": the last tooltip is ${shown ? `"${shown}"` : "none"}`);
       }
+    },
+    async terminalContextMenu() {
+      const screen = await waitFor(() => {
+        const terminal = doc.querySelector(".xterm") as TerminalElement | null;
+        if (!terminal?.octoboardTerminalText?.row(0)) return undefined;
+        return terminal.querySelector<HTMLElement>(".xterm-screen") ?? undefined;
+      }, "No terminal output to right-click");
+      const box = screen.getBoundingClientRect();
+      screen.dispatchEvent(new MouseEvent("contextmenu", {
+        bubbles: true, cancelable: true, button: 2,
+        clientX: box.x + Math.min(240, box.width / 2),
+        clientY: box.y + Math.min(120, box.height / 2),
+      }));
+      await wait(300);
     },
     async contextMenu(matcher) {
       const control = await waitFor(() => find(matcher), `Nothing to right-click matching ${String(matcher)}`);

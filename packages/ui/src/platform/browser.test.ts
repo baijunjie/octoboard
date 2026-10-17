@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { browserPlatform } from "./browser";
 import { ConfigurationFileError } from "./configurationFileError";
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 it("opens a link in a new tab with no access to the page and no referrer", async () => {
   const open = vi.spyOn(window, "open").mockReturnValue(null);
@@ -83,4 +86,20 @@ describe("saving the configuration file as a download", () => {
     expect(revoked).toHaveBeenCalledExactlyOnceWith("blob:fixture");
     vi.useRealTimers();
   });
+});
+
+it("offers clipboard reads only when the browser provides them, without reading at setup", async () => {
+  const writeText = vi.fn(async () => {});
+  const readText = vi.fn(async () => "clipboard text");
+  vi.stubGlobal("navigator", { clipboard: { writeText, readText } });
+  const clipboard = browserPlatform().clipboard!;
+  expect(readText).not.toHaveBeenCalled();
+  await expect(clipboard.readText!()).resolves.toBe("clipboard text");
+  expect(readText).toHaveBeenCalledOnce();
+});
+
+it("keeps clipboard writing available in a browser without clipboard reading", () => {
+  vi.stubGlobal("navigator", { clipboard: { writeText: async () => {} } });
+  expect(browserPlatform().clipboard?.readText).toBeUndefined();
+  expect(browserPlatform().clipboard?.writeText).toBeDefined();
 });

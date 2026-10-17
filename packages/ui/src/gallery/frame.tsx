@@ -67,6 +67,7 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const platform = selectPlatform();
   const grants = scenario?.macosPermissions;
   const configuration = scenario?.configuration;
+  let clipboardText = typeof scenario?.clipboard === "object" ? scenario.clipboard.text : "";
   return {
     ...platform,
     ...(params.get("chrome") === "1" && { windowChrome: { leftInset: () => 0, subscribe: () => () => {} } }),
@@ -80,6 +81,12 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
     }),
     ...(scenario?.backgroundRun && { backgroundRun: { set: async () => {} } }),
     ...(scenario?.clipboard === "unavailable" && { clipboard: undefined }),
+    ...(typeof scenario?.clipboard === "object" && {
+      clipboard: {
+        writeText: async (text: string) => { clipboardText = text; },
+        readText: async () => clipboardText,
+      },
+    }),
     configurationFile: configuration?.unavailable
       ? undefined
       : {

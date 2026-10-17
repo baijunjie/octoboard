@@ -485,6 +485,12 @@ export const en = {
   "welcome.toolChecking": "Checking…",
   "welcome.toolsHint": "To open a session, install at least one tool and make sure it is on your {pathVar}.",
 
+  "terminal.actions": "Terminal actions",
+  "terminal.copy": "Copy",
+  "terminal.paste": "Paste",
+  "terminal.selectAll": "Select all",
+  "terminal.copyFailed": "Could not copy the selection",
+  "terminal.pasteFailed": "Could not paste from the clipboard",
   "terminal.empty": "No session selected",
   "terminal.empty.description": "Select a session to view its terminal.",
   // Under `sidebar.noProjects` as the heading, when a console session exists but no projects do.

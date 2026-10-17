@@ -14,6 +14,7 @@ import { isDormant as isDormantStatus, isLive, type Session } from "../protocol"
 import { useDaemon, useDaemonStore } from "../store";
 import { useOctoboardTheme } from "../theme";
 import { TerminalController, type TermStatus } from "./TerminalController";
+import { TerminalEditMenu } from "./TerminalEditMenu";
 import { TerminalLinkTooltip } from "./TerminalLinkTooltip";
 import type { HoveredTerminalLink } from "./terminalLinks";
 import { XTERM_THEMES } from "./xtermThemes";
@@ -425,6 +426,7 @@ export function TerminalPane({
         {/* xterm lays its cells out left to right whatever the page's direction. */}
         <div dir="ltr" className="h-full overflow-hidden" ref={containerRef} />
       </div>
+      {session && <TerminalEditMenu key={session.id} sessionId={session.id} controllerRef={controllerRef} contextTargetRef={containerRef} />}
       <TerminalLinkTooltip setLinkRef={setLinkRef} />
       {cover && (
         <div

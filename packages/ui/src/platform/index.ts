@@ -179,6 +179,8 @@ export interface ClipboardCapability {
   /** Puts `text` on the clipboard; rejects when the environment refuses (no permission, no
    * focused document). */
   writeText(text: string): Promise<void>;
+  /** Reads text only when the user chooses Paste; may ask for permission or reject. */
+  readText?(): Promise<string>;
 }
 
 export interface BackgroundRunCapability {

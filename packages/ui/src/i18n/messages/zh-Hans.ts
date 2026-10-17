@@ -426,6 +426,12 @@ export const zhHans: Translation<"other"> = {
   "welcome.toolChecking": "检测中…",
   "welcome.toolsHint": "安装至少一种工具并配置到 {pathVar} 中，即可打开会话。",
 
+  "terminal.actions": "终端操作",
+  "terminal.copy": "复制",
+  "terminal.paste": "粘贴",
+  "terminal.selectAll": "全选",
+  "terminal.copyFailed": "无法复制选中文本",
+  "terminal.pasteFailed": "无法粘贴剪贴板内容",
   "terminal.empty": "未选择会话",
   "terminal.empty.description": "选择一个会话以查看其终端。",
   "terminal.noProjects.withAgent.description": "项目是你工作的目录，会话在其中运行。你可以自己创建项目，也可以让控制台会话帮你创建。",

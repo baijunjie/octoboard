@@ -3,11 +3,13 @@ import { EllipsisVertical, LoaderCircle, RefreshCw, TriangleAlert, type LucideIc
 import { MenuContext, useSlottedContext } from "react-aria-components";
 import React, { useEffect, useId, useRef, useState } from "react";
 
+import { IS_MAC } from "../useWindowShortcut";
 import { isolate } from "../i18n/isolate";
 import { StatusAnnouncer } from "./StatusAnnouncer";
 import { useT } from "../i18n/react";
 import { FadeOverflow } from "./FadeOverflow";
 import { TitledControl } from "./TitledControl";
+import { useLatest } from "./useLatest";
 import { usePointerFocusReturn } from "./usePointerFocusReturn";
 
 /** Set when a menu closed but could not hand focus back, because the item it ran opened a dialog
@@ -265,6 +267,8 @@ export function ActionMenu({
   className = "shrink-0",
   tooltip,
   contextTargetRef,
+  contextOnly = false,
+  onContextOpen,
 }: {
   label: string;
   items: ActionMenuEntry[];
@@ -279,8 +283,13 @@ export function ActionMenu({
   /** An element whose right-click (context menu) opens this same menu at the pointer: the row or
    * header the menu belongs to. A menu opened that way is anchored to the pointer, not the trigger. */
   contextTargetRef?: React.RefObject<HTMLElement | null>;
+  /** Opens only from the target's context menu gesture, without a visible or tabbable trigger. */
+  contextOnly?: boolean;
+  /** Refreshes actions before opening; runs before the target's own context menu handler. */
+  onContextOpen?: () => void;
 }): React.ReactElement {
   const t = useT();
+  const contextOpenRef = useLatest(onContextOpen);
   const [isOpen, setIsOpen] = useState(false);
   // Where a right-click opened the menu; `null` while it is anchored to its trigger.
   const [pointerAt, setPointerAt] = useState<{ x: number; y: number } | null>(null);
@@ -333,10 +342,17 @@ export function ActionMenu({
     // must not take focus: a target without its own focus handling would pull it off whatever had
     // it (typically the terminal), and the menu returns focus to where it stood at the gesture.
     const onMouseDown = (event: MouseEvent) => {
-      if (event.button === 2 || (event.button === 0 && event.ctrlKey)) event.preventDefault();
+      if (event.button === 2 || (event.button === 0 && event.ctrlKey && (!contextOnly || IS_MAC))) {
+        event.preventDefault();
+        // xterm handles a secondary press itself; leaving it through would change the selection
+        // or send a mouse report before the editing menu can use it.
+        if (contextOnly) event.stopPropagation();
+      }
     };
     const onContextMenu = (event: MouseEvent) => {
       event.preventDefault();
+      if (contextOnly) event.stopPropagation();
+      contextOpenRef.current?.();
       const active = document.activeElement;
       const adopt =
         handedFocus?.isConnected && (active === document.body || active?.closest("[data-slot=dropdown-popover]"))
@@ -347,13 +363,22 @@ export function ActionMenu({
       setPointerAt({ x: event.clientX, y: event.clientY });
       onOpenChange(true);
     };
-    target.addEventListener("mousedown", onMouseDown);
-    target.addEventListener("contextmenu", onContextMenu);
-    return () => {
-      target.removeEventListener("mousedown", onMouseDown);
-      target.removeEventListener("contextmenu", onContextMenu);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!contextOnly || (event.key !== "ContextMenu" && !(event.key === "F10" && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey))) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const rect = (event.target instanceof Element ? event.target : target).getBoundingClientRect();
+      onContextMenu(new MouseEvent("contextmenu", { clientX: rect.left, clientY: rect.bottom }));
     };
-  }, [contextTargetRef]);
+    target.addEventListener("mousedown", onMouseDown, contextOnly);
+    target.addEventListener("contextmenu", onContextMenu, contextOnly);
+    target.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      target.removeEventListener("mousedown", onMouseDown, contextOnly);
+      target.removeEventListener("contextmenu", onContextMenu, contextOnly);
+      target.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [contextTargetRef, contextOnly, contextOpenRef]);
 
   // react-aria's popover ignores a press outside it made with anything but the primary button, so
   // a right-click while the menu is open would leave it open (and, on the web, show the browser's
@@ -363,7 +388,7 @@ export function ActionMenu({
     const inMenu = (event: Event) => event.target instanceof Element && event.target.closest("[data-slot=dropdown-popover]");
     const onMouseDown = (event: MouseEvent) => {
       if (inMenu(event)) return;
-      if (event.button === 2 || (event.button === 0 && event.ctrlKey)) onOpenChange(false);
+      if (event.button === 2 || (event.button === 0 && event.ctrlKey && (!contextOnly || IS_MAC))) onOpenChange(false);
     };
     const onContextMenu = (event: MouseEvent) => {
       if (!inMenu(event)) event.preventDefault();
@@ -391,9 +416,11 @@ export function ActionMenu({
         <TitledControl title={tooltip === false ? undefined : (tooltip ?? t("common.moreActions"))}>
           <Dropdown.Trigger
             aria-label={label}
+            hidden={contextOnly}
+            excludeFromTabOrder={contextOnly}
             preventFocusOnPress
             className={
-              triggerClassName ??
+              contextOnly ? "hidden" : triggerClassName ??
               "inline-flex row-icon-control items-center justify-center rounded-md p-0 text-app-muted hover:bg-default hover:text-foreground aria-expanded:bg-default aria-expanded:text-foreground"
             }
           >

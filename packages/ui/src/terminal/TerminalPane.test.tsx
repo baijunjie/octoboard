@@ -125,7 +125,7 @@ it("shows a static disconnected cover with a Reconnect button once the attempts 
   FakeController.last.settle("closed");
   expect(status(container)).toBe("Terminal disconnected");
   expect(container.querySelector("[data-slot=spinner]")).toBeNull();
-  expect(container.querySelector("button")?.textContent).toBe("Reconnect");
+  expect(container.querySelector<HTMLButtonElement>("button:not([hidden])")?.textContent).toBe("Reconnect");
 });
 
 it("reconnects, with the attempts reset, when Reconnect is pressed", () => {
@@ -133,9 +133,9 @@ it("reconnects, with the attempts reset, when Reconnect is pressed", () => {
   for (let i = 0; i < 5; i++) failAttempt();
   FakeController.last.settle("closed");
   const attaches = FakeController.last.attaches;
-  act(() => container.querySelector("button")?.click());
+  act(() => container.querySelector<HTMLButtonElement>("button:not([hidden])")?.click());
   expect(FakeController.last.attaches).toBe(attaches + 1);
-  expect(container.querySelector("button")).toBeNull();
+  expect(container.querySelector<HTMLButtonElement>("button:not([hidden])")).toBeNull();
   expect(container.querySelector("[data-slot=spinner]")).not.toBeNull();
 });
 
@@ -145,7 +145,7 @@ it("offers no Reconnect button while the daemon connection is not open", () => {
   for (let i = 0; i < 5; i++) failAttempt();
   FakeController.last.settle("closed");
   expect(status(container)).toBe("Terminal disconnected");
-  expect(container.querySelector("button")).toBeNull();
+  expect(container.querySelector<HTMLButtonElement>("button:not([hidden])")).toBeNull();
 });
 
 it("focuses the Reconnect button, not the terminal, through the handle while it is offered", () => {
@@ -160,7 +160,7 @@ it("focuses the Reconnect button, not the terminal, through the handle while it 
   FakeController.last.settle("closed");
   act(() => handle.current?.focus());
   expect(FakeController.last.focuses).toBe(1);
-  expect(document.activeElement).toBe(container.querySelector("button"));
+  expect(document.activeElement).toBe(container.querySelector<HTMLButtonElement>("button:not([hidden])"));
 });
 
 it("does not attach again for a broadcast about a session whose attempts are spent", () => {
@@ -269,7 +269,7 @@ it("hands focus to the top bar when the session goes away while the terminal hol
 it("offers Add project in place of the select-a-session line while the console is bare", () => {
   const onAddProject = vi.fn();
   const { container, handle, topBarButton, elsewhere, show } = mountEmpty({ onAddProject });
-  const button = container.querySelector("button")!;
+  const button = container.querySelector<HTMLButtonElement>("button:not([hidden])")!;
   expect(button.textContent).toContain("Add project");
   expect(container.textContent).not.toContain("Select a session");
 
@@ -295,7 +295,7 @@ it("offers the contextual session action and hands focus on when it disappears",
   const onPress = vi.fn();
   const { container, handle, topBarButton, elsewhere, show } = mountEmpty({ newSession: { message: "New session", label: "New session", onPress } });
   expect(container.textContent).not.toContain("Select a session");
-  const button = container.querySelector("button")!;
+  const button = container.querySelector<HTMLButtonElement>("button:not([hidden])")!;
   elsewhere.focus();
   act(() => handle.current?.focus());
   expect(document.activeElement).toBe(button);
@@ -309,7 +309,7 @@ it("shows the installation step without a creation control when no agent is avai
   const { container } = mountEmpty({ noAgents: true });
   expect(container.textContent).toContain("install at least one tool");
   expect(container.textContent).not.toContain("Select a session");
-  expect(container.querySelector("button")).toBeNull();
+  expect(container.querySelector<HTMLButtonElement>("button:not([hidden])")).toBeNull();
 });
 
 it("covers a starting session with its own message and attaches only once it is up", () => {
@@ -325,7 +325,7 @@ it("covers a starting session with its own message and attaches only once it is 
   // No process to connect to, so no error cover, no Reconnect and no unavailable message.
   act(() => void vi.advanceTimersByTime(60_000));
   expect(status(container)).toBe("Starting session…");
-  expect(container.querySelector("button")).toBeNull();
+  expect(container.querySelector<HTMLButtonElement>("button:not([hidden])")).toBeNull();
   expect(controller.attaches).toBe(0);
 
   render(root, { ...starting, status: "idle" });
