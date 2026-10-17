@@ -278,7 +278,7 @@ export const focusScenarios: Scenario[] = [
     title: "Long console session and project names",
     state: state,
     preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `consoleSession:${longHub.id}` },
-    description: "Long English agent task titles with original session names in the header and cards, alongside long session names and project headings. Hover the clipped console subtitle or session heading to run only that text's marquee; hovering header controls leaves both still.",
+    description: "Long English agent task titles with original session names in the header and cards, alongside long session names and project headings. Hover the clipped console subtitle or session heading to run only that text's marquee after a 600-millisecond initial pause. It pauses at the far end for three seconds, returns to the beginning in about 200 milliseconds, waits three seconds, then starts another run. Moving the pointer away resets it immediately; hovering header controls leaves both still.",
   },
   {
     id: "focus-project-no-sessions",

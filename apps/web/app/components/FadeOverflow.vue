@@ -10,7 +10,7 @@ let frame: number | undefined;
 let hovered = false;
 let position = 0;
 let last: number | undefined;
-let phase: "rest" | "forward" | "far" | "back" = "rest";
+let phase: "initial" | "rest" | "forward" | "far" | "back" = "initial";
 let pausedAt: number | undefined;
 
 function extent(): number {
@@ -48,16 +48,15 @@ function tick(now: number): void {
     last = undefined;
     return;
   }
-  if (!hovered) phase = "back";
-  if (phase === "rest" || phase === "far") {
+  if (phase === "initial" || phase === "rest" || phase === "far") {
     pausedAt ??= now;
-    if (now - pausedAt >= (phase === "rest" ? 700 : 1200)) {
-      phase = phase === "rest" ? "forward" : "back";
+    if (now - pausedAt >= (phase === "initial" ? 600 : 3000)) {
+      phase = phase === "far" ? "back" : "forward";
       pausedAt = undefined;
     }
   } else {
     const target = phase === "forward" ? distance : 0;
-    const step = Math.min(Math.abs(target - position), (phase === "forward" ? 60 : 160) * elapsed);
+    const step = Math.min(Math.abs(target - position), (phase === "forward" ? 60 : distance * 5) * elapsed);
     position += Math.sign(target - position) * step;
     if (Math.abs(position - target) < 0.5) {
       position = target;
@@ -81,20 +80,20 @@ function measure(): void {
 
 function enter(): void {
   hovered = true;
-  phase = position > 0 ? "back" : "rest";
+  phase = "initial";
   pausedAt = undefined;
   measure();
 }
 
 function leave(): void {
   hovered = false;
-  if (position > 0 && frame === undefined) frame = requestAnimationFrame(tick);
+  motionChanged();
 }
 
 function motionChanged(): void {
   cancel();
   position = 0;
-  phase = "rest";
+  phase = "initial";
   pausedAt = undefined;
   measure();
 }

@@ -42,7 +42,8 @@ site remembers language changes for one year in a same-site cookie.
 The unlocalized static 404 page does not perform language matching.
 
 In the header and navigation dialog, the selected language's name fades where its single line is clipped. Hovering
-anywhere on the language selector runs that name as a marquee, pausing at its ends and returning to its beginning
+anywhere on the language selector runs that name as a marquee with the timing described in
+`docs/product/labels-and-tooltips.md`, "Names too long for their space". It immediately resets to its beginning
 when the pointer leaves. The fade follows the name's own reading direction. Reduced motion leaves the name still.
 
 ## Search indexing and agent-readable copies

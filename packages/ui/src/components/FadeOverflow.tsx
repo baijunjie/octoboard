@@ -113,13 +113,14 @@ function maskImage(fade: number, { start, end, rtl, width }: Clipped): string | 
 }
 
 /** Marquee pacing: a pause where the label rests, a scroll at reading speed, a pause at the far
- * edge it runs to, a quicker scroll back, and again while the pointer stays. The two pauses are
+ * edge it runs to, then a rapid return to rest before the next pause and run while the pointer stays. The two pauses are
  * named for the run rather than for the text, whose beginning is the far edge of a label clipped at
  * its start. */
 const MARQUEE_SPEED = 60; // px per second
-const MARQUEE_RETURN_SPEED = 160;
-const MARQUEE_PAUSE_REST = 700; // ms
-const MARQUEE_PAUSE_FAR = 1200;
+const MARQUEE_RETURN_DURATION = 200; // ms
+const MARQUEE_INITIAL_DELAY = 600; // ms
+const MARQUEE_PAUSE_REST = 3000; // ms
+const MARQUEE_PAUSE_FAR = 3000;
 
 /** The label itself, unless a single-label control explicitly owns its hover region. */
 function marqueeScope(element: HTMLElement): HTMLElement {
@@ -127,7 +128,7 @@ function marqueeScope(element: HTMLElement): HTMLElement {
 }
 
 /**
- * Scrolls a clipped label through its whole text while the pointer is over its scope, and back to
+ * Scrolls a clipped label through its whole text while the pointer is over its scope, and resets to
  * where it rests when the pointer leaves. It moves the element's own scroll position, so the edge
  * fades follow by themselves: an edge fades in as text passes it, and stops fading once the text
  * beyond it is in view. Which edge the label is clipped at decides only which way it runs: clipped
@@ -136,7 +137,7 @@ function marqueeScope(element: HTMLElement): HTMLElement {
  *
  * `holds` is the protocol between this and the pin that otherwise holds a start-clipped label at
  * its end: it is raised for as long as the marquee owns the scroll position — through the run and
- * the return after it — and the pin stands aside while it is up, instead of dragging the text back
+ * its pauses — and the pin stands aside while it is up, instead of dragging the text back
  * every frame. Whatever gives the position up lowers it again, and nothing moves the position while
  * it is down, so that the label is never left away from where it rests with no one to put it back.
  * A lowered flag therefore means nothing is running and no frame is pending, which is what lets the
@@ -205,12 +206,9 @@ function useMarquee(
       // Only a position the marquee took is put back: where it never started — the text fits, or
       // the system asks for no motion — the pin has the label and `position` is stale.
       if (!holds.current) return;
-      // The hold is given up only once the text is back where it rests, so the return is scrolled
-      // rather than snapped away by the pin. The pointer may still be over the scope; the next
-      // resize starts the run again if the text no longer fits.
-      move(resting(), MARQUEE_RETURN_SPEED, 0, () => {
-        holds.current = false;
-      });
+      frame = undefined;
+      setOffset(resting());
+      holds.current = false;
     };
     const cycle = () => {
       if (!running || !over) return;
@@ -220,7 +218,9 @@ function useMarquee(
         giveBack();
         return;
       }
-      move(far(), MARQUEE_SPEED, MARQUEE_PAUSE_FAR, () => move(resting(), MARQUEE_RETURN_SPEED, MARQUEE_PAUSE_REST, cycle));
+      move(far(), MARQUEE_SPEED, MARQUEE_PAUSE_FAR, () => {
+        move(resting(), Math.abs(resting() - position) * 1000 / MARQUEE_RETURN_DURATION, MARQUEE_PAUSE_REST, cycle);
+      });
     };
     const start = () => {
       if (!over || running || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -228,8 +228,8 @@ function useMarquee(
       running = true;
       holds.current = true;
       if (frame !== undefined) cancelAnimationFrame(frame);
-      position = scrolledFromStart(element);
-      move(resting(), MARQUEE_RETURN_SPEED, MARQUEE_PAUSE_REST, cycle);
+      setOffset(resting());
+      move(resting(), MARQUEE_SPEED, MARQUEE_INITIAL_DELAY, cycle);
     };
     const enter = () => {
       over = true;

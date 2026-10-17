@@ -177,14 +177,13 @@ function mount(
       }),
     settle,
     // Takes the pointer off and shows that nothing is left counting, the tooltip's cooldown and the
-    // marquee's return included.
+    // marquee's frames included.
     finish: () => {
       act(() => {
         label.dispatchEvent(new MouseEvent("pointerout", { bubbles: true }));
         label.dispatchEvent(new MouseEvent("pointerleave"));
       });
-      // Long enough for the marquee to scroll back to where the label rests, which is what gives
-      // up its last frame.
+      // Let the tooltip's cooldown and any pending measurement finish.
       act(() => void vi.advanceTimersByTime(5000));
       settle();
       expect(vi.getTimerCount()).toBe(0);
@@ -250,12 +249,47 @@ it("runs a label clipped at its start back toward its beginning, against the pin
   expect(written.length).toBeGreaterThan(10);
   expect(written.every((position, i) => i === 0 || position < written[i - 1]!)).toBe(true);
 
-  // Off the label it scrolls back to the end it rests at, to within the sub-pixel the pin itself
-  // leaves alone.
+  // Leaving restores the resting end immediately.
   act(() => void label.dispatchEvent(new MouseEvent("pointerleave")));
-  act(() => void vi.advanceTimersByTime(3000));
+  expect(label.scrollLeft).toBe(200);
   settle();
-  expect(label.scrollLeft).toBeGreaterThan(199.5);
+  finish();
+});
+
+it.each(["end", "start"] as const)("holds the far edge for three seconds and returns rapidly (%s clipping)", (clip) => {
+  const { label, written, enter, finish } = mount({ clip, children: "a long label" }, true);
+  const rest = clip === "start" ? 200 : 0;
+  const far = clip === "start" ? 0 : 200;
+  enter();
+  act(() => void vi.advanceTimersByTime(592));
+  expect(label.scrollLeft).toBe(rest);
+  act(() => void vi.advanceTimersByTime(96));
+  expect(Math.abs(label.scrollLeft - rest)).toBeGreaterThan(1);
+  // Follow individual frames to detect arrival independently of the initial hover pause.
+  let elapsed = 0;
+  while (Math.abs(label.scrollLeft - far) > 0.5 && elapsed < 5000) {
+    act(() => void vi.advanceTimersByTime(16));
+    elapsed += 16;
+  }
+  expect(elapsed).toBeLessThan(5000);
+  const arrival = label.scrollLeft;
+  written.length = 0;
+  act(() => void vi.advanceTimersByTime(2992));
+  expect(label.scrollLeft).toBe(arrival);
+  expect(written).toEqual([]);
+  act(() => void vi.advanceTimersByTime(112));
+  expect(Math.abs(label.scrollLeft - rest)).toBeGreaterThan(20);
+  act(() => void vi.advanceTimersByTime(160));
+  expect(written.some((position) => Math.abs(position - rest) < 0.5)).toBe(true);
+  expect(Math.abs(label.scrollLeft - rest)).toBeLessThan(5);
+  written.length = 0;
+  act(() => void vi.advanceTimersByTime(2800));
+  expect(label.scrollLeft).toBe(rest);
+  act(() => void vi.advanceTimersByTime(700));
+  expect(Math.abs(label.scrollLeft - rest)).toBeGreaterThan(20);
+  expect(written.every((position, i) => i === 0 || (clip === "start" ? position <= written[i - 1]! : position >= written[i - 1]!))).toBe(true);
+  act(() => void label.dispatchEvent(new MouseEvent("pointerleave")));
+  expect(label.scrollLeft).toBe(rest);
   finish();
 });
 

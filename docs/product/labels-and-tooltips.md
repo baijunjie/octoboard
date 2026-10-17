@@ -187,12 +187,13 @@ state, shown whether or not the line is cut (see "The branch badge" in `docs/pro
   trigger, and a picked tag while it is over the tag. The project filter's strip of conditions runs as a whole while
   the pointer is anywhere over it, its tags moving together rather than each on its own. A fixed session-owner label and a diff's collapsed-line label
   run over their text controls.
-- After a short pause the text scrolls at reading speed, about 60 px a second, toward the edge it is cut at — a label
-  cut at its end scrolls forward through its text, one cut at its start scrolls back toward its beginning — pauses
-  there, scrolls quickly back to where it rests and goes round again for as long as the pointer stays. The pacing is
-  the same whichever way it runs.
-- When the pointer leaves, the text scrolls back to where it rests: the beginning of a label cut at its end, the end
-  of one cut at its start.
+- After an initial pause of about 600 ms the text scrolls at reading speed, about 60 px a second, toward the edge it
+  is cut at — a label cut at its end scrolls forward through its text, one cut at its start scrolls back toward its
+  beginning. It pauses there for three seconds, returns to where it rests in about 200 ms, then waits three seconds
+  before starting the next reading pass for as long as the pointer stays. The pacing is the same whichever way it
+  runs.
+- When the pointer leaves, the text immediately resets to where it rests: the beginning of a label cut at its end,
+  the end of one cut at its start.
 - The fades follow the text: an edge fades while text is hidden behind it and stops fading once that text is in view,
   so the cut edge stops fading as the run reaches it and the opposite edge fades meanwhile.
 - Nothing moves where the system asks for reduced motion.

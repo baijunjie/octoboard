@@ -301,6 +301,10 @@ within a row, card or header have independent hover regions; pointing at neighbo
 or an action button must not start their marquees. A branch and its upstream counts may scroll together when they
 form one text line.
 
+Each run scrolls at reading speed, holds at the far edge for three seconds, then returns to its
+resting position in about 200 milliseconds. The first reading pass starts after a 600 millisecond
+hover delay; subsequent passes wait three seconds at rest. Leaving the hover region resets the label to rest immediately.
+
 An entire menu item, selector, fixed-owner indicator, picked tag or diff's collapsed-line text control may trigger
 its single text label as one interaction target. Such a scope must contain only that label; a picked tag's remove
 button may share the scope so its text can scroll clear of the button. A row or header containing independent labels

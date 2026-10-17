@@ -91,7 +91,7 @@ export const filterScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Conditions wider than the heading",
-    description: "The keyword and four tags do not fit beside the Projects label. They stay on one line at full width and fade at the clipped end; hovering the strip with a real pointer runs it as one marquee. Its tooltip shows the whole filter as the same chips as the heading, wrapped onto as many lines as it needs; the longest tag shrinks to the tooltip's width and breaks inside its own chip.",
+    description: "The keyword and four tags do not fit beside the Projects label. They stay on one line at full width and fade at the clipped end; hovering the strip with a real pointer runs it as one marquee after a 600-millisecond initial pause. At the far end it pauses for three seconds, then returns to the beginning in about 200 milliseconds, waits three seconds and runs again. Moving the pointer away resets it immediately. Its tooltip shows the whole filter as the same chips as the heading, wrapped onto as many lines as it needs; the longest tag shrinks to the tooltip's width and breaks inside its own chip.",
     state: overflowingState,
     preferences: { sidebarConsole: console_.id },
     steps: [
