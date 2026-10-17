@@ -89,32 +89,25 @@ At delivery:
   re-judge once you have acted on it.
 - Otherwise, self-check item by item in the following order:
 
-1. **Static checks**: run the project's agreed quality-check commands (formatting, type checking, lint and so
+1. **Gallery**: when this round's changes touch the UI, mocks, or the interface contracts mocks depend on, bring the
+   gallery up to date and run the full quick check via the `agent-gallery` skill; skip it when they touch none of these.
+2. **Static checks**: run the project's agreed quality-check commands (formatting, type checking, lint and so
    on) and confirm they report nothing. Skip this if the project has no such commands.
-2. **Change check**: review this round's changes via the `agent-change-check` skill; if you changed code in
+3. **Change check**: review this round's changes via the `agent-change-check` skill; if you changed code in
    response to the findings, re-run the static checks and the affected tests first, then have it reviewed
    again. Only move on once the review passes, or the remaining findings have been handed to the user.
-3. **Documentation update**: when this round's changes call for updating the docs that later readers rely on,
+4. **Documentation update**: when this round's changes call for updating the docs that later readers rely on,
    update them via the `agent-docs` skill; if aligning with the docs changed code, re-run the static checks
    and the affected tests.
+5. **UI preview**: when this round's changes touch the UI, start a preview from the development branch via the
+   `agent-gallery` skill, put the direct links in the report and wait for the user to confirm; once the user confirms,
+   or agrees to hand the branch over (merge, push for a PR and so on), stop the preview and clean up its temporary data
+   via that skill before handing it over. Skip it when the UI was not touched.
 
 ### This project
 
-- Before "Static checks": when this round added or changed a UI state, hand the gallery to the `agent-gallery` skill
-  so the state can be seen there. Skip it when this round changed no UI state.
 - Within "Documentation update": `docs/ui-accessibility.md`, the UI's accessibility standard, has no writer subagent
   of its own — you maintain it yourself, from what the change turned up and from what a writer subagent hands back as
   belonging to it. Skip it when this round's changes touch nothing it states.
-
-- Before reporting any change that affects the UI for user review, start a temporary preview service from the task's
-  branch or worktree. Skip this when the changes do not affect the UI.
-- Include a working, directly accessible link to each page needed to verify the changed UI in the report; confirm the
-  links show the branch's changes and provide any necessary access instructions.
-- Keep the preview service running while awaiting user confirmation and while addressing requested revisions; refresh
-  the preview and report updated links when needed.
-- Once the user confirms the UI changes (including permission to merge), stop the temporary preview service and report
-  that it has been stopped. Stop only services started for this review.
-- If a usable preview cannot be provided, report the blocker explicitly instead of presenting the UI changes as ready
-  for confirmation.
 
 <!-- setup-agent:workflow:end -->
