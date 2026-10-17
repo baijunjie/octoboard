@@ -1,5 +1,5 @@
 import { Button, Spinner } from "@heroui/react";
-import { Archive, Lock, RotateCcw, Trash2, X } from "lucide-react";
+import { Archive, RotateCcw, Trash2, X } from "lucide-react";
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
@@ -17,7 +17,7 @@ import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Account, Console, Project, Session } from "../protocol";
 import { sessionAccountTooltip, sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
 import { archivedSessionRows, boundArchivedSessions } from "../sidebar/order";
-import { LockButton, NESTED_ROW_CLASS, RowIconButton, TreeRow } from "../sidebar/rows";
+import { NESTED_ROW_CLASS, TreeRow } from "../sidebar/rows";
 import { useFlip } from "../sidebar/useFlip";
 
 /** How many rows the list adds each time its end scrolls into view. */
@@ -48,7 +48,6 @@ export function ArchiveView({
   selectedSessionId,
   onSelect,
   onReopen,
-  onSetLocked,
   onOpenDialog,
   dialogOpen,
   onClose,
@@ -73,7 +72,6 @@ export function ArchiveView({
    * view is closed by that, as by any selection. */
   onSelect: (session: Session) => void;
   onReopen: (session: Session) => void;
-  onSetLocked: (session: Session, locked: boolean) => void;
   onOpenDialog: (dialog: DialogRequest) => void;
   /** Whether a dialog is open, which a deletion's confirmation is. */
   dialogOpen: boolean;
@@ -202,7 +200,6 @@ export function ArchiveView({
                   selected={session.id === selectedSessionId}
                   onSelect={onSelect}
                   onReopen={onReopen}
-                  onSetLocked={onSetLocked}
                   onOpenDialog={onOpenDialog}
                 />
               </li>
@@ -230,7 +227,6 @@ function ArchiveRow({
   selected,
   onSelect,
   onReopen,
-  onSetLocked,
   onOpenDialog,
 }: {
   session: Session;
@@ -239,19 +235,15 @@ function ArchiveRow({
   selected: boolean;
   onSelect: (session: Session) => void;
   onReopen: (session: Session) => void;
-  onSetLocked: (session: Session, locked: boolean) => void;
   onOpenDialog: (dialog: DialogRequest) => void;
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
   const usageId = useId();
   const datesId = useId();
-  const rowRef = useRef<HTMLDivElement>(null);
   const usage = hasVisibleUsage(session.usage);
   return (
     <TreeRow
-      ref={rowRef}
-      locked={session.locked}
       ariaLabel={sessionAriaLabel(t, language, session, accounts, under)}
       describedBy={usage ? `${usageId} ${datesId}` : datesId}
       selected={selected}
@@ -273,7 +265,6 @@ function ArchiveRow({
       {/* The actions and the dates move to a line of their own together, so a narrow pane still
           has the dates at the row's end with the actions beside them. */}
       <div className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-y-1">
-        {session.locked && <LockButton name={sessionDisplayTitle(t, session)} onUnlock={() => onSetLocked(session, false)} returnFocusTo={rowRef} />}
         {/* Shown while the row is hovered or holds focus, like the sidebar rows' controls.
             Hidden by clipping to no width rather than removed, so they take no room from
             the title yet stay reachable with Tab; focus lifts the clip so the focus ring
@@ -287,7 +278,6 @@ function ArchiveRow({
                 <RotateCcw aria-hidden="true" className="size-4" />
                 {t("sidebar.session.reopen")}
               </Button>
-              {!session.locked && <RowIconButton icon={Lock} label={t("sidebar.session.lock")} onPress={() => onSetLocked(session, true)} />}
               <TitledControl title={t("archive.delete", { title: isolate(sessionDisplayTitle(t, session)) })}>
                 <Button
                   isIconOnly

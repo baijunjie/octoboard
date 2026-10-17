@@ -659,7 +659,6 @@ function ArchivedRow({
       describedBy={hasVisibleUsage(session.usage) ? metadataId : undefined}
       ariaLabel={sessionAriaLabel(t, language, session, accounts)}
       selected={selected}
-      locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
     >
       <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
@@ -667,7 +666,7 @@ function ArchivedRow({
         <span className="text-app-muted">{sessionDisplayTitle(t, session)}</span>
       </RowLabel>
       {hasVisibleUsage(session.usage) && <span id={metadataId}><SessionUsageLabel usage={session.usage} /></span>}
-      <RowControls fixed={session.locked ? <LockButton name={sessionDisplayTitle(t, session)} onUnlock={() => handlers.onSetLocked(session, false)} returnFocusTo={rowRef} /> : undefined}>
+      <RowControls>
         <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={false} rowRef={rowRef} />
       </RowControls>
     </TreeRow>

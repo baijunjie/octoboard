@@ -213,10 +213,6 @@ const lockedFocusState = {
   ...scrollingFocusState,
   sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, id === hub1.id || id === "s-1" ? { ...session, locked: true } : session])),
 };
-const lockedArchivePreview = {
-  ...archivePreviewTen,
-  sessions: new Map([...archivePreviewTen.sessions!].map(([id, session]) => [id, id === previewLead.id ? { ...session, locked: true } : session])),
-};
 
 export const focusScenarios: Scenario[] = [
   {
@@ -319,10 +315,10 @@ export const focusScenarios: Scenario[] = [
     id: "focus-archived-session-menu",
     group: GROUP,
     category: "normal",
-    title: "Locked archived session actions",
-    state: lockedArchivePreview,
+    title: "Archived session actions",
+    state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "Used archived rows have no Delete shortcut because deletion requires confirmation. The locked archived lead has a yellow border and a persistent Unlock icon. Its open menu offers Reopen, Unlock, Copy session ID and disabled Delete, with a divider before Delete. Unlock enables deletion without changing archive order. Reopen selects the session and moves it from Archived to Sessions.",
+    description: "Used archived rows have no Delete shortcut because deletion requires confirmation. The menu offers Reopen, Copy session ID and destructive Delete, with a divider before Delete. Archived rows have no lock controls or yellow outlines. Reopen selects the session and moves it from Archived to Sessions.",
     steps: [(ui) => ui.press(ui.t("sidebar.session.actions", { title: previewLead.title }))],
   },
   {

@@ -52,7 +52,6 @@ function renderArchiveView(
         accounts={[]}
         onSelect={() => {}}
         onReopen={() => {}}
-        onSetLocked={() => {}}
         onOpenDialog={onOpenDialog}
         dialogOpen={false}
         onClose={onClose}
@@ -180,4 +179,9 @@ it("opens at the loaded page count and scroll offset it is restored to, and repo
     scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
   });
   expect(onViewState).toHaveBeenLastCalledWith({ shown: 2, scrollTop: 10 });
+});
+
+it("offers no lock or unlock control in the archive", () => {
+  const { container } = renderArchiveView();
+  expect(container.querySelector('button[aria-label="Lock"], button[aria-label^="Unlock "]')).toBeNull();
 });

@@ -272,8 +272,8 @@ describe("the Copy session ID entry", () => {
   });
 });
 
-it.each(["idle", "archived"] as const)("keeps a locked %s session protected and offers unlocking", (status) => {
-  const session = sessionOf("locked", "c", "p", "Protected", status, { locked: true });
+it("keeps a locked live session protected and offers unlocking", () => {
+  const session = sessionOf("locked", "c", "p", "Protected", "idle", { locked: true });
   const handlers = { onSetLocked: vi.fn() } as unknown as SidebarHandlers;
   const items = sessionMenu(t, handlers, session, []);
   const unlock = items.find((item) => typeof item !== "string" && item.label === "Unlock");
@@ -282,4 +282,13 @@ it.each(["idle", "archived"] as const)("keeps a locked %s session protected and 
   expect(unlock).toBeDefined();
   (unlock as { onClick: () => void }).onClick();
   expect(handlers.onSetLocked).toHaveBeenCalledWith(session, false);
+});
+
+it.each([false, true])("offers no lock controls on archived sessions, locked=%s", (locked) => {
+  const session = sessionOf("archived", "c", "p", "Archived", "archived", { locked });
+  const labels = sessionMenu(t, {} as SidebarHandlers, session, []).flatMap((item) => typeof item === "object" ? [item.label] : []);
+  expect(labels).not.toContain("Lock");
+  expect(labels).not.toContain("Unlock");
+  expect(labels).toContain("Reopen");
+  expect(labels).toContain("Delete");
 });

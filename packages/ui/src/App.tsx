@@ -795,7 +795,6 @@ export function App(): React.ReactElement {
                       selectedSessionId,
                       onSelect: stableSelectSession,
                       onReopen: stableReopenSession,
-                      onSetLocked: stableSetLocked,
                       onOpenDialog: stableOpenDialog,
                       dialogOpen: dialogRequest !== undefined,
                       onClose: closeArchive,
