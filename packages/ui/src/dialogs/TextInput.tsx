@@ -36,7 +36,8 @@ export function TextInput({
 }): React.ReactElement {
   const field = useTrimmedField(value, onChange);
   const invalid = errorMessage !== undefined && errorMessage !== null && errorMessage !== false && errorMessage !== "";
-  const input = <Input dir={dir} placeholder={placeholder} className={trailing ? "min-w-0 flex-1" : undefined} />;
+  // Dialog fields hold application metadata, so 1Password must not offer identity or login fills.
+  const input = <Input data-1p-ignore dir={dir} placeholder={placeholder} className={trailing ? "min-w-0 flex-1" : undefined} />;
   return (
     <TextField
       fullWidth
