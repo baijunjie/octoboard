@@ -56,6 +56,10 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   `[data-gallery-failure]` overlay (`src/gallery/banner.ts`); check a capture for it.
 - A frame URL with `chrome=1` gives the page the desktop window's `windowChrome` capability (`src/gallery/frame.tsx`),
   so what only the desktop app offers can be driven in a browser.
+- `src/gallery/preview/` is git-ignored, so it exists per checkout: every `.ts` / `.tsx` file directly in it (not in
+  subdirectories) must default-export a `Scenario[]`, which `fixtures/index.ts` appends to `SCENARIOS`; anything else
+  goes in a subdirectory. Those scenarios are therefore listed, swept and held by the gallery's tests in that checkout
+  only. Such files import fixtures from their own modules, never from `fixtures/index.ts` (an import cycle).
 
 **Conventions for writing scenarios**
 
@@ -118,7 +122,7 @@ them. Nothing enforces this.
 | `index.html` | The window's Content Security Policy (a `<meta>` tag) and the inline script that applies the theme class before first paint |
 | `website-preview.html`, `vite.preview.config.ts` | The entry and build config of the fixture-backed React build embedded by the public website |
 | `src/website-preview/` | The preview's bootstrap and fixtures: `main.tsx` mounts the real `App` over `createPreviewDaemon` (`daemon.ts`), with sample repositories (`repositories/`), `createPreviewScenario` (`scenarios.ts`) for its three scenes, and a scroll bridge to the embedding page; the iframe and scene buttons belong to [`apps/web/`](../../apps/web/README.md) |
-| `gallery.html`, `gallery-frame.html`, `src/gallery/` | The dev-only UI state gallery (see "The UI state gallery"): `shell.tsx` and `frame.tsx` (the shell page and the page one scenario renders in), `scenario.ts` (the scenario type), `interact.ts` (step helpers), `fixtureDaemon.ts` with `fixtureGit.ts` and `fixtureConfiguration.ts` (the fixture daemon), and `fixtures/` (the scenarios, `builders.ts`, `groups.ts`, sample projects and repositories, change factories) |
+| `gallery.html`, `gallery-frame.html`, `src/gallery/` | The dev-only UI state gallery (see "The UI state gallery"): `shell.tsx` and `frame.tsx` (the shell page and the page one scenario renders in), `scenario.ts` (the scenario type), `interact.ts` (step helpers), `fixtureDaemon.ts` with `fixtureGit.ts` and `fixtureConfiguration.ts` (the fixture daemon), `fixtures/` (the scenarios, `builders.ts`, `groups.ts`, sample projects and repositories, change factories), and the untracked, per-checkout `preview/` (extra scenarios appended to `SCENARIOS`) |
 | `scripts/gallery-sweep.mjs` | `pnpm gallery:sweep` |
 | `scripts/gallery-chip-geometry.mjs` | A standalone Playwright check of chip geometry over gallery scenarios, run by hand against a served gallery |
 | `scripts/wkbench/` | `pnpm bench:wkwebview`: the WKWebView latency benchmark (see [its README](scripts/wkbench/README.md)) |

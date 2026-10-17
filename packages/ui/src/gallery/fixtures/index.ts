@@ -21,6 +21,13 @@ import { viewerScenarios } from "./viewer";
 
 export { GROUPS } from "./groups";
 
+// Scenarios added only to show a change for review, kept untracked in `src/gallery/preview/` of the
+// checkout that shows them. They import fixtures from their own modules: importing this one is a cycle
+// the eager glob turns into an uninitialized `SCENARIOS`.
+const PREVIEW_SCENARIOS = Object.values(
+  import.meta.glob<Scenario[]>("../preview/*.{ts,tsx}", { eager: true, import: "default" }),
+).flat();
+
 /** The catalog keeps stable deep links; navigation orders each function by category. */
 export const SCENARIOS: Scenario[] = [
   ...emptyScenarios,
@@ -50,6 +57,7 @@ export const SCENARIOS: Scenario[] = [
     description: "Names, labels, files, paths and italic confirmation words compare at the inherited 12px, 14px and 16px sizes, with long-path wrapping and right-to-left isolation. Four fixed metadata sizes, six colors outside alerts, every color inside each alert tone, code blocks and nested tone priority are all on the page; scroll to compare the complete palette.",
     codePalette: true,
   },
+  ...PREVIEW_SCENARIOS,
 ];
 
 /** A successful welcome view is the landing page, regardless of catalog ordering. */

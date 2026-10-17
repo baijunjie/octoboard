@@ -32,5 +32,8 @@ coverage/
 # Claude Code local
 .claude/settings.local.json
 
+# Review-only gallery scenarios and the record of the preview serving them, per checkout
+/packages/ui/src/gallery/preview/
+
 # Git worktrees
 .worktrees/
