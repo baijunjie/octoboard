@@ -16,7 +16,6 @@ import { useListMotion } from "../components/useListMotion";
 import { AccountDialog } from "./AccountDialog";
 import { OptionSelect } from "../dialogs/OptionSelect";
 import { errorPresentation } from "../errorPresentation";
-import { SettingRow } from "./SettingRow";
 import { useSectionRefocus } from "./useSectionRefocus";
 
 /** Every account, grouped by agent with the agent's default account first, and the means to add,
@@ -61,8 +60,8 @@ export function AgentAccountsSection(): React.ReactElement {
                 {unavailable ? t("agents.notInstalled", { agent: AGENT_LABEL[agent] }) : AGENT_LABEL[agent]}
               </h3>
               {agent === "codex" && <p className="pb-2 text-sm text-app-muted">{t("settings.accounts.approval.description")}</p>}
-              <div className="border-t border-separator">
-                <SettingRow
+              <div className={`grid grid-cols-1 border-t border-separator ${agent === "codex" && owned.length > 0 ? "sm:grid-cols-[minmax(0,1fr)_auto_auto]" : "sm:grid-cols-[minmax(0,1fr)_auto]"}`}>
+                <AccountRow
                   motionKey={`default:${agent}`}
                   label={t("settings.accounts.defaultName")}
                   description={
@@ -71,11 +70,10 @@ export function AgentAccountsSection(): React.ReactElement {
                       {state?.default_account_dir && <MarkedPath path={state.default_account_dir} />}
                     </>
                   }
-                >
-                  {agent === "codex" && <ApprovalReviewerSelect account={null} name={t("settings.accounts.defaultName")} reviewer={defaultReviewer} />}
-                </SettingRow>
+                  reviewer={agent === "codex" && <ApprovalReviewerSelect account={null} name={t("settings.accounts.defaultName")} reviewer={defaultReviewer} />}
+                />
                 {owned.map((account) => (
-                  <SettingRow
+                  <AccountRow
                     key={account.id}
                     motionKey={account.id}
                     label={
@@ -89,29 +87,27 @@ export function AgentAccountsSection(): React.ReactElement {
                         {notUsable}
                       </>
                     }
+                    reviewer={agent === "codex" && <ApprovalReviewerSelect account={account.id} name={account.name} reviewer={account.approval_reviewer} />}
                   >
-                    <div className="flex flex-wrap items-center gap-2">
-                      {agent === "codex" && <ApprovalReviewerSelect account={account.id} name={account.name} reviewer={account.approval_reviewer} />}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        preventFocusOnPress
-                        aria-label={t("settings.accounts.editLabel", { name: isolate(account.name), agent: AGENT_LABEL[agent] })}
-                        onPress={() => setEditing(account)}
-                      >
-                        {t("common.edit")}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        preventFocusOnPress
-                        aria-label={t("settings.accounts.removeLabel", { name: isolate(account.name), agent: AGENT_LABEL[agent] })}
-                        onPress={() => setRemoving(account)}
-                      >
-                        {t("common.remove")}
-                      </Button>
-                    </div>
-                  </SettingRow>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      preventFocusOnPress
+                      aria-label={t("settings.accounts.editLabel", { name: isolate(account.name), agent: AGENT_LABEL[agent] })}
+                      onPress={() => setEditing(account)}
+                    >
+                      {t("common.edit")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      preventFocusOnPress
+                      aria-label={t("settings.accounts.removeLabel", { name: isolate(account.name), agent: AGENT_LABEL[agent] })}
+                      onPress={() => setRemoving(account)}
+                    >
+                      {t("common.remove")}
+                    </Button>
+                  </AccountRow>
                 ))}
               </div>
             </div>
@@ -139,6 +135,27 @@ export function AgentAccountsSection(): React.ReactElement {
 }
 
 
+/** Subgrid shares control widths across accounts, including the default account without actions. */
+function AccountRow({ label, description, reviewer, children, motionKey }: {
+  label: React.ReactNode;
+  description: React.ReactNode;
+  reviewer?: React.ReactNode;
+  children?: React.ReactNode;
+  motionKey: string;
+}): React.ReactElement {
+  return (
+    <div data-list-motion={motionKey} className="col-span-full grid grid-cols-subgrid items-center gap-x-4 gap-y-3 border-b border-separator py-4 last:border-b-0">
+      <div className="min-w-0">
+        <div className="text-sm font-medium">{label}</div>
+        <div className="text-sm text-app-muted">{description}</div>
+      </div>
+      {reviewer && <div className="min-w-0">{reviewer}</div>}
+      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
+    </div>
+  );
+}
+
+
 function ApprovalReviewerSelect({ account, name, reviewer }: {
   account: string | null;
   name: string;
@@ -155,16 +172,18 @@ function ApprovalReviewerSelect({ account, name, reviewer }: {
   };
   // The trigger must stay focusable while the popover returns keyboard focus after selection.
   return (
-    <OptionSelect<ApprovalReviewer | "inherit">
-      inline
-      label={t("settings.accounts.approval.label", { name: isolate(name) })}
-      value={reviewer ?? "inherit"}
-      onChange={save}
-      options={[
-        { value: "inherit", label: t("settings.accounts.approval.inherit"), isDisabled: busy },
-        { value: "auto_review", label: t("settings.accounts.approval.auto"), isDisabled: busy },
-        { value: "user", label: t("settings.accounts.approval.user"), isDisabled: busy },
-      ]}
-    />
+    <div className="w-64 max-w-full">
+      <OptionSelect<ApprovalReviewer | "inherit">
+        hideLabel
+        label={t("settings.accounts.approval.label", { name: isolate(name) })}
+        value={reviewer ?? "inherit"}
+        onChange={save}
+        options={[
+          { value: "inherit", label: t("settings.accounts.approval.inherit"), isDisabled: busy },
+          { value: "auto_review", label: t("settings.accounts.approval.auto"), isDisabled: busy },
+          { value: "user", label: t("settings.accounts.approval.user"), isDisabled: busy },
+        ]}
+      />
+    </div>
   );
 }
