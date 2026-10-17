@@ -192,7 +192,7 @@ scope:
   - With **a console session that is not archived and more than one project**, it asks for a session to be selected,
     with no creation button.
   - With **a console session that is not archived and no projects**, it offers **Add project**, opening the ordinary
-    new-project dialog.
+    new-project dialog. The explanation also tells the user they can ask a console session to create a project for them.
 - **When all supported agents are known to be unavailable**, an otherwise offered **New session** or **New console
   session** is replaced by an explanation that no agent was found and how to make one available, with no creation
   button. Availability that has not yet been determined does not prevent either offer. The **Add project** offer and

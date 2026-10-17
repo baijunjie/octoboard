@@ -426,7 +426,7 @@ export const zhHans: Translation<"other"> = {
 
   "terminal.empty": "未选择会话",
   "terminal.empty.description": "选择一个会话以查看其终端。",
-  "terminal.noProjects.description": "项目是你工作的目录，会话在其中运行。",
+  "terminal.noProjects.withAgent.description": "项目是你工作的目录，会话在其中运行。你可以自己创建项目，也可以让控制台会话帮你创建。",
   "terminal.noSessions.description": "新建一个会话以开始工作。",
   "terminal.input": "终端输入",
   "terminal.loading": "终端加载中…",

@@ -69,7 +69,7 @@ export const emptyScenarios: Scenario[] = [
     category: "normal",
     title: "A console with no projects",
     description:
-      "The sidebar headings show Console sessions (1) and Projects (0). With no projects, the main area offers Add project, and F6 reaches that button; the sidebar's Projects section carries the same offer as a row.",
+      "The sidebar headings show Console sessions (1) and Projects (0). The main area explains that you can create a project yourself or ask a console session to create one, alongside Add project. F6 reaches that button; the sidebar's Projects section carries the same offer as a row.",
     state: snapshotState({
       consoles: [consoleOf("c-1", "Main")],
       sessions: [sessionOf("s-hub", "c-1", undefined, "Hub", "idle")],

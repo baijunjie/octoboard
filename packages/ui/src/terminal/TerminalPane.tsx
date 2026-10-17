@@ -474,7 +474,7 @@ export function TerminalPane({
             <EmptyPanel
               icon={FolderPlus}
               message={t("sidebar.noProjects")}
-              description={t("terminal.noProjects.description")}
+              description={t("terminal.noProjects.withAgent.description")}
               action={{ label: t("sidebar.console.addProject"), icon: FolderPlus, onPress: onAddProject }}
             />
           ) : (
