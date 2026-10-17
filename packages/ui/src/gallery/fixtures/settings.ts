@@ -78,7 +78,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "General, run in the background offered (desktop app)",
-    description: "The clone-directory explanation leaves the path in the input. The desktop app's background row starts off; switch it on and off to read both descriptions.",
+    description: "The desktop app's background row starts off; switch it on and off to read both descriptions.",
     state,
     backgroundRun: true,
     steps: [

@@ -147,7 +147,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive menu, parents only",
     state: archiveState,
-    description: "The menu retains the last active task titles, including distinct tasks created under generic session names, and View all. Children of live and archived leads stay out of this preview. Long archived names fade at the menu edge and run as a marquee when their row is hovered.",
+    description: "The menu keeps the last active task titles, including distinct tasks created under generic session names, and View all; children of live and archived leads stay out of this preview. Long archived names fade at the menu edge and run as a marquee when their row is hovered.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
@@ -159,7 +159,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive with live and archived owners",
     state: archiveState,
-    description: "The full project archive retains the last active task titles beside the original session names and includes children omitted from the preview. Children of the archived lead nest under it; the archived child of the active lead appears as a standalone row. Only dates sit on the right, with archived time above created time to match the archive ordering; a compact usage chip follows the agent name in the same muted text color, showing substantial usage while recorded zero totals and absent records are hidden. Each row is a button: hover it for the pointer cursor and the row background, or Tab to it for a focus ring around the row; Reopen and Delete show in both cases, and their separate fills can be compared against the row background. The archived lead's row is the selected session and keeps its selected background at rest, as the archived rows in the sidebar do, with its usage chip on it. Pressing another row (not Reopen or Delete) closes the archive and shows that session's saved terminal. Long session titles fade and scroll only on text hover. Agent names omit parenthesized accounts; hover agent icons for account details. Archive count and heading also respond only to their own text hover. Hovering agent icons, Reopen, Delete or header controls leaves the text still. Delete an entry or a nested child to watch the remaining rows slide into place. Close the archive, then open it again through the project menu to review both transitions.",
+    description: "The full archive shows each last active task title beside the original session name, the archived lead's children nested under it and the archived child of the active lead as a standalone row. A compact usage chip follows the agent name, hiding zero and absent totals; only dates sit on the right, archived above created. Each row is a button. Hover or Tab to it to compare its background and focus ring with the Reopen and Delete fills. The archived lead is the selected session. Pressing another row closes the archive and shows that session's saved terminal. Delete an entry or a nested child to watch the rows slide into place, then close the archive and reopen it through the project menu to review both transitions.",
     steps: [
       // Selecting the archived lead from the menu, then opening the full archive, marks its row.
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
@@ -176,7 +176,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive, many entries",
     state: archiveState,
-    description: "Seventy entries are loaded thirty at a time. Archived rows offer Reopen and Delete, without lock controls or yellow outlines. The newest entries retain English agent task titles beside their original names, including a long title; other entries keep only their session names. Dates on the right cover recent and older archives; the first two cards show substantial usage and hide recorded zero usage. Delete an entry: it fades out to the right by one quarter of its own width over 300ms while the remaining rows slide into place over the same duration. The system’s reduced-motion preference keeps these changes immediate.",
+    description: "Seventy entries are loaded thirty at a time; the newest keep their last active task titles (one of them long) and the first two show usage chips. Rows offer Reopen and Delete, without lock controls or yellow outlines. Delete an entry: it fades out to the right by a quarter of its own width over 300ms while the remaining rows slide into place, and the reduced-motion preference keeps the change immediate.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
@@ -188,7 +188,7 @@ export const archiveScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Console menu, archived console sessions",
-    description: "The console's menu (the same one opens from its avatar in the rail) lists Add project, Edit console, Archived console sessions and Delete console below a separator; there is no Export configuration. The submenu shows the five newest archived console sessions, retaining their last active task titles, then View all.",
+    description: "The console's menu (the same one opens from its avatar in the rail) lists Add project, Edit console, Archived console sessions and Delete console below a separator, with no Export configuration. The submenu shows the five newest archived console sessions with their last active task titles, then View all.",
     state: archiveState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.console.actions", { name: console_.name })),
@@ -240,7 +240,7 @@ export const archiveScenarios: Scenario[] = [
     state: archiveState,
     sessionRecords: Object.fromEntries([...archiveState.sessions.keys()].map((id) => [id, id === underArchivedLead[0].id ? "present" as const : "absent" as const])),
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
-    description: "Native files exist for a child, so the confirmation keeps the Trash option. It lists both archived children with their agent icons and titles; hover the agent icons for account details. The unchecked option to move the agent's own session records to the Trash carries the hint that says the sessions deleted with it go too.",
+    description: "Native files exist for a child, so the confirmation keeps the Trash option, unchecked, with the hint that the sessions deleted with it go too. It lists both archived children with their agent icons and titles.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
       (ui) => ui.press(ui.t("archive.delete", { title: archivedLead.title })),

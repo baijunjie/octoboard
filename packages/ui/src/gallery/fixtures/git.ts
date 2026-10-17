@@ -154,14 +154,14 @@ export const gitScenarios: Scenario[] = [
   {
     id: "git-transfer-badges", group: GROUP, category: "normal",
     title: "Push and pull count indicators",
-    description: "Each transfer keeps a spinning loader on the left. On the right, pushing scrolls only ↑ beside 3 upward; pulling scrolls only ↓ beside 2 downward. The push’s opposite ↓ arrow and both numbers stay still; pull shows only ↓2 because it has no commits ahead of upstream. The zero-count push shows only the loader and branch.",
+    description: "Each transfer keeps a spinning loader on the left. Pushing scrolls only ↑ beside 3 upward, with the opposite ↓ arrow and both numbers still; pulling shows only ↓2, because it has no commits ahead of upstream, and scrolls that arrow downward. The zero-count push shows only the loader and branch.",
     state: transferState,
     preferences: { sidebarWidth: 480 },
   },
   {
     id: "git-pull-focus", group: GROUP, category: "normal",
     title: "Pulling in project focus",
-    description: "The focus header keeps the left loader spinning while only the right ↓ count arrow scrolls downward. The count stays still; the zero ahead count is omitted.",
+    description: "The focus header keeps the left loader spinning while only the ↓ count arrow scrolls downward; the zero ahead count is omitted.",
     state: transferState,
     preferences: { sidebarWidth: 480, sidebarConsole: console_.id, sidebarFocus: `project:${pullPreview.id}` },
   },
@@ -252,7 +252,7 @@ export const gitScenarios: Scenario[] = [
     title: "Branch badges",
     state: badgesState,
     preferences: { sidebarWidth: 200 },
-    description: "Remote counts, spinning checks and transfers, detached and missing branches, and long labels. The left activity glyph spins while only the matching count arrow scrolls during a transfer. Hover a clipped project name or branch to scroll only that text; counts move with their branch. Hovering row controls leaves both labels still. Hover badges for their full details; drag the sidebar wider to inspect clipping.",
+    description: "Remote counts, spinning checks and transfers, detached and missing branches, and long labels. Hover a clipped project name or branch to scroll only that text, with counts moving with their branch; hovering row controls leaves both labels still. Hover badges for their full details, and drag the sidebar wider to inspect clipping.",
   },
   {
     id: "git-badge-focus",
@@ -270,7 +270,7 @@ export const gitScenarios: Scenario[] = [
     title: "Long branch pushing in project focus",
     state: badgesState,
     preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
-    description: "The left loading glyph spins during pushing; the ahead-count arrow scrolls upward when its part of the long line is revealed. Hover the glyph for the pushing status. The long project name and branch fade separately. Hover either text to run only its marquee; hovering the console subtitle or header controls leaves both still. The branch and counts scroll together; hover the branch text for full details.",
+    description: "The left loading glyph spins during pushing, and the ahead-count arrow scrolls upward when its part of the long line is revealed; hover the glyph for the pushing status. The long project name and branch fade separately and run their own marquees on hover, the branch scrolling together with its counts; hovering the console subtitle or header controls leaves both still.",
   },
   {
     id: "git-push-accepted",

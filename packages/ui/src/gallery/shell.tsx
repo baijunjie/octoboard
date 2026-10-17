@@ -144,7 +144,7 @@ function Gallery(): React.ReactElement {
               const scenarios = SCENARIOS.filter((s) => s.group === title && s.category === category.id);
               return (
                 <div key={category.id} className="category-section" data-category={category.id}>
-                  <h3>{category.label} <span>{scenarios.length}</span></h3>
+                  <h3 title={category.description}>{category.label} <span>{scenarios.length}</span></h3>
                   {scenarios.length === 0 && <p className="no-scenarios">No previews in this section</p>}
                   {scenarios.map((s) => (
                     <a
@@ -169,7 +169,6 @@ function Gallery(): React.ReactElement {
         <div className="preview-context" data-category={scenario.category}>
           <div className="preview-location">{scenario.group} <span aria-hidden> / </span><strong className="category-badge">{category.label}</strong></div>
           <h1>{scenario.title}</h1>
-          <p>{category.description}</p>
           {scenario.description && <p className="description">{scenario.description}</p>}
         </div>
         <header aria-label="Preview controls">

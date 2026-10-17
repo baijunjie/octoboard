@@ -124,8 +124,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "A project session's files",
-    description:
-      "Folders first, natural order, .git left out. Expand or collapse a folder to watch the following rows slide into place; scrolling keeps rows steady. src is expanded and main.ts is selected: its rounded highlight has space on all four sides, matching Git rows. Compare its actions button with the selected sidebar session and the console header: resting glyphs stay muted, while hovering or opening each menu gives it the shared subtle tint. Press a file for the viewer and Left/Right to visit visible files. Right-click file and folder rows, or use their actions button, for Open, Show in file manager and Copy path. Switch between Website and Search API sessions to inspect the short file-pane entrance; Search API has its own routes and schema tree. Switching between the two Website sessions keeps the current tree steady. A project's actions offer Browse files when its pane is hidden or belongs to another project. Open in file manager is available independently. Narrow the window and open the project pane drawer to see the same tree over the terminal.",
+    description: "Folders come first in natural order, with .git left out. src is expanded and main.ts is selected, its rounded highlight keeping space on all four sides, as Git rows do. Expand or collapse a folder to watch the following rows slide into place, and press a file for the viewer, then Left/Right to visit visible files. Switch between the Website and Search API sessions to inspect the short file-pane entrance and Search API's own tree. Switching between the two Website sessions keeps the tree steady. A project's actions offer Browse files when its pane is hidden or belongs to another project.",
     state,
     filesByProject: {
       [api.id]: {
@@ -144,7 +143,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Matching files throughout the project",
-    description: "The filter sits above matching files grouped by folder. Both server.ts files match the trimmed, case-insensitive filename query without opening any folders first. The project title, compact pill tabs and right-aligned filter, layout and Refresh controls share one header row. Each tab keeps its own query, layout and folded folders.",
+    description: "The filter sits above matching files grouped by folder: both server.ts files match the trimmed, case-insensitive filename query without opening any folders first. The project title, compact pill tabs and right-aligned filter, layout and Refresh controls share one header row. Each tab keeps its own query, layout and folded folders.",
     state,
     files: filterFiles,
     steps: [
@@ -159,7 +158,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "All project files as a flat list",
-    description: "The flat layout lists files throughout the project without opening folders or entering a query. Muted icons distinguish source code, configuration, JSON, documents, images, audio, video, archives, spreadsheets, databases, certificates, fonts, Git files and licenses; an unknown extension keeps the plain file icon. Relative paths distinguish the two server.ts files. The layout toggle occupies the same header position as in Uncommitted and Compare.",
+    description: "The flat layout lists files throughout the project without opening folders or entering a query, with muted icons distinguishing source code, configuration, JSON, documents, images, audio, video, archives, spreadsheets, databases, certificates, fonts, Git files and licenses; an unknown extension keeps the plain file icon. Relative paths distinguish the two server.ts files.",
     state,
     files: fileTypeFiles,
     steps: [
@@ -188,7 +187,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Project actions with its files already visible",
-    description: "Website's files are already visible, so its open actions menu omits Browse files. Open in file manager remains available; in the gallery it acknowledges the request without opening a host application.",
+    description: "Website's files are already visible, so its open actions menu omits Browse files. Open in file manager remains available.",
     state,
     steps: [...openFiles, (ui) => ui.press(ui.t("sidebar.project.actions", { name: web.name }))],
   },
@@ -197,7 +196,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "A file’s context menu",
-    description: "Right-clicking main.ts opens its menu at the pointer without opening the viewer. Open uses the system’s default application; Show in file manager reveals and selects the file; Copy path copies its project-relative path. Native actions are acknowledged without opening a host application in the gallery. Folder rows offer the same actions.",
+    description: "Right-clicking main.ts opens its menu at the pointer without opening the viewer: Open uses the system's default application, Show in file manager reveals and selects the file, and Copy path copies its project-relative path. Folder rows offer the same actions.",
     state,
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.contextMenu("main.ts")],
   },

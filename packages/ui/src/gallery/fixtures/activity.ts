@@ -31,15 +31,7 @@ export const activityScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Collapsed project rows, by what is going on beneath them",
-    description:
-      "Each collapsed row's marker stands for the most pressing activity among its sessions: a waving hand for " +
-      "Website (waiting beats working), a pinging dot for Search API, a speech bubble for Billing, and none for " +
-      "Docs. Hover the markers to read A session is waiting for you, A session is working and A session is " +
-      "running. Docs has only an interrupted session and stays undimmed with the other unarchived projects. " +
-      "Pinned Archived only and No sessions yet follow them, dimmed together. Expand from the Projects heading: " +
-      "only Website, Search API, Billing and Docs open; the two inactive projects stay folded. " +
-      "These markers stand alone; a console " +
-      "avatar's tooltip in the rail words the same activities after the console's name instead.",
+    description: "Each collapsed row's marker shows the most pressing activity beneath it: a waving hand for Website (waiting beats working), a pinging dot for Search API, a speech bubble for Billing and none for Docs. Hover a marker to read its tooltip. Docs, whose only session is interrupted, stays undimmed. The pinned Archived only and No sessions yet projects sort after the active ones, dimmed together. Expand from the Projects heading: only the four active projects open, and those two stay folded.",
     state: snapshotState({ consoles: [console_], projects: [archived, empty, website, api, billing, docs], sessions }),
     steps: [
       (ui) => ui.press(ui.t("sidebar.collapseAll")),

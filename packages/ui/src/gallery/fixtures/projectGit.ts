@@ -374,8 +374,7 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "A worktree's uncommitted changes",
-    description:
-      "Staged, unstaged and untracked changes share the list. Collapse a section to watch following rows slide into place; scrolling keeps rows steady. server.ts is selected: its rounded highlight has space on all four sides, matching Files and folder-grouped Git rows. Its actions button has a muted resting glyph and the shared subtle tint when hovered or open, matching the selected sidebar session and console header. Right-click a row for Open, Show in file manager and Copy path in the selected worktree. Open a file to inspect its viewer, or use the controls to explore filters, folders and status tooltips. The repository includes successful rename, expansion and budget cases. Choose Docked above the preview to inspect the 320px project pane at the 1168px minimum window width: tabs scroll horizontally when needed.",
+    description: "Staged, unstaged and untracked changes share the list, with server.ts selected and its rounded highlight spaced like Files rows. Collapse a section to watch the following rows slide into place, and right-click a row for Open, Show in file manager and Copy path in the selected worktree. Choose Docked above the preview to inspect the 320px project pane at the 1168px minimum window width: tabs scroll horizontally when needed.",
     state,
     steps: [...openGit, (ui) => ui.press(ui.changeRow("server.ts", "modified")), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
   },
@@ -393,7 +392,7 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "A section heading pinned above grouped changes",
-    description: "The folder-grouped list starts partway through Staged: its heading stays against the worktree selector's bottom border while directories and files scroll beneath it. The top fade starts below the pinned band; scrolling farther lets the next section replace it.",
+    description: "As in the flat list, the folder-grouped list starts partway through Staged and its heading stays against the worktree selector's bottom border while directories and files scroll beneath it; scrolling farther lets the next section replace it.",
     state,
     preferences: { changeLayout: "tree" },
     steps: [...openGit, (ui) => ui.scrollCollection(ui.t("git.list.label"), 180)],
@@ -570,7 +569,7 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Changes grouped by folder",
-    description: "Directories start expanded and config.ts is selected inside src. Collapse and expand folders to watch following rows slide into place; scrolling keeps rows steady. Its rounded highlight keeps the same space on all four sides as Files and the flat Git list, while file labels follow the folder indentation. Compare file actions buttons at rest, then hover or open their menus for the same subtle shared hover tint.",
+    description: "Directories start expanded and config.ts is selected inside src, its highlight spaced like the flat list's while file labels follow the folder indentation.",
     state: state,
     preferences: { changeLayout: "tree" },
     steps: [
@@ -630,7 +629,7 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Changes with an empty filter field",
-    description: "The focused, empty filter shows its placeholder above the unchanged list. The project title, Files, Uncommitted and Compare compact pill tabs, filter toggle and Refresh share one header row. Moving focus away closes the empty field.",
+    description: "The focused, empty filter shows its placeholder above the unchanged list; moving focus away closes the empty field.",
     state,
     steps: [
       ...openGit,

@@ -266,7 +266,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "Menu of a session that was never used",
-    description: "Copy session ID sits directly after Rename, matching Copy project name in project actions. The last entry is Delete, destructive, in place of Archive. Close the menu and hover or focus the unused session row to see the matching Delete shortcut immediately before the actions menu. The untouched Claude Code, Codex and Grok sessions all delete immediately and move any native records to the Trash without confirmation.",
+    description: "Copy session ID sits directly after Rename, and the last entry is the destructive Delete in place of Archive. Close the menu and hover or focus the unused row: its Delete shortcut sits immediately before the actions menu, and the untouched Claude Code, Codex and Grok sessions all delete immediately, moving any native records to the Trash without confirmation.",
     state: unusedState,
     sessionRecords: { [unusedSession.id]: "absent", [unusedCodex.id]: "unknown", [unusedGrok.id]: "present" },
     steps: [openUnusedMenu],
@@ -335,7 +335,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "New console session advanced settings",
-    description: "Name previews the console name without a numeric suffix. Advanced shows the console's Opus model and high reasoning effort for Claude Code. Changes apply to this new session.",
+    description: "Advanced shows the console's Opus model and high reasoning effort for Claude Code; changes apply to this new session.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.consoleSessions.new")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
@@ -434,7 +434,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "New session advanced settings",
-    description: "The Conversation tabs at the head have New conversation selected, with Name below them. Claude Code and its inherited long account name share the joined field; expanded Advanced shows the project's Opus model and high reasoning effort, with Report to still offered above. Changing either setting applies to this session.",
+    description: "New conversation is selected with Name below the tabs. Claude Code and its long inherited account name share the joined field; expanded Advanced shows the project's Opus model and high reasoning effort, with Report to still offered above.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
@@ -468,7 +468,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, conversation not found",
-    description: "On the Resume conversation tab with a session ID filled in and Report to gone, the refusal stands under the Session ID field, with the field focused: it says no conversation with this ID is in the account's directory, with the directory path as code in the danger tone and the typed ID not repeated. The dialog has no alert at its foot and the ID stays as typed.",
+    description: "On the Resume conversation tab with a session ID filled in and Report to gone, the refusal stands under the Session ID field, which is focused: no conversation with this ID is in the account's directory, the directory path set as code in the danger tone and the typed ID not repeated. The dialog has no alert at its foot.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
       (ui) => ui.press(ui.t("dialog.session.conversationResume")),
@@ -586,7 +586,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Project tag suggestions",
-    description: "Short and long tags share the field with the input. The short tag fits its content until hover or keyboard focus makes room for its remove button; unused project tags appear below. Pick a suggestion or type a new tag and press Enter, then remove a chip: the changed chip fades in from the left and fades out to the right while the others and the input slide between wrapped lines.",
+    description: "Short and long tags share the field with the input. The short tag fits its content until hover or keyboard focus makes room for its remove button; unused project tags appear below. Pick a suggestion or type a new tag and press Enter, then remove a chip to see the chips fade and slide between wrapped lines.",
     steps: [
       ...editTaggedProject,
       (ui) => ui.press(ui.t("dialog.project.tagsSuggestions")),

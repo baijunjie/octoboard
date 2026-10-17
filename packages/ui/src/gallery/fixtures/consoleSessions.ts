@@ -45,17 +45,7 @@ export const consoleSessionsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Console sessions, and project sessions bound, unbound and nested",
-    description:
-      "The section headings show Console sessions (4) and Projects (2), counting only the rows in each section. " +
-      "Agent task titles appear before the original session names, with untitled sessions keeping their names. " +
-      "Console sessions and each project's sibling sessions put Waiting for you first, then Awaiting instructions, " +
-      "Working and Interrupted. Above the projects, Hub 3, the release-plan task under Hub, Hub 2 and Hub 4 show that order, each in its own " +
-      "colour; Website shows the same status order. A bound project " +
-      "session carries that colour as a binding badge in its sidebar row; an unbound one carries none. The sessions " +
-      "bound to a project session are listed under it, a level below: the lead session keeps the binding badge of " +
-      "the console session it reports to, and the sessions under either owner carry none. The pointer rests " +
-      "on the status glyph of \"Add idempotency keys\", whose tooltip reads Waiting for you; every row's glyph " +
-      "has one (Working, Waiting for you, Awaiting instructions, Interrupted), next to the agent mark's own.",
+    description: "The headings show Console sessions (4) and Projects (2), each counting only its own rows. Agent task titles come before the original session names. Hub 3, the release-plan task under Hub, Hub 2 and Hub 4 show the status order Waiting for you, Awaiting instructions, Working, Interrupted, each in its own colour. Website shows the same order. Its bound sessions carry the owner's colour as a binding badge, while its unbound ones, and Search API's Plan the reindex, carry none. Sessions bound to a lead session are listed under it, a level below, with no badge. The pointer rests on the status glyph of \"Add idempotency keys\". Every row's glyph has a tooltip, here Waiting for you.",
     state,
     steps: [(ui) => ui.hoverRowStatus(ui.session("Add idempotency keys"))],
   },

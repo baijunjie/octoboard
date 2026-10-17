@@ -27,8 +27,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "normal",
     title: "Queued trust prompts for all agents",
-    description:
-      "Claude Code and Codex offer their projects' parent folders; the Grok Build project is the home directory itself, whose parent is too broad to offer. The warning's configuration-file token takes its tone while the project path stays neutral. Each agent has its own caution and Codex names its repository-root trust. All three asking sessions raise their hands. Not now advances through the queued prompts while their hands stay raised until trust is answered in the terminal.",
+    description: "Claude Code and Codex offer their projects' parent folders, while the Grok Build project is the home directory itself, whose parent is too broad to offer. The warning's configuration-file token takes its tone while the project path stays neutral. Each agent has its own caution, and Codex names its repository-root trust. All three asking sessions raise their hands. Not now advances through the queued prompts while the hands stay raised until trust is answered in the terminal.",
     state: snapshotState({
       consoles: [console_],
       projects: [web, api, grokProject],
@@ -60,8 +59,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "normal",
     title: "Request to start a session in another project",
-    description:
-      "A session in Search API asks for a Grok Build session in Search API experiments, a linked worktree of the same repository: the requester belongs to a different console and project, so all requester and destination names are visible as chips. The question is followed by the branches that would be handed over, each a code chip joined as the language joins a list (a literal % shown as written, the long name wrapping inside its chip).",
+    description: "A session in Search API asks for a Grok Build session in Search API experiments, a linked worktree of the same repository. The requester belongs to a different console and project, so all requester and destination names appear as chips. The question is followed by the branches that would be handed over, each a code chip joined as the language joins a list. A literal % is shown as written (fix/coverage-at-100%), and the long name wraps inside its chip.",
     state: snapshotState({
       consoles: [console_, requestingConsole],
       projects: [web, { ...api, console_id: requestingConsole.id }, worktreeProject, grokProject],
@@ -176,8 +174,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Warning notices and recovery",
-    description:
-      "Deliberate warning notices: an untrusted workspace workaround naming its allow and deny settings as code, a failed trust confirmation, a trust entry blocked by a locked store and a session whose launch failed after it appeared (named by its title, with no session link, since it is gone). Session links identify where recovery is needed, and the trust file's path is set as code.",
+    description: "Deliberate warning notices: an untrusted workspace workaround naming its allow and deny settings as code, a failed trust confirmation, a trust entry blocked by a locked store and a session whose launch failed after it appeared. Session links identify where recovery is needed. The failed session is named by its title with no link, since it is gone. The trust file's path is set as code.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
       { kind: "notice", code: "claude_workspace_untrusted", params: {}, message: "", session: "s-web-1" },

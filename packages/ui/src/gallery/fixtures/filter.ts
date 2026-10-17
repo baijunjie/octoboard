@@ -62,7 +62,7 @@ export const filterScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Project filter",
-    description: "Selected tags have checkmarks; the normal vocabulary fits without scrolling. The popover stays open as conditions are picked; the heading chips fade in from the left and fade out to the right while the remaining chips slide horizontally as tags are added or removed. Matching projects enter and exit at the same time as the sidebar reorders. After closing it, the heading's Funnel X clears all conditions.",
+    description: "Selected tags have checkmarks and the normal vocabulary fits without scrolling. The popover stays open as conditions are picked: the heading chips fade in from the left and out to the right while the others slide, and matching projects enter and exit as the sidebar reorders. After closing it, the heading's Funnel X clears all conditions.",
     state,
     preferences: { sidebarConsole: console_.id },
     steps: [
@@ -91,7 +91,7 @@ export const filterScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Conditions wider than the heading",
-    description: "The keyword and four tags do not fit beside the Projects label. They stay on one line at full width and fade at the clipped end; hovering the strip with a real pointer runs it as one marquee after a 600-millisecond initial pause. At the far end it pauses for three seconds, then returns to the beginning in about 200 milliseconds, waits three seconds and runs again. Moving the pointer away resets it immediately. Its tooltip shows the whole filter as the same chips as the heading, wrapped onto as many lines as it needs; the longest tag shrinks to the tooltip's width and breaks inside its own chip.",
+    description: "The keyword and four tags do not fit beside the Projects label: they stay on one line at full width, fade at the clipped end and run as one marquee when the strip is hovered with a real pointer. Its tooltip shows the whole filter as the same chips as the heading, wrapped onto as many lines as it needs, the longest tag shrinking to the tooltip's width and breaking inside its own chip.",
     state: overflowingState,
     preferences: { sidebarConsole: console_.id },
     steps: [
