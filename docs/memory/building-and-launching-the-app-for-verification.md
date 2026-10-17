@@ -62,10 +62,10 @@ gets chased through the frontend instead.
 
 `pnpm build:app` also strips every `APPLE_*` variable from the build's environment and fails if the `.app` comes out
 Developer ID-signed, so there is nothing to remember to unset. The reason it exists: the Tauri CLI reads `APPLE_*`
-straight from the environment (see the "Release builds" section of `apps/desktop/README.md`), and while the shell
-exported them, a plain verification build was Developer ID-signed and submitted to Apple's notary service three
-separate times, with nothing in the command or its output to warn of it — unreleased code sent to Apple, minutes added
-to the build, and a signed bundle that the wrapped-sidecar swap above breaks. One of the three came from an agent
+straight from the environment and signs and notarizes with whatever it finds there, and while the shell exported
+them, a plain verification build was Developer ID-signed and submitted to Apple's notary service three separate times,
+with nothing in the command or its output to warn of it — unreleased code sent to Apple, minutes added to the build, and
+a signed bundle that the wrapped-sidecar swap above breaks. One of the three came from an agent
 stripping the variables with `UNSET=$(...)` and `env $UNSET ...`, which does nothing in zsh because zsh does not
 word-split an unquoted parameter. Do not run a bare `pnpm tauri build` or `pnpm release` for a verification: the
 first signs with whatever `APPLE_*` the calling shell carries, and the second loads the credentials from the gitignored
@@ -84,9 +84,9 @@ anything read off an exec'd app about launch timing, first paint, or what is on 
 ## A throwaway `HOME` and `TMPDIR` isolate the daemon's data, not the webview's
 
 Point `HOME` and `TMPDIR` at fresh directories for every verification run. The daemon keeps its database and instance
-lock under `$HOME/.octoboard` and its port file under the temp directory (see the "Pointing it at a daemon" section of
-`packages/ui/README.md`), so on the real `HOME` a run either works on the user's own data or, while the user's own
-Octoboard is running, loses the lock and opens the window on the `?error=` startup screen instead of the app.
+lock (`daemon.lock`) under `$HOME/.octoboard` and its port file (`octoboardd.port`) under `$TMPDIR`, so on the real
+`HOME` a run either works on the user's own data or, while the user's own Octoboard is running, loses the lock and
+opens the window on the `?error=` startup screen instead of the app.
 The daemon then takes that directory as the user's home, and the app offers less around it: the trust dialog for a
 project whose parent folder is or contains it shows no folder checkbox, so that project can only be trusted on its
 own (see the "Trusted folders" section of `docs/product/folder-trust.md`). So put project directories inside the

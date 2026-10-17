@@ -45,10 +45,10 @@ it is not the app's WKWebView. A pointer interaction or a WebKit rendering quest
 page loaded in Playwright's `webkit`, a paint defect still in the real window, and behaviour that depends on the
 daemon, the shell or how the window starts up still in the real app.
 
-For batch checks that scenarios still run, follow `packages/ui/README.md`, section "Sweeping the gallery", for the
-scope and when a run is needed. A page with no errors does not establish that its mocks supply what the current
-components need: verify the fields, data conditions and contracts behind a new UI state against the code. Use the
-browser where the actual appearance or interaction needs checking, within the change's scope.
+For batch checks that scenarios still run (`pnpm gallery:sweep`), keep to the scope the "Finishing" section of
+`.claude/agents/gallery-writer.md` sets: which scenarios, languages and themes to sweep, when a full sweep is warranted,
+and when a sweep adds nothing. A page with no errors does not establish that its mocks supply what the current
+components need: verify the fields, data conditions and contracts behind a new UI state against the code.
 
 How the bundle loads what it fetches at run time — lazy chunks, a worker, WebAssembly, assets — and anything a
 build-only Vite plugin changes are not settled there either: the gallery runs Vite's unbundled dev modules from
@@ -137,9 +137,6 @@ A factory parameter likewise carries the content a reply needs, not the right to
 Applies when visually verifying gallery interactions. A capture taken after setup shows only the view it leaves on
 screen; it does not visually verify earlier states, even when their assertions passed. Display initialization is not
 a regression sequence: keep necessary behavioral assertions in tests or separate verification runs.
-
-For distinct confirmation views, follow `packages/ui/README.md`, section "The UI state gallery", when deciding which
-scenarios to show; shared mock data does not require them to share a scenario.
 
 ## A scenario's steps run in every language, so no matcher spells out the catalog's own punctuation
 
@@ -309,7 +306,8 @@ Where a check needs a real client against a real daemon but not the native windo
 `packages/ui/README.md`) in a headless browser driven over the DevTools protocol, with real mouse and key events. The
 daemon treats it as any other client, so every daemon-side outcome and everything the agent in a session sees is
 exercised, and no screen-recording or accessibility grant is needed for it; what it leaves out is the Tauri shell's own
-event path, which carries no daemon traffic anyway (the "External interfaces" section of `apps/desktop/README.md`).
+event path, which carries no daemon traffic anyway (`apps/desktop/README.md`, the opening under its title "Octoboard
+desktop application").
 That is enough to confirm what a dialog does. It is not the app's WebKit, so it settles behaviour and never rendering.
 
 So where a check has to run in the real app, keep the GUI out of the setup: create the consoles, projects and sessions a

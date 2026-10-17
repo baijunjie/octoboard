@@ -19,6 +19,14 @@ imposed on the file: the desktop app raises its save and open dialogs, and a bro
 file picker. Where the window can do neither, the welcome screen's button is not shown and the Configuration section
 says that exporting and importing are not available (see "Configuration" in `docs/product/settings.md`).
 
+**The file.** Both dialogs offer JSON files (`.json`). The name offered for saving is `octoboard-<console name>.json`
+for one console — any character a file name cannot hold (a control character, `/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`,
+`|`) becomes a space, and runs of spaces become one — and `octoboard-configuration.json` for everything, or for a
+console whose name leaves nothing. The user can change it in the save dialog; a browser may file the download under a
+name of its own. The desktop app's open dialog reads the picked file whole and refuses, before anything is sent to the
+daemon, one larger than 64 MiB, as too large to be a configuration file, and one that is not UTF-8 text, as not a text
+file; either is told in the import dialog, and another file can be chosen.
+
 **Exporting** opens a dialog that asks what to export: the console the sidebar shows, or everything; with no console
 there is only everything. Under that choice, before anything is saved, the dialog says that the file contains the path
 of each project on the machine running Octoboard, which may not be the one the window is on, so sharing it is a choice

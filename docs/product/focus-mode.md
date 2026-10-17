@@ -73,7 +73,8 @@ without any preview rows. When every archived session fits in the preview, there
 The archive preview, including View all, follows "Items moving within a collection" in
 `docs/product/collection-motion.md`.
 
-Relative times ("5 minutes ago") are worded in the current language, and anything under a minute reads as now.
+Relative times ("5 minutes ago") are worded in the current language, and anything under a minute reads as now. While
+shown they keep up with the clock by themselves, never more than 30 seconds behind it.
 
 **Where either view has nothing to list**, a single **compact empty row** takes the list's place, under its
 section heading, as in the full sidebar (see "The compact row" in `docs/product/empty-states.md` and "Empty rows" in

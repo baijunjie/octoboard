@@ -3,6 +3,11 @@
 // nothing outside it sees a library type: callers hand it plain text and patches. The rendered DOM
 // is read elsewhere only by `rendererDom.ts`, which cannot live here, and `expansion.ts`, which
 // is the part of it that drives the separators of collapsed lines.
+//
+// `@pierre/diffs`, `@pierre/theming`, `@shikijs/themes` and `shiki` are exact-pinned in
+// `package.json`: the theme shim (`themeShim.ts`) reaches into the first two's internals, and the
+// viewer depends on `@pierre/diffs`'s markup and instance, which no type signature guards. Each
+// dependency on the library's markup or behavior is noted where it is used.
 import {
   getFiletypeFromFileName,
   preloadHighlighter,
@@ -41,7 +46,10 @@ function readingCss(theme: "light" | "dark"): string {
  * tinted in both appearances, and in the light one the line tints are the lightest that still read
  * as a tint. The dark palette meets the ratio on the library's own line tints. The `+` / `-`
  * indicators mark changed lines. The same sheet draws what the viewer adds to the separators of
- * collapsed lines (`expansion.ts`): the whole-file control, and a focus ring.
+ * collapsed lines (`expansion.ts`): the whole-file control, and a focus ring. Every `data-*`
+ * selector and `--diffs-*` property in the sheet is the library's own markup and styling, except the
+ * attributes the viewer sets itself (`data-whole-file`, `data-focus-visible`, `data-faded-label`),
+ * so a library upgrade is checked against them.
  */
 function diffCss(theme: "light" | "dark"): string {
   const [added, removed] = theme === "light" ? ["#1a7f37", "#cf222e"] : ["#3fb950", "#f85149"];
@@ -215,6 +223,7 @@ function useDrawnCallback<Instance = unknown>(
   latest.current = { onDrawn, onRender };
   return useCallback((node, instance, phase) => {
     latest.current.onRender?.(node, instance, phase);
+    // `[data-code]` is the library's markup for drawn code; a library upgrade is checked against it.
     if (phase !== "unmount" && (node.shadowRoot ?? node).querySelector("[data-code]")) latest.current.onDrawn?.();
   }, []);
 }

@@ -113,6 +113,10 @@ function verify() {
 
   console.log("verifying the app bundle's signature:");
   execFileSync("codesign", ["--verify", "--deep", "--strict", app], { stdio: "inherit" });
+  // Both `spctl` verdicts here are on files this machine just built, which carry no quarantine
+  // attribute, so they show the signature and notarization are accepted but prove little about a
+  // download. A real Gatekeeper test needs a copy that was quarantined on its way (another machine, a
+  // browser download, `xattr -w com.apple.quarantine`), assessed after it is opened.
   console.log("checking Gatekeeper's own verdict on the app bundle:");
   execFileSync("spctl", ["-a", "-vvv", app], { stdio: "inherit" });
 

@@ -2,191 +2,126 @@
 
 A headless Rust binary that plays two roles in one process:
 
-- **Host role**: owns PTYs and agent processes, receives hook callbacks, lists directories, finds the git repositories
-  under a parent directory, clones a repository, probes a git remote and detects which agent a project is set up for,
-  lists the models an agent offers for an account, checks a project's git status against its remote, pushes a
-  project's current branch, switches a project to a local branch, restores a project's tracked changes, opens the system terminal or file manager at a project
-  directory, opens a live project path in its default application or reveals it in the system file manager,
-  and serves bounded, source-aware reads of a project's files (on disk, in the index, in a branch or commit).
+- **Host role**: owns PTYs and agent processes and receives their hook callbacks; works on the machine and its
+  repositories on behalf of clients (directory listings, repository discovery, clone, remote probing, git status,
+  push, branch switch, restore, opening a project in the system terminal or file manager, agent and model detection);
+  and serves bounded, source-aware reads of a project's files and changes.
 - **Coordinator role**: stores consoles, projects, sessions, report panel pages and the agent accounts in SQLite,
   routes requests to the host role, and carries the stored configuration between devices as a document it exports and
   reads back.
 
-The desktop application (`apps/desktop/`) is purely a client of this process. It never shares state or an IPC channel with it —
-everything it can do goes through the external interface below.
+The desktop application (`apps/desktop/`) is purely a client of this process; everything it can do goes through the
+external interface below.
 
 ## Development
 
-This crate is a member of the repository's root Cargo workspace, alongside the desktop shell's Tauri crate: the
-lockfile and the build directory are the root's `Cargo.lock` and `target/`. `cargo build` and `cargo test` run from
-the repository root and cover both crates; `-p octoboardd` narrows either to this one. The Tauri crate resolves its
-`octoboardd` sidecar at compile time, so on a fresh checkout a workspace-wide build or test fails until
-`pnpm --filter @octoboard/desktop build:daemon` has run once.
+This crate is a member of the repository's root Cargo workspace alongside the desktop shell's Tauri crate (shared root
+`Cargo.lock` and `target/`). `cargo build` and `cargo test` from the repository root cover both crates; add
+`-p octoboardd` to narrow either to this one. The Tauri crate resolves its `octoboardd` sidecar at compile time, so on
+a fresh checkout a workspace-wide build or test fails until `pnpm --filter @octoboard/desktop build:daemon` has run
+once.
 
 ## External interfaces
 
-- WebSocket/HTTP server, bound to `127.0.0.1` on an OS-assigned port — the only way a client talks to the daemon: the
-  desktop application today, and in the server form the owner's browser on another machine (see "Two deployment forms"
-  in `docs/architecture.md`). Specified in [`PROTOCOL.md`](PROTOCOL.md), which is authoritative; this doc does not
-  restate it.
-- `octoboardd hook --session <id> --port <port>` — one of three other CLI modes, not the server. This is what the
-  per-session hook script execs on every agent hook event; it reads the hook's payload from stdin and posts it to the
-  running daemon's `POST /hook/:session`. A Claude Code new enough for HTTP hooks (2.1.63, its version read from where
-  its binary is installed, `ClaudeAdapter::installed_version`) posts to that route itself and does not run this mode,
-  unless an `allowedHttpHookUrls` setting leaves the daemon's URL out, which keeps the command form.
-- `octoboardd git-ref --session <id> --port <port> -- <ref> <oid>...` — another CLI mode. This is what the
-  `reference-transaction` hook dispatcher of a project session's git starts, in the background, when a transaction has
-  created branches (see `src/branch_origin/`); it posts them to the running daemon's `POST /git-ref/:session`.
-- `octoboardd mcp --session <id> --role <role> [--bound] --port <port> --token <token>` — the last CLI mode. This is
-  the MCP server each adapter registers as a session's `command`-type MCP server (see `src/mcp/` below); it speaks MCP
-  on stdin/stdout and forwards each tool call to the running daemon's `POST /mcp/:token`. All three are specified in
-  [`PROTOCOL.md`](PROTOCOL.md).
+- WebSocket/HTTP server, bound to `127.0.0.1` on an OS-assigned port — the only way a client talks to the daemon.
+  Specified in [`PROTOCOL.md`](PROTOCOL.md), which is authoritative.
+- `octoboardd hook --session <id> --port <port>` — CLI mode run by the per-session hook script for agents whose hooks
+  use the command form; posts the payload from stdin to the running daemon's `POST /hook/:session`.
+- `octoboardd git-ref --session <id> --port <port> -- <ref> <oid>...` — CLI mode started by a project session's
+  `reference-transaction` git hook when branches were created; posts them to `POST /git-ref/:session`.
+- `octoboardd mcp --session <id> --role <role> [--bound] --port <port> --token <token>` — CLI mode that is the MCP
+  server each adapter registers for a session; speaks MCP on stdin/stdout and forwards tool calls to
+  `POST /mcp/:token`.
 
 ## Layout
 
 | Path | Role |
 |---|---|
-| `build.rs` | Exposes the app name from the repo-root `config/app.json` as `OCTOBOARD_APP_NAME`, for the wording the daemon itself shows the user |
-| `src/main.rs` | CLI entry point: parses the four modes above, opens the store, binds the port, prints the handshake line the application waits for, runs the server until shutdown |
-| `src/access.rs` | The middleware every route sits behind: turns away, with `403`, a request whose `Host` or `Origin` is not one a local client or the application's own UI would send; the rule is in `PROTOCOL.md` |
-| `src/server.rs` | The HTTP/WebSocket router described in `PROTOCOL.md`, including `POST /mcp/:token`, `POST /git-ref/:session` and `POST /hook/:session` (which answers at once and has the event applied from `hook_queue.rs`'s queue) |
-| `src/protocol.rs` | Rust types for the wire protocol; kept in sync with `PROTOCOL.md` and with `packages/ui/src/protocol.ts` by hand; also the console session colour's wire form (`ConsoleSessionColour`, a plain snake_case enum of 16 colour names, and its ordered `PALETTE`) and the one mapping from a failure to an `error` reply's code, params and message (`error_parts`, `Event::from_error`), shared by `server.rs`, `browse/lane.rs` and `config_import.rs` |
-| `src/coordinator.rs` | Coordinator role: what each control-socket request does to the stored consoles/projects/sessions/pages/accounts, and which host-role work it triggers, including the launch flow a resume and a switch of a session's account share, the opening of a project session that continues a conversation started outside Octoboard (`resume_agent_session_id`, its refusals in `checked_resume_id` and `locate_conversation_to_resume`), who a session reports to (`owner_refusal`, what may own what; `bind_session`, an unbound project session binding itself to a console session, which makes it a lead session, or to a project session of its project; `transfer_session`, an owner handing a session to another), the archive, reopen and delete cascades over the sessions bound under a session, down to a lead session's own, with native-record inspection (`inspect_session_records`), guarded unused-session deletion (`delete_unused_session`), and automatic trashing of unused sessions' agent records and the delete's option to move used sessions' agent records (`agent_records.rs`) to the Trash, the account a session runs under (the one chosen for it, else its project's, else its console's, else the agent's default; a project's own setting has three states, so one that names the agent's default account ends the chain there while one that inherits falls through to the console; a console session has no project), resolving the model and reasoning effort at launch (`launch_settings`, combining the session's stored overrides with its console's console-session pair or its project's pair), the Codex account approval reviewer (`set_account_approval_reviewer`, updating the stored account or default-account choice, and `session_approval_reviewer`, resolving it for each launch), and the `list_agent_models` request, answered through `agent_models.rs`; the opening of a session in two steps, `begin_open` (the refusals, then the record published as `starting`) and `finish_open` (the launch, run as a `Followup` once the reply to the client has been queued; a launch that fails deletes the session again), where `resolve_open` reads what a request asks for and feeds `begin_open` and `check_open` (which refuses, before anything is launched, a request that could never be carried out), `open_session` waits for the launch, and `open_session_detached` hands the launch back as a `Followup`; projects are stored with absolute, lexically normalised paths; console creation (`create_console`, with its every refusal listed by `check_new_console` without writing anything) and project association (`add_project`) are functions `config_import.rs` calls as well; the edits of a console (`update_console`), a project (`update_project`) and a session (`rename_session`, `set_session_pinned`, `set_session_locked`, `set_session_colour`), with their validation (non-empty names and titles, a model and effort the agent offers, a colour only for a console session), are functions the MCP settings tools call as well, except colour and locking, which no MCP tool offers |
-| `src/session_request/` | The one kind of session a session asks the user to approve, `request_session`: a session with no owner, in any project or as a console session. `mod.rs` holds the requests waiting for the user's answer (one per session, held in memory and put to every client again after a snapshot), the call that waits for the answer up to a time limit of Octoboard's own, its withdrawal when the caller's process ends, the call's connection is dropped or the caller asks again, late answers, the carrying out of an approval (the session started as `start_session` would, but unbound, with the brief as its opening prompt, then the branches the request hands over moved to it through `branch_origin::hand_over`), and the outcome also written into the caller's session, with the turns that outcome and a backgrounded call's result start spared a synthesised report; `tests.rs` is its tests |
-| `src/reporting.rs` | The channel between an owner (a console session, or an unbound or lead project session that started sessions) and the project sessions bound to it: the brief a task is handed over as, writing a message into a running session, a report reaching its owner (a lead session's final report is held back until its sessions are archived), the report a session sends itself (`deliver_own_report`, shared by the `report` tool and a session binding itself to an owner), the message write for a caller on the runtime (`write_message_off_runtime`), the report synthesised when a session stops without sending one (withheld for a lead session while its sessions have a process), `close_turn_and_report`, the one path that closes a turn and has that report made, shared by the hook handler and the record watches, automatic archiving, and rendering a report panel form submission into the console session's message |
-| `src/sharing.rs` | Information one session shares with another, any running session in any console or project: the quoted, framed message the receiver reads, and the copy sent to the receiver's owner, delivered through `reporting.rs`'s message writing; `one_line` and `place_of`, the wording by which messages name a session and where it runs, are used by `mcp/bindings.rs` and `session_request/` too |
-| `src/relocate.rs` | Copying one session's conversation record from one account's config directory into another's, for a switch of the session's account: finding the record by name under the agent's root, and copying it to the same path relative to the directory, staged and checked before it replaces anything |
-| `src/outbox.rs` | The per-session queue every message Octoboard writes into an agent passes through: order-preserving, one drainer per session, and what happens to a message the session only partly accepted |
-| `src/store.rs` | Coordinator's SQLite storage for consoles, projects, sessions, pages, agent accounts, branch origins, the trusted folders, the user settings and the host table, a console session's badge colour among them (labels of the earlier palettes, shipped and branch-only, are rewritten to the nearest current colour when the store opens, and a new console session gets a random free colour); a project's per-agent account is kept as the account id column plus a per-agent flag for "the agent's default account", read back as a `ProjectAccount`; a session can be looked up by the agent's conversation id it records; a session's binding changes only through `set_binding` (an atomic compare-and-set on what it is bound to now, on whether the new owner can own sessions, and on the session having none of its own), and a session is created under an owner through `insert_session_under_owner`, which makes the same check, so two bindings racing cannot make orchestration more than two levels deep |
-| `src/state.rs` | Shared daemon state: publishing a running session's terminal title (`record_terminal_title`), the session status transitions, the turn bookkeeping a synthesised report rests on (including the credits that make a turn started by Octoboard's own message, or by the result of a call the agent moved to the background, count as reported, each told apart by the prompt it opens with where the agent's prompt is read), the record watches' bookkeeping (which watch is current for a session, and how far into its record file the carried-offset watches have read), each project's live git status and check claim, the `request_session` requests waiting for an answer, every agent's current availability and resolved default account, the model lists read lately (`agent_models`, a `ModelCache`), the hook events waiting to be applied (`hook_queues`), and the directory the consoles' working directories sit under (`console_workdir`, given at construction so a test can point it at a scratch directory) |
-| `src/launch_settings.rs` | Normalises a model and reasoning effort (trimmed, blank read as unset) and checks one a console, project or session is newly given against the list `agent_models.rs` answers with (`LaunchCheck`), refusing one the agent does not offer and accepting anything when no list could be read; the checks run before a record is read for its write, since asking an agent can take seconds |
-| `src/agent_models.rs` | Which models an agent currently offers for an account, for the dialogs that choose one: Claude Code answered from its version-free aliases with no subprocess, Codex from `codex debug models`, Grok Build from `grok models` decorated by that account's `models_cache.json`; the command runs in the login-shell environment with the account's configuration directory, under a timeout and an output ceiling; results are cached per agent and configuration directory (`ModelCache`, held on `AppState`); a failure comes back as an empty list with a coded reason, never an error. Its fixtures are `codex_debug_models.json`, `grok_models.txt` and `grok_models_cache.json` in `testdata/` |
-| `src/config_export.rs` | The configuration document `export_configuration` answers with (`PROTOCOL.md`, "Configuration export"): the types of its JSON form, which an import reads back, and `build`, which lifts one console's configuration, or all of it, out of the store. An account becomes its name alone, the agent being the field the reference sits in, never an id or a `config_dir`; a reference to an account that no longer exists is dropped; sessions, pages, trust state, a console's working directory and the machine's clone directory are left out; it runs no `git` |
-| `src/config_import.rs` | Reading a configuration document back (`PROTOCOL.md`, "Configuration import"): `inspect` answers per project which of four directories it could be placed in on this machine (the recorded path, the same last segment under the default clone directory, a clone of the recorded remote, or one the user names) and which account references would fall back to a default, changing nothing; `apply` creates a console for each console of the document and associates its projects through `coordinator::add_project`, reporting what could not be created or applied and carrying on; settings only when asked for. The document is untrusted input: paths and URLs are checked (an absolute path, a URL that reaches a remote) before any is used, and accounts are rebound by agent and case-insensitive name |
-| `src/availability.rs` | Working out, once per daemon start, which agents are available and what each one's default account resolves to |
-| `src/git_env.rs` | The base every `git` the daemon runs in a user's repository or against a user's remote is built from: `non_interactive`, a command that cannot prompt, and `read_only`, which keeps a read from rewriting the repository's index; also `user_configuration_only`, the filter that drops the `GIT_*` variables a login shell exported other than those saying which of the user's own material to use (configuration files, TLS certificates and settings, proxy helper), for any command, read or write, that must see the repository its working directory names (`git_status.rs`, `git_remote.rs`, `git_restore.rs`, `browse/git.rs`); the git command builders of `hostfs.rs`, `git_status.rs`, `git_remote.rs`, `git_restore.rs` and `browse/git.rs` start from it |
-| `src/git_status.rs` | Checks one project's git status against its remote and fast-forwards it: automatically when auto-pull is on, and for one project right now on the manual `pull_project_branch` request (`pull_project_now`, which ignores the check floor and the setting; a request that finds a check in flight is owed one forced rerun, and one that finds the check still waiting for a place takes it over, recorded in the claim map in `state.rs`); a sweep of many projects runs at most `SWEEP_WIDTH` checks at once, across every client) — see `PROTOCOL.md`'s "Daemon behaviour, per project". Also the branch-header read and shared Git runners (`run_git_read`, `run_git_write`) used by `git_push.rs` and `git_switch.rs`, `read_header`, the local read of that header, and `publish_reread`, which republishes it after a push, a branch switch or a restore and when `git_watch.rs` sees a ref change, with no fetch; only the header fields and the error of failing to read them reach the held status (`AppState::publish_git_reread`) |
-| `src/git_push.rs` | Pushes only the project's current branch on `push_project_branch` (`push_current_branch`, planned by `plan_push`): one explicit refspec, never `--force` and never a bare `git push`. It does not take `git_status.rs`'s check claim; the `git` it runs and the local header read it publishes before and after the push are that module's |
-| `src/git_watch.rs` | Watches each git project's refs (`HEAD`, `packed-refs`, `refs/heads`, `refs/remotes`, across a linked worktree's two directories) with `notify`, and answers a debounced change with `git_status::publish_reread`, one project at a time and a few projects at once; `start` runs at daemon start, `add` from `coordinator::add_project`, `watch_now` from a check that finds a repository the watch does not know (`git_status.rs`), and `remove` where `coordinator.rs` deletes a project (a project delete, a console's cascade); a failed watch leaves that project to the client's poll |
-| `src/git_switch.rs` | Switches a project worktree to an existing local branch for `switch_project_branch` (`switch_branch`), using `git_status.rs` for its Git commands and branch-header publication |
-| `src/git_restore.rs` | Restores a project's tracked file changes through `restore_project`, which handles `restore_project_changes` and republishes the branch header through `git_status.rs` |
-| `src/branch_origin/` | Which session is responsible for a git branch (`store.rs`'s `branch_origins` table: a branch's birth time and its responsible session, with the title recorded for it and since when; sent as `BranchInfo.origin`). The creator is not recorded: a creation the session's own git reported only sets the first responsible session, and from then on the responsible session changes only by a handover; a branch with none is left unmarked, never guessed. `mod.rs` holds the entry points (`ref_created`, which takes the report `server.rs` receives on `POST /git-ref/:session` after checking it against the session's project and the branch's reflog, and sets the branch's initial responsible session; `annotate`, the Git mode's branch listing, which reconciles the stored rows with the branches that exist; `hand_over`, the move of branches' responsible session to another with a compare-and-set, and `first_not_held_by`, the check before a session is asked to approve one; `project_deleted`). `git_hooks.rs` makes ready the hook dispatchers every project session's agent process tree runs git under, and `session_env`, the environment variables `term.rs` adds to a project session's launch to point git's `core.hooksPath` at them; `dispatcher.sh` is the script each dispatcher is rendered from, running the user's own hook as git would have and, for `reference-transaction`, starting `octoboardd git-ref` (`git_ref_mode.rs`); `gate.rs` holds the per-repository write gate on `AppState` (`branch_origins`); `git_files.rs` reads repository and reflog facts from the filesystem; `tests.rs` holds the module's tests |
-| `src/git_remote.rs` | A project's recorded git remote URL: which remote counts (`origin`, else the upstream's, else the first), reading it from the repository's own configuration with its own read-only `git` runner, storing and broadcasting a change, and the pass at daemon start that re-reads every project's; the URL helpers shared with the console session's tools: `is_clonable_url` (the transports a clone may use), and `has_credentials` / `without_credentials` for a credential in a URL's userinfo; association (`coordinator.rs`) and the check (`git_status.rs`) record through it |
-| `src/session.rs` | One running agent process: its PTY, output fan-out and shutdown, the terminal snapshot capture boundary (`freeze_output`, `freeze_output_for`, `keep_final_output`), and observing terminal titles from its output (`observe_titles`) |
-| `src/terminal_snapshot.rs` | Agent-independent terminal state (`TerminalSnapshot`): parses output, reflows terminal state on resize, freezes the active buffer for dormant previews and renders that buffer and its available history as scrolling ANSI output, and supplies the mode preamble a live replay opens with once the ring has dropped its start |
-| `src/terminal_title.rs` | The bounded, streaming OSC 0/2 title parser (`Parser::feed`) used by `session.rs` |
-| `src/crash_cleanup.rs` | Ending every agent process when the daemon goes down on an internal failure — a panic on the main thread, or any abort — and leaving them running after a panic the daemon survives; the running agents are held in a lock-free table a signal handler can read |
-| `src/trust/` | Each agent's own folder-trust confirmation: `mod.rs` decides whether the user has given the one permission all agents share (per project or through a trusted parent folder; console sessions are pressed without asking), asks the application through `trust_prompt` / `confirm_trust` and reports failures; `screen.rs` recognises each agent's screen in a session's terminal output and keeps the session's watch, including holding Octoboard's own messages while a screen may be up; `press.rs` presses it — the only code that types keys into a session on its own; `carry.rs` carries the entry Grok Build writes into its per-session trust store over to the user's own |
-| `src/term.rs` | Launching an agent in a PTY, adding to a project session's environment what its git needs to report the branches it creates (`branch_origin::git_hooks::session_env`), and writing messages into a running one |
-| `src/ptyio.rs` | Non-blocking read/write on a PTY master fd (a blocking write can park forever behind a modal dialog) |
-| `src/ringbuf.rs` | Fixed-capacity ring buffer holding a session's recent terminal output, replayed to a client that attaches or reconnects |
-| `src/saved_output.rs` | Terminal previews kept as one file per session once its process ends (`paths::saved_output_dir`), replayed by the terminal socket for a session with no process; the persistence layer for parsed snapshots, also readable as terminal bytes, written atomically, removed with the session's record, and swept at startup |
-| `src/hostfs.rs` | Host role's filesystem work: browsing directories, moving a directory to the system Trash, finding git repositories under a parent directory, cloning one, probing a remote, detecting which agent a directory or remote is set up for, lexical path normalisation |
-| `src/open_directory.rs` | Host application launchers: `open` opens a project directory for `open_project_directory`; `open_path` opens a scoped live path in its default application for `open_project_path` or reveals it in the file manager for `reveal_project_path`; macOS uses `/usr/bin/open`, Linux uses `xdg-open` for opening and `gdbus` with FileManager1 for revealing |
-| `src/open_terminal.rs` | Opens the system terminal at a project's directory for `open_project_terminal` (`open_directory`). On macOS that is Terminal.app through `/usr/bin/open`, and only `open` is waited on; on Linux the first installed program in a fixed list that can be given the directory, else one that inherits its working directory, resolved from one login-shell snapshot and started detached |
-| `src/env_shell/` | The user's real shell environment that every agent is launched with, and resolving a binary on it. `mod.rs` is the façade callers use: `snapshot` (a fresh one, which also fills the cache; the start-up availability check in `availability.rs`), `launch_snapshot` (used by `term::launch`, `switch_session_account` and the locating of a conversation to resume in `coordinator.rs`, and the clone in `hostfs.rs`: the last capture while it is under ten minutes old with its `PATH` directories still present, retaken in the background, else a fresh one) and `cached_snapshot` (for a caller on its own repeating schedule, such as `git_status.rs`, `git_remote.rs`, `git_restore.rs`, `browse/git.rs`, `agent_models.rs`, `agent_records.rs`, `open_terminal.rs`, `open_directory.rs` and `coordinator.rs`: a capture or a failure up to an hour old). `snapshot.rs` runs `$SHELL -l -i -c 'env -0 && printf <marker>'` and parses it, `cache.rs` holds the one stored capture and the two read policies over it (every snapshot, `snapshot` included, takes its turn: one is taken at a time), and `resolve.rs` finds a binary on a snapshot's `PATH` |
-| `src/subprocess.rs` | `spawn_detached` starts a detached process and reaps it in the background, shared by the Linux system-terminal and file-manager launchers; running one subprocess the daemon spawned directly to completion within bounds — a deadline, a ceiling on its output, a cancel, the whole process group killed on any stop: `run_bounded` (output bounded while it is read) and `run_with_timeout` (a thin wrapper over it); used by `hostfs.rs`, `git_status.rs`, `git_remote.rs`, `agent_models.rs`, `open_terminal.rs`, `open_directory.rs` and `browse/` |
-| `src/hooks.rs` | Reads what one agent's hook event payload says — the session's status, its turn boundaries, the prompt a turn was started with, the tool calls it moved to the background; each agent's events and payload shape differ |
-| `src/transcript.rs` | Claude Code's side of watching an agent's own session record: recognises, in the session's transcript JSONL, the one status change its hooks never report — a declined permission prompt or `AskUserQuestion` — arms the watch when a hook raises the hand, and lowers it when the rejection is found |
-| `src/rollout.rs` | Codex's side of the same: recognises, in the session's rollout file, the end of a turn that ended in an error — which Codex reports through no hook at all — arms the watch from that turn's `UserPromptSubmit`, and closes the turn as failed |
-| `src/agent_records.rs` | Where an agent keeps its own on-disk records of a session (Claude Code's transcript and subagent directory, Codex's rollout, Grok's session directory): the hook-reported path hints (`on_hook`), the per-account record listing (`Locator`) the usage collector reads, `record_paths`, the contained set of paths a session's deletion moves to the Trash, `presence`, the native-record inspection shared by the inspection request and guarded deletion, and `title_files`, where each agent keeps the titles it gives a conversation |
-| `src/session_title.rs` | The title a session shows (`resolve`): the title its agent's records name the conversation with, else the task in the terminal title as the agent's adapter reads it, else a stand-in from the first prompt; `state.rs` applies it to every session a client receives (`wire_session`) |
-| `src/usage.rs` | Native session token statistics from Claude Code transcripts, Codex rollouts and Grok Build usage ledgers, read from the records `agent_records.rs` locates; `spawn` collects totals, and the titles `record_titles.rs` reads in the same pass, for storage and session publication |
-| `src/record_titles.rs` | The titles an agent's own records give a session (the name the conversation was given, a first-prompt stand-in): what one record has given (`Titles`) and an account's shared title file kept for the sessions asked for (`SharedTitles`); where each agent keeps them is `title_files` in `agent_records.rs` |
-| `src/line_file.rs` | A file read again as it grows (`LineFile`): reads only the complete lines added since the last read and says when the file was replaced, truncated or rewritten |
-| `src/record_watch.rs` | The mechanism `transcript.rs` and `rollout.rs` share: an offset-tracked line reader (`scan_lines`) and the poll loop around it (`spawn`), parameterised by poll interval, start offset (at the file's end, or carried across turns) and the caller's per-line check and action |
-| `src/hook_mode.rs` | The `octoboardd hook` CLI mode itself |
-| `src/hook_queue.rs` | The hook events received and not yet applied, one bounded ordered queue per session, so `POST /hook/:session` can answer before an event is applied and a session's events still take effect in arrival order; `settled` is the bounded wait for a session's queue to empty that a handler reading what those events change (the console request's report) makes first |
-| `src/git_ref_mode.rs` | The `octoboardd git-ref` CLI mode itself: reports to the daemon the branches a project session's git has created |
-| `src/loopback.rs` | A minimal HTTP client for the daemon's own loopback address, shared by `hook_mode.rs`, `git_ref_mode.rs` and `mcp/stdio.rs` — the CLI modes that call the running daemon from a separate process |
-| `src/mcp/` | The Octoboard MCP server — see below |
-| `src/browse/` | Bounded, source-aware reads of a project's files over the control socket — see below |
-| `src/instance_lock.rs` | Enforces one daemon per data directory |
-| `src/paths.rs` | Where Octoboard keeps its own files, under `~/.octoboard` (the consoles' working-directory parent among them, `consoles_dir`), and the host's home directory when it is really known (`known_home_dir`), as reported to clients |
-| `src/adapter/` | One adapter per agent CLI — see below |
-| `src/test_support.rs` | Test-only (`#[cfg(test)]`, not part of the binary): the fixtures the modules' unit tests share — a self-removing scratch directory and file, an `AppState` over a fresh store in one, a console and a project stored in it (`console`, `insert_project`), a stand-in live session on a PTY that ends itself, one registered with the state whose output a test can wait on (`running`, `output_containing`), the helpers for tests that run a fixture shell and check the processes it left (`env_shell` and `subprocess` tests), and the git fixtures: `isolated_git_env` (the process environment without any `GIT_*` variable and with no global or system git configuration, which the `git_status.rs` and `browse/` tests share), `fixture_git` (the system git, `SYSTEM_GIT`, in a directory in that environment, which the other git fixtures are built on), `git` / `git_bytes` (plain `git` for fixture setup, failing the test on a non-zero exit), `git_stdin` (the same with input piped in), `git_stdin_env` (that with extra environment variables set, such as a committer date), `repo_with` (a repository in a scratch directory with one commit), `git_has_show_ref_exists` (whether the machine's git is new enough for a test that needs `show-ref --exists`), `git_dir_state` (a snapshot of every file under a repository's `.git`, digest and modification time, to check a read left it alone), `move_modification_time_back` (makes a tracked file's stat information stale so a `git` read wants to refresh the index) and `move_directory_time_back` (backdates a directory's modification time, so a stamp read from it looks untouched) |
+| `build.rs` | Exposes the app name from the repo-root `config/app.json` as `OCTOBOARD_APP_NAME` |
+| `src/main.rs` | CLI entry point: parses the four modes, opens the store, binds the port, prints the handshake line the application waits for, runs the server |
+| `src/server.rs` | The HTTP/WebSocket router described in `PROTOCOL.md`, including `POST /mcp/:token`, `POST /git-ref/:session` and `POST /hook/:session` |
+| `src/access.rs` | The middleware every route sits behind: refuses with `403` a request whose `Host` or `Origin` is not a local client's or the application's own UI's |
+| `src/protocol.rs` | Rust types for the wire protocol (kept in sync by hand with `PROTOCOL.md` and `packages/ui/src/protocol.ts`), the console session colours, and the one mapping from a failure to an `error` reply |
+| `src/coordinator.rs` | Coordinator role: what each control-socket request does to the stored consoles, projects, sessions, pages and accounts, and which host-role work it triggers (session open/launch, binding and transfer, archive/reopen/delete cascades, account resolution, launch settings, console and project association and edits) |
+| `src/session_request/` | `request_session`: a session asking the user to approve a session with no owner, with the pending requests, the wait for the answer and the carrying out of an approval |
+| `src/reporting.rs` | The channel between an owner and the sessions bound to it: briefs, messages into a running session, reports reaching the owner or synthesised when a session stops, automatic archiving, and report-panel form submissions |
+| `src/sharing.rs` | Information one session shares with another, delivered through `reporting.rs`'s message writing |
+| `src/relocate.rs` | Copying a session's conversation record between account configuration directories for an account switch |
+| `src/outbox.rs` | The per-session ordered queue every message Octoboard writes into an agent passes through |
+| `src/store.rs` | The coordinator's SQLite storage: consoles, projects, sessions, pages, agent accounts, branch origins, trusted folders, user settings and the host table |
+| `src/state.rs` | Shared daemon state: session status and turn bookkeeping, record-watch bookkeeping, each project's live git status and check claim, pending `request_session` requests, agent availability, the model cache and the hook queues |
+| `src/launch_settings.rs`, `src/agent_models.rs` | Normalising and checking a model and reasoning effort (`LaunchCheck`), and listing the models an agent offers for an account (`ModelCache`); fixtures in `testdata/` |
+| `src/availability.rs` | Working out, once per daemon start, which agents are available and each one's default account |
+| `src/config_export.rs`, `src/config_import.rs` | Building the configuration document `export_configuration` answers with, and reading one back (`inspect` and `apply`) |
+| `src/git_env.rs` | The base every `git` the daemon runs is built from (non-interactive, read-only, variable filtering) |
+| `src/git_status.rs`, `src/git_push.rs`, `src/git_switch.rs`, `src/git_restore.rs`, `src/git_remote.rs`, `src/git_watch.rs` | Per-project git: status check against the remote and fast-forward, push of the current branch, switch to a local branch, restore of tracked changes, the recorded remote URL, and the ref watch that republishes the branch header |
+| `src/branch_origin/` | Which session is responsible for a git branch: `ref_created`, `annotate`, `hand_over`, `project_deleted`, plus the git hook dispatchers (`git_hooks.rs`, `dispatcher.sh`) that report created branches |
+| `src/session.rs`, `src/term.rs`, `src/ptyio.rs`, `src/ringbuf.rs` | One running agent process and its PTY: launch, output fan-out and replay buffer, non-blocking PTY I/O, writing messages into a session |
+| `src/terminal_snapshot.rs`, `src/terminal_title.rs`, `src/saved_output.rs` | Terminal state: parsed snapshots and dormant previews, OSC title parsing, and previews persisted per ended session |
+| `src/crash_cleanup.rs` | Ending every agent process when the daemon goes down on an internal failure |
+| `src/trust/` | Each agent's folder-trust confirmation: the permission decision and prompt, recognising each agent's screen, and pressing it |
+| `src/env_shell/` | The user's real shell environment every agent is launched with (`snapshot`, `launch_snapshot`, `cached_snapshot`) and resolving a binary on it |
+| `src/hostfs.rs`, `src/open_directory.rs`, `src/open_terminal.rs` | Host filesystem work (browsing, Trash, repository discovery, clone, remote probing, agent detection) and launching the system terminal, file manager or default application |
+| `src/subprocess.rs` | Running a spawned process to completion within bounds (`run_bounded`, `run_with_timeout`) and detached spawning |
+| `src/hooks.rs`, `src/hook_queue.rs`, `src/hook_mode.rs` | Reading what an agent's hook payload says, the per-session ordered queue of unapplied hook events, and the `octoboardd hook` mode |
+| `src/transcript.rs`, `src/rollout.rs`, `src/record_watch.rs`, `src/line_file.rs` | Watching an agent's own session record for status changes hooks never report (Claude Code transcript, Codex rollout), over a shared offset-tracked line reader |
+| `src/agent_records.rs`, `src/record_titles.rs`, `src/session_title.rs`, `src/usage.rs` | Where each agent keeps its on-disk session records, the titles they give a conversation, the title a session shows, and native token statistics |
+| `src/git_ref_mode.rs`, `src/loopback.rs` | The `octoboardd git-ref` mode, and the minimal HTTP client for the daemon's own loopback address shared by the CLI modes |
+| `src/instance_lock.rs`, `src/paths.rs` | One daemon per data directory, and where Octoboard keeps its files under `~/.octoboard` |
+| `src/test_support.rs` | Test-only fixtures shared by the modules' unit tests (scratch directories, stored state, stand-in sessions, git repositories) |
+| `src/mcp/` | The Octoboard MCP server (below) |
+| `src/browse/` | Project-browsing reads over the control socket (below) |
+| `src/adapter/` | One adapter per agent CLI (below) |
 
 ### `src/mcp/`
 
-The Octoboard MCP server: the orchestration tools the console session drives Octoboard with, the narrower set a project
-session that can own sessions (unbound, or a lead session) drives its own project with, the reporting tool a session
-bound to an owner answers through, the settings tools (a console session reads and changes its console's, its projects'
-and the application's settings; a project session reads its own project), the tools every session shares information
-with any other running session through (`list_sessions`, `get_session`, `share_info`), and `request_session`, with which
-any session asks the user for a session that has no owner, optionally handing it the branches the caller is responsible
-for. `start_session` makes the caller the owner of a new session;
-`transfer_session` hands one of the caller's sessions to another owner, and `bind_to_session` binds an unbound project
-session to one (`bindings.rs`).
-Which set a session sees follows from its role and from whether it has the role of a bound session (bound to an owner and
-not a lead session). That follows the session's current binding, which can change while it runs: the daemon checks every
-call against the binding as it stands, every `POST /mcp/:token` answer carries it as `bound`, and the stdio child, which
-starts from its `--bound` argument, switches its catalogue and sends `notifications/tools/list_changed` when it changes.
-The tool catalogue is shared by both sides of the stdio bridge, so the child process, the daemon, and the role
-descriptions cannot drift apart. The wire-level `POST /mcp/:token` contract is in `PROTOCOL.md`; "The console
-session's tools", "The unbound project session's tools", "Changing a session's owner" and "Reporting"
-in `docs/product/hub-orchestration.md` list the tools and what each one does, `docs/product/information-between-sessions.md`
-describes how sessions see and inform one another, and `docs/product/agent-settings-tools.md` details the settings
-tools.
+The tool surface a session drives Octoboard with: orchestration tools for console sessions, a narrower set for project
+sessions that can own sessions, the reporting tool for bound sessions, settings tools, information sharing between
+sessions, and `request_session`. Which set a session sees follows its role and its current binding, which the daemon
+checks on every call. The catalogue is shared by both sides of the stdio bridge. The wire contract is in
+[`PROTOCOL.md`](PROTOCOL.md).
 
 | File | Role |
 |---|---|
-| `mod.rs` | The tool catalogue, and which tools a session may see, by its role (`console` / `project`) and whether it has the bound role at present |
-| `role.rs` | The role description injected at launch; a console session's is only a short pointer to its instruction file |
-| `console_instructions.rs` | The console session's instruction file: `refresh_console_session_instructions` (serialized, from the stored console; the plain writer only at creation) writes `AGENTS.md` (the built-in guidance, then the console's own `console_session_prompt` when it has one) into a console's working directory, with `CLAUDE.md` a relative symlink to it |
-| `exec.rs` | Runs one tool call against the real consoles, projects and sessions, through the same coordinator/reporting functions the control socket uses; the calls that act on a session (`send_message`, `archive_session` and the like) reach only sessions bound to the caller, while reads and `share_info` reach any session |
-| `bindings.rs` | `transfer_session` and `bind_to_session`, and what each tells the sessions concerned (the one handed over, the new owner, the old one), since a session told at launch who it reports to is not told again by anything else |
-| `args.rs` | Reading a tool call's arguments (booleans, string lists and texts are refused with a reason when malformed rather than read as absent) and finding the records they name: a project or console of any console (`find_project`, `find_console`, for `request_session`), a project of the caller's console, the caller's own project and console |
-| `settings.rs` | The settings tools — reading and changing the console's own settings, its projects' and the application's, and a project session's read of its own project — with the parsing of their per-agent `accounts` and `launch` arguments and the shape their results share |
-| `stdio.rs` | `octoboardd mcp` itself: the stdio child process each adapter registers, forwarding every call to the daemon over loopback, and following the binding the daemon reports with each answer, and closing the connection of a `request_session` call the agent cancels |
+| `mod.rs` | The tool catalogue, and which tools a session may see by role and binding |
+| `role.rs`, `console_instructions.rs` | The role description injected at launch, and the console session's instruction file written into its working directory |
+| `exec.rs` | Runs one tool call through the same coordinator and reporting functions the control socket uses |
+| `bindings.rs` | `transfer_session` and `bind_to_session`, and what they tell the sessions concerned |
+| `args.rs` | Reading a tool call's arguments and finding the records they name |
+| `settings.rs` | The settings tools for a console, its projects and the application, and a project session's read of its own project |
+| `stdio.rs` | `octoboardd mcp` itself: the stdio child forwarding calls to the daemon over loopback |
 
 ### `src/browse/`
 
-Serves the project-browsing requests of the control socket (`get_project_source`, `list_project_dir`, `search_project_files`,
-`read_project_file`, `list_project_changes`, `read_project_change`, `list_project_branches`, `compare_project_branches`,
-`read_project_comparison_change`, and the two `…_change_bodies` requests that read a diff's whole file bodies): where a
-project's files live (the directory itself, its repository and worktree, the same place in the repository's other
-worktrees), and then a bounded recursive file-name search, directory listing or read of one file from the disk, the index, a branch or a commit,
-or of a worktree's uncommitted changes to the project and one change's diff, the repository's local branches, and the
-changes one branch has made since it forked from another (from their merge base to its tip) and one of them as a diff. A
-request is re-resolved from the store and the repository each time; nothing a client names is used as a directory. The
-wire contract, the identities handed to clients, the Git invocation rules and the budget values are in "Browsing a
-project" in [`PROTOCOL.md`](PROTOCOL.md) and are not restated here. `mod.rs`'s `serve` is the entry point, called from
-`server.rs`, which also owns the connection's lane wiring, the retained-bytes reservation each request makes and the
-writer that puts control events before browse replies; `state.rs` holds the daemon-wide `Gate` (concurrent reads and
-retained bytes) the lanes draw on.
+Serves the project-browsing control-socket requests (`get_project_source`, `list_project_dir`, `search_project_files`,
+`read_project_file`, `list_project_changes`, `read_project_change`, `list_project_branches`,
+`compare_project_branches`, `read_project_comparison_change` and the `…_change_bodies` requests): bounded reads from
+the disk, the index, a branch or a commit, a worktree's uncommitted changes, and the changes one branch has made since
+it forked from another. The wire contract and budgets are in "Browsing a project" in [`PROTOCOL.md`](PROTOCOL.md).
+`mod.rs`'s `serve` is the entry point, called from `server.rs`.
 
 | File | Role |
 |---|---|
-| `mod.rs` | `serve`: turns one request into a reply or a coded error, and the marker error a cancelled read ends with; `locate`, the repository and the worktree (the project's own, or another of the same repository, checked now) a Git read works in; `resolve_project_path`, resolves a live path in the project or selected worktree for the host application launchers |
-| `source.rs` | Resolving a project to its root, repository, worktree and sibling worktrees; minting and re-checking the identities clients hold; repository discovery that stops below the home directory |
-| `wire_path.rs` | The canonical text form a path takes on the wire so no byte of a file name is lost (`RelPath`) |
-| `live.rs` | Reading and listing files on disk under a scope, and `search_files`, the bounded recursive file-name search; reads refuse symlink escapes, links in a path's components and non-regular files |
-| `blob.rs` | Reading a file's blob from the index or a commit, and resolving and verifying a branch (a broken one, naming no commit, refused) or commit, and checking a branch name without looking it up (`branch_refname`); the exact-path lookups of the index's entries and of a commit's tree entry, and a blob read by object id, that a change's two sides are read through |
-| `git.rs` | The one way browse runs `git`: isolated from the environment and configuration, bounded, output kept as bytes, and never writing to the repository (`GitEnv`); its exact-path runs (`run_exact`) and the predicate for paths that nest (`paths_nest`) |
-| `changes.rs` | A worktree's uncommitted changes scoped to a project and one change's diff: `list` (one `git status` of the whole worktree, kept to the entries with a side inside the project, a side outside it named by its repository path alone) and `read` (the `Reader`: one change read afresh at the paths it names from its group's two sources, its index entry and disk file re-checked after the patch is made, the change refused as `source_changed` when they moved; a change with a side outside the project gets no patch; the patch is made by one of two routes, the diff `git` computes between the change's two versions when its paths nest and both sides are a file or a symbolic link, otherwise one restricted to the change's own paths), `read_between`, the same read of a change between two commits, which nothing is re-checked after since neither moves, and `read_bodies` / `read_bodies_between`, the same read run without inline bodies and its sides compared with the versions a client names before each file's whole body is read from the matched blob or file version, a side on disk whose path has a clean filter in effect refused as `clean_filtered` before either body is read |
-| `compare.rs` | A repository's local branches (`branches`, one `for-each-ref`, broken branches listed as they are and cut at a budget) and the comparison of two of them: `list` (the changes from the two tips' merge base (`git merge-base`, refused as `no_merge_base` when there is none) to the right tip, one `diff-tree` of the whole tree kept to what touches the project like a worktree's change listing, falling back to the project's own directory when the output overflows for a project below the repository's root) and `read` (one change, read through `changes.rs`'s `read_between` from the merge base and the right commit the comparison resolved, never from the branches again) and `read_bodies` (the same for a change's bodies) |
-| `compare_tests.rs` | End-to-end tests of the three branch requests over real repositories (test-only; shares `tests.rs`'s `Fixture`) |
-| `nested_tests.rs` | End-to-end tests of a change whose two paths nest (a rename into or out of a path below itself) over real repositories, in the staged group and in a comparison (test-only; shares `tests.rs`'s `Fixture`) |
-| `body_tests.rs` | End-to-end tests of the two `…_change_bodies` requests over real repositories (test-only; shares `tests.rs`'s `Fixture`) |
-| `change_tests.rs` | End-to-end tests of the two change requests over real repositories and worktrees (test-only; shares `tests.rs`'s `Fixture`) |
-| `budget.rs` | The limits every browse read is held to, in one place, with the change listing's, diff's, branch listing's and comparison's budgets and each request kind's reservation |
-| `lane.rs` | Per-connection lane: the bound on outstanding requests, slots whose newer request supersedes the older, and the reservation of retained bytes against the daemon-wide `Gate` |
-| `tests.rs` | End-to-end tests over real directories and repositories (test-only) |
+| `mod.rs` | `serve`, `locate` (repository and worktree for a Git read), `resolve_project_path` |
+| `source.rs` | Resolving a project to its root, repository, worktree and sibling worktrees, and the identities clients hold |
+| `wire_path.rs` | `RelPath`, the canonical wire form of a path |
+| `live.rs` | Reading and listing files on disk, and the bounded file-name search `search_files` |
+| `blob.rs` | Reading blobs from the index or a commit, and resolving branches and commits |
+| `git.rs` | The one way browse runs `git`: isolated, bounded, never writing to the repository |
+| `changes.rs` | A worktree's uncommitted changes: `list`, `read`, `read_between` and the bodies reads |
+| `compare.rs` | Local branches and the comparison of two of them: `branches`, `list`, `read`, `read_bodies` |
+| `budget.rs`, `lane.rs` | The limits every read is held to, and the per-connection lane (outstanding-request bound, superseding, retained-bytes reservation) |
+| `tests.rs`, `change_tests.rs`, `compare_tests.rs`, `nested_tests.rs`, `body_tests.rs` | Test-only end-to-end tests over real repositories |
 
 ### `src/adapter/`
 
-A single adapter interface (launch, pre-allocate/obtain a session id, inject capabilities, report status, resume), so
-the rest of the daemon is agnostic to which agent it is driving. Three things are injected when a session starts: the
-status hooks, the Octoboard MCP server, and a role description ("What is injected on every launch" in
-`docs/product/launching-agents.md`).
+A single adapter interface (launch, session id, capability injection, status reporting, resume), so the rest of the
+daemon is agnostic to which agent it drives. Status hooks, the Octoboard MCP server and a role description are
+injected when a session starts.
 
 | File | Agent |
 |---|---|
-| `mod.rs` | The adapter trait (including `uses_hook_script`, whether the agent's hooks run the per-session script, and `installed_version`, an agent's version read from where its binary is installed) and the agent-agnostic launch/resume flow shared by all three, and the per-agent configuration-directory variable (`config_dir_var`) that launching and `agent_models.rs` both read |
-| `claude.rs` | Claude Code — injects by CLI flags only; its hooks are HTTP hooks from 2.1.63 on, the hook script before |
-| `codex.rs` | Codex — injects through repeated `-c` overrides, re-passed on every resume, including the account approval reviewer supplied by the coordinator; owns the matching approval-status detection |
-| `grok.rs` | Grok Build — no flag for hooks or MCP; injects through a per-session `GROK_HOME` overlay |
-
-The design constraints each adapter has to satisfy (which flags must never be passed, workspace-trust gating, how a
-message is written into a running session, resume semantics) are documented in each file's own doc comment and in
-"Injecting Octoboard into each agent" in `docs/agent-cli-reference.md`; they are not repeated here.
+| `mod.rs` | The adapter trait and the agent-agnostic launch/resume flow shared by all three, and `config_dir_var` |
+| `claude.rs` | Claude Code |
+| `codex.rs` | Codex |
+| `grok.rs` | Grok Build |

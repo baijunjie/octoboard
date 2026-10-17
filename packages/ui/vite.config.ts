@@ -68,6 +68,10 @@ export default defineConfig(({ command }) => {
   // bake a dev port into the bundle — but `vitest` resolves this config with `command: "serve"` too, so
   // a test run does load them, and anything a test derives from the port varies with the developer's
   // own `.env` (a separate process from the `vite build` the same script runs afterwards).
+  //
+  // The variables stay out of `packages/ui/.env`: that directory is vite's own `envDir`, which a
+  // `vite build` reads too, so a `VITE_DAEMON_PORT` there would go into a release bundle. Vite also
+  // expands `$VAR` in the files it loads itself, where the root files are read literally here.
   if (command === "serve") loadEnv(".env", ".env.local");
   const daemonPort = process.env.OCTOBOARD_DAEMON_PORT;
 

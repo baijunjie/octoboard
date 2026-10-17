@@ -55,9 +55,10 @@ export type ExpansionStatus =
   | { kind: "overBudget" }
   | { kind: "unavailable" };
 
-/** What of the library's diff the expansion drives: a gap is the run of lines before hunk `gap`
- * (the one after the last hunk is numbered past it), `up` revealing lines from the hunk above it and
- * `down` from the one below. */
+/** What of the library's diff the expansion drives: the instance `onPostRender` hands over, of which
+ * only `expandHunk` is used, so a library upgrade is checked against its gap numbering and directions.
+ * A gap is the run of lines before hunk `gap` (the one after the last hunk is numbered past it), `up`
+ * revealing lines from the hunk above it and `down` from the one below. */
 export interface HunkExpander {
   expandHunk: (gap: number, direction: "up" | "down" | "both", lines: number) => void;
 }
@@ -90,8 +91,11 @@ const onInput = () => attached.forEach((expansion) => expansion.forgetFocus());
 
 const BOUND = new WeakMap<ShadowRoot, { current?: Expansion }>();
 
-/** Listens on the library's shadow root once, for whichever expansion is current. Its listeners run
- * before the library's own, which would expand by its own step: a press here is ours alone. */
+/** Listens on the library's shadow root once, for whichever expansion is current. Registered for the
+ * capture phase on the shadow root, so they run before the library's listeners on the elements inside
+ * it, and `stopPropagation` keeps a handled press from reaching them (they would expand by the
+ * library's own step); a library upgrade is checked for that. The library also redraws the separators
+ * after each expansion, which `attach` relies on to decorate them again. */
 function bind(root: ShadowRoot): { current?: Expansion } {
   const bound = BOUND.get(root);
   if (bound) return bound;
