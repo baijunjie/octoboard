@@ -56,7 +56,7 @@ Claude Code accounts have no such choice, although Claude Code takes a permissio
 
 ## Milestones
 
-1. [Daemon account quotas](01-daemon-account-quotas.md)
+1. 01 Daemon account quotas (closed)
 2. [Account management with quotas](02-settings-account-quotas.md)
 3. [Rail quota entry](03-rail-quota-entry.md)
 4. [Menu bar quota submenus](04-menu-bar-quota-submenus.md)
@@ -73,4 +73,3 @@ Milestones 2–4 depend on 1; milestone 5 is independent of the others.
   whether a fresh account's first use of auto shows a one-time consent screen — to be measured in milestone 5.
 - Colour thresholds for low remaining quota (e.g. warning below some percent) are not settled; bars use one colour
   per agent until decided.
-- What `grok agent stdio` writes into an account's home when probed.

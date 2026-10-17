@@ -105,6 +105,8 @@ pub struct AppState {
     pub session_requests: crate::session_request::SessionRequests,
     /// The model lists read lately, per agent and account directory (`crate::agent_models`).
     pub agent_models: crate::agent_models::ModelCache,
+    /// The plan quota last read for each account (`crate::account_quotas`). Held in memory only.
+    pub account_quotas: crate::account_quotas::AccountQuotas,
     /// For each session with a session request waiting, the status its agent's own events
     /// say it has, while the record shows `WaitingUser` for the request. Kept so that the daemon's
     /// decisions about the agent (can a message be written, did a turn end) keep reading the agent
@@ -210,6 +212,7 @@ impl AppState {
             browse_gate: Arc::new(crate::browse::lane::Gate::with_budget()),
             session_requests: Default::default(),
             agent_models: Default::default(),
+            account_quotas: Default::default(),
             events,
             session_publication: Mutex::new(()),
             session_removals: Mutex::new(0),

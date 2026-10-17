@@ -300,6 +300,50 @@ export interface ModelsUnavailable {
   message: string;
 }
 
+/** The kind of a quota window. Claude Code has `session`, `weekly` and `weekly_model`, Codex
+ * `session` and `weekly`, Grok Build `credit_period`. */
+export type QuotaWindowKind = "session" | "weekly" | "weekly_model" | "credit_period";
+
+/** One window of an account's plan quota. */
+export interface QuotaWindow {
+  kind: QuotaWindowKind;
+  /** The model's display name for `weekly_model`; null for the other kinds. */
+  label: string | null;
+  /** How much of the window is used, normally 0 to 100; a value above 100 is passed on as the
+   * agent gives it. */
+  used_percent: number;
+  /** When the window resets, in milliseconds since the epoch, if the agent says. */
+  resets_at: number | null;
+  /** The window's length, if known. */
+  window_minutes: number | null;
+}
+
+/** Why an account's quota has no windows, as a coded message worded like an `error`. Codes:
+ * `quota_binary_not_found`, `quota_shell_environment_failed`, `quota_timed_out`,
+ * `quota_command_failed`, `quota_unreadable_reply`, `quota_no_windows`. */
+export interface QuotaUnavailable {
+  code: string;
+  params: Record<string, string>;
+  message: string;
+}
+
+/** The plan quota of one account as the agent's own CLI last reported it, replayed in `snapshot`
+ * and broadcast whole by `account_quotas_updated`. Runtime state of the daemon, never stored. */
+export interface AccountQuota {
+  agent: Agent;
+  /** The account's id; null for the agent's default account. */
+  account: string | null;
+  /** When the reading was taken, milliseconds since the epoch. */
+  fetched_at: number;
+  /** The plan as the agent names it (`max`, `plus`, `SuperGrok`), if it says. */
+  plan: string | null;
+  /** Empty when the account has never been read. After a failed re-read the last good windows
+   * stay (with their `fetched_at`) and `unavailable` says why the newer attempt failed, so they
+   * can be shown as stale. */
+  windows: QuotaWindow[];
+  unavailable: QuotaUnavailable | null;
+}
+
 /** The app-wide settings the daemon stores; it is a record so it can grow. */
 export interface Settings {
   /** Off (the default): the periodic check still runs `git fetch` so ahead/behind stays accurate,
@@ -830,6 +874,12 @@ export type RequestBody =
    * broadcasts `settings_updated` only when something actually changed (the trusted-folders
    * pattern). */
   | { type: "update_settings"; auto_pull_repositories?: boolean; default_clone_dir?: string }
+  /** Answered with `ack` at once; each reading that finishes arrives as `account_quotas_updated`.
+   * Re-reads the quotas of the accounts it selects whose last attempt is older than the polling
+   * interval: `agent` limits it to one agent's accounts, `account` (an account id) to that one
+   * account, neither covers every account of every available agent. An `account` that does not
+   * exist or belongs to another `agent` is refused with `unknown_account`. */
+  | { type: "refresh_account_quotas"; agent?: Agent; account?: string }
   /** Answered with `ack` at once; the statuses arrive as `project_git_status` broadcasts as each
    * project finishes. Every project of `console` is checked, concurrently. A project whose check
    * is already in flight is not started again, so a client polling faster than the checks finish,
@@ -955,6 +1005,9 @@ export type Event =
     /** Always three entries, one per agent, each `not_determined` until the daemon's one-time
        * determination for this run lands. */
     agent_availability: AgentAvailability[];
+    /** The plan quota last read for each account of every available agent, the default account
+       * included; empty until the first readings land. */
+    account_quotas: AccountQuota[];
     /** The daemon host's home directory — not the browser's, the two may be on different
        * machines — so a path under it can be shown as `~/...`. Null when the daemon cannot
        * determine one. */
@@ -964,6 +1017,8 @@ export type Event =
    * whole three-entry list. Broadcast once, when the daemon's one-time determination lands; never
    * again afterwards. */
   | { type: "agent_availability_updated"; agent_availability: AgentAvailability[] }
+  /** A quota reading finished, or an account's was dropped: the whole list. */
+  | { type: "account_quotas_updated"; account_quotas: AccountQuota[] }
   /** The whole list of trusted directories, sent when it changes. */
   | { type: "trusted_directories_updated"; trusted_directories: string[] }
   | { type: "console_upserted"; console: Console }

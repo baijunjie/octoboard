@@ -31,7 +31,6 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -226,25 +225,14 @@ fn run(
     args: &[&str],
     timeout: Duration,
 ) -> Result<String, ModelsUnavailable> {
-    let adapter = adapter::adapter_for(agent);
-    let binary = env_shell::resolve_binary(adapter.binary(), shell_env).map_err(|_| {
-        ModelsUnavailable::new(
-            code::BINARY_NOT_FOUND,
-            format!(
-                "`{}` was not found on PATH in the shell environment",
-                adapter.binary()
-            ),
-            &[("binary", adapter.binary())],
-        )
-    })?;
-    let mut command = Command::new(&binary);
-    command.args(args).env_clear().envs(shell_env);
-    if let Some(dir) = config_dir {
-        command.env(adapter::config_dir_var(agent), dir);
-    }
-    // Neutral, so no project-level configuration of whatever directory the daemon started in
-    // takes part.
-    command.current_dir(crate::paths::home_dir());
+    let mut command =
+        adapter::account_command(agent, shell_env, config_dir, args).map_err(|binary| {
+            ModelsUnavailable::new(
+                code::BINARY_NOT_FOUND,
+                format!("`{binary}` was not found on PATH in the shell environment"),
+                &[("binary", binary)],
+            )
+        })?;
 
     let bounds = Bounds {
         timeout,
@@ -462,10 +450,8 @@ impl ModelCache {
 
 #[cfg(test)]
 mod tests {
-    use std::os::unix::fs::PermissionsExt;
-
     use super::*;
-    use crate::test_support::ScratchDir;
+    use crate::test_support::{fake_agent, ScratchDir};
 
     const CODEX_CATALOGUE: &str = include_str!("../testdata/codex_debug_models.json");
     const GROK_LIST: &str = include_str!("../testdata/grok_models.txt");
@@ -473,23 +459,6 @@ mod tests {
 
     fn ids(models: &[AgentModel]) -> Vec<&str> {
         models.iter().map(|model| model.id.as_str()).collect()
-    }
-
-    /// Writes an executable `name` into `dir` that runs `script`, and returns an environment whose
-    /// `PATH` is that directory alone.
-    fn fake_agent(dir: &Path, name: &str, script: &str) -> HashMap<String, String> {
-        let path = dir.join(name);
-        std::fs::write(&path, format!("#!/bin/sh\n{script}\n")).expect("fake agent");
-        let mut perms = std::fs::metadata(&path).expect("metadata").permissions();
-        perms.set_mode(0o700);
-        std::fs::set_permissions(&path, perms).expect("chmod");
-        HashMap::from([
-            (
-                "PATH".to_string(),
-                format!("{}:/usr/bin:/bin", dir.display()),
-            ),
-            ("HOME".to_string(), dir.to_string_lossy().into_owned()),
-        ])
     }
 
     fn reason(listing: &Listing) -> &str {

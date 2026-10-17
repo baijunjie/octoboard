@@ -3,7 +3,7 @@
 Per-agent facts about the three agent CLIs Octoboard launches: the hook events, what their payloads carry, what the
 payloads can and cannot be correlated on, what a failing hook costs, how a project's own configuration layers around an
 injected one, the mechanism and conditions for injecting Octoboard into each, and what it takes to move a session's
-conversation into another config directory.
+conversation into another config directory, and how to ask each one how much of its plan quota is left.
 
 Established against **Claude Code 2.1.274**, **Codex 0.160.0** and **Grok Build 1.0.46**; what the Claude Code section
 says about a declined prompt was measured on **2.1.286** as well, and held identically on both. What "Moving a
@@ -15,7 +15,8 @@ was measured on **Claude Code 2.1.296**, **Codex 0.160.0** and **Grok Build 1.0.
 re-checked on **0.161.0**, which the folder-trust facts above were measured on. What the Grok Build section's "What the
 model itself is handed, and what it calls" says was re-confirmed on **Grok Build 1.0.52** with a real account, as was
 the timeout paragraph's `tool_timeout_sec = 660`; "The id a turn records is not one of the ids `grok models` prints"
-was first measured on that build.
+was first measured on that build. What "Plan quota" says was measured on **Claude Code 2.1.302**, **Codex 0.162.1** and
+**Grok Build 1.0.60**.
 All three rewrite their hook surface, their payload fields, their configuration layering and their on-disk layout on
 upgrade, so check a detail here against the installed version before relying on it.
 
@@ -569,6 +570,127 @@ before launching.
 **The trap a verification has to rule out** is an agent that resumes *successfully* into an empty conversation. None of
 the three did that here, each refusing distinctly, but a future version could introduce it and it would look like a
 successful switch.
+
+## Plan quota
+
+Each CLI can say how much of an account's plan quota is used, over a channel meant for its own front ends. All three
+are marked experimental by their makers, so a reply that does not parse is a reason to show the quota as unavailable,
+never to fail anything else. Measured against the default account of each on Claude Code 2.1.302, Codex 0.162.1 and
+Grok Build 1.0.60, with the working directory set to the home directory and the agent's configuration-directory
+variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GROK_HOME`) set to a pinned account's directory, or left alone for the
+default account. The CLI handles its own login, Keychain access and token refresh, so nothing here reads a credential.
+
+Codex and Grok Build want **stdin kept open until the reply is on stdout**: they exit silently when it closes first.
+Claude Code answers with stdin open as well, so all three are asked the same way. Each answers in about one to three
+seconds. A request that gets no reply within fifteen seconds is given up on and the process group killed.
+
+**Claude Code** (do not pass `--bare`: it skips the Keychain, so the login is not found):
+
+```
+claude -p --input-format stream-json --output-format stream-json --verbose --no-session-persistence \
+  --strict-mcp-config --mcp-config '{"mcpServers":{}}'
+```
+
+The last two flags keep the user's MCP servers from starting; the reply is the same with and without them. Settings are
+deliberately left to load (see "What a probe touches" below).
+
+Write one JSON object per line:
+
+```
+{"type":"control_request","request_id":"r1","request":{"subtype":"initialize"}}
+{"type":"control_request","request_id":"r2","request":{"subtype":"get_usage","skip_behaviors":true}}
+```
+
+The `initialize` reply (a large `control_response` listing commands) is passed over; the reply to `r2` is
+`{"type":"control_response","response":{"subtype":"success","request_id":"r2","response":{...}}}`, and a refused
+request has `"subtype":"error"` and an `"error"` string. In `response.response`:
+
+- `subscription_type` (`"max"`) and `rate_limits_available`;
+- `rate_limits.limits[]`, the list to read: entries `{kind, percent, severity, resets_at, scope, is_active}` where
+  `kind` is `session` (the 5-hour window), `weekly_all` (the weekly window) or `weekly_scoped` (a weekly window of one
+  model, named by `scope.model.display_name`, e.g. `"Fable"`). `percent` is used, not remaining; `resets_at` is
+  ISO 8601 with a fractional second and an offset;
+- `rate_limits.five_hour` and `seven_day` (`{utilization, resets_at}`) and `model_scoped[]`
+  (`{display_name, utilization, resets_at}`) carry the same windows in an older layout, with `seven_day_opus` and
+  `seven_day_sonnet` as `null` on the measured account;
+- a number of other `rate_limits` keys, each `null` or a bucket with no label (one measured account had a dollar-capped
+  one at 100%), plus `extra_usage`, `spend` and `seven_day_breakdown`. None of them is a quota window to show.
+
+An account with no subscription is expected to report `rate_limits_available: false` or a `null` `rate_limits`; that
+was not measured, as no such account was at hand.
+
+**Codex**:
+
+```
+codex app-server -c features.plugins=false -c features.remote_plugin=false -c features.apps=false -c features.hooks=false
+```
+
+The `-c` overrides keep the probe from reaching out on start (see "What a probe touches" below); the reply is the same
+with and without them. They are configuration overrides rather than `--disable <feature>` because `--disable` refuses a
+feature name the installed Codex does not know, where an unknown configuration key is ignored (measured with
+`-c features.not_a_real_feature=false`).
+
+Write JSON-RPC lines (the server's own lines carry no `jsonrpc` member):
+
+```
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"octoboard","version":"0.1.0"}}}
+{"jsonrpc":"2.0","method":"initialized"}
+{"jsonrpc":"2.0","id":2,"method":"account/rateLimits/read"}
+```
+
+Notifications (`remoteControl/status/changed`, `account/updated`) arrive between the replies and are passed over. The
+reply to id 2 is `{"id":2,"result":{...}}`, or `{"id":2,"error":{"code","message"}}`. `result.rateLimits` is
+`{limitId:"codex", primary, secondary, credits, planType, ...}` where `primary` and `secondary` are
+`{usedPercent, windowDurationMins, resetsAt}` — `300` and `10080` minutes on the measured account, `resetsAt` in
+Unix **seconds** — and `planType` is `"plus"`. `result.rateLimitsByLimitId` repeats the same under each limit id. The
+schema is available from `codex app-server generate-json-schema` (`v2/GetAccountRateLimitsResponse.json`).
+
+**Grok Build**:
+
+```
+grok agent --no-leader stdio
+```
+
+Write ACP (JSON-RPC) lines. The method name's **leading underscore is required**:
+
+```
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}
+{"jsonrpc":"2.0","id":2,"method":"_x.ai/billing","params":{}}
+```
+
+The server sends notifications of its own in between (`_x.ai/mcp/servers_updated`). The reply to id 2 is
+`{"jsonrpc":"2.0","id":2,"result":{"config":{...},"subscription_tier":"SuperGrok"}}`, with `config.creditUsagePercent`
+(a float, `100.0` on the measured account), `config.currentPeriod` `{type:"USAGE_PERIOD_TYPE_WEEKLY", start, end}`
+(ISO 8601), and spend fields (`onDemandCap`, `onDemandUsed`, `prepaidBalance`) that are not a quota window. There is
+one credit pool, not a session and a weekly window.
+
+**What a probe touches.** The poller runs each probe every five minutes per account, so what a start does matters.
+Measured on the same builds by listing the files each probe changed in the agent's home and the processes alive in its
+process group when the reply arrived.
+
+- **Claude Code** syncs plugins on start (it rewrites `plugins/synced/…` and a `.in_use` marker per installed plugin
+  version) and registers the process in `sessions/<pid>.json` with a `.key` file. `--setting-sources local` stopped the
+  plugin writes, but it also drops the user's `settings.json`, which can carry `apiKeyHelper`, `env` (API key or auth
+  token, base URL, Bedrock or Vertex, proxy, extra CA certificates) and `forceLoginMethod`, so a probe could fail or read
+  a different identity than the account's sessions use; the probe therefore leaves settings loading as it is. An
+  `enabledPlugins` override through `--settings` did not stop the sync. `--strict-mcp-config` with an empty
+  `--mcp-config` does keep the user's MCP servers from starting. So the plugin sync and the `sessions/` registration
+  stay; a later Claude Code start clears a registration whose process is gone (the probe is killed, so it leaves its
+  own until then). No session record is written, with `--no-session-persistence`.
+- **Codex**, bare: the app server starts a plugin catalogue sync that runs `git ls-remote` over SSH against a plugin
+  marketplace and writes `plugins/cache/…` and `.tmp/git-…`. With `features.plugins`, `features.remote_plugin`,
+  `features.apps` and `features.hooks` set to false neither happens and the reply is unchanged. Still written:
+  `models_cache.json`, `logs_*.sqlite`, `memories_*.sqlite-shm` and a `tmp/arg0/codex-arg0…` directory that Codex clears
+  on a later start. No MCP server process was running at the reply.
+- **Grok Build** has no flag to skip anything: `grok agent stdio` accepts only `--debug`, `--debug-file` and
+  `--leader-socket`. It announces the user's configured MCP servers (`_x.ai/mcp/servers_updated`) but none ran as a
+  child process at the reply. It writes `models_cache.json`, `sessions/session_search.sqlite` and `logs/unified.jsonl`
+  in `GROK_HOME`, so a probe of an account does write into that account's directory.
+
+What remains unavoidable: each probe starts one agent process and writes the files named above, in the agent's home
+and, for Claude Code, its `sessions/` registration; a Claude Code probe syncs the user's plugins; and a Grok Build probe
+starts with the account's whole configuration. Whether a user's hook fires was not observed for any agent: no session or
+turn starts in a probe, and the hook events documented above are session events.
 
 ## Injecting Octoboard into each agent
 

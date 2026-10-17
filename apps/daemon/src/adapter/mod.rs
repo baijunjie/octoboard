@@ -234,6 +234,31 @@ pub fn default_account_dir(agent: Agent, shell_env: &HashMap<String, String>) ->
     home.join(default_name)
 }
 
+/// A command running `agent`'s binary with `args` the way a session of the account would run it,
+/// for a short query of the CLI rather than a launch: the binary resolved on `shell_env`'s
+/// `PATH`, the environment the snapshot's and no more, the account's directory exported under
+/// the agent's own variable when `config_dir` names one (left as the shell has it for the
+/// default account), and the home directory as working directory, so no project-level
+/// configuration of whatever directory the daemon started in takes part. `Err` carries the
+/// binary's name when it does not resolve.
+pub fn account_command(
+    agent: Agent,
+    shell_env: &HashMap<String, String>,
+    config_dir: Option<&Path>,
+    args: &[&str],
+) -> Result<std::process::Command, &'static str> {
+    let binary_name = adapter_for(agent).binary();
+    let binary =
+        crate::env_shell::resolve_binary(binary_name, shell_env).map_err(|_| binary_name)?;
+    let mut command = std::process::Command::new(binary);
+    command.args(args).env_clear().envs(shell_env);
+    if let Some(dir) = config_dir {
+        command.env(config_dir_var(agent), dir);
+    }
+    command.current_dir(crate::paths::home_dir());
+    Ok(command)
+}
+
 #[derive(Default)]
 pub struct LaunchPlan {
     pub args: Vec<String>,

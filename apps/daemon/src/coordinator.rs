@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use uuid::Uuid;
 
+use crate::account_quotas;
 use crate::adapter;
 use crate::agent_records;
 use crate::config_export;
@@ -429,6 +430,33 @@ async fn handle_inner(
                 models: listing.models,
                 unavailable: listing.unavailable,
             }))
+        }
+
+        RequestBody::RefreshAccountQuotas { agent, account } => {
+            let scope = match (agent, account) {
+                (Some(agent), account) => {
+                    checked_account_reference(state, agent, account.clone())?;
+                    account_quotas::Scope {
+                        agent: Some(agent),
+                        account,
+                    }
+                }
+                (None, Some(account)) => {
+                    let stored = state
+                        .store
+                        .get_account(&account)?
+                        .ok_or_else(|| CodedError::unknown_account(&account))?;
+                    account_quotas::Scope {
+                        agent: Some(stored.agent),
+                        account: Some(account),
+                    }
+                }
+                (None, None) => account_quotas::Scope::default(),
+            };
+            // The readings take seconds; each is announced as it lands.
+            let state = state.clone();
+            tokio::spawn(async move { account_quotas::refresh(&state, &scope).await });
+            Ok(None)
         }
 
         RequestBody::ExportConfiguration { console } => Ok(Some(Event::ConfigurationExported {
@@ -3758,6 +3786,7 @@ fn update_account(
         .get_account(id)?
         .ok_or_else(|| CodedError::unknown_account(id))?;
     let mut changed = false;
+    let mut dir_changed = false;
     if let Some(name) = name {
         let name = normalize_account_name(&name)?;
         if name != account.name {
@@ -3771,12 +3800,17 @@ fn update_account(
         if dir != account.config_dir {
             account.config_dir = dir;
             changed = true;
+            dir_changed = true;
         }
     }
     if !changed {
         return Ok(());
     }
     state.store.update_account(&account)?;
+    // A reading belongs to the directory it was taken under; a rename leaves it valid.
+    if dir_changed {
+        state.account_quotas.forget_account(state, id);
+    }
     broadcast_settings(state)?;
     Ok(())
 }
@@ -3801,6 +3835,7 @@ fn delete_account(state: &Arc<AppState>, id: &str) -> Result<()> {
         .map(|project| project.id)
         .collect();
     state.store.delete_account(id)?;
+    state.account_quotas.forget_account(state, id);
     for console_id in affected_consoles {
         if let Some(console) = state.store.get_console(&console_id)? {
             state.broadcast(Event::ConsoleUpserted { console });
@@ -5385,6 +5420,116 @@ mod tests {
             let coded = refused.downcast_ref::<CodedError>().expect("coded");
             assert_eq!(coded.code, error_code::UNKNOWN_ACCOUNT);
         }
+    }
+
+    #[tokio::test]
+    async fn refreshing_quotas_refuses_a_foreign_or_unknown_account_and_acks_otherwise() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-refresh-quotas");
+        handle(
+            &state,
+            None,
+            create_account_request(Agent::Codex, "Work", "/home/u/.codex-work"),
+        )
+        .await
+        .expect("created");
+        let codex_account = only_account(&state).id;
+
+        for (agent, account) in [
+            (Some(Agent::Claude), Some(codex_account.clone())),
+            (None, Some("no-such-account".to_string())),
+        ] {
+            let refused = handle(
+                &state,
+                None,
+                RequestBody::RefreshAccountQuotas { agent, account },
+            )
+            .await
+            .expect_err("not an account of that agent");
+            let coded = refused.downcast_ref::<CodedError>().expect("coded");
+            assert_eq!(coded.code, error_code::UNKNOWN_ACCOUNT);
+        }
+
+        // Nothing is available until the shell has been read, so nothing is run.
+        for (agent, account) in [
+            (None, None),
+            (Some(Agent::Codex), None),
+            (None, Some(codex_account.clone())),
+            (Some(Agent::Codex), Some(codex_account)),
+        ] {
+            let reply = handle(
+                &state,
+                Some("req-1".to_string()),
+                RequestBody::RefreshAccountQuotas { agent, account },
+            )
+            .await
+            .expect("accepted");
+            assert!(reply.is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn repointing_or_deleting_an_account_drops_its_quota_reading() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-forget-quotas");
+        handle(
+            &state,
+            None,
+            create_account_request(Agent::Codex, "Work", "/home/u/.codex-work"),
+        )
+        .await
+        .expect("created");
+        let account = only_account(&state).id;
+        let hold = |state: &Arc<AppState>| {
+            state
+                .account_quotas
+                .hold_for_test(&crate::protocol::AccountQuota {
+                    agent: Agent::Codex,
+                    account: Some(account.clone()),
+                    fetched_at: 1,
+                    plan: None,
+                    windows: Vec::new(),
+                    unavailable: None,
+                });
+        };
+
+        hold(&state);
+        assert_eq!(state.account_quotas.list().len(), 1);
+        handle(
+            &state,
+            None,
+            RequestBody::UpdateAccount {
+                account: account.clone(),
+                name: Some("Renamed".to_string()),
+                config_dir: None,
+            },
+        )
+        .await
+        .expect("updated");
+        // A rename leaves the reading alone; repointing the account drops it.
+        assert_eq!(state.account_quotas.list().len(), 1);
+        handle(
+            &state,
+            None,
+            RequestBody::UpdateAccount {
+                account: account.clone(),
+                name: None,
+                config_dir: Some("/home/u/.codex-other".to_string()),
+            },
+        )
+        .await
+        .expect("repointed");
+        assert!(state.account_quotas.list().is_empty());
+
+        hold(&state);
+        handle(
+            &state,
+            None,
+            RequestBody::DeleteAccount {
+                account: account.clone(),
+            },
+        )
+        .await
+        .expect("deleted");
+        assert!(state.account_quotas.list().is_empty());
     }
 
     /// A non-absolute directory is refused with nothing saved; a directory that does not exist at

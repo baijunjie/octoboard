@@ -1502,6 +1502,18 @@ pub enum RequestBody {
         account: Option<String>,
         reviewer: Option<ApprovalReviewer>,
     },
+    /// Re-reads the plan quotas of the accounts it selects whose last reading is older than the
+    /// polling interval (and not backed off after failures): `agent` limits it to one agent's
+    /// accounts, `account` (an account id) to that one account, and with neither it covers every
+    /// account of every available agent. An `account` that does not exist or belongs to another
+    /// `agent` is refused with `unknown_account`. Answered with `ack` at once; each reading that
+    /// finishes follows as `account_quotas_updated`.
+    RefreshAccountQuotas {
+        #[serde(default)]
+        agent: Option<Agent>,
+        #[serde(default)]
+        account: Option<String>,
+    },
     /// Checks every project of this console's current git status against its remote, concurrently.
     /// Answered with `ack` at once; the statuses follow as `project_git_status` broadcasts, one per
     /// project as its check finishes. A project already being checked — by an earlier call this
@@ -1596,6 +1608,9 @@ pub enum Event {
         /// replaced once the daemon's one-time login-shell snapshot lands; see
         /// `crate::availability`.
         agent_availability: Vec<AgentAvailability>,
+        /// The plan quota last read for each account of every available agent, the default
+        /// account included; empty until the first readings land. Runtime state, not stored.
+        account_quotas: Vec<AccountQuota>,
         /// The daemon host's home directory, so a client can show a path under it as `~/...`; it
         /// is the daemon's home, not the browser's, since the two may be on different machines.
         /// Null when the daemon cannot determine one.
@@ -1607,6 +1622,11 @@ pub enum Event {
     /// during a run.
     AgentAvailabilityUpdated {
         agent_availability: Vec<AgentAvailability>,
+    },
+    /// A plan quota reading finished, or an account's was dropped: the whole list, like every other
+    /// upsert.
+    AccountQuotasUpdated {
+        account_quotas: Vec<AccountQuota>,
     },
     /// The directories whose projects Octoboard presses every agent's trust confirmation for
     /// changed: the whole list, like every other upsert.
@@ -1950,6 +1970,72 @@ impl ModelsUnavailable {
             message: message.into(),
         }
     }
+}
+
+/// The kind of a quota window. Not every agent has every kind: Claude Code has `session`,
+/// `weekly` and `weekly_model`, Codex `session` and `weekly`, Grok Build `credit_period`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QuotaWindowKind {
+    /// The five-hour window.
+    Session,
+    /// The weekly window across all models.
+    Weekly,
+    /// A weekly window of one model, named by `label`.
+    WeeklyModel,
+    /// A pool of credits over a billing period.
+    CreditPeriod,
+}
+
+/// One window of an account's plan quota.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct QuotaWindow {
+    pub kind: QuotaWindowKind,
+    /// The model's display name for `weekly_model`; absent for the other kinds.
+    pub label: Option<String>,
+    /// How much of the window is used, normally 0 to 100; a value above 100 is passed on as the
+    /// agent gives it.
+    pub used_percent: f64,
+    /// When the window resets, in milliseconds since the epoch, if the agent says.
+    pub resets_at: Option<i64>,
+    /// The window's length, if known.
+    pub window_minutes: Option<u32>,
+}
+
+/// Why an account's quota has no windows, as a coded message of the same shape as an `error`. It
+/// is part of the reading rather than a failure of anything else.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct QuotaUnavailable {
+    pub code: String,
+    pub params: Params,
+    pub message: String,
+}
+
+impl QuotaUnavailable {
+    pub fn new(code: &'static str, message: impl Into<String>, pairs: &[(&str, &str)]) -> Self {
+        Self {
+            code: code.to_string(),
+            params: params(pairs),
+            message: message.into(),
+        }
+    }
+}
+
+/// The plan quota of one account as the agent's own CLI last reported it. Runtime state of the
+/// daemon: never stored and never part of an exported configuration.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct AccountQuota {
+    pub agent: Agent,
+    /// The account's id; `None` for the agent's default account.
+    pub account: Option<String>,
+    /// When the reading was taken, milliseconds since the epoch.
+    pub fetched_at: i64,
+    /// The plan as the agent names it (`max`, `plus`, `SuperGrok`), if it says.
+    pub plan: Option<String>,
+    /// Empty when the account has never been read. After a failed re-read, the last good windows
+    /// stay (with their `fetched_at`) and `unavailable` says why the newer attempt failed.
+    pub windows: Vec<QuotaWindow>,
+    pub unavailable: Option<QuotaUnavailable>,
 }
 
 /// Something a session's user has to be told, as a coded message. Carried from where it is found to
@@ -2386,6 +2472,26 @@ pub mod models_unavailable_code {
     pub const UNREADABLE_OUTPUT: &str = "models_unreadable_output";
 }
 
+/// Codes carried by `QuotaUnavailable`; `PROTOCOL.md` lists each with its params. Like an error
+/// code, each needs a `daemon.<code>` message in the UI's catalogs.
+pub mod quota_unavailable_code {
+    /// The agent's binary does not resolve on the login shell's `PATH`. `params` names `binary`.
+    pub const BINARY_NOT_FOUND: &str = "quota_binary_not_found";
+    /// The login-shell snapshot the command runs in could not be taken. `params` names `detail`.
+    pub const SHELL_ENVIRONMENT_FAILED: &str = "quota_shell_environment_failed";
+    /// The command did not reply in time. `params` names `agent`.
+    pub const TIMED_OUT: &str = "quota_timed_out";
+    /// The command could not be run, ended without replying, or the reply was an error. `params`
+    /// names `agent` and `detail`.
+    pub const COMMAND_FAILED: &str = "quota_command_failed";
+    /// The command replied but the reply is not in a shape that can be read. `params` names
+    /// `agent`.
+    pub const UNREADABLE_REPLY: &str = "quota_unreadable_reply";
+    /// The command replied and the account has no quota windows (an API key rather than a
+    /// subscription, say). `params` names `agent`.
+    pub const NO_WINDOWS: &str = "quota_no_windows";
+}
+
 /// The `reason_code` param of a failed press of a trust confirmation, in the `error` and in the
 /// `session_notice` alike; `PROTOCOL.md` lists each. A client that does not know one shows the
 /// English `reason` instead. A new reason also needs a `daemon.trust_reason.<code>` message in the
@@ -2560,6 +2666,16 @@ mod tests {
                 },
             ),
             (
+                r#"{"type":"refresh_account_quotas","id":"request-1","agent":"codex","account":"account-7"}"#,
+                |body| match body {
+                    RequestBody::RefreshAccountQuotas {
+                        agent: Some(super::Agent::Codex),
+                        account,
+                    } => account,
+                    _ => None,
+                },
+            ),
+            (
                 r#"{"type":"pull_project_branch","id":"request-1","project":"project-7"}"#,
                 |body| match body {
                     RequestBody::PullProjectBranch { project } => Some(project),
@@ -2636,6 +2752,87 @@ mod tests {
             let target = target(request.body).expect(json);
             assert!(target.ends_with("-7"), "{json} acted on `{target}`");
         }
+    }
+
+    #[test]
+    fn account_quotas_travel_in_the_snapshot_and_in_their_own_event_in_the_documented_shape() {
+        let quota = |kind, label: Option<&str>| super::QuotaWindow {
+            kind,
+            label: label.map(str::to_string),
+            used_percent: 27.5,
+            resets_at: Some(1_792_258_799_899),
+            window_minutes: Some(300),
+        };
+        let quotas = vec![super::AccountQuota {
+            agent: super::Agent::Claude,
+            account: None,
+            fetched_at: 7,
+            plan: Some("max".to_string()),
+            windows: vec![
+                quota(super::QuotaWindowKind::Session, None),
+                quota(super::QuotaWindowKind::Weekly, None),
+                quota(super::QuotaWindowKind::WeeklyModel, Some("Fable")),
+                quota(super::QuotaWindowKind::CreditPeriod, None),
+            ],
+            unavailable: Some(super::QuotaUnavailable::new(
+                super::quota_unavailable_code::TIMED_OUT,
+                "late",
+                &[("agent", "Claude Code")],
+            )),
+        }];
+        let event = serde_json::to_value(super::Event::AccountQuotasUpdated {
+            account_quotas: quotas.clone(),
+        })
+        .unwrap();
+        assert_eq!(event["type"], "account_quotas_updated");
+        assert_eq!(
+            event["account_quotas"][0],
+            serde_json::json!({
+                "agent": "claude",
+                "account": null,
+                "fetched_at": 7,
+                "plan": "max",
+                "windows": [
+                    {"kind": "session", "label": null, "used_percent": 27.5,
+                     "resets_at": 1_792_258_799_899_i64, "window_minutes": 300},
+                    {"kind": "weekly", "label": null, "used_percent": 27.5,
+                     "resets_at": 1_792_258_799_899_i64, "window_minutes": 300},
+                    {"kind": "weekly_model", "label": "Fable", "used_percent": 27.5,
+                     "resets_at": 1_792_258_799_899_i64, "window_minutes": 300},
+                    {"kind": "credit_period", "label": null, "used_percent": 27.5,
+                     "resets_at": 1_792_258_799_899_i64, "window_minutes": 300},
+                ],
+                "unavailable": {"code": "quota_timed_out", "params": {"agent": "Claude Code"},
+                                "message": "late"},
+            })
+        );
+        let snapshot = serde_json::to_value(super::Event::Snapshot {
+            hosts: vec![],
+            consoles: vec![],
+            projects: vec![],
+            sessions: vec![],
+            trusted_directories: vec![],
+            settings: super::Settings::default(),
+            git_statuses: vec![],
+            agent_availability: vec![],
+            account_quotas: quotas,
+            home_dir: None,
+        })
+        .unwrap();
+        assert_eq!(snapshot["account_quotas"][0]["plan"], "max");
+    }
+
+    #[test]
+    fn a_quota_refresh_may_name_neither_agent_nor_account() {
+        let request: Request =
+            serde_json::from_str(r#"{"type":"refresh_account_quotas","id":"request-1"}"#).unwrap();
+        assert!(matches!(
+            request.body,
+            RequestBody::RefreshAccountQuotas {
+                agent: None,
+                account: None
+            }
+        ));
     }
 
     /// A switch must name its target: an explicit null is the default account, and a request that
@@ -3041,6 +3238,7 @@ mod tests {
                 default_account_dir: None,
             })
             .collect(),
+            account_quotas: vec![],
             home_dir: Some("/Users/dev".to_string()),
         })
         .unwrap();

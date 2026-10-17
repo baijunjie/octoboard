@@ -1,10 +1,11 @@
 //! Running a subprocess to completion within bounds, or detaching an external application.
-//! Bounded runs have a deadline, an output ceiling, and a cancel. Every stop kills the whole process group rather
-//! than the direct child, so anything it forked (`ssh`, an askpass helper) goes with it. Capturing
+//! Bounded runs have a deadline, an output ceiling, and a cancel; an exchange of lines with a program that answers on
+//! stdout while its stdin stays open has the first two. Every stop kills the whole process group rather than the
+//! direct child, so anything it forked (`ssh`, an askpass helper) goes with it. Capturing
 //! the login shell's environment, which can leave a background process of its own holding a pipe
 //! open and so needs a completion marker rather than end-of-file, is `crate::env_shell`'s.
 
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, ExitStatus, Output, Stdio};
 use std::sync::mpsc;
@@ -52,8 +53,8 @@ pub(crate) const REAP_GRACE: Duration = Duration::from_millis(500);
 pub(crate) const PIPE_CHUNK_SIZE: usize = 8192;
 
 /// Kills the whole process group behind `child` and waits, bounded by `REAP_GRACE`, for it to be
-/// reaped — the two steps every stop of [`run_bounded`] needs, pulled out so none of them can
-/// apply only the first and leave the child running unreaped.
+/// reaped — the two steps every stop of [`run_bounded`] and [`run_exchange`] needs, pulled out so
+/// none of them can apply only the first and leave the child running unreaped.
 fn kill_process_group(child: &mut Child) {
     let pid = child.id();
     // SAFETY: a plain signal to a process group number. Every call site reaches here only while
@@ -176,6 +177,63 @@ fn bounded_pipe_reader(
     }
 }
 
+/// A spawned child with its pipes read on threads of their own, bounded as `bounds` says.
+struct Spawned {
+    child: Child,
+    /// Present only when the caller asked for stdin to be piped.
+    stdin: Option<std::process::ChildStdin>,
+    stdout: mpsc::Receiver<BoundedChunk>,
+    stderr: mpsc::Receiver<BoundedChunk>,
+}
+
+/// Starts `command` in a process group of its own with stdout and stderr piped (and stdin piped
+/// or null) and a reader thread on each pipe: stdout stops at `bounds.stdout_limit`, stderr is
+/// kept up to `bounds.stderr_limit` and the rest discarded.
+fn spawn_bounded(
+    command: &mut Command,
+    bounds: &Bounds,
+    pipe_stdin: bool,
+) -> std::result::Result<Spawned, anyhow::Error> {
+    command.process_group(0);
+    command.stdin(if pipe_stdin {
+        Stdio::piped()
+    } else {
+        Stdio::null()
+    });
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
+    let mut child = command.spawn().context("spawning the command")?;
+
+    let stdin = child.stdin.take();
+    let stdout_pipe = child.stdout.take().expect("stdout was piped");
+    let stderr_pipe = child.stderr.take().expect("stderr was piped");
+    let (stdout_tx, stdout) = mpsc::channel();
+    let (stderr_tx, stderr) = mpsc::channel();
+    let stdout_limit = bounds.stdout_limit;
+    let stderr_limit = bounds.stderr_limit;
+    thread::spawn(move || bounded_pipe_reader(stdout_pipe, &stdout_tx, stdout_limit, true));
+    thread::spawn(move || bounded_pipe_reader(stderr_pipe, &stderr_tx, stderr_limit, false));
+    Ok(Spawned {
+        child,
+        stdin,
+        stdout,
+        stderr,
+    })
+}
+
+/// Appends to `stderr` whatever is still in flight on the pipe, for up to a moment: a message
+/// for the user, worth a settle so it does not reach them cut at a chunk boundary.
+fn settle_stderr(rx: &mpsc::Receiver<BoundedChunk>, stderr: &mut Vec<u8>) {
+    let settle = Instant::now() + REAP_GRACE;
+    while Instant::now() < settle {
+        match rx.recv_timeout(BOUNDED_POLL) {
+            Ok(BoundedChunk::Data(bytes)) => stderr.extend_from_slice(&bytes),
+            Ok(_) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+        }
+    }
+}
+
 /// How often [`run_bounded`] looks at the deadline, the cancel flag and the child between pipe
 /// reads. Short, because its callers answer a person who is waiting on a file to open.
 const BOUNDED_POLL: Duration = Duration::from_millis(5);
@@ -197,23 +255,12 @@ pub fn run_bounded(
 ) -> std::result::Result<Output, BoundedFailure> {
     use std::sync::atomic::Ordering;
 
-    command.process_group(0);
-    command.stdin(Stdio::null());
-    command.stdout(Stdio::piped());
-    command.stderr(Stdio::piped());
-    let mut child = command
-        .spawn()
-        .context("spawning the bounded command")
-        .map_err(BoundedFailure::Failed)?;
-
-    let stdout_pipe = child.stdout.take().expect("stdout was piped");
-    let stderr_pipe = child.stderr.take().expect("stderr was piped");
-    let (stdout_tx, stdout_rx) = mpsc::channel();
-    let (stderr_tx, stderr_rx) = mpsc::channel();
-    let stdout_limit = bounds.stdout_limit;
-    let stderr_limit = bounds.stderr_limit;
-    thread::spawn(move || bounded_pipe_reader(stdout_pipe, &stdout_tx, stdout_limit, true));
-    thread::spawn(move || bounded_pipe_reader(stderr_pipe, &stderr_tx, stderr_limit, false));
+    let Spawned {
+        mut child,
+        stdout: stdout_rx,
+        stderr: stderr_rx,
+        ..
+    } = spawn_bounded(command, bounds, false).map_err(BoundedFailure::Failed)?;
 
     let deadline = Instant::now() + bounds.timeout;
     let mut stdout = Vec::new();
@@ -263,16 +310,7 @@ pub fn run_bounded(
                 }
             },
             Some((status, _)) if !stdout_open => {
-                // Whatever stderr is still in flight is a message, worth a moment's settle so it
-                // does not reach the user cut at a chunk boundary.
-                let settle = Instant::now() + REAP_GRACE;
-                while Instant::now() < settle {
-                    match stderr_rx.recv_timeout(BOUNDED_POLL) {
-                        Ok(BoundedChunk::Data(bytes)) => stderr.extend_from_slice(&bytes),
-                        Ok(_) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
-                        Err(mpsc::RecvTimeoutError::Timeout) => {}
-                    }
-                }
+                settle_stderr(&stderr_rx, &mut stderr);
                 return Ok(Output {
                     status,
                     stdout,
@@ -298,6 +336,139 @@ pub fn run_bounded(
             return Err(BoundedFailure::TimedOut(bounds.timeout));
         }
     }
+}
+
+/// Why [`run_exchange`] did not return a reply. Each case has killed the process group first.
+#[derive(Debug)]
+pub enum ExchangeFailure {
+    TimedOut(Duration),
+    StdoutExceeded(usize),
+    /// The child closed its stdout without having sent a reply, normally by exiting. `status` is
+    /// what it exited with, `None` when that could not be read, and `stderr` is what it wrote, up
+    /// to the bound.
+    ClosedWithoutReply {
+        status: Option<ExitStatus>,
+        stderr: Vec<u8>,
+    },
+    Failed(anyhow::Error),
+}
+
+impl std::fmt::Display for ExchangeFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TimedOut(timeout) => write!(formatter, "did not reply within {timeout:?}"),
+            Self::StdoutExceeded(limit) => {
+                write!(formatter, "produced more than {limit} bytes of output")
+            }
+            Self::ClosedWithoutReply { status, stderr } => {
+                formatter.write_str("ended without replying")?;
+                if let Some(status) = status {
+                    write!(formatter, " ({status})")?;
+                }
+                let stderr = String::from_utf8_lossy(stderr);
+                match stderr.trim().lines().next_back() {
+                    Some(last) => write!(formatter, ": {last}"),
+                    None => Ok(()),
+                }
+            }
+            Self::Failed(err) => write!(formatter, "{err:#}"),
+        }
+    }
+}
+
+/// Runs an already-configured `command` as a conversation over lines: writes every line of
+/// `input` to its stdin, keeps stdin open, and reads stdout line by line until `is_reply` accepts
+/// one, which is returned. For a program that answers a request on stdout and exits when its
+/// input ends, possibly before it has answered, so [`run_bounded`], which gives a closed stdin,
+/// cannot be used. Whatever else it prints is passed over, a line `is_reply` rejects included.
+///
+/// Every end, a reply too, kills the whole process group, since the program is by then running
+/// on nothing the caller wants. The same bounds apply as to [`run_bounded`]: `bounds.timeout`
+/// from the start, `bounds.stdout_limit` over everything printed (one byte more fails the run),
+/// and `bounds.stderr_limit` bytes of stderr kept, for the failure that reports it.
+pub fn run_exchange(
+    command: &mut Command,
+    input: &[String],
+    bounds: &Bounds,
+    mut is_reply: impl FnMut(&str) -> bool,
+) -> std::result::Result<String, ExchangeFailure> {
+    let Spawned {
+        mut child,
+        stdin,
+        stdout: stdout_rx,
+        stderr: stderr_rx,
+    } = spawn_bounded(command, bounds, true).map_err(ExchangeFailure::Failed)?;
+    // Held until the group is killed below: closing it early is what makes such a program exit.
+    let mut stdin = stdin.expect("stdin was piped");
+    let stdout_limit = bounds.stdout_limit;
+
+    let deadline = Instant::now() + bounds.timeout;
+    // A child that is already gone fails the write; the read below then reports how it ended.
+    for line in input {
+        if writeln!(stdin, "{line}").is_err() {
+            break;
+        }
+    }
+    let _ = stdin.flush();
+
+    let mut pending: Vec<u8> = Vec::new();
+    let outcome = loop {
+        let left = deadline.saturating_duration_since(Instant::now());
+        match stdout_rx.recv_timeout(left) {
+            Ok(BoundedChunk::Data(bytes)) => {
+                pending.extend_from_slice(&bytes);
+                if let Some(reply) = take_reply(&mut pending, &mut is_reply) {
+                    break Ok(reply);
+                }
+            }
+            Ok(BoundedChunk::Exceeded) => break Err(ExchangeFailure::StdoutExceeded(stdout_limit)),
+            Ok(BoundedChunk::Failed(err)) => {
+                break Err(ExchangeFailure::Failed(
+                    anyhow::Error::new(err).context("reading stdout from the subprocess"),
+                ))
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                break Err(ExchangeFailure::TimedOut(bounds.timeout))
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                // The last line may come without its newline.
+                pending.push(b'\n');
+                break match take_reply(&mut pending, &mut is_reply) {
+                    Some(reply) => Ok(reply),
+                    None => Err(ExchangeFailure::ClosedWithoutReply {
+                        status: None,
+                        stderr: Vec::new(),
+                    }),
+                };
+            }
+        }
+    };
+    kill_process_group(&mut child);
+    match outcome {
+        Err(ExchangeFailure::ClosedWithoutReply { .. }) => {
+            let mut stderr = Vec::new();
+            settle_stderr(&stderr_rx, &mut stderr);
+            Err(ExchangeFailure::ClosedWithoutReply {
+                status: child.try_wait().ok().flatten(),
+                stderr,
+            })
+        }
+        other => other,
+    }
+}
+
+/// Removes the complete lines from the front of `pending` one at a time and returns the first
+/// that `is_reply` accepts; what follows it, and any partial line, stays.
+fn take_reply(pending: &mut Vec<u8>, is_reply: &mut impl FnMut(&str) -> bool) -> Option<String> {
+    while let Some(end) = pending.iter().position(|byte| *byte == b'\n') {
+        let line: Vec<u8> = pending.drain(..=end).collect();
+        let line = String::from_utf8_lossy(&line);
+        let line = line.trim();
+        if !line.is_empty() && is_reply(line) {
+            return Some(line.to_string());
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -418,5 +589,101 @@ mod tests {
         .expect("a run within its stdout limit");
         assert_eq!(output.stdout, b"out");
         assert_eq!(output.stderr, b"0123456789");
+    }
+
+    /// Runs `script` under `/bin/sh` through [`run_exchange`] with `input` on its stdin, the
+    /// script recording its pid first; `None` when the run ended before it did (see
+    /// [`until_the_shell_ran`]).
+    fn exchange_of(
+        script: &str,
+        input: &[&str],
+        bounds: Bounds,
+    ) -> Option<(std::result::Result<String, ExchangeFailure>, i32)> {
+        let pid_file = ScratchFile::new("env-shell-exchange", "pid");
+        let mut command = Command::new("/bin/sh");
+        command.args([
+            "-c",
+            &format!("echo $$ > '{}'; {script}", pid_file.display()),
+        ]);
+        let input: Vec<String> = input.iter().map(|line| line.to_string()).collect();
+        let outcome = run_exchange(&mut command, &input, &bounds, |line| {
+            line.starts_with("reply")
+        });
+        Some((outcome, read_pid_file(&pid_file)?))
+    }
+
+    fn exchange_bounds(timeout: Duration) -> Bounds {
+        Bounds {
+            timeout,
+            stdout_limit: 64 * 1024,
+            stderr_limit: 1024,
+        }
+    }
+
+    #[test]
+    fn an_exchange_returns_the_reply_to_what_was_written_and_ends_the_child() {
+        // Waits for two lines, so stdin must have stayed open for the second; a reply is not
+        // the end of the program, which then idles.
+        let script = "read a; echo noise; read b; echo \"reply $a $b\"; exec /bin/sleep 300";
+        let (outcome, pid) =
+            until_the_shell_ran(|| exchange_of(script, &["one", "two"], exchange_bounds(PATIENCE)));
+        assert_eq!(outcome.expect("a reply"), "reply one two");
+        assert_gone_by(pid, Instant::now() + PATIENCE);
+    }
+
+    #[test]
+    fn an_exchange_reads_a_reply_that_ends_the_stream_without_a_newline() {
+        let (outcome, _) =
+            until_the_shell_ran(|| exchange_of("printf 'reply x'", &[], exchange_bounds(PATIENCE)));
+        assert_eq!(outcome.expect("a reply"), "reply x");
+    }
+
+    #[test]
+    fn an_exchange_that_gets_no_reply_in_time_fails_and_leaves_nothing_behind() {
+        let (outcome, pid) = until_the_shell_ran(|| {
+            exchange_of(
+                "echo noise; exec /bin/sleep 300",
+                &[],
+                exchange_bounds(Duration::from_millis(500)),
+            )
+        });
+        let failure = outcome.expect_err("no reply");
+        assert!(matches!(failure, ExchangeFailure::TimedOut(_)), "{failure}");
+        assert_gone_by(pid, Instant::now() + PATIENCE);
+    }
+
+    #[test]
+    fn an_exchange_whose_child_exits_without_replying_reports_how_it_ended() {
+        let (outcome, _) = until_the_shell_ran(|| {
+            exchange_of(
+                "echo noise; echo 'bad login' >&2; exit 3",
+                &["ignored"],
+                exchange_bounds(PATIENCE),
+            )
+        });
+        let failure = outcome.expect_err("no reply");
+        match &failure {
+            ExchangeFailure::ClosedWithoutReply { status, stderr } => {
+                assert_eq!(status.and_then(|status| status.code()), Some(3));
+                assert_eq!(stderr, b"bad login\n");
+            }
+            other => panic!("{other}"),
+        }
+        assert!(failure.to_string().ends_with("bad login"), "{failure}");
+    }
+
+    #[test]
+    fn an_exchange_that_prints_past_its_limit_fails_and_leaves_nothing_behind() {
+        let bounds = Bounds {
+            stdout_limit: 1024,
+            ..exchange_bounds(PATIENCE)
+        };
+        let (outcome, pid) = until_the_shell_ran(|| exchange_of("exec /usr/bin/yes", &[], bounds));
+        let failure = outcome.expect_err("too much output");
+        assert!(
+            matches!(failure, ExchangeFailure::StdoutExceeded(1024)),
+            "{failure}"
+        );
+        assert_gone_by(pid, Instant::now() + PATIENCE);
     }
 }

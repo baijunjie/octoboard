@@ -13,7 +13,7 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use crate::protocol::Agent;
@@ -295,6 +295,44 @@ pub(crate) fn watched_live_session(
         resolves_approvals_itself: false,
         carried_trust,
     })))
+}
+
+/// The one executable every fake agent CLI is a symlink to, written once per test binary. A
+/// script of its own per fake would pay macOS's first-`exec` code-signature check each time,
+/// serialised across processes; this one is exec'd once and then reused. It sources the
+/// companion file next to the symlink (`$0.body`), which is where each fake's behaviour lives.
+/// Installed by writing a file of the process's own and renaming it into place, since a test
+/// binary of another worktree may be executing it.
+fn fake_agent_dispatcher() -> &'static Path {
+    static DISPATCHER: OnceLock<PathBuf> = OnceLock::new();
+    DISPATCHER.get_or_init(|| {
+        let path = std::env::temp_dir().join("octoboardd-fake-agent-dispatcher");
+        let staging = path.with_extension(format!("{}", std::process::id()));
+        std::fs::write(&staging, "#!/bin/sh\n. \"$0.body\"\n")
+            .expect("write fake agent dispatcher");
+        let mut perms = std::fs::metadata(&staging).unwrap().permissions();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o700);
+        std::fs::set_permissions(&staging, perms).expect("chmod fake agent dispatcher");
+        std::fs::rename(&staging, &path).expect("install fake agent dispatcher");
+        path
+    })
+}
+
+/// Makes `dir/<binary>` a fake agent CLI that runs `body` as shell script (sourced, so `exit`
+/// ends it and `$@` are its arguments), and returns an environment whose `PATH` is `dir` and the
+/// system directories and whose `HOME` is `dir`.
+pub(crate) fn fake_agent(dir: &Path, binary: &str, body: &str) -> HashMap<String, String> {
+    let path = dir.join(binary);
+    std::fs::write(dir.join(format!("{binary}.body")), body).expect("write fake agent body");
+    std::fs::remove_file(&path).ok();
+    std::os::unix::fs::symlink(fake_agent_dispatcher(), &path).expect("symlink fake agent");
+    HashMap::from([
+        (
+            "PATH".to_string(),
+            format!("{}:/usr/bin:/bin", dir.display()),
+        ),
+        ("HOME".to_string(), dir.to_string_lossy().into_owned()),
+    ])
 }
 
 /// The pid `path` holds, if the fixture shell has written one. Read once, without waiting:

@@ -4,7 +4,8 @@ A headless Rust binary that plays two roles in one process:
 
 - **Host role**: owns PTYs and agent processes and receives their hook callbacks; works on the machine and its
   repositories on behalf of clients (directory listings, repository discovery, clone, remote probing, git status,
-  push, branch switch, restore, opening a project in the system terminal or file manager, agent and model detection);
+  push, branch switch, restore, opening a project in the system terminal or file manager, agent and model detection,
+  reading each account's plan quota);
   and serves bounded, source-aware reads of a project's files and changes.
 - **Coordinator role**: stores consoles, projects, sessions, report panel pages and the agent accounts in SQLite,
   routes requests to the host role, and carries the stored configuration between devices as a document it exports and
@@ -49,8 +50,9 @@ once.
 | `src/relocate.rs` | Copying a session's conversation record between account configuration directories for an account switch |
 | `src/outbox.rs` | The per-session ordered queue every message Octoboard writes into an agent passes through |
 | `src/store.rs` | The coordinator's SQLite storage: consoles, projects, sessions, pages, agent accounts, branch origins, trusted folders, user settings and the host table |
-| `src/state.rs` | Shared daemon state: session status and turn bookkeeping, record-watch bookkeeping, each project's live git status and check claim, pending `request_session` requests, agent availability, the model cache and the hook queues |
+| `src/state.rs` | Shared daemon state: session status and turn bookkeeping, record-watch bookkeeping, each project's live git status and check claim, pending `request_session` requests, agent availability, the model cache, the account quotas and the hook queues |
 | `src/launch_settings.rs`, `src/agent_models.rs` | Normalising and checking a model and reasoning effort (`LaunchCheck`), and listing the models an agent offers for an account (`ModelCache`); fixtures in `testdata/` |
+| `src/account_quotas/` | Each account's plan quota from its agent's own CLI: `mod.rs` keeps the readings (`AccountQuotas`) and runs the background poller and the on-request refresh, `probe.rs` holds the three conversations and their reply parsers, `rfc3339.rs` reads the timestamps they carry |
 | `src/availability.rs` | Working out, once per daemon start, which agents are available and each one's default account |
 | `src/config_export.rs`, `src/config_import.rs` | Building the configuration document `export_configuration` answers with, and reading one back (`inspect` and `apply`) |
 | `src/git_env.rs` | The base every `git` the daemon runs is built from (non-interactive, read-only, variable filtering) |
@@ -62,13 +64,13 @@ once.
 | `src/trust/` | Each agent's folder-trust confirmation: the permission decision and prompt, recognising each agent's screen, and pressing it |
 | `src/env_shell/` | The user's real shell environment every agent is launched with (`snapshot`, `launch_snapshot`, `cached_snapshot`) and resolving a binary on it |
 | `src/hostfs.rs`, `src/open_directory.rs`, `src/open_terminal.rs` | Host filesystem work (browsing, Trash, repository discovery, clone, remote probing, agent detection) and launching the system terminal, file manager or default application |
-| `src/subprocess.rs` | Running a spawned process to completion within bounds (`run_bounded`, `run_with_timeout`) and detached spawning |
+| `src/subprocess.rs` | Running a spawned process to completion within bounds (`run_bounded`, `run_with_timeout`), exchanging lines with one that answers on stdout while stdin stays open (`run_exchange`), and detached spawning |
 | `src/hooks.rs`, `src/hook_queue.rs`, `src/hook_mode.rs` | Reading what an agent's hook payload says, the per-session ordered queue of unapplied hook events, and the `octoboardd hook` mode |
 | `src/transcript.rs`, `src/rollout.rs`, `src/record_watch.rs`, `src/line_file.rs` | Watching an agent's own session record for status changes hooks never report (Claude Code transcript, Codex rollout), over a shared offset-tracked line reader |
 | `src/agent_records.rs`, `src/record_titles.rs`, `src/session_title.rs`, `src/usage.rs` | Where each agent keeps its on-disk session records, the titles they give a conversation, the title a session shows, and native token statistics |
 | `src/git_ref_mode.rs`, `src/loopback.rs` | The `octoboardd git-ref` mode, and the minimal HTTP client for the daemon's own loopback address shared by the CLI modes |
 | `src/instance_lock.rs`, `src/paths.rs` | One daemon per data directory, and where Octoboard keeps its files under `~/.octoboard` |
-| `src/test_support.rs` | Test-only fixtures shared by the modules' unit tests (scratch directories, stored state, stand-in sessions, git repositories) |
+| `src/test_support.rs` | Test-only fixtures shared by the modules' unit tests (scratch directories, stored state, stand-in sessions, fake agent CLIs, git repositories) |
 | `src/mcp/` | The Octoboard MCP server (below) |
 | `src/browse/` | Project-browsing reads over the control socket (below) |
 | `src/adapter/` | One adapter per agent CLI (below) |
@@ -121,7 +123,7 @@ injected when a session starts.
 
 | File | Agent |
 |---|---|
-| `mod.rs` | The adapter trait and the agent-agnostic launch/resume flow shared by all three, and `config_dir_var` |
+| `mod.rs` | The adapter trait and the agent-agnostic launch/resume flow shared by all three, `config_dir_var`, and `account_command` (the command for a short query of an agent's CLI as an account would run it) |
 | `claude.rs` | Claude Code |
 | `codex.rs` | Codex |
 | `grok.rs` | Grok Build |

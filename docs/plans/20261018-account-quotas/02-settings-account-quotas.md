@@ -20,6 +20,16 @@
 - [ ] Opening the section sends the refresh request.
 - [ ] Strings in every i18n catalog; gallery scenarios through the gallery skill.
 
+## Handoff
+
+- The daemon's quota error codes (`quota_binary_not_found`, `quota_shell_environment_failed`, `quota_timed_out`,
+  `quota_command_failed`, `quota_unreadable_reply`, `quota_no_windows`) have no `daemon.<code>` messages in the UI
+  catalogs yet; add them when rendering `unavailable`.
+- `plan` arrives raw (`max`, `plus`, `SuperGrok`); the UI decides how to display it.
+- A failed re-read keeps the last good windows with `unavailable` set beside them; show them as stale rather than
+  hiding them. An account never read successfully has empty windows.
+- `refresh_account_quotas` cannot target only the default account; an agent-only scope includes it.
+
 ## Notes for the developer
 
 - **Reusable capabilities**: HeroUI's `Meter` (semantically "remaining"); the existing live-clock hook and relative

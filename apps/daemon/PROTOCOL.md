@@ -55,6 +55,7 @@ the request id as if it were a record id.
 | `detect_directory_agent` | `path` | Answered with `agent_detected`: the agent the directory at `path` is set up for (marker rules as for `add_project`), or null for none, several, or one known not to be installed. A `path` that is not absolute, does not exist or is not a directory is refused with `path_not_absolute`, `path_not_found` or `path_not_a_directory`, as for `add_project` |
 | `probe_git_remote` | `remote_url` | Answered with `agent_detected` for the remote's top-level names, or refused with `git_remote_unreachable`. Does a shallow, blobless, checkout-less `git clone` into a scratch directory and lists its top level, so it proves the remote can be read with the user's credentials. Runs in the same non-interactive environment as a clone; the fetch is bounded by a 60 second deadline and the scratch directory is removed when the probe ends. An empty repository is reachable and answers null |
 | `list_agent_models` | `agent`, `account?` | Answered with `agent_models`: the models `agent` currently offers, read from the catalogue of the account `account` names (an account id; absent is the default account). An `account` that does not exist or belongs to another agent is refused with `unknown_account`. Nothing else is a refusal: a missing binary, no network, a non-zero exit or output past 8 MiB, output that cannot be read or a command that runs past 15 seconds are an empty list with a reason (see "Agent models" below). Never touches a session or the stored accounts |
+| `refresh_account_quotas` | `agent?`, `account?` | Answered with `ack` at once. Re-reads the plan quota of the accounts it selects whose last attempt is older than the polling interval (five minutes, longer for an account that keeps failing): `agent` limits it to one agent's accounts, `account` (an account id) to that one account, and with neither it covers every account of every available agent. An `account` that does not exist or belongs to another `agent` is refused with `unknown_account`. Each reading that finishes follows as `account_quotas_updated`; an account that is not due, or whose reading is already running, is left alone. See "Account quotas" below |
 | `export_configuration` | `console?` | Answered with `configuration_exported`: the configuration document (see "Configuration export" below) of the console `console` names, or, when it is absent, of every console and the application settings. A `console` that does not exist is refused with `unknown_console` rather than answered with an empty document. A read of what is stored: it runs no `git` and touches no session |
 | `inspect_configuration` | `document` | Answered with `configuration_inspected`: for each project of the configuration document `document` (see "Configuration import" below) the directories it could be placed in on this machine, and for each account reference whether it falls back to a default account. Changes nothing and runs no `git`. Its existence checks of paths together have a 15 second deadline; a project whose check did not come back in that time is offered nothing. A document that is not a configuration document, is of a version this daemon does not read, or cannot be read is refused with `configuration_not_recognised`, `configuration_version_unsupported` or `configuration_unreadable` |
 | `import_configuration` | `document`, `resolutions?`, `apply_settings?` | Answered with `configuration_imported`: creates a new console for each console of `document` and associates each project with the directory its entry in `resolutions` chooses (see "Configuration import" below). A project with no entry is left out. The document is refused as `inspect_configuration` refuses it, and a resolution that names a console or project the document does not have, names one twice, or chooses a `directory` that is neither an absolute path nor starts with `~/`, is refused with `import_resolution_invalid`; all of that before anything is created, as is anything `create_console` would refuse of a console of the document (an avatar that is not an image, say). `apply_settings` (absent means false) also applies the document's application settings; asking for them of a document that carries none is refused with `import_settings_missing`, before anything is created. A project that cannot be placed after that is not an error of the request (see "Configuration import") |
@@ -107,8 +108,9 @@ the request id as if it were a record id.
 
 | `type` | Fields |
 |---|---|
-| `snapshot` | `hosts`, `consoles`, `projects`, `sessions`, `trusted_directories`, `settings`, `git_statuses`, `agent_availability`, `home_dir` — sent once, unprompted, when a control socket connects. `git_statuses` is every `GitStatus` the daemon currently holds, empty on a fresh start — carried here, like the trusted directories, so a reconnecting client never has to ask for it separately. `agent_availability` is always three entries, one per agent, each `not_determined` until the daemon's one-time login-shell snapshot for this run lands — see "Agent availability" below. `home_dir` is the daemon host's home directory — not the browser's, the two may be on different machines — so a client can show a path under it as `~/...`; null when the daemon cannot determine one (`HOME` unset, relative or the filesystem root) |
+| `snapshot` | `hosts`, `consoles`, `projects`, `sessions`, `trusted_directories`, `settings`, `git_statuses`, `agent_availability`, `account_quotas`, `home_dir` — sent once, unprompted, when a control socket connects. `git_statuses` is every `GitStatus` the daemon currently holds, empty on a fresh start — carried here, like the trusted directories, so a reconnecting client never has to ask for it separately. `agent_availability` is always three entries, one per agent, each `not_determined` until the daemon's one-time login-shell snapshot for this run lands — see "Agent availability" below. `account_quotas` is the plan quota last read for each account of every available agent, empty until the first readings land — see "Account quotas" below. `home_dir` is the daemon host's home directory — not the browser's, the two may be on different machines — so a client can show a path under it as `~/...`; null when the daemon cannot determine one (`HOME` unset, relative or the filesystem root) |
 | `agent_availability_updated` | `agent_availability` — the whole three-entry list, sent once, when the daemon's one-time determination of it lands; never again afterwards, since nothing re-determines it during a run |
+| `account_quotas_updated` | `account_quotas` — the whole list, sent whenever a reading finishes or an account's reading is dropped (the account was repointed or deleted); see "Account quotas" below |
 | `trusted_directories_updated` | `trusted_directories` — the whole list of trusted directory paths, sent when it changes |
 | `settings_updated` | `settings` — the whole `Settings` record, sent when `update_settings` actually changes it, and also whenever the account list changes (`create_account`, `update_account`, `delete_account`, `set_account_approval_reviewer`, or a console dialog's save that repoints or mints one) |
 | `console_upserted` / `project_upserted` / `session_upserted` | `console` / `project` / `session` — the whole record, under that key |
@@ -582,6 +584,57 @@ stays usable. A client shows the reason and falls back to the agent's own defaul
 | `models_timed_out` | `agent` | The command did not finish within 15 seconds |
 | `models_command_failed` | `agent`, `detail` | The command could not be run, exited non-zero, or printed more than 8 MiB; `detail` is the exit status and the last line of the first 4 KiB it wrote to stderr (which can end mid-line), or the reason it could not be run or kept running, such as `produced more than … bytes of output` |
 | `models_unreadable_output` | `agent` | The command succeeded but printed no model that could be read |
+
+### Account quotas
+
+An `AccountQuota` is how much of one account's plan the agent's own CLI says is used. The daemon asks the CLI itself and
+never reads a credential or calls a server of its own. It runs the CLI the way a session of the account would be run:
+the login-shell snapshot, the agent's configuration-directory variable set to the account's directory (left as the
+shell has it for the default account), and the home directory as working directory. The exception is that MCP servers,
+plugins and hooks are left out where the CLI allows it without changing the sign-in (see "What a probe touches" in
+`docs/agent-cli-reference.md`).
+The commands and the replies they give are in the same document, "Plan quota". The readings are runtime state: held in
+memory, never stored, never part of `get_settings` or an exported configuration.
+
+```
+AccountQuota { agent, account, fetched_at, plan, windows: [QuotaWindow], unavailable }
+QuotaWindow  { kind, label, used_percent, resets_at, window_minutes }
+```
+
+- `account` is the account's id, `null` for the agent's default account. There is one entry per account of every
+  available agent, the default account included, ordered by agent and then account with the default account first.
+- `fetched_at` and `resets_at` are milliseconds since the epoch. `plan` is the plan as the agent names it (`max`,
+  `plus`, `SuperGrok`), null when it does not say.
+- `kind` is `session` (the five-hour window), `weekly`, `weekly_model` (a weekly window of the one model `label` names)
+  or `credit_period` (a pool of credits over a billing period). Claude Code reports `session`, `weekly` and one
+  `weekly_model` per model with its own weekly limit, Codex `session` and `weekly`, Grok Build one `credit_period`.
+  `used_percent` is used, not remaining, normally 0 to 100 (a value above 100 is passed on as the agent gives it).
+  `window_minutes` is the window's length where it is known; a Grok `credit_period`'s is the span of its current
+  period.
+- `windows` is empty while the account has never been read successfully. When a later attempt fails, the last good
+  `windows`, `plan` and `fetched_at` are kept and `unavailable` is set beside them, so a client can show them as stale;
+  the next success clears it. A reading that cannot be taken or read is a state of that account only: the agents mark
+  these calls experimental, so nothing else is affected by it.
+
+| `code` | `params` | Meaning |
+|---|---|---|
+| `quota_binary_not_found` | `binary` | The agent's binary does not resolve on the login shell's `PATH` |
+| `quota_shell_environment_failed` | `detail` | The login-shell snapshot the command runs in could not be taken |
+| `quota_timed_out` | `agent` | The command gave no reply within 15 seconds |
+| `quota_command_failed` | `agent`, `detail` | The command could not be run, ended without replying, printed more than 8 MiB, or answered the request with an error; `detail` is the exit status and the last line of the first 4 KiB it wrote to stderr, or the error's message |
+| `quota_unreadable_reply` | `agent` | The command replied, but not in a shape that holds a quota window |
+| `quota_no_windows` | `agent` | The command replied and the account has no quota windows to report (an account without a subscription, say) |
+
+Readings are kept per agent, account and configuration directory, so an account pointed at another directory never
+inherits the old one's. `delete_account`, and `update_account` when it changes the directory, drop the account's reading
+at once (a rename keeps it), and a reading still running for it is discarded when it lands. A reading is also dropped
+when its account is no longer one of those the poller covers. A background poller started with the daemon reads every
+account of every available agent about every five minutes, four CLIs at a time across the whole daemon. An account
+whose reading ends unavailable is tried again after twice, four times and then eight times that interval, and a reading
+still running is never started twice. A newly created account, or an agent found available after the daemon's start, is
+read within the poller's next look, which comes every fifteen seconds. `refresh_account_quotas` runs the same path on
+request for a client that wants fresher data when it opens a view: it only reads what is due, so asking on every open
+costs nothing. Every change to the list is broadcast whole as `account_quotas_updated`.
 
 ### Configuration export
 
