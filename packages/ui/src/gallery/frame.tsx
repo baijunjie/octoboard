@@ -14,6 +14,7 @@ import { ConfigurationFileError } from "../platform/configurationFileError";
 import { galleryFailure } from "./banner";
 import { SCENARIOS } from "./fixtures";
 import { installFakeTerminal } from "./fakeTerminal";
+import { holdPrimaryModifier } from "./heldModifier";
 import { createUi, settleMotion, stuckExit } from "./interact";
 import { prepareStorage } from "./prepare";
 
@@ -31,6 +32,8 @@ document.documentElement.classList.add(theme);
 document.documentElement.setAttribute("data-theme", theme);
 
 installFakeTerminal();
+// The shell's Held control: the new-session "+" buttons as they are while the shortcut modifier is down.
+const heldModifier = params.get("held") === "1" ? holdPrimaryModifier() : undefined;
 
 const [{ App }, { Toasts }, { ErrorBoundary }, { LanguageProvider }, { selectPlatform }, { PlatformProvider }, startup, store, { ThemeProvider }] =
   await Promise.all([
@@ -161,6 +164,8 @@ try {
   const ui = createUi(document, language, daemon);
   await ui.wait(300);
   for (const step of scenario?.steps ?? []) await step(ui);
+  // After the steps, which find the "+" buttons by their plain names, not the held form's.
+  heldModifier?.press();
   const stuck = await stuckExit(document);
   if (stuck) galleryFailure(`Something that was closing never left the page: ${stuck} is still marked data-exiting`);
 } catch (error) {

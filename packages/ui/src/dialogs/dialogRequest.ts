@@ -29,3 +29,6 @@ export type DialogRequest =
   /** Every archived session of `project`, or every archived session bound to `consoleSession`, or
    * with neither every archived console session of `console`. */
   | { kind: "delete-archived"; console: Console; project?: Project; consoleSession?: Session; count: number };
+
+/** The dialog requests that open a session, which a quick create answers without the dialog. */
+export type NewSessionRequest = Extract<DialogRequest, { kind: "new-console-session" | "new-session" }>;

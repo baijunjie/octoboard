@@ -79,7 +79,8 @@ are listed in, pinning, the archive view and how selecting a session works — i
 
 New console session from the console header, the console sessions section's empty row, and the terminal's offer of
 the same action open a dialog before anything is launched. New session under a project opens the same dialog for that
-project.
+project. The sidebar's **+** buttons can also open a session without the dialog, on the values the dialog would open
+on; see "Opening a session with defaults" below.
 
 A project session's dialog opens with two tabs at its head, **New conversation**, selected by default, and **Resume
 conversation**, each holding the whole form: the **Resume conversation** tab starts with a required **Session ID**
@@ -161,7 +162,8 @@ If the launch itself fails — the directory cannot be reached, the agent binary
 shell environment could not be captured (see "The launch environment" in `docs/product/launching-agents.md`), or, for
 Grok Build only, the account the session would hold pins a directory that is not an initialized Grok home (see "Agent
 config directories" in `docs/product/consoles-and-projects.md`) — the *starting* session is removed again and no
-session is left behind. For a session opened from the dialog the failure is reported as a notice toast that names
+session is left behind. For a session opened from the dialog, or with defaults (see "Opening a session with
+defaults" below), the failure is reported as a notice toast that names
 the session and gives the reason, worded from the failure's own code in the UI's language; for a shell environment
 capture that ran out of time, the title names the session alone and the explanation is laid out beneath it — the
 command that did not finish and its time limit, the likely cause, and what to fix. Should the session's record itself
@@ -172,7 +174,8 @@ session for the other two agents: it has no conversation to lose, so Claude Code
 Octoboard creates it for Codex.
 
 **With every agent determined unavailable, opening a session is refused outright, before any of that**: the dialog
-cannot be submitted, the console header's new-session action is disabled, and a console session's
+cannot be submitted, the console header's new-session action is disabled, no **+** offers to open a session with
+defaults (see "Opening a session with defaults" below), and a console session's
 `start_session` tool is refused with a reason it can report (see "The console session's tools" in
 `docs/product/hub-orchestration.md`). The dialog and the tool's refusal say which agents Octoboard supports and that one
 of them has to be on the user's `PATH`, without saying how to install one; the console sessions section, with room for
@@ -180,6 +183,48 @@ less, says only that no agent was found on the user's `PATH` (see "The console s
 `docs/product/sidebar.md`). This refusal only ever fires once availability has actually been determined and found none;
 while that determination is still pending, nothing is refused on its account and a session opens or fails exactly as
 described above.
+
+### Opening a session with defaults
+
+While the platform's primary modifier is held — ⌘ on macOS, Ctrl elsewhere, each without the other — every sidebar
+**+** that opens the session dialog turns into its quick form: it shows a bolt in place of the plus, and its tooltip
+and accessible name say it opens the session **with defaults**. Pressing it then opens the session at once, without
+the dialog. These are:
+
+- the console header's **+**, New console session (see "The console header" in `docs/product/sidebar.md`);
+- each project row's **+** (see "Project rows" in `docs/product/sidebar.md`);
+- the header's **+** in a project's focus mode (see "A project's focus mode" in `docs/product/focus-mode.md`);
+- in a console session's focus mode, each project's own **+** and the header's **+** menu of projects, where the
+  project chosen is opened with defaults (see "A console session's focus mode" in `docs/product/focus-mode.md`).
+
+The empty rows' and the terminal's **New session** and **New console session** offers have no quick form; they always
+open the dialog.
+
+A **+** button pressed with the modifier opens with defaults even when the hold had not been noticed before the press.
+A project chosen from the console session focus mode's menu follows whether the modifier is held at the moment it is
+chosen. The hold ends when the key is released, when the window loses focus and when the page is hidden; a modifier
+already down while the window was in the background is picked up once the pointer moves or a key is pressed.
+
+The session opened is the one the dialog would open if submitted untouched:
+
+- no name, so it takes its parent's current name (see **Name** above);
+- the agent and account the dialog opens on (see "Which agent a session uses" and "Which account a session uses"
+  below), sent as the session's own choice;
+- no model or reasoning effort of its own, so both follow the parent;
+- a new conversation, never a resumed one;
+- **unbound** — from the project list too, where the dialog's **Report to** starts on no console session — except in a
+  console session's focus mode, where it is bound to that console session, as the dialog opened there binds it.
+
+It is listed as *starting* and selected, as a session opened from the dialog is, and a launch failure is reported the
+same way (see above). A refusal the dialog would show inside itself is an error toast instead. When the console
+session it would be bound to is no longer available — archived or gone — nothing is sent, and an error toast says so,
+with the same message the dialog shows in that case. Only one session opens with defaults at a time: further presses
+are ignored until the daemon has answered the previous one. If the sidebar has switched to another console by the time
+the answer arrives, the session is still opened but not selected.
+
+With every agent determined unavailable, no **+** shows its quick form: a press opens the dialog, which explains the
+missing agent, and the console header's **+** stays disabled (see "The console sessions section and the project list"
+in `docs/product/sidebar.md`).
 
 ### Which agent a session uses
 

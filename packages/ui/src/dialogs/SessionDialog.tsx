@@ -23,6 +23,7 @@ import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
 import type { NewSessionBinding } from "./dialogRequest";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
+import { openSessionRequest } from "./openSessionRequest";
 import { OptionSelect } from "./OptionSelect";
 import { TextInput } from "./TextInput";
 
@@ -172,16 +173,15 @@ export function SessionDialog({
     }
     void run(async () => {
       setRefusal(undefined);
-      const reply = await request({
-        type: "open_session",
-        console_id: parentConsole.id,
-        ...(project ? { project_id: project.id, bound_to: owner?.id } : {}),
-        ...(resuming ? { resume_agent_session_id: resumeId } : {}),
-        agent: choice.agent,
-        account: choice.account,
-        title: title || undefined,
-        ...overrides,
-      }).catch((err: unknown) => {
+      const reply = await request(openSessionRequest({
+        console: parentConsole,
+        project,
+        ownerId: owner?.id,
+        resumeId: resuming ? resumeId : undefined,
+        choice,
+        title,
+        overrides,
+      })).catch((err: unknown) => {
         if (!(err instanceof DaemonRequestError) || !resuming || !RESUME_REFUSALS.has(err.code)) throw err;
         setRefusal({ error: err, asked });
         resumeFieldRef.current?.querySelector("input")?.focus();

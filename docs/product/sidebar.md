@@ -110,7 +110,8 @@ is a **preview**:
 
 The top of the sidebar names the console being shown, followed by a **+** button, **New console session**,
 then its action menu. The **+** opens the session dialog before launching anything (see "Opening a session" in
-`docs/product/sessions.md`). The menu offers **Add project**, **Edit console**, **Archived console sessions** and,
+`docs/product/sessions.md`), or, with the primary modifier held, opens a console session at once without it (see
+"Opening a session with defaults" in `docs/product/sessions.md`). The menu offers **Add project**, **Edit console**, **Archived console sessions** and,
 after a separator, **Delete console** (see "Associating a project",
 "Editing a console" and "Deleting a console" in `docs/product/consoles-and-projects.md`; deleting asks for a typed
 confirmation first). **Archived console sessions** is a submenu of the console's newest archived console sessions, each
@@ -269,7 +270,8 @@ stands for, in the same words the row's own name folds in beside the project's n
 
 At the row's end are its pin button while the project is pinned (see "Pinning" below), then a **+** button, **New
 session**, which opens the new-session dialog for that project (see "Opening a session" in
-`docs/product/sessions.md`), and the project's action menu. The same menu is the focused
+`docs/product/sessions.md`) — or, with the primary modifier held, opens the session at once without it (see "Opening
+a session with defaults" in the same doc) — and the project's action menu. The same menu is the focused
 project's, and a project's heading in a console session's focus mode, apart from the items those views leave out
 (see "What both views show" and "A console session's focus mode" in `docs/product/focus-mode.md`). Choosing an action
 closes the menu at once; submenu entries open their next menu. Separators split it into four groups, in this order:

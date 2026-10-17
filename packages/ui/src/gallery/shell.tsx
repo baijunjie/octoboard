@@ -30,6 +30,8 @@ interface View {
   width?: number;
   /** Likewise; otherwise the scenario's own, and otherwise the window fits the page. */
   height?: number;
+  /** The shortcut modifier is held down, as the page's viewing condition, whatever the scenario. */
+  held: boolean;
 }
 
 function readView(): View {
@@ -43,11 +45,20 @@ function readView(): View {
     language: isLanguage(language) ? language : "en",
     width: Number.isFinite(width) && width > 0 ? width : undefined,
     height: Number.isFinite(height) && height > 0 ? height : undefined,
+    held: params.get("held") === "1",
   };
 }
 
-function viewQuery(view: View): string {
+/** The parameters the shell page and the frame both take from a view: its scenario, theme and
+ * language, and the shortcut modifier while held. */
+function sharedParams(view: View): URLSearchParams {
   const params = new URLSearchParams({ scenario: view.scenario, theme: view.theme, lang: view.language });
+  if (view.held) params.set("held", "1");
+  return params;
+}
+
+function viewQuery(view: View): string {
+  const params = sharedParams(view);
   if (view.width) params.set("width", String(view.width));
   if (view.height) params.set("height", String(view.height));
   return `?${params}`;
@@ -118,7 +129,7 @@ function Gallery(): React.ReactElement {
     window.history.replaceState(null, "", viewQuery(view));
   }, [view]);
 
-  const frameQuery = `?${new URLSearchParams({ scenario: scenario.id, theme: view.theme, lang: view.language })}`;
+  const frameQuery = `?${sharedParams({ ...view, scenario: scenario.id })}`;
 
   return (
     <>
@@ -199,6 +210,14 @@ function Gallery(): React.ReactElement {
               </button>
             ))}
             <SizeBox label="Height in pixels" size={height} min={MIN_HEIGHT} emptyMeans="fit" onCommit={(h) => update({ height: h })} />
+          </div>
+          <div className="group">
+            Modifier (⌘ / Ctrl)
+            {([false, true] as const).map((held) => (
+              <button key={String(held)} aria-pressed={view.held === held} onClick={() => update({ held })}>
+                {held ? "Held" : "Released"}
+              </button>
+            ))}
           </div>
           <a href={`gallery-frame.html${frameQuery}`} target="_blank" rel="noreferrer">
             Open alone

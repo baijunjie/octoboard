@@ -357,6 +357,7 @@ export const en = {
   "sidebar.console.delete": "Delete console",
   "sidebar.consoleSessions.headingWithCount": "Console sessions ({count})",
   "sidebar.consoleSessions.new": "New console session",
+  "sidebar.consoleSessions.newQuick": "New console session with defaults",
   "sidebar.consoleSessions.empty": "No console sessions yet",
   "sidebar.archive.consoleSessions": "Archived console sessions",
   "sidebar.archive.empty": "No archived sessions",
@@ -364,6 +365,7 @@ export const en = {
   "sidebar.project.ariaLabelPinned": "{name}, pinned",
   "sidebar.project.actions": "Actions for project {name}",
   "sidebar.project.openSession": "New session",
+  "sidebar.project.openSessionQuick": "New session with defaults",
   "sidebar.project.copyName": "Copy project name",
   "sidebar.project.nameCopied": "Project name copied",
   "sidebar.project.copyNameFailed": "Could not copy the project name",
@@ -414,7 +416,9 @@ export const en = {
   "sidebar.focus.enter": "Focus mode",
   "sidebar.focus.exit": "Leave focus mode",
   "sidebar.focus.newSession": "New session",
+  "sidebar.focus.newSessionQuick": "New session with defaults",
   "sidebar.focus.newSessionIn": "New session in {name}",
+  "sidebar.focus.newSessionInQuick": "New session in {name} with defaults",
   "sidebar.focus.noBoundSessions": "No bound sessions",
   // "Under" rather than "bound to": the count covers a lead session's own sessions too, and those
   // are bound to the lead session, not to the console session above it.

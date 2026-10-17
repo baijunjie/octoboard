@@ -53,7 +53,7 @@ export const emptyScenarios: Scenario[] = [
     category: "exceptional",
     title: "A console, no agent installed",
     description:
-      "Under Console sessions the row says no agent was found on PATH and the section's New console session is disabled; the console session left over from before still shows beneath it. The project below keeps its own empty row.",
+      "Under Console sessions the row says no agent was found on PATH and the section's New console session is disabled; the console session left over from before still shows beneath it. The project below keeps its own empty row. Modifier: Held changes nothing here: with no agent to create with, the project's \"+\" stays plain and opens the dialog.",
     state: {
       ...snapshotState({
         consoles: [consoleOf("c-1", "Main")],

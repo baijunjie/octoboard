@@ -5,7 +5,6 @@ import {
   ListChevronsDownUp,
   ListChevronsUpDown,
   MessageSquarePlus,
-  Plus,
   SearchX,
   TriangleAlert,
 } from "lucide-react";
@@ -24,6 +23,7 @@ import { RowControls, RowIconGroup, RowIconSlot } from "../components/RowControl
 import { FadedScroller } from "../components/scrollFade";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { StatusIcon } from "../components/StatusIcon";
+import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { withGitBadge } from "../gitStatusLabel";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
@@ -40,6 +40,7 @@ import { BindingBadge } from "./BindingBadge";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
 import { consoleMenu, projectMenu } from "./menus";
+import { NewSessionButton } from "./NewSessionButton";
 import { SessionActions } from "./SessionActions";
 import { archivedSessions, consoleActivity, INACTIVE_PROJECT_RANK, liveSessionRows, liveSessions, projectRank, sortProjectsByRank } from "./order";
 import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterSummary } from "./ProjectFilter";
@@ -113,6 +114,7 @@ export function Sidebar({
   onSwitchConsoleSession,
   onOpenConsoleSession,
   onOpenDialog,
+  onQuickCreateSession,
   onFocus,
   onOpenArchive,
   onBrowseProject,
@@ -139,6 +141,7 @@ export function Sidebar({
     onSwitchConsoleSession,
     onOpenConsoleSession,
     onOpenDialog,
+    onQuickCreateSession,
     onFocus,
     onOpenArchive,
     onBrowseProject,
@@ -396,7 +399,6 @@ export function Sidebar({
 function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers; current: Console }): React.ReactElement {
   const t = useT();
   const headerRef = useRef<HTMLDivElement>(null);
-  const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const sessions = useArchivedOwnerSessions(current.id);
   return (
     // The list under this header is inset twice — the scroll area, then each heading and row — so
@@ -406,7 +408,14 @@ function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers; curre
         <span className="text-base font-semibold">{current.name}</span>
       </RowLabel>
       <RowIconGroup>
-        <RowIconButton icon={Plus} label={t("sidebar.consoleSessions.new")} onPress={() => handlers.onOpenConsoleSession(current)} isDisabled={noAgentAvailable(agentAvailability)} />
+        <NewSessionButton
+          label={t("sidebar.consoleSessions.new")}
+          quickLabel={t("sidebar.consoleSessions.newQuick")}
+          target={() => ({ kind: "new-console-session", console: current })}
+          onOpen={handlers.onOpenDialog}
+          onQuickCreate={handlers.onQuickCreateSession}
+          isDisabledWhenBlocked
+        />
         <ActionMenu
           label={t("sidebar.console.actions", { name: isolate(current.name) })}
           items={consoleMenu(t, current, handlers, sessions)}
@@ -729,8 +738,7 @@ const ProjectNode = memo(function ProjectNode({
   const lastRootIndex = rows.reduce((last, row, index) => row.under ? last : index, -1);
   const archived = archivedSessions(sessions);
   const activity = consoleActivity(sessions);
-  const openSession = () =>
-    handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project, binding: { kind: "choose" } });
+  const newSession = (): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "choose" } });
   const activityKey = activityLabelKey(activity, project.pinned);
   const nameLabel = activityKey
     ? t(activityKey, { name: isolate(project.name) })
@@ -768,7 +776,7 @@ const ProjectNode = memo(function ProjectNode({
         <GitBadge status={gitStatus} decorative />
         {isCollapsed && <ActivityMarker activity={activity} />}
         <RowControls fixed={project.pinned ? <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={rowRef} /> : undefined}>
-          <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />
+          <NewSessionButton label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
           <ActionMenu label={t("sidebar.project.actions", { name: isolate(project.name) })} items={projectMenu(t, handlers, project, archived, sessions, { gitRepository: gitStatus?.repository })} contextTargetRef={rowRef} />
         </RowControls>
       </TreeRow>
@@ -781,7 +789,7 @@ const ProjectNode = memo(function ProjectNode({
               compact
               icon={MessageSquarePlus}
               message={t("sidebar.noSessions")}
-              action={{ label: t("sidebar.project.openSession"), onPress: openSession }}
+              action={{ label: t("sidebar.project.openSession"), onPress: () => handlers.onOpenDialog(newSession()) }}
             />
           ) : (
             <div ref={listRef} className="relative flex flex-col gap-0.5">

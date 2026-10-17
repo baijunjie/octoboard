@@ -28,6 +28,7 @@ import { ConfirmDialog } from "./dialogs/ConfirmDialog";
 import type { DialogRequest } from "./dialogs/dialogRequest";
 import { PendingQuestionDialog, usePendingQuestion } from "./dialogs/PendingQuestionDialog";
 import { RequestedDialog } from "./dialogs/RequestedDialog";
+import { useQuickCreateSession } from "./dialogs/useQuickCreateSession";
 import { useT } from "./i18n/react";
 import type { AsideLayout } from "./layout/AsidePane";
 import { ASIDE_LABELS, liveOwner, ownerAfterMove, ownerForSession, ownerKey, sameOwner, type AsideOwner } from "./layout/asideOwner";
@@ -321,14 +322,17 @@ export function App(): React.ReactElement {
 
   const openConsoleSession = (console_: Console) => openDialog({ kind: "new-console-session", console: console_ });
 
-  /** Puts a session this window just opened on screen; it is always in the console and project the
-   * sidebar already shows, so only the archive view, were it open, has to give way. */
+  /** Puts a session this window just opened on screen; it is in the console the sidebar shows
+   * (a dialog holds the window still, and a quick create does not call this once the console has
+   * changed under it), so only the archive view, were it open, has to give way. */
   const showOpenedSession = (sessionId: string) => {
     setSelectionByUser(sessionId);
     // The reply that names the session has already been applied to the store by the time this runs.
     setOwnerByUser(ownerForSession(store.getState().sessions.get(sessionId)));
     setArchiveScope(undefined);
   };
+
+  const quickCreateSession = useQuickCreateSession(showOpenedSession, sidebarView.currentConsole?.id);
 
   // `create_console` is answered with a bare ack, so the console this window just created is
   // recognised as the one that was not there when its dialog opened, and the sidebar switches to it.
@@ -617,6 +621,7 @@ export function App(): React.ReactElement {
   const stableSwitchConsoleSession = useStableHandler(switchConsoleSession);
   const stableOpenConsoleSession = useStableHandler(openConsoleSession);
   const stableOpenDialog = useStableHandler(openDialog);
+  const stableQuickCreateSession = useStableHandler(quickCreateSession);
   const stableReopenSession = useStableHandler(reopenSession);
   const stableArchiveSession = useStableHandler(archiveSession);
   const stableSetSessionColour = useStableHandler(setSessionColour);
@@ -734,6 +739,7 @@ export function App(): React.ReactElement {
                 onSwitchConsoleSession={stableSwitchConsoleSession}
                 onOpenConsoleSession={stableOpenConsoleSession}
                 onOpenDialog={stableOpenDialog}
+                onQuickCreateSession={stableQuickCreateSession}
                 onFocus={stableFocus}
                 onOpenArchive={stableOpenArchive}
                 visibleBrowserProjectId={panes.asideShown || panes.asidePeek.active ? asideProject?.id : undefined}

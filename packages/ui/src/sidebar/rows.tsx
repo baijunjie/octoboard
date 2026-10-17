@@ -1,6 +1,7 @@
 import { Button } from "@heroui/react";
 import { Lock, LockOpen, Pin, PinOff, type LucideIcon } from "lucide-react";
 import React, { type RefObject, useRef } from "react";
+import type { PressEvent } from "react-aria-components";
 
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
 import { handFocusOff } from "../components/handFocusOff";
@@ -128,7 +129,7 @@ export function RowIconButton({
   label: string;
   /** The accessible name, when it says more than the tooltip's bare verb (whose row it acts on). */
   ariaLabel?: string;
-  onPress: () => void;
+  onPress: (event: PressEvent) => void;
   isDisabled?: boolean;
   /** Extra classes on the glyph itself, such as a right-to-left mirror. */
   iconClassName?: string;

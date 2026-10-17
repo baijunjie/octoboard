@@ -1,5 +1,5 @@
 import type { ActionMenuEntry } from "../components/ActionMenu";
-import type { DialogRequest } from "../dialogs/dialogRequest";
+import type { DialogRequest, NewSessionRequest } from "../dialogs/dialogRequest";
 import type { Console, ConsoleSessionColour, Project, Session } from "../protocol";
 import type { SettingsSectionId } from "../settings/SettingsDialog";
 
@@ -32,6 +32,8 @@ export interface SidebarHandlers {
   onSwitchConsoleSession: (session: Session) => void;
   onOpenConsoleSession: (console: Console) => void;
   onOpenDialog: (dialog: DialogRequest) => void;
+  /** Opens the session the dialog `target` would open, without the dialog, on its defaults. */
+  onQuickCreateSession: (target: NewSessionRequest) => void;
   /** Enters the focus mode of a project or a console session, or with `undefined` leaves it. */
   onFocus: (target: FocusTarget | undefined) => void;
   onOpenArchive: (scope: ArchiveScope) => void;

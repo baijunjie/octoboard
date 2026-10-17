@@ -117,7 +117,8 @@ From the top, below the header:
   scope stay the same.
 
 **New session** (the header's **+** and the empty row) opens the new-session dialog with no "Report to"
-choice: the session is always unbound.
+choice: the session is always unbound. With the primary modifier held, the header's **+** opens the session at once
+without the dialog, unbound as well (see "Opening a session with defaults" in `docs/product/sessions.md`).
 
 ## A console session's focus mode
 
@@ -136,7 +137,9 @@ choice: the session is always unbound.
   mode to be entered from here — and keeps **Pin** / **Unpin**. The project list's filter is not part of this view.
 - **New session**: the header's **+** opens a menu of the console's projects, so that a project with nothing bound yet
   can be reached; choosing one opens the new-session dialog for it. The dialog has no "Report to" field, and shows a
-  line saying the session reports to this console session, which it will be bound to.
+  line saying the session reports to this console session, which it will be bound to. With the primary modifier held,
+  this menu and each project's own **+** open the session at once without the dialog, bound to this console session
+  all the same (see "Opening a session with defaults" in `docs/product/sessions.md`).
 - **With no project in the console at all** there is nothing to open a session in: the header's **+** is disabled, and
   in place of the sessions a compact row says the console has no projects yet; clicking it opens **Add project**.
 - **Archived (n)** counts the archived sessions under this console session — bound to it, or bound to an archived lead

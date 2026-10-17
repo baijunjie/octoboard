@@ -1,5 +1,5 @@
 import { Badge, Button, Switch, Tooltip } from "@heroui/react";
-import { ArrowLeft, FolderOpen, FolderPlus, List, MessageSquarePlus, Plus } from "lucide-react";
+import { ArrowLeft, FolderPlus, List, MessageSquarePlus } from "lucide-react";
 import React, { memo, useId, useLayoutEffect, useRef } from "react";
 
 import { AGENT_LABEL } from "../agents";
@@ -15,6 +15,7 @@ import { TitledControl } from "../components/TitledControl";
 import { useListMotion } from "../components/useListMotion";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { FadedScroller } from "../components/scrollFade";
+import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { isolate } from "../i18n/isolate";
 import { joinPhrases } from "../i18n/joinPhrases";
 import { useCurrentLanguage, useT } from "../i18n/react";
@@ -28,10 +29,12 @@ import { useNow } from "../useNow";
 import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu, sessionMenu } from "./menus";
+import { NewSessionButton } from "./NewSessionButton";
+import { NewSessionMenu } from "./NewSessionMenu";
 import { SessionActions } from "./SessionActions";
-import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroupRows, focusGroups, hasBoundSessions, liveSessionRows, type NestedSession, notUnderConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
+import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroupRows, focusGroups, hasBoundSessions, liveSessionRows, type NestedSession, notUnderConsoleSession, switchStrip, type SwitchStripEntry } from "./order";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
-import { NESTED_INSET_CLASS, LockButton, PinButton, RowIconButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
+import { NESTED_INSET_CLASS, LockButton, PinButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
 
@@ -123,8 +126,7 @@ export function ProjectFocusView({
   const archived = archivedSessions(sessions);
   const archiveContext = [...sessions, ...owners.values()];
   const elsewhere = boundElsewhere(sessions, owners);
-  const openSession = () =>
-    handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project, binding: { kind: "unbound" } });
+  const newSession = (): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "unbound" } });
   const viewAll = () => handlers.onOpenArchive({ console: project.console_id, project: project.id });
   const headerRef = useRef<HTMLDivElement>(null);
   const switchFocus = useFocusHandoff(() => headerRef.current?.querySelector("button")?.focus());
@@ -140,7 +142,7 @@ export function ProjectFocusView({
         </div>
         <GitBadge status={gitStatus} />
         <RowIconGroup>
-          <RowIconButton icon={Plus} label={t("sidebar.project.openSession")} onPress={openSession} />
+          <NewSessionButton label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
           <ActionMenu
             label={t("sidebar.project.actions", { name: isolate(project.name) })}
             items={projectMenu(t, handlers, project, archived, archiveContext, { placement: "focused", gitRepository: gitStatus?.repository })}
@@ -182,7 +184,7 @@ export function ProjectFocusView({
               compact
               icon={MessageSquarePlus}
               message={t("sidebar.noSessions")}
-              action={{ label: t("sidebar.project.openSession"), onPress: openSession }}
+              action={{ label: t("sidebar.project.openSession"), onPress: () => handlers.onOpenDialog(newSession()) }}
             />
           ) : (
             <SessionCards handlers={handlers} sessions={live} selectedSessionId={selectedSessionId} consoleOwner={includeConsoleSessions ? consoleOwner : undefined} />
@@ -229,10 +231,8 @@ export function ConsoleSessionFocusView({
   const groups = focusGroups(projects, sessions, consoleSession.id);
   const liveCount = groups.reduce((sum, group) => sum + group.sessions.length, 0);
   const archived = boundArchivedSessions(sessions, consoleSession.id);
-  const openSession = (project: Project) =>
-    handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project, binding: { kind: "bound", to: consoleSession } });
+  const newSession = (project: Project): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "bound", to: consoleSession } });
   const viewAll = () => handlers.onOpenArchive({ console: parentConsole.id, consoleSession: consoleSession.id });
-  const newSessionLabel = t("sidebar.focus.newSession");
   const strip = switchStrip(sessions, parentConsole.id);
   const headerRef = useRef<HTMLDivElement>(null);
 
@@ -255,22 +255,16 @@ export function ConsoleSessionFocusView({
         </TreeRow>
         <RowIconGroup>
           {consoleSession.locked && <LockButton name={sessionDisplayTitle(t, consoleSession)} onUnlock={() => handlers.onSetLocked(consoleSession, false)} returnFocusTo={headerRef} />}
-          {projects.length === 0 ? (
-            <RowIconButton icon={Plus} label={newSessionLabel} onPress={() => {}} isDisabled />
-          ) : (
-            // A session needs a project, and a console session with nothing bound yet has no group
-            // to open one from, so the header offers every project.
-            <ActionMenu
-              label={newSessionLabel}
-              tooltip={newSessionLabel}
-              trigger={<Plus aria-hidden="true" className="size-4" />}
-              items={sortProjects(projects, () => []).map((project) => ({
-                label: project.name,
-                icon: FolderOpen,
-                onClick: () => openSession(project),
-              }))}
-            />
-          )}
+          {/* A session needs a project, and a console session with nothing bound yet has no group
+              to open one from, so the header offers every project. */}
+          <NewSessionMenu
+            label={t("sidebar.focus.newSession")}
+            quickLabel={t("sidebar.focus.newSessionQuick")}
+            projects={projects}
+            target={newSession}
+            onOpen={handlers.onOpenDialog}
+            onQuickCreate={handlers.onQuickCreateSession}
+          />
           <ActionMenu
             label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, consoleSession)) })}
             items={sessionMenu(t, handlers, consoleSession, accounts, { placement: "focused", hasBoundSessions: hasBoundSessions(sessions, consoleSession.id) })}
@@ -408,9 +402,9 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
   const boundHere = useDaemonStoreEqual((s) => focusGroupRows(sessionsOf(indexSessions(s.sessions).byConsole, parentConsole.id), project, consoleSessionId));
   const sessions = useProjectSessions(project.id);
   const archived = archivedSessions(sessions);
-  const onOpenSession = () => {
+  const newSessionHere = (): NewSessionRequest | undefined => {
     const consoleSession = store.getState().sessions.get(consoleSessionId);
-    if (consoleSession) handlers.onOpenDialog({ kind: "new-session", console: parentConsole, project, binding: { kind: "bound", to: consoleSession } });
+    return consoleSession && { kind: "new-session", console: parentConsole, project, binding: { kind: "bound", to: consoleSession } };
   };
   const headerRef = useRef<HTMLDivElement>(null);
   // Where focus goes when the pin button, ahead of it, is unpinned away.
@@ -426,7 +420,14 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
         <RowIconGroup>
           {project.pinned && <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={openSessionHolder} />}
           {/* Named for its project: the header's "+" is beside it in the same view. */}
-          <RowIconButton ref={openSessionHolder} icon={Plus} label={t("sidebar.focus.newSessionIn", { name: isolate(project.name) })} onPress={onOpenSession} />
+          <NewSessionButton
+            ref={openSessionHolder}
+            label={t("sidebar.focus.newSessionIn", { name: isolate(project.name) })}
+            quickLabel={t("sidebar.focus.newSessionInQuick", { name: isolate(project.name) })}
+            target={newSessionHere}
+            onOpen={handlers.onOpenDialog}
+            onQuickCreate={handlers.onQuickCreateSession}
+          />
           <ActionMenu
             label={t("sidebar.project.actions", { name: isolate(project.name) })}
             items={projectMenu(t, handlers, project, archived, sessions, { placement: "nested", gitRepository: gitStatus?.repository })}

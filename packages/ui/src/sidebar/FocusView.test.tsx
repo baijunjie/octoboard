@@ -3,13 +3,15 @@ import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { AGENT_OPTIONS } from "../agents";
 import { expectIndependentMarquees, stubMarquee } from "../components/marqueeTestSupport";
 import { isolate } from "../i18n/isolate";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
-import type { Session } from "../protocol";
+import type { Agent, AgentAvailability, Session } from "../protocol";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { sessionColourHex } from "../sessionColours";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { IS_MAC } from "../useWindowShortcut";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
 import type { SidebarHandlers } from "./types";
@@ -49,9 +51,9 @@ const withTeams = [...sessions, lead, underLead, underFree];
 
 /** `stored` is what the store holds of the console's sessions, which a console session's focus mode's
  * project groups read themselves. */
-function mount(render: (handlers: SidebarHandlers) => React.ReactElement, stored: Session[] = []): { text: () => string; container: HTMLElement; handlers: SidebarHandlers; unmount: () => void } {
+function mount(render: (handlers: SidebarHandlers) => React.ReactElement, stored: Session[] = [], agentAvailability?: Map<Agent, AgentAvailability>): { text: () => string; container: HTMLElement; handlers: SidebarHandlers; unmount: () => void } {
   const daemon: Daemon = {
-    store: createStateStore({ sessions: new Map(stored.map((session) => [session.id, session])), settings: { auto_pull_repositories: false, default_clone_dir: "/p", accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/w" }] } }),
+    store: createStateStore({ ...(agentAvailability && { agentAvailability }), sessions: new Map(stored.map((session) => [session.id, session])), settings: { auto_pull_repositories: false, default_clone_dir: "/p", accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/w" }] } }),
     request: vi.fn(),
     toastError: vi.fn(),
     toastNotice: vi.fn(),
@@ -60,11 +62,13 @@ function mount(render: (handlers: SidebarHandlers) => React.ReactElement, stored
     reconnect: () => {},
     terminalUrl: () => "",
   };
-  const handlers = { onFocus: vi.fn(), onOpenDialog: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn(), onSetPinned: vi.fn(), onSetLocked: vi.fn(), onSwitchConsoleSession: vi.fn() } as unknown as SidebarHandlers;
+  const handlers = { onFocus: vi.fn(), onOpenDialog: vi.fn(), onQuickCreateSession: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn(), onSetPinned: vi.fn(), onSetLocked: vi.fn(), onSwitchConsoleSession: vi.fn() } as unknown as SidebarHandlers;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() => root.render(<DaemonProvider value={daemon}>{render(handlers)}</DaemonProvider>));
   const unmount = () => {
+    // A held modifier outlives the view, so a test that leaves it down must not carry it on.
+    act(() => void window.dispatchEvent(new Event("blur")));
     act(() => root.unmount());
     container.remove();
   };
@@ -142,6 +146,58 @@ it("a console session's focus mode shows only its projects and sessions without 
   const newInProject = container.querySelector<HTMLElement>(`button[aria-label="New session in ${isolate("Website")}"]`);
   act(() => newInProject?.click());
   expect(handlers.onOpenDialog).toHaveBeenCalledWith(expect.objectContaining({ kind: "new-session", binding: { kind: "bound", to: hub1 } }));
+  unmount();
+});
+
+const hold = () => act(() => void window.dispatchEvent(new KeyboardEvent("keydown", IS_MAC ? { metaKey: true } : { ctrlKey: true })));
+const noAgent = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "unavailable" as const }]));
+const bound = { kind: "bound", to: hub1 } as const;
+
+it("with the modifier held, a project group's new-session button quick-creates instead of opening the dialog", () => {
+  const { container, handlers, unmount } = mount((h) => (
+    <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions} />
+  ), sessions);
+  hold();
+  act(() => container.querySelector<HTMLElement>(`button[aria-label="New session in ${isolate("Website")} with defaults"]`)?.click());
+  expect(handlers.onQuickCreateSession).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: bound });
+  expect(handlers.onOpenDialog).not.toHaveBeenCalled();
+  unmount();
+});
+
+it("with the modifier held, the header's project menu quick-creates for the chosen project", () => {
+  const { container, handlers, unmount } = mount((h) => (
+    <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions} />
+  ), sessions);
+  hold();
+  act(() => container.querySelector<HTMLElement>('button[aria-label="New session with defaults"]')?.click());
+  const item = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((el) => el.textContent === "Website");
+  act(() => item?.click());
+  expect(handlers.onQuickCreateSession).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: bound });
+  expect(handlers.onOpenDialog).not.toHaveBeenCalled();
+  unmount();
+});
+
+it("with no agent available, the header's project menu stays a plain \"+\" that opens the dialog while the modifier is held", () => {
+  const { container, handlers, unmount } = mount((h) => (
+    <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions} />
+  ), sessions, noAgent);
+  hold();
+  expect(container.querySelector('button[aria-label="New session with defaults"]')).toBeNull();
+  act(() => container.querySelector<HTMLElement>('button[aria-label="New session"]')?.click());
+  const item = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((el) => el.textContent === "Website");
+  act(() => item?.click());
+  expect(handlers.onOpenDialog).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: bound });
+  expect(handlers.onQuickCreateSession).not.toHaveBeenCalled();
+  unmount();
+});
+
+it("a project's focus mode header quick-creates an unbound session while the modifier is held", () => {
+  const { container, handlers, unmount } = mount((h) => (
+    <ProjectFocusView handlers={h} console={main} project={web} sessions={[]} owners={owners} />
+  ));
+  hold();
+  act(() => container.querySelector<HTMLElement>('button[aria-label="New session with defaults"]')?.click());
+  expect(handlers.onQuickCreateSession).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: { kind: "unbound" } });
   unmount();
 });
 
