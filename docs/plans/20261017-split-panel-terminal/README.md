@@ -14,11 +14,12 @@ every value is a literal at its call site.
 ## Plan outline
 
 1. Give both panes one horizontal inset token and bring the right pane onto it.
-2. Replace decorative outline borders with a 4px thin shadow, and draw dividers as a 0.5px double line that reads as a
-   groove.
+2. Replace decorative outline borders with a 4px thin shadow, edge panel cards with a 0.5px hairline and that shadow,
+   and draw dividers as a 0.5px double line that reads as a groove.
 3. Turn the project's right pane into a vertical stack of panels, in the manner of Claude's desktop app: each panel
-   kind (Files, Terminal to begin with) has its own header with its title, actions, maximize and close, a resize
-   handle sits between neighbours, and the top bar gets one toggle per panel kind beside the pane's own toggle.
+   kind (Files, Terminal to begin with) is its own card with a header holding its title, actions, maximize and close,
+   a resize handle sits in the gap between neighbouring cards, and the top bar gets one toggle per panel kind beside
+   the pane's own toggle.
 4. Let the daemon run plain shell terminals that belong to a project, beside the agent sessions it already runs.
 5. Add the Terminal panel: several terminal tabs per project, following the project the way the file browser does.
 
@@ -26,12 +27,18 @@ every value is a literal at its call site.
 
 - **The inset is 16px in both panes**, the sidebar's current value. Rows keep the sidebar's structure: an 8px outer
   inset for the hover and selected fill, content at 16px. Only the right pane changes visibly.
-- **No decorative outline borders.** Every decorative outline border gives way to the 4px thin shadow. Only borders
-  that identify a control (form fields and the like) and borders that show a selected state stay, at the 3:1 contrast
-  they need.
-- **Dividers are grooves.** A divider is a 0.5px double line, dark beside light, that reads as recessed. A 1x
-  display cannot draw it — two half-pixel lines blend into one pixel of a single colour, scaled or not — so there the
-  divider falls back to a single 1px dark line, the same thickness as on a high-density display, without the recess.
+- **No decorative outline borders, except a panel card's hairline.** Every decorative outline border gives way to the
+  4px thin shadow. The one exception, after Claude's desktop app, is a panel card — each panel in the split right pane,
+  and the floating pane and the drawer while they hold a report: it keeps a 0.5px hairline outline together with the
+  shadow, a 1px line on a 1x display. Borders that identify a control (form fields and the like) and borders that show a
+  selected state stay, at the 3:1 contrast they need.
+- **The right pane is its panel cards.** In the project view the right pane has no frame of its own, in any form: it is
+  the stack of panel cards, as in Claude's desktop app. The cards fill the pane edge to edge with no margin around them,
+  and only a gap between neighbouring cards. The gap shows the sidebar's background in every form, so a floating pane or
+  a drawer never shows the agent terminal through it. The pane's 16px inset is measured from the card's edge.
+- **Dividers are grooves.** A divider is a 0.5px double line, dark beside light, that reads as recessed. A 1x display
+  cannot draw it — two half-pixel lines blend into one pixel of a single colour, scaled or not — so there the divider
+  falls back to a single 1px dark line, the same thickness as on a high-density display, without the recess.
 - **Splitting applies to the project view only.** A console session's report stays a single-owner pane with no panel
   stack and no terminal toggle. This keeps the first version to one owner kind; a terminal needs a project's
   directory anyway.
