@@ -3,7 +3,8 @@ import { useLayoutEffect, useRef } from "react";
 import { prefersReducedMotion } from "../reducedMotion";
 
 const SELECTOR = "[data-list-motion], [data-flip]";
-const DURATION = 260;
+const DURATION = 300;
+const PRESENCE_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
 const EASING = "cubic-bezier(0.2, 0, 0, 1)";
 
 interface ListMotionOptions {
@@ -14,7 +15,7 @@ interface ListMotionOptions {
 }
 
 interface Point { x: number; y: number }
-interface Position extends Point { element: HTMLElement }
+interface Position extends Point { element: HTMLElement; parent: HTMLElement | null; width: number; height: number; columns?: string }
 interface Slide extends Point { animation: Animation }
 interface ListWatch { list: HTMLElement; rendered: () => void; stop: () => void }
 
@@ -30,8 +31,18 @@ function origin(element: HTMLElement): Point {
   return { x, y };
 }
 
+// Presence uses transform while layout movement uses translate; neither replaces the other.
+function presenceFrames(transform: string, entering: boolean): Keyframe[] {
+  const base = transform && transform !== "none" ? transform : "";
+  const shifted = `translateX(${entering ? -25 : 25}%)${base ? ` ${base}` : ""}`;
+  return entering
+    ? [{ opacity: 0, transform: shifted }, { opacity: 1, transform: base || "none" }]
+    : [{ opacity: 1, transform: base || "none" }, { opacity: 0, transform: shifted }];
+}
+
 function watchList(list: HTMLElement, { descendants = false, virtualized = false }: ListMotionOptions): ListWatch {
   let positions = new Map<string, Position>();
+  let initialized = false;
   let order = "";
   let width = list.clientWidth;
   let height = list.clientHeight;
@@ -40,12 +51,15 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
   let stopped = false;
   const observed = new Set<HTMLElement>();
   const slides = new Map<HTMLElement, Slide>();
+  const entrances = new Map<HTMLElement, Animation>();
+  const exits = new Map<string, { element: HTMLElement; animation: Animation }>();
   const query = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : undefined;
   const children = () => (descendants || virtualized
     ? Array.from(list.querySelectorAll<HTMLElement>(SELECTOR))
     : Array.from(list.children).filter((child): child is HTMLElement => child instanceof HTMLElement && child.matches(SELECTOR)))
     // A marked group owns its descendants' movement. Animating both would double their travel.
     .filter((child) => {
+      if (child.closest("[data-list-motion-ghost]")) return false;
       const parent = child.parentElement?.closest(SELECTOR);
       return !parent || parent === list || !list.contains(parent);
     });
@@ -59,6 +73,68 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     slides.get(element)?.animation.cancel();
     slides.delete(element);
   };
+  const clearEntrance = (element: HTMLElement) => {
+    entrances.get(element)?.cancel();
+    entrances.delete(element);
+  };
+  const clearExit = (key: string) => {
+    const exit = exits.get(key);
+    if (!exit) return;
+    exits.delete(key);
+    exit.animation.cancel();
+    exit.element.remove();
+  };
+  const leave = (key: string, before: Position) => {
+    // React removes the real control immediately. Its inert copy is only a visual; it never
+    // holds focus, participates in the collection, or keeps a removed action reachable.
+    const ghost = before.element.cloneNode(true) as HTMLElement;
+    for (const node of [ghost, ...ghost.querySelectorAll<HTMLElement>("*")]) {
+      for (const attribute of Array.from(node.attributes)) {
+        if (attribute.name === "id" || attribute.name === "name" || attribute.name === "autofocus" || attribute.name === "data-list-motion" || attribute.name === "data-flip" || attribute.name.startsWith("on")) node.removeAttribute(attribute.name);
+      }
+    }
+    ghost.dataset.listMotionGhost = "";
+    ghost.setAttribute("aria-hidden", "true");
+    ghost.setAttribute("inert", "");
+    const residual = offset(before.element);
+    let parent = before.parent && list.contains(before.parent) ? before.parent : list;
+    let scrollX = 0;
+    let scrollY = 0;
+    for (let at = before.parent; at && at !== list; at = at.parentElement) {
+      const style = getComputedStyle(at);
+      if (/(auto|scroll|hidden|clip)/.test(`${style.overflowX} ${style.overflowY}`)) parent = list;
+      scrollX += at.scrollLeft;
+      scrollY += at.scrollTop;
+    }
+    // A shrinking inner scroller would clip its last departing row and retain phantom overflow.
+    // Lift that visual to the collection, preserving its position within nested scrollers.
+    const escaped = parent !== before.parent;
+    const visual = document.createElement("div");
+    visual.dataset.listMotionExit = "";
+    visual.setAttribute("aria-hidden", "true");
+    visual.setAttribute("inert", "");
+    // Bound the departing copy to its previous box so its rightward travel cannot enlarge
+    // an ancestor's scrollable area. The box survives outside a shrinking inner scroller.
+    Object.assign(visual.style, { position: "absolute", width: `${before.width}px`, height: `${before.height}px`, overflow: "clip", pointerEvents: "none", translate: `${residual.x}px ${residual.y}px` });
+    Object.assign(ghost.style, { position: "absolute", right: "auto", bottom: "auto", margin: "0", width: `${before.width}px`, height: `${before.height}px`, boxSizing: "border-box", gridTemplateColumns: before.columns ?? ghost.style.gridTemplateColumns, pointerEvents: "none", translate: "0px 0px" });
+    visual.appendChild(ghost);
+    parent.appendChild(visual);
+    const base = origin(list);
+    const containing = visual.offsetParent instanceof HTMLElement ? origin(visual.offsetParent) : { x: 0, y: 0 };
+    visual.style.left = `${before.x + base.x - containing.x - (escaped ? scrollX : 0)}px`;
+    visual.style.top = `${before.y + base.y - containing.y - (escaped ? scrollY : 0)}px`;
+    ghost.style.left = "0px";
+    ghost.style.top = "0px";
+    const animation = ghost.animate?.(presenceFrames(getComputedStyle(ghost).transform, false), { duration: DURATION, easing: PRESENCE_EASING });
+    if (!animation) { visual.remove(); return; }
+    exits.set(key, { element: visual, animation });
+    animation.onfinish = () => { if (exits.get(key)?.animation === animation) clearExit(key); };
+    animation.oncancel = () => {
+      if (exits.get(key)?.animation !== animation) return;
+      exits.delete(key);
+      visual.remove();
+    };
+  };
   const measure = (animate: boolean) => {
     if (stopped) return;
     const rows = children();
@@ -66,23 +142,41 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     const newWidth = list.clientWidth;
     const newHeight = list.clientHeight;
     const scrolled = scrollTop !== list.scrollTop || scrollLeft !== list.scrollLeft;
-    const moving = animate && !prefersReducedMotion() && width === newWidth && (!virtualized || (height === newHeight && !scrolled));
+    const moving = initialized && animate && !prefersReducedMotion() && width === newWidth && (!virtualized || (height === newHeight && !scrolled));
     const base = virtualized ? list.getBoundingClientRect() : origin(list);
     // Read all geometry before creating or cancelling animations, keeping layout reads in one pass.
     const moves = rows.map((element) => {
       const residual = offset(element);
       const point = virtualized ? element.getBoundingClientRect() : origin(element);
-      const position = { element, x: point.x - base.x + (virtualized ? list.scrollLeft - residual.x : 0), y: point.y - base.y + (virtualized ? list.scrollTop - residual.y : 0) };
+      const style = virtualized ? undefined : getComputedStyle(element);
+      // Absolute elements cannot inherit subgrid tracks. Full-span rows keep the parent's
+      // resolved tracks so their visual copy retains the same column widths after removal.
+      const columns = style?.gridTemplateColumns.startsWith("subgrid") && style.gridColumn === "1 / -1" && element.parentElement
+        ? getComputedStyle(element.parentElement).gridTemplateColumns : undefined;
+      const position = { element, columns, parent: element.parentElement, width: virtualized ? 0 : element.offsetWidth, height: virtualized ? 0 : element.offsetHeight, x: point.x - base.x + (virtualized ? list.scrollLeft - residual.x : 0), y: point.y - base.y + (virtualized ? list.scrollTop - residual.y : 0) };
       const key = element.dataset.listMotion ?? element.dataset.flip!;
       const before = positions.get(key);
       next.set(key, position);
-      return { element, position, before, residual };
+      return { element, position, before, residual, transform: style?.transform ?? "none" };
     });
+    for (const key of exits.keys()) if (!moving || next.has(key)) clearExit(key);
+    if (moving && !virtualized) {
+      for (const [key, before] of positions) if (!next.has(key)) leave(key, before);
+    }
+    for (const element of entrances.keys()) if (!rows.includes(element) || !moving) clearEntrance(element);
     for (const element of slides.keys()) if (!rows.includes(element) || !moving) cancel(element);
-    for (const { element, position, before, residual } of moves) {
+    for (const { element, position, before, residual, transform } of moves) {
       if (!moving) continue;
       if (!before || before.element !== element) {
         cancel(element);
+        clearEntrance(element);
+        if (!virtualized && !before) {
+          const animation = element.animate?.(presenceFrames(transform, true), { duration: DURATION, easing: PRESENCE_EASING });
+          if (animation) {
+            entrances.set(element, animation);
+            animation.onfinish = () => { if (entrances.get(element) === animation) entrances.delete(element); };
+          }
+        }
         continue;
       }
       if (before.x === position.x && before.y === position.y) continue;
@@ -96,6 +190,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
         animation.onfinish = () => { if (slides.get(element)?.animation === animation) slides.delete(element); };
       }
     }
+    initialized = initialized || rows.length > 0;
     positions = next;
     width = newWidth;
     height = newHeight;
@@ -107,6 +202,9 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
   };
   const resize = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(() => measure(true));
   resize?.observe(list);
+  // Cached collections can populate in a second commit during the same mount. Once that
+  // commit settles, a first addition to a genuinely empty collection is a live update.
+  queueMicrotask(() => { if (!stopped) initialized = true; });
   // A cached collection may commit after its owner; observe structural and layout changes there.
   // WAAPI changes no attributes, so observing style does not feed the animation back into itself.
   const keysChanged = () => JSON.stringify(children().map((element) => element.dataset.listMotion ?? element.dataset.flip)) !== order;
@@ -117,9 +215,12 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     if (keysChanged() || layoutChanged) measure(true);
   });
   mutations?.observe(list, { childList: true, subtree: true, attributes: true, attributeFilter: virtualized ? ["data-list-motion", "data-flip", "style"] : ["data-list-motion", "data-flip"] });
-  const onScroll = () => { if (virtualized) measure(false); };
+  const onScroll = () => {
+    if (virtualized) measure(false);
+    else for (const key of exits.keys()) clearExit(key);
+  };
   const onReducedMotion = () => { if (prefersReducedMotion()) measure(false); };
-  list.addEventListener("scroll", onScroll, { passive: true });
+  list.addEventListener("scroll", onScroll, { passive: true, capture: true });
   query?.addEventListener?.("change", onReducedMotion);
   return {
     list,
@@ -131,16 +232,18 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
       stopped = true;
       resize?.disconnect();
       mutations?.disconnect();
-      list.removeEventListener("scroll", onScroll);
+      list.removeEventListener("scroll", onScroll, true);
       query?.removeEventListener?.("change", onReducedMotion);
       for (const element of slides.keys()) cancel(element);
+      for (const element of entrances.keys()) clearEntrance(element);
+      for (const key of exits.keys()) clearExit(key);
     },
   };
 }
 
-/** Surviving keyed rows slide to their new positions in either axis. Mark rows with
- * data-list-motion={stableId}; additions and removals take effect immediately. Layout changes
- * caused by scrolling or container width changes update the baseline without animation. */
+/** Keyed rows enter, leave and slide to their new positions in either axis. Removed controls
+ * leave only inert visual copies; actions and focus handoffs take effect immediately. Virtual
+ * collections animate surviving rows only, never newly rendered or recycled identities. */
 export function useListMotion<T extends HTMLElement>({ descendants = false, virtualized = false }: ListMotionOptions = {}): React.RefObject<T | null> {
   const ref = useRef<T>(null);
   const watch = useRef<ListWatch | null>(null);

@@ -61,7 +61,7 @@ export const layoutScenarios: Scenario[] = [
     category: "normal",
     title: "Rail with five consoles",
     description:
-      "Waiting, working, running and inactive avatars appear together, including a long name. Hover for activity details. Delete the inactive Docs console from its context menu to watch the remaining avatars slide into place.",
+      "Waiting, working, running and inactive avatars appear together, including a long name. Hover for activity details. Delete the inactive Docs console from its context menu: its avatar fades out while sliding to the right while the remaining avatars slide into place. Use the rail’s New console button to add an avatar and inspect its entrance.",
     state: railState,
     steps: [
       (ui) => ui.press(ui.session("Hub")),

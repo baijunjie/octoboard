@@ -140,7 +140,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts",
-    description: "Codex's default account and Personal follow their account configuration; Automation uses automatic review and Production asks you. Change any approval mode to save it independently. Claude Code and Grok have no approval selector. Remove Work or Client to watch the remaining accounts slide into place.",
+    description: "Codex's default account and Personal follow their account configuration; Automation uses automatic review and Production asks you. Change any approval mode to save it independently. Claude Code and Grok have no approval selector. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place.",
     state: approvalState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -216,7 +216,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: trustedFolders",
-    description: "Remove the first trusted folder to watch the remaining path slide into place.",
+    description: "Remove the first trusted folder: its row fades out while sliding to the right while the remaining path slides into place.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

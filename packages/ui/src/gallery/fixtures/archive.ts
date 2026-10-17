@@ -181,7 +181,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive, many entries and a locked session",
     state: lockedArchiveState,
-    description: "Seventy entries are loaded thirty at a time. The first row is locked: a yellow border and persistent Unlock control identify it without changing its archive order, and Delete all is disabled. Unlock the row to enable both its deletion and Delete all. The newest entries retain English agent task titles beside their original names, including a long title; other entries keep only their session names. Dates on the right cover recent and older archives; the first two cards show substantial usage and hide recorded zero usage. Delete an entry to watch the remaining rows slide into place; the system’s reduced-motion preference keeps this movement immediate.",
+    description: "Seventy entries are loaded thirty at a time. The first row is locked: a yellow border and persistent Unlock control identify it without changing its archive order, and Delete all is disabled. Unlock the row to enable both its deletion and Delete all. The newest entries retain English agent task titles beside their original names, including a long title; other entries keep only their session names. Dates on the right cover recent and older archives; the first two cards show substantial usage and hide recorded zero usage. Delete an unlocked entry: it fades out to the right by one quarter of its own width over 300ms while the remaining rows slide into place over the same duration. The system’s reduced-motion preference keeps these changes immediate.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),

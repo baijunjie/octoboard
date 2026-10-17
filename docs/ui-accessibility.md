@@ -858,15 +858,19 @@ position slide into place using the shared list-motion implementation. This appl
 records, selected tags, wrapping chips and virtualized file and change collections. Use stable item identities,
 not array indices or translated labels. Horizontal and wrapping collections move on both axes, including under RTL.
 
-Use a 260 ms ease with `cubic-bezier(0.2, 0, 0, 1)`. New items appear immediately and removed items stop accepting
-input immediately; do not delay an action or keep a removed control reachable to play an exit animation. Preserve
-keyboard focus on surviving controls and retain the surface's focus handoff when the focused item is removed.
+Use a 300 ms ease with `cubic-bezier(0.2, 0, 0, 1)` for position changes. In nonvirtualized collections, new items
+fade in from the left while removed items fade out to the right as inert, accessibility-hidden visual copies.
+These effects move by 25% of each item's own width over 300 ms with `cubic-bezier(0.4, 0, 0.2, 1)`, starting alongside
+the surviving items' movement. Removed items stop accepting input immediately; do not delay an action or keep a
+removed control reachable to play an exit animation. Preserve keyboard focus on surviving controls and retain the
+surface's focus handoff when the focused item is removed.
 
 Initial rendering, scrolling, viewport recycling and container resizing do not trigger item movement animations.
 Virtualized collections keep virtualization and animate only surviving rendered identities whose layout changes.
 Static choices, a replacement page or directory listing, and fixed result snapshots do not require collection
 motion. Collections whose component already provides the same behavior, such as the toast stack, keep that behavior.
-With reduced motion requested, update positions immediately and cancel any movement already running.
+With reduced motion requested, update positions immediately, cancel any entry or movement already running and
+remove exit copies.
 
 Use `useListMotion` from `packages/ui/src/components/useListMotion.ts`, marking items with `data-list-motion`.
 Its descendant mode supports semantic wrappers and `display: contents`; its virtualized mode follows rendered

@@ -4,7 +4,7 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 
 ## Product
 
-- [Collection motion](product/collection-motion.md) — position transitions for dynamic collections, including
+- [Collection motion](product/collection-motion.md) — entry, exit and position transitions for dynamic collections, including
   horizontal and wrapping items, virtualized rows, keyboard focus and reduced motion.
 - [Consoles and projects](product/consoles-and-projects.md) — consoles, their working directory, agent defaults and
   per-agent config directories; the three ways a project is associated, what is editable afterwards, how the

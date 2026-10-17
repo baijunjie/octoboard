@@ -62,7 +62,7 @@ export const filterScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Project filter",
-    description: "Selected tags have checkmarks; the normal vocabulary fits without scrolling. The popover stays open as conditions are picked; the heading chips slide horizontally as tags are added or removed. After closing it, the heading's Funnel X clears all conditions.",
+    description: "Selected tags have checkmarks; the normal vocabulary fits without scrolling. The popover stays open as conditions are picked; the heading chips fade in from the left and fade out to the right while the remaining chips slide horizontally as tags are added or removed. Matching projects enter and exit at the same time as the sidebar reorders. After closing it, the heading's Funnel X clears all conditions.",
     state,
     preferences: { sidebarConsole: console_.id },
     steps: [
