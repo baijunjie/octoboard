@@ -844,6 +844,7 @@ mod tests {
             agent,
             name: name.to_string(),
             config_dir: format!("/accounts/{id}"),
+            approval_reviewer: None,
         }
     }
 

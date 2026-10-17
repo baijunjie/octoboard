@@ -36,6 +36,19 @@ const browserState: Scenario["state"] = {
   ]),
 };
 
+const approvalState: Scenario["state"] = {
+  ...browserState,
+  settings: {
+    ...browserState.settings!,
+    accounts: [
+      ...browserState.settings!.accounts,
+      { id: "a-codex-auto", agent: "codex", name: "Automation", config_dir: "/Users/dev/.codex-automation", approval_reviewer: "auto_review" },
+      { id: "a-codex-user", agent: "codex", name: "Production", config_dir: "/Users/dev/.codex-production", approval_reviewer: "user" },
+    ],
+  },
+  agentAvailability: new Map(browserState.agentAvailability).set("codex", { agent: "codex", availability: "available", default_account_dir: "/Users/dev/.codex" }),
+};
+
 export const settingsScenarios: Scenario[] = [
   {
     id: "settings-general",
@@ -127,11 +140,26 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts",
-    description: "The introduction displays PATH as code above the configured accounts and unavailable agents. Remove Work or Client to watch the remaining accounts slide into place.",
-    state: browserState,
+    description: "Codex's default account and Personal follow their account configuration; Automation uses automatic review and Production asks you. Change any approval mode to save it independently. Claude Code and Grok have no approval selector. Remove Work or Client to watch the remaining accounts slide into place.",
+    state: approvalState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
+    ],
+  },
+  {
+    id: "settings-account-approval-error",
+    group: GROUP,
+    category: "exceptional",
+    title: "Account approval mode could not be saved",
+    description: "The error toast explains the failed save. Codex's default account keeps Follow account configuration; retrying leaves the saved selection intact.",
+    state: approvalState,
+    accountApprovalError: { code: "store_io_failed", params: { detail: "Permission denied" }, message: "The account settings could not be saved: Permission denied" },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.accounts")),
+      (ui) => ui.press(ui.t("settings.accounts.approval.label", { name: ui.t("settings.accounts.defaultName") })),
+      (ui) => ui.press(ui.t("settings.accounts.approval.auto")),
     ],
   },
   {

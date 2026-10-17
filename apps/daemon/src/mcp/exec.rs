@@ -1727,6 +1727,7 @@ pub(super) mod tests {
                 agent: Agent::Codex,
                 name: "Work".to_string(),
                 config_dir: "/secret/codex".to_string(),
+                approval_reviewer: None,
             })
             .unwrap();
         git_remote::record_remote_url(

@@ -98,6 +98,7 @@ the request id as if it were a record id.
 | `pull_project_branch` | `project` | Checks one project against its remote and fast-forwards it right now, the same work `refresh_git_status` does per project (see "Daemon behaviour, per project" below), except that the one-minute floor does not apply and the fast-forward happens whether or not `auto_pull_repositories` is on, under the same rule (`upstream` set, `behind > 0`, `ahead == 0`). Answered with `ack` at once; the status follows as `project_git_status` broadcasts. A project whose check is already running gets one more check, with the fast-forward, as soon as that one ends, so the request ends in a fast-forward attempt; any number of requests meanwhile share that one rerun. A project whose check is only waiting for a place in a sweep, or in the fast-forward pass started by turning `auto_pull_repositories` on (at most four projects are checked at once, across every client) does not wait behind it: that check runs at once with the fast-forward, in its place, so the request costs one fetch and no rerun. The in-flight `checking` status is broadcast at once for the request, without the 400 ms delay a sweep's check has. The rerun is skipped too if the project has been removed meanwhile. A project that is not a git repository is reported as such (`repository: false`). An unknown project is `unknown_project` |
 | `create_account` | `agent`, `name`, `config_dir` | Both fields are required: an account always has a name and a directory. `name` is trimmed and must be non-empty and unique within `agent` (compared trimmed, case-insensitively, including against the default account's own name); a collision is `account_name_taken`, naming the account it collides with. `config_dir` must be absolute or start with `~/`, and is stored lexically normalised; existence is not checked. Broadcasts `settings_updated` |
 | `update_account` | `account`, `name?`, `config_dir?` | Renames the account, repoints it, or both, independently; either field absent leaves it alone. Validated as in `create_account`. Broadcasts `settings_updated` when something actually changed |
+| `set_account_approval_reviewer` | `account` (id or `null`), `reviewer` (`user`, `auto_review` or `null`) | Sets the Codex account launch override; a null account names the Codex default account and a null reviewer follows the account's own configuration. An unknown account or one of another agent is `unknown_account`. Broadcasts `settings_updated` only when changed. Takes effect on the next launch or resume; running sessions keep their current reviewer |
 | `delete_account` | `account` | Clears the reference of every console and project that refers to this account — putting each console back on its agent's default account and each project back to inheriting its console's, while a project whose reference is `default` names no account and is left as it is — then removes the account. A session holding it is left alone: it already carries its own copy of the directory it launches with. Broadcasts `settings_updated`, a `console_upserted` for every console whose reference was cleared, and a `project_upserted` for every project whose reference was cleared |
 | `shutdown` | — | Terminates every session process (leaving them `interrupted`) and exits the daemon |
 
@@ -108,7 +109,7 @@ the request id as if it were a record id.
 | `snapshot` | `hosts`, `consoles`, `projects`, `sessions`, `trusted_directories`, `settings`, `git_statuses`, `agent_availability`, `home_dir` — sent once, unprompted, when a control socket connects. `git_statuses` is every `GitStatus` the daemon currently holds, empty on a fresh start — carried here, like the trusted directories, so a reconnecting client never has to ask for it separately. `agent_availability` is always three entries, one per agent, each `not_determined` until the daemon's one-time login-shell snapshot for this run lands — see "Agent availability" below. `home_dir` is the daemon host's home directory — not the browser's, the two may be on different machines — so a client can show a path under it as `~/...`; null when the daemon cannot determine one (`HOME` unset, relative or the filesystem root) |
 | `agent_availability_updated` | `agent_availability` — the whole three-entry list, sent once, when the daemon's one-time determination of it lands; never again afterwards, since nothing re-determines it during a run |
 | `trusted_directories_updated` | `trusted_directories` — the whole list of trusted directory paths, sent when it changes |
-| `settings_updated` | `settings` — the whole `Settings` record, sent when `update_settings` actually changes it, and also whenever the account list changes (`create_account`, `update_account`, `delete_account`, or a console dialog's save that repoints or mints one) |
+| `settings_updated` | `settings` — the whole `Settings` record, sent when `update_settings` actually changes it, and also whenever the account list changes (`create_account`, `update_account`, `delete_account`, `set_account_approval_reviewer`, or a console dialog's save that repoints or mints one) |
 | `console_upserted` / `project_upserted` / `session_upserted` | `console` / `project` / `session` — the whole record, under that key |
 | `console_deleted` / `project_deleted` / `session_deleted` | `console` / `project` / `session` — the id of the record that was removed |
 | `project_git_status` | `status` — one project's whole `GitStatus`, sent on every change, including every transition of `activity` (so an animated icon has something to follow) and every local re-read of the branch header (see "Daemon behaviour, per project"). Nothing is sent when a project is removed; the client drops its status along with it |
@@ -318,7 +319,7 @@ Console { id, name, workdir, default_agent,
           claude_console_session_model?, claude_console_session_effort?,
           codex_console_session_model?, codex_console_session_effort?,
           grok_console_session_model?, grok_console_session_effort?, icon?, console_session_prompt?, created_at }
-Account { id, agent, name, config_dir }
+Account { id, agent, name, config_dir, approval_reviewer }
 Project { id, console_id, host_id, name, path, default_agent?, source, remote_url?,
           claude_account_id, codex_account_id, grok_account_id,   // each a ProjectAccount
           claude_session_model?, claude_session_effort?,
@@ -332,7 +333,7 @@ Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
           account_id?, config_dir?, model?: string|null, effort?: string|null, pinned, started_at, ended_at? }
 SessionUsage { input_tokens, output_tokens, total_tokens, cached_input_tokens?, cache_write_input_tokens? }
 Page    { id, console_session_id, html, anchor_message_id?, created_at }
-Settings  { auto_pull_repositories, default_clone_dir, accounts: Account[] }
+Settings  { auto_pull_repositories, default_clone_dir, accounts: Account[], codex_default_approval_reviewer }
 GitStatus { project, repository, branch?, detached, upstream?, ahead, behind,
             activity: "idle"|"checking"|"pulling"|"pushing", error? }
 AgentAvailability { agent, availability: "not_determined"|"available"|"unavailable", default_account_dir? }
@@ -397,6 +398,14 @@ here — see below. `Account.config_dir` is an absolute, lexically normalised pa
 set (Claude Code creates a missing directory on first run, and the daemon creates a missing Codex directory before
 launching it; Grok Build is checked at launch instead). The whole account list travels as `Settings.accounts`, and a
 client is told about any change to it through `settings_updated` — there is no separate account event.
+
+`Account.approval_reviewer` is `null` (the default for older accounts), `user`, or `auto_review`, and is
+settable only for Codex accounts. `Settings.codex_default_approval_reviewer` has the same values for the Codex default
+account. A null override inherits the effective Codex home's `config.toml`. Non-null values become per-launch
+`approvals_reviewer` CLI overrides on fresh launches and resumes, without editing that file, sandbox settings or the
+approval policy. The override is looked up from the session's current account at launch time. A deleted account or a
+legacy pinned directory with no account id inherits its original home's configuration rather than the default account's
+override. These account settings stay local and are not included in configuration exports or changed by imports.
 
 **Every agent also has a *default* account, which is not a row in `Settings.accounts` at all**: it is the state of
 pinning nothing, named by `Console.*_account_id` and `Session.account_id` being unset. It cannot be created, renamed

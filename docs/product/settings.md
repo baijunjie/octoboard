@@ -142,9 +142,27 @@ not available is headed as not installed and its accounts are marked not usable;
 determined is headed plainly.
 
 Each group starts with the agent's **default account**, said to be the setup a session runs under when nothing is
-pinned, with the directory it currently resolves to. It has no actions: its name is Octoboard's own and it cannot be
-edited or removed. The accounts the user owns follow, each with its name, its directory, an **Edit** button and a
-**Remove** button. Both kinds of directory are shown as in "How paths are shown" above.
+pinned, with the directory it currently resolves to. Its name is Octoboard's own; its name and directory cannot be
+edited, and it cannot be removed. The accounts the user owns follow, each with its name, its directory, an **Edit**
+button and a **Remove** button. Both kinds of directory are shown as in "How paths are shown" above.
+
+Every Codex account row, including the default account, has an inline approval-mode selector:
+
+- **Follow account configuration** leaves the reviewer to that account's Codex configuration. This is the initial
+  choice for both new and existing accounts; automatic review is never enabled just by adding an account.
+- **Automatic review** asks Codex to review approval requests itself and may use additional tokens.
+- **Ask me** asks Codex to send approval requests to the user.
+
+The choice is saved when selected, separately from editing the account's name or directory. Choices are unavailable
+while saving; a failure is shown as a toast. It applies when a session next starts or resumes, including an account switch;
+a running process keeps its current reviewer. A named account's choice is independent of the default account's:
+following configuration does not inherit the default account's selector. If a session's named account was deleted,
+or it holds a pinned directory without a stored account reference, it follows that original directory's Codex
+configuration instead of adopting the default account's choice. Claude Code and Grok Build have no such selector.
+
+These choices are stored by Octoboard. An explicit reviewer overrides Codex's reviewer for that launch without
+writing its configuration files or changing its sandbox or approval policy. They remain local; see
+"What is not configuration and never travels" in `docs/product/configuration-export-and-import.md`.
 
 One **Add account** button, above the groups, serves every agent: its form asks for the agent — every agent can be
 picked, one that is not installed included, since an account may be set up before its agent is — then a name and a

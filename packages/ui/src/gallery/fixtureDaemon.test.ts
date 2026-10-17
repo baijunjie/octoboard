@@ -476,3 +476,35 @@ describe("the fixture daemon's settings and rail removals", () => {
     await expect(daemon.request({ type: "delete_console", console: "missing" })).rejects.toMatchObject({ code: "unknown_console" });
   });
 });
+
+describe("the fixture daemon's account approval modes", () => {
+  const accounts = [
+    { id: "codex", agent: "codex" as const, name: "Build", config_dir: "/Users/dev/.codex-build" },
+    { id: "claude", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" },
+  ];
+  const scenario = { id: "account-approval", group: "Settings" as const, category: "normal" as const, title: "", state: snapshotState({ settings: { auto_pull_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts } }) };
+
+  it("saves and clears default and custom modes independently without changing other settings", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await daemon.request({ type: "set_account_approval_reviewer", account: null, reviewer: "auto_review" });
+    await daemon.request({ type: "set_account_approval_reviewer", account: "codex", reviewer: "user" });
+    expect(daemon.store.getState().settings).toEqual({ ...scenario.state.settings, codex_default_approval_reviewer: "auto_review", accounts: [{ ...accounts[0], approval_reviewer: "user" }, accounts[1]] });
+    await daemon.request({ type: "set_account_approval_reviewer", account: null, reviewer: null });
+    await daemon.request({ type: "set_account_approval_reviewer", account: "codex", reviewer: null });
+    expect(daemon.store.getState().settings.codex_default_approval_reviewer).toBeNull();
+    expect(daemon.store.getState().settings.accounts[0]?.approval_reviewer).toBeNull();
+    for (const account of ["missing", "claude"]) {
+      await expect(daemon.request({ type: "set_account_approval_reviewer", account, reviewer: "auto_review" })).rejects.toMatchObject({ code: "unknown_account", params: { account } });
+    }
+  });
+
+  it("retains both selections when saving fails", async () => {
+    const error = { code: "store_io_failed", params: { detail: "Permission denied" }, message: "Permission denied" };
+    const daemon = createFixtureDaemon({ ...scenario, accountApprovalError: error });
+    const before = daemon.store.getState().settings;
+    for (const account of [null, "codex"]) {
+      await expect(daemon.request({ type: "set_account_approval_reviewer", account, reviewer: "auto_review" })).rejects.toMatchObject(error);
+      expect(daemon.store.getState().settings).toEqual(before);
+    }
+  });
+});

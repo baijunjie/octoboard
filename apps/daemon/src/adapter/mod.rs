@@ -42,7 +42,7 @@ use std::time::Duration;
 use anyhow::Result;
 
 use crate::mcp::Owner;
-use crate::protocol::{error_code, Agent, CodedError, Notice, Role};
+use crate::protocol::{error_code, Agent, ApprovalReviewer, CodedError, Notice, Role};
 
 /// Everything an adapter needs to assemble one launch.
 pub struct LaunchSpec<'a> {
@@ -83,6 +83,8 @@ pub struct LaunchSpec<'a> {
     /// through [`pinned_config_dir`], which refuses a directory that has vanished, and passes the
     /// result on to whatever else needs it.
     pub config_dir: Option<&'a Path>,
+    /// Codex-only override; absent follows its own configuration.
+    pub approval_reviewer: Option<ApprovalReviewer>,
     /// The model to launch with, in the agent's own spelling; `None` leaves it to the agent. Read
     /// from the setting for this agent of the session's console (a console session) or of its
     /// project (a project session), and `None` when that setting is unset.
@@ -240,7 +242,7 @@ pub struct LaunchPlan {
     /// The agent resolves approval requests itself for this session, so its permission hook fires
     /// without any dialog ever reaching the user. Octoboard must not raise a hand for one: nobody
     /// would have anything to answer, and the tool proceeds regardless. Only Codex can be in this
-    /// state, and only because of the user's own configuration.
+    /// state, because of the user's configuration or account override.
     pub resolves_approvals_itself: bool,
     /// Something about this launch the user has to be told, because the agent will not tell them
     /// in a way they can act on. Surfaced once, when the session starts.
@@ -442,6 +444,7 @@ pub mod tests {
                 hook_script: &self.hook_script,
                 shell_env: &self.shell_env,
                 config_dir: self.config_dir.as_deref(),
+                approval_reviewer: None,
                 model: self.model.as_deref(),
                 effort: self.effort.as_deref(),
                 agent_version: self.agent_version,

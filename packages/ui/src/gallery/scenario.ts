@@ -141,6 +141,8 @@ export interface Scenario {
   /** Per-session account-switch refusals or a request kept pending. Unlisted sessions switch
    * normally, updating their account and recorded configuration directory. */
   sessionAccountSwitches?: Record<string, FixtureError | "pending">;
+  /** A refusal to save a Codex account's approval mode; successful requests update settings. */
+  accountApprovalError?: FixtureError;
   /** A refused request to open a project's directory in the host's file manager. The fixture
    * otherwise acknowledges the request without opening any host application. */
   projectDirectoryOpenError?: FixtureError;

@@ -550,6 +550,7 @@ mod tests {
             agent: Agent::Claude,
             name: "Other".to_owned(),
             config_dir: other.to_string_lossy().into_owned(),
+            approval_reviewer: None,
         };
 
         let projects = account.join("projects");

@@ -10,22 +10,25 @@ import { MarkedPath } from "../components/MarkedPath";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
-import type { Account } from "../protocol";
+import type { Account, ApprovalReviewer } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { useListMotion } from "../components/useListMotion";
 import { AccountDialog } from "./AccountDialog";
+import { OptionSelect } from "../dialogs/OptionSelect";
+import { errorPresentation } from "../errorPresentation";
 import { SettingRow } from "./SettingRow";
 import { useSectionRefocus } from "./useSectionRefocus";
 
 /** Every account, grouped by agent with the agent's default account first, and the means to add,
  * edit and remove the ones the user owns (see "Agent accounts" in `docs/product/settings.md`). The
  * default account is not a record: it is the state of pinning nothing, so it is shown from the
- * agent's availability and offers no action. */
+ * agent's availability and has no name or directory actions. */
 export function AgentAccountsSection(): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
   const listRef = useListMotion<HTMLDivElement>({ descendants: true });
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const defaultReviewer = useDaemonStore((s) => s.settings.codex_default_approval_reviewer);
   const availability = useDaemonStore((s) => s.agentAvailability);
   // `undefined` is closed; `null` is the form for a new account.
   const [editing, setEditing] = useState<Account | null | undefined>();
@@ -57,17 +60,20 @@ export function AgentAccountsSection(): React.ReactElement {
                 <AgentIcon agent={agent} />
                 {unavailable ? t("agents.notInstalled", { agent: AGENT_LABEL[agent] }) : AGENT_LABEL[agent]}
               </h3>
+              {agent === "codex" && <p className="pb-2 text-sm text-app-muted">{t("settings.accounts.approval.description")}</p>}
               <div className="border-t border-separator">
                 <SettingRow
                   motionKey={`default:${agent}`}
                   label={t("settings.accounts.defaultName")}
                   description={
                     <>
-                      <div>{t("settings.accounts.defaultDescription")}</div>
+                      <div>{t("settings.accounts.defaultSetup")}</div>
                       {state?.default_account_dir && <MarkedPath path={state.default_account_dir} />}
                     </>
                   }
-                />
+                >
+                  {agent === "codex" && <ApprovalReviewerSelect account={null} name={t("settings.accounts.defaultName")} reviewer={defaultReviewer} />}
+                </SettingRow>
                 {owned.map((account) => (
                   <SettingRow
                     key={account.id}
@@ -84,7 +90,8 @@ export function AgentAccountsSection(): React.ReactElement {
                       </>
                     }
                   >
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {agent === "codex" && <ApprovalReviewerSelect account={account.id} name={account.name} reviewer={account.approval_reviewer} />}
                       <Button
                         size="sm"
                         variant="outline"
@@ -128,5 +135,36 @@ export function AgentAccountsSection(): React.ReactElement {
         />
       )}
     </>
+  );
+}
+
+
+function ApprovalReviewerSelect({ account, name, reviewer }: {
+  account: string | null;
+  name: string;
+  reviewer?: ApprovalReviewer | null;
+}): React.ReactElement {
+  const t = useT();
+  const { request, toastError } = useDaemon();
+  const [busy, setBusy] = useState(false);
+  const save = (value: ApprovalReviewer | "inherit") => {
+    setBusy(true);
+    void request({ type: "set_account_approval_reviewer", account, reviewer: value === "inherit" ? null : value })
+      .catch((err) => toastError(errorPresentation(err as Error)))
+      .finally(() => setBusy(false));
+  };
+  // The trigger must stay focusable while the popover returns keyboard focus after selection.
+  return (
+    <OptionSelect<ApprovalReviewer | "inherit">
+      inline
+      label={t("settings.accounts.approval.label", { name: isolate(name) })}
+      value={reviewer ?? "inherit"}
+      onChange={save}
+      options={[
+        { value: "inherit", label: t("settings.accounts.approval.inherit"), isDisabled: busy },
+        { value: "auto_review", label: t("settings.accounts.approval.auto"), isDisabled: busy },
+        { value: "user", label: t("settings.accounts.approval.user"), isDisabled: busy },
+      ]}
+    />
   );
 }

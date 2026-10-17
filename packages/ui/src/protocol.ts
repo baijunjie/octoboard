@@ -105,6 +105,9 @@ export type ConsoleEffortField =
 export type ProjectModelField = "claude_session_model" | "codex_session_model" | "grok_session_model";
 export type ProjectEffortField = "claude_session_effort" | "codex_session_effort" | "grok_session_effort";
 
+/** How Codex reviews permission requests when an account overrides its own configuration. */
+export type ApprovalReviewer = "user" | "auto_review";
+
 /** A named config directory of one agent, kept once for the whole application. The default
  * account of each agent is not one of these — it is the state of pinning nothing, and what it is
  * shown as is derived on the client from `AgentAvailability`, not sent as a record. */
@@ -116,6 +119,8 @@ export interface Account {
   name: string;
   /** Absolute, lexically normalised. Existence is not checked when this is set. */
   config_dir: string;
+  /** Codex only; absent or null follows the account configuration. */
+  approval_reviewer?: ApprovalReviewer | null;
 }
 
 export interface Project {
@@ -306,6 +311,8 @@ export interface Settings {
   /** Every account of every agent, application-wide. The default account of each agent is not
    * among these — it is the state of pinning nothing, not a row. */
   accounts: Account[];
+  /** The Codex default account; absent or null follows its own configuration. */
+  codex_default_approval_reviewer?: ApprovalReviewer | null;
 }
 
 /** An account reference of a configuration document: the account's name alone, since the agent is
@@ -861,6 +868,7 @@ export type RequestBody =
    * agent's default account, then removes the account. Broadcasts `settings_updated`, and a
    * `console_upserted` for every console whose reference was cleared. */
   | { type: "delete_account"; account: string }
+  | { type: "set_account_approval_reviewer"; account: string | null; reviewer: ApprovalReviewer | null }
   /** The browse requests (see "Browsing a project" in `apps/daemon/PROTOCOL.md`), answered with
    * `project_source`, `project_dir`, `project_file_matches`, `project_file`, `project_changes`, `project_change`,
    * `project_branches`, `project_comparison`, `project_comparison_change`, `project_change_bodies`

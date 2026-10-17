@@ -435,10 +435,10 @@ when a confirmation comes up" in `docs/product/folder-trust.md`.
 A hand Octoboard raised for a waiting session request is answered in that request's dialog instead, so a message
 addressed to such a session is not held (see "Waiting for the answer" in `docs/product/session-requests.md`).
 
-Where the user's own Codex configuration **resolves approval requests by itself**, Octoboard raises
-no hand at all: the permission event still fires, but Codex resolves the request, no dialog ever
-reaches the user and the tool proceeds — a hand there would ask them to answer something they never
-see. Those sessions keep reading as *working*.
+Where Codex's effective approval mode **resolves approval requests by itself** — from the account's explicit
+choice or its own configuration (see "Agent accounts" in `docs/product/settings.md`) — Octoboard raises no hand at all:
+the permission event still fires, but Codex resolves the request, no dialog ever reaches the user and the tool proceeds
+— a hand there would ask them to answer something they never see. Those sessions keep reading as *working*.
 
 ### Declining a Claude Code prompt or question
 

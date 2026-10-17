@@ -323,6 +323,17 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           store.setState({ settings: { ...current.settings, auto_pull_repositories: body.auto_pull_repositories ?? current.settings.auto_pull_repositories, default_clone_dir: cloneDir } });
           return { type: "ack" };
         }
+        case "set_account_approval_reviewer": {
+          const current = store.getState();
+          if (body.account !== null && !current.settings.accounts.some((account) => account.id === body.account && account.agent === "codex")) {
+            return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
+          }
+          if (scenario.accountApprovalError) return fail(scenario.accountApprovalError);
+          store.setState({ settings: body.account === null
+            ? { ...current.settings, codex_default_approval_reviewer: body.reviewer }
+            : { ...current.settings, accounts: current.settings.accounts.map((account) => account.id === body.account ? { ...account, approval_reviewer: body.reviewer } : account) } });
+          return { type: "ack" };
+        }
         case "delete_account": {
           const current = store.getState();
           if (!current.settings.accounts.some((account) => account.id === body.account)) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });

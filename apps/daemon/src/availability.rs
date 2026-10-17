@@ -194,6 +194,7 @@ mod tests {
                 agent,
                 name: format!("{agent:?} login"),
                 config_dir: format!("/accounts/{agent:?}"),
+                approval_reviewer: None,
             })
             .collect();
         for account in &seeded {

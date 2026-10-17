@@ -21,9 +21,9 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::protocol::{
-    error_code, now_millis, Account, Agent, BranchOriginSource, CodedError, Console,
-    ConsoleSessionColour, Host, HostKind, Origin, Page, Project, ProjectAccount, ProjectSource,
-    Role, Session, SessionStatus, Settings,
+    error_code, now_millis, Account, Agent, ApprovalReviewer, BranchOriginSource, CodedError,
+    Console, ConsoleSessionColour, Host, HostKind, Origin, Page, Project, ProjectAccount,
+    ProjectSource, Role, Session, SessionStatus, Settings,
 };
 use crate::session_title::RecordTitles;
 
@@ -247,6 +247,14 @@ impl Store {
         )?;
         if !column_exists(&conn, "settings", "default_clone_dir")? {
             conn.execute("ALTER TABLE settings ADD COLUMN default_clone_dir TEXT", [])?;
+        }
+        for (table, column) in [
+            ("accounts", "approval_reviewer"),
+            ("settings", "codex_default_approval_reviewer"),
+        ] {
+            if !column_exists(&conn, table, column)? {
+                conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {column} TEXT"), [])?;
+            }
         }
         // The first palette had six labels; a branch's first later palette added plain labels (all
         // of them families now but `purple`), and its second wrote `<family>-<shade>`. Every label
@@ -503,13 +511,14 @@ impl Store {
     pub fn insert_account(&self, account: &Account) -> Result<()> {
         self.lock()
             .execute(
-                "INSERT INTO accounts (id, agent, name, config_dir, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO accounts (id, agent, name, config_dir, created_at, approval_reviewer) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
                     account.id,
                     enum_to_text(&account.agent),
                     account.name,
                     account.config_dir,
                     now_millis(),
+                    account.approval_reviewer.as_ref().map(enum_to_text),
                 ],
             )
             .map_err(|err| account_write_error(err, account))?;
@@ -530,11 +539,23 @@ impl Store {
         Ok(())
     }
 
+    pub fn set_account_approval_reviewer(
+        &self,
+        id: &str,
+        reviewer: Option<ApprovalReviewer>,
+    ) -> Result<()> {
+        self.lock().execute(
+            "UPDATE accounts SET approval_reviewer = ?2 WHERE id = ?1",
+            params![id, reviewer.as_ref().map(enum_to_text)],
+        )?;
+        Ok(())
+    }
+
     pub fn get_account(&self, id: &str) -> Result<Option<Account>> {
         let account = self
             .lock()
             .query_row(
-                "SELECT id, agent, name, config_dir FROM accounts WHERE id = ?1",
+                "SELECT id, agent, name, config_dir, approval_reviewer FROM accounts WHERE id = ?1",
                 params![id],
                 read_account,
             )
@@ -555,7 +576,7 @@ impl Store {
     pub fn list_accounts(&self) -> Result<Vec<Account>> {
         let conn = self.lock();
         let mut stmt =
-            conn.prepare("SELECT id, agent, name, config_dir FROM accounts ORDER BY created_at")?;
+            conn.prepare("SELECT id, agent, name, config_dir, approval_reviewer FROM accounts ORDER BY created_at")?;
         let rows = stmt
             .query_map([], read_account)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -764,7 +785,27 @@ impl Store {
             auto_pull_repositories: self.auto_pull_repositories()?,
             default_clone_dir: self.default_clone_dir()?,
             accounts: self.list_accounts()?,
+            codex_default_approval_reviewer: self.codex_default_approval_reviewer()?,
         })
+    }
+
+    pub fn codex_default_approval_reviewer(&self) -> Result<Option<ApprovalReviewer>> {
+        Ok(self.lock().query_row(
+            "SELECT codex_default_approval_reviewer FROM settings WHERE id = ?1",
+            params![SETTINGS_ID],
+            |row| enum_from_row_opt(row, 0),
+        )?)
+    }
+
+    pub fn set_codex_default_approval_reviewer(
+        &self,
+        reviewer: Option<ApprovalReviewer>,
+    ) -> Result<()> {
+        self.lock().execute(
+            "UPDATE settings SET codex_default_approval_reviewer = ?2 WHERE id = ?1",
+            params![SETTINGS_ID, reviewer.as_ref().map(enum_to_text)],
+        )?;
+        Ok(())
     }
 
     pub fn auto_pull_repositories(&self) -> Result<bool> {
@@ -1699,6 +1740,7 @@ fn read_account(row: &Row<'_>) -> rusqlite::Result<Account> {
         agent: enum_from_row(row, 1)?,
         name: row.get(2)?,
         config_dir: row.get(3)?,
+        approval_reviewer: enum_from_row_opt(row, 4)?,
     })
 }
 
@@ -1871,6 +1913,7 @@ mod tests {
             agent,
             name: format!("{id}-name"),
             config_dir: config_dir.to_string(),
+            approval_reviewer: None,
         }
     }
 
@@ -2769,6 +2812,72 @@ mod tests {
             let console = store.get_console(id).unwrap().unwrap();
             assert_eq!(console.claude_account_id, None);
         }
+    }
+
+    #[test]
+    fn approval_reviewer_columns_migrate_and_settings_round_trip() {
+        let path = temp_db("approval-reviewer-migration");
+        let store = Store::open(&path).unwrap();
+        store
+            .insert_account(&account("acct-1", Agent::Codex, "/tmp/codex"))
+            .unwrap();
+        {
+            let conn = store.lock();
+            conn.execute("ALTER TABLE accounts DROP COLUMN approval_reviewer", [])
+                .unwrap();
+            conn.execute(
+                "ALTER TABLE settings DROP COLUMN codex_default_approval_reviewer",
+                [],
+            )
+            .unwrap();
+        }
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        let mut account = store.get_account("acct-1").unwrap().unwrap();
+        assert_eq!(account.approval_reviewer, None);
+        assert_eq!(store.codex_default_approval_reviewer().unwrap(), None);
+        account.approval_reviewer = Some(ApprovalReviewer::User);
+        store
+            .set_account_approval_reviewer(&account.id, account.approval_reviewer)
+            .unwrap();
+        store
+            .set_codex_default_approval_reviewer(Some(ApprovalReviewer::AutoReview))
+            .unwrap();
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert_eq!(store.get_account("acct-1").unwrap().unwrap(), account);
+        assert_eq!(
+            store
+                .get_settings()
+                .unwrap()
+                .codex_default_approval_reviewer,
+            Some(ApprovalReviewer::AutoReview)
+        );
+        store.set_codex_default_approval_reviewer(None).unwrap();
+        assert_eq!(store.codex_default_approval_reviewer().unwrap(), None);
+    }
+
+    #[test]
+    fn reviewer_changes_and_account_edits_do_not_overwrite_each_other() {
+        let path = temp_db("account-reviewer-independent");
+        let store = Store::open(&path).unwrap();
+        let mut stale = account("acct-1", Agent::Codex, "/tmp/codex");
+        store.insert_account(&stale).unwrap();
+        store
+            .set_account_approval_reviewer(&stale.id, Some(ApprovalReviewer::AutoReview))
+            .unwrap();
+        stale.name = "Renamed".into();
+        stale.config_dir = "/tmp/codex-moved".into();
+        store.update_account(&stale).unwrap();
+        let saved = store.get_account(&stale.id).unwrap().unwrap();
+        assert_eq!(saved.approval_reviewer, Some(ApprovalReviewer::AutoReview));
+        store
+            .set_account_approval_reviewer(&stale.id, Some(ApprovalReviewer::User))
+            .unwrap();
+        let saved = store.get_account(&stale.id).unwrap().unwrap();
+        assert_eq!(saved.name, stale.name);
+        assert_eq!(saved.config_dir, stale.config_dir);
+        assert_eq!(saved.approval_reviewer, Some(ApprovalReviewer::User));
     }
 
     /// An account's name and directory round-trip, and `update_account` can change either

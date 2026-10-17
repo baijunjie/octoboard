@@ -12,7 +12,7 @@ use crate::adapter::{self, LaunchSpec};
 use crate::branch_origin;
 use crate::env_shell;
 use crate::paths;
-use crate::protocol::{error_code, Agent, CodedError, Notice, Role};
+use crate::protocol::{error_code, Agent, ApprovalReviewer, CodedError, Notice, Role};
 use crate::ptyio;
 use crate::session::{self, LiveSession, NewSession};
 
@@ -63,6 +63,8 @@ pub struct LaunchRequest {
     /// The configuration directory of the session's own agent that it is pinned to; see
     /// `protocol::Session::config_dir`.
     pub config_dir: Option<PathBuf>,
+    /// Codex approval reviewer override for this launch.
+    pub approval_reviewer: Option<ApprovalReviewer>,
     /// The model to launch with; see `LaunchSpec::model`.
     pub model: Option<String>,
     /// The reasoning effort to launch with; see `LaunchSpec::effort`.
@@ -90,6 +92,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         task,
         resume_agent_session_id,
         config_dir,
+        approval_reviewer,
         model,
         effort,
         preresolved_shell_env,
@@ -151,6 +154,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         hook_script: &hook_script,
         shell_env: &shell_env,
         config_dir: config_dir.as_deref(),
+        approval_reviewer,
         model: model.as_deref(),
         effort: effort.as_deref(),
         agent_version: binary

@@ -292,6 +292,14 @@ impl Console {
     }
 }
 
+/// Who resolves Codex approval requests. An absent override follows the account configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApprovalReviewer {
+    User,
+    AutoReview,
+}
+
 /// A named config directory of one agent, kept once for the whole application and referred to by
 /// id wherever a config directory is referred to — a console's per-agent setting, a session's own
 /// copy of it. Every agent also has a *default* account, which is not a row here: it is the state
@@ -312,6 +320,9 @@ pub struct Account {
     /// directory they are about to create should not be stopped — this may therefore name a
     /// directory that does not exist yet.
     pub config_dir: String,
+    /// Codex-only launch override; never written into the agent's own configuration.
+    #[serde(default)]
+    pub approval_reviewer: Option<ApprovalReviewer>,
 }
 
 /// Whether an agent's binary resolves on the user's login shell `PATH`, the only test an agent is
@@ -662,6 +673,8 @@ pub struct Settings {
     /// Every account of every agent, application-wide. The default account of each agent is not
     /// among these — it is the state of pinning nothing, not a row (see `Account`).
     pub accounts: Vec<Account>,
+    /// Launch override for Codex sessions that use the default account.
+    pub codex_default_approval_reviewer: Option<ApprovalReviewer>,
 }
 
 /// Where a project's files are read from, as `project_source` reports it. See "Project sources" in
@@ -1485,6 +1498,12 @@ pub enum RequestBody {
     /// `settings_updated`, and a `console_upserted` for every console whose reference was cleared.
     DeleteAccount {
         account: String,
+    },
+    /// Sets a Codex account's approval reviewer. A null account names the default account; a null
+    /// reviewer follows its configuration. Takes effect on the next launch or resume.
+    SetAccountApprovalReviewer {
+        account: Option<String>,
+        reviewer: Option<ApprovalReviewer>,
     },
     /// Checks every project of this console's current git status against its remote, concurrently.
     /// Answered with `ack` at once; the statuses follow as `project_git_status` broadcasts, one per

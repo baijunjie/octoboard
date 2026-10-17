@@ -35,11 +35,11 @@
 //!   own hook script path, so seeding `hooks.state` with hashes shipped with the adapter cannot
 //!   work — no hash captured once could ever match a different session's.
 //!
-//! One of the user's own settings changes what Octoboard may promise: with `approvals_reviewer`
-//! set to auto review, Codex resolves an approval request itself — the `PermissionRequest` hook
+//! The effective `approvals_reviewer` changes what Octoboard may promise: with it set to auto review,
+//! Codex resolves an approval request itself — the `PermissionRequest` hook
 //! fires, no modal is ever shown, and the tool proceeds. A raised hand there asks the user to
-//! answer something they will never be shown, so the adapter reads the setting and says so in its
-//! plan.
+//! answer something they will never be shown, so the adapter resolves the account override or
+//! reads the setting and says so in its plan.
 //!
 //! Codex cannot pre-allocate a session id, and in the interactive TUI the thread is created lazily
 //! on the first prompt submission — so a session the user opens without a task has no
@@ -272,6 +272,16 @@ impl AgentAdapter for CodexAdapter {
             args.push(format!("model_reasoning_effort={}", toml_string(effort)));
         }
 
+        if let Some(reviewer) = spec.approval_reviewer {
+            let value = match reviewer {
+                crate::protocol::ApprovalReviewer::User => "user",
+                crate::protocol::ApprovalReviewer::AutoReview => "auto_review",
+            };
+            // Repeated on resume like the other launch overrides; the user's file stays intact.
+            args.push("-c".to_string());
+            args.push(format!("approvals_reviewer={}", toml_string(value)));
+        }
+
         if spec.resume_agent_session_id.is_none() {
             if let Some(task) = spec.task {
                 args.push(task.to_string());
@@ -294,12 +304,16 @@ impl AgentAdapter for CodexAdapter {
 
 /// Whether this user's Codex resolves approval requests without ever showing a dialog.
 ///
-/// Read from the user's own `config.toml` — never written to it. The setting's shape is not pinned
-/// down (it has been seen as a plain value and as a table), so the whole value is searched for the
+/// The account override takes precedence; otherwise read the user's own `config.toml`, never
+/// written to. The setting's shape is not pinned down (it has been seen as a plain value and as a
+/// table), so the whole value is searched for the
 /// auto-review marker rather than one key path being assumed. Unreadable or absent means "the user
 /// will be asked", which is the safe way to be wrong: a hand raised needlessly is visible, while
 /// one never raised leaves a session looking busy while it waits.
 fn resolves_approvals_itself(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> bool {
+    if let Some(reviewer) = spec.approval_reviewer {
+        return reviewer == crate::protocol::ApprovalReviewer::AutoReview;
+    }
     const AUTO_REVIEW: &str = "auto_review";
     let config = codex_home(spec, pinned).join("config.toml");
     let Ok(text) = std::fs::read_to_string(&config) else {
@@ -519,6 +533,45 @@ mod tests {
             ))
         ))));
         assert!(!overrides.iter().any(|o| o.starts_with("instructions=")));
+    }
+
+    #[test]
+    fn account_reviewer_overrides_are_repeated_on_resume_without_changing_the_users_config() {
+        use crate::protocol::ApprovalReviewer;
+        let mut fixture = spec_fixture();
+        let home = fixture.scratch.join("reviewer-home");
+        std::fs::create_dir_all(&home).unwrap();
+        let config = home.join("config.toml");
+        let original = "approvals_reviewer = \"auto_review\"\n";
+        std::fs::write(&config, original).unwrap();
+        fixture.config_dir = Some(home);
+        for (reviewer, text, resolves) in [
+            (ApprovalReviewer::User, "user", false),
+            (ApprovalReviewer::AutoReview, "auto_review", true),
+        ] {
+            for resume in [None, Some("conversation-1")] {
+                let mut spec = fixture.spec();
+                spec.approval_reviewer = Some(reviewer);
+                spec.resume_agent_session_id = resume;
+                spec.task = Some("Initial prompt");
+                let plan = CodexAdapter.plan(&spec).unwrap();
+                assert_eq!(plan.resolves_approvals_itself, resolves);
+                assert!(overrides(&plan.args).contains(&format!("approvals_reviewer=\"{text}\"")));
+                assert!(!plan
+                    .args
+                    .iter()
+                    .any(|arg| arg.contains("approval_policy") || arg.contains("sandbox_mode")));
+                if resume.is_none() {
+                    assert_eq!(plan.args.last().unwrap(), "Initial prompt");
+                }
+                assert_eq!(std::fs::read_to_string(&config).unwrap(), original);
+            }
+        }
+        let plan = CodexAdapter.plan(&fixture.spec()).unwrap();
+        assert!(plan.resolves_approvals_itself);
+        assert!(!overrides(&plan.args)
+            .iter()
+            .any(|arg| arg.starts_with("approvals_reviewer=")));
     }
 
     /// A hand raised for an approval the user is never shown can never be cleared by them, so the

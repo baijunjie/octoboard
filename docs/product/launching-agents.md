@@ -49,11 +49,11 @@ given Octoboard permission, for a console session in the console's own working d
 agent records the trust in its own configuration, as it does when a person answers. See
 `docs/product/folder-trust.md`.
 
-Two settings of theirs are *read* at launch and never written: whether Claude Code has been trusted
-with the project's directory, and whether Codex resolves approval requests by itself. Each one
-changes what Octoboard can promise for that session (see "Per-agent specifics a user will notice"
-below and "The raised hand" in `docs/product/sessions.md`). The Codex setting remains the user's to
-change in Codex itself; Claude Code's trust is given by answering its trust confirmation.
+Claude Code's folder trust and Codex's approval reviewer affect what Octoboard can promise for a session (see
+"Per-agent specifics a user will notice" below and "The raised hand" in `docs/product/sessions.md`). Their
+configuration files are read at launch and never rewritten. Claude Code's trust is given by answering its trust
+confirmation. Codex's reviewer can be overridden for an account in Settings; see "Agent accounts" in
+`docs/product/settings.md`.
 
 Everything Octoboard adds is injected **per launch** and disappears with the process. In consequence, a project's own
 configuration keeps working exactly as it does outside Octoboard: its instruction file, its skills, its hooks and its
@@ -115,8 +115,8 @@ arguments every time and a resume that omitted them would leave a session nobody
 with.
 
 The model and reasoning effort resolved for the session are passed on the launch as well (see "The model and
-reasoning effort" below). They are not part of the injection: they are the user's own choice carried to the
-agent, not a capability Octoboard adds.
+reasoning effort" below), as is an explicit Codex account approval reviewer (see "Agent accounts" in
+`docs/product/settings.md`). These are the user's choices carried to the agent, separate from the injected capabilities.
 
 ### The console session's instruction file
 
@@ -296,8 +296,11 @@ conditions that are visible:
   that waits for the user, such as a session request, can return its result. This is the limit on Octoboard's tools
   alone; no other tool's limit changes.
 
-Whether Codex resolves approval requests by itself is read from `config.toml` in the Codex home that launch uses: the
-session's Codex config directory, else a `CODEX_HOME` the user's shell exports, else `~/.codex`.
+An explicit Codex approval reviewer chosen for the account in Settings takes precedence on every launch, a resume
+included. When the account follows its configuration, whether Codex resolves approval requests by itself is read
+from `config.toml` in the Codex home that launch uses: the session's Codex config directory, else a `CODEX_HOME` the
+user's shell exports, else `~/.codex`. The account choices and their lifetime rules are in "Agent accounts" in
+`docs/product/settings.md`.
 
 **Grok Build.** A Grok session runs against a per-session Grok home that Octoboard builds afresh on every launch from a
 **source home**: the session's Grok Build config directory when it holds one, else a `GROK_HOME` the user's shell
