@@ -23,16 +23,16 @@ export function RowActions({ path, name, directory = false, contextTargetRef }: 
   const scope = useContext(RowPathScope);
   const { request, toastError } = useDaemon();
   const items: ActionMenuEntry[] = [];
+  if (copyPath) items.push({ label: t("common.copyPath"), icon: Copy, onClick: () => copyPath(path) });
   if (scope) {
     const run = (type: "open_project_path" | "reveal_project_path") => {
       void request({ type, ...scope, path }).catch((error: Error) => toastError(error));
     };
     items.push(
-      { label: t("browser.row.open"), icon: SquareArrowOutUpRight, onClick: () => run("open_project_path") },
       { label: t("browser.row.reveal"), icon: FolderOpen, onClick: () => run("reveal_project_path") },
+      { label: t("browser.row.open"), icon: SquareArrowOutUpRight, onClick: () => run("open_project_path") },
     );
   }
-  if (copyPath) items.push({ label: t("common.copyPath"), icon: Copy, onClick: () => copyPath(path) });
   if (items.length === 0) return null;
   return (
     <RowControls className="ms-auto">

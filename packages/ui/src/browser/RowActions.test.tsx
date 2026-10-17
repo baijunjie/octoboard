@@ -110,8 +110,8 @@ it.each(["open_project_path", "reveal_project_path"] as const)("sends %s with th
   );
   act(() => actionsOf(container).click());
   const entries = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")];
-  expect(entries.map((entry) => entry.textContent)).toEqual(["Open", "Show in file manager"]);
-  act(() => entries[type === "open_project_path" ? 0 : 1].click());
+  expect(entries.map((entry) => entry.textContent)).toEqual(["Show in file manager", "Open"]);
+  act(() => entries[type === "open_project_path" ? 1 : 0].click());
   await flush();
   expect(request).toHaveBeenCalledExactlyOnceWith({ type, project: "p", worktree: "w", path: "src/caf%C3%A9.ts" });
 });

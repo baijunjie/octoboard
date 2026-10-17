@@ -227,8 +227,9 @@ entry**, whether the folder is collapsed or expanded. Every file's row in the Gi
 button in both its views. This applies to flat and grouped layouts and filtered results. **Right-clicking a row
 opens the same menu at the pointer** (Control-click also works in the desktop app).
 
-- **Open** opens the live file or folder with the operating system's default application. **Show in file manager**,
-  immediately after it, opens the containing folder and selects that entry, including when the entry is a folder.
+- The menu's order is **Copy path**, **Show in file manager**, then **Open**, omitting unavailable actions.
+- **Show in file manager** opens the containing folder and selects that entry, including when the entry is a folder.
+  **Open** opens the live file or folder with the operating system's default application.
   Both act on the machine running the daemon, including when the client is a browser on another machine. Files uses
   the project directory; Uncommitted uses the selected worktree and the project's directory within it. They act on
   what is on disk now, including for a staged change. **Compare offers neither action**, since its changes name
