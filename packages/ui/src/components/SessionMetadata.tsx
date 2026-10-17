@@ -45,7 +45,7 @@ export function SessionUsageLabel({ usage }: { usage?: SessionUsage | null }): R
     ...(usage.cached_input_tokens == null ? [] : [{ key: "cached", label: t("session.usage.cached"), value: usage.cached_input_tokens }]),
     ...(usage.cache_write_input_tokens == null ? [] : [{ key: "cacheWrite", label: t("session.usage.cacheWrite"), value: usage.cache_write_input_tokens }]),
   ];
-  const total = t("session.usage.total", { tokens: tokens(usage.total_tokens) });
+  const total = t("session.usage.total", { count: usage.total_tokens, tokens: tokens(usage.total_tokens) });
   // The accessible name is one plain sentence; the tooltip lays the same counts out as a table.
   const details = joinPhrases(language, [total, ...rows.map((row) => t("session.usage.entry", { label: row.label, tokens: tokens(row.value) }))]);
   const tooltip = <UsageTooltip total={total} rows={rows} format={number} />;
@@ -55,7 +55,7 @@ export function SessionUsageLabel({ usage }: { usage?: SessionUsage | null }): R
   // or selected row. The compact size sits in the metadata line without growing it.
   return (
     <IndicatorTooltip tooltip={tooltip} label={details} className="flex shrink-0">
-      <InlineChip size="xs" aria-hidden="true" className="sidebar-fills">{compact.format(usage.total_tokens)}</InlineChip>
+      <InlineChip size="xs" aria-hidden="true" className="sidebar-fills text-app-muted">{compact.format(usage.total_tokens)}</InlineChip>
     </IndicatorTooltip>
   );
 }

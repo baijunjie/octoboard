@@ -25,7 +25,7 @@ it("uses the recorded total and exposes full localized counts with cache subsets
   const { container } = mount(<SessionUsageLabel usage={usage} />);
   expect(container.textContent).toBe("125K");
   const label = container.querySelector('[role="img"]')?.getAttribute("aria-label");
-  expect(label).toContain(`Tokens: ${isolate("124,999")}`);
+  expect(label).toContain(`${isolate("124,999")} tokens`);
   expect(label).toContain(`Input: ${isolate("123,456")}`);
   expect(label).toContain(`Cached input: ${isolate("100,000")}`);
   expect(label).toContain(`Cache write: ${isolate("0")}`);
@@ -43,6 +43,7 @@ it("omits unavailable and zero usage until a positive total arrives", () => {
   expect(container.innerHTML).toBe("");
   render(<SessionUsageLabel usage={{ input_tokens: 1, output_tokens: 0, total_tokens: 1 }} />);
   expect(container.textContent).toBe("1");
+  expect(container.querySelector('[role="img"]')?.getAttribute("aria-label")).toContain(`${isolate("1")} token`);
   expect(container.querySelector('[role="img"]')?.getAttribute("aria-label")).not.toContain("Cached input");
 });
 

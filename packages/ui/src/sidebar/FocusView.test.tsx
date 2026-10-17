@@ -378,5 +378,5 @@ it("updates recorded usage on active cards and keeps archived previews compact w
   expect(row(archived.title).getAttribute("aria-describedby")).toBeNull();
   act(update);
   const description = document.getElementById(row(active.title).getAttribute("aria-describedby")!);
-  expect(description?.querySelector('[role="img"]')?.getAttribute("aria-label")).toContain(`Tokens: ${isolate("1,200")}`);
+  expect(description?.querySelector('[role="img"]')?.getAttribute("aria-label")).toContain(`${isolate("1,200")} tokens`);
 });

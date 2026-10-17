@@ -438,6 +438,7 @@ primary file-path row retain their shared path components, including their icons
 tooltips. Path input fields and source or Markdown content also retain their own layouts.
 
 Inline chips retain HeroUI's colours, soft fill and shape; the secondary hue is the shared purple extension.
+Session usage chips use the same muted text colour as their neighbouring metadata or compact archive title.
 `CodeBlock` uses the shared Typography wrapper for multi-line diagnostics. Outside an Alert, both default to neutral
 and may choose a colour. `TintedAlert` supplies `CodeToneContext`: default stays neutral, accent maps to primary, and
 success, warning and danger use their matching colours. The nearest status context takes precedence over an explicit

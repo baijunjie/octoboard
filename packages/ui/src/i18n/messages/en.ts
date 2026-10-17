@@ -462,7 +462,10 @@ export const en = {
   "archive.delete": "Delete {title}",
   "session.meta.created": "Created {time}",
   "session.meta.archived": "Archived {time}",
-  "session.usage.total": "Tokens: {tokens}",
+  "session.usage.total": {
+    one: "{tokens} token",
+    other: "{tokens} tokens",
+  },
   "session.usage.input": "Input",
   "session.usage.output": "Output",
   "session.usage.cached": "Cached input",

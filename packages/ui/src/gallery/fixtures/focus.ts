@@ -191,6 +191,12 @@ const uncachedUsageState = {
   sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, id === "s-1" ? { ...session, usage: session.usage && withoutCache(session.usage) } : session])),
 };
 
+// A single recorded token exercises the tooltip heading's singular form.
+const singleTokenUsageState = {
+  ...scrollingFocusState,
+  sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, id === "s-1" ? { ...session, usage: { input_tokens: 1, output_tokens: 0, total_tokens: 1 } } : session])),
+};
+
 const addIdempotencyKeys = (ui: Ui) => ui.session(ui.t("session.displayTitle", { title: "Prevent duplicate API requests", name: "Add idempotency keys" }));
 
 const hierarchyState = {
@@ -234,7 +240,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus including console sessions",
     state: combinedState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "Agent names sit on the left of the metadata line; a compact usage chip and creation age sit on the right. A substantial cached total is shown; zero totals and missing native records omit the chip without adding a row. Account names appear only in agent icon tooltips and accessible session labels. The switch beside Sessions is on; hover or focus it for its tooltip. Bound and unbound cards differ subtly; owner badges precede long single-line titles, which fade and scroll on text hover. Hover only the text to scroll it; owner, status and agent marks or menu controls leave both lines still. Bound cards keep status, owner and agent marks in one column; titles without an owner badge start at the card content edge without an empty owner slot. Pin/menu spacing matches the header controls. Nested cards inherit owner colors; hover badges for owner names. Rounded branches connect both the single child under Write the migration and the two children under Rework the result ranking. The vertical rail crosses the card gaps and stops at the last child’s centre; top-level cards have no rail. Arabic mirrors the branches. Pinned cards come first, then Waiting for you, Awaiting instructions, Working and Interrupted; children stay under parents. Scroll to confirm Sessions stays above the fade and Archived pushes it away at a 200px window height. Card and header actions buttons share muted resting glyphs and the shared subtle tint when hovered or open.",
+    description: "Agent names sit on the left of the metadata line; a compact usage chip and creation age sit on the right, all sharing the same muted text color. A substantial cached total is shown; zero totals and missing native records omit the chip without adding a row. Account names appear only in agent icon tooltips and accessible session labels. The switch beside Sessions is on; hover or focus it for its tooltip. Bound and unbound cards differ subtly; owner badges precede long single-line titles, which fade and scroll on text hover. Hover only the text to scroll it; owner, status and agent marks or menu controls leave both lines still. Bound cards keep status, owner and agent marks in one column; titles without an owner badge start at the card content edge without an empty owner slot. Pin/menu spacing matches the header controls. Nested cards inherit owner colors; hover badges for owner names. Rounded branches connect both the single child under Write the migration and the two children under Rework the result ranking. The vertical rail crosses the card gaps and stops at the last child’s centre; top-level cards have no rail. Arabic mirrors the branches. Pinned cards come first, then Waiting for you, Awaiting instructions, Working and Interrupted; children stay under parents. Scroll to confirm Sessions stays above the fade and Archived pushes it away at a 200px window height. Card and header actions buttons share muted resting glyphs and the shared subtle tint when hovered or open.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Compare ranking strategies", name: "Rework the result ranking" }))),
     ],
@@ -246,7 +252,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console session focus",
     state: scrollingFocusState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "Bound cards place agent names on the left and a compact usage chip beside creation age on the right. Zero and absent usage omit the chip without adding a row; hover the chip for input, output and cache details, or agent icons for account details. Bound cards and archives stay under their owners. The two cards under Rework the result ranking have rounded branches joined by a continuous vertical rail across the card gap. The rail stops at the last child’s centre and does not appear beside top-level cards; Arabic mirrors it. Scroll the long list to confirm Sessions stays clear above the fade and, at a 200px window height, Archived replaces it at the top. The switch strip includes waiting, working and inactive sessions; hover markers for details. The header plus menu, header actions, nested project actions, session card actions and archived session actions use the same muted resting glyphs and the shared subtle tint when hovered or open.",
+    description: "Bound cards place agent names on the left and a compact usage chip beside creation age on the right, all sharing the same muted text color. Zero and absent usage omit the chip without adding a row; hover the chip for input, output and cache details, or agent icons for account details. Bound cards and archives stay under their owners. The two cards under Rework the result ranking have rounded branches joined by a continuous vertical rail across the card gap. The rail stops at the last child’s centre and does not appear beside top-level cards; Arabic mirrors it. Scroll the long list to confirm Sessions stays clear above the fade and, at a 200px window height, Archived replaces it at the top. The switch strip includes waiting, working and inactive sessions; hover markers for details. The header plus menu, header actions, nested project actions, session card actions and archived session actions use the same muted resting glyphs and the shared subtle tint when hovered or open.",
     steps: [
       (ui) => ui.press(addIdempotencyKeys(ui)),
     ],
@@ -256,8 +262,18 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Token usage tooltip",
-    description: "The pointer rests on Add idempotency keys' token count. The tooltip leads with the exact total, then a divider and a two-column table: muted labels at the start, figures aligned to the end (mirrored under right-to-left), Input and Output followed by Cached input and Cache write.",
+    description: "The pointer rests on Add idempotency keys' token count. The tooltip leads with the exact total (plural “tokens” in English), then a divider and a two-column table: muted labels at the start, figures aligned to the end (mirrored under right-to-left), Input and Output followed by Cached input and Cache write.",
     state: scrollingFocusState,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
+    steps: [(ui) => ui.hoverSessionUsage(addIdempotencyKeys(ui))],
+  },
+  {
+    id: "focus-usage-tooltip-single-token",
+    group: GROUP,
+    category: "normal",
+    title: "Token usage tooltip, one token",
+    description: "The heading reads “1 token” in English, using the singular form; Chinese retains its usual token label. The table shows one input token and zero output tokens.",
+    state: singleTokenUsageState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
     steps: [(ui) => ui.hoverSessionUsage(addIdempotencyKeys(ui))],
   },
@@ -288,7 +304,7 @@ export const focusScenarios: Scenario[] = [
     state: projectArchivePreviewTen,
     sessionRecords: { "s-preview-2": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The headings count zero live sessions and ten archived parents. All ten parents appear without View all. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus Unused archived draft to see the Delete shortcut immediately before its menu: it has no conversation and its native records are verified absent, so it deletes without confirmation. Used archived rows have only their actions menu, where Delete still requires confirmation. Long preview titles scroll only while the pointer is over their text; icons and row controls do not start them. The Show all project sessions switch is absent even when its saved preference is on. Delete the unused draft or reopen a row, then archive it again: the remaining archive rows slide into place.",
+    description: "The headings count zero live sessions and ten archived parents. All ten parents appear without View all. Compact archive rows omit dates and show a usage chip only for positive totals, matching the muted title color. Hover or focus Unused archived draft to see the Delete shortcut immediately before its menu: it has no conversation and its native records are verified absent, so it deletes without confirmation. Used archived rows have only their actions menu, where Delete still requires confirmation. Long preview titles scroll only while the pointer is over their text; icons and row controls do not start them. The Show all project sessions switch is absent even when its saved preference is on. Delete the unused draft or reopen a row, then archive it again: the remaining archive rows slide into place.",
   },
   {
     id: "focus-archived-session-menu",
@@ -308,7 +324,7 @@ export const focusScenarios: Scenario[] = [
     state: projectArchivePreviewEleven,
     sessionRecords: { "s-preview-2": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}` },
-    description: "The heading counts thirteen archived sessions: eleven parents and two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show a usage chip only for positive totals. Hover or focus Unused archived draft to see the Delete shortcut immediately before its menu: it has no conversation and its native records are verified absent, so it deletes without confirmation. Used archived rows have only their actions menu, where Delete still requires confirmation. Ten parent rows precede View all; children of the archived lead appear only in the full archive. Delete the unused draft to bring the eleventh parent into the preview; reopen another row, then archive it again to watch the remaining rows and View all slide into place. View all remains while archived children are hidden.",
+    description: "The heading counts thirteen archived sessions: eleven parents and two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show a usage chip only for positive totals, matching the muted title color. Hover or focus Unused archived draft to see the Delete shortcut immediately before its menu: it has no conversation and its native records are verified absent, so it deletes without confirmation. Used archived rows have only their actions menu, where Delete still requires confirmation. Ten parent rows precede View all; children of the archived lead appear only in the full archive. Delete the unused draft to bring the eleventh parent into the preview; reopen another row, then archive it again to watch the remaining rows and View all slide into place. View all remains while archived children are hidden.",
   },
   {
     id: "focus-console-archive-five",
@@ -317,7 +333,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console archive preview, exactly ten parents",
     state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The headings count zero live sessions and ten directly bound archived parents. All ten appear without View all. Compact archive rows omit dates and show a usage chip only for positive totals. Used archived rows have no Delete shortcut; their actions menu retains Delete with confirmation and Reopen. Long preview titles scroll only while their text is hovered; icons and controls leave them still. Reopen a row, then archive it again to see the remaining archive rows slide into place.",
+    description: "The headings count zero live sessions and ten directly bound archived parents. All ten appear without View all. Compact archive rows omit dates and show a usage chip only for positive totals, matching the muted title color. Used archived rows have no Delete shortcut; their actions menu retains Delete with confirmation and Reopen. Long preview titles scroll only while their text is hovered; icons and controls leave them still. Reopen a row, then archive it again to see the remaining archive rows slide into place.",
   },
   {
     id: "focus-console-archive-overflow",
@@ -326,7 +342,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console archive preview, eleven parents with children",
     state: archivePreviewEleven,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The heading counts thirteen bound archived sessions, including two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show a usage chip only for positive totals. Used archived rows have no Delete shortcut; their actions menu retains Delete with confirmation and Reopen. Only ten of eleven parent rows appear before View all; the full archive keeps children under their archived lead. Reopen a parent without children, then archive it again: the remaining archive rows slide as the preview changes.",
+    description: "The heading counts thirteen bound archived sessions, including two hidden children. Long preview titles scroll only on text hover. Compact archive rows omit dates and show a usage chip only for positive totals, matching the muted title color. Used archived rows have no Delete shortcut; their actions menu retains Delete with confirmation and Reopen. Only ten of eleven parent rows appear before View all; the full archive keeps children under their archived lead. Reopen a parent without children, then archive it again: the remaining archive rows slide as the preview changes.",
   },
   {
     id: "focus-project-empty",

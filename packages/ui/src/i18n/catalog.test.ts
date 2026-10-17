@@ -11,6 +11,14 @@ it("fills placeholders, selects the plural form and falls back to English", () =
   expect(format("de", "rail.waiting", { count: 2 })).toBe("2 sessions are waiting for you. Go to the next one.");
 });
 
+it.each([0, 1, 2, 73866303])("localizes token usage units for a total of %i", (count) => {
+  const tokens = count.toLocaleString("en");
+  const params = { count, tokens };
+  expect(format("en", "session.usage.total", params)).toBe(`${tokens} ${count === 1 ? "token" : "tokens"}`);
+  expect(format("zh-Hans", "session.usage.total", params)).toBe(`${tokens} 个 token`);
+  expect(format("ar", "session.usage.total", params)).toBe(`${tokens} ${count === 1 ? "token" : "tokens"}`);
+});
+
 const translated = Object.entries(CATALOGS).filter(([language]) => language !== "en") as [
   Language,
   Record<string, Message>,

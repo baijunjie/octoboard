@@ -404,7 +404,9 @@ export const zhHans: Translation<"other"> = {
   "archive.delete": "删除 {title}",
   "session.meta.created": "创建于 {time}",
   "session.meta.archived": "归档于 {time}",
-  "session.usage.total": "{tokens} Token",
+  "session.usage.total": {
+    other: "{tokens} 个 token",
+  },
   "session.usage.input": "输入",
   "session.usage.output": "输出",
   "session.usage.cached": "缓存输入",
