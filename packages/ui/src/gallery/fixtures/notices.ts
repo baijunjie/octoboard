@@ -55,15 +55,45 @@ export const noticeScenarios: Scenario[] = [
     }),
   },
   {
+    id: "session-request-same-project",
+    group: TRUST,
+    category: "normal",
+    title: "Request to start a session in the requester's own project",
+    description: "A session in Website asks for a Claude Code session in Website itself. The requester is named by its terminal title beside its name, and its project and console are not named again, since the question already names them.",
+    state: snapshotState({
+      consoles: [console_],
+      projects: [web, api, grokProject],
+      sessions: sessions.map((s) => s.id === "s-web-1"
+        ? { ...s, status: "waiting_user" as const, terminal_title: "Remove the redundant details" }
+        : s),
+      sessionRequests: [
+        {
+          requestId: "r-1",
+          session: "s-web-1",
+          role: "project",
+          console: console_.id,
+          project: web.id,
+          agent: "claude",
+          branches: [],
+          requestedAt: 1,
+        },
+      ],
+    }),
+  },
+  {
     id: "session-request-project",
     group: TRUST,
     category: "normal",
     title: "Request to start a session in another project",
-    description: "A session in Search API asks for a Grok Build session in Search API experiments, a linked worktree of the same repository. The requester belongs to a different console and project, so all requester and destination names appear as chips. The question is followed by the branches that would be handed over, each a code chip joined as the language joins a list. A literal % is shown as written (fix/coverage-at-100%), and the long name wraps inside its chip.",
+    description: "A session in Search API asks for a Grok Build session in Search API experiments, a linked worktree of the same repository. The requester, named by its terminal title beside its name, belongs to a different console and project, so all requester and destination names appear as chips. The question is followed by the branches that would be handed over, each a code chip joined as the language joins a list. A literal % is shown as written (fix/coverage-at-100%), and the long name wraps inside its chip.",
     state: snapshotState({
       consoles: [console_, requestingConsole],
       projects: [web, { ...api, console_id: requestingConsole.id }, worktreeProject, grokProject],
-      sessions: sessions.map((s) => ({ ...s, ...(s.project_id === api.id ? { console_id: requestingConsole.id } : {}) })),
+      sessions: sessions.map((s) => ({
+        ...s,
+        ...(s.project_id === api.id ? { console_id: requestingConsole.id } : {}),
+        ...(s.id === "s-api-1" ? { terminal_title: "Deduplicate retried writes" } : {}),
+      })),
       sessionRequests: [
         {
           requestId: "r-1",

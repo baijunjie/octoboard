@@ -8,6 +8,7 @@ import { joinNodes } from "../i18n/joinPhrases";
 import type { Language } from "../i18n/languages";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { SESSION_REQUEST_ANSWERED, SESSION_REQUEST_NOT_WAITING } from "../protocol";
+import { sessionDisplayTitle } from "../sessionLabel";
 import { useDaemon, useDaemonStore, type SessionRequest } from "../store";
 import { displayWirePath } from "../wirePath";
 import type { ConfirmDialogProps } from "./ConfirmDialog";
@@ -24,12 +25,14 @@ function branchList(language: Language, branches: string[]): React.ReactNode[] {
  * would be handed where the request names any. It carries no text an agent wrote: the confirmation
  * is the one place the user's approval is enforced, so it says only what Octoboard knows. The
  * requester's place is named because it may belong to another project or console than the one it
- * asks in, which the user has no other way to see; its console is named only where it is not the
- * one the new session would be in, which the sentence names anyway. The names are the user's own,
- * and a long one may have no break opportunity, so the sentence wraps anywhere. Names the store
- * does not know stand in as their ids. */
+ * asks in, which the user has no other way to see; its project and console are named only where
+ * they are not the ones the new session would be in, which the sentence names anyway. The session
+ * is named by its display title, its current task beside its name, since the name alone is often
+ * just its project's. The names are the user's own, and a long one may have no break opportunity,
+ * so the sentence wraps anywhere. Names the store does not know stand in as their ids. */
 function SessionRequestMessage({ request }: { request: SessionRequest }): React.ReactElement {
   const language = useCurrentLanguage();
+  const t = useT();
   const requesting = useDaemonStore((s) => s.sessions.get(request.session));
   const consoles = useDaemonStore((s) => s.consoles);
   const projects = useDaemonStore((s) => s.projects);
@@ -37,10 +40,11 @@ function SessionRequestMessage({ request }: { request: SessionRequest }): React.
   // be asked for in any console.
   const console_ = consoles.get(request.console)?.name ?? request.console;
   const project = request.project ? (projects.get(request.project)?.name ?? request.project) : "";
-  const session = <InlineChip dir="auto" wrap size="inherit">{requesting?.title ?? request.session}</InlineChip>;
+  const session = <InlineChip dir="auto" wrap size="inherit">{requesting ? sessionDisplayTitle(t, requesting) : request.session}</InlineChip>;
   let requester: React.ReactElement;
-  if (!requesting) requester = <Message id="dialog.sessionRequest.requester.unknown" params={{ session }} />;
-  else {
+  if (!requesting || (requesting.project_id && requesting.project_id === request.project)) {
+    requester = <Message id="dialog.sessionRequest.requester.session" params={{ session }} />;
+  } else {
     const elsewhere = requesting.console_id !== request.console;
     const own = { session, console: <InlineChip dir="auto" wrap size="inherit">{consoles.get(requesting.console_id)?.name ?? requesting.console_id}</InlineChip> };
     if (requesting.project_id) {

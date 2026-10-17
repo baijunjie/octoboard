@@ -236,9 +236,11 @@ the reason as a toast about the requesting session. It is for one of these reaso
 
 A plain confirmation titled "Start a session?", with two buttons, **Refuse** and **Start session**.
 
-- **One sentence says who asks and for what.** It names the requesting session by its title (its id where the window
-  does not know it) and where that session lives — its project for a project session, plus its console only where
-  that is not the console the new session would be in, since a request can come from any project or console; then
+- **One sentence says who asks and for what.** It names the requesting session by its displayed name (see
+  "Displayed names" in `docs/product/session-titles.md`; its id where the window does not know the session) and where
+  that session lives — its project for a project session, plus its console only where that is not the console the new
+  session would be in, since a request can come from any project or console; a requester in the very project the new
+  session would be in, or one the window does not know, is named without either; then
   the agent the new session would run and where it would be — a project and that project's console, or, for a console
   session, the console alone; and it ends saying the new session would report to the user. The console is so named
   once where both sessions share it. A project or console the window does not know is named by its id.

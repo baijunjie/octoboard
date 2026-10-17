@@ -830,7 +830,7 @@ export const zhHans: Translation<"other"> = {
   "dialog.sessionRequest.requester.projectElsewhere": "控制台 {console} 的项目 {project} 中的会话 {session}",
   "dialog.sessionRequest.requester.console": "控制台会话 {session}",
   "dialog.sessionRequest.requester.consoleElsewhere": "控制台 {console} 中的会话 {session}",
-  "dialog.sessionRequest.requester.unknown": "会话 {session}",
+  "dialog.sessionRequest.requester.session": "会话 {session}",
   "dialog.sessionRequest.question.project": "{requester} 请求在控制台 {console} 的项目 {project} 中启动一个 {agent} 会话。新会话将向你汇报。",
   "dialog.sessionRequest.question.console": "{requester} 请求在控制台 {console} 中启动一个 {agent} 控制台会话。新会话将向你汇报。",
   "dialog.sessionRequest.withBranches": "{question}{branches}",

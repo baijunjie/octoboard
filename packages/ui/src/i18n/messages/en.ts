@@ -920,7 +920,7 @@ export const en = {
   "dialog.sessionRequest.requester.projectElsewhere": "The session {session} in the project {project} of the console {console}",
   "dialog.sessionRequest.requester.console": "The console session {session}",
   "dialog.sessionRequest.requester.consoleElsewhere": "The session {session} in the console {console}",
-  "dialog.sessionRequest.requester.unknown": "The session {session}",
+  "dialog.sessionRequest.requester.session": "The session {session}",
   "dialog.sessionRequest.question.project":
     "{requester} asks to start a {agent} session in the project {project} of the console {console}. The new session would report to you.",
   "dialog.sessionRequest.question.console":

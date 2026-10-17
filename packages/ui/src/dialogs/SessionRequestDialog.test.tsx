@@ -70,8 +70,10 @@ it("says nothing of branches when none is handed over", () => {
 });
 
 // The requester may live in another project or console than the one it asks in, which the dialog is
-// the only place to see; its console is named only where it is not the one the session is asked in.
+// the only place to see; its project and console are named only where they are not the ones the
+// session is asked in, and it goes by its display title, its own name often being just its project's.
 it.each([
+  { requester: sessionOf("s-1", "c-1", "p-1", "Shop", "working", { terminal_title: "Refund flow" }), where: "The session Refund flow｜Shop asks to start" },
   { requester: sessionOf("s-1", "c-1", "p-3", "Billing agent", "working"), where: "The session Billing agent in the project Shop asks to start" },
   { requester: sessionOf("s-1", "c-1", undefined, "Planner", "working"), where: "The console session Planner asks to start" },
   { requester: sessionOf("s-1", "c-2", "p-2", "Billing agent", "working"), where: "The session Billing agent in the project Ledger of the console Other asks to start" },
