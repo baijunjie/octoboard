@@ -103,13 +103,21 @@ it("moves children without sliding while the list's width changes, and slides fr
   expect(animate.mock.calls.map((call) => (call[0] as { translate: string }[])[0].translate).sort()).toEqual(["0px -40px", "0px 40px"]);
 });
 
-it("leaves a child that just appeared alone and slides the ones it displaced", () => {
+it("animates a new child entering and slides the ones it displaced", () => {
   tops = { a: 0, b: 40 };
   const list = mount(["a", "b"]);
   tops = { a: 0, n: 40, b: 80 };
   list.rerender(["a", "n", "b"]);
-  expect(animate).toHaveBeenCalledTimes(1);
-  expect((animate.mock.calls[0][0] as { translate: string }[])[0].translate).toBe("0px -40px");
+  expect(animate).toHaveBeenCalledTimes(2);
+  const entering = animate.mock.contexts.findIndex((element: HTMLElement) => element.dataset.flip === "n");
+  const displaced = animate.mock.contexts.findIndex((element: HTMLElement) => element.dataset.flip === "b");
+  expect(entering).toBeGreaterThanOrEqual(0);
+  expect(displaced).toBeGreaterThanOrEqual(0);
+  expect(animate.mock.calls[entering][0]).toEqual([
+    { opacity: 0, transform: "translateX(-25%)" },
+    { opacity: 1, transform: "none" },
+  ]);
+  expect((animate.mock.calls[displaced][0] as { translate: string }[])[0].translate).toBe("0px -40px");
 });
 
 it("does not slide where the system asks for reduced motion", () => {
