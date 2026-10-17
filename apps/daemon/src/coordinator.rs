@@ -175,6 +175,14 @@ async fn handle_inner(
         }
 
         RequestBody::DeleteConsole { console: id } => {
+            let _removal = state.claim_session_removal();
+            ensure_unlocked(
+                state
+                    .store
+                    .list_sessions()?
+                    .into_iter()
+                    .filter(|session| session.console_id == id),
+            )?;
             let console = state
                 .store
                 .get_console(&id)?
@@ -317,11 +325,13 @@ async fn handle_inner(
             stop_sessions,
             trash_directory,
         } => {
+            let _removal = state.claim_session_removal();
             let deleted = state
                 .store
                 .get_project(&id)?
                 .ok_or_else(|| CodedError::unknown_project(&id))?;
             let in_project = |session: &Session| session.project_id.as_deref() == Some(&id);
+            ensure_unlocked(state.store.list_sessions()?.into_iter().filter(in_project))?;
             // A session still being launched has no process to stop, so it refuses either way.
             let refused = if stop_sessions {
                 state.has_launching_sessions_where(in_project)?
@@ -563,6 +573,14 @@ async fn handle_inner(
             pinned,
         } => {
             set_session_pinned(state, &id, pinned)?;
+            Ok(None)
+        }
+
+        RequestBody::SetSessionLocked {
+            session: id,
+            locked,
+        } => {
+            set_session_locked(state, &id, locked)?;
             Ok(None)
         }
 
@@ -1971,6 +1989,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         colour: None,
         ordinal: None,
         pinned: false,
+        locked: false,
         started_at: now_millis(),
         ended_at: None,
     };
@@ -2717,7 +2736,9 @@ async fn start_process(
 /// user's request, an owner's tool, a `done` report with no open items, a `delete_project` that
 /// stops sessions.
 pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
+    let _removal = state.claim_session_removal();
     let session = state.session_record(id)?;
+    ensure_unlocked(std::iter::once(session.clone()).chain(team(state, &session)?))?;
     // "Not running" is taken to mean interrupted by exclusion: a status that is neither archived
     // nor backed by a process would be archived here without anyone having decided so. One gap is
     // left open: `begin_open` inserts the session record, `bound_to` included, before it takes
@@ -2757,6 +2778,17 @@ pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
     archive_record(state, id)
 }
 
+pub(crate) fn ensure_unlocked(sessions: impl IntoIterator<Item = Session>) -> Result<()> {
+    if let Some(session) = sessions.into_iter().find(|session| session.locked) {
+        return Err(CodedError::raised(
+            error_code::SESSION_LOCKED,
+            "this operation includes a locked session; unlock it first",
+            &[("session", &session.id)],
+        ));
+    }
+    Ok(())
+}
+
 /// The sessions bound to `owner`, in any status. A session with the role of a bound one owns none,
 /// so it is not looked up.
 pub(crate) fn bound_sessions(state: &Arc<AppState>, owner: &Session) -> Result<Vec<Session>> {
@@ -2773,7 +2805,7 @@ pub(crate) fn bound_sessions(state: &Arc<AppState>, owner: &Session) -> Result<V
 
 /// Every session below `owner` along the bindings, in any status, the deepest level first: the
 /// sessions bound to its lead sessions, then the sessions bound to it.
-fn team(state: &Arc<AppState>, owner: &Session) -> Result<Vec<Session>> {
+pub(crate) fn team(state: &Arc<AppState>, owner: &Session) -> Result<Vec<Session>> {
     let bound = bound_sessions(state, owner)?;
     let mut sessions = Vec::new();
     for session in &bound {
@@ -2903,6 +2935,7 @@ fn session_titles(sessions: &[Session]) -> String {
 /// Marks one session archived and ends its process, if it has one.
 fn archive_record(state: &Arc<AppState>, id: &str) -> Result<()> {
     let mut session = state.session_record(id)?;
+    ensure_unlocked([session.clone()])?;
     session.status = SessionStatus::Archived;
     session.ended_at = Some(now_millis());
     state.save_session(&session)?;
@@ -3186,7 +3219,9 @@ fn session_ids_where(
 /// and used sessions' records when asked, through `trash_agent_records_of` (every one
 /// deleted, the archived sessions bound to it included).
 fn delete_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Session>> {
+    let _removal = state.claim_session_removal();
     let session = state.session_record(id)?;
+    ensure_unlocked(std::iter::once(session.clone()).chain(team(state, &session)?))?;
     let mut gone = Vec::new();
     let deleted = if session.status == SessionStatus::Archived {
         delete_archived_group(state, &session, &mut gone)?
@@ -3236,6 +3271,8 @@ fn inspect_session_records(
 }
 
 fn delete_unused_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Session>> {
+    let _removal = state.claim_session_removal();
+    ensure_unlocked([state.session_record(id)?])?;
     if let Deletion::Deleted { process, session } = state.delete_if_unused(id)? {
         if let Some(live) = process {
             stop_process(live);
@@ -3357,6 +3394,7 @@ fn delete_archived_sessions(
     project_id: Option<&str>,
     console_session_id: Option<&str>,
 ) -> Result<Vec<Session>> {
+    let _removal = state.claim_session_removal();
     state
         .store
         .get_console(console_id)?
@@ -3384,6 +3422,7 @@ fn delete_archived_sessions(
         }
     }
     let mut deleted = Vec::new();
+    let mut selected = Vec::new();
     for session in state.store.list_sessions()? {
         let in_scope = session.console_id == console_id
             && match (project_id, console_session_id) {
@@ -3391,9 +3430,13 @@ fn delete_archived_sessions(
                 (None, Some(owner)) => session.bound_to.as_deref() == Some(owner),
                 (None, None) => session.role == Role::Console,
             };
-        if in_scope {
-            delete_archived_group(state, &session, &mut deleted)?;
+        if in_scope && session.status == SessionStatus::Archived {
+            ensure_unlocked(std::iter::once(session.clone()).chain(team(state, &session)?))?;
+            selected.push(session);
         }
+    }
+    for session in selected {
+        delete_archived_group(state, &session, &mut deleted)?;
     }
     Ok(deleted)
 }
@@ -3803,6 +3846,13 @@ pub fn set_session_pinned(state: &Arc<AppState>, id: &str, pinned: bool) -> Resu
     Ok(session)
 }
 
+pub fn set_session_locked(state: &Arc<AppState>, id: &str, locked: bool) -> Result<Session> {
+    state.set_session_locked(id, locked)?;
+    let session = state.session_record(id)?;
+    state.publish_session(&session);
+    Ok(session)
+}
+
 /// Sets a console session's badge colour and broadcasts it. A project session carries none.
 pub fn set_session_colour(
     state: &Arc<AppState>,
@@ -4120,6 +4170,7 @@ mod tests {
                     account_id: None,
                     config_dir: None,
                     pinned: false,
+                    locked: false,
                     started_at: 0,
                     ended_at: None,
                 })
@@ -4247,6 +4298,7 @@ mod tests {
                 account_id: None,
                 config_dir: None,
                 pinned: false,
+                locked: false,
                 started_at: 0,
                 ended_at: None,
             })
@@ -4800,6 +4852,7 @@ mod tests {
             account_id: None,
             config_dir: None,
             pinned: false,
+            locked: false,
             started_at: 0,
             ended_at: None,
         }
@@ -7187,6 +7240,99 @@ mod tests {
         assert!(["hub", "lead", "worker"]
             .iter()
             .all(|id| !state.has_process(id)));
+    }
+
+    #[tokio::test]
+    async fn session_lock_changes_cannot_cross_a_removal_claim() {
+        let (state, _dir) = switch_fixture("lock-removal-race");
+        state
+            .store
+            .insert_session(&console_session("session", SessionStatus::Interrupted))
+            .unwrap();
+        set_session_locked(&state, "session", true).unwrap();
+        let removal = state.claim_session_removal();
+        let nested = state.claim_session_removal();
+        let task_state = state.clone();
+        tokio::spawn(async move {
+            tokio::task::yield_now().await;
+            for locked in [true, false] {
+                assert_eq!(
+                    code_of(&set_session_locked(&task_state, "session", locked).unwrap_err()),
+                    error_code::SESSION_LOCK_BUSY
+                );
+            }
+        })
+        .await
+        .unwrap();
+        drop(nested);
+        assert_eq!(
+            code_of(&set_session_locked(&state, "session", false).unwrap_err()),
+            error_code::SESSION_LOCK_BUSY
+        );
+        assert_eq!(
+            code_of(&archive_session(&state, "session").unwrap_err()),
+            error_code::SESSION_LOCKED
+        );
+        drop(removal);
+        assert!(state.session_record("session").unwrap().locked);
+        set_session_locked(&state, "session", false).unwrap();
+        archive_session(&state, "session").unwrap();
+        assert_eq!(status_of(&state, "session"), Some(SessionStatus::Archived));
+    }
+
+    #[test]
+    fn locked_sessions_refuse_archive_and_delete_cascades_without_partial_changes() {
+        use SessionStatus::{Archived, Interrupted};
+        let (state, _dir) = switch_fixture("locked-cascades");
+        for session in [
+            console_session("hub", Interrupted),
+            lead_session("lead", Interrupted, "hub"),
+            bound_session("worker", Interrupted, "lead"),
+        ] {
+            state.store.insert_session(&session).unwrap();
+        }
+        set_session_locked(&state, "worker", true).unwrap();
+        for id in ["worker", "lead", "hub"] {
+            assert_eq!(
+                code_of(&archive_session(&state, id).unwrap_err()),
+                error_code::SESSION_LOCKED
+            );
+            assert_eq!(status_of(&state, id), Some(Interrupted));
+        }
+        set_session_locked(&state, "worker", false).unwrap();
+        archive_session(&state, "hub").unwrap();
+        set_session_locked(&state, "worker", true).unwrap();
+        assert_eq!(
+            code_of(&delete_session(&state, "hub").unwrap_err()),
+            error_code::SESSION_LOCKED
+        );
+        assert_eq!(
+            code_of(&delete_archived_sessions(&state, "console-1", None, None).unwrap_err()),
+            error_code::SESSION_LOCKED
+        );
+        for id in ["hub", "lead", "worker"] {
+            assert_eq!(status_of(&state, id), Some(Archived));
+        }
+        set_session_locked(&state, "worker", false).unwrap();
+        assert_eq!(delete_session(&state, "hub").unwrap().len(), 3);
+    }
+
+    #[test]
+    fn a_locked_unused_session_cannot_be_deleted() {
+        let (state, _dir) = switch_fixture("locked-unused");
+        state
+            .store
+            .insert_session(&console_session("unused", SessionStatus::Idle))
+            .unwrap();
+        set_session_locked(&state, "unused", true).unwrap();
+        assert_eq!(
+            code_of(&delete_session(&state, "unused").unwrap_err()),
+            error_code::SESSION_LOCKED
+        );
+        assert_eq!(
+            code_of(&delete_unused_session(&state, "unused").unwrap_err()),
+            error_code::SESSION_LOCKED
+        );
     }
 
     /// Deleting an archived console session takes the archived sessions bound to it, at both

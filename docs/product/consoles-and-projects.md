@@ -192,6 +192,9 @@ its console's reference.
 
 ### Deleting a console
 
+A locked session anywhere in the console, archived sessions included, refuses the whole deletion under
+"Locking a session" in `docs/product/sessions.md`.
+
 Deleting a console asks for confirmation, and the Delete button stays disabled until the word for "delete" in the
 current language — "DELETE" in English, and in any language not yet translated (see "What is translated so far" in
 `docs/product/language.md`), "删除" in Simplified Chinese — has been typed into the confirmation's field. What is typed
@@ -450,6 +453,9 @@ The console session can make the same changes to its console's projects (see "Ch
 `docs/product/agent-settings-tools.md`).
 
 ### Removing a project
+
+A locked session of the project, archived sessions included, refuses removal before any process is ended or
+folder is moved, under "Locking a session" in `docs/product/sessions.md`.
 
 Removing a project removes the association, and with it the records of that project's sessions, archived ones
 included. It also clears what Octoboard recorded about which session created which branch in the project's

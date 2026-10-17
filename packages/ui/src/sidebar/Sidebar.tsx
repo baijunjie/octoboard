@@ -44,7 +44,7 @@ import { SessionActions } from "./SessionActions";
 import { archivedSessions, consoleActivity, INACTIVE_PROJECT_RANK, liveSessionRows, liveSessions, projectRank, sortProjectsByRank } from "./order";
 import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterSummary } from "./ProjectFilter";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
-import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, PinButton, RowIconButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
+import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, LockButton, PinButton, RowIconButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
 import { focusTargetId } from "./focus";
 import type { FocusTarget, SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
@@ -124,6 +124,7 @@ export function Sidebar({
   onPushProjectBranch,
   onLoadProjectBranches,
   onSetSessionColour,
+  onSetLocked,
   onSetPinned,
   onReopenSession,
   onArchiveSession,
@@ -149,6 +150,7 @@ export function Sidebar({
     onPushProjectBranch,
     onLoadProjectBranches,
     onSetSessionColour,
+    onSetLocked,
     onSetPinned,
     onReopenSession,
     onArchiveSession,
@@ -841,16 +843,18 @@ const SessionRow = memo(function SessionRow({
       ref={rowRef}
       ariaLabel={sessionAriaLabel(t, language, session, accounts, owner)}
       selected={selected}
+      locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
     >
       <StatusIcon status={session.status} decorative withTooltip />
       <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
       <RowLabel title={sessionDisplayTitle(t, session)}>{sessionDisplayTitle(t, session)}</RowLabel>
       <RowControls
-        fixed={badgeOwner?.colour || session.pinned ? (
+        fixed={badgeOwner?.colour || session.pinned || session.locked ? (
           <>
             {/* A console session shows its own colour; a bound session shows its owner's. */}
             {badgeOwner?.colour && <RowIconSlot><BindingBadge owner={badgeOwner} decorative={session.role === "console"} /></RowIconSlot>}
+            {session.locked && <LockButton name={sessionDisplayTitle(t, session)} onUnlock={() => handlers.onSetLocked(session, false)} returnFocusTo={rowRef} />}
             {session.pinned && <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}
           </>
         ) : undefined}

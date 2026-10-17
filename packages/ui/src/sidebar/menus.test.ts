@@ -271,3 +271,15 @@ describe("the Copy session ID entry", () => {
     expect(handlers.onCopySessionId).toHaveBeenCalledExactlyOnceWith(session);
   });
 });
+
+it.each(["idle", "archived"] as const)("keeps a locked %s session protected and offers unlocking", (status) => {
+  const session = sessionOf("locked", "c", "p", "Protected", status, { locked: true });
+  const handlers = { onSetLocked: vi.fn() } as unknown as SidebarHandlers;
+  const items = sessionMenu(t, handlers, session, []);
+  const unlock = items.find((item) => typeof item !== "string" && item.label === "Unlock");
+  const removal = items.find((item) => typeof item !== "string" && ["Archive", "Delete"].includes(item.label));
+  expect(removal).toMatchObject({ disabled: true });
+  expect(unlock).toBeDefined();
+  (unlock as { onClick: () => void }).onClick();
+  expect(handlers.onSetLocked).toHaveBeenCalledWith(session, false);
+});

@@ -208,6 +208,57 @@ describe("the fixture daemon's session pins", () => {
   });
 });
 
+describe("the fixture daemon's session locks", () => {
+  it("toggles only the requested session without changing its position or other properties", async () => {
+    const first = sessionOf("first", "c", "p", "First", "idle", { pinned: true });
+    const second = sessionOf("second", "c", "p", "Second", "archived", { locked: true });
+    const daemon = createFixtureDaemon({ id: "locks", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ sessions: [first, second] }) });
+    await expect(daemon.request({ type: "set_session_locked", session: first.id, locked: true })).resolves.toEqual({ type: "ack" });
+    expect([...daemon.store.getState().sessions]).toEqual([[first.id, { ...first, locked: true }], [second.id, second]]);
+    await daemon.request({ type: "set_session_locked", session: first.id, locked: false });
+    expect(daemon.store.getState().sessions.get(first.id)).toEqual(first);
+    await expect(daemon.request({ type: "set_session_locked", session: "missing", locked: true })).rejects.toMatchObject({ code: "unknown_session" });
+  });
+
+  it("refuses archiving a locked grandchild atomically and allows it after unlocking", async () => {
+    const owner = sessionOf("owner", "c", undefined, "Hub", "interrupted");
+    const lead = sessionOf("lead", "c", "p", "Lead", "interrupted", { bound_to: owner.id });
+    const child = sessionOf("child", "c", "p", "Child", "interrupted", { bound_to: lead.id, locked: true });
+    const daemon = createFixtureDaemon({ id: "locks", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ sessions: [owner, lead, child] }) });
+    for (const id of [owner.id, lead.id, child.id]) await expect(daemon.request({ type: "archive_session", session: id })).rejects.toMatchObject({ code: "session_locked", params: { session: child.id } });
+    expect([...daemon.store.getState().sessions.values()]).toEqual([owner, lead, child]);
+    await daemon.request({ type: "set_session_locked", session: child.id, locked: false });
+    await daemon.request({ type: "archive_session", session: owner.id });
+    expect([...daemon.store.getState().sessions.values()].every((session) => session.status === "archived")).toBe(true);
+  });
+
+  it("refuses single and bulk deletion before removing any archived family member", async () => {
+    const console_ = consoleOf("c", "Main");
+    const project = projectOf("p", console_.id, "Website");
+    const owner = sessionOf("owner", console_.id, undefined, "Hub", "archived");
+    const lead = sessionOf("lead", console_.id, project.id, "Lead", "archived", { bound_to: owner.id });
+    const child = sessionOf("child", console_.id, project.id, "Child", "archived", { bound_to: lead.id, locked: true });
+    const other = sessionOf("other", console_.id, project.id, "Other", "archived");
+    const daemon = createFixtureDaemon({ id: "locks", group: "Archive view", category: "normal", title: "", state: snapshotState({ consoles: [console_], projects: [project], sessions: [other, owner, lead, child] }) });
+    const requests: RequestBody[] = [
+      { type: "delete_session", session: owner.id },
+      { type: "delete_session", session: child.id },
+      { type: "delete_archived_sessions", console: console_.id },
+      { type: "delete_archived_sessions", console: console_.id, project: project.id },
+      { type: "delete_archived_sessions", console: console_.id, console_session: owner.id },
+      { type: "delete_project", project: project.id },
+      { type: "delete_console", console: console_.id },
+    ];
+    for (const request of requests) {
+      await expect(daemon.request(request)).rejects.toMatchObject({ code: "session_locked", params: { session: child.id } });
+      expect([...daemon.store.getState().sessions.values()]).toEqual([other, owner, lead, child]);
+    }
+    await daemon.request({ type: "set_session_locked", session: child.id, locked: false });
+    await daemon.request({ type: "delete_archived_sessions", console: console_.id, project: project.id });
+    expect([...daemon.store.getState().sessions.keys()]).toEqual([owner.id]);
+  });
+});
+
 describe("the fixture daemon's deletion of archived sessions", () => {
   const console_ = consoleOf("c-1", "Main");
   const project = projectOf("p-1", console_.id, "Search API");

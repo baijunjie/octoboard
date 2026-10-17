@@ -203,6 +203,7 @@ pub fn deliver_report(
     session_id: &str,
     report: Report<'_>,
 ) -> Result<String> {
+    let _removal = state.claim_session_removal();
     let session = state.session_record(session_id)?;
     let Some(bound_to) = &session.bound_to else {
         bail!("this session is unbound, so there is nobody to report to");
@@ -213,7 +214,12 @@ pub fn deliver_report(
     if session.status.is_dormant() {
         bail!("this session has already been wrapped up; there is nothing further to report");
     }
-    let finished = report.status == ReportStatus::Done && report.open_items.is_empty();
+    let finished = report.status == ReportStatus::Done
+        && report.open_items.is_empty()
+        && coordinator::ensure_unlocked(
+            std::iter::once(session.clone()).chain(coordinator::team(state, &session)?),
+        )
+        .is_ok();
     if finished {
         let unfinished: Vec<Session> = coordinator::bound_sessions(state, &session)?
             .into_iter()
@@ -502,6 +508,7 @@ mod tests {
             account_id: None,
             config_dir: None,
             pinned: false,
+            locked: false,
             started_at: 0,
             ended_at: None,
         }
@@ -769,6 +776,7 @@ mod tests {
             account_id: None,
             config_dir: None,
             pinned: false,
+            locked: false,
             started_at: 0,
             ended_at: None,
         };
@@ -921,6 +929,27 @@ mod tests {
             state.store.insert_session(&session).unwrap();
         }
         (state, dir, live)
+    }
+
+    #[test]
+    fn a_locked_sessions_done_report_is_delivered_without_archiving() {
+        let (state, _dir, _live) = team_state(
+            "locked-report",
+            &[("worker", "hub", false, SessionStatus::Idle)],
+        );
+        state.store.set_session_locked("worker", true).unwrap();
+        let result = deliver_report(&state, "worker", done_report()).unwrap();
+        assert!(!result.contains("now archived"));
+        assert_eq!(
+            state.session_record("worker").unwrap().status,
+            SessionStatus::Idle
+        );
+        state.store.set_session_locked("worker", false).unwrap();
+        deliver_report(&state, "worker", done_report()).unwrap();
+        assert_eq!(
+            state.session_record("worker").unwrap().status,
+            SessionStatus::Archived
+        );
     }
 
     /// A lead session's `done` report with no open items is refused, naming them, while a session

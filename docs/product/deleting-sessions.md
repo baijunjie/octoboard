@@ -4,6 +4,9 @@ How a session is deleted for good, rather than archived: an archived session, on
 session that has never been used. Archiving itself, and where archived sessions are listed, are in "Archiving,
 interruption and resuming" and "Archived sessions" in `docs/product/sessions.md`.
 
+Every deletion is subject to "Locking a session" in `docs/product/sessions.md`, including unused sessions,
+archived descendants and bulk deletion. A locked session blocks the whole operation before any session is removed.
+
 ## Deleting archived sessions
 
 An archived session can be deleted: one at a time, or at once every archived session of a project, every
@@ -38,7 +41,8 @@ Removing a project or deleting a console also deletes its archived sessions alon
 ## Deleting an unused session
 
 A session that has **never been used** is deleted rather than archived: its action menu offers **Delete** in place of
-**Archive** — on its sidebar row, on its card in a focus mode and, for a console session, in its focus mode's header.
+**Archive** — on its sidebar row, on its card in a focus mode and, for a console session, in its focus mode's
+header. Delete is disabled while locked.
 Its row and card offer a Delete shortcut under the same conditions (see "Session rows" in
 `docs/product/sidebar.md`); this also applies to archived preview rows in focus mode.
 A session is unused, whatever its status, while all of these hold:

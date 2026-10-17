@@ -62,6 +62,7 @@ export function sessionOf(
     status,
     has_conversation: true,
     pinned: false,
+    locked: false,
     started_at: minutesAgo(90),
     ...(status === "archived" ? { ended_at: minutesAgo(30) } : {}),
     ...extra,

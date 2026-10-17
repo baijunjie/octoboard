@@ -104,6 +104,7 @@ fn session_record(id: &str, project: &str) -> Session {
         account_id: None,
         config_dir: None,
         pinned: false,
+        locked: false,
         started_at: now_millis() - 60_000,
         ended_at: None,
     }

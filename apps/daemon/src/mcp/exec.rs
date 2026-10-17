@@ -809,6 +809,7 @@ pub(super) mod tests {
             account_id: None,
             config_dir: None,
             pinned: false,
+            locked: false,
             started_at: 0,
             ended_at: None,
         }

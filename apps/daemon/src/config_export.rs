@@ -534,6 +534,7 @@ mod tests {
             account_id: Some("acct-1".to_string()),
             config_dir: Some("/home/u/.claude-work".to_string()),
             pinned: false,
+            locked: false,
             started_at: 0,
             ended_at: None,
         };

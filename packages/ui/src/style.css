@@ -948,3 +948,9 @@ html.pane-resizing * {
   white-space: inherit;
   overflow-wrap: inherit;
 }
+
+/* An inset outline preserves each session row's dimensions and focus ring. */
+div[data-locked="true"] {
+  outline: 1px solid var(--warning);
+  outline-offset: -1px;
+}

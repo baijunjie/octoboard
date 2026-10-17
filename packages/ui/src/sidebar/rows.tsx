@@ -1,5 +1,5 @@
 import { Button } from "@heroui/react";
-import { Pin, PinOff, type LucideIcon } from "lucide-react";
+import { Lock, LockOpen, Pin, PinOff, type LucideIcon } from "lucide-react";
 import React, { type RefObject, useRef } from "react";
 
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
@@ -57,6 +57,7 @@ export function TreeRow({
   describedBy,
   onActivate,
   selected,
+  locked,
   expanded,
   className = "min-h-8 items-center gap-2 px-2",
   children,
@@ -66,6 +67,7 @@ export function TreeRow({
   describedBy?: string;
   onActivate: () => void;
   selected?: boolean;
+  locked?: boolean;
   expanded?: boolean;
   className?: string;
   children: React.ReactNode;
@@ -83,6 +85,7 @@ export function TreeRow({
       aria-current={selected ? "true" : undefined}
       aria-expanded={expanded}
       data-selected={selected || undefined}
+      data-locked={locked || undefined}
       {...focusVisible}
       className={`group flex cursor-pointer rounded-lg text-sm outline-none select-none transition-colors hover:bg-panel-hover data-focus-visible:ring-2 data-focus-visible:ring-app-focus data-selected:bg-panel-selected ${className}`}
       onMouseDown={keepFocus}
@@ -188,6 +191,36 @@ export function PinButton({
         >
           <Pin aria-hidden="true" className="size-4 group-hover/pin:hidden group-data-[focus-visible=true]/pin:hidden" />
           <PinOff aria-hidden="true" className="hidden size-4 group-hover/pin:block group-data-[focus-visible=true]/pin:block" />
+        </Button>
+      </TitledControl>
+    </div>
+  );
+}
+
+export function LockButton({ name, onUnlock, returnFocusTo }: {
+  name: string;
+  onUnlock: () => void;
+  returnFocusTo: RefObject<HTMLElement | null>;
+}): React.ReactElement {
+  const t = useT();
+  const holder = useRef<HTMLDivElement>(null);
+  return (
+    <div ref={holder} className="flex shrink-0" onClick={(e) => e.stopPropagation()}>
+      <TitledControl title={t("sidebar.session.unlock")}>
+        <Button
+          isIconOnly
+          size="sm"
+          variant="ghost"
+          aria-label={t("sidebar.session.unlockItem", { name: isolate(name) })}
+          preventFocusOnPress
+          onPress={() => {
+            handFocusOff(holder.current, returnFocusTo.current, true);
+            onUnlock();
+          }}
+          className="group/lock row-icon-control rounded-md text-warning-glyph hover:text-foreground"
+        >
+          <Lock aria-hidden="true" className="size-4 group-hover/lock:hidden group-data-[focus-visible=true]/lock:hidden" />
+          <LockOpen aria-hidden="true" className="hidden size-4 group-hover/lock:block group-data-[focus-visible=true]/lock:block" />
         </Button>
       </TitledControl>
     </div>

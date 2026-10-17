@@ -52,6 +52,7 @@ function renderArchiveView(
         accounts={[]}
         onSelect={() => {}}
         onReopen={() => {}}
+        onSetLocked={() => {}}
         onOpenDialog={onOpenDialog}
         dialogOpen={false}
         onClose={onClose}

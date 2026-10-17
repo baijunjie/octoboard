@@ -60,7 +60,7 @@ function mount(render: (handlers: SidebarHandlers) => React.ReactElement, stored
     reconnect: () => {},
     terminalUrl: () => "",
   };
-  const handlers = { onFocus: vi.fn(), onOpenDialog: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn(), onSetPinned: vi.fn(), onSwitchConsoleSession: vi.fn() } as unknown as SidebarHandlers;
+  const handlers = { onFocus: vi.fn(), onOpenDialog: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn(), onSetPinned: vi.fn(), onSetLocked: vi.fn(), onSwitchConsoleSession: vi.fn() } as unknown as SidebarHandlers;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() => root.render(<DaemonProvider value={daemon}>{render(handlers)}</DaemonProvider>));
@@ -379,4 +379,16 @@ it("updates recorded usage on active cards and keeps archived previews compact w
   act(update);
   const description = document.getElementById(row(active.title).getAttribute("aria-describedby")!);
   expect(description?.querySelector('[role="img"]')?.getAttribute("aria-label")).toContain(`${isolate("1,200")} tokens`);
+});
+
+it("unlocks a locked card without selecting it or changing its position", () => {
+  const locked = sessionOf("web-locked", main.id, web.id, "Protected chore", "idle", { locked: true });
+  const { container, handlers } = mount((h) => (
+    <ProjectFocusView handlers={h} console={main} project={web} sessions={[locked]} owners={owners} />
+  ));
+  const button = container.querySelector<HTMLButtonElement>('button[aria-label^="Unlock "]')!;
+  expect(button.closest("[data-locked=true]")).not.toBeNull();
+  act(() => button.click());
+  expect(handlers.onSetLocked).toHaveBeenCalledWith(locked, false);
+  expect(handlers.onSelectSession).not.toHaveBeenCalled();
 });

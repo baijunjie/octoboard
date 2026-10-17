@@ -23,6 +23,9 @@ opaque background and stay clear of the edge fade, which begins below the headin
 view stays below both the heading and the fade. The other scrolling rules are in "The edge that hides content
 fades" and "Scrolling a surface from the keyboard" in `docs/product/scrolling-surfaces.md`.
 
+The session lock button and yellow outline, including in the console session header and archived preview, follow
+"Session lock controls" in `docs/product/sidebar.md`.
+
 **Session cards**, in both: the status glyph with the status in words, the pin button when pinned (see "Pinning" in
 `docs/product/sidebar.md`), the session's action menu and, just before it, a Delete or Archive button
 (both always shown when available; see "Session rows" in `docs/product/sidebar.md` for when the
@@ -54,10 +57,11 @@ the parent-session preview described in "The archive view" in `docs/product/side
 agent's icon and its title on one compact line, with native token usage at the trailing end when its total is positive (see
 "Native session usage" in `docs/product/session-usage.md`). These preview rows show no creation or archive time.
 The heading counts every archived session in the view's scope, including children omitted from the preview. Clicking a
-row selects it while leaving it archived. Its action menu offers **Reopen**, which selects and resumes the session,
+row selects it while leaving it archived. Its action menu starts with **Lock** / **Unlock**, then offers **Reopen**,
+which selects and resumes the session,
 then **Copy session ID** when a clipboard is available (see "Session rows" in `docs/product/sidebar.md`),
-and after a separator **Delete**. A Delete shortcut immediately before the action-menu button appears for an
-unused session that is not still starting, under the same rules as "Session rows" in `docs/product/sidebar.md`. It
+and after a separator **Delete**, disabled while locked. A Delete shortcut immediately before the action-menu button
+appears for an unlocked unused session that is not still starting, under the same rules as "Session rows" in `docs/product/sidebar.md`. It
 takes the same deletion action as the menu (see "Deleting archived sessions" in `docs/product/deleting-sessions.md` for the
 confirmation rules). The menu and an available shortcut show with the row's other controls as described in
 "Rows, names and keyboard focus" in `docs/product/sidebar.md`. Reopening follows "Archiving, interruption and

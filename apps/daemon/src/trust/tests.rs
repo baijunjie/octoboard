@@ -446,6 +446,7 @@ fn session(id: &str, agent: Agent, role: Role, project_id: Option<&str>) -> Sess
         account_id: None,
         config_dir: None,
         pinned: false,
+        locked: false,
         started_at: 0,
         ended_at: None,
     }

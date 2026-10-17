@@ -19,7 +19,7 @@ console sessions section and the project list" in `docs/product/sidebar.md`).
 
 A console session's row follows a session row exactly — the same status glyph, its agent's icon, its
 title, a pin button when pinned, and selecting it resumes it when it is interrupted, as selecting an
-interrupted session's row does. Its action menu offers **Pin**/**Unpin**, **Rename**, **Copy session ID** when a clipboard
+interrupted session's row does. Its action menu offers **Lock**/**Unlock**, **Pin**/**Unpin**, **Rename**, **Copy session ID** when a clipboard
 is available (see "Session rows" in `docs/product/sidebar.md`), **Colour** (see "The binding badge" in
 `docs/product/sidebar.md`), **Focus mode** (see
 `docs/product/focus-mode.md`), **Switch account** and **Archive** — **Delete** in its place while the console session
@@ -527,12 +527,30 @@ behaviour was measured against Codex 0.160.0. A release that changes that shape 
 — there is no error and nothing is reported as having failed — and the only symptom is a session
 reading *working* while Codex sits at its prompt.
 
+## Locking a session
+
+Locking is the user's protection against archiving or deleting a session. Every session starts unlocked,
+including sessions already stored without a lock setting. The lock is shared by every client, survives a daemon
+restart, and stays set when the session is resumed or reopened. Locking does not change its position in a list,
+its status, or its binding. The controls are described in "Session lock controls" in `docs/product/sidebar.md`.
+Agents have no tool to lock or unlock a session.
+
+An archive or deletion that includes a locked session is refused with `session_locked`, identifying that session,
+and changes nothing. This covers the session itself, an owner's sessions at both levels, deleting archived sessions
+in bulk, removing a project, and deleting a console. A locked descendant blocks archiving or deleting its owner,
+even when the descendant is already archived. A bulk operation is refused as a whole rather than skipping locks.
+Unlock the protected session before retrying. A completion report still reaches its owner but does not archive
+a protected session or owner (see "Automatic archiving" in `docs/product/hub-orchestration.md`).
+
+While an archive or deletion is in progress, changing any session's lock is refused with `session_lock_busy`;
+retry after that operation finishes. A failed lock change leaves the stored lock unchanged.
+
 ## Archiving, interruption and resuming
 
 **Archiving** ends the agent's process and keeps the session and its record. The agent is asked to
 exit first and is killed only if it does not; a kill takes the agent's tool subprocesses with it.
-Archiving is available for any session that is not already archived, including an interrupted one;
-a console session is archived from its own row's menu, like any other (see "Console sessions and
+Archiving is available for a session that is not already archived, including an interrupted one, subject to
+"Locking a session" above. A console session is archived from its own row's menu, like any other (see "Console sessions and
 project sessions" above). The user archives a session from its row's menu. A session at its prompt or
 interrupted, with no unarchived session under it, is archived at once, since nothing is cut short; one starting, at
 work, waiting for the user, being resumed, or with an unarchived session under it asks for confirmation first. A session that has never been used offers **Delete** there instead, unless it is still starting (see "Deleting an unused session" in `docs/product/deleting-sessions.md`).

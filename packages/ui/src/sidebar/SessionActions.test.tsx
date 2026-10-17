@@ -67,3 +67,9 @@ it("removes the delete shortcut as soon as the first conversation is reported", 
   expect(shortcut(container, "Delete")).toBeNull();
   expect(daemon.request).not.toHaveBeenCalled();
 });
+
+it.each([false, true])("hides removal shortcuts on a locked session, conversation=%s", (has_conversation) => {
+  const { container } = mount({ ...unused, status: "idle", has_conversation, locked: true }, async () => ({ type: "ack" }));
+  expect(shortcut(container, "Delete")).toBeNull();
+  expect(shortcut(container, "Archive")).toBeNull();
+});

@@ -334,6 +334,11 @@ export const en = {
   "sidebar.expandAll": "Expand projects with unarchived sessions",
   "sidebar.collapseAll": "Collapse all projects",
   "sidebar.pin": "Pin",
+  "sidebar.session.lock": "Lock",
+  "sidebar.session.unlock": "Unlock",
+  "sidebar.session.unlockItem": "Unlock {name}",
+  "daemon.session_lock_busy": "Sessions are being archived or deleted. Try again when the operation finishes.",
+  "daemon.session_locked": "This action includes a locked session. Unlock it first.",
   "sidebar.unpin": "Unpin",
   "sidebar.unpinItem": "Unpin {name}",
   // What is going on beneath a console or a project, folded into its accessible name, and shown as

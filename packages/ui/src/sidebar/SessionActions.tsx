@@ -44,7 +44,7 @@ export function SessionActions({
   const archivable = !offersDelete(session, hasBoundSessions) && atOnce;
   return (
     <>
-      {(deletable || archivable) && (
+      {!session.locked && (deletable || archivable) && (
         <div className="contents" {...handoff}>
           <RowIconButton
             icon={deletable ? Trash2 : Archive}

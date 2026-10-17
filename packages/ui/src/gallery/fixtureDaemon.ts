@@ -122,6 +122,10 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
   const fail = ({ code, params, message }: FixtureError): never => {
     throw new DaemonRequestError(daemonMessage(currentLanguage(), code, params, message, store.getState()), code, params);
   };
+  const refuseLocked = (sessions: Iterable<Session>) => {
+    const locked = [...sessions].find((session) => session.locked);
+    if (locked) return fail({ code: "session_locked", params: { session: locked.id }, message: "This session is locked" });
+  };
   const gitReply = createGitReplies(git, fail);
   const configurationReply = createConfigurationReplies(scenario.configuration, store.getState, fail);
   const recordsPresence = (ids: string[]): SessionRecordsPresence => {
@@ -167,7 +171,9 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           // Match coordinator::team over the valid fixture hierarchy: owners reach two levels.
           const childrenOf = (owner: Session) => [...current.sessions.values()].filter((child) => child.bound_to === owner.id);
           const direct = childrenOf(session);
-          const descendants = [...direct.flatMap(childrenOf), ...direct].filter((child) => child.status !== "archived");
+          const team = [...direct.flatMap(childrenOf), ...direct];
+          refuseLocked([session, ...team]);
+          const descendants = team.filter((child) => child.status !== "archived");
           const running = descendants.filter((child) => isLive(child.status));
           if (running.length) return fail({
             code: "session_has_running_sessions",
@@ -246,6 +252,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
         }
         case "delete_project": {
           if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
+          refuseLocked([...store.getState().sessions.values()].filter((session) => session.project_id === body.project));
           if (body.trash_directory && scenario.projectDeleteError) return fail(scenario.projectDeleteError);
           return { type: "ack" };
         }
@@ -254,6 +261,12 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
           const updated = { ...session, pinned: body.pinned };
           store.setState((state) => ({ sessions: new Map(state.sessions).set(body.session, updated) }));
+          return { type: "ack" };
+        }
+        case "set_session_locked": {
+          const session = store.getState().sessions.get(body.session);
+          if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
+          store.setState((state) => ({ sessions: new Map(state.sessions).set(body.session, { ...session, locked: body.locked }) }));
           return { type: "ack" };
         }
         case "set_session_colour": {
@@ -294,6 +307,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
             status: body.task == null ? "idle" : "working",
             has_conversation: false,
             pinned: false,
+            locked: false,
             started_at: Date.now(),
             ...(project ? { bound_to: body.bound_to } : { ordinal, colour: "teal" }),
             ...(account && { account_id: account.id, config_dir: account.config_dir }),
@@ -437,6 +451,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
         case "delete_console": {
           const current = store.getState();
           if (!current.consoles.has(body.console)) return fail({ code: "unknown_console", params: { console: body.console }, message: `unknown console ${body.console}` });
+          refuseLocked([...current.sessions.values()].filter((session) => session.console_id === body.console));
           if ([...current.sessions.values()].some((session) => session.console_id === body.console && isLive(session.status))) return fail({ code: "console_has_running_sessions", params: {}, message: "This console still has running sessions" });
           const consoles = new Map(current.consoles);
           consoles.delete(body.console);
@@ -460,6 +475,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const all = [...store.getState().sessions.values()];
           const session = store.getState().sessions.get(body.session);
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: "Unknown session" });
+          refuseLocked([session]);
           const unused = !session.has_conversation && !session.bound_to && !all.some((s) => s.bound_to === session.id);
           if (session.status === "starting" || (body.only_if_unused && !unused)
             || (session.status !== "archived" && !unused)) {
@@ -474,6 +490,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
             }
           };
           if (session.status === "archived") visit(session.id);
+          refuseLocked(all.filter((record) => doomed.has(record.id)));
           store.setState((state) => ({
             sessions: new Map([...state.sessions].filter(([id]) => !doomed.has(id))),
             pages: new Map([...state.pages].filter(([id]) => !doomed.has(id))),
@@ -510,6 +527,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
                     : s.role === "console"),
             )
             .forEach(deleteGroup);
+          refuseLocked(all.filter((record) => doomed.has(record.id)));
           store.setState((state) => ({
             sessions: new Map(Array.from(state.sessions).filter(([id]) => !doomed.has(id))),
             pages: new Map(Array.from(state.pages).filter(([id]) => !doomed.has(id))),

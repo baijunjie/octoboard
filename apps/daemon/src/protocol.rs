@@ -588,6 +588,9 @@ pub struct Session {
     /// The user pinned this session to the top of its list. Only `set_session_pinned` changes it,
     /// and a pinned session stays pinned across archiving and resuming.
     pub pinned: bool,
+    /// Prevents archiving and deletion until the user unlocks the session.
+    #[serde(default)]
+    pub locked: bool,
     pub started_at: i64,
     pub ended_at: Option<i64>,
 }
@@ -1422,6 +1425,10 @@ pub enum RequestBody {
         session: String,
         pinned: bool,
     },
+    SetSessionLocked {
+        session: String,
+        locked: bool,
+    },
     /// Refused for a project session, which carries no colour.
     SetSessionColour {
         session: String,
@@ -2237,6 +2244,10 @@ pub mod error_code {
     pub const ICON_NOT_AN_IMAGE: &str = "icon_not_an_image";
     pub const ICON_TOO_LARGE: &str = "icon_too_large";
     pub const SESSION_NOT_RUNNING: &str = "session_not_running";
+    /// A lock change raced an archive or deletion. The client may retry once it finishes.
+    pub const SESSION_LOCK_BUSY: &str = "session_lock_busy";
+    /// The operation includes a locked session. `params.session` names it.
+    pub const SESSION_LOCKED: &str = "session_locked";
     /// Only an archived session, or one never used, can be deleted, and not while it is starting: a
     /// session that is not archived is refused once it has had a turn, is bound to an owner or has
     /// sessions bound to it.
@@ -2509,6 +2520,13 @@ mod tests {
                 r#"{"type":"set_session_pinned","id":"request-1","session":"session-7","pinned":true}"#,
                 |body| match body {
                     RequestBody::SetSessionPinned { session, .. } => Some(session),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"set_session_locked","id":"request-1","session":"session-7","locked":true}"#,
+                |body| match body {
+                    RequestBody::SetSessionLocked { session, .. } => Some(session),
                     _ => None,
                 },
             ),

@@ -362,6 +362,7 @@ and sessions listed in a confirmation. Session rows, focus mode cards and the ar
 their accessible names; confirmations provide the agent and account as hidden accessible text beside the icon. Its
 action menu offers:
 
+- **Lock** / **Unlock** — see "Session lock controls" below.
 - **Pin** / **Unpin**.
 - **Rename** — see "Renaming a session" in `docs/product/sessions.md`.
 - **Copy session ID** — immediately after Rename, copies the session's ID exactly to the clipboard. Available for
@@ -395,8 +396,10 @@ action menu offers:
   the archive. Deletion needs no confirmation and automatically moves its agent records to the Trash, as described
   in "Deleting an unused session" in `docs/product/deleting-sessions.md`.
 
-**The Delete or Archive button.** Just before its action-menu button, a session row — a console session's included —
-carries a **Delete** button while the session is unused and not still starting (see "Deleting an unused session" in
+Archive and Delete menu items are disabled while the session is locked.
+
+**The Delete or Archive button.** Just before its action-menu button, an unlocked session row — a console
+session's included — carries a **Delete** button while the session is unused and not still starting (see "Deleting an unused session" in
 `docs/product/deleting-sessions.md`). Agent records do not affect its availability. Being archived does not qualify
 a session for the shortcut. Pressing it takes the same deletion action as the menu, without confirmation and with
 automatic cleanup of its agent records; deletion is refused if the session is no longer unused when it takes place.
@@ -558,6 +561,26 @@ mouse press neither selects the row nor moves keyboard focus. The button goes aw
 keyboard focus, focus is handed first, with its focus ring showing, to the row or card it was on — or, on a project's
 heading in a console session's focus mode, to that heading's **+** button.
 
+## Session lock controls
+
+A session's action menu starts with **Lock** or **Unlock**, including archived sessions, nested sessions and a
+console session's focus header. Protection and persistence follow "Locking a session" in `docs/product/sessions.md`.
+
+A locked session has a yellow inset outline on its sidebar row, focus card, focus archive preview row and full
+archive row; a console session in focus has the same outline around its selectable header title. This does not
+change the row's size or its list order, and keyboard focus keeps its own ring.
+
+A locked session also has a persistent yellow lock button before its other action controls, ahead of its pin
+button when there is one. It remains visible without hover, including on focus cards, archive preview rows, full
+archive rows and a console session's focus header. Pointer hover or visible keyboard focus changes the closed lock
+to an open lock. Its tooltip offers unlocking, and its accessible name also identifies the session. Pressing it
+unlocks that session; a mouse press neither selects the session nor moves keyboard focus. When the disappearing
+button holds keyboard focus, focus goes to its row, card or focus header with a visible focus ring.
+
+The full archive view offers a Lock button among an unlocked row's actions and keeps Delete disabled for a locked
+row. Its Delete all button is disabled while a listed session is locked. A lock among descendants outside the list
+still refuses deletion under the rules of "Locking a session" in `docs/product/sessions.md`.
+
 ## Selecting a session
 
 Selecting a session shows its terminal; selecting an interrupted one resumes it, except by `Ctrl+Tab` or
@@ -626,13 +649,13 @@ scope and nesting are described below.
   hour and minute, formatted in the current language and the client's local time zone. An unknown archive date is
   omitted; the creation date never stands in for it. Archive previews show no dates: submenu previews keep their compact title-only presentation, and focus
   mode's preview rows are described in "What both views show" in `docs/product/focus-mode.md`. The date block sits
-  flush at the row's end in the reading direction, on the right in a left-to-right language. The row's **Reopen** and
+  flush at the row's end in the reading direction, on the right in a left-to-right language. The row's **Reopen**, **Lock** (while unlocked) and
   **Delete** buttons show only while the row is hovered or holds keyboard focus, and are still reached with Tab.
   Hidden, they take no room, so a resting row's title runs up to the date block; shown, they appear just before the
   date block (to its left in a left-to-right language), which stays at the row's end, and the title gives up room for
   them, cut off if it must be. On a pane too narrow for one line, the date block moves onto a line of its own, still at
   the row's end; while the row is hovered or focused the buttons join it there, so such a row grows by a line when its
-  buttons appear. Both buttons have filled backgrounds distinct from the hovered row; Delete uses a soft danger fill.
+  buttons appear. Reopen and Delete have filled backgrounds distinct from the hovered row; Delete uses a soft danger fill.
 - A session whose owner is **a project session listed here too** — an archived session of an archived lead session, or
   of any archived project session that had started sessions — is **inset under that owner**, with rounded connectors
   as in "Project rows" above, and follows it instead of being ranked against the rows beside it; one whose owner is

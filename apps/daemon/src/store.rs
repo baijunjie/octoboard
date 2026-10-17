@@ -299,7 +299,7 @@ impl Store {
                 )?;
             }
         }
-        for column in ["model_override", "effort_override"] {
+        for column in ["model_override", "effort_override", "locked"] {
             if !column_exists(&conn, "sessions", column)? {
                 conn.execute(
                     &format!("ALTER TABLE sessions ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0"),
@@ -307,6 +307,15 @@ impl Store {
                 )?;
             }
         }
+        conn.execute_batch(
+            "CREATE TRIGGER IF NOT EXISTS protect_locked_session_delete
+             BEFORE DELETE ON sessions WHEN OLD.locked = 1
+             BEGIN SELECT RAISE(ABORT, 'locked sessions cannot be deleted'); END;
+             CREATE TRIGGER IF NOT EXISTS protect_locked_session_archive
+             BEFORE UPDATE OF status ON sessions
+             WHEN OLD.locked = 1 AND NEW.status = 'archived' AND OLD.status != 'archived'
+             BEGIN SELECT RAISE(ABORT, 'locked sessions cannot be archived'); END;",
+        )?;
         for column in CONSOLE_SESSION_LAUNCH_COLUMNS {
             if !column_exists(&conn, "consoles", column)? {
                 conn.execute(
@@ -1018,9 +1027,9 @@ impl Store {
     /// never change; `bound_to` and `lead` change only through [`Self::set_binding`], and
     /// `account_id` and `config_dir` change only through [`Self::set_session_account`], the one
     /// write path a switch of the session's account uses, so a record read before a switch can
-    /// never write the old account back over it. `pinned` is the user's own statement
-    /// ([`Self::set_session_pinned`]), which a record read earlier must not overwrite, and so is
-    /// `colour` ([`Self::set_session_colour`]).
+    /// never write the old account back over it. `pinned` and `locked` are the user's own statements
+    /// ([`Self::set_session_pinned`] and [`Self::set_session_locked`]), which a record read earlier
+    /// must not overwrite, and neither may it overwrite `colour` ([`Self::set_session_colour`]).
     /// Returns whether a row was written: `false` means the session is gone (deleted meanwhile).
     pub fn update_session(&self, session: &Session) -> Result<bool> {
         let changed = self.lock().execute(
@@ -1226,6 +1235,14 @@ impl Store {
                 read_session,
             )
             .optional()?)
+    }
+
+    pub fn set_session_locked(&self, id: &str, locked: bool) -> Result<()> {
+        self.lock().execute(
+            "UPDATE sessions SET locked = ?2 WHERE id = ?1",
+            params![id, locked],
+        )?;
+        Ok(())
     }
 
     pub fn set_session_pinned(&self, id: &str, pinned: bool) -> Result<()> {
@@ -1584,7 +1601,7 @@ const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_
                                role, origin, title, status, has_conversation, bound_to, colour,
                                ordinal, account_id, config_dir, pinned, started_at, ended_at,
                                lead, terminal_title, model, effort, model_override, effort_override, usage,
-                               record_title, record_prompt";
+                               record_title, record_prompt, locked";
 
 const CONSOLE_COLUMNS: &str = "id, name, workdir, console_session_agent, default_agent,
                                claude_account_id, codex_account_id, grok_account_id,
@@ -1642,9 +1659,9 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             (id, agent, agent_session_id, console_id, project_id, host_id, role, origin, title,
              status, has_conversation, bound_to, colour, ordinal, account_id, config_dir, pinned,
              started_at, ended_at, lead, terminal_title, model, effort, model_override, effort_override, usage,
-             record_title, record_prompt)
+             record_title, record_prompt, locked)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
+                 ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
         params![
             session.id,
             enum_to_text(&session.agent),
@@ -1674,6 +1691,7 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             session.usage.as_ref().map(serde_json::to_string).transpose()?,
             session.record_titles.named,
             session.record_titles.prompt,
+            session.locked,
         ],
     )?;
     Ok(())
@@ -1802,6 +1820,7 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         account_id: row.get(14)?,
         config_dir: row.get(15)?,
         pinned: row.get(16)?,
+        locked: row.get(28)?,
         started_at: row.get(17)?,
         ended_at: row.get(18)?,
         lead: row.get(19)?,
@@ -1934,6 +1953,7 @@ mod tests {
             account_id: None,
             config_dir: config_dir.map(str::to_string),
             pinned: false,
+            locked: false,
             started_at: 0,
             ended_at: None,
         }
@@ -2565,6 +2585,52 @@ mod tests {
         pinned.pinned = true;
         store.update_project(&pinned).unwrap();
         assert!(store.get_project("project-1").unwrap().unwrap().pinned);
+    }
+
+    #[test]
+    fn session_locks_migrate_persist_and_guard_every_store_removal() {
+        let path = temp_db("session-locked");
+        {
+            let store = Store::open(&path).unwrap();
+            store.insert_console(&console(None, None, None)).unwrap();
+            store.insert_project(&project(false)).unwrap();
+            let mut record = session(None);
+            record.project_id = Some("project-1".to_string());
+            store.insert_session(&record).unwrap();
+            store
+                .lock()
+                .execute_batch(
+                    "DROP TRIGGER protect_locked_session_delete;
+                 DROP TRIGGER protect_locked_session_archive;
+                 ALTER TABLE sessions DROP COLUMN locked;",
+                )
+                .unwrap();
+        }
+        let store = Store::open(&path).unwrap();
+        let mut stale = store.get_session("session-1").unwrap().unwrap();
+        assert!(!stale.locked);
+        store.set_session_locked("session-1", true).unwrap();
+        assert!(store.update_session(&stale).unwrap());
+        assert!(store.get_session("session-1").unwrap().unwrap().locked);
+        stale.status = SessionStatus::Archived;
+        assert!(store.update_session(&stale).is_err());
+        assert!(store.delete_session("session-1").is_err());
+        assert!(store.delete_session_if_unused("session-1").is_err());
+        assert!(store.delete_project("project-1").is_err());
+        assert!(store.delete_console("console-1").is_err());
+        assert!(store.get_project("project-1").unwrap().is_some());
+        store.set_session_locked("session-1", false).unwrap();
+        store.update_session(&stale).unwrap();
+        store.set_session_locked("session-1", true).unwrap();
+        assert!(store.delete_session_if_archived("session-1").is_err());
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert!(store.get_session("session-1").unwrap().unwrap().locked);
+        store.set_session_locked("session-1", false).unwrap();
+        assert!(store
+            .delete_session_if_archived("session-1")
+            .unwrap()
+            .is_some());
     }
 
     /// A session record read before the user pinned it, written back afterwards, does not undo

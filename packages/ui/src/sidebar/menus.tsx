@@ -1,4 +1,4 @@
-import { Archive, ArrowLeftRight, Copy, Download, Focus, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Palette, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Upload } from "lucide-react";
+import { Archive, ArrowLeftRight, Copy, Download, Focus, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Upload } from "lucide-react";
 
 import { switchEntries } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/ActionMenu";
@@ -212,6 +212,7 @@ export function sessionMenu(
   const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts);
   const focusable = session.role === "console" && !archived && !focused;
   return [
+    { label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, onClick: () => handlers.onSetLocked(session, !session.locked) },
     ...(archived ? [{ label: t("sidebar.session.reopen"), icon: RotateCcw, onClick: () => handlers.onReopenSession(session) }] : []),
     ...(archived || focused ? [] : [pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned))]),
     ...(!archived ? [{ label: t("sidebar.session.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }] : []),
@@ -223,7 +224,7 @@ export function sessionMenu(
     ...(switchAccount ? [switchAccount] : []),
     "separator",
     offersDelete(session, hasBoundSessions)
-      ? { label: t("sidebar.session.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true }
-      : { label: t("sidebar.session.archive"), icon: Archive, onClick: () => handlers.onArchiveSession(session) },
+      ? { label: t("sidebar.session.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true, disabled: session.locked }
+      : { label: t("sidebar.session.archive"), icon: Archive, onClick: () => handlers.onArchiveSession(session), disabled: session.locked },
   ];
 }

@@ -31,7 +31,7 @@ import { projectMenu, sessionMenu } from "./menus";
 import { SessionActions } from "./SessionActions";
 import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroupRows, focusGroups, hasBoundSessions, liveSessionRows, type NestedSession, notUnderConsoleSession, sortProjects, switchStrip, type SwitchStripEntry } from "./order";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
-import { NESTED_INSET_CLASS, PinButton, RowIconButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
+import { NESTED_INSET_CLASS, LockButton, PinButton, RowIconButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
 
@@ -244,6 +244,7 @@ export function ConsoleSessionFocusView({
         <TreeRow
           ariaLabel={sessionAriaLabel(t, language, consoleSession, accounts)}
           selected={consoleSession.id === selectedSessionId}
+          locked={consoleSession.locked}
           onActivate={() => handlers.onSelectSession(consoleSession)}
           className="min-h-10 min-w-16 flex-1 items-center gap-2 px-2"
         >
@@ -253,6 +254,7 @@ export function ConsoleSessionFocusView({
           </div>
         </TreeRow>
         <RowIconGroup>
+          {consoleSession.locked && <LockButton name={sessionDisplayTitle(t, consoleSession)} onUnlock={() => handlers.onSetLocked(consoleSession, false)} returnFocusTo={headerRef} />}
           {projects.length === 0 ? (
             <RowIconButton icon={Plus} label={newSessionLabel} onPress={() => {}} isDisabled />
           ) : (
@@ -599,13 +601,14 @@ const SessionCard = memo(function SessionCard({
       describedBy={hasVisibleUsage(session.usage) ? metadataId : undefined}
       ariaLabel={under && consoleOwner ? joinPhrases(language, [label, t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, consoleOwner)) })]) : label}
       selected={selected}
+      locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
       className="min-h-8 flex-col gap-1 border border-separator p-[7px] data-selected:border-accent-glyph"
     >
       <RowIconLine icon={<StatusIcon status={session.status} decorative />}>
         <span className="text-xs font-medium text-app-muted">{statusLabel(t, session.status)}</span>
         <span className="flex-1" />
-        <RowControls always fixed={session.pinned ? <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} /> : undefined}>
+        <RowControls always fixed={session.locked || session.pinned ? <>{session.locked && <LockButton name={sessionDisplayTitle(t, session)} onUnlock={() => handlers.onSetLocked(session, false)} returnFocusTo={rowRef} />}{session.pinned && <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}</> : undefined}>
           <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={hasBound} rowRef={rowRef} />
         </RowControls>
       </RowIconLine>
@@ -656,6 +659,7 @@ function ArchivedRow({
       describedBy={hasVisibleUsage(session.usage) ? metadataId : undefined}
       ariaLabel={sessionAriaLabel(t, language, session, accounts)}
       selected={selected}
+      locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
     >
       <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
@@ -663,7 +667,7 @@ function ArchivedRow({
         <span className="text-app-muted">{sessionDisplayTitle(t, session)}</span>
       </RowLabel>
       {hasVisibleUsage(session.usage) && <span id={metadataId}><SessionUsageLabel usage={session.usage} /></span>}
-      <RowControls>
+      <RowControls fixed={session.locked ? <LockButton name={sessionDisplayTitle(t, session)} onUnlock={() => handlers.onSetLocked(session, false)} returnFocusTo={rowRef} /> : undefined}>
         <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={false} rowRef={rowRef} />
       </RowControls>
     </TreeRow>

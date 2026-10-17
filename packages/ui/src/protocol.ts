@@ -205,6 +205,7 @@ export interface Session {
   effort?: string | null;
   /** The user pinned this session to the top of its list; survives archiving and resuming. */
   pinned: boolean;
+  locked: boolean;
   started_at: number;
   ended_at?: number | null;
   usage?: SessionUsage | null;
@@ -802,6 +803,7 @@ export type RequestBody =
    * is broadcast as `session_deleted`. */
   | { type: "delete_archived_sessions"; console: string; project?: string; console_session?: string; trash_agent_records?: boolean }
   | { type: "set_session_pinned"; session: string; pinned: boolean }
+  | { type: "set_session_locked"; session: string; locked: boolean }
   /** Refused for a project session. */
   | { type: "set_session_colour"; session: string; colour: ConsoleSessionColour }
   | { type: "send_message"; session: string; text: string }

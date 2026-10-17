@@ -115,6 +115,9 @@ pub struct AppState {
     /// Serializes session readback with event sends, including deletions, so a stale reader
     /// cannot announce its snapshot after a newer title or removal.
     session_publication: Mutex<()>,
+    /// Lock changes and removal claims share this gate, so a lock cannot be accepted halfway
+    /// through a cascade or while a project directory is being moved to the Trash.
+    session_removals: Mutex<usize>,
     shutdown: tokio::sync::Notify,
 }
 
@@ -209,8 +212,28 @@ impl AppState {
             agent_models: Default::default(),
             events,
             session_publication: Mutex::new(()),
+            session_removals: Mutex::new(0),
             shutdown: tokio::sync::Notify::new(),
         }
+    }
+
+    pub fn claim_session_removal(self: &Arc<Self>) -> SessionRemovalClaim {
+        *self.session_removals.lock().unwrap() += 1;
+        SessionRemovalClaim {
+            state: self.clone(),
+        }
+    }
+
+    pub fn set_session_locked(&self, id: &str, locked: bool) -> Result<()> {
+        let removals = self.session_removals.lock().unwrap();
+        if *removals != 0 {
+            return Err(CodedError::raised(
+                error_code::SESSION_LOCK_BUSY,
+                "sessions are being archived or deleted; try changing the lock again when that operation finishes",
+                &[("session", id)],
+            ));
+        }
+        self.store.set_session_locked(id, locked)
     }
 
     /// The working directory a console of this id gets, under the directory the daemon was started
@@ -1507,6 +1530,18 @@ pub enum Deletion {
     },
 }
 
+/// Keeps lock changes out of a removal's preflight and mutations without holding a mutex
+/// across awaits. Nested removals each keep their own claim until their caller has finished.
+pub struct SessionRemovalClaim {
+    state: Arc<AppState>,
+}
+
+impl Drop for SessionRemovalClaim {
+    fn drop(&mut self) {
+        *self.state.session_removals.lock().unwrap() -= 1;
+    }
+}
+
 /// The right to start a process for one session, released on drop, and only then: it outlives
 /// `register_live`, so the holder decides how much of what follows a launch it covers.
 pub struct LaunchClaim {
@@ -1692,6 +1727,7 @@ mod tests {
             account_id: None,
             config_dir: None,
             pinned: false,
+            locked: false,
             started_at: 0,
             ended_at: None,
         }

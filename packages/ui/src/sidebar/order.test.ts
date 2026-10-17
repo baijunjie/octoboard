@@ -17,6 +17,7 @@ const session = (id: string, status: SessionStatus, started_at: number, pinned =
   bound_to,
   started_at,
   pinned,
+  locked: false,
 });
 
 const project = (id: string, name: string, pinned = false): Project => ({

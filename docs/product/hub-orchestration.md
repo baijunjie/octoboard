@@ -155,7 +155,8 @@ session: it has the role of a bound one.
   unbound project session's role description and tool list, as at its first launch, not those of a session bound to a
   console session.
 - **It reports to its console session**, as any session bound to one does: its `report` is accepted and delivered
-  there. Its `done` report with no open items is refused while its own sessions are unfinished, and no report is
+  there. Its `done` report with no open items is refused while its own sessions are unfinished and automatic archiving
+  is not blocked by a lock (see "Automatic archiving" below), and no report is
   synthesised for it while they run (see "Reporting" and "When a session does not report" below).
 - **Its console session can hand it on.** Handed to another console session of the console it stays a lead session,
   keeping its sessions. It can be handed to a project session only while it has no sessions of its own, archived ones
@@ -266,7 +267,8 @@ The call returns `owner`, `owner_kind` and a `note` telling the caller that it i
 session, where it is one) and whether its summary was sent as its first report; that from now on the owner is the one
 it takes work from, or the user typing in its terminal, and it reports to it with `report` once per round of work,
 which replaces what its role description says about being unbound and not calling `report`; that `done` with no open
-items archives it — refused for a lead session while a session it started is not archived — while `needs_decision` or
+items archives it, subject to "Automatic archiving" below — refused for a lead session while a session it started
+is not archived and no lock blocks automatic archiving — while `needs_decision` or
 open items leave it running; that a lead session keeps driving its own sessions with `start_session` and the tools that
 go with it, and that any other can no longer start or drive sessions, with the list of the Octoboard tools it has left;
 and not to call `bind_to_session` again. Once the caller is bound, the binding stands: a summary that could not be
@@ -345,9 +347,8 @@ Reporting fails, and leaves the session exactly as it was, when:
 - the session has already been wrapped up — a session archived by its own `done` report cannot
   report a second time;
 - the session is a lead session, the report has `status: done` and no open items, and a session bound to it is not
-  archived. The reason names those sessions. Its sessions archive themselves when they report they are done, so one
-  that is not archived has not finished, and neither has the lead session. Its other reports go through, and none of
-  them archives it.
+  archived, unless a lock blocks automatic archiving (see "Automatic archiving" below). The reason names those
+  sessions. Its other reports go through, and none of them archives it.
 
 ### When a session does not report
 
@@ -370,8 +371,13 @@ arrives that much later. Sessions outside the orchestration are never reported o
 
 ### Automatic archiving
 
-A report with `status: done` and **no** open items wraps the session up: once the report has been
-accepted for its owner, the session's process is ended and the session is archived.
+Locks follow "Locking a session" in `docs/product/sessions.md`. If the reporting session or any session under it
+is locked, its report is delivered normally, including `done` with no open items, but it is not archived. The
+unfinished-session refusal for a lead session's completion report does not apply in that case. Unlocking does not
+retroactively archive it; a later qualifying report or an explicit archive must do so.
+
+A report with `status: done` and **no** open items, with no lock blocking it, wraps the session up: once the report
+has been accepted for its owner, the session's process is ended and the session is archived.
 "Accepted" rather than "read" — an owner that is merely busy has the report queued for it,
 and the session is archived anyway rather than being left alive until the owner gets round
 to it.

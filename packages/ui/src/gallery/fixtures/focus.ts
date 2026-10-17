@@ -203,10 +203,19 @@ const hierarchyState = {
   ...state,
   projects: new Map([...state.projects!].map(([id, item]) => [id, id === project.id ? { ...item, pinned: true } : item])),
   sessions: new Map([
-    ...[...state.sessions!].map(([id, session]) => [id, id === "s-3" || id === "s-3b" ? { ...session, pinned: true } : id === "s-2" ? { ...session, terminal_title: "Review search result accuracy and verify long session row titles scroll only while hovering their text" } : session] as const),
-    // Nothing was ever said in it, so its shortcut and menu offer Delete in place of Archive.
-    ["s-unused", sessionOf("s-unused", console_.id, project.id, "Draft the release notes", "idle", { has_conversation: false })] as const,
+    ...[...state.sessions!].map(([id, session]) => [id, id === "s-3b" ? { ...session, pinned: true, locked: true } : id === "s-3" ? { ...session, pinned: true } : id === "s-2" ? { ...session, terminal_title: "Review search result accuracy and verify long session row titles scroll only while hovering their text" } : session] as const),
+    // Locking also protects an unused session that would otherwise offer immediate deletion.
+    ["s-unused", sessionOf("s-unused", console_.id, project.id, "Draft the release notes", "idle", { has_conversation: false, locked: true })] as const,
   ]),
+};
+
+const lockedFocusState = {
+  ...scrollingFocusState,
+  sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, id === hub1.id || id === "s-1" ? { ...session, locked: true } : session])),
+};
+const lockedArchivePreview = {
+  ...archivePreviewTen,
+  sessions: new Map([...archivePreviewTen.sessions!].map(([id, session]) => [id, id === previewLead.id ? { ...session, locked: true } : session])),
 };
 
 export const focusScenarios: Scenario[] = [
@@ -218,7 +227,7 @@ export const focusScenarios: Scenario[] = [
     state: hierarchyState,
     sessionRecords: { "s-unused": "absent" },
     preferences: { sidebarConsole: console_.id },
-    description: "The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches connect each project session and its nested sessions; the final branch ends at the last child. Agent task titles and fallback session names appear together. Search API and its bound Add idempotency keys and unbound Write the migration and Profile the slow query are pinned. Binding dots and pins remain visible while action menus hide; hover or focus a row to compare the evenly spaced controls, then unpin a session to see the remaining controls close together. An Archive button precedes the menu only on a session that archives without a confirmation: an idle or interrupted one with no unarchived session bound to it or to one bound to it. Profile the slow query (its pin stays left of Archive) and Rework the retry loop have it; Write the migration and Compare ranking strategies (unarchived sessions are bound under them), the idle console sessions (which have bound sessions too), Add idempotency keys (working) and Review search result accuracy (waiting) do not. Draft the release notes (unused) has a Delete shortcut immediately before its menu; it deletes immediately and moves any native records to the Trash without confirmation. Long session names scroll only while their text is hovered; hovering row icons or controls leaves them still.",
+    description: "The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches connect each project session and its nested sessions; the final branch ends at the last child. Agent task titles and fallback session names appear together. Search API and its bound Add idempotency keys and unbound Write the migration and Profile the slow query are pinned. Binding dots and pins remain visible while action menus hide; hover or focus a row to compare the evenly spaced controls, then unpin a session to see the remaining controls close together. An Archive button precedes the menu only on a session that archives without a confirmation: an idle or interrupted one with no unarchived session bound to it or to one bound to it. Rework the retry loop has it; the pinned, locked Profile the slow query instead keeps a yellow border and lock before its menu without moving in the order; Write the migration and Compare ranking strategies (unarchived sessions are bound under them), the idle console sessions (which have bound sessions too), Add idempotency keys (working) and Review search result accuracy (waiting) do not. Draft the release notes is unused but locked, so its yellow-bordered row has no Delete shortcut. Both locked rows keep a clickable Unlock icon visible before actions, and their menus offer Unlock with Archive or Delete disabled. Long session names scroll only while their text is hovered; hovering row icons or controls leaves them still.",
   },
   {
     id: "focus-project",
@@ -250,9 +259,9 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Console session focus",
-    state: scrollingFocusState,
+    state: lockedFocusState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "Bound cards place agent names on the left and a compact usage chip beside creation age on the right, all sharing the same muted text color. Zero and absent usage omit the chip without adding a row; hover the chip for input, output and cache details, or agent icons for account details. Bound cards and archives stay under their owners. The two cards under Rework the result ranking have rounded branches joined by a continuous vertical rail across the card gap. The rail stops at the last child’s centre and does not appear beside top-level cards; Arabic mirrors it. Scroll the long list to confirm Sessions stays clear above the fade and, at a 200px window height, Archived replaces it at the top. The switch strip includes waiting, working and inactive sessions; hover markers for details. The header plus menu, header actions, nested project actions, session card actions and archived session actions use the same muted resting glyphs and the shared subtle tint when hovered or open.",
+    description: "The focused Hub header and pinned Add idempotency keys card have yellow lock borders and persistent Unlock controls before actions; unlocking keeps their existing order. Bound cards place agent names on the left and a compact usage chip beside creation age on the right, all sharing the same muted text color. Zero and absent usage omit the chip without adding a row; hover the chip for input, output and cache details, or agent icons for account details. Bound cards and archives stay under their owners. The two cards under Rework the result ranking have rounded branches joined by a continuous vertical rail across the card gap. The rail stops at the last child’s centre and does not appear beside top-level cards; Arabic mirrors it. Scroll the long list to confirm Sessions stays clear above the fade and, at a 200px window height, Archived replaces it at the top. The switch strip includes waiting, working and inactive sessions; hover markers for details. The header plus menu, header actions, nested project actions, session card actions and archived session actions use the same muted resting glyphs and the shared subtle tint when hovered or open.",
     steps: [
       (ui) => ui.press(addIdempotencyKeys(ui)),
     ],
@@ -310,10 +319,10 @@ export const focusScenarios: Scenario[] = [
     id: "focus-archived-session-menu",
     group: GROUP,
     category: "normal",
-    title: "Archived session actions",
-    state: archivePreviewTen,
+    title: "Locked archived session actions",
+    state: lockedArchivePreview,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "Used archived rows have no Delete shortcut because deletion requires confirmation. The menu offers Reopen, Copy session ID and destructive Delete, with a divider before Delete. Reopen selects the session and moves it from Archived to Sessions.",
+    description: "Used archived rows have no Delete shortcut because deletion requires confirmation. The locked archived lead has a yellow border and a persistent Unlock icon. Its open menu offers Reopen, Unlock, Copy session ID and disabled Delete, with a divider before Delete. Unlock enables deletion without changing archive order. Reopen selects the session and moves it from Archived to Sessions.",
     steps: [(ui) => ui.press(ui.t("sidebar.session.actions", { title: previewLead.title }))],
   },
   {

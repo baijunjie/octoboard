@@ -581,6 +581,11 @@ A hand-built row or card that its content already identifies takes HeroUI's sepa
 (`border-separator`, as the focus-mode session cards do), even though that is under 3:1. Its selected state still has to
 reach 3:1 (`border-accent-glyph`).
 
+A locked session keeps a yellow inset outline without changing its size or position. Its persistent lock button
+also communicates the state through its Unlock accessible name and tooltip, so the outline is decorative. Hovering
+or keyboard-focusing the button changes the glyph to an open lock; unlocking hands keyboard focus to the row before
+the button disappears. The focus ring remains visible alongside the lock outline.
+
 Focus-mode session cards use the opaque `--panel` surface over the sidebar's `--panel-sidebar`, with the existing
 hover and selected tints on top. Their titles use the shared single-line fading label, including its full-name
 tooltip and hover marquee, rather than an ellipsis or a line clamp.
