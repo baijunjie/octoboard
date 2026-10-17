@@ -10,6 +10,7 @@ import type { Agent, AgentAvailability, Session } from "../protocol";
 import type { NewSessionBinding } from "./dialogRequest";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
+import { trackMountRefocus } from "./dialogTestSupport";
 import { SessionDialog } from "./SessionDialog";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -37,15 +38,16 @@ function everyAgentUnavailable(): Map<Agent, AgentAvailability> {
   return new Map(agents.map((agent) => [agent, { agent, availability: "unavailable" as const }]));
 }
 
-/** Renders the dialog and returns its root and daemon, so a test can query the rendered body, read
- * the requests sent and unmount it. */
+/** Renders the dialog and returns its container, root and daemon, so a test can query the rendered
+ * body, read the requests sent and unmount it, along with `pastMountRefocus`, which the test awaits
+ * before a step whose focus it asserts (see `trackMountRefocus`). */
 function renderDialog(
   sessions: Session[],
   initial: Partial<State> = {},
   consoleOverride: Partial<typeof parentConsole> = {},
   binding: NewSessionBinding = { kind: "choose" },
   projectOverride: Partial<typeof project> | null = {},
-): { container: HTMLElement; root: ReturnType<typeof createRoot>; daemon: Daemon } {
+): { container: HTMLElement; root: ReturnType<typeof createRoot>; daemon: Daemon; pastMountRefocus: () => Promise<void> } {
   const daemon = fakeDaemon(initial);
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -63,7 +65,7 @@ function renderDialog(
       </DaemonProvider>,
     ),
   );
-  return { container, root, daemon };
+  return { container, root, daemon, pastMountRefocus: trackMountRefocus() };
 }
 
 const hub1 = sessionOf("s-hub-1", parentConsole.id, undefined, "Hub", "idle", { colour: "teal", started_at: 100 });
@@ -420,12 +422,13 @@ it.each(["inherit", "pick", "clear"] as const)("opens with session launch settin
 });
 
 it("queries the selected account and keeps overrides separate when changing agents", async () => {
-  const { container, root, daemon } = renderDialog([], {
+  const { container, root, daemon, pastMountRefocus } = renderDialog([], {
     settings: { auto_pull_repositories: false, default_clone_dir: "", accounts: [
       { id: "a-work", agent: "claude", name: "Work", config_dir: "/accounts/work" },
     ] },
   }, { claude_account_id: "a-work" }, { kind: "unbound" }, { codex_session_model: "codex-project" });
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  await pastMountRefocus();
   answerSessionModels(daemon);
   await act(async () => buttons().find((button) => button.textContent === "Advanced")!.click());
   expect(daemon.request).toHaveBeenCalledWith({ type: "list_agent_models", agent: "claude", account: "a-work" });
@@ -456,12 +459,13 @@ it("queries the selected account and keeps overrides separate when changing agen
 
 
 it.each(["trigger", "popover"] as const)("keeps the selected agent and hands focus back when the last named account is removed from %s", async (focused) => {
-  const { container, root, daemon } = renderDialog([], {
+  const { container, root, daemon, pastMountRefocus } = renderDialog([], {
     settings: { auto_pull_repositories: false, default_clone_dir: "", accounts: [
       { id: "a-work", agent: "claude", name: "Work", config_dir: "/accounts/work" },
     ] },
   }, { default_agent: "codex" });
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  await pastMountRefocus();
   await act(async () => pickerNamed("Agent").click());
   await act(async () => optionElements().find((option) => option.getAttribute("data-key") === "claude")!.click());
   await act(async () => pickerNamed("Claude Code account").click());
@@ -568,8 +572,9 @@ it("uses the console name as its placeholder without submitting it as a custom t
 });
 
 it.each(["Backspace", "Delete"])("clears a launch choice with %s only while its list is closed", async (key) => {
-  const { container, root, daemon } = renderDialog([], {}, {}, undefined, { claude_session_model: "opus" });
+  const { container, root, daemon, pastMountRefocus } = renderDialog([], {}, {}, undefined, { claude_session_model: "opus" });
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  await pastMountRefocus();
   answerSessionModels(daemon);
   await act(async () => buttons().find((button) => button.textContent === "Advanced")!.click());
   const trigger = pickerNamed("Model");

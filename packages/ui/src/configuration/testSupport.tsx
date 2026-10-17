@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { onTestFinished, vi } from "vitest";
 
+import { trackMountRefocus } from "../dialogs/dialogTestSupport";
 import type { ConfigurationFileCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { Event, RequestBody } from "../protocol";
@@ -15,6 +16,8 @@ export interface Mounted {
   /** The messages given to `toastNotice`. */
   notices: () => string[];
   closed: () => number;
+  /** Awaited before a step whose focus the test asserts (see `trackMountRefocus`). */
+  pastMountRefocus: () => Promise<void>;
 }
 
 /** Renders `dialog(onClose)` over a daemon answering each request with `reply`, and a platform
@@ -53,6 +56,7 @@ export function mountDialog(
     sent: () => vi.mocked(daemon.request).mock.calls.map(([body]) => body),
     notices: () => vi.mocked(daemon.toastNotice).mock.calls.map(([message]) => message),
     closed: () => closed.mock.calls.length,
+    pastMountRefocus: trackMountRefocus(),
   };
 }
 

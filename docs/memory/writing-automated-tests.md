@@ -156,6 +156,20 @@ Applies to the `packages/ui` component tests (`vitest` under jsdom) that render 
   leaves the rest skipped and the cache cold. The caching is per `lazy` object, not per module: two exports built with
   `lazy` give one file two separate first tests, and a test that renders one surface and then the other settles twice.
 
+## A dialog test waits out the dialog's own mount refocus before any step whose focus it asserts
+
+Applies to `packages/ui` component tests (`vitest` under jsdom) that mount a modal — every HeroUI `Modal` and
+`AlertDialog`, so `Dialog` and `ConfirmDialog` too, is react-aria's `Dialog` and so runs `useDialog`. Half a second
+after mounting, unless a control inside already had focus, `useDialog` moves focus by itself: if focus is then on the
+dialog or on `<body>` it blurs the dialog and focuses it again, one frame later under virtual clicks. Focus passes
+through `<body>` whenever a select's list closes on its way back to the trigger, so a step around that moment loses
+its focus to the dialog, and whether a step meets it depends only on how fast the test ran up to it: the test passes
+alone and fails under the full suite's load.
+
+Call `trackMountRefocus()` (`packages/ui/src/dialogs/dialogTestSupport.ts`) right after the mount, and await what it
+returns before the first step whose focus the test asserts — immediately after the mount is simplest. Skip the await
+in a test on `vi.useFakeTimers()`, where it would never resolve.
+
 ## A jsdom test cannot tell where focus ends after a session is selected
 
 Applies to `packages/ui` component tests, which run under jsdom without the terminal. In the app, selecting a live

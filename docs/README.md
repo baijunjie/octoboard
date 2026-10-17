@@ -373,7 +373,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   armed it, since stray work crashes a later file and the failure names the wrong one, how a test settles HeroUI's
   module-level toast queue and which two tempting fixes only mask it, why a test that fakes timers has to assert for
   itself that it left none pending, why a surface behind a `React.lazy` boundary has to be settled before a test reads
-  it and why a clean whole-file run is no evidence that it was, why a jsdom test cannot tell where keyboard focus ends
+  it and why a clean whole-file run is no evidence that it was, why a dialog test waits out react-aria's mount refocus
+  before a step whose focus it asserts, why a jsdom test cannot tell where keyboard focus ends
   after a session is selected, and why it cannot tell what a selection over the viewer's code copies either, since the
   tests mock the renderer away and the real one draws into a shadow root.
 - [Writing desktop shell code](memory/writing-desktop-shell-code.md) — rules for the Tauri shell in

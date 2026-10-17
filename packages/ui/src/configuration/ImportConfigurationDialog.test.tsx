@@ -185,9 +185,10 @@ it("tells each project's result in a table row, with the reason beside a failure
 
 it("names the result step in its title and takes focus to the dialog, wherever focus was while it ran", async () => {
   let answer!: (event: Event) => void;
-  await reviewing({
+  const { pastMountRefocus } = await reviewing({
     reply: (body) => body.type === "import_configuration" ? new Promise((resolve) => (answer = resolve)) : reply(body),
   });
+  await pastMountRefocus();
   const dialog = document.body.querySelector<HTMLElement>("[role=dialog]")!;
   expect(dialog.querySelector("h2")?.textContent).toBe("Import configuration");
   await press("Import");

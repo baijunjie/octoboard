@@ -109,8 +109,8 @@ it("animates a new child entering and slides the ones it displaced", () => {
   tops = { a: 0, n: 40, b: 80 };
   list.rerender(["a", "n", "b"]);
   expect(animate).toHaveBeenCalledTimes(2);
-  const entering = animate.mock.contexts.findIndex((element: HTMLElement) => element.dataset.flip === "n");
-  const displaced = animate.mock.contexts.findIndex((element: HTMLElement) => element.dataset.flip === "b");
+  const entering = animate.mock.contexts.findIndex((element) => (element as HTMLElement).dataset.flip === "n");
+  const displaced = animate.mock.contexts.findIndex((element) => (element as HTMLElement).dataset.flip === "b");
   expect(entering).toBeGreaterThanOrEqual(0);
   expect(displaced).toBeGreaterThanOrEqual(0);
   expect(animate.mock.calls[entering][0]).toEqual([

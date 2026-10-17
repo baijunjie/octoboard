@@ -37,8 +37,13 @@ const press = (element: HTMLElement, key: string) =>
 /** The same key on whatever holds focus now, for a walk of several steps. */
 const pressOn = (key: string) => press(document.activeElement as HTMLElement, key);
 /** Lets the frames a fold needs to settle pass: the focus react-aria moves and the heading taking
- * it back both run after the renders that take the rows away (`keepHeadingFocus`). */
-const settle = () => act(async () => void (await new Promise((resolve) => setTimeout(resolve, 60))));
+ * it back both run after the renders that take the rows away (`keepHeadingFocus`, two frames after
+ * the press). It counts frames rather than waiting a time, which a stall of the event loop can let
+ * expire together with the first frame, before the second is even requested. */
+const settle = () =>
+  act(async () => {
+    for (let frame = 0; frame < 2; frame++) await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  });
 
 it("shows every row when nothing narrows them", () => {
   const { container } = render();

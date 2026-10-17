@@ -14,6 +14,7 @@ const { FakeTerminal } = vi.hoisted(() => {
     rows = 24;
     options: Record<string, unknown>;
     private queue: [string, (() => void) | undefined][] = [];
+    private parseTimer: ReturnType<typeof setTimeout> | undefined;
     private dataListeners: ((data: string) => void)[] = [];
     private userInputListeners: (() => void)[] = [];
     _core = {
@@ -31,13 +32,13 @@ const { FakeTerminal } = vi.hoisted(() => {
 
     loadAddon(): void {}
     registerLinkProvider(): void {}
-    onScroll(): void {}
-    onWriteParsed(): void {}
-    onResize(): void {}
+    onScroll = () => ({ dispose: () => {} });
+    onWriteParsed = () => ({ dispose: () => {} });
+    onResize = () => ({ dispose: () => {} });
     keyHandler?: (event: KeyboardEvent) => boolean;
     wheelHandler?: () => boolean;
     buffer = {
-      onBufferChange: () => {},
+      onBufferChange: () => ({ dispose: () => {} }),
       active: { type: "normal", viewportY: 0, baseY: 0, cursorY: 0, getLine: () => undefined, getNullCell: () => ({}) },
     };
 
@@ -58,7 +59,11 @@ const { FakeTerminal } = vi.hoisted(() => {
     selectAll(): void { this.selection = this.screen; }
     paste(text: string): void { this.userTypes(`\x1b[200~${text}\x1b[201~`); }
     focus(): void {}
-    dispose(): void {}
+    /** Drops what is still queued, so no parse runs into the next test (xterm itself would still parse it). */
+    dispose(): void {
+      clearTimeout(this.parseTimer);
+      this.queue = [];
+    }
     modes = { mouseTrackingMode: "none" };
     private binaryListeners: ((data: string) => void)[] = [];
 
@@ -79,9 +84,13 @@ const { FakeTerminal } = vi.hoisted(() => {
       this.screen = "";
     }
 
+    get parsing(): boolean {
+      return this.queue.length > 0;
+    }
+
     write(data: string | Uint8Array, callback?: () => void): void {
       const text = typeof data === "string" ? data : String.fromCharCode(...data);
-      if (this.queue.push([text, callback]) === 1) setTimeout(() => this.parse());
+      if (this.queue.push([text, callback]) === 1) this.parseTimer = setTimeout(() => this.parse());
     }
 
     /** A key pressed and released, which xterm turns into `data`. */
@@ -161,8 +170,15 @@ vi.mock("@xterm/addon-webgl", () => ({ WebglAddon: class { onContextLoss(): void
 
 const url = (session: string) => `ws://daemon/ws/term/${session}`;
 const lastSocket = () => FakeSocket.all[FakeSocket.all.length - 1];
-/** Lets every write queued so far be parsed. */
-const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
+const framesPending = new Set<ReturnType<typeof setTimeout>>();
+/** Lets every write queued so far be parsed, and every frame requested so far run, including those
+ * one schedules for the next. It waits on the work itself rather than on a fixed delay: a parse
+ * whose callback requests a frame is a chain of timers, and a delay timer that expires in the same
+ * stall of the event loop as the first of them fires before the next one is even scheduled. */
+const settle = async () => {
+  do await new Promise((resolve) => setTimeout(resolve));
+  while (term.parsing || framesPending.size > 0);
+};
 
 let wakes: string[];
 /** What `onWake` reports: whether the session started. */
@@ -175,7 +191,19 @@ let term: FakeTerminal;
 beforeEach(async () => {
   FakeSocket.all = [];
   vi.stubGlobal("WebSocket", FakeSocket);
-  vi.stubGlobal("requestAnimationFrame", (callback: () => void) => setTimeout(callback));
+  framesPending.clear();
+  vi.stubGlobal("requestAnimationFrame", (callback: () => void) => {
+    const frame = setTimeout(() => {
+      framesPending.delete(frame);
+      callback();
+    });
+    framesPending.add(frame);
+    return frame;
+  });
+  vi.stubGlobal("cancelAnimationFrame", (frame: ReturnType<typeof setTimeout>) => {
+    clearTimeout(frame);
+    framesPending.delete(frame);
+  });
   wakes = [];
   wakeStarts = false;
   painted = [];
@@ -197,6 +225,11 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  // Disposing the controller bumps its generation, so a paint frame still pending does nothing when it
+  // runs, and disposes the fake terminal, which drops its queued writes: a test that ends with work
+  // pending leaves nothing to land in the next, such as a replay's paint reaching the module-level
+  // `painted` the next test reads.
+  controller.dispose();
   vi.unstubAllGlobals();
 });
 
