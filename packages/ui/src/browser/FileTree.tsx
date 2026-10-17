@@ -1,9 +1,5 @@
 import { Spinner } from "@heroui/react";
 import {
-  File,
-  FileImage,
-  FileQuestion,
-  FileSymlink,
   RotateCw,
   TriangleAlert,
 } from "lucide-react";
@@ -21,16 +17,10 @@ import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { BrowseEntry } from "../protocol";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import { RowActions } from "./RowActions";
+import { FileIcon } from "./FileIcon";
 import type { TreeNode } from "./tree";
 import { useBrowserListMotion } from "./useBrowserListMotion";
 import { DirectoryRow, ROW_CLASS, ROW_HEIGHT, RowContent, RowName } from "./treeRow";
-
-const IMAGE_NAME = /\.(png|jpe?g|gif|webp|bmp|ico|avif|svg)$/i;
-
-function FileIcon({ entry, name }: { entry: BrowseEntry | undefined; name: string }): React.ReactElement {
-  const Icon = !entry ? FileQuestion : entry.kind === "symlink" ? FileSymlink : entry.kind === "other" ? FileQuestion : IMAGE_NAME.test(name) ? FileImage : File;
-  return <Icon aria-hidden="true" className="size-4 shrink-0 text-app-muted" />;
-}
 
 /** The rows of the tree with their rendering kept for every row whose content did not change: the
  * tree caches a row's rendering by its object, so handing back the same object for an unchanged row
@@ -117,7 +107,7 @@ export function FileTree({
   const fade = useScrollFade({ ref: motionRef, className: "min-h-0 flex-1 overflow-auto py-1 outline-none" });
   // react-aria-components 1.21.1 decides whether a row can expand — its `aria-expanded` and Left /
   // Right — from the children it holds, not from `hasChildItems`, which it hands only to the
-  // chevron slot (the folder icon). So a collapsed directory, whose rows are not built, holds one
+  // chevron slot. So a collapsed directory, whose rows are not built, holds one
   // stand-in row that is never on screen (a collapsed row's children are not rows of the tree), the
   // same object every time. It costs the tree's `aria-rowcount` one row per collapsed directory.
   // TODO: drop the stand-ins once react-aria-components hands `hasChildItems` to `useTreeItem`.
@@ -221,7 +211,7 @@ function FileNodeRow({ node, showPaths, children }: {
     <TreeItem data-list-motion={node.key} id={node.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS} ref={rowRef}>
       <TreeItemContent>
         <RowContent>
-          <FileIcon entry={node.entry} name={name} />
+          <FileIcon entry={node.entry} path={node.path} />
           <RowName name={name} className={missing ? "text-app-muted line-through" : undefined} />
           {missing && <span className="shrink-0 text-xs text-app-muted">{missing}</span>}
           <RowActions contextTargetRef={rowRef} path={node.path} name={name} />

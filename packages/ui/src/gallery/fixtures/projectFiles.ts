@@ -86,6 +86,29 @@ const filterFiles: FixtureFiles = {
   "src/services/search": { dir: true },
   "src/services/search/server.ts": { text: "export const searchPort = 8081;\n" },
 };
+const fileTypeFiles: FixtureFiles = {
+  "": { dir: true },
+  ".env.example": { text: "PORT=8080\n" },
+  ".gitignore": SAMPLE_FILES[".gitignore"]!,
+  "archive.zip": { text: "" },
+  "certificate.pem": { text: "" },
+  "data.csv": { text: "id,title\n1,Search\n" },
+  Dockerfile: { text: "FROM node:24\n" },
+  "font.woff2": { text: "" },
+  LICENSE: { text: "MIT License\n" },
+  "logo.png": SAMPLE_FILES["docs/logo.png"]!,
+  "package.json": SAMPLE_FILES["package.json"]!,
+  "README.md": SAMPLE_FILES["README.md"]!,
+  "recording.mp3": { text: "" },
+  "schema.sql": { text: "CREATE TABLE documents (id INTEGER PRIMARY KEY);\n" },
+  src: { dir: true },
+  "src/server.ts": SAMPLE_FILES["src/server.ts"]!,
+  "src/services": { dir: true },
+  "src/services/search": { dir: true },
+  "src/services/search/server.ts": filterFiles["src/services/search/server.ts"]!,
+  "unknown.custom": { text: "A file with an unrecognized extension.\n" },
+  "walkthrough.mp4": { text: "" },
+};
 
 export const projectFilesScenarios: Scenario[] = [
   {
@@ -136,9 +159,9 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "All project files as a flat list",
-    description: "The flat layout lists files throughout the project without opening folders or entering a query. Relative paths distinguish files in different folders. The layout toggle occupies the same header position as in Uncommitted and Compare.",
+    description: "The flat layout lists files throughout the project without opening folders or entering a query. Muted icons distinguish source code, configuration, JSON, documents, images, audio, video, archives, spreadsheets, databases, certificates, fonts, Git files and licenses; an unknown extension keeps the plain file icon. Relative paths distinguish the two server.ts files. The layout toggle occupies the same header position as in Uncommitted and Compare.",
     state,
-    files: filterFiles,
+    files: fileTypeFiles,
     steps: [
       ...openFiles,
       (ui) => ui.press(ui.t("git.layout.flat")),

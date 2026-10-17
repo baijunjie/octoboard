@@ -193,9 +193,9 @@ and Untracked, the comparison's one section — and within each section the chan
 - Within a folder, folders come first and then changes, each in the order the flat list has them (see "What is
   listed" above).
 - A chain of folders that each hold nothing but the next is one row, named by the whole chain — `tools/release`.
-- A folder's row is a folder icon, open or closed with the folder, and its name; the icon is the folder's expand
-  control, so the row has no chevron. A change's row is as it is in the flat list, less the folder its parent row now
-  carries.
+- A folder's row has an expand arrow before its folder icon, open or closed with the folder, and its name. The arrow
+  points right while collapsed (left in a right-to-left language), and down while expanded. A change's row is as it is
+  in the flat list, less the folder its parent row now carries.
 - Folders start open, and which ones the user folded away is kept per project for as long as the window is open: a
   reload or a restart opens them all again. A fold survives switching to the other view and back, and belongs to the
   section it was made in, so the same folder under another section stays open.
@@ -204,7 +204,7 @@ The rows take the keyboard as the Files mode's tree does (see "Rows and the keyb
 `docs/product/project-pane.md`): Up and Down move through them and the section headings between them, Home and End
 through the rows alone, typing a name's first letters moves to one, Right and Left open and close a folder (the other
 way round under a right-to-left language), and Enter opens a change or opens and closes a folder. A folder's row tells
-assistive technology whether it is open, and its folder icon is named Expand or Collapse (see "Tooltips on icon-only
+assistive technology whether it is open, and its arrow button is named Expand or Collapse (see "Tooltips on icon-only
 controls" in `docs/product/labels-and-tooltips.md`).
 
 A change under a folded folder has no row, and it is the rows that the viewer moves through (see "Moving between

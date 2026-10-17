@@ -47,7 +47,7 @@ it("tints the selected file's row and names it as selected", () => {
   expect(row("a.ts").hasAttribute("data-current")).toBe(false);
 });
 
-// react-aria's own label for the expand control (the folder icon, in its chevron slot) is its
+// react-aria's own label for the expand control (in its chevron slot) is its
 // translation of "Expand" ("扩展" in zh-CN), which is not the word the tooltip uses; the label comes
 // from the app's catalog, and react-aria's aria-labelledby (the control, then the row) appends the
 // folder's name.

@@ -95,8 +95,15 @@ that read the same are always kept in the same order. The file viewer moves thro
 
 ### Rows and the keyboard
 
-- A folder opens and closes with a click, Enter, its folder icon, or Right and Left (the other way round under a
-  right-to-left language). A file opens in the file viewer with a click or Enter.
+File rows use muted icons suited to their names and extensions: code, scripts, configuration, JSON, documents,
+images, audio, video, archives, spreadsheets, databases, fonts, keys and certificates, Git metadata, and licenses.
+Unrecognized file names use a generic file icon. These name-based icons apply in the folder tree, flat list and
+filtered results. In the unfiltered folder tree, symbolic links and unavailable or special entries have their own
+icons instead.
+
+- A folder has an expand arrow before its folder icon: pointing right while collapsed (left in a right-to-left
+  language), and down while expanded. The arrow, a click on the row, Enter, or Right and Left opens and closes it
+  (the arrow keys are reversed under a right-to-left language). A file opens in the file viewer with a click or Enter.
 - At a file or folder row's end is the button of its own actions, reached with the same Right and Left; a collapsed
   folder is expanded first (see "A row's actions" below).
 - The arrow keys, Home and End move through the rows, and typing a name's first letters moves to it.

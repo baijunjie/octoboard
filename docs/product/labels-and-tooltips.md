@@ -61,7 +61,7 @@ buttons, the pin buttons and the session Delete or Archive shortcuts below. Thes
 - the three options of Settings' Appearance row — Light, Dark and System (see "Appearance" in
   `docs/product/settings.md`);
 - the report panel's previous-page and next-page buttons;
-- the project pane's Refresh button, a folder's icon in its file tree and in the Git mode's change tree ("Expand" /
+- the project pane's Refresh button, a folder's arrow button in its file tree and in the Git mode's change tree ("Expand" /
   "Collapse"), the file viewer's Copy path button and its Previous file and Next file buttons (see
   `docs/product/project-pane.md`), and the Git mode's Swap branches (see "The branch selectors" in
   `docs/product/project-pane-git-mode.md`);

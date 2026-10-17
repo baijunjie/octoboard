@@ -1,4 +1,4 @@
-import { Folder, FolderOpen, FolderSymlink } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, FolderOpen, FolderSymlink } from "lucide-react";
 import React from "react";
 import { Button } from "react-aria-components";
 
@@ -11,25 +11,25 @@ import { useT } from "../i18n/react";
  * position alone. It includes `RowContent`'s `h-7` and the row's `my-0.5` margins. */
 export const ROW_HEIGHT = 32;
 
-/** The content of a directory's row: a folder icon, the name and optional actions. The folder icon
- * is the row's expand control and opens with the directory, so the row needs no chevron too; a
- * symlinked directory's icon has no open form and stays the same. */
+/** A directory row keeps its expand control separate from its folder icon; a symlinked folder
+ * retains its link marker in either expanded state. */
 export function DirectoryRow({ name, isExpanded, link = false, children }: { name: string; isExpanded: boolean; link?: boolean; children?: React.ReactNode }): React.ReactElement {
   const t = useT();
   const toggleTitle = isExpanded ? t("browser.tree.collapse") : t("browser.tree.expand");
   const Icon = link ? FolderSymlink : isExpanded ? FolderOpen : Folder;
   return (
-    <RowContent>
-      {/* The folder icon fills React Aria's chevron slot. React Aria keeps it out of the tab
-          order; the row does the same on a press, so it is for the pointer alone. React Aria's own
-          label is a translation of "Expand" that disagrees with the tooltip's wording (zh-CN
-          "扩展"), so the label is the tooltip's word from the catalog; React Aria appends the row's
-          name through aria-labelledby, which gives "Expand src". */}
+    <RowContent chevron={
       <TitledControl title={toggleTitle}>
+        {/* React Aria appends the row's name through aria-labelledby. Its default translation
+            of Expand differs from the tooltip, so both use the app's catalog. */}
         <Button slot="chevron" aria-label={toggleTitle} className="flex size-4 shrink-0 items-center justify-center text-app-muted outline-none">
-          <Icon aria-hidden="true" className="size-4" />
+          {isExpanded
+            ? <ChevronDown aria-hidden="true" className="size-3.5" />
+            : <ChevronRight aria-hidden="true" className="size-3.5 rtl:-scale-x-100" />}
         </Button>
       </TitledControl>
+    }>
+      <Icon aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
       <RowName name={name} />
       {children}
     </RowContent>
@@ -47,9 +47,10 @@ export const ROW_CLASS = [
 /** What a row lays out: indented by its level inside a `TreeItem`, or,
  * for a row of a flat list (`flat`), which has no level to read, inset by a fixed padding. A flat
  * row also sits a little looser, having no indent to carry part of the separation. */
-export function RowContent({ children, flat = false }: { children: React.ReactNode; flat?: boolean }): React.ReactElement {
+export function RowContent({ children, flat = false, chevron }: { children: React.ReactNode; flat?: boolean; chevron?: React.ReactNode }): React.ReactElement {
   return (
     <div className={`flex h-7 min-w-0 items-center ${flat ? "gap-2 px-2" : "gap-1.5 pe-2 ps-[calc((var(--tree-item-level)-1)*0.875rem+0.5rem)]"}`}>
+      {!flat && <span className="flex size-4 shrink-0 items-center justify-center">{chevron}</span>}
       {children}
     </div>
   );
