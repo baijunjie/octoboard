@@ -30,6 +30,17 @@ Build loads none of the project's instructions, hooks or MCP servers.
 | Project session whose project has the trust permission, of its own or through a trusted folder | Pressed at once, without a dialog. |
 | Any other project session | The user is asked in a dialog; nothing is sent until they agree. |
 
+Once Octoboard recognises a confirmation that needs the user, the session reads as *waiting for the user* and raises
+its hand everywhere that status is shown or counted (see "The raised hand" in `docs/product/sessions.md`). Closing
+the dialog with **Not now**, moving the terminal's cursor or a failed attempt to press the confirmation leaves the
+hand up. It comes down when Octoboard successfully presses the confirmation, the agent sends its first hook report,
+or, for Codex answered in the terminal, Octoboard sees that the confirmation has been replaced by the next screen.
+The session then shows the agent's last reported status, or its launch status if no report has arrived. An
+interrupted or archived session keeps that status instead of a trust hand.
+
+A confirmation pressed automatically for a console session or under an existing trust permission raises no hand
+unless that press fails and the confirmation still needs the user.
+
 ## The trust permission
 
 What lets Octoboard press a confirmation without asking is one permission, **shared by all three agents**. It is

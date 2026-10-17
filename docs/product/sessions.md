@@ -292,7 +292,7 @@ tools are there; whether the role description takes effect in it is in "What is 
 |---|---|---|---|
 | Starting | `starting` | a muted arc turning | A newly opened session — from the dialog, by an agent's `start_session`, or by an approved session request — whose agent is still being launched; it has no process yet. It becomes *awaiting instructions*, or *working* for a session started with a brief, once the process is up, and is removed again if the launch fails (see "Opening a session"). |
 | Working | `working` | an accent-coloured dot pulsing a fading copy of itself outward | The agent is executing a turn. |
-| Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a session request (see "Waiting for the answer" in `docs/product/session-requests.md`). |
+| Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision, including its folder-trust confirmation, or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a session request (see "Waiting for the answer" in `docs/product/session-requests.md`). |
 | Awaiting instructions | `idle` | a green speech bubble | The process is running and sitting at its prompt. |
 | Interrupted | `interrupted` | a pause sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
 | Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming"). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" below) and can be reopened. |
@@ -324,7 +324,7 @@ Transitions:
   *awaiting instructions* otherwise, unless the agent's own first report has already moved it on (see "Opening a
   session"). A launch that fails removes the session.
 - While the process runs, reports from the agent move the session between *working*, *waiting for the user* and
-  *awaiting instructions* — except while a session request holds it at *waiting for the user* (see
+  *awaiting instructions* — except while a folder-trust confirmation or session request holds it at *waiting for the user* (see
   "What the statuses are derived from" below).
 - The process ending for any reason other than archiving — the agent exiting on its own, a crash, the application
   quitting — leaves the session *interrupted*.
@@ -341,8 +341,8 @@ Transitions:
 
 ### What the statuses are derived from
 
-Status comes from hook events Octoboard injects into each agent per launch, never from reading the terminal's rendered
-output. Three things besides those events bear on a running session's status, and only these three.
+Status comes from hook events Octoboard injects into each agent per launch, with the exceptions below. Four things
+besides those events bear on a running session's status, and only these four.
 
 - While a **Claude Code** session is *waiting for the user*, Octoboard also reads that session's own transcript file —
   the machine-readable record the agent keeps of the conversation, still not its rendered output — because a declined
@@ -350,6 +350,9 @@ output. Three things besides those events bear on a running session's status, an
 - While a **Codex** session has a turn open, Octoboard also reads that session's own rollout file — the record Codex
   keeps of the session, again not its rendered output — because a turn that ends in an error is reported by no hook
   event at all; see "A Codex turn that ends in an error" below.
+- A recognised folder-trust confirmation that needs the user holds its session at *waiting for the user*, even
+  before the agent's first hook report. Its raised hand follows the confirmation rather than the dialog; see
+  "What happens when a confirmation comes up" in `docs/product/folder-trust.md`.
 - A session request — a `request_session` call — waiting for the user's answer holds
   its session at *waiting for the user* for the whole wait, whatever the agent's own events say meanwhile; when the
   request ends the session goes back to where its agent was last seen to be (see "Waiting for the answer" in
@@ -366,9 +369,6 @@ limitations of what the agents expose rather than of this one:
   keeps reading as working until the next prompt is submitted. A session that was *waiting for the user* falls into
   the same silence, but there the hand would be left up with nothing to lower it, so that one case is recovered
   from the transcript instead — see "Declining a Claude Code prompt or question" below.
-- No agent reports anything while it is on its own folder-trust confirmation, so a session sitting there keeps the
-  status its launch gave it — *working* or *awaiting instructions* — and raises no hand, although it is waiting for a
-  person.
 - Grok Build's bash mode (`!`) fires no tool or turn events, so work done through it never shows in the status; Grok's
   turn-end backstop was seen to follow about a minute later in one run (see "When a session does not report" in
   `docs/product/hub-orchestration.md`), but it finds the session already awaiting instructions.
@@ -420,7 +420,7 @@ Claude Code prompt or question" below). Nobody can answer for them: a session dr
 project session that started sessions — is told to leave such a session alone, and a message addressed to it is held
 until the user is done — see "Messages held until a session can take them" in `docs/product/message-delivery.md`.
 
-**A granted permission prompt lowers the hand only once the call it let through has finished.** The user answering *yes*
+**A granted tool permission prompt lowers the hand only once the call it let through has finished.** The user answering *yes*
 is itself reported by no event, so the next event the session produces is normally the end of that tool call — the hand
 stays up from the moment the prompt appeared until the call is done, which is a moment for a file write and minutes for
 a build or a test run. For that whole time the session reads as *waiting for the user* everywhere the hand is shown, it
@@ -428,6 +428,9 @@ counts in the rail's waiting count and the Dock badge, and a message addressed t
 earlier signal to read: the delay is in what the agents report, not in how often Octoboard looks. Measured on Codex
 0.160.0 and on Claude Code 2.1.274; Grok Build was not measured. A prompt the user *declines* is not delayed this way:
 the decline ends the turn, and the hand comes down right after the answer.
+
+A hand raised for a folder-trust confirmation can be answered in its trust dialog or the terminal; see "What happens
+when a confirmation comes up" in `docs/product/folder-trust.md`.
 
 A hand Octoboard raised for a waiting session request is answered in that request's dialog instead, so a message
 addressed to such a session is not held (see "Waiting for the answer" in `docs/product/session-requests.md`).

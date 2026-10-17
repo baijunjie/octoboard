@@ -825,6 +825,13 @@ async fn a_project_without_consent_is_asked_about_and_nothing_is_sent_until_conf
             "/work/project".to_string()
         )
     );
+    assert_eq!(
+        state
+            .wire_session(state.session_record(&live.id).unwrap())
+            .status,
+        SessionStatus::WaitingUser,
+        "the trust prompt raises the hand, including after reconnect"
+    );
     tokio::time::sleep(Duration::from_millis(600)).await;
     assert!(
         sent(&received).is_empty(),
@@ -845,10 +852,23 @@ async fn a_project_without_consent_is_asked_about_and_nothing_is_sent_until_conf
             .trust_consent
     );
     let mut upserted = false;
+    let mut lowered = false;
     while let Ok(event) = events.try_recv() {
-        upserted |= matches!(event, Event::ProjectUpserted { project } if project.trust_consent);
+        match event {
+            Event::ProjectUpserted { project } => upserted |= project.trust_consent,
+            Event::SessionUpserted { session } => lowered |= session.status == SessionStatus::Idle,
+            _ => {}
+        }
     }
     assert!(upserted, "clients are told the project is now consented");
+    assert!(
+        lowered,
+        "accepting the screen publishes the restored status"
+    );
+    assert_eq!(
+        state.session_record(&live.id).unwrap().status,
+        SessionStatus::Idle
+    );
 
     // Answered once: a second confirmation of the same screen is stale.
     assert!(confirm(&state, "project-session-1", true, false)
@@ -986,6 +1006,13 @@ async fn a_failed_answer_records_no_consent_and_tells_the_user() {
         .expect_err("failed");
     assert!(err.to_string().contains("did not move"), "{err}");
     assert!(!consented_in_store(&state));
+    assert_eq!(
+        state
+            .wire_session(state.session_record(&live.id).unwrap())
+            .status,
+        SessionStatus::WaitingUser,
+        "a failed press leaves the hand up"
+    );
     let mut told = false;
     while let Ok(event) = events.try_recv() {
         told |= matches!(event, Event::SessionNotice { session, message, .. }
@@ -1539,7 +1566,24 @@ async fn codex_answered_in_the_terminal_is_no_longer_waiting() {
     let record = session("codex-1", Agent::Codex, Role::Project, Some("project-1"));
     let (live, received) = start(&state, &dir, record, &codex_script(Path::new("%RECEIVED%")));
     assert!(wait_for(PATIENCE, || live.trust.waiting()));
+    let mut events = state.subscribe();
+    supervise(&state, &live);
+    tokio::time::timeout(PATIENCE, async {
+        loop {
+            if matches!(events.recv().await.unwrap(), Event::TrustPrompt { .. }) {
+                break;
+            }
+        }
+    })
+    .await
+    .expect("prompt");
     assert_eq!(pending_prompts(&state).len(), 1);
+    assert_eq!(
+        state
+            .wire_session(state.session_record(&live.id).unwrap())
+            .status,
+        SessionStatus::WaitingUser
+    );
 
     live.write_input(b"\r").expect("the person's Enter");
 
@@ -1554,6 +1598,17 @@ async fn codex_answered_in_the_terminal_is_no_longer_waiting() {
     assert!(!consented_in_store(&state));
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert_eq!(sent(&received), ENTER, "only the person's own key");
+    tokio::time::timeout(PATIENCE, async {
+        loop {
+            if let Event::SessionUpserted { session } = events.recv().await.unwrap() {
+                if session.status == SessionStatus::Idle {
+                    break;
+                }
+            }
+        }
+    })
+    .await
+    .expect("the dismissed screen lowers the hand without a hook");
 }
 
 /// A message for a Codex session at its screen is held, since its trailing Enter would accept
@@ -1915,4 +1970,31 @@ fn only_groks_entry_changes_in_the_users_store() {
         )
     );
     assert!(merge_entry("[folders\n", "/work/project", entry).is_err());
+}
+
+#[tokio::test]
+async fn trust_waiting_preserves_the_agent_status_and_ends_only_when_the_screen_is_gone() {
+    for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+        let (state, dir) = state_with_project("trust-status");
+        let mut record = session("s", agent, Role::Project, Some("project-1"));
+        record.status = SessionStatus::Working;
+        let (live, _) = start(&state, &dir, record, "read -r value");
+        live.trust.needs_user.store(true, Ordering::Release);
+        // A claimed press and a cursor key are not evidence that the screen has gone.
+        live.trust.answered.store(true, Ordering::Release);
+        live.write_input(b"x").unwrap();
+        let record = state.session_record("s").unwrap();
+        assert_eq!(
+            state.wire_session(record.clone()).status,
+            SessionStatus::WaitingUser
+        );
+        assert_eq!(record.status, SessionStatus::Working);
+        for status in [SessionStatus::Interrupted, SessionStatus::Archived] {
+            let mut dormant = record.clone();
+            dormant.status = status;
+            assert_eq!(state.wire_session(dormant).status, status);
+        }
+        on_hook(&state, &live);
+        assert_eq!(state.wire_session(record).status, SessionStatus::Working);
+    }
 }

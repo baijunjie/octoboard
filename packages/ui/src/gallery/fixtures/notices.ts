@@ -12,6 +12,11 @@ const codexSession = sessionOf("s-api-codex", console_.id, api.id, "Review the r
 const grokProject = projectOf("p-grok-home", console_.id, "Home", { path: "/Users/dev" });
 const grokSession = sessionOf("s-web-grok", console_.id, grokProject.id, "Tidy the stylesheet", "working", { agent: "grok" });
 const sessions = [...SAMPLE.sessions, codexSession, grokSession];
+const trustSessions = sessions.filter((session) => session.id !== "s-api-1").map((session) =>
+  ["s-web-1", codexSession.id, grokSession.id].includes(session.id)
+    ? { ...session, status: "waiting_user" as const }
+    : session,
+);
 const requestingConsole = consoleOf("c-requester", "Release coordination");
 
 export const noticeScenarios: Scenario[] = [
@@ -21,16 +26,31 @@ export const noticeScenarios: Scenario[] = [
     category: "normal",
     title: "Queued trust prompts for all agents",
     description:
-      "Claude Code and Codex offer their projects' parent folders; the Grok Build project is the home directory itself, whose parent is too broad to offer. The warning's configuration-file token takes its tone while the project path stays neutral. Each agent has its own caution and Codex names its repository-root trust. Not now advances through the three queued prompts.",
+      "Claude Code and Codex offer their projects' parent folders; the Grok Build project is the home directory itself, whose parent is too broad to offer. The warning's configuration-file token takes its tone while the project path stays neutral. Each agent has its own caution and Codex names its repository-root trust. All three asking sessions raise their hands. Not now advances through the queued prompts while their hands stay raised until trust is answered in the terminal.",
     state: snapshotState({
       consoles: [console_],
       projects: [web, api, grokProject],
-      sessions,
+      sessions: trustSessions,
       trustPrompts: [
         { session: "s-web-1", agent: "claude", project: web.id, path: web.path, trustDir: "/Users/dev/code" },
         { session: codexSession.id, agent: "codex", project: api.id, path: api.path, trustDir: "/Users/dev/code" },
         { session: grokSession.id, agent: "grok", project: grokProject.id, path: grokProject.path, trustDir: null },
       ],
+    }),
+  },
+  {
+    id: "trust-prompt-dismissed",
+    group: TRUST,
+    category: "normal",
+    title: "Trust still waiting after Not now",
+    description:
+      "The folder-trust dialog has been deferred. Fix the summary layout keeps its raised hand because the agent is still waiting for trust in the terminal.",
+    state: snapshotState({
+      consoles: [console_],
+      projects: [web],
+      sessions: SAMPLE.sessions
+        .filter((session) => session.project_id === web.id || session.role === "console")
+        .map((session) => session.id === "s-web-1" ? { ...session, status: "waiting_user" } : session),
     }),
   },
   {

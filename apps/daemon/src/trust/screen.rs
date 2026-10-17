@@ -294,6 +294,8 @@ pub struct TrustState {
     pub(super) expired: AtomicBool,
     /// The screen has been sighted, once, and `sightings` told.
     pub(super) sighted: AtomicBool,
+    /// The screen needs a person rather than an automatic press.
+    pub(super) needs_user: AtomicBool,
     /// How many foreign writes the session's input had had when the screen was sighted, and how
     /// much the session had printed by then.
     pub(super) writes_at_sighting: AtomicU64,
@@ -341,6 +343,7 @@ impl TrustState {
             watch_age: Mutex::new(age),
             expired: AtomicBool::new(false),
             sighted: AtomicBool::new(false),
+            needs_user: AtomicBool::new(false),
             writes_at_sighting: AtomicU64::new(0),
             output_at_sighting: AtomicU64::new(0),
             hook_seen: AtomicBool::new(false),
@@ -505,6 +508,14 @@ impl TrustState {
     /// `input_writes` is the session's count as it stands now.
     pub(super) fn input_since_sighting(&self, input_writes: u64) -> bool {
         input_writes != self.writes_at_sighting.load(Ordering::Acquire)
+    }
+
+    /// A hand stays raised through a failed press or a cursor key until the screen is known gone.
+    pub(crate) fn needs_user(&self) -> bool {
+        self.needs_user.load(Ordering::Acquire)
+            && !self.hook_seen.load(Ordering::Acquire)
+            && !self.pressed.load(Ordering::Acquire)
+            && !self.dismissed.load(Ordering::Acquire)
     }
 
     /// Whether the screen is up and nobody has started answering it.

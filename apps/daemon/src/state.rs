@@ -406,7 +406,9 @@ impl AppState {
                 return;
             }
         };
-        match self.store.set_terminal_title(&session.id, title) {
+        let stored = self.store.set_terminal_title(&session.id, title);
+        drop(live);
+        match stored {
             Ok(Some(record)) if self.resolved_title(&record, &names) != before => {
                 self.publish_session(&record)
             }
@@ -454,9 +456,16 @@ impl AppState {
         )
     }
 
-    /// The session as a client receives it: the stored raw terminal title is replaced by the
-    /// resolved title.
+    /// The session as a client receives it, with its resolved title and a live trust wait.
+    /// Trust leaves the stored agent status intact so answering restores it even before a hook.
     pub(crate) fn wire_session(&self, mut session: Session) -> Session {
+        if !session.status.is_dormant()
+            && self
+                .live_session(&session.id)
+                .is_some_and(|live| live.trust.needs_user())
+        {
+            session.status = SessionStatus::WaitingUser;
+        }
         session.terminal_title = self.resolved_title(&session, &std::cell::OnceCell::new());
         session
     }

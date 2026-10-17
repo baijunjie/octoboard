@@ -296,6 +296,7 @@ fn release_when_the_screen_goes(state: &Arc<AppState>, live: &Arc<LiveSession>) 
             tokio::time::sleep(QUIET).await;
             if screen.replaced_in(&since_sighting()) {
                 trust.dismissed.store(true, Ordering::Release);
+                publish_status(&state, &live);
                 release_held(&state, &live.id);
                 break;
             }
@@ -319,6 +320,9 @@ fn release_held(state: &Arc<AppState>, session_id: &str) {
 /// Nothing of Octoboard's own permission is recorded here; only a successful press does that.
 pub fn on_hook(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     let noted = live.trust.note_hook();
+    if live.trust.needs_user.swap(false, Ordering::AcqRel) {
+        publish_status(state, live);
+    }
     if noted.released {
         release_held(state, &live.id);
     }
@@ -357,6 +361,8 @@ async fn on_sighting(state: &Arc<AppState>, live: &Arc<LiveSession>) -> Result<(
         return Ok(());
     }
     let project = project.ok_or_else(|| anyhow!("the session's project is gone"))?;
+    live.trust.needs_user.store(true, Ordering::Release);
+    state.publish_session(&session);
     state.broadcast(prompt(&session, &project));
     Ok(())
 }
@@ -408,14 +414,26 @@ async fn answer_and_report(state: &Arc<AppState>, live: &Arc<LiveSession>) {
 async fn answer_off_the_runtime(state: &Arc<AppState>, live: Arc<LiveSession>) -> Result<()> {
     let id = live.id.clone();
     let hook_at_start = live.trust.screen.hook_at_start;
-    tokio::task::spawn_blocking(move || answer(&live))
+    let answering = live.clone();
+    let outcome = tokio::task::spawn_blocking(move || answer(&answering))
         .await
         .map_err(anyhow::Error::from)
-        .and_then(|outcome| outcome)?;
+        .and_then(|outcome| outcome);
+    if outcome.is_err() && !live.trust.pressed.load(Ordering::Acquire) {
+        live.trust.needs_user.store(true, Ordering::Release);
+    }
+    publish_status(state, &live);
+    outcome?;
     if !hook_at_start {
         release_held(state, &id);
     }
     Ok(())
+}
+
+fn publish_status(state: &AppState, live: &LiveSession) {
+    if let Ok(session) = state.session_record(&live.id) {
+        state.publish_session(&session);
+    }
 }
 
 /// The right to answer was not there to take: the screen is not up, or somebody else — a
