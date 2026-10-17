@@ -11,12 +11,12 @@ import { mountRows } from "./browserTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const origin = (session: string, title: string) => ({ source: "ref_hook" as const, session, title, created_at: 0 });
+const origin = (session: string, title: string) => ({ responsible_session: session, responsible_title: title, responsible_since: 0 });
 const branches: BranchInfo[] = [
-  { name: "made-by-session", commit: "a".repeat(40), origin: origin("s-live", "Fix the layout") },
-  { name: "made-by-archived", commit: "c".repeat(40), origin: origin("s-archived", "Old experiment") },
-  { name: "made-by-gone", commit: "d".repeat(40), origin: origin("s-gone", "Tune the weights") },
-  { name: "made-in-terminal", commit: "b".repeat(40) },
+  { name: "worked-by-session", commit: "a".repeat(40), origin: origin("s-live", "Fix the layout") },
+  { name: "worked-by-archived", commit: "c".repeat(40), origin: origin("s-archived", "Old experiment") },
+  { name: "worked-by-gone", commit: "d".repeat(40), origin: origin("s-gone", "Tune the weights") },
+  { name: "unattributed", commit: "b".repeat(40) },
 ];
 
 const console_ = consoleOf("c", "Main");
@@ -40,23 +40,23 @@ function open(selectedSessionId?: string, daemonState = state, value?: string): 
   act(() => container.querySelector<HTMLElement>("button")!.click());
 }
 
-it("marks only a branch with an origin, naming the session by its current title", () => {
+it("marks only a branch with a responsible session, naming the session by its current title", () => {
   open();
-  const ring = ringOf("made-by-session");
-  // The session was renamed since the attribution, and the sidebar shows the new title.
-  expect(ring.getAttribute("aria-label")).toBe(`Created by session ${isolate("Fix the layout, renamed")}`);
-  expect(optionOf("made-in-terminal").querySelector("[role=img]")).toBeNull();
+  const ring = ringOf("worked-by-session");
+  // The session was renamed since it became responsible, and the sidebar shows the new title.
+  expect(ring.getAttribute("aria-label")).toBe(`Session ${isolate("Fix the layout, renamed")} is working on this branch`);
+  expect(optionOf("unattributed").querySelector("[role=img]")).toBeNull();
 });
 
 it("leaves the option's own name to its content, so the ring's name is not duplicated onto it", () => {
   open();
-  expect(optionOf("made-by-session").hasAttribute("aria-label")).toBe(false);
-  expect(optionOf("made-by-session").textContent).toBe("made-by-sessionaaaaaaa");
+  expect(optionOf("worked-by-session").hasAttribute("aria-label")).toBe(false);
+  expect(optionOf("worked-by-session").textContent).toBe("worked-by-sessionaaaaaaa");
 });
 
 it.each([
-  ["an archived session, which still exists", "made-by-archived", `Created by session ${isolate("Old experiment")}`],
-  ["a session that is gone", "made-by-gone", `Created by session ${isolate("Tune the weights")}, which no longer exists`],
+  ["an archived session, which still exists", "worked-by-archived", `Session ${isolate("Old experiment")} is working on this branch`],
+  ["a session that is gone", "worked-by-gone", `Session ${isolate("Tune the weights")} was working on this branch and no longer exists`],
 ])("names %s", (_, branch, name) => {
   open();
   expect(ringOf(branch).getAttribute("aria-label")).toBe(name);
@@ -64,19 +64,19 @@ it.each([
 
 it("does not call a session gone before the daemon's first snapshot", () => {
   open(undefined, {});
-  expect(ringOf("made-by-gone").getAttribute("aria-label")).toBe(`Created by session ${isolate("Tune the weights")}`);
+  expect(ringOf("worked-by-gone").getAttribute("aria-label")).toBe(`Session ${isolate("Tune the weights")} is working on this branch`);
 });
 
 it("draws no badge on the trigger once a branch is chosen", () => {
   const container = mountRows(
-    <BranchSelect label="From" branches={branches} value="made-by-session" gone={false} selectedSessionId={undefined} onChange={() => {}} />,
+    <BranchSelect label="From" branches={branches} value="worked-by-session" gone={false} selectedSessionId={undefined} onChange={() => {}} />,
     { state },
   );
-  expect(container.querySelector("button")!.textContent).toContain("made-by-session");
+  expect(container.querySelector("button")!.textContent).toContain("worked-by-session");
   expect(container.querySelector("[role=img]")).toBeNull();
 });
 
-it("shows the creator in a tooltip after the delay while the pointer is on the ring, and not over the rest of the row", () => {
+it("shows the responsible session in a tooltip after the delay while the pointer is on the ring, and not over the rest of the row", () => {
   // Fake timers, to show that nothing is left counting down once the tooltip has gone.
   vi.useFakeTimers();
   onTestFinished(() => {
@@ -86,18 +86,18 @@ it("shows the creator in a tooltip after the delay while the pointer is on the r
   open();
   expect(openTooltip()).toBeNull();
 
-  enter(optionOf("made-by-session"));
+  enter(optionOf("worked-by-session"));
   settle();
   expect(openTooltip()).toBeNull();
-  leave(optionOf("made-by-session"));
+  leave(optionOf("worked-by-session"));
 
-  enter(ringOf("made-by-session"));
+  enter(ringOf("worked-by-session"));
   expect(openTooltip()).toBeNull();
   settle();
-  expect(openTooltip()?.textContent).toBe("Created by session Fix the layout, renamed");
+  expect(openTooltip()?.textContent).toBe("Session Fix the layout, renamed is working on this branch");
   expect(openTooltip()?.querySelector("[data-inline-chip]")?.textContent).toBe("Fix the layout, renamed");
 
-  leave(ringOf("made-by-session"));
+  leave(ringOf("worked-by-session"));
   settle();
   expect(openTooltip()).toBeNull();
   expect(vi.getTimerCount()).toBe(0);
@@ -105,29 +105,29 @@ it("shows the creator in a tooltip after the delay while the pointer is on the r
 
 it("takes no focus: the ring is no tab stop and a press on it is cancelled", () => {
   open();
-  const ring = ringOf("made-by-session");
+  const ring = ringOf("worked-by-session");
   expect(ring.tabIndex).toBe(-1);
   const press = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
   act(() => void ring.dispatchEvent(press));
   expect(press.defaultPrevented).toBe(true);
 });
 
-it("names the selected session by its current title, not the snapshot's", () => {
+it("names the selected session by its current title, not the recorded one", () => {
   open("s-live");
-  expect(ringOf("made-by-session").getAttribute("aria-label")).toBe(`Created by the selected session ${isolate("Fix the layout, renamed")}`);
+  expect(ringOf("worked-by-session").getAttribute("aria-label")).toBe(`The selected session ${isolate("Fix the layout, renamed")} is working on this branch`);
 });
 
-it("keeps the snapshot title for a selected session that is gone", () => {
+it("keeps the recorded title for a selected session that is gone", () => {
   open("s-gone");
-  expect(ringOf("made-by-gone").getAttribute("aria-label")).toBe(`Created by session ${isolate("Tune the weights")}, which no longer exists`);
+  expect(ringOf("worked-by-gone").getAttribute("aria-label")).toBe(`Session ${isolate("Tune the weights")} was working on this branch and no longer exists`);
 });
 
 it("marks the selected session's branches in the accent colour and in words", () => {
   open("s-live");
   const mark = (name: string) => ringOf(name).firstElementChild!;
-  expect(mark("made-by-session").className).toContain("border-accent-glyph");
+  expect(mark("worked-by-session").className).toContain("border-accent-glyph");
   // The fill is what tells it from the plain ring without the colour.
-  expect(mark("made-by-session").className).toContain("bg-accent-glyph");
-  expect(mark("made-by-archived").className).toContain("border-app-muted");
-  expect(mark("made-by-archived").className).not.toContain("bg-");
+  expect(mark("worked-by-session").className).toContain("bg-accent-glyph");
+  expect(mark("worked-by-archived").className).toContain("border-app-muted");
+  expect(mark("worked-by-archived").className).not.toContain("bg-");
 });

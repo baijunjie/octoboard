@@ -89,7 +89,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Session requests](product/session-requests.md) — how any session asks with `request_session` for a session that has
   no owner, in any project or as a console session: who is offered the tool, its arguments and the refusals before the
   user is asked, the 8-minute wait and the raised hand, each agent's own time limit, how a request ends (approval,
-  refusal, time limit, withdrawal), what approval does, the outcome message, and the confirmation dialog.
+  refusal, time limit, withdrawal), what approval does, handing the requester's branches over to the new session with
+  `branches`, the outcome message, and the confirmation dialog.
 - [Settings tools for agents](product/agent-settings-tools.md) — which settings a console session can read and change
   through its tools (projects, its own console, the application-wide settings), the read-only `get_project` every
   project session has, the `accounts` and `launch` argument shapes, when a change takes effect, and what is never
@@ -138,14 +139,16 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   never writes to the repository and how it differs from the branch badge, folding a section of the list away and
   unfolding it, opening a change in the file viewer and expanding the lines its diff collapses, errors, and what is kept
   for the window's lifetime.
-- [Which session created a branch](product/branch-creator.md) — the creator badge on a branch's row in the Git mode's
-  From and To lists: the title it names a session by (the session's own while it exists, the recorded one once it is
-  gone) and the filled ring a branch of the selected session takes; the rule that a branch gets a creator only when a
-  project session's own git reported creating it through git's reference-transaction hook, or stays unmarked; what
-  counts as a creation (renames keep it, forced updates and copies do not, a report from an ended session's background
-  job counts); what it needs (git 2.36 or later); the hook dispatchers a session's git runs, which still run the user's
-  own hooks, and their visible effects and cost; how a record is scoped to a repository, when it goes and the 1,000 cap;
-  that nothing is written to the repository; and where a branch carries no creator.
+- [Which session is working on a branch](product/branch-responsible-session.md) — the responsible-session badge on a
+  branch's row in the Git mode's From and To lists: the title it names the session by (the session's own while it
+  exists, the recorded one once it is gone) and the filled ring a branch of the selected session takes; the
+  responsible session, which starts as the session whose own git reported creating the branch through git's
+  reference-transaction hook and moves only by an approved handover, a branch no session's git reported staying
+  unmarked; what counts as a creation (renames keep the record, forced updates and copies do not, a report from an
+  ended session's background job counts); what attribution needs (git 2.36 or later); the hook dispatchers a
+  session's git runs, which still run the user's own hooks, and their visible effects and cost; how a record is
+  scoped to a repository, when it changes or goes and the 1,000 cap; that nothing is written to the repository; and
+  where a branch has no responsible session.
 - [Empty states](product/empty-states.md) — the two shapes a view, list or panel with nothing to show takes: the full
   panel's glyph, title, explaining line and action, the compact row for a list nested in another, what each part says,
   and how each is announced.

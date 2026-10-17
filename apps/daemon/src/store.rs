@@ -21,9 +21,9 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::protocol::{
-    error_code, now_millis, Account, Agent, ApprovalReviewer, BranchOriginSource, CodedError,
-    Console, ConsoleSessionColour, Host, HostKind, Origin, Page, Project, ProjectAccount,
-    ProjectSource, Role, Session, SessionStatus, Settings,
+    error_code, now_millis, Account, Agent, ApprovalReviewer, CodedError, Console,
+    ConsoleSessionColour, Host, HostKind, Origin, Page, Project, ProjectAccount, ProjectSource,
+    Role, Session, SessionStatus, Settings,
 };
 use crate::session_title::RecordTitles;
 
@@ -207,23 +207,27 @@ impl Store {
                 anchor_message_id TEXT,
                 created_at        INTEGER NOT NULL
             );
-            -- Which session created a branch, keyed on the branch because one session creates many
-            -- and a branch has one creator. No `REFERENCES` on `session_id`: a project's deletion
-            -- cascades its sessions away and the attribution outlives them, which is what the
-            -- title snapshot is for. `repository` is the repository's canonical common directory,
-            -- so a row belongs to the repository and not to any project.
+            -- The session working on a branch, keyed on the branch because one session works on
+            -- many and a branch has one responsible session. It starts as the session whose own git
+            -- reported creating the branch and moves only by a handover. No `REFERENCES` on
+            -- `responsible_session_id`: a project's deletion cascades its sessions away and the
+            -- record outlives them, which is what `responsible_title`, the title the session had
+            -- when it became responsible, is for. `responsible_since` is when that was, in
+            -- milliseconds. `repository` is the repository's canonical common directory, so a row
+            -- belongs to the repository and not to any project.
             -- `birth_commit` and `birth_time` are the commit and the second the branch was created
             -- at, which tell a branch deleted and made again under the same name from the one the
-            -- row was made for.
+            -- row was made for; `created_at` is that time in milliseconds, or when the creation was
+            -- reported.
             CREATE TABLE IF NOT EXISTS branch_origins (
                 repository     TEXT NOT NULL,
                 branch         TEXT NOT NULL,
-                session_id     TEXT,
-                session_title  TEXT,
-                source         TEXT NOT NULL,
                 created_at     INTEGER NOT NULL,
                 birth_commit   TEXT,
                 birth_time     INTEGER,
+                responsible_session_id TEXT,
+                responsible_since      INTEGER,
+                responsible_title      TEXT,
                 PRIMARY KEY (repository, branch)
             );
             CREATE TABLE IF NOT EXISTS settings (
@@ -237,14 +241,68 @@ impl Store {
         // Older milestone schemas are moved aside above. Compatible additions are migrated in
         // place so consoles, projects, accounts and sessions keep their stored state.
         //
-        // Branch origins once came from heuristics as well as from the session's own git, and a
-        // row of one of those may name the wrong session; only the git's own report is kept, so
-        // that every origin shown is one the session's git made.
-        conn.execute(
-            "DELETE FROM branch_origins WHERE source <> 'ref_hook' OR session_id IS NULL
-                 OR session_title IS NULL OR birth_commit IS NULL OR birth_time IS NULL",
-            [],
-        )?;
+        // Branch origins once recorded the creating session apart from the responsible one. The
+        // creator is not kept: it becomes the responsible session, with its title, where none was
+        // recorded; a session the branch was handed to takes its own title, cut as a record cuts
+        // it, if it still exists, else the creator's. The creator's columns go.
+        //
+        // They once came from heuristics as well as from the session's own git, and a row of one
+        // of those may name the wrong session; only the git's own report is kept, so that every
+        // origin shown is one the session's git made, and the column saying where a row came from
+        // goes with the rest.
+        //
+        // One transaction, so that an interrupted migration cannot leave a half-moved table.
+        let tx = conn.unchecked_transaction()?;
+        let creator_recorded = column_exists(&tx, "branch_origins", "session_id")?;
+        if creator_recorded {
+            tx.execute(
+                "DELETE FROM branch_origins WHERE source <> 'ref_hook' OR session_id IS NULL
+                     OR session_title IS NULL OR birth_commit IS NULL OR birth_time IS NULL",
+                [],
+            )?;
+        }
+        for (column, definition) in [
+            ("responsible_session_id", "TEXT"),
+            ("responsible_since", "INTEGER"),
+            ("responsible_title", "TEXT"),
+        ] {
+            if !column_exists(&tx, "branch_origins", column)? {
+                tx.execute(
+                    &format!("ALTER TABLE branch_origins ADD COLUMN {column} {definition}"),
+                    [],
+                )?;
+            }
+        }
+        if creator_recorded {
+            tx.execute(
+                "UPDATE branch_origins SET responsible_session_id = session_id,
+                     responsible_since = created_at
+                 WHERE responsible_session_id IS NULL OR responsible_since IS NULL",
+                [],
+            )?;
+            tx.execute(
+                &format!(
+                    "UPDATE branch_origins SET responsible_title = COALESCE(
+                         (SELECT substr(sessions.title, 1, {}) FROM sessions
+                          WHERE sessions.id = responsible_session_id
+                            AND responsible_session_id <> session_id),
+                         session_title)
+                     WHERE responsible_title IS NULL",
+                    crate::browse::budget::MAX_ORIGIN_TITLE_CHARS
+                ),
+                [],
+            )?;
+            for column in ["session_id", "session_title"] {
+                tx.execute(
+                    &format!("ALTER TABLE branch_origins DROP COLUMN {column}"),
+                    [],
+                )?;
+            }
+        }
+        if column_exists(&tx, "branch_origins", "source")? {
+            tx.execute("ALTER TABLE branch_origins DROP COLUMN source", [])?;
+        }
+        tx.commit()?;
         if !column_exists(&conn, "settings", "default_clone_dir")? {
             conn.execute("ALTER TABLE settings ADD COLUMN default_clone_dir TEXT", [])?;
         }
@@ -378,6 +436,13 @@ impl Store {
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Connection> {
         self.conn.lock().expect("store mutex poisoned")
+    }
+
+    /// Makes every later read or write of the branch records fail.
+    #[cfg(test)]
+    pub fn drop_branch_origins(&self) -> Result<()> {
+        self.lock().execute_batch("DROP TABLE branch_origins")?;
+        Ok(())
     }
 
     fn ensure_local_host(&self) -> Result<()> {
@@ -1393,20 +1458,20 @@ impl Store {
             }
             let mut insert = tx.prepare(
                 "INSERT OR REPLACE INTO branch_origins
-                     (repository, branch, session_id, session_title, source,
-                      created_at, birth_commit, birth_time)
+                     (repository, branch, created_at, birth_commit, birth_time,
+                      responsible_session_id, responsible_since, responsible_title)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             )?;
             for origin in put {
                 insert.execute(params![
                     repository,
                     origin.branch,
-                    origin.session_id,
-                    origin.session_title,
-                    enum_to_text(&origin.source),
                     origin.created_at,
                     origin.birth_commit,
                     origin.birth_time,
+                    origin.responsible_session,
+                    origin.responsible_since,
+                    origin.responsible_title,
                 ])?;
             }
         }
@@ -1424,6 +1489,41 @@ impl Store {
         Ok(rows)
     }
 
+    /// Makes `to`, called `to_title`, the responsible session of each of `branches` whose
+    /// responsible session is `from`, as of `since` (milliseconds), and says which moved and which
+    /// did not: a branch that has no row, or whose responsible session is another by now, stays as
+    /// it is. One transaction for the lot, each branch compared and set in one statement, so of two
+    /// handovers racing for a branch only one lands.
+    pub fn move_branch_responsibility(
+        &self,
+        repository: &str,
+        branches: &[String],
+        from: &str,
+        to: &str,
+        to_title: &str,
+        since: i64,
+    ) -> Result<BranchMove> {
+        let mut conn = self.lock();
+        let tx = conn.transaction()?;
+        let mut result = BranchMove::default();
+        {
+            let mut update = tx.prepare(
+                "UPDATE branch_origins SET responsible_session_id = ?4, responsible_since = ?5,
+                     responsible_title = ?6
+                 WHERE repository = ?1 AND branch = ?2 AND responsible_session_id = ?3",
+            )?;
+            for branch in branches {
+                if update.execute(params![repository, branch, from, to, since, to_title])? > 0 {
+                    result.moved.push(branch.clone());
+                } else {
+                    result.unmoved.push(branch.clone());
+                }
+            }
+        }
+        tx.commit()?;
+        Ok(result)
+    }
+
     /// Removes every origin recorded for the repository.
     pub fn delete_repository_branch_origins(&self, repository: &str) -> Result<()> {
         self.lock().execute(
@@ -1436,8 +1536,8 @@ impl Store {
 
 fn read_branch_origins(conn: &Connection, repository: &str) -> Result<Vec<BranchOrigin>> {
     let mut stmt = conn.prepare(
-        "SELECT repository, branch, session_id, session_title, source,
-                created_at, birth_commit, birth_time
+        "SELECT repository, branch, created_at, birth_commit, birth_time,
+                responsible_session_id, responsible_since, responsible_title
          FROM branch_origins WHERE repository = ?1 ORDER BY branch",
     )?;
     let rows = stmt
@@ -1445,34 +1545,43 @@ fn read_branch_origins(conn: &Connection, repository: &str) -> Result<Vec<Branch
             Ok(BranchOrigin {
                 repository: row.get(0)?,
                 branch: row.get(1)?,
-                session_id: row.get(2)?,
-                session_title: row.get(3)?,
-                source: enum_from_row::<BranchOriginSource>(row, 4)?,
-                created_at: row.get(5)?,
-                birth_commit: row.get(6)?,
-                birth_time: row.get(7)?,
+                created_at: row.get(2)?,
+                birth_commit: row.get(3)?,
+                birth_time: row.get(4)?,
+                responsible_session: row.get(5)?,
+                responsible_since: row.get(6)?,
+                responsible_title: row.get(7)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
 }
 
-/// Which session created one branch.
+/// The session working on one branch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BranchOrigin {
     pub repository: String,
     /// The branch's name below `refs/heads/`, as a wire path.
     pub branch: String,
-    pub session_id: String,
-    /// The session's title when the attribution was made, so the row outlives the session.
-    pub session_title: String,
-    pub source: BranchOriginSource,
-    /// Milliseconds since the epoch.
+    /// When the branch was created, in milliseconds since the epoch.
     pub created_at: i64,
     /// The commit and the second the branch was created at: its first reflog entry, or in a
     /// reftable repository, which has no reflog files, the report's commit and time.
     pub birth_commit: String,
     pub birth_time: i64,
+    /// The session working on the branch now, and when it became so (milliseconds since the
+    /// epoch).
+    pub responsible_session: String,
+    pub responsible_since: i64,
+    /// The responsible session's title when it became so, so the row outlives that session.
+    pub responsible_title: String,
+}
+
+/// What [`Store::move_branch_responsibility`] did, by branch name.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BranchMove {
+    pub moved: Vec<String>,
+    pub unmoved: Vec<String>,
 }
 
 /// Whether a table has a column of this name.
@@ -2505,12 +2614,12 @@ mod tests {
         let origin = BranchOrigin {
             repository: "/r/.git".to_string(),
             branch: "feature".to_string(),
-            session_id: "session-1".to_string(),
-            session_title: "Title".to_string(),
-            source: BranchOriginSource::RefHook,
             created_at: 7,
             birth_commit: "abc".to_string(),
             birth_time: 7,
+            responsible_session: "session-1".to_string(),
+            responsible_since: 7,
+            responsible_title: "Title".to_string(),
         };
         let put = |store: &Store| {
             store
@@ -2533,6 +2642,128 @@ mod tests {
         put(&store);
         store.delete_project("project-1").expect("project deleted");
         assert_eq!(store.branch_origins("/r/.git").unwrap(), [origin]);
+    }
+
+    /// A database from before the responsible session's title was recorded gets, for a branch
+    /// handed to a session that still exists, that session's title cut as a record cuts it, and
+    /// the recorded creator's otherwise; the creator columns are gone afterwards.
+    #[test]
+    fn branch_origins_without_a_responsible_title_get_the_creators_and_lose_the_creator() {
+        let path = temp_db("branch-origins-responsible-title");
+        let long_title = format!("é{}", "x".repeat(100));
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .insert_console(&console(None, None, None))
+                .expect("console");
+            let holder = Session {
+                id: "session-3".to_string(),
+                title: long_title.clone(),
+                ..session(None)
+            };
+            store.insert_session(&holder).expect("session");
+            let conn = store.lock();
+            conn.execute_batch(
+                "DROP TABLE branch_origins;
+                 CREATE TABLE branch_origins (
+                     repository TEXT NOT NULL, branch TEXT NOT NULL, session_id TEXT,
+                     session_title TEXT, source TEXT NOT NULL, created_at INTEGER NOT NULL,
+                     birth_commit TEXT, birth_time INTEGER, responsible_session_id TEXT,
+                     responsible_since INTEGER, PRIMARY KEY (repository, branch));
+                 INSERT INTO branch_origins VALUES
+                     ('/r/.git', 'feature', 'session-1', 'Title', 'ref_hook', 7000, 'abc', 7,
+                      'session-2', 8000),
+                     ('/r/.git', 'handed', 'session-1', 'Title', 'ref_hook', 7000, 'abc', 7,
+                      'session-3', 8000);",
+            )
+            .unwrap();
+        }
+        let store = Store::open(&path).expect("migrates the table in place");
+        let rows = store.branch_origins("/r/.git").unwrap();
+        assert_eq!(rows[0].branch, "feature");
+        assert_eq!(rows[0].responsible_session, "session-2");
+        assert_eq!(rows[0].responsible_title, "Title");
+        assert_eq!(rows[1].branch, "handed");
+        assert_eq!(
+            rows[1].responsible_title,
+            long_title.chars().take(80).collect::<String>()
+        );
+        let conn = store.lock();
+        assert!(!column_exists(&conn, "branch_origins", "session_id").unwrap());
+        assert!(!column_exists(&conn, "branch_origins", "session_title").unwrap());
+        assert!(!column_exists(&conn, "branch_origins", "source").unwrap());
+    }
+
+    /// A database from before the responsible session was recorded gets each branch's recorded
+    /// creator as its responsible session, from when the branch was created, with its title; a row
+    /// no git of a session reported, or one that names no session, is dropped.
+    #[test]
+    fn branch_origins_without_a_responsible_session_get_the_recorded_creator() {
+        let path = temp_db("branch-origins-responsible");
+        {
+            let store = Store::open(&path).expect("store");
+            let conn = store.lock();
+            conn.execute_batch(
+                "DROP TABLE branch_origins;
+                 CREATE TABLE branch_origins (
+                     repository TEXT NOT NULL, branch TEXT NOT NULL, session_id TEXT,
+                     session_title TEXT, source TEXT NOT NULL, created_at INTEGER NOT NULL,
+                     birth_commit TEXT, birth_time INTEGER, PRIMARY KEY (repository, branch));
+                 INSERT INTO branch_origins VALUES
+                     ('/r/.git', 'feature', 'session-1', 'Title', 'ref_hook', 7000, 'abc', 7),
+                     ('/r/.git', 'no-session', NULL, 'Title', 'ref_hook', 7000, 'abc', 7),
+                     ('/r/.git', 'guessed', 'session-1', 'Title', 'heuristic', 7000, 'abc', 7);",
+            )
+            .unwrap();
+        }
+        let store = Store::open(&path).expect("migrates the table in place");
+        let rows = store.branch_origins("/r/.git").unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].branch, "feature");
+        assert_eq!(rows[0].responsible_session, "session-1");
+        assert_eq!(rows[0].responsible_since, 7000);
+        assert_eq!(rows[0].responsible_title, "Title");
+    }
+
+    /// Each branch of a handover is compared and set on its own: the ones the expected session
+    /// holds move, the rest are reported and stay.
+    #[test]
+    fn a_handover_moves_only_the_branches_the_expected_session_holds() {
+        let path = temp_db("branch-handover");
+        let store = Store::open(&path).expect("store");
+        let origin = |branch: &str, session: &str| BranchOrigin {
+            repository: "/r/.git".to_string(),
+            branch: branch.to_string(),
+            created_at: 7,
+            birth_commit: "abc".to_string(),
+            birth_time: 7,
+            responsible_session: session.to_string(),
+            responsible_since: 7,
+            responsible_title: "Title".to_string(),
+        };
+        store
+            .apply_branch_origins("/r/.git", &[], &[origin("a", "s1"), origin("b", "s2")], 10)
+            .unwrap();
+        let names = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+
+        let moved = store
+            .move_branch_responsibility("/r/.git", &names(&["a", "b", "c"]), "s1", "s3", "Three", 9)
+            .unwrap();
+        assert_eq!(moved.moved, names(&["a"]));
+        assert_eq!(moved.unmoved, names(&["b", "c"]));
+
+        let rows = store.branch_origins("/r/.git").unwrap();
+        let a = &rows[0];
+        assert_eq!(
+            (a.responsible_session.as_str(), a.responsible_since),
+            ("s3", 9)
+        );
+        assert_eq!(a.responsible_title, "Three");
+        assert_eq!(rows[1], origin("b", "s2"));
+        let other = store
+            .move_branch_responsibility("/elsewhere/.git", &names(&["a"]), "s3", "s4", "Four", 10)
+            .unwrap();
+        assert!(other.moved.is_empty());
     }
 
     /// The remote URL is written and cleared on its own, and an edit of the project leaves it be.

@@ -230,21 +230,22 @@ const BRANCHES: BranchInfo[] = [
   {
     name: "feature/ranking-experiments",
     commit: FEATURE_TIP,
-    // Created by a live session of the project, which the selected-session scenarios pick.
-    origin: { source: "ref_hook", session: "s-ranking", title: "Tune the ranking weights", created_at: 1_760_000_000_000 },
+    // The responsibility of a live session of the project, which the selected-session scenarios
+    // pick.
+    origin: { responsible_session: "s-ranking", responsible_title: "Tune the ranking weights", responsible_since: 1_760_000_000_000 },
   },
   {
     name: LONG_BRANCH,
     commit: "5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a",
-    // A session that has been removed since.
-    origin: { source: "ref_hook", session: "s-gone", title: "Review the deduplication pass", created_at: 1_759_000_000_000 },
+    // The responsible session has been removed since, so the recorded title names it.
+    origin: { responsible_session: "s-gone", responsible_title: "Review the deduplication pass", responsible_since: 1_759_000_000_000 },
   },
   {
     name: "chore/update-dependencies",
     commit: "7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807e8d9",
-    // A live session that is not the selected one: the plain ring. The title is the one the session
-    // had when the attribution was made, and it has been renamed since.
-    origin: { source: "ref_hook", session: "s-web-2", title: "Bump the packages", created_at: 1_758_000_000_000 },
+    // A live session that is not the selected one: the plain ring. The title recorded when it became
+    // responsible has been superseded by the session's own, which is the one the badge shows.
+    origin: { responsible_session: "s-web-2", responsible_title: "Bump the packages", responsible_since: 1_758_000_000_000 },
   },
   { name: "main", commit: MAIN_TIP },
   { name: "release/2.4", commit: MAIN_TIP },
@@ -309,9 +310,9 @@ export const SAMPLE_GIT: FixtureGit = {
 };
 
 const { console: console_, web, api, sessions } = SAMPLE;
-/** The session that created `feature/ranking-experiments`, checked out in the side worktree. The
- * other Git scenarios select `sessions[1]`, which created no branch, so that the selectors start at
- * their defaults. */
+/** The session responsible for `feature/ranking-experiments`, checked out in the
+ * side worktree. The other Git scenarios select `sessions[1]`, which is responsible for no branch,
+ * so that the selectors start at their defaults. */
 const rankingSession = sessionOf("s-ranking", console_.id, web.id, "Tune the ranking weights", "idle");
 const state = snapshotState({ consoles: [console_], projects: [web, api], sessions: [...sessions, rankingSession] });
 const openGitFor = (session: { title: string }, view: "worktree" | "compare" = "worktree") => [
@@ -533,9 +534,9 @@ const reviewScenarios: Scenario[] = [
     id: "git-compare-origins",
     group: GROUP,
     category: "normal",
-    title: "Branch creator indicators",
+    title: "Responsible-session badges on branches",
     state: state,
-    description: "The selected, other and removed session origins are visible together; hover their rings for details.",
+    description: "Each branch row's ring names the session working on it: filled in the accent colour for the selected session, plain for another session, and named as no longer existing for a removed one. Hover a ring for its tooltip.",
     steps: [
       ...openGitFor(rankingSession, "compare"),
       (ui: Ui) => ui.wait(300),
@@ -549,7 +550,7 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "The selected session's worktree",
     state: state,
-    description: "The selected session created feature/ranking-experiments, which the side worktree has checked out: the Worktree selector is on that worktree and lists its changes, not the project folder's.",
+    description: "The selected session is responsible for feature/ranking-experiments, which the side worktree has checked out: the Worktree selector is on that worktree and lists its changes, not the project folder's.",
     steps: openGitFor(rankingSession),
   },
   {
@@ -558,7 +559,7 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "The selected session's branch compared from main",
     state: state,
-    description: "From is the branch the main worktree has checked out and To the branch the selected session created: the list is what that branch changed since it forked from main. Right-clicking a comparison row offers Copy path only, because this historical view has no live file to open or reveal.",
+    description: "From is the branch the main worktree has checked out and To the branch the selected session is responsible for: the list is what that branch changed since it forked from main. Right-clicking a comparison row offers Copy path only, because this historical view has no live file to open or reveal.",
     steps: [
       ...openGitFor(rankingSession, "compare"),
       (ui: Ui) => ui.wait(600),

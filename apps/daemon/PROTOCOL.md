@@ -116,7 +116,7 @@ the request id as if it were a record id.
 | `project_git_status` | `status` — one project's whole `GitStatus`, sent on every change, including every transition of `activity` (so an animated icon has something to follow) and every local re-read of the branch header (see "Daemon behaviour, per project"). Nothing is sent when a project is removed; the client drops its status along with it |
 | `session_notice` | `session`, `code`, `params`, `message` — something about a session the user has to be told that no status field carries: an injected capability that will not apply, a setting of theirs Octoboard had to work around, a message Octoboard accepted and could not deliver. Broadcast when it is found, which may be at launch or at any point in the session's life; nothing stores it, so a client that connects later does not see it. See "Coded messages" |
 | `trust_prompt` | `session`, `agent`, `project`, `path`, `trust_dir` — a running session of a project is at its agent's folder-trust confirmation, which is asking whether `path` is trusted, and the project has no permission of its own (`trust_consent`) and does not lie under any of `trusted_directories`. `agent` is the one asking: Claude Code's workspace-trust screen, Codex's "Trust this folder?" (shown only inside a git repository, and recorded by Codex for the repository's root), or Grok Build's "Do you trust the contents of this directory?" (shown only where the folder holds content its trust gates, such as an `AGENTS.md`). `trust_dir` is the directory `confirm_trust` with `trust_parent_dir` would trust — the project's parent — or null when there is none to offer (it would be the filesystem root, the home directory or one containing it, the home directory cannot be determined, or `path` is not absolute); a client offers the choice only when it is not null. Broadcast once per confirmation, when it is recognised in the session's terminal output. A Codex or Grok Build confirmation also stops waiting once anything is typed into the session from a terminal, which is the person answering it there (Codex runs no hook after that); its prompt is then not sent again, and a `confirm_trust` for it gets `trust_not_waiting`. When the person answers Grok Build's in the terminal, the entry Grok writes is carried into the user's own trust store all the same, with no permission of Octoboard's recorded; an answer that writes no entry (a decline) changes nothing, and a failure to carry one is a `trust_not_carried_over` notice. From launch, and while a confirmation is waiting, messages Octoboard itself writes into the session are held for as long as `send_message` would refuse one with `session_trust_pending`. Each client is also sent one for every confirmation still waiting under the same condition, with the same fields, right after every `snapshot` (on connect and on lag recovery), so a client that missed the broadcast is still asked; a client already holding the prompt ignores the repeat. A client that declines ("Not now") drops the prompt locally, and a later `snapshot` may ask again. With no client connected the confirmation simply stays for the person to answer in the terminal. The client answers with `confirm_trust`, or leaves the confirmation alone. A console session's confirmation is pressed by the daemon without a prompt and without recording anything, because its working directory is the console's own; a project session's is when it meets the condition above the other way round. A client whose queue holds prompts for projects under a directory that has just become trusted drops them |
-| `session_request` | `request_id`, `session`, `role`, `console`, `project`, `agent`, `requested_at` | A session called `request_session` and its call is waiting for the user's answer. `session` is the requesting session, which may be a console session or a project session bound or not. `role` is `project` or `console`, the kind of session it asked for; `console` is the console that session would be in, and `project` the project it would be in, or null for a console session. `agent` is the agent it would run. `requested_at` is epoch ms and orders requests oldest first. Broadcast once when the call is made, and re-sent to a client after every `snapshot` (on connect and on lag recovery) for every request still waiting, oldest first, after the `trust_prompt`s. A client already holding it ignores the repeat |
+| `session_request` | `request_id`, `session`, `role`, `console`, `project`, `agent`, `branches`, `requested_at` | A session called `request_session` and its call is waiting for the user's answer. `session` is the requesting session, which may be a console session or a project session bound or not. `role` is `project` or `console`, the kind of session it asked for; `console` is the console that session would be in, and `project` the project it would be in, or null for a console session. `agent` is the agent it would run. `branches` lists the branches an approval would hand to the new session, as wire paths below `refs/heads/`: branches the requesting session is responsible for in the project's repository, checked when it asked; empty when the request hands none over. `requested_at` is epoch ms and orders requests oldest first. Broadcast once when the call is made, and re-sent to a client after every `snapshot` (on connect and on lag recovery) for every request still waiting, oldest first, after the `trust_prompt`s. A client already holding it ignores the repeat |
 | `session_request_closed` | `request_id`, `reason` | The request is no longer waiting, and every client closes its dialog. `reason` is `approved`, `refused`, `timed_out` or `withdrawn`. `approved` means the user approved; it is announced before the session is started, not after one was started. `withdrawn` means the requesting session's process ended, its call's connection to the daemon was dropped (including the agent cancelling the call over MCP), or the same session asked again |
 | `console_session_title` | `id`, `console`, `title` — the reply to `preview_console_session_title`, the automatic title at the time of the read |
 | `session_records_inspected` | `id`, `presence` — reply to `inspect_session_records`, with `presence` one of `present`, `absent`, `unknown` |
@@ -882,7 +882,7 @@ SideRead          = { state: "present", path, kind, source: ContentSource, file:
                   | { state: "absent" }
                   | { state: "out_of_scope" }
 BranchInfo        { name, commit, origin? }
-BranchOriginInfo  { source: "ref_hook", session, title, created_at }
+BranchOriginInfo  { responsible_session, responsible_title, responsible_since }
 ComparisonEndpoint { branch, commit }
 ```
 
@@ -1172,22 +1172,23 @@ listed as it is rather than looked into, since asking `git` what a missing objec
 comparison of it is refused with `unknown_branch`, as a branch read is. At most 10,000 branches, or 2 MiB of names as
 sent, are listed, the first in byte order; a list cut there carries `complete: false`.
 
-A branch the daemon can name the creating session of carries `origin`, a `BranchOriginInfo`: `session` is that session's
-id (the session may be gone), `title` is what it had when the attribution was made, and `created_at` is when the branch
-was created in milliseconds. `source` is `ref_hook`, the only source: the session's own git reported creating the
-branch. A project session's agent is started with `core.hooksPath` pointed, through `GIT_CONFIG_COUNT`, at hook
-dispatchers of the daemon's, and when a reference transaction of any git in that agent's process tree commits a branch
-that did not exist while the transaction was prepared, the `reference-transaction` dispatcher reports it to `POST
-/git-ref/:session` (below) — a forced update of an existing branch is not a creation; every other hook, and that one
-too, runs the hook the user's own configuration names. The report is recorded only for a repository the session's own
-project is in, and, where the repository keeps reflog files, only while the branch's reflog still begins with its
-creation at the reported commit. The command that made the branch is never read, so any command, alias or script counts
-alike; a branch no session's git reported — one made in the user's own terminal, a copy (`git branch -c`), one made
-while the daemon was not running — carries no `origin`. A branch renamed after it was recorded keeps its `origin` under
-the new name, which git's reflog records. Nothing is injected, and nothing attributed, where the user's `git` is older
-than 2.36. Listing the branches is also what removes the record of a branch that no longer exists, and at most 1,000
-branches of a repository carry one: past that, a record is dropped by the time its branch was created, oldest first. The
-record is kept in the daemon's database only; nothing is written to the repository.
+A branch the daemon can name a responsible session for carries `origin`, a `BranchOriginInfo`: `responsible_session` is
+the session working on the branch now (it may be gone), `responsible_title` is the title it had when it became
+responsible, and `responsible_since` is when it did, in milliseconds. The session whose own git reported creating the
+branch is responsible for it until the record is moved to another; nothing else about who created it is kept. A project
+session's agent is started with `core.hooksPath` pointed, through `GIT_CONFIG_COUNT`, at hook dispatchers of the
+daemon's, and when a reference transaction of any git in that agent's process tree commits a branch that did not exist
+while the transaction was prepared, the `reference-transaction` dispatcher reports it to `POST /git-ref/:session`
+(below) — a forced update of an existing branch is not a creation; every other hook, and that one too, runs the hook the
+user's own configuration names. The report is recorded only for a repository the session's own project is in, and, where
+the repository keeps reflog files, only while the branch's reflog still begins with its creation at the reported commit.
+The command that made the branch is never read, so any command, alias or script counts alike; a branch no session's git
+reported — one made in the user's own terminal, a copy (`git branch -c`), one made while the daemon was not running —
+carries no `origin`. A branch renamed after it was recorded keeps its `origin` under the new name, which git's reflog
+records. Nothing is injected, and nothing attributed, where the user's `git` is older than 2.36. Listing the branches is
+also what removes the record of a branch that no longer exists, and at most 1,000 branches of a repository carry one:
+past that, a record is dropped by the time its branch was created, oldest first. The record is kept in the daemon's
+database only; nothing is written to the repository.
 
 In a repository whose references are kept in reftable format there are no reflog files, so a record is taken at the
 reported commit and time and cannot be held against its branch's birth: a branch deleted and made again under the same
@@ -1283,8 +1284,8 @@ born yet, and its staged changes are compared with the empty tree.
 | Change paths | 2 MiB, as sent | Bounds a change list whose entries are few but whose paths are long, counted as JSON writes them, the repository paths of sides outside the project included. A change list past it is cut |
 | Branches | 10,000 | A repository usually has a handful to tens of local branches, and one kept for years with every branch left behind a few thousand. A branch list past it is cut |
 | Branch names | 2 MiB, as sent | Bounds a branch list whose branches are few but whose names are long, counted as JSON writes them. A branch list past it is cut |
-| Branch origins, per repository | 1,000 | Which session created a branch, kept in the daemon's database (see "Comparing two branches"). In a repository with more branches than this the ones a listing reaches first keep theirs and the rest carry none; a record past the cap is dropped oldest first, by the time its branch was created. A branch list reserves 768 bytes for each one it attaches, as JSON writes it |
-| Origin title | 80 characters | The creating session's title as the record snapshots it, so the attribution outlives the session; a longer title is cut to this |
+| Branch origins, per repository | 1,000 | Which session is working on a branch, kept in the daemon's database (see "Comparing two branches"). In a repository with more branches than this the ones a listing reaches first keep theirs and the rest carry none; a record past the cap is dropped oldest first, by the time its branch was created. A branch list reserves 768 bytes for each one it attaches, as JSON writes it |
+| Origin title | 80 characters | The responsible session's title as the record snapshots it when the session becomes responsible, so the badge can name it once it is gone; a longer title is cut to this |
 | `git for-each-ref` output for a branch list | 4 MiB | One branch past the budget is asked for, each a line of about 90 bytes beside its name, so this is room for names averaging some 300 bytes. Past it the branch list is refused (`git_output`) |
 | `git diff-tree` output for a comparison | 8 MiB | As a change list's `git status`, it covers the whole tree, so a rename into the project is found against the rest of the repository; a record is about 100 bytes and its paths. Past it a project below the repository's root is compared within its own directory instead (see "Comparing two branches"), and a project at the root is refused (`git_output`), as is a directory's own comparison past it. That second run can double a comparison's worst-case time: two runs of up to the 30 s `git` deadline each |
 | `git status` output for a change list | 8 MiB | The status covers the whole worktree, since a rename into the project is only found against the rest of the repository; a record is about 120 bytes and its path, so this holds tens of thousands of changes. Past it the change list is refused (`git_output`) rather than built from part of the output |
@@ -1486,10 +1487,17 @@ console, changes a project's path, source, host, remote or `trust_consent`, or w
   fast-forwards the projects already behind at once.
 - `start_session` takes `account` (id or name, `default`), `model` and `effort` besides the brief; the account is read
   among the accounts of the agent the session will be of.
-- `request_session` takes `kind` (`project` or `console`), `project`, `console` and `brief` — and the overrides of
-  `start_session` — and waits for the user's answer. A project session is in the named project, which defaults to the
-  caller's own, and may belong to any console; a console session is in the named console, defaulting to the caller's own.
-  The new session has no owner and the caller carries on unchanged. See `docs/product/session-requests.md`.
+- `request_session` takes `kind` (`project` or `console`), `project`, `console`, `brief` and an optional `branches` —
+  and the overrides of `start_session` — and waits for the user's answer. `branches` is a list of local branch names in
+  the project's repository to hand to the new session; each must be one the caller is responsible for (see
+  `BranchOriginInfo`), and a call that names one it is not responsible for, names any for a console session, or names
+  any for a project that is not in a git repository, is refused before the user is asked. On approval, once the session
+  has started, their responsible session becomes the new session, a branch whose responsible session changed meanwhile
+  being reported in the outcome instead, and a move that cannot be recorded being reported there too, with the caller
+  still responsible for the branches; nothing moves on any other ending. A project session is in the named project,
+  which defaults to the caller's own, and may belong to any console; a console session is in the named console,
+  defaulting to the caller's own. The new session has no owner and the caller carries on unchanged. See
+  `docs/product/session-requests.md`.
 - `transfer_session` takes `session` (one of the caller's), `to` (the new owner) and `note`, and needs no approval:
   `Session.bound_to` changes, the session and the new owner are told in messages, and the note reaches the new owner.
   `bind_to_session` takes `owner` and `summary`, which reaches the owner as the caller's first report. Both refuse, in

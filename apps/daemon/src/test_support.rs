@@ -456,6 +456,37 @@ pub(crate) fn repo_with(label: &str, files: &[(&[u8], &[u8])]) -> ScratchDir {
     dir
 }
 
+/// Makes `branch` in the repository at `repo` and records `session` as its responsible
+/// session, as the hook's report would have; the branch is the one the record was made for, which
+/// is what a handover asks.
+pub(crate) fn branch_made_by(state: &AppState, repo: &Path, branch: &str, session: &str) {
+    git(repo, &["branch", branch]);
+    let reflog = std::fs::read_to_string(repo.join(".git/logs/refs/heads").join(branch)).unwrap();
+    let head = reflog.lines().next().unwrap().split('\t').next().unwrap();
+    let mut fields = head.split(' ');
+    let commit = fields.nth(1).unwrap().to_string();
+    let time: i64 = head.rsplit(' ').nth(1).unwrap().parse().unwrap();
+    let key = crate::branch_origin::repo_key(&crate::branch_origin::repository_of(repo).unwrap());
+    state
+        .store
+        .apply_branch_origins(
+            &key,
+            &[],
+            &[crate::store::BranchOrigin {
+                repository: key.clone(),
+                branch: branch.to_string(),
+                created_at: time * 1000,
+                birth_commit: commit,
+                birth_time: time,
+                responsible_session: session.to_string(),
+                responsible_since: time * 1000,
+                responsible_title: format!("Work {session}"),
+            }],
+            100,
+        )
+        .unwrap();
+}
+
 /// Two repositories whose `a.txt` differs, `(ours, theirs)`: a command that reads `a.txt` says
 /// which of them it ran against.
 pub(crate) fn repo_pair(label: &str) -> (ScratchDir, ScratchDir) {

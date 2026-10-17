@@ -67,7 +67,7 @@ console sessions are listed, are in "Console sessions and project sessions" in
 | `list_archived` | `project` | The archived sessions of one of this console's projects, whoever owns them, each with its owner. |
 | `reopen_session` | `session`, `text?` | Relaunches an archived or interrupted session of the caller's, continuing its conversation, and optionally hands it an instruction — its next task — delivered once the relaunched session can take one. The caller is the console session the session is bound to and is running, so reopening one never brings a console session back. |
 | `transfer_session` | `session`, `to`, `note` | Hands one of the caller's running sessions to another owner, without the user. See "Handing a session to another owner" below. |
-| `request_session` | `kind`, `project?`, `console?`, `brief`, `agent?`, `account?`, `model?`, `effort?` | Asks the user to start a session that is nobody's. See `docs/product/session-requests.md`. |
+| `request_session` | `kind`, `project?`, `console?`, `brief`, `agent?`, `account?`, `model?`, `effort?`, `branches?` | Asks the user to start a session that is nobody's. See `docs/product/session-requests.md`. |
 | `list_sessions`, `share_info` | see `docs/product/information-between-sessions.md` | As for every session. |
 | `show_page` | `html` | Pushes an HTML page to the calling console session's report panel, beside the console session's own terminal. Answers with the new page's id. See `docs/product/report-panel.md`. |
 

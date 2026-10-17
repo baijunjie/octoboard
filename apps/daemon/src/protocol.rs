@@ -924,33 +924,23 @@ pub struct ChangeRef {
 pub struct BranchInfo {
     pub name: String,
     pub commit: String,
-    /// The session that created the branch, when the daemon can name one; absent otherwise.
+    /// The session responsible for the branch, when the daemon can name one; absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<BranchOriginInfo>,
 }
 
-/// How the daemon came to attribute a branch to a session.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum BranchOriginSource {
-    /// The session's own git reported creating the branch, through the `reference-transaction`
-    /// hook Octoboard points it at.
-    RefHook,
-}
-
-/// The session a branch is attributed to having created, with the title that session had when the
-/// attribution was made — the record outlives the session, which a project's deletion takes with
-/// it.
+/// The session working on a branch now, with the title that session had when it became
+/// responsible — the record outlives the session, which a project's deletion takes with it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BranchOriginInfo {
-    /// `ref_hook`: a branch with no session to name carries no origin at all.
-    pub source: BranchOriginSource,
-    /// The creating session's id. It may name a session that no longer exists.
-    pub session: String,
-    pub title: String,
-    /// When the branch was created (milliseconds since the epoch): its reflog's first entry where
-    /// it has one, else when the creation was reported.
-    pub created_at: i64,
+    /// The session working on the branch: the one whose own git reported creating it until the
+    /// branch is handed to another. It may name a session that no longer exists.
+    pub responsible_session: String,
+    /// That session's title when it became responsible.
+    pub responsible_title: String,
+    /// When that session became responsible (milliseconds since the epoch): the branch's creation,
+    /// or the handover.
+    pub responsible_since: i64,
 }
 
 /// One end of a branch comparison: the branch, as a wire path, and the full id of the commit it was
@@ -1692,6 +1682,10 @@ pub enum Event {
         project: Option<String>,
         /// The agent the new session would run.
         agent: Agent,
+        /// The branches an approval would hand to the new session, as wire paths below
+        /// `refs/heads/`: ones the requesting session is responsible for, checked when it asked.
+        /// Empty when the request hands none over.
+        branches: Vec<String>,
         /// Milliseconds since the epoch, which is what orders several requests oldest first.
         requested_at: i64,
     },

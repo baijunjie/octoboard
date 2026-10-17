@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it } from "vitest";
+import { expect, it, onTestFinished } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
+import { setLanguage } from "../i18n/language";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { SESSION_REQUEST_NOT_WAITING } from "../protocol";
 import type { SessionRequest, TrustPrompt } from "../store";
@@ -17,6 +18,7 @@ const request: SessionRequest = {
   console: "c-1",
   project: "p-1",
   agent: "codex",
+  branches: [],
   requestedAt: 2,
 };
 
@@ -40,6 +42,31 @@ it.each([
   expect(dialogText()).toContain(where);
   expect(dialogText()).toContain("The new session would report to you.");
   expect([...document.querySelectorAll("[data-inline-chip]")].map((chip) => chip.textContent)).toEqual([asked.session, asked.project, asked.console].filter(Boolean));
+});
+
+// The branches an approval would hand over are named, each as code and joined as the language joins
+// a list, and a request that hands none over reads as it did without them.
+it.each([
+  { branches: ["fix/refunds"], where: "The branch fix/refunds would be handed over to it." },
+  { branches: ["fix/refunds", "100%25-done"], where: "The branches fix/refunds, 100%-done would be handed over to it." },
+])("names the branches handed over: $branches", ({ branches, where }) => {
+  mountPendingQuestionDialog({ sessionRequests: [{ ...request, branches }] }, ack);
+  expect(dialogText()).toContain("The new session would report to you. " + where);
+  const codes = [...document.querySelectorAll("[data-inline-chip] code")].map((code) => code.textContent);
+  expect(codes).toEqual(branches.map((branch) => branch.replace("%25", "%")));
+});
+
+it("puts no space between the question and the branches in a language with none after its full stop", () => {
+  setLanguage("zh-Hans");
+  onTestFinished(() => setLanguage("en"));
+  mountPendingQuestionDialog({ sessionRequests: [{ ...request, branches: ["fix/refunds", "feat/pay"] }] }, ack);
+  expect(dialogText()).toContain("新会话将向你汇报。分支 fix/refunds、feat/pay 将移交给新会话。");
+});
+
+it("says nothing of branches when none is handed over", () => {
+  mountPendingQuestionDialog({ sessionRequests: [request] }, ack);
+  expect(dialogText()).not.toContain("handed over");
+  expect(document.querySelectorAll("[data-inline-chip] code")).toHaveLength(0);
 });
 
 // The requester may live in another project or console than the one it asks in, which the dialog is

@@ -18,6 +18,8 @@ const trustSessions = sessions.filter((session) => session.id !== "s-api-1").map
     : session,
 );
 const requestingConsole = consoleOf("c-requester", "Release coordination");
+// A linked worktree of the Search API repository, which Octoboard has as a project of its own.
+const worktreeProject = projectOf("p-api-experiments", console_.id, "Search API experiments");
 
 export const noticeScenarios: Scenario[] = [
   {
@@ -59,19 +61,20 @@ export const noticeScenarios: Scenario[] = [
     category: "normal",
     title: "Request to start a session in another project",
     description:
-      "A session in Website asks for a Grok Build session in Search API: the requester belongs to a different console and project, so all requester and destination names are visible as chips.",
+      "A session in Search API asks for a Grok Build session in Search API experiments, a linked worktree of the same repository: the requester belongs to a different console and project, so all requester and destination names are visible as chips. The question is followed by the branches that would be handed over, each a code chip joined as the language joins a list (a literal % shown as written, the long name wrapping inside its chip).",
     state: snapshotState({
       consoles: [console_, requestingConsole],
-      projects: [{ ...web, console_id: requestingConsole.id }, api, grokProject],
-      sessions: sessions.map((s) => ({ ...s, ...(s.project_id === web.id ? { console_id: requestingConsole.id } : {}), ...(s.id === "s-web-1" ? { status: "waiting_user" as const } : {}) })),
+      projects: [web, { ...api, console_id: requestingConsole.id }, worktreeProject, grokProject],
+      sessions: sessions.map((s) => ({ ...s, ...(s.project_id === api.id ? { console_id: requestingConsole.id } : {}) })),
       sessionRequests: [
         {
           requestId: "r-1",
-          session: "s-web-1",
+          session: "s-api-1",
           role: "project",
           console: console_.id,
-          project: api.id,
+          project: worktreeProject.id,
           agent: "grok",
+          branches: ["feature/saved-searches", "fix/coverage-at-100%25", "feature/rework-the-suggestion-index-so-that-prefixes-are-matched-before-fuzzy-candidates"],
           requestedAt: 1,
         },
       ],
@@ -95,6 +98,7 @@ export const noticeScenarios: Scenario[] = [
           console: console_.id,
           project: null,
           agent: "codex",
+          branches: [],
           requestedAt: 1,
         },
       ],

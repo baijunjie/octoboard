@@ -49,9 +49,10 @@ export interface GitReview {
  * that comparison when it is made again.
  *
  * `session` is the selected session when it belongs to this project, none otherwise. Selecting one
- * sets the selectors, once, from the branch it created (`selectionForBranch`), and from one that
- * created none, to their defaults; no session leaves them as they are. Only what was read from
- * the daemon after the selection is weighed, so what a pane held from before it is asked for again.
+ * sets the selectors, once, from the branch it most recently became responsible for
+ * (`selectionForBranch`), and from one responsible for none, to their defaults; no session leaves
+ * them as they are. Only what was read from the daemon after the selection is weighed, so what a
+ * pane held from before it is asked for again.
  */
 export function useGitReview(project: string, browser: ProjectBrowserState, active: boolean, session: string | undefined, filters: Record<"worktree" | "compare", FileFilterState>): GitReview {
   const source = useProjectSource(project, active);

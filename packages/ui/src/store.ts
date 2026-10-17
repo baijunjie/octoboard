@@ -73,6 +73,8 @@ export interface SessionRequest {
   project: string | null;
   /** The agent the new session would run. */
   agent: Agent;
+  /** The branches an approval would hand to the new session, as wire paths; empty for none. */
+  branches: string[];
   requestedAt: number;
 }
 
@@ -347,6 +349,7 @@ function reducer(state: State, action: Action): State {
             console: event.console,
             project: event.project,
             agent: event.agent,
+            branches: event.branches,
             requestedAt: event.requested_at,
           };
           return { ...state, sessionRequests: withRequest(state.sessionRequests, request) };

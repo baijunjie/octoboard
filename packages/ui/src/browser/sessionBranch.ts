@@ -11,13 +11,13 @@ export interface GitSelection {
 /** What the selectors hold with no session's branch to follow. */
 const DEFAULT_SELECTION: GitSelection = { worktree: undefined, left: undefined, right: undefined };
 
-/** The branch `session` is attributed to having created: of those whose origin names it, the one
- * made last. */
+/** The branch `session` is responsible for: of those whose origin names it as responsible, the one
+ * it became responsible for last. */
 export function sessionBranch(branches: readonly BranchInfo[], session: string): string | undefined {
-  let latest: { name: string; createdAt: number } | undefined;
+  let latest: { name: string; since: number } | undefined;
   for (const { name, origin } of branches) {
-    if (origin?.session !== session) continue;
-    if (!latest || origin.created_at > latest.createdAt) latest = { name, createdAt: origin.created_at };
+    if (origin?.responsible_session !== session) continue;
+    if (!latest || origin.responsible_since > latest.since) latest = { name, since: origin.responsible_since };
   }
   return latest?.name;
 }

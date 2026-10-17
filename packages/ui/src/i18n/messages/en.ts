@@ -601,9 +601,9 @@ export const en = {
   "git.compare.to": "To",
   "git.compare.choose": "Choose a branch",
   "git.compare.branchGone": "{branch} (no longer exists)",
-  "git.compare.branchOrigin": "Created by session {title}",
-  "git.compare.branchOriginSelected": "Created by the selected session {title}",
-  "git.compare.branchOriginGone": "Created by session {title}, which no longer exists",
+  "git.compare.branchResponsible": "Session {title} is working on this branch",
+  "git.compare.branchResponsibleSelected": "The selected session {title} is working on this branch",
+  "git.compare.branchResponsibleGone": "Session {title} was working on this branch and no longer exists",
   "git.compare.swap": "Swap branches",
   "git.compare.prompt": "Two branches needed",
   "git.compare.prompt.description": "Choose a {from} and a {to} branch to see what {to} has changed since it forked from {from}.",
@@ -921,6 +921,11 @@ export const en = {
     "{requester} asks to start a {agent} session in the project {project} of the console {console}. The new session would report to you.",
   "dialog.sessionRequest.question.console":
     "{requester} asks to start a {agent} console session in the console {console}. The new session would report to you.",
+  "dialog.sessionRequest.withBranches": "{question} {branches}",
+  "dialog.sessionRequest.branches": {
+    one: "The branch {branches} would be handed over to it.",
+    other: "The branches {branches} would be handed over to it.",
+  },
   "dialog.sessionRequest.confirm": "Start session",
   "dialog.sessionRequest.refuse": "Refuse",
 

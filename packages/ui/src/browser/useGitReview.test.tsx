@@ -325,7 +325,8 @@ it("drops the filter text with the field, so no filter out of sight narrows a li
 });
 
 type Tree = { id: string; branch: string | null; main?: boolean };
-type Made = { name: string; session?: string };
+/** `responsible` is the session working on the branch; none when the daemon names no one. */
+type Made = { name: string; responsible?: string };
 
 /** The Git mode of project `id` with a selected session, as the app drives it: every change of the
  * session is noted (`noteSessionSwitch`), a pane mounted again keeps the project's state. */
@@ -387,7 +388,7 @@ function followHarness(id: string) {
         branches: branches.map((b) => ({
           name: b.name,
           commit: "c",
-          origin: b.session ? { source: "ref_hook" as const, session: b.session, title: "t", created_at: 1 } : undefined,
+          origin: b.responsible ? { responsible_session: b.responsible, responsible_title: "t", responsible_since: 1 } : undefined,
         })),
         complete: true,
       }),
@@ -414,22 +415,22 @@ it("sets the selectors from the selected session's branch once it is known, unle
 
   // The attribution arrives in a later list: set.
   act(() => void h.latest.git.refresh());
-  await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", session: "s1" }]);
+  await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", responsible: "s1" }]);
   expect(h.selectors()).toEqual({ worktree: "w", left: "main", right: "topic" });
 
   // Another session with no branch restores the defaults; a choice made since settles it.
   h.show("s2");
-  await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", session: "s1" }]);
+  await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", responsible: "s1" }]);
   expect(h.selectors()).toEqual(NONE);
   act(() => h.latest.git.view.compare.onBranchesChange("main", undefined));
   act(() => void h.latest.git.refresh());
-  await h.settle([MAIN, TOPIC], [{ name: "topic", session: "s2" }]);
+  await h.settle([MAIN, TOPIC], [{ name: "topic", responsible: "s2" }]);
   expect(h.selectors()).toMatchObject({ left: "main", right: undefined });
 });
 
-it("sets the selectors again on switching between two sessions that each created a branch", async () => {
+it("sets the selectors again on switching between two sessions that are each responsible for a branch", async () => {
   const h = followHarness("f2");
-  const branches = [{ name: "main" }, { name: "topic", session: "s1" }, { name: "other", session: "s2" }];
+  const branches = [{ name: "main" }, { name: "topic", responsible: "s1" }, { name: "other", responsible: "s2" }];
   h.mount(undefined);
   h.show("s1");
   await h.settle([MAIN, TOPIC], branches);
@@ -443,7 +444,7 @@ it("asks again for a worktree no listed one is, and sets it from the list that a
   const h = followHarness("f3");
   h.mount(undefined);
   h.show("s1");
-  const branches = [{ name: "main" }, { name: "topic", session: "s1" }];
+  const branches = [{ name: "main" }, { name: "topic", responsible: "s1" }];
   await h.settle([MAIN], branches);
   // The list read so far has no worktree for the branch: the comparison is set, the worktree waits
   // for the list asked for again.
@@ -455,7 +456,7 @@ it("asks again for a worktree no listed one is, and sets it from the list that a
 
 it("weighs only what was read after the selection, asking again for what a pane held", async () => {
   const h = followHarness("f4");
-  const branches = [{ name: "main" }, { name: "topic", session: "s1" }, { name: "other", session: "s2" }];
+  const branches = [{ name: "main" }, { name: "topic", responsible: "s1" }, { name: "other", responsible: "s2" }];
   h.mount(undefined);
   h.show("s1");
   await h.settle([MAIN, TOPIC], branches);
@@ -474,7 +475,7 @@ it("weighs only what was read after the selection, asking again for what a pane 
 
 it("sets the selectors again on a new selection of the session, but not on a pane mounted under the same one", async () => {
   const h = followHarness("f5");
-  const branches = [{ name: "main" }, { name: "topic", session: "s1" }];
+  const branches = [{ name: "main" }, { name: "topic", responsible: "s1" }];
   h.mount(undefined);
   h.show("s1");
   await h.settle([MAIN, TOPIC], branches);
@@ -499,7 +500,7 @@ it("leaves the selectors as they are for a session that is not the project's", a
   const h = followHarness("f6");
   h.mount(undefined);
   h.show("s1");
-  await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", session: "s1" }]);
+  await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", responsible: "s1" }]);
   const before = h.selectors();
   h.show(undefined);
   expect(pending).toHaveLength(0);
@@ -526,12 +527,12 @@ it("sets the worktree of a branch that shows up later in a worktree made since, 
       project: "f7",
       branches: [
         { name: "main", commit: "c" },
-        { name: "topic", commit: "c", origin: { source: "ref_hook", session: "s1", title: "t", created_at: 1 } },
+        { name: "topic", commit: "c", origin: { responsible_session: "s1", responsible_title: "t", responsible_since: 1 } },
       ],
       complete: true,
     }));
     expect(h.selectors()).toEqual({ worktree: undefined, left: "main", right: "topic" });
-    await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", session: "s1" }]);
+    await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", responsible: "s1" }]);
     expect(h.selectors()).toEqual({ worktree: "w", left: "main", right: "topic" });
   } finally {
     clock.mockRestore();

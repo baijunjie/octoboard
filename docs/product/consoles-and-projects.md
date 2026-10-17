@@ -458,10 +458,10 @@ A locked session of the project, archived sessions included, refuses removal bef
 folder is moved, under "Locking a session" in `docs/product/sessions.md`.
 
 Removing a project removes the association, and with it the records of that project's sessions, archived ones
-included. It also clears what Octoboard recorded about which session created which branch in the project's
+included. It also clears what Octoboard recorded about which session is working on which branch in the project's
 repository, unless another project still points into that repository (see "What the record is" in
-`docs/product/branch-creator.md`). **The directory and everything in it are left as they are**, unless the user
-chooses to move the folder to the Trash as well (see "Moving the project folder to the Trash" below).
+`docs/product/branch-responsible-session.md`). **The directory and everything in it are left as they are**, unless the
+user chooses to move the folder to the Trash as well (see "Moving the project folder to the Trash" below).
 
 Removing a project asks for confirmation. **Sessions of the project that are still running do not block it**:
 

@@ -102,8 +102,7 @@ pub const MAX_BRANCH_ORIGINS: usize = 1_000;
 pub const MAX_ORIGIN_TITLE_CHARS: usize = 80;
 
 /// What one attached origin takes, counted generously as JSON writes it: a session id, the title at
-/// six bytes a character if every one needed a `\u00XX` escape, a source, a time and the JSON
-/// around them.
+/// six bytes a character if every one needed a `\u00XX` escape, a time and the JSON around them.
 pub const BRANCH_ORIGIN_BYTES: usize = 768;
 
 /// The largest patch one change's diff returns. 99 % of the measured commits' whole patches were

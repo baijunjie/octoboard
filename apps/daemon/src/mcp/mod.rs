@@ -605,7 +605,11 @@ const REQUEST_SESSION: ToolDef = ToolDef {
                   starts, where you have it. The user is asked first, and the call waits for \
                   their answer, for several minutes at most. On approval Octoboard starts it with \
                   your brief as its opening prompt, and you carry on as you were. A refusal, or no \
-                  answer in time, comes back as an error and changes nothing.",
+                  answer in time, comes back as an error and changes nothing. When you are \
+                  handing over the work on a branch you are responsible for, pass it in \
+                  `branches`: the user is shown them, and on approval the new session becomes \
+                  responsible for them in your place. Leave `branches` out when you are only \
+                  working on whatever branch is checked out.",
     schema: request_session_schema,
 };
 
@@ -687,6 +691,15 @@ fn request_session_schema() -> Value {
         "type": "string",
         "description": "For `console`: the console's id, or its name when that is unambiguous. \
                         Defaults to this session's own console.",
+    });
+    schema["properties"]["branches"] = json!({
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "For `project`: local branches of the project's repository to hand over \
+                        to the new session, by name. Each must be a branch you are responsible \
+                        for: one you created or were handed. Pass them when you are handing over \
+                        the work on those branches; leave this out when you are only working on \
+                        the checked-out branch, or when there is nothing to hand over.",
     });
     schema["required"] = json!(["kind", "brief"]);
     schema

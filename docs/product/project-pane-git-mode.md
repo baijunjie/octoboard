@@ -299,9 +299,9 @@ from, and **To**, the branch whose changes are shown (see "What is compared" bel
 - Each one offers every local branch of the repository — checked out in some worktree or in none — in byte order of
   their names, each with the first seven characters of the commit at its tip. At most 10,000 branches, or as many as
   2 MiB of names hold, are offered, the first in that order; nothing says the list was cut.
-- A branch Octoboard can name the session that created it for carries a small ring between its name and its commit,
-  **in the two lists only and never on a selector's chosen branch**; most branches carry none, which is ordinary (see
-  "The creator badge" in `docs/product/branch-creator.md`).
+- A branch that has a responsible session, the session working on it now, carries a small ring between its name and
+  its commit, **in the two lists only and never on a selector's chosen branch**; most branches carry none, which is
+  ordinary (see "The responsible-session badge" in `docs/product/branch-responsible-session.md`).
 - A selector with no branch chosen says to choose one. A chosen branch's name too long for its space fades out (see
   "Names too long for their space" in `docs/product/labels-and-tooltips.md`), in the selector and in its list.
 - A chosen branch that a complete branch list no longer has stays chosen, its name marked as no longer existing, until
@@ -407,9 +407,9 @@ long as the repository has them (see "Errors" below).
 ## Following the selected session
 
 Selecting one of the project's sessions in the sidebar sets the Git mode's selectors from **the session's branch**: of
-the branches whose recorded creator is that session (see "When a branch has a creator" in
-`docs/product/branch-creator.md`), the one created last. The selectors of both views are set together, whichever view
-is on screen; the view shown does not change.
+the branches whose responsible session is that session (see "The responsible session" in
+`docs/product/branch-responsible-session.md`), the one it became responsible for last. The selectors of both views are
+set together, whichever view is on screen; the view shown does not change.
 
 - **The worktree selector** chooses the worktree that has the session's branch checked out, and the worktree holding
   the project's folder when none has.
@@ -439,10 +439,10 @@ When the selectors are set:
   selector in the meantime. When still no worktree has it, the worktree holding the project's folder stays chosen.
 - **A choice made in a selector stands while the same session stays selected**: nothing sets the selectors again until
   the next selection.
-- **A session's branch that turns up later** — in a branch list read after the selection, its creator having been
-  recorded only after the branch itself appeared, say — is followed then, once, provided the user has changed no
-  selector since the selection. Once a session's branch has been followed, later branch lists leave the selectors alone,
-  even one that names a newer branch for the session.
+- **A session's branch that turns up later** — in a branch list read after the selection, its responsible session
+  having been recorded only after the branch itself appeared, say — is followed then, once, provided the user has
+  changed no selector since the selection. Once a session's branch has been followed, later branch lists leave the
+  selectors alone, even one that names a newer branch for the session.
 - **Selecting any other session** — another project's, or a console session — or none leaves the selectors as they
   are.
 

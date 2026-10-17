@@ -1,20 +1,25 @@
-//! Which session created a git branch, kept so the Git mode can mark the relation.
+//! Which session is responsible for a git branch, the one working on it now, kept so the Git mode
+//! can mark the relation.
 //!
-//! A branch is attributed only when the session's own git says it created it: a project session's
-//! agent runs with `core.hooksPath` pointed at Octoboard's hook dispatchers ([`git_hooks`]), and
-//! when a reference transaction of a git anywhere in that agent's process tree commits a branch
-//! that did not exist while it was prepared — whatever command, alias or script made it — the
-//! `reference-transaction` hook reports it, under the session it was started for, to
-//! [`ref_created`]. A forced update of an existing branch names no old value either, which is why
-//! existence is asked before the transaction writes anything. Nothing else names a session: no
-//! timing, no working directory, no guess. A branch the hook never reported carries no creator,
-//! which is no failure.
+//! A branch is first attributed, to the session that made it, only when that session's own git says
+//! it created it: a project session's agent runs with `core.hooksPath` pointed at Octoboard's hook
+//! dispatchers ([`git_hooks`]), and when a reference transaction of a git anywhere in that agent's
+//! process tree commits a branch that did not exist while it was prepared — whatever command, alias
+//! or script made it — the `reference-transaction` hook reports it, under the session it was
+//! started for, to [`ref_created`]. A forced update of an existing branch names no old value
+//! either, which is why existence is asked before the transaction writes anything. Nothing else
+//! names a session: no timing, no working directory, no guess. A branch the hook never reported has
+//! no responsible session, which is no failure, and cannot be handed over.
 //!
 //! A report is taken only for a repository the session's own project is in, and only while the
 //! branch is still the one it reports: in a repository whose references are files, the branch's
 //! reflog has to begin with its creation at the reported commit, at the time of the report. The
 //! record lives in the daemon's SQLite (`store::BranchOrigin`) — the Git mode never writes to a
 //! user's repository, so no ref, note or configuration entry carries it.
+//!
+//! A row's responsible session is the reporting session when the row is written, and another only
+//! through an explicit handover ([`hand_over`]) — never inferred. The row keeps the title the
+//! session had then, to name it once it is gone; who reported the branch is not kept apart from it.
 //!
 //! A row lives and dies with its branch. It is validated against the branch's first reflog entry on
 //! every listing, so a branch deleted and made again under the same name does not inherit the old
@@ -28,7 +33,8 @@
 //! - In a repository whose references are in reftable format there are no reflog files to read, so
 //!   a row is taken at the reported commit and the report's time, cannot be held against the
 //!   branch's birth afterwards, and a rename is not followed: a branch deleted and made again under
-//!   the same name between two listings keeps the first one's creator until its name goes.
+//!   the same name between two listings keeps the first one's row until its name goes, and a
+//!   branch deleted since the last listing is still taken for the one its row was made for.
 //! - Elsewhere a row is held only as long as the reflog keeps the branch's first entry: once
 //!   `gc.reflogExpire` (90 days by default) drops it, the row goes. A branch deleted and made again
 //!   at the same commit inside one second has the same first entry and keeps the old row.
@@ -49,9 +55,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::browse::compare::BranchList;
 use crate::browse::{budget, wire_path};
-use crate::protocol::{BranchOriginInfo, BranchOriginSource, Session};
+use crate::protocol::{BranchOriginInfo, Session};
 use crate::state::AppState;
-use crate::store::BranchOrigin;
+use crate::store::{BranchMove, BranchOrigin};
 pub use gate::Gates;
 pub use git_files::repository_of;
 use git_files::{first_reflog_entry, reflog_has_message, uses_reftable};
@@ -114,7 +120,7 @@ fn record_created(state: &AppState, session_id: &str, report: &RefReport) -> Res
         return Ok(());
     }
     let key = repo_key(&repo);
-    let creator = Creator::of(&session);
+    let responsible = Responsible::of(&session);
 
     let gate = state.branch_origins.gate(&repo);
     let _serialized = gate.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -144,12 +150,12 @@ fn record_created(state: &AppState, session_id: &str, report: &RefReport) -> Res
         put.push(BranchOrigin {
             repository: key.clone(),
             branch,
-            session_id: creator.id.clone(),
-            session_title: creator.title.clone(),
-            source: BranchOriginSource::RefHook,
             created_at: birth_time * 1000,
             birth_commit: created.oid.clone(),
             birth_time,
+            responsible_session: responsible.id.clone(),
+            responsible_since: birth_time * 1000,
+            responsible_title: responsible.title.clone(),
         });
     }
     if put.is_empty() {
@@ -244,11 +250,59 @@ pub fn annotate(state: &AppState, repo: &Path, list: &mut BranchList) {
 
 fn shown(row: BranchOrigin) -> BranchOriginInfo {
     BranchOriginInfo {
-        source: row.source,
-        session: row.session_id,
-        title: row.session_title,
-        created_at: row.created_at,
+        responsible_session: row.responsible_session,
+        responsible_title: row.responsible_title,
+        responsible_since: row.responsible_since,
     }
+}
+
+/// The first of `branches` of `repo` that `session` has no handover to give, or `None` when it
+/// is responsible for all of them. A branch is not the session's when it has no row, when its row
+/// names another responsible session, or when it is no longer the branch the row was made for. In a
+/// reftable repository the last cannot be told (see the module header), so a branch deleted since
+/// the last listing still passes there. The answer is a snapshot: [`hand_over`] compares again when
+/// it moves.
+pub fn first_not_held_by(
+    state: &AppState,
+    repo: &Path,
+    branches: &[String],
+    session: &str,
+) -> Result<Option<String>> {
+    let rows = state.store.branch_origins(&repo_key(repo))?;
+    Ok(branches
+        .iter()
+        .find(|branch| {
+            !rows.iter().any(|row| {
+                row.branch == **branch
+                    && row.responsible_session == session
+                    && is_same_branch(repo, row)
+            })
+        })
+        .cloned())
+}
+
+/// Moves the responsible session of `branches` of `repo` from `from` to `to`, called `to_title`
+/// (cut as attribution cuts it), only where it is `from` now, and says which moved and which did
+/// not. Under the repository's gate, as every other write to its rows is: a reconcile that has
+/// read its snapshot would otherwise write the old responsible session back over the move.
+pub fn hand_over(
+    state: &AppState,
+    repo: &Path,
+    branches: &[String],
+    from: &str,
+    to: &str,
+    to_title: &str,
+) -> Result<BranchMove> {
+    let gate = state.branch_origins.gate(repo);
+    let _serialized = gate.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    state.store.move_branch_responsibility(
+        &repo_key(repo),
+        branches,
+        from,
+        to,
+        &recorded_title(to_title),
+        crate::protocol::now_millis(),
+    )
 }
 
 // -- a project's deletion ----------------------------------------------------
@@ -420,25 +474,26 @@ fn has_project(state: &AppState, repo: &Path) -> Result<bool> {
 
 /// A session as a row remembers it.
 #[derive(Debug, Clone)]
-struct Creator {
+struct Responsible {
     id: String,
     title: String,
 }
 
-impl Creator {
+impl Responsible {
     fn of(session: &Session) -> Self {
         Self {
             id: session.id.clone(),
-            title: session
-                .title
-                .chars()
-                .take(budget::MAX_ORIGIN_TITLE_CHARS)
-                .collect(),
+            title: recorded_title(&session.title),
         }
     }
 }
 
+/// A session title as a record keeps it, so it outlives the session at a bounded size.
+fn recorded_title(title: &str) -> String {
+    title.chars().take(budget::MAX_ORIGIN_TITLE_CHARS).collect()
+}
+
 /// The key a repository's rows are stored under: its canonical common directory, as a wire path.
-fn repo_key(repo: &Path) -> String {
+pub(crate) fn repo_key(repo: &Path) -> String {
     wire_path::encode(repo.as_os_str().as_bytes())
 }

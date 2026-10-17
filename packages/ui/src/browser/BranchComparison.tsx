@@ -66,7 +66,7 @@ export function BranchComparisonView({
   /** The selectors' strip, which takes keyboard focus when what held it below goes. */
   selectorsRef: React.RefObject<HTMLDivElement | null>;
   changeView: ChangeViewState;
-  /** The session selected in the sidebar, whose branches the creator badge marks. */
+  /** The session selected in the sidebar, whose branches the responsible-session badge marks. */
   selectedSessionId: string | undefined;
 }): React.ReactElement {
   const t = useT();

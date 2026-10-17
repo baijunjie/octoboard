@@ -8,18 +8,18 @@ import type { BranchOrigin } from "../protocol";
 import { useDaemonStore } from "../store";
 
 /**
- * The mark a branch carries for the session that created it: a ring, named "Created by session
- * {title}" for assistive technology, with the same words in a tooltip while the pointer is on the
- * ring. It answers who made the branch, never who is working in it now. A branch with no origin
- * gets no badge, which is the ordinary case.
+ * The mark a branch carries for the session working on it now, its responsible session: a ring,
+ * named "Session {title} is working on this branch" for assistive technology, with the same words
+ * in a tooltip while the pointer is on the ring. A branch with no responsible session gets no badge,
+ * which is the ordinary case.
  *
  * The title is the session's current one while it exists, because that is the one the sidebar
- * shows and a title that differs from it would name a session the user cannot find. The daemon's
- * snapshot from when the attribution was made is the fallback for a session that is gone, and the
- * name and tooltip then say it does not exist. An archived session is still in the store, and so
- * still exists. When the creator is the selected session its ring is filled and in the accent
- * colour, and the name and tooltip say so as well. Colour never carries it alone: the fill is a
- * shape.
+ * shows and a title that differs from it would name a session the user cannot find. The title
+ * recorded when it became responsible is the fallback for a session that is gone, and the name and
+ * tooltip then say it no longer exists. An archived session is still in the store, and so still
+ * exists. When the responsible session is the selected session its ring is filled and in the
+ * accent colour, and the name and tooltip say so as well. Colour never carries it alone: the fill
+ * is a shape.
  *
  * Kept shortfall: it is an `IndicatorTooltip`, so the title shows on pointer hover only and the badge
  * is no tab stop. A screen-reader user has it in the option's name, which includes the ring's, but a
@@ -28,16 +28,16 @@ import { useDaemonStore } from "../store";
 export function BranchOriginBadge({ origin, selectedSessionId }: { origin: BranchOrigin; selectedSessionId: string | undefined }): React.ReactElement {
   const t = useT();
   // Before the first snapshot the store holds no sessions at all, which says nothing about this one.
-  const gone = useDaemonStore((s) => s.hosts !== undefined && !s.sessions.has(origin.session));
-  const selected = origin.session === selectedSessionId;
+  const gone = useDaemonStore((s) => s.hosts !== undefined && !s.sessions.has(origin.responsible_session));
+  const selected = origin.responsible_session === selectedSessionId;
   // Read as a string, not as the session or the map: either has a new identity after any daemon event.
-  const liveTitle = useDaemonStore((s) => s.sessions.get(origin.session)?.title);
-  const message = gone ? "git.compare.branchOriginGone" : selected ? "git.compare.branchOriginSelected" : "git.compare.branchOrigin";
+  const liveTitle = useDaemonStore((s) => s.sessions.get(origin.responsible_session)?.title);
+  const message = gone ? "git.compare.branchResponsibleGone" : selected ? "git.compare.branchResponsibleSelected" : "git.compare.branchResponsible";
   const label = t(message, {
-    title: isolate(liveTitle ?? origin.title),
+    title: isolate(liveTitle ?? origin.responsible_title),
   });
   return (
-    <IndicatorTooltip tooltip={<Message id={message} params={{ title: <InlineChip dir="auto" wrap size="inherit">{liveTitle ?? origin.title}</InlineChip> }} />} label={label} className="inline-flex shrink-0">
+    <IndicatorTooltip tooltip={<Message id={message} params={{ title: <InlineChip dir="auto" wrap size="inherit">{liveTitle ?? origin.responsible_title}</InlineChip> }} />} label={label} className="inline-flex shrink-0">
       <span aria-hidden="true" className={`inline-block size-2.5 rounded-full border-2 ${selected ? "border-accent-glyph bg-accent-glyph" : "border-app-muted"}`} />
     </IndicatorTooltip>
   );

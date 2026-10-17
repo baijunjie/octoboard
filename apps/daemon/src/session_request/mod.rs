@@ -33,6 +33,7 @@ mod tests;
 
 use std::collections::{HashSet, VecDeque};
 use std::future::Future;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -41,6 +42,8 @@ use serde_json::{json, Value};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
+use crate::branch_origin;
+use crate::browse::wire_path;
 use crate::coordinator::{self, OpenRequest};
 use crate::mcp::{qualified_tool_name, tool_by_name};
 use crate::protocol::{
@@ -49,6 +52,7 @@ use crate::protocol::{
 use crate::reporting::{self, WhenBlocked};
 use crate::sharing::{one_line, place_of};
 use crate::state::AppState;
+use crate::store::BranchMove;
 
 /// How long a call waits for the user's answer. Octoboard's own value, for every agent alike, and
 /// kept below `mcp::stdio`'s `CALL_TIMEOUT` with room left for an approval given at the last
@@ -102,6 +106,17 @@ struct Ended {
     how: SessionRequestEnding,
 }
 
+/// The branches of one repository a request hands to the session it asks for, checked to be the
+/// requester's to give when the request was made.
+#[derive(Debug, Clone)]
+pub struct Handover {
+    /// The canonical common directory of the repository, as `branch_origin::repository_of` gives
+    /// it.
+    pub repository: PathBuf,
+    /// Names below `refs/heads/`, as wire paths. Never empty.
+    pub branches: Vec<String>,
+}
+
 /// One request: what the dialog is told of it, and the session an approval opens.
 struct Request {
     id: String,
@@ -112,6 +127,8 @@ struct Request {
     open: OpenRequest,
     /// The agent the session would run, settled when the request was made.
     agent: Agent,
+    /// The branches an approval hands to the session, if the request names any.
+    handover: Option<Handover>,
 }
 
 impl Request {
@@ -131,6 +148,11 @@ impl Request {
             console: self.open.console_id.clone(),
             project: self.open.project_id.clone(),
             agent: self.agent,
+            branches: self
+                .handover
+                .as_ref()
+                .map(|handover| handover.branches.clone())
+                .unwrap_or_default(),
             requested_at: self.requested_at,
         }
     }
@@ -314,11 +336,13 @@ impl Drop for WithdrawOnDrop<'_> {
 /// returns. `open` must be unbound: a session with no owner is the point of the request, and the
 /// caller binding it is for `start_session`, or for the caller binding itself afterwards. What the
 /// session could never be started for is refused before the user is asked. The `Err` case is what
-/// the model is shown as the reason, so it is written for it.
+/// the model is shown as the reason, so it is written for it. `handover` is moved to the session
+/// on approval and only then.
 pub async fn ask_for_session(
     state: &Arc<AppState>,
     caller: &Session,
     open: OpenRequest,
+    handover: Option<Handover>,
     limit: Duration,
 ) -> Result<Value> {
     let agent = coordinator::check_open(state, &open).await?;
@@ -328,6 +352,7 @@ pub async fn ask_for_session(
         requested_at: now_millis(),
         open,
         agent,
+        handover,
     };
     wait_for_answer(state, caller, request, limit).await
 }
@@ -408,7 +433,7 @@ pub async fn answer(
 
 /// [`answer`], starting the session through `launch`: `coordinator::open_session` outside the
 /// tests, which cannot launch an agent.
-async fn answer_with<F, Fut>(
+pub(crate) async fn answer_with<F, Fut>(
     state: &Arc<AppState>,
     request_id: &str,
     approve: bool,
@@ -465,8 +490,8 @@ struct Approved {
     message: String,
 }
 
-/// Carries out an approval: starts the session the caller described, unbound. The caller keeps
-/// running, and does not own what it asked for.
+/// Carries out an approval: starts the session the caller described, unbound, then hands it the
+/// branches the request names. The caller keeps running, and does not own what it asked for.
 async fn carry_out<F, Fut>(state: &Arc<AppState>, request: &Request, launch: F) -> Result<Approved>
 where
     F: FnOnce(OpenRequest) -> Fut,
@@ -478,7 +503,8 @@ where
         return Err(not_waiting(&caller.id));
     }
     let started = launch(request.open.clone()).await?;
-    let note = outcome_note(state, &caller, &started);
+    let handed = hand_over_branches(state, request, &caller, &started).await;
+    let note = outcome_note(state, &caller, &started, handed.as_ref());
     let message = format!(
         "{OUTCOME_OPENING} `{}` call. {note} If that call already returned this, there is nothing \
          more to do about it.",
@@ -500,11 +526,80 @@ where
     })
 }
 
+/// What became of the branches a request named, once its session was started.
+enum Handed {
+    /// The compare-and-set ran: some branches moved, the rest were no longer the caller's, or were
+    /// gone.
+    Moved(BranchMove),
+    /// The move could not be recorded, so every branch is still the caller's.
+    Failed(Vec<String>),
+}
+
+/// Moves the branches the request names to the session it started, each only if the caller is
+/// still its responsible session. The session is running by now, so a failure to move is not one
+/// of the approval: it is told to the caller instead.
+async fn hand_over_branches(
+    state: &Arc<AppState>,
+    request: &Request,
+    caller: &Session,
+    started: &Session,
+) -> Option<Handed> {
+    let handover = request.handover.as_ref()?;
+    let moving = {
+        let state = state.clone();
+        let repository = handover.repository.clone();
+        let branches = handover.branches.clone();
+        let (from, to) = (caller.id.clone(), started.id.clone());
+        let to_title = started.title.clone();
+        tokio::task::spawn_blocking(move || {
+            branch_origin::hand_over(&state, &repository, &branches, &from, &to, &to_title)
+        })
+    };
+    let moved = match moving.await {
+        Ok(Ok(moved)) => Handed::Moved(moved),
+        Ok(Err(err)) => {
+            tracing::warn!(session = %caller.id, %err, "handing the branches over failed");
+            Handed::Failed(handover.branches.clone())
+        }
+        Err(err) => {
+            tracing::warn!(session = %caller.id, %err, "handing the branches over did not finish");
+            Handed::Failed(handover.branches.clone())
+        }
+    };
+    Some(moved)
+}
+
+/// Branch names, as wire paths, set in backticks and separated by commas, for prose.
+pub fn named_branches(branches: &[String]) -> String {
+    branches
+        .iter()
+        .map(|branch| {
+            let name = wire_path::decode(branch).unwrap_or_default();
+            format!("`{}`", String::from_utf8_lossy(&name))
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// The noun and the pronoun that stand for `branches` in a sentence: "branch" and "it" for one,
+/// "branches" and "them" for several.
+pub fn branch_noun_and_pronoun(branches: &[String]) -> (&'static str, &'static str) {
+    match branches {
+        [_] => ("branch", "it"),
+        _ => ("branches", "them"),
+    }
+}
+
 /// What a session is told of the session it asked for, in the call's result and in the message
-/// alike: where it was started, that it reports to the user, and what that leaves the caller able
-/// to do with it — share information, read it where the caller can read sessions, and bind itself
-/// to it where the caller could.
-fn outcome_note(state: &Arc<AppState>, caller: &Session, started: &Session) -> String {
+/// alike: where it was started, that it reports to the user, what became of the branches it asked
+/// to hand over, and what that leaves the caller able to do with the session — share information,
+/// read it where the caller can read sessions, and bind itself to it where the caller could.
+fn outcome_note(
+    state: &Arc<AppState>,
+    caller: &Session,
+    started: &Session,
+    handed: Option<&Handed>,
+) -> String {
     let tool = |name: &str| qualified_tool_name(caller.agent, name);
     let has = |name: &str| tool_by_name(caller.role, caller.has_bound_role(), name).is_some();
     let place = place_of(state, started);
@@ -526,17 +621,56 @@ fn outcome_note(state: &Arc<AppState>, caller: &Session, started: &Session) -> S
     } else {
         String::new()
     };
+    let branches = handed.map(branch_outcome).unwrap_or_default();
     format!(
         "The user approved the request: Octoboard started the {kind} session `{id}` (\"{title}\", \
          {agent}){place}, with your brief as its opening prompt. It has no owner: it reports to \
          the user, not to you. It is not yours to drive — you cannot instruct, archive or reopen \
-         it — and you go on with your own work as you were. `{share_info}` tells it something that \
-         touches its work{reads}.{bind}",
+         it — and you go on with your own work as you were.{branches} `{share_info}` tells it \
+         something that touches its work{reads}.{bind}",
         id = started.id,
         title = one_line(&started.title),
         agent = started.agent.label(),
         share_info = tool("share_info"),
     )
+}
+
+/// What became of the branches a request handed over, as a sentence or two for the outcome note,
+/// each opening with a space.
+fn branch_outcome(handed: &Handed) -> String {
+    let mut text = String::new();
+    match handed {
+        Handed::Moved(handed) => {
+            if !handed.moved.is_empty() {
+                let (_, them) = branch_noun_and_pronoun(&handed.moved);
+                text.push_str(&format!(
+                    " Handed over to it: {}. It is now the session responsible for {them} and you \
+                     no longer are.",
+                    named_branches(&handed.moved)
+                ));
+            }
+            if !handed.unmoved.is_empty() {
+                let (them, they, were, stay) = match handed.unmoved.as_slice() {
+                    [_] => ("it", "It", "it was", "stays as it was"),
+                    _ => ("them", "They", "they were", "stay as they were"),
+                };
+                text.push_str(&format!(
+                    " Not handed over, because by then you were no longer responsible for {them} \
+                     or {were} gone: {}. {they} {stay}.",
+                    named_branches(&handed.unmoved)
+                ));
+            }
+        }
+        Handed::Failed(branches) => {
+            let (_, them) = branch_noun_and_pronoun(branches);
+            text.push_str(&format!(
+                " Octoboard could not record the handover of {}, so you are still responsible for \
+                 {them}.",
+                named_branches(branches)
+            ));
+        }
+    }
+    text
 }
 
 /// Whether `owner` could own `session` right now, by the rules a binding keeps.

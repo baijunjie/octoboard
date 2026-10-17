@@ -1,10 +1,12 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::*;
+use crate::branch_origin::{self, repo_key, repository_of};
 use crate::protocol::{Console, Origin, Project, ProjectAccount, ProjectSource, SessionStatus};
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{
-    app_state, idle_stand_in, output_containing, running, ScratchDir, PATIENCE,
+    app_state, branch_made_by, idle_stand_in, output_containing, repo_with, running, ScratchDir,
+    PATIENCE,
 };
 use serde_json::json;
 
@@ -139,11 +141,22 @@ async fn ask_in_background(
     asked: OpenRequest,
     limit: Duration,
 ) -> (tokio::task::JoinHandle<Result<Value>>, Event) {
+    ask_handing_over(state, caller, asked, None, limit).await
+}
+
+/// [`ask_in_background`] for a request that hands `handover` over.
+async fn ask_handing_over(
+    state: &Arc<AppState>,
+    caller: &str,
+    asked: OpenRequest,
+    handover: Option<Handover>,
+    limit: Duration,
+) -> (tokio::task::JoinHandle<Result<Value>>, Event) {
     let caller_id = caller.to_string();
     let caller = state.session_record(caller).unwrap();
     let task = {
         let state = state.clone();
-        tokio::spawn(async move { ask_for_session(&state, &caller, asked, limit).await })
+        tokio::spawn(async move { ask_for_session(&state, &caller, asked, handover, limit).await })
     };
     let deadline = std::time::Instant::now() + PATIENCE;
     loop {
@@ -284,6 +297,7 @@ async fn an_approval_starts_a_session_with_no_owner_in_any_project() {
             Agent::Claude
         )
     );
+    assert!(matches!(&event, Event::SessionRequest { branches, .. } if branches.is_empty()));
 
     let started = answer_by(&launcher, &request_id_of(&event), true)
         .await
@@ -297,6 +311,7 @@ async fn an_approval_starts_a_session_with_no_owner_in_any_project() {
     assert!(note.contains("mcp__octoboard__share_info"), "{note}");
     // Not in the caller's console, so there is no binding to offer.
     assert!(!note.contains("bind_to_session"), "{note}");
+    assert!(!note.contains("anded over"), "{note}");
     assert!(state
         .session_record(&started.id)
         .unwrap()
@@ -392,6 +407,7 @@ async fn a_call_made_while_its_approval_is_carried_out_is_refused() {
         &state,
         &caller,
         asked(CONSOLE, Some("project-1")),
+        None,
         ANSWER_TIME_LIMIT,
     )
     .await
@@ -602,7 +618,14 @@ async fn a_second_call_takes_the_place_of_the_first() {
     let _second = {
         let state = state.clone();
         tokio::spawn(async move {
-            ask_for_session(&state, &caller, asked(CONSOLE, None), ANSWER_TIME_LIMIT).await
+            ask_for_session(
+                &state,
+                &caller,
+                asked(CONSOLE, None),
+                None,
+                ANSWER_TIME_LIMIT,
+            )
+            .await
         })
     };
 
@@ -713,4 +736,206 @@ async fn a_dropped_call_is_withdrawn_and_waiting_requests_follow_the_snapshot() 
     }
     assert_eq!(types[0], "snapshot");
     assert_eq!(requests, [first_id, second_id]);
+}
+
+/// A repository with a branch `asker` is responsible for under each of `branches`, the handover
+/// of them, and the directory the repository lives in, which the handover is only good for as long
+/// as it is kept.
+fn handover_of(state: &Arc<AppState>, branches: &[&str]) -> (Handover, ScratchDir) {
+    let repo = repo_with("session-request-repo", &[(b"a", b"a")]);
+    for branch in branches {
+        branch_made_by(state, &repo, branch, "asker");
+    }
+    let handover = Handover {
+        repository: repository_of(&repo).unwrap(),
+        branches: branches.iter().map(|branch| branch.to_string()).collect(),
+    };
+    (handover, repo)
+}
+
+/// Who is responsible for each of the repository's branches, by branch name.
+fn responsible_for(state: &Arc<AppState>, handover: &Handover) -> Vec<(String, String)> {
+    state
+        .store
+        .branch_origins(&repo_key(&handover.repository))
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.branch, row.responsible_session))
+        .collect()
+}
+
+/// The branches a request names are in its event, and an approval hands them to the session it
+/// started, which the caller is told in the result and in the message, and the records take the new
+/// session's title.
+#[tokio::test]
+async fn an_approval_hands_the_branches_over_to_the_session_it_started() {
+    let (state, _dir) = fixture("handover-approve");
+    let asker = running(&state, "asker");
+    let launcher = Launcher::new(&state);
+    let (handover, _repo) = handover_of(&state, &["alpha", "beta"]);
+    let (call, event) = ask_handing_over(
+        &state,
+        "asker",
+        asked(CONSOLE, Some("project-1")),
+        Some(handover.clone()),
+        ANSWER_TIME_LIMIT,
+    )
+    .await;
+    assert!(
+        matches!(&event, Event::SessionRequest { branches, .. } if branches == &["alpha", "beta"])
+    );
+    // Asking moves nothing.
+    assert!(responsible_for(&state, &handover)
+        .iter()
+        .all(|(_, session)| session == "asker"));
+
+    let started = answer_by(&launcher, &request_id_of(&event), true)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let result = outcome_of(call).await.unwrap();
+    let note = result["note"].as_str().unwrap();
+    assert!(
+        note.contains("Handed over to it: `alpha`, `beta`."),
+        "{note}"
+    );
+    assert!(!note.contains("Not handed over"), "{note}");
+    assert_eq!(
+        responsible_for(&state, &handover),
+        [
+            ("alpha".to_string(), started.id.clone()),
+            ("beta".to_string(), started.id.clone())
+        ]
+    );
+    let rows = state
+        .store
+        .branch_origins(&repo_key(&handover.repository))
+        .unwrap();
+    assert!(rows
+        .iter()
+        .all(|row| row.responsible_title == started.title));
+    let message = output_containing(&asker, "Handed over to it");
+    assert!(message.contains("`alpha`, `beta`"), "{message}");
+}
+
+/// A branch whose responsible session changed while the user was deciding is reported in the
+/// outcome and left alone; the others are handed over.
+#[tokio::test]
+async fn a_branch_that_changed_hands_meanwhile_is_reported_not_moved() {
+    let (state, _dir) = fixture("handover-partial");
+    let _asker = running(&state, "asker");
+    let launcher = Launcher::new(&state);
+    let (handover, _repo) = handover_of(&state, &["kept", "taken"]);
+    let (call, event) = ask_handing_over(
+        &state,
+        "asker",
+        asked(CONSOLE, Some("project-1")),
+        Some(handover.clone()),
+        ANSWER_TIME_LIMIT,
+    )
+    .await;
+    branch_origin::hand_over(
+        &state,
+        &handover.repository,
+        &["taken".to_string()],
+        "asker",
+        "elsewhere",
+        "Elsewhere",
+    )
+    .unwrap();
+
+    let started = answer_by(&launcher, &request_id_of(&event), true)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let result = outcome_of(call).await.unwrap();
+    let note = result["note"].as_str().unwrap();
+    assert!(note.contains("Handed over to it: `kept`."), "{note}");
+    assert!(note.contains("Not handed over"), "{note}");
+    assert!(note.contains("`taken`. It stays as it was."), "{note}");
+    assert_eq!(
+        responsible_for(&state, &handover),
+        [
+            ("kept".to_string(), started.id),
+            ("taken".to_string(), "elsewhere".to_string())
+        ]
+    );
+}
+
+/// A move the store cannot record is not an error of the approval: the session still starts, and
+/// the caller is told it is still responsible for the branches.
+#[tokio::test]
+async fn a_handover_the_store_cannot_record_is_told_to_the_caller() {
+    let (state, _dir) = fixture("handover-failed");
+    let _asker = running(&state, "asker");
+    let launcher = Launcher::new(&state);
+    let (handover, _repo) = handover_of(&state, &["alpha"]);
+    let (call, event) = ask_handing_over(
+        &state,
+        "asker",
+        asked(CONSOLE, Some("project-1")),
+        Some(handover),
+        ANSWER_TIME_LIMIT,
+    )
+    .await;
+    state.store.drop_branch_origins().unwrap();
+
+    answer_by(&launcher, &request_id_of(&event), true)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let result = outcome_of(call).await.unwrap();
+    let note = result["note"].as_str().unwrap();
+    assert!(
+        note.contains("could not record the handover of `alpha`, so you are still responsible"),
+        "{note}"
+    );
+    assert!(!note.contains("Handed over"), "{note}");
+}
+
+/// A request that ends any way but an approval moves nothing.
+#[tokio::test]
+async fn a_request_that_is_not_approved_moves_nothing() {
+    for ending in ["refused", "timed out", "withdrawn"] {
+        let (state, _dir) = fixture(&format!("handover-{}", ending.replace(' ', "-")));
+        let asker = idle_stand_in("asker");
+        state.register_live(asker.clone());
+        state.watch_exit(asker.clone());
+        let launcher = Launcher::new(&state);
+        let (handover, _repo) = handover_of(&state, &["topic"]);
+        let limit = match ending {
+            "timed out" => Duration::from_millis(50),
+            _ => ANSWER_TIME_LIMIT,
+        };
+        let (call, event) = ask_handing_over(
+            &state,
+            "asker",
+            asked(CONSOLE, Some("project-1")),
+            Some(handover.clone()),
+            limit,
+        )
+        .await;
+        match ending {
+            "refused" => {
+                answer_by(&launcher, &request_id_of(&event), false)
+                    .await
+                    .unwrap();
+            }
+            "withdrawn" => asker.terminate(),
+            _ => {}
+        }
+        outcome_of(call).await.expect_err(ending);
+        // Too late to answer, whichever way it ended.
+        let _ = answer_by(&launcher, &request_id_of(&event), true).await;
+
+        assert_eq!(launcher.launched.load(Ordering::SeqCst), 0, "{ending}");
+        assert_eq!(
+            responsible_for(&state, &handover),
+            [("topic".to_string(), "asker".to_string())],
+            "{ending}"
+        );
+    }
 }

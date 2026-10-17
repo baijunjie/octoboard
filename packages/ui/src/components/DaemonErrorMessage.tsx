@@ -6,6 +6,7 @@ import { hasCodeParams, hasShellTimeoutDetails, type ErrorPresentation } from ".
 import { errorText } from "../errorText";
 import { isMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
+import { joinNodes } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { MessageParams } from "../protocol";
 import { useDaemonStore } from "../store";
@@ -32,9 +33,7 @@ function CodedDaemonMessage({ error }: { error: DaemonRequestError }): React.Rea
   const running = error.code === "session_has_running_sessions" ? runningSessionIds(error.params) : undefined;
   if (running) {
     const titles = running.map((id) => sessions.get(id)?.title ?? id);
-    params.sessions = new Intl.ListFormat(language, { style: "narrow", type: "conjunction" }).formatToParts(titles).map((part, key) => (
-      part.type === "literal" ? part.value : <InlineChip key={key} wrap size="inherit">{part.value}</InlineChip>
-    ));
+    params.sessions = joinNodes(language, titles, (title, key) => <InlineChip key={key} wrap size="inherit">{title}</InlineChip>);
   }
   if (error.code === "launch_failed" && error.params.reason_code && error.params.reason_code !== "launch_failed" && hasCodeParams({ code: error.params.reason_code, params: error.params })) {
     params.reason = codedMessageNode({ code: error.params.reason_code, params: error.params }, String(params.reason ?? ""));

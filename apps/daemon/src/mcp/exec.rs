@@ -19,12 +19,15 @@
 //! told to it in prose as well: in the call's result when it made the change itself, and in a
 //! message written into it when its owner did.
 
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
+use crate::branch_origin;
+use crate::browse::wire_path;
 use crate::coordinator::{self, OpenRequest};
 use crate::git_remote;
 use crate::protocol::{
@@ -32,7 +35,7 @@ use crate::protocol::{
     Session, SessionStatus,
 };
 use crate::reporting::{self, Delivery, ReportStatus, WhenBlocked};
-use crate::session_request;
+use crate::session_request::{self, Handover};
 use crate::sharing::{self, OwnerCopy};
 use crate::state::AppState;
 
@@ -561,6 +564,12 @@ async fn request_session(
             if optional_string(arguments, "project").is_some() {
                 bail!("`project` is for `kind: project`; a console session is in no project");
             }
+            if optional_string_list(arguments, "branches")?.is_some_and(|names| !names.is_empty()) {
+                bail!(
+                    "`branches` is for `kind: project`; a console session is in no project, so \
+                     there is no branch to hand it"
+                );
+            }
             let console = match optional_string(arguments, "console") {
                 Some(wanted) => find_console(state, &wanted)?,
                 None => own_console(state, caller)?,
@@ -569,14 +578,26 @@ async fn request_session(
         }
         other => bail!("`kind` is `{other}`, which is not one of `project` or `console`"),
     };
+    let handover = match &project {
+        Some(project) => branches_to_hand_over(state, caller, project, arguments).await?,
+        None => None,
+    };
     let open = session_in(state, &console, project, arguments)?;
     // Whoever reads the brief is to know who wrote it, and that it is not that session's to drive.
+    let handed = handover.as_ref().map_or_else(String::new, |handover| {
+        let (noun, them) = session_request::branch_noun_and_pronoun(&handover.branches);
+        format!(
+            " It also handed the {noun} {} over to you, with the same approval: you are now the \
+             session responsible for {them}, so carry on the work on {them}.",
+            session_request::named_branches(&handover.branches)
+        )
+    });
     let task = open.task.map(|brief| {
         format!(
             "You were started at the request of the session `{id}` (\"{title}\"), with the user's \
              approval. Nobody owns you but the user: that session is not your owner, and it and \
-             you can only share information with each other. This is the brief it wrote:\n\n\
-             {brief}",
+             you can only share information with each other.{handed} This is the brief it \
+             wrote:\n\n{brief}",
             id = caller.id,
             title = sharing::one_line(&caller.title),
         )
@@ -587,7 +608,81 @@ async fn request_session(
         origin: Origin::User,
         ..open
     };
-    session_request::ask_for_session(state, caller, asked, session_request::ANSWER_TIME_LIMIT).await
+    session_request::ask_for_session(
+        state,
+        caller,
+        asked,
+        handover,
+        session_request::ANSWER_TIME_LIMIT,
+    )
+    .await
+}
+
+/// The branches `request_session` hands over, from its `branches` argument: local branches of the
+/// repository `project` is in that the caller is responsible for, each named once. `None` when
+/// the argument names none. Refused before the user is asked, with the first branch that is not
+/// the caller's to give.
+async fn branches_to_hand_over(
+    state: &Arc<AppState>,
+    caller: &Session,
+    project: &Project,
+    arguments: &Map<String, Value>,
+) -> Result<Option<Handover>> {
+    let Some(names) = optional_string_list(arguments, "branches")? else {
+        return Ok(None);
+    };
+    let mut branches: Vec<String> = Vec::new();
+    for name in &names {
+        let name = name.trim();
+        if name.is_empty() {
+            bail!("`branches` must not hold a blank name");
+        }
+        let wire = wire_path::encode(name.as_bytes());
+        if !branches.contains(&wire) {
+            branches.push(wire);
+        }
+    }
+    if branches.is_empty() {
+        return Ok(None);
+    }
+    // Finding the repository reads the filesystem and the holder check reads the store.
+    let (repository, not_held) = {
+        let state = state.clone();
+        let path = project.path.clone();
+        let (branches, caller) = (branches.clone(), caller.id.clone());
+        tokio::task::spawn_blocking(move || {
+            let Some(repository) = branch_origin::repository_of(Path::new(&path)) else {
+                return Ok(None);
+            };
+            let not_held =
+                branch_origin::first_not_held_by(&state, &repository, &branches, &caller)?;
+            Ok::<_, anyhow::Error>(Some((repository, not_held)))
+        })
+        .await??
+        .ok_or_else(|| {
+            anyhow!(
+                "the project `{}` (\"{}\") is not in a git repository, so there is no branch to \
+                 hand to a session there",
+                project.id,
+                project.name
+            )
+        })?
+    };
+    if let Some(branch) = not_held {
+        bail!(
+            "{} is not a branch you are responsible for in the repository of the project `{}` \
+             (\"{}\"): it does not exist there, or it was not created by you or handed to you, or \
+             another session is responsible for it now. Only a branch you are responsible for can \
+             be handed over",
+            session_request::named_branches(&[branch]),
+            project.id,
+            project.name
+        );
+    }
+    Ok(Some(Handover {
+        repository,
+        branches,
+    }))
 }
 
 // -- argument and record helpers ---------------------------------------------
@@ -931,39 +1026,260 @@ pub(super) mod tests {
         ] {
             let mut args = arguments(json!({ "brief": { "goal": "do the thing" } }));
             args.extend(extra.as_object().unwrap().clone());
-            let call = {
-                let state = state.clone();
-                tokio::spawn(async move { call(&state, caller, "request_session", &args).await })
-            };
-            let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
-            let waiting = loop {
-                let found = session_request::pending_events(&state)
-                    .into_iter()
-                    .find(|event| {
-                        matches!(event, Event::SessionRequest { session, .. } if session == caller)
-                    });
-                if let Some(Event::SessionRequest {
-                    role,
-                    console,
-                    project,
-                    ..
-                }) = found
-                {
-                    break (role, console, project);
-                }
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "the request never waited"
-                );
-                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            let Event::SessionRequest {
+                role: waiting_role,
+                console: waiting_console,
+                project: waiting_project,
+                ..
+            } = withdrawn_request(&state, caller, args).await
+            else {
+                unreachable!()
             };
             assert_eq!(
-                (waiting.0, waiting.1.as_str(), waiting.2.as_deref()),
+                (
+                    waiting_role,
+                    waiting_console.as_str(),
+                    waiting_project.as_deref()
+                ),
                 (role, console, project),
                 "{caller}"
             );
-            session_request::withdraw_for_session(&state, caller);
-            call.await.unwrap().expect_err("withdrawn");
+        }
+    }
+
+    /// The branches a request hands over are the caller's to give in the project's own repository:
+    /// anything else is refused before the user is asked, and what is accepted reaches the dialog
+    /// once and by name.
+    #[tokio::test]
+    async fn a_session_request_hands_over_only_branches_the_caller_is_responsible_for() {
+        let (state, _dir) = shared_console_state("request-branches");
+        let repo = crate::test_support::repo_with("request-branches-repo", &[(b"a", b"a")]);
+        state
+            .store
+            .insert_project(&Project {
+                id: "repo".to_string(),
+                name: "repo".to_string(),
+                path: repo.to_string_lossy().into_owned(),
+                ..state.store.get_project("project-1").unwrap().unwrap()
+            })
+            .unwrap();
+        crate::test_support::branch_made_by(&state, &repo, "mine", "loose");
+        crate::test_support::branch_made_by(&state, &repo, "theirs", "a");
+        crate::test_support::git(&repo, &["branch", "unrecorded"]);
+        let request = |extra: Value| {
+            let mut args = arguments(json!({ "brief": { "goal": "do the thing" } }));
+            args.extend(extra.as_object().unwrap().clone());
+            args
+        };
+
+        for (extra, expected) in [
+            (
+                json!({ "kind": "project", "project": "repo", "branches": ["theirs"] }),
+                "`theirs` is not a branch you are responsible for",
+            ),
+            (
+                json!({ "kind": "project", "project": "repo", "branches": ["mine", "unrecorded"] }),
+                "`unrecorded` is not a branch you are responsible for",
+            ),
+            (
+                json!({ "kind": "project", "project": "repo", "branches": ["mine", "absent"] }),
+                "`absent` is not a branch you are responsible for",
+            ),
+            (
+                json!({ "kind": "project", "project": "repo", "branches": ["mine", " "] }),
+                "blank name",
+            ),
+            (
+                json!({ "kind": "project", "project": "repo", "branches": "mine" }),
+                "array of strings",
+            ),
+            (
+                json!({ "kind": "project", "project": "project-2", "branches": ["mine"] }),
+                "not in a git repository",
+            ),
+            (
+                json!({ "kind": "console", "branches": ["mine"] }),
+                "`branches` is for `kind: project`",
+            ),
+        ] {
+            let err = refused_promptly(&state, &request(extra)).await;
+            assert!(err.to_string().contains(expected), "{err}");
+            assert!(!state.session_requests.is_waiting_for("loose"));
+        }
+
+        // An empty list is no branches at all, for either kind, and a repeated name is one branch.
+        for (extra, expected) in [
+            (
+                json!({ "kind": "console", "branches": [] }),
+                Vec::<&str>::new(),
+            ),
+            (
+                json!({ "kind": "project", "project": "repo", "branches": [] }),
+                Vec::new(),
+            ),
+            (
+                json!({ "kind": "project", "project": "repo", "branches": ["mine", "mine"] }),
+                vec!["mine"],
+            ),
+        ] {
+            let event = withdrawn_request(&state, "loose", request(extra)).await;
+            assert!(
+                matches!(&event, Event::SessionRequest { branches, .. } if branches == &expected),
+                "{event:?}"
+            );
+        }
+
+        // A branch deleted and made again is another branch, which the caller never was
+        // responsible for, though a branch of that name is there.
+        crate::test_support::branch_made_by(&state, &repo, "recreated", "loose");
+        crate::test_support::git(&repo, &["branch", "-D", "recreated"]);
+        crate::test_support::git(&repo, &["commit", "-q", "--allow-empty", "-m", "later"]);
+        crate::test_support::git(&repo, &["branch", "recreated"]);
+        let err = refused_promptly(
+            &state,
+            &request(json!({ "kind": "project", "project": "repo", "branches": ["recreated"] })),
+        )
+        .await;
+        assert!(
+            err.to_string()
+                .contains("`recreated` is not a branch you are responsible for"),
+            "{err}"
+        );
+    }
+
+    /// An approval starts the session with a brief that says who wrote it, and, when the request
+    /// handed branches over, that they are its to work on.
+    #[tokio::test]
+    async fn the_started_sessions_brief_says_which_branches_it_was_handed() {
+        let (state, _dir) = shared_console_state("request-brief");
+        let repo = crate::test_support::repo_with("request-brief-repo", &[(b"a", b"a")]);
+        state
+            .store
+            .insert_project(&Project {
+                id: "repo".to_string(),
+                name: "repo".to_string(),
+                path: repo.to_string_lossy().into_owned(),
+                ..state.store.get_project("project-1").unwrap().unwrap()
+            })
+            .unwrap();
+        for branch in ["one", "two", "three"] {
+            crate::test_support::branch_made_by(&state, &repo, branch, "loose");
+        }
+        let _caller = running(&state, "loose");
+
+        for (branches, between) in [
+            (
+                json!(["one"]),
+                " It also handed the branch `one` over to you, with the same approval: you are now \
+                 the session responsible for it, so carry on the work on it. This is the brief it \
+                 wrote:",
+            ),
+            (
+                json!(["two", "three"]),
+                " It also handed the branches `two`, `three` over to you, with the same approval: \
+                 you are now the session responsible for them, so carry on the work on them. This \
+                 is the brief it wrote:",
+            ),
+            (json!([]), " This is the brief it wrote:"),
+        ] {
+            let args = arguments(json!({
+                "kind": "project",
+                "project": "repo",
+                "branches": branches,
+                "brief": { "goal": "do the thing" },
+            }));
+            let task = approved_task(&state, "loose", args).await;
+            assert!(
+                task.contains(&format!("share information with each other.{between}")),
+                "{task}"
+            );
+        }
+    }
+
+    /// The refusal of the request `args` as `loose`, which is made before the user is asked: a call
+    /// that is not refused would wait for an answer, so it is cut short.
+    async fn refused_promptly(state: &Arc<AppState>, args: &Map<String, Value>) -> anyhow::Error {
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            call(state, "loose", "request_session", args),
+        )
+        .await
+        .expect("the call is refused without waiting for the user")
+        .expect_err("refused")
+    }
+
+    /// Makes the request `args` as `caller`, withdraws it once it waits, and returns what it asked.
+    async fn withdrawn_request(
+        state: &Arc<AppState>,
+        caller: &'static str,
+        args: Map<String, Value>,
+    ) -> Event {
+        let call = {
+            let state = state.clone();
+            tokio::spawn(async move { call(&state, caller, "request_session", &args).await })
+        };
+        let event = wait_for_request(state, caller).await;
+        session_request::withdraw_for_session(state, caller);
+        call.await.unwrap().expect_err("withdrawn");
+        event
+    }
+
+    /// Makes the request `args` as `caller` and approves it with a launch that starts nothing but
+    /// records a session; returns the brief the session was started with.
+    async fn approved_task(
+        state: &Arc<AppState>,
+        caller: &'static str,
+        args: Map<String, Value>,
+    ) -> String {
+        let call = {
+            let state = state.clone();
+            tokio::spawn(async move { call(&state, caller, "request_session", &args).await })
+        };
+        let Event::SessionRequest { request_id, .. } = wait_for_request(state, caller).await else {
+            unreachable!()
+        };
+        let task = Arc::new(std::sync::Mutex::new(None));
+        let launch = |open: coordinator::OpenRequest| {
+            let (state, task) = (state.clone(), task.clone());
+            async move {
+                *task.lock().unwrap() = open.task.clone();
+                let started = Session {
+                    project_id: open.project_id.clone(),
+                    ..project_session(&Uuid::new_v4().to_string(), &open.console_id, None)
+                };
+                state.store.insert_session(&started)?;
+                running(&state, &started.id);
+                Ok(started)
+            }
+        };
+        session_request::answer_with(state, &request_id, true, launch)
+            .await
+            .unwrap()
+            .unwrap();
+        call.await.unwrap().expect("approved");
+        let task = task
+            .lock()
+            .unwrap()
+            .take()
+            .expect("the session was started");
+        task
+    }
+
+    /// The waiting request of `caller`, once it is there.
+    async fn wait_for_request(state: &Arc<AppState>, caller: &str) -> Event {
+        let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
+        loop {
+            let found = session_request::pending_events(state).into_iter().find(
+                |event| matches!(event, Event::SessionRequest { session, .. } if session == caller),
+            );
+            if let Some(event) = found {
+                return event;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the request never waited"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
     }
 

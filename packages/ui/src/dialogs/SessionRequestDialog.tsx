@@ -4,20 +4,32 @@ import { AGENT_LABEL } from "../agents";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
 import { InlineChip } from "../components/InlineChip";
-import { Message, useT } from "../i18n/react";
+import { joinNodes } from "../i18n/joinPhrases";
+import type { Language } from "../i18n/languages";
+import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { SESSION_REQUEST_ANSWERED, SESSION_REQUEST_NOT_WAITING } from "../protocol";
 import { useDaemon, useDaemonStore, type SessionRequest } from "../store";
+import { displayWirePath } from "../wirePath";
 import type { ConfirmDialogProps } from "./ConfirmDialog";
 
+/** The branches an approval would hand over, each as code, joined as the language joins a list.
+ * They are not text the agent wrote: the daemon checked each is a branch the requester is
+ * responsible for. */
+function branchList(language: Language, branches: string[]): React.ReactNode[] {
+  return joinNodes(language, branches.map(displayWirePath), (branch, key) => <InlineChip key={key} monospace wrap size="inherit">{branch}</InlineChip>);
+}
+
 /** What the dialog says: which session asks, and where it is, for a session of which agent where —
- * a project and its console, or a console — that would report to the user. It carries no text an
- * agent wrote: the confirmation is the one place the user's approval is enforced, so it says only
- * what Octoboard knows. The requester's place is named because it may belong to another project or
- * console than the one it asks in, which the user has no other way to see; its console is named
- * only where it is not the one the new session would be in, which the sentence names anyway. The names are the
- * user's own, and a long one may have no break opportunity, so the sentence wraps anywhere. Names
- * the store does not know stand in as their ids. */
+ * a project and its console, or a console — that would report to the user, and the branches it
+ * would be handed where the request names any. It carries no text an agent wrote: the confirmation
+ * is the one place the user's approval is enforced, so it says only what Octoboard knows. The
+ * requester's place is named because it may belong to another project or console than the one it
+ * asks in, which the user has no other way to see; its console is named only where it is not the
+ * one the new session would be in, which the sentence names anyway. The names are the user's own,
+ * and a long one may have no break opportunity, so the sentence wraps anywhere. Names the store
+ * does not know stand in as their ids. */
 function SessionRequestMessage({ request }: { request: SessionRequest }): React.ReactElement {
+  const language = useCurrentLanguage();
   const requesting = useDaemonStore((s) => s.sessions.get(request.session));
   const consoles = useDaemonStore((s) => s.consoles);
   const projects = useDaemonStore((s) => s.projects);
@@ -43,11 +55,14 @@ function SessionRequestMessage({ request }: { request: SessionRequest }): React.
     }
   }
   const params = { requester, console: <InlineChip dir="auto" wrap size="inherit">{console_}</InlineChip>, agent: AGENT_LABEL[request.agent] };
+  const question = request.role === "console"
+    ? <Message id="dialog.sessionRequest.question.console" params={params} />
+    : <Message id="dialog.sessionRequest.question.project" params={{ ...params, project: <InlineChip dir="auto" wrap size="inherit">{project}</InlineChip> }} />;
   return (
     <p className="[overflow-wrap:anywhere]">
-      {request.role === "console"
-        ? <Message id="dialog.sessionRequest.question.console" params={params} />
-        : <Message id="dialog.sessionRequest.question.project" params={{ ...params, project: <InlineChip dir="auto" wrap size="inherit">{project}</InlineChip> }} />}
+      {request.branches.length > 0
+        ? <Message id="dialog.sessionRequest.withBranches" params={{ question, branches: <Message id="dialog.sessionRequest.branches" params={{ count: request.branches.length, branches: branchList(language, request.branches) }} /> }} />
+        : question}
     </p>
   );
 }

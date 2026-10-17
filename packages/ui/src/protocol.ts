@@ -578,20 +578,19 @@ export type ChangeEntry =
 export interface BranchInfo {
   name: string;
   commit: string;
-  /** The session that created the branch; absent when the daemon cannot name one: no session's own
+  /** The session working on the branch; absent when the daemon cannot name one: no session's own
    * git reported creating it. */
   origin?: BranchOrigin;
 }
 
-/** The session a branch is attributed to having created. `title` is what that session was called
- * when the attribution was made, since `session` may name one that no longer exists (a project's
- * deletion takes its sessions with it). `source` is how the daemon told: `ref_hook`, the session's
- * own git reporting the branch's creation. `created_at` is milliseconds since the epoch. */
+/** The session working on a branch now: the one whose own git reported creating it, until the branch
+ * is handed to another. `responsible_session` may name one that no longer exists (a project's
+ * deletion takes its sessions with it), so `responsible_title` is what it was called when it became
+ * responsible, and `responsible_since` is when that was, in milliseconds since the epoch. */
 export interface BranchOrigin {
-  source: "ref_hook";
-  session: string;
-  title: string;
-  created_at: number;
+  responsible_session: string;
+  responsible_title: string;
+  responsible_since: number;
 }
 
 /** One end of a branch comparison: the branch (a wire path) and the full id of the commit it was
@@ -1021,6 +1020,9 @@ export type Event =
     project: string | null;
     /** The agent the new session would run. */
     agent: Agent;
+    /** The branches an approval would hand to the new session, as wire paths below `refs/heads/`;
+     * empty when the request hands none over. */
+    branches: string[];
     /** Milliseconds since the epoch; several requests are shown oldest first. */
     requested_at: number;
   }

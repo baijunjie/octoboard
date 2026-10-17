@@ -711,8 +711,8 @@ offsets. Verify the shared columns with actions hidden, hovered, focused and ope
 
 The criterion is about controls, so a mark that only opens a tooltip is not held to it: a tooltip is not an action,
 and a mark too small to aim at reliably costs a hover that can be tried again, not an activation. Several such marks
-are drawn well under 24 — the binding badge on a session row, a branch's creator badge, a change row's status letter —
-and the press under them, where there is one, belongs to the row and keeps the row's own target.
+are drawn well under 24 — the binding badge on a session row, a branch's responsible-session badge, a change row's
+status letter — and the press under them, where there is one, belongs to the row and keeps the row's own target.
 
 Neither exception in the criterion is easy to rely on here. *Spacing* needs a 24-pixel circle centred on the target to
 touch no other target, which a small control placed over a larger one (a delete badge on a corner) fails by

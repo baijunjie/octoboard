@@ -539,9 +539,9 @@ export const zhHans: Translation<"other"> = {
   "git.compare.to": "到",
   "git.compare.choose": "选择分支",
   "git.compare.branchGone": "{branch}（已不存在）",
-  "git.compare.branchOrigin": "由会话 {title} 创建",
-  "git.compare.branchOriginSelected": "由所选会话 {title} 创建",
-  "git.compare.branchOriginGone": "由会话 {title} 创建，该会话已不存在",
+  "git.compare.branchResponsible": "会话 {title} 正在处理该分支",
+  "git.compare.branchResponsibleSelected": "所选会话 {title} 正在处理该分支",
+  "git.compare.branchResponsibleGone": "会话 {title} 曾处理该分支，现已不存在",
   "git.compare.swap": "交换分支",
   "git.compare.prompt": "需要两个分支",
   "git.compare.prompt.description": "选择 {from} 和 {to} 两个分支，查看 {to} 分支自 {from} 分支分叉以来的更改。",
@@ -829,6 +829,10 @@ export const zhHans: Translation<"other"> = {
   "dialog.sessionRequest.requester.unknown": "会话 {session}",
   "dialog.sessionRequest.question.project": "{requester} 请求在控制台 {console} 的项目 {project} 中启动一个 {agent} 会话。新会话将向你汇报。",
   "dialog.sessionRequest.question.console": "{requester} 请求在控制台 {console} 中启动一个 {agent} 控制台会话。新会话将向你汇报。",
+  "dialog.sessionRequest.withBranches": "{question}{branches}",
+  "dialog.sessionRequest.branches": {
+    other: "分支 {branches} 将移交给新会话。",
+  },
   "dialog.sessionRequest.confirm": "启动会话",
   "dialog.sessionRequest.refuse": "拒绝",
 

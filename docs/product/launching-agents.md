@@ -224,7 +224,7 @@ Besides the terminal type, the variables set over the snapshot are:
 - for a project session, a `core.hooksPath` entry through `GIT_CONFIG_COUNT`, together with `OCTOBOARD_SESSION_ID` and
   `OCTOBOARD_DAEMON_PORT`, which point every git in the agent's process tree at Octoboard's hook dispatchers; those
   still run the user's own git hooks, and report the branches that git creates (see "The session's git hooks" and
-  "What attribution needs" in `docs/product/branch-creator.md`). A console session gets none of them.
+  "What attribution needs" in `docs/product/branch-responsible-session.md`). A console session gets none of them.
 
 The agent binary is resolved from that same snapshot's `PATH`, which is that login + interactive shell's `PATH`, not the
 one a terminal happens to have. So when the shell lists an old install of an agent before a newer one, the old one is
