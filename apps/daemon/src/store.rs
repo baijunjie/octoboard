@@ -1252,43 +1252,35 @@ impl Store {
         Ok(())
     }
 
-    /// Deletes the session only while it is archived, and says whether it did.
-    pub fn delete_session_if_archived(&self, id: &str) -> Result<bool> {
-        let deleted = self.lock().execute(
-            "DELETE FROM sessions WHERE id = ?1 AND status = ?2",
-            params![id, enum_to_text(&SessionStatus::Archived)],
-        )?;
-        Ok(deleted > 0)
+    /// Deletes the session only while it is archived and returns the record that was removed.
+    pub fn delete_session_if_archived(&self, id: &str) -> Result<Option<Session>> {
+        Ok(self
+            .lock()
+            .query_row(
+                &format!("DELETE FROM sessions WHERE id = ?1 AND status = ?2 RETURNING {SESSION_COLUMNS}"),
+                params![id, enum_to_text(&SessionStatus::Archived)],
+                read_session,
+            )
+            .optional()?)
     }
 
-    /// Deletes the session only while it is unused, and says whether it did: it has had no turn, is
-    /// bound to no owner and has no session bound to it, whatever its status. Checked and deleted
-    /// in one statement, so a turn that lands meanwhile wins.
-    pub fn delete_session_if_unused(&self, id: &str) -> Result<bool> {
-        self.delete_unused(id, None)
-    }
-
-    pub fn delete_session_if_unused_matching(&self, expected: &Session) -> Result<bool> {
-        self.delete_unused(&expected.id, Some(expected))
-    }
-
-    fn delete_unused(&self, id: &str, expected: Option<&Session>) -> Result<bool> {
-        let deleted = self.lock().execute(
-            "DELETE FROM sessions
-             WHERE id = ?1 AND has_conversation = 0 AND bound_to IS NULL
-               AND NOT EXISTS (SELECT 1 FROM sessions WHERE bound_to = ?1)
-               AND (?2 = 0 OR (agent = ?3 AND agent_session_id IS ?4
-                              AND config_dir IS ?5 AND account_id IS ?6))",
-            params![
-                id,
-                expected.is_some(),
-                expected.map(|session| enum_to_text(&session.agent)),
-                expected.and_then(|session| session.agent_session_id.as_deref()),
-                expected.and_then(|session| session.config_dir.as_deref()),
-                expected.and_then(|session| session.account_id.as_deref()),
-            ],
-        )?;
-        Ok(deleted > 0)
+    /// Deletes the session only while it is unused: it has had no turn, is bound to no owner and
+    /// has no session bound to it, whatever its status. The returned identity comes from the same
+    /// statement as the delete, so native-record cleanup cannot use an earlier hook snapshot.
+    pub fn delete_session_if_unused(&self, id: &str) -> Result<Option<Session>> {
+        Ok(self
+            .lock()
+            .query_row(
+                &format!(
+                    "DELETE FROM sessions
+                     WHERE id = ?1 AND has_conversation = 0 AND bound_to IS NULL
+                       AND NOT EXISTS (SELECT 1 FROM sessions WHERE bound_to = ?1)
+                     RETURNING {SESSION_COLUMNS}"
+                ),
+                params![id],
+                read_session,
+            )
+            .optional()?)
     }
 
     pub fn get_session(&self, id: &str) -> Result<Option<Session>> {
@@ -2593,7 +2585,10 @@ mod tests {
         assert!(store.update_session(&stale).unwrap());
         assert!(store.get_session("session-1").unwrap().unwrap().pinned);
 
-        assert!(store.delete_session_if_archived("session-1").unwrap());
+        assert!(store
+            .delete_session_if_archived("session-1")
+            .unwrap()
+            .is_some());
         assert!(!store.update_session(&stale).unwrap());
         drop(store);
     }
@@ -3305,7 +3300,8 @@ mod tests {
         store.update_session(&archived).expect("archived");
         assert!(store
             .delete_session_if_archived(&archived.id)
-            .expect("delete"));
+            .expect("delete")
+            .is_some());
 
         assert_eq!(
             store.preview_console_session_title("console-1").unwrap(),

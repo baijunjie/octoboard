@@ -31,8 +31,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   switching a session to another account of its agent, how a console session's archive and reopen follow the
   sessions bound to it, and where archived sessions are kept.
 - [Deleting sessions](product/deleting-sessions.md) — deleting archived sessions one at a time or all at once (an
-  archived owner takes its bound archived sessions along), deleting a never-used session, and the opt-in option to
-  move the agent's own session records to the Trash.
+  archived owner takes its bound archived sessions along), deleting a never-used session without confirmation, and
+  moving agent records to the Trash automatically for unused sessions or optionally for used sessions.
 - [Session terminal](product/session-terminal.md) — the selected session's terminal: what its area shows with no
   session selected, typing and the mouse, output, scrollback and resizing, the reconnect and loading covers,
   interrupted, archived and dormant sessions and the saved preview, links in the output (Cmd/Ctrl+click, the OSC 8

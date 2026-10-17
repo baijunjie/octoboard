@@ -392,15 +392,14 @@ action menu offers:
   has started sessions is archived under the same rule, with the same confirmation while any of them is unarchived.
 - **Delete**, in place of Archive for a session that has never been used — no turn yet, bound to no owner and with no
   session bound to it — and is not still starting; it stops the session and deletes it outright, leaving nothing in
-  the archive. The record check and when confirmation is needed are described in "Deleting an unused session" in
-  `docs/product/deleting-sessions.md`.
+  the archive. Deletion needs no confirmation and automatically moves its agent records to the Trash, as described
+  in "Deleting an unused session" in `docs/product/deleting-sessions.md`.
 
 **The Delete or Archive button.** Just before its action-menu button, a session row — a console session's included —
-carries a **Delete** button only while deletion would go through without confirmation: the session is unused,
-not still starting, and its agent records have been proved absent (see "Deleting an unused session" in
-`docs/product/deleting-sessions.md`). While that record check is pending, or when records are present or their
-absence cannot be proved, Delete remains in the menu alone. Being archived does not qualify a session for the
-shortcut. Pressing it takes the same deletion action as the menu, including the guarded recheck before deletion.
+carries a **Delete** button while the session is unused and not still starting (see "Deleting an unused session" in
+`docs/product/deleting-sessions.md`). Agent records do not affect its availability. Being archived does not qualify
+a session for the shortcut. Pressing it takes the same deletion action as the menu, without confirmation and with
+automatic cleanup of its agent records; deletion is refused if the session is no longer unused when it takes place.
 A row whose menu offers **Archive** instead carries an Archive button while archiving would go through without a
 confirmation: the session is at its prompt or interrupted, no unarchived session is bound to it or to a session
 bound to it, and it has been used. Pressing Archive does what the menu's **Archive** does — a session still being

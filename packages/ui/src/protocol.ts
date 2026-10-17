@@ -789,11 +789,11 @@ export type RequestBody =
   /** Removes Octoboard's record of one session: an archived one, or one that has never been used
    * (no turn, bound to no owner, none bound to it), whose process is stopped; refused with
    * `session_not_deletable` otherwise, or while it is starting. The agent's own records of the
-   * session (and of the archived sessions deleted with it) are moved to the Trash only with
-   * `trash_agent_records`; default false. `only_if_unused_without_agent_records` rejects unless
-   * the session remains unused and a fresh native-file inspection proves absence; guarded deletion
-   * never moves native files to the Trash. */
-  | { type: "delete_session"; session: string; trash_agent_records?: boolean; only_if_unused_without_agent_records?: boolean }
+   * session (and of the archived sessions deleted with it) are moved to the Trash automatically
+   * for unused sessions, and also for used sessions with `trash_agent_records` (default false).
+   * `only_if_unused` atomically rejects unless the session remains unused, including when archived;
+   * it never falls back to deleting an archived owner's group. */
+  | { type: "delete_session"; session: string; trash_agent_records?: boolean; only_if_unused?: boolean }
   /** Inspects the agent-native files of the entire supplied deletion scope; reads no transcripts. */
   | { type: "inspect_session_records"; sessions: string[] }
   /** With `project`: every archived session of that project. With `console_session`: every

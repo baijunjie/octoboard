@@ -1,6 +1,8 @@
 import { Alert } from "@heroui/react";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
+import { useStableHandler } from "../components/useLatest";
+import { errorPresentation } from "../errorPresentation";
 import { useListMotion } from "../components/useListMotion";
 import { InlineChip } from "../components/InlineChip";
 import { useFocusHandoff } from "../components/useFocusHandoff";
@@ -107,16 +109,36 @@ function SessionRecordsTrashOption({ visible, ...props }: React.ComponentProps<t
   return <div ref={ref} className="contents" {...handoff}>{visible && <TrashOption {...props} />}</div>;
 }
 
+/** The daemon checks the unused state atomically before deleting and cleaning up native records. */
+function DeleteUnusedSession({ sessionId, onClose }: { sessionId: string; onClose: () => void }): null {
+  const { request, toastError } = useDaemon();
+  const close = useStableHandler(onClose);
+  const deletion = useRef<ReturnType<typeof request> | undefined>(undefined);
+  useEffect(() => {
+    let active = true;
+    // Reuse the request when Strict Mode reconnects this effect.
+    deletion.current ??= request({ type: "delete_session", session: sessionId, only_if_unused: true });
+    void deletion.current.then(() => {
+      if (active) close();
+    }, (err: unknown) => {
+      if (!active) return;
+      toastError(errorPresentation(err as Error), sessionId);
+      close();
+    });
+    return () => { active = false; };
+  }, [sessionId, request, toastError, close]);
+  return null;
+}
+
 /** The confirmation of a session's deletion, with the option of also moving the agent's own
  * records of it to the Trash. `withIt` are the archived sessions that go along. */
-function DeleteSessionDialog({ session, withIt, unused, onClose }: { session: Session; withIt: Session[]; unused: boolean; onClose: () => void }): React.ReactElement | null {
+function DeleteSessionDialog({ session, withIt, onClose }: { session: Session; withIt: Session[]; onClose: () => void }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
   const [trash, setTrash] = useState(false);
-  const { pending, presence } = useSessionRecords([session.id, ...withIt.map((s) => s.id)], unused ? session.id : undefined, onClose);
+  const presence = useSessionRecords([session.id, ...withIt.map((s) => s.id)]);
   const canTrash = presence !== "absent";
   const moveRecords = canTrash && trash;
-  if (unused && pending) return null;
   return (
     <ConfirmDialog
       title={<Message id="dialog.deleteSession.title" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, session)}</InlineChip> }} />}
@@ -164,7 +186,7 @@ function DeleteArchivedDialog({
   const t = useT();
   const { request } = useDaemon();
   const [trash, setTrash] = useState(false);
-  const { presence } = useSessionRecords(targets.map((s) => s.id), undefined, onClose);
+  const presence = useSessionRecords(targets.map((s) => s.id));
   const canTrash = presence !== "absent";
   const moveRecords = canTrash && trash;
   return (
@@ -358,9 +380,11 @@ export function RequestedDialog({
     case "delete-session": {
       // An archived owner takes the archived sessions bound to it, and those bound to those, along.
       const withIt = boundArchivedSessions(Array.from(sessions.values()), dialog.session.id);
-      const unused = !dialog.session.has_conversation && !dialog.session.bound_to
+      const unused = dialog.session.status !== "starting" && !dialog.session.has_conversation && !dialog.session.bound_to
         && !Array.from(sessions.values()).some((s) => s.bound_to === dialog.session.id);
-      return <DeleteSessionDialog session={dialog.session} withIt={withIt} unused={unused} onClose={onClose} />;
+      return unused
+        ? <DeleteUnusedSession key={dialog.session.id} sessionId={dialog.session.id} onClose={onClose} />
+        : <DeleteSessionDialog session={dialog.session} withIt={withIt} onClose={onClose} />;
     }
     case "delete-archived": {
       // All of a console's archived console sessions take their archived bound sessions with them;

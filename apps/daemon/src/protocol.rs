@@ -1394,14 +1394,14 @@ pub enum RequestBody {
     },
     /// Removes Octoboard's record of one session, archived or never used. A session that is not
     /// archived is deleted only while it has had no turn and nothing is bound to it or from it, and
-    /// its process is stopped. The agent's own records of the session are moved to the Trash only
-    /// when `trash_agent_records` is set.
+    /// its process is stopped. Unused sessions' agent records are moved to the Trash automatically;
+    /// `trash_agent_records` also moves the records of used sessions.
     DeleteSession {
         session: String,
-        /// Requires a fresh absent-record inspection and the atomic unused-session delete,
-        /// including when the session is archived.
+        /// Requires the atomic unused-session delete, including when the session is archived.
+        /// Never falls back to an archived-session cascade.
         #[serde(default)]
-        only_if_unused_without_agent_records: bool,
+        only_if_unused: bool,
         #[serde(default)]
         trash_agent_records: bool,
     },
@@ -1414,7 +1414,7 @@ pub enum RequestBody {
         project: Option<String>,
         #[serde(default)]
         console_session: Option<String>,
-        /// As on `DeleteSession`, for every session deleted.
+        /// Moves native records to the Trash for every session deleted; defaults to false.
         #[serde(default)]
         trash_agent_records: bool,
     },

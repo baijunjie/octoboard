@@ -387,17 +387,23 @@ describe("the fixture daemon's native session records", () => {
     await expect(daemon.request({ type: "inspect_session_records", sessions: [owner.id, child.id, "missing"] })).resolves.toMatchObject({ presence: "present" });
   });
 
-  it.each(["present", "unknown"] as const)("refuses guarded deletion with %s files", async (presence) => {
+  it.each(["absent", "present", "unknown"] as const)("removes an unused session with %s records", async (presence) => {
     const daemon = createFixtureDaemon({ ...scenario, sessionRecords: { unused: presence } });
-    await expect(daemon.request({ type: "delete_session", session: unused.id, only_if_unused_without_agent_records: true })).rejects.toMatchObject({ code: "session_not_deletable" });
-    expect(daemon.store.getState().sessions.has(unused.id)).toBe(true);
+    await daemon.request({ type: "delete_session", session: unused.id, only_if_unused: true });
+    expect(daemon.store.getState().sessions.has(unused.id)).toBe(false);
   });
 
-  it("removes an unused session with proven absence but refuses the guard for used sessions", async () => {
-    const daemon = createFixtureDaemon({ ...scenario, sessionRecords: { unused: "absent", owner: "absent" } });
-    await daemon.request({ type: "delete_session", session: unused.id, only_if_unused_without_agent_records: true });
-    expect(daemon.store.getState().sessions.has(unused.id)).toBe(false);
-    await expect(daemon.request({ type: "delete_session", session: owner.id, only_if_unused_without_agent_records: true })).rejects.toMatchObject({ code: "session_not_deletable" });
+  it("refuses guarded deletion for used, bound and owner sessions, and any deletion while starting", async () => {
+    const bound = { ...unused, id: "unused-bound", bound_to: owner.id };
+    const unusedOwner = { ...unused, id: "unused-owner" };
+    const boundChild = { ...unused, id: "unused-child", bound_to: unusedOwner.id };
+    const starting = { ...unused, id: "starting", status: "starting" as const };
+    const daemon = createFixtureDaemon({ ...scenario, state: snapshotState({ sessions: [unused, owner, child, live, bound, unusedOwner, boundChild, starting] }) });
+    for (const session of [owner, bound, unusedOwner, starting]) {
+      await expect(daemon.request({ type: "delete_session", session: session.id, only_if_unused: true })).rejects.toMatchObject({ code: "session_not_deletable" });
+      expect(daemon.store.getState().sessions.has(session.id)).toBe(true);
+    }
+    await expect(daemon.request({ type: "delete_session", session: starting.id })).rejects.toMatchObject({ code: "session_not_deletable" });
   });
 
   it("takes archived children with a confirmed archived lead and preserves live children", async () => {

@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { sessionOf } from "../gallery/fixtures/builders";
-import type { Session, SessionRecordsPresence } from "../protocol";
+import type { Session } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { SessionActions } from "./SessionActions";
 import type { SidebarHandlers } from "./types";
@@ -41,38 +41,29 @@ function mount(session: Session, inspect: Daemon["request"]) {
 const unused = sessionOf("unused", "console", "project", "Unused", "archived", { has_conversation: false });
 const shortcut = (container: HTMLElement, label: string) => container.querySelector<HTMLButtonElement>(`button[aria-label^="${label} "]`);
 
-it.each<[Session["status"], boolean, SessionRecordsPresence, string | undefined]>([
-  ["archived", true, "absent", undefined],
-  ["archived", false, "present", undefined],
-  ["archived", false, "unknown", undefined],
-  ["archived", false, "absent", "Delete"],
-  ["idle", false, "absent", "Delete"],
-  ["idle", false, "present", undefined],
-  ["idle", true, "absent", "Archive"],
-])("offers only a confirmation-free shortcut for %s, conversation=%s, records=%s", async (status, has_conversation, presence, label) => {
+it.each<[Session["status"], boolean, string | undefined]>([
+  ["archived", true, undefined],
+  ["archived", false, "Delete"],
+  ["idle", false, "Delete"],
+  ["working", false, "Delete"],
+  ["starting", false, undefined],
+  ["idle", true, "Archive"],
+])("offers a shortcut for %s, conversation=%s without inspecting native records", (status, has_conversation, label) => {
   const session = { ...unused, status, has_conversation };
-  const { container, daemon, handlers } = mount(session, async () => ({ type: "session_records_inspected", presence }));
-  await act(async () => {});
+  const { container, daemon, handlers } = mount(session, async () => { throw new Error("No inspection expected"); });
   expect(shortcut(container, "Delete") !== null).toBe(label === "Delete");
   expect(shortcut(container, "Archive") !== null).toBe(label === "Archive");
-  expect(daemon.request).toHaveBeenCalledTimes(has_conversation ? 0 : 1);
+  expect(daemon.request).not.toHaveBeenCalled();
   if (label === "Delete") {
     act(() => shortcut(container, "Delete")!.click());
     expect(handlers.onOpenDialog).toHaveBeenCalledWith({ kind: "delete-session", session });
   }
 });
 
-it("waits for record inspection and discards absence when the native session changes", async () => {
-  let resolve!: (value: { type: "session_records_inspected"; presence: SessionRecordsPresence }) => void;
-  const { container, daemon, render } = mount(unused, () => new Promise((done) => { resolve = done; }));
-  expect(shortcut(container, "Delete")).toBeNull();
-  await act(async () => resolve({ type: "session_records_inspected", presence: "absent" }));
+it("removes the delete shortcut as soon as the first conversation is reported", () => {
+  const { container, daemon, render } = mount({ ...unused, status: "idle" }, async () => ({ type: "ack" }));
   expect(shortcut(container, "Delete")).not.toBeNull();
-  render({ ...unused, title: "Renamed" });
-  expect(daemon.request).toHaveBeenCalledTimes(1);
-  render({ ...unused, agent_session_id: "another-native-session" });
+  render({ ...unused, status: "working", has_conversation: true });
   expect(shortcut(container, "Delete")).toBeNull();
-  expect(daemon.request).toHaveBeenCalledTimes(2);
-  await act(async () => resolve({ type: "session_records_inspected", presence: "present" }));
-  expect(shortcut(container, "Delete")).toBeNull();
+  expect(daemon.request).not.toHaveBeenCalled();
 });

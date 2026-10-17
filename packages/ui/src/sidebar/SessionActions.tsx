@@ -3,7 +3,6 @@ import React, { type RefObject } from "react";
 
 import { ActionMenu } from "../components/ActionMenu";
 import { useFocusHandoff } from "../components/useFocusHandoff";
-import { useSessionRecords } from "../dialogs/useSessionRecords";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Account, Session } from "../protocol";
@@ -16,7 +15,7 @@ import { RowIconButton } from "./rows";
 import type { SidebarHandlers } from "./types";
 
 /** A session row's or card's controls: its action menu, and before it a Delete or Archive shortcut
- * only while that action needs no confirmation. Deletion rechecks the agent's records. When a shortcut
+ * only while that action needs no confirmation. When a shortcut
  * disappears while holding keyboard focus, focus moves to the row (`rowRef`). */
 export function SessionActions({
   handlers,
@@ -41,13 +40,7 @@ export function SessionActions({
   });
   const handoff = useFocusHandoff(() => rowRef.current?.focus());
   const title = sessionDisplayTitle(t, session);
-  const unused = session.status !== "starting" && !session.has_conversation && !session.bound_to && !hasBoundSessions;
-  const revision = JSON.stringify([
-    session.agent, session.agent_session_id, session.account_id, session.config_dir, session.status,
-    accounts.filter((account) => account.agent === session.agent).map((account) => [account.id, account.config_dir]),
-  ]);
-  const { presence } = useSessionRecords([session.id], undefined, () => {}, { enabled: unused, revision });
-  const deletable = unused && presence === "absent";
+  const deletable = session.status !== "starting" && !session.has_conversation && !session.bound_to && !hasBoundSessions;
   const archivable = !offersDelete(session, hasBoundSessions) && atOnce;
   return (
     <>

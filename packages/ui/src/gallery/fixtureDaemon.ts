@@ -461,9 +461,9 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const session = store.getState().sessions.get(body.session);
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: "Unknown session" });
           const unused = !session.has_conversation && !session.bound_to && !all.some((s) => s.bound_to === session.id);
-          if ((body.only_if_unused_without_agent_records && (!unused || recordsPresence([session.id]) !== "absent"))
+          if (session.status === "starting" || (body.only_if_unused && !unused)
             || (session.status !== "archived" && !unused)) {
-            return fail({ code: "session_not_deletable", params: { session: session.id }, message: "Session is no longer unused or its agent records cannot be proved absent" });
+            return fail({ code: "session_not_deletable", params: { session: session.id }, message: "Session is no longer unused or is still starting" });
           }
           const doomed = new Set([session.id]);
           const visit = (owner: string) => {

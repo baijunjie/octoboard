@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { expect, it, vi } from "vitest";
 
 import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../components/tooltipTestSupport";
@@ -22,7 +22,7 @@ function mount(
   dialog: DialogRequest,
   sessions: Session[],
   accounts: Account[] = [],
-  callbacks: { onClose?: () => void; request?: Daemon["request"]; onSwitchAccount?: (sessionId: string, account: string | null) => Promise<void> } = {},
+  callbacks: { onClose?: () => void; request?: Daemon["request"]; onSwitchAccount?: (sessionId: string, account: string | null) => Promise<void>; strict?: boolean } = {},
 ): { container: HTMLElement; daemon: Daemon } {
   const daemon: Daemon = {
     store: createStateStore({
@@ -37,11 +37,10 @@ function mount(
     reconnect: () => {},
     terminalUrl: () => "",
   };
-  const container = mountForTooltip(
-    <DaemonProvider value={daemon}>
-      <RequestedDialog dialog={dialog} onClose={callbacks.onClose ?? (() => {})} onSessionOpened={() => {}} onSwitchAccount={callbacks.onSwitchAccount ?? (async () => {})} />
-    </DaemonProvider>,
-  );
+  const content = <DaemonProvider value={daemon}>
+    <RequestedDialog dialog={dialog} onClose={callbacks.onClose ?? (() => {})} onSessionOpened={() => {}} onSwitchAccount={callbacks.onSwitchAccount ?? (async () => {})} />
+  </DaemonProvider>;
+  const container = mountForTooltip(callbacks.strict ? <StrictMode>{content}</StrictMode> : content);
   return { container, daemon };
 }
 
@@ -297,32 +296,31 @@ it.each(["archived", "on-target", "removed"] as const)("skips a snapshotted sess
 });
 
 
-it.each(["idle", "archived"] as const)("deletes an unused %s session without a confirmation only after a guarded file check", async (status) => {
-  const unused = { ...owner, status, has_conversation: false };
+it.each(["claude", "codex", "grok"] as const)("deletes an unused %s session and its records without inspection or confirmation", async (agent) => {
+  const unused = { ...owner, agent, has_conversation: false, agent_session_id: agent === "codex" ? undefined : owner.agent_session_id };
   const onClose = vi.fn();
   const { daemon } = mount({ kind: "delete-session", session: unused }, [unused], [], {
     onClose,
-    request: async (body) => body.type === "inspect_session_records"
-      ? { type: "session_records_inspected", presence: "absent" }
-      : { type: "ack" },
+    strict: true,
+    request: async () => ({ type: "ack" }),
   });
   expect(document.querySelector("[role=alertdialog]")).toBeNull();
   await act(async () => {});
-  expect(daemon.request).toHaveBeenCalledWith({ type: "inspect_session_records", sessions: [unused.id] });
-  expect(daemon.request).toHaveBeenCalledWith({ type: "delete_session", session: unused.id, only_if_unused_without_agent_records: true });
+  expect(daemon.request).toHaveBeenCalledExactlyOnceWith({ type: "delete_session", session: unused.id, only_if_unused: true });
   expect(onClose).toHaveBeenCalledOnce();
   expect(document.querySelector("[role=alertdialog]")).toBeNull();
 });
 
-it.each(["present", "unknown"] as const)("confirms an unused session with %s agent records", async (presence) => {
-  const unused = { ...owner, has_conversation: false };
+it("also deletes an archived unused session without confirmation", async () => {
+  const unused = { ...owner, status: "archived" as const, has_conversation: false };
+  const onClose = vi.fn();
   const { daemon } = mount({ kind: "delete-session", session: unused }, [unused], [], {
-    request: async () => ({ type: "session_records_inspected", presence }),
+    onClose, request: async () => ({ type: "ack" }),
   });
   await act(async () => {});
-  expect(document.querySelector("[role=alertdialog]")).not.toBeNull();
-  expect(document.querySelector("[role=alertdialog] input[type=checkbox]")).not.toBeNull();
-  expect(daemon.request).toHaveBeenCalledTimes(1);
+  expect(daemon.request).toHaveBeenCalledExactlyOnceWith({ type: "delete_session", session: unused.id, only_if_unused: true });
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(document.querySelector("[role=alertdialog]")).toBeNull();
 });
 
 it("keeps the confirmation for a used archived session but hides cleanup when no files exist", async () => {
@@ -335,21 +333,18 @@ it("keeps the confirmation for a used archived session but hides cleanup when no
   expect(document.querySelector("[role=alertdialog] input[type=checkbox]")).toBeNull();
 });
 
-it("falls back to confirmation if a direct deletion is refused after the file check", async () => {
+it("reports a refused unused deletion without offering an unguarded confirmation", async () => {
   const unused = { ...owner, has_conversation: false };
   const onClose = vi.fn();
   const { daemon } = mount({ kind: "delete-session", session: unused }, [unused], [], {
     onClose,
-    request: async (body) => {
-      if (body.type === "delete_session") throw new Error("Session is now in use");
-      return { type: "session_records_inspected", presence: "absent" };
-    },
+    request: async () => { throw new Error("Session is now in use"); },
   });
   await act(async () => {});
-  expect(document.querySelector("[role=alertdialog]")).not.toBeNull();
-  expect(document.querySelector("[role=alertdialog] input[type=checkbox]")).toBeNull();
-  expect(daemon.request).toHaveBeenCalledTimes(3);
-  expect(onClose).not.toHaveBeenCalled();
+  expect(document.querySelector("[role=alertdialog]")).toBeNull();
+  expect(daemon.request).toHaveBeenCalledTimes(1);
+  expect(daemon.toastError).toHaveBeenCalledOnce();
+  expect(onClose).toHaveBeenCalledOnce();
 });
 
 it("checks the native records of archived children as well as their owner", async () => {
@@ -376,8 +371,8 @@ it("keeps the bulk deletion confirmation but removes cleanup for a file-free sco
 });
 
 it("retains confirmation and cleanup when inspecting records fails", async () => {
-  const unused = { ...owner, has_conversation: false };
-  const { daemon } = mount({ kind: "delete-session", session: unused }, [unused], [], {
+  const archived = { ...owner, status: "archived" as const };
+  const { daemon } = mount({ kind: "delete-session", session: archived }, [archived], [], {
     request: async () => { throw new Error("Connection lost"); },
   });
   await act(async () => {});
@@ -404,18 +399,19 @@ it.each(["single", "bulk"] as const)("keeps keyboard focus in the %s confirmatio
   expect(document.activeElement).toBe(document.querySelector("[role=alertdialog]"));
 });
 
-it("does not act on an old unused session after the dialog subject changes", async () => {
+it("does not close a used session's confirmation when an earlier direct deletion finishes", async () => {
   const unused = { ...owner, has_conversation: false };
-  let resolve!: (value: { type: "session_records_inspected"; presence: "absent" }) => void;
-  const waiting = new Promise<{ type: "session_records_inspected"; presence: "absent" }>((done) => { resolve = done; });
+  const waiting = deferred();
   const onClose = vi.fn();
   const { daemon } = mount({ kind: "delete-session", session: unused }, [unused], [], {
     onClose,
-    request: () => waiting,
+    request: async (body) => {
+      if (body.type === "delete_session") { await waiting.promise; return { type: "ack" }; }
+      return { type: "session_records_inspected", presence: "absent" };
+    },
   });
-  // A submitted prompt changes the same dialog’s current session before inspection completes.
   act(() => daemon.store.setState({ sessions: new Map([[owner.id, owner]]) }));
-  await act(async () => { resolve({ type: "session_records_inspected", presence: "absent" }); });
+  await act(async () => waiting.resolve());
   expect(document.querySelector("[role=alertdialog]")).not.toBeNull();
   expect(daemon.request).toHaveBeenCalledTimes(2);
   expect(onClose).not.toHaveBeenCalled();

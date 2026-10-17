@@ -525,24 +525,18 @@ async fn handle_inner(
         RequestBody::DeleteSession {
             session,
             trash_agent_records,
-            only_if_unused_without_agent_records,
+            only_if_unused,
         } => {
-            let deleted = if only_if_unused_without_agent_records {
-                let state = Arc::clone(state);
-                tokio::task::spawn_blocking(move || {
-                    delete_unused_without_agent_records(
-                        &state,
-                        &session,
-                        agent_records::Locator::default(),
-                    )
-                })
-                .await??
+            let deleted = if only_if_unused {
+                delete_unused_session(state, &session)?
             } else {
                 delete_session(state, &session)?
             };
-            if trash_agent_records && !only_if_unused_without_agent_records {
-                trash_agent_records_after_delete(state, deleted).await;
-            }
+            let records_to_trash = deleted
+                .into_iter()
+                .filter(|session| trash_agent_records || !session.has_conversation)
+                .collect();
+            trash_agent_records_after_delete(state, records_to_trash).await;
             Ok(None)
         }
 
@@ -3188,8 +3182,8 @@ fn session_ids_where(
 /// The record takes its saved terminal output with it. Nothing else of Octoboard's hangs off a
 /// session: its queue, MCP token and turn bookkeeping go when its process does, and so does its
 /// scratch directory (clearing the run directory at startup is only the fallback). The project is
-/// never touched, and the agent's own records are not either: the caller moves them to the Trash
-/// when asked, through `trash_agent_records_of`, from the sessions this returns (every one
+/// never touched. The caller moves unused sessions' native records to the Trash automatically,
+/// and used sessions' records when asked, through `trash_agent_records_of` (every one
 /// deleted, the archived sessions bound to it included).
 fn delete_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Session>> {
     let session = state.session_record(id)?;
@@ -3198,11 +3192,11 @@ fn delete_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Session>> {
         delete_archived_group(state, &session, &mut gone)?
     } else {
         match state.delete_if_unused(id)? {
-            Deletion::Deleted { process } => {
+            Deletion::Deleted { process, session } => {
                 if let Some(live) = process {
                     stop_process(live);
                 }
-                gone.push(session);
+                gone.push(*session);
                 true
             }
             Deletion::Refused => false,
@@ -3241,27 +3235,16 @@ fn inspect_session_records(
     Ok(presence)
 }
 
-fn delete_unused_without_agent_records(
-    state: &Arc<AppState>,
-    id: &str,
-    mut locator: agent_records::Locator,
-) -> Result<Vec<Session>> {
-    let session = state.session_record(id)?;
-    let accounts = state.store.list_accounts()?;
-    if agent_records::presence(&state.record_hints, &mut locator, &accounts, &session)
-        == crate::protocol::SessionRecordPresence::Absent
-        && state.store.list_accounts()? == accounts
-    {
-        if let Deletion::Deleted { process } = state.delete_if_unused_matching(&session)? {
-            if let Some(live) = process {
-                stop_process(live);
-            }
-            return Ok(vec![session]);
+fn delete_unused_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Session>> {
+    if let Deletion::Deleted { process, session } = state.delete_if_unused(id)? {
+        if let Some(live) = process {
+            stop_process(live);
         }
+        return Ok(vec![*session]);
     }
     Err(CodedError::raised(
         error_code::SESSION_NOT_DELETABLE,
-        "the session is no longer unused or its agent records cannot be proved absent",
+        "the session is no longer unused",
         &[("session", id)],
     ))
 }
@@ -3270,6 +3253,9 @@ fn delete_unused_without_agent_records(
 /// a move across volumes copies, and the accounts' records are listed. The delete has happened
 /// already, so nothing here fails the request: a failure is logged.
 async fn trash_agent_records_after_delete(state: &Arc<AppState>, deleted: Vec<Session>) {
+    if deleted.is_empty() {
+        return;
+    }
     let state = Arc::clone(state);
     let moved = tokio::task::spawn_blocking(move || {
         trash_agent_records_of(
@@ -4290,7 +4276,7 @@ mod tests {
             RequestBody::DeleteSession {
                 session: "s".to_string(),
                 trash_agent_records: false,
-                only_if_unused_without_agent_records: false,
+                only_if_unused: false,
             },
             RequestBody::DeleteProject {
                 project: "project-1".to_string(),
@@ -7333,83 +7319,150 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn guarded_deletion_rechecks_native_records_and_never_falls_back_to_archived() {
-        use crate::protocol::SessionRecordPresence::{Absent, Present, Unknown};
-        let (state, dir) = switch_fixture("delete-native-absence");
+    async fn guarded_deletion_accepts_an_unused_codex_session_without_a_native_id() {
+        let (state, _dir) = switch_fixture("delete-unused-codex");
+        state
+            .store
+            .insert_session(&project_session(
+                "unused",
+                Agent::Codex,
+                SessionStatus::Idle,
+            ))
+            .unwrap();
+        let mut events = state.subscribe();
+        handle(
+            &state,
+            None,
+            RequestBody::DeleteSession {
+                session: "unused".to_owned(),
+                only_if_unused: true,
+                trash_agent_records: false,
+            },
+        )
+        .await
+        .unwrap();
+        assert!(matches!(
+            events.try_recv().unwrap(),
+            Event::SessionDeleted { session } if session == "unused"
+        ));
+        assert!(state.store.get_session("unused").unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn guarded_deletion_accepts_and_trashes_unused_grok_native_records() {
+        let (state, dir) = switch_fixture("delete-unused-grok");
         let account = dir.join("account");
         let native_id = "11111111-2222-3333-4444-555555555555";
-        let locator = || {
+        let records = account.join("sessions/work").join(native_id);
+        std::fs::create_dir_all(&records).unwrap();
+        std::fs::write(records.join("usage.json"), "{}").unwrap();
+        std::fs::write(records.join("messages.json"), "[]").unwrap();
+        state
+            .store
+            .insert_session(&Session {
+                agent_session_id: Some(native_id.to_owned()),
+                config_dir: Some(account.to_string_lossy().into_owned()),
+                ..project_session("unused", Agent::Grok, SessionStatus::Idle)
+            })
+            .unwrap();
+        let deleted = delete_unused_session(&state, "unused").unwrap();
+        assert!(state.store.get_session("unused").unwrap().is_none());
+        let trashed = dir.join("trash");
+        trash_agent_records_of(
+            &state,
+            &deleted,
             agent_records::Locator::with_shell(HashMap::from([(
                 "HOME".to_owned(),
                 dir.join("home").to_string_lossy().into_owned(),
-            )]))
+            )])),
+            |path| {
+                assert_eq!(path, records);
+                std::fs::rename(path, &trashed)?;
+                Ok(())
+            },
+        );
+        assert!(!records.exists());
+        assert!(trashed.join("messages.json").exists());
+    }
+
+    #[tokio::test]
+    async fn unused_deletion_returns_the_native_identity_at_the_atomic_delete() {
+        let (state, dir) = switch_fixture("delete-unused-identity");
+        let initial = project_session("unused", Agent::Codex, SessionStatus::Idle);
+        state.store.insert_session(&initial).unwrap();
+        let stale = state.session_record("unused").unwrap();
+        assert!(stale.agent_session_id.is_none());
+        let native_id = "11111111-2222-3333-4444-555555555555";
+        let account = dir.join("codex-account");
+        let rollout = account
+            .join("sessions/2026/10/17")
+            .join(format!("rollout-2026-10-17T01-02-03-{native_id}.jsonl"));
+        std::fs::create_dir_all(rollout.parent().unwrap()).unwrap();
+        std::fs::write(&rollout, "{}\n").unwrap();
+        let discovered = Session {
+            agent_session_id: Some(native_id.to_owned()),
+            config_dir: Some(account.to_string_lossy().into_owned()),
+            ..initial
         };
-        for (id, used) in [("unused", false), ("used-archived", true)] {
-            state
-                .store
-                .insert_session(&Session {
-                    agent_session_id: Some(native_id.to_owned()),
-                    config_dir: Some(account.to_string_lossy().into_owned()),
-                    has_conversation: used,
-                    ..project_session(id, Agent::Claude, SessionStatus::Archived)
-                })
-                .unwrap();
-        }
-        let ids = vec!["unused".to_owned()];
-        assert_eq!(
-            inspect_session_records(&state, &ids, locator()).unwrap(),
-            Absent
+        state.save_session(&discovered).unwrap();
+        state
+            .set_session_account("unused", None, discovered.config_dir.as_deref())
+            .unwrap();
+        let Deletion::Deleted { session, .. } = state.delete_if_unused("unused").unwrap() else {
+            panic!("native-id discovery must leave an unused session deletable");
+        };
+        assert_eq!(session.agent_session_id, discovered.agent_session_id);
+        assert_eq!(session.config_dir, discovered.config_dir);
+        let trashed = dir.join("trashed-rollout.jsonl");
+        trash_agent_records_of(
+            &state,
+            &[*session],
+            agent_records::Locator::with_shell(HashMap::from([(
+                "HOME".to_owned(),
+                dir.join("home").to_string_lossy().into_owned(),
+            )])),
+            |path| {
+                assert_eq!(path, rollout);
+                std::fs::rename(path, &trashed)?;
+                Ok(())
+            },
         );
-        assert_eq!(
-            inspect_session_records(&state, &["missing".to_owned()], locator()).unwrap(),
-            Unknown
-        );
-        let transcript = account
-            .join("projects/work")
-            .join(format!("{native_id}.jsonl"));
-        std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
-        std::fs::write(&transcript, "{}\n").unwrap();
-        assert_eq!(
-            inspect_session_records(
+        assert!(!rollout.exists());
+        assert!(trashed.exists());
+    }
+
+    #[tokio::test]
+    async fn guarded_deletion_refuses_a_first_turn_or_archived_owner_instead_of_cascading() {
+        let (state, _dir) = switch_fixture("delete-unused-race");
+        let session = project_session("first-turn", Agent::Codex, SessionStatus::Idle);
+        state.store.insert_session(&session).unwrap();
+        let mut started = session.clone();
+        started.has_conversation = true;
+        started.status = SessionStatus::Archived;
+        state.save_session(&started).unwrap();
+        state
+            .store
+            .insert_session(&console_session("owner", SessionStatus::Archived))
+            .unwrap();
+        state
+            .store
+            .insert_session(&bound_session("child", SessionStatus::Archived, "owner"))
+            .unwrap();
+        for id in ["first-turn", "owner", "child"] {
+            let err = handle(
                 &state,
-                &["missing".to_owned(), "unused".to_owned()],
-                locator()
+                None,
+                RequestBody::DeleteSession {
+                    session: id.to_owned(),
+                    only_if_unused: true,
+                    trash_agent_records: false,
+                },
             )
-            .unwrap(),
-            Present
-        );
-        let err = delete_unused_without_agent_records(&state, "unused", locator()).unwrap_err();
-        assert_eq!(code_of(&err), error_code::SESSION_NOT_DELETABLE);
-        assert!(state.store.get_session("unused").unwrap().is_some());
-        std::fs::remove_file(transcript).unwrap();
-        let err =
-            delete_unused_without_agent_records(&state, "used-archived", locator()).unwrap_err();
-        assert_eq!(code_of(&err), error_code::SESSION_NOT_DELETABLE);
-        assert!(state.store.get_session("used-archived").unwrap().is_some());
-        let inspected = state.session_record("unused").unwrap();
-        for field in ["agent", "native_id", "config_dir", "account_id"] {
-            let mut stale = inspected.clone();
-            match field {
-                "agent" => stale.agent = Agent::Codex,
-                "native_id" => stale.agent_session_id = Some("different".to_owned()),
-                "config_dir" => stale.config_dir = Some("/different".to_owned()),
-                "account_id" => stale.account_id = Some("different".to_owned()),
-                _ => unreachable!(),
-            }
-            assert!(
-                matches!(
-                    state.delete_if_unused_matching(&stale).unwrap(),
-                    Deletion::Refused
-                ),
-                "{field}"
-            );
+            .await
+            .unwrap_err();
+            assert_eq!(code_of(&err), error_code::SESSION_NOT_DELETABLE, "{id}");
         }
-        let mut events = state.subscribe();
-        delete_unused_without_agent_records(&state, "unused", locator()).unwrap();
-        assert!(
-            matches!(events.try_recv().unwrap(), Event::SessionDeleted { session } if session == "unused")
-        );
-        assert!(state.store.get_session("unused").unwrap().is_none());
+        assert_eq!(session_ids(&state), ["child", "first-turn", "owner"]);
     }
 
     /// A session that is not archived is deleted only while it is unused: no turn yet, bound to no

@@ -233,15 +233,19 @@ const switchAccountState = snapshotState({
   ],
   settings: accountsState.settings,
 });
-// A live session that has never had a turn beside one that has: only the first offers Delete in its
-// menu rather than Archive.
+// Never-conversed sessions from all three agents share the same Delete shortcut, regardless
+// of native record presence; the used session keeps Archive instead.
 const unusedSession = sessionOf("s-web-unused", console_.id, web.id, "Draft the migration notes", "idle", { has_conversation: false, started_at: minutesAgo(4) });
+const unusedCodex = sessionOf("s-codex-unused", console_.id, web.id, "Untouched Codex draft", "idle", { agent: "codex", has_conversation: false });
+const unusedGrok = sessionOf("s-grok-unused", console_.id, web.id, "Untouched Grok draft", "idle", { agent: "grok", has_conversation: false });
 const unusedState = snapshotState({
   consoles: [console_],
   projects: [web],
   sessions: [
     sessionOf("s-web-used", console_.id, web.id, "Fix the summary layout", "working"),
     unusedSession,
+    unusedCodex,
+    unusedGrok,
   ],
 });
 const openUnusedMenu = (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title: unusedSession.title }));
@@ -262,8 +266,9 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "Menu of a session that was never used",
-    description: "Copy session ID sits directly after Rename, matching Copy project name in project actions. The last entry is Delete, destructive, in place of Archive. Close the menu and hover or focus the unused session row to see the matching Delete shortcut immediately before the actions menu. Native file presence is unknown, so the shortcut still asks for confirmation.",
+    description: "Copy session ID sits directly after Rename, matching Copy project name in project actions. The last entry is Delete, destructive, in place of Archive. Close the menu and hover or focus the unused session row to see the matching Delete shortcut immediately before the actions menu. The untouched Claude Code, Codex and Grok sessions all delete immediately and move any native records to the Trash without confirmation.",
     state: unusedState,
+    sessionRecords: { [unusedSession.id]: "absent", [unusedCodex.id]: "unknown", [unusedGrok.id]: "present" },
     steps: [openUnusedMenu],
   },
   {
@@ -275,16 +280,6 @@ export const dialogScenarios: Scenario[] = [
     state: unusedState,
     clipboard: "unavailable",
     steps: [openUnusedMenu],
-  },
-  {
-    id: "dialog-delete-unused-session",
-    group: "Sidebar sessions",
-    category: "normal",
-    title: "Delete a session that was never used",
-    description: "The unused session has native files, so its Delete shortcut opens the confirmation: the message, no list of bound sessions, and the unchecked option to also move the agent's own session records to the Trash, with its plain hint.",
-    state: unusedState,
-    sessionRecords: { [unusedSession.id]: "present" },
-    steps: [(ui) => ui.press(ui.t("sidebar.session.deleteItem", { title: unusedSession.title }))],
   },
   {
     id: "dialog-switch-account",

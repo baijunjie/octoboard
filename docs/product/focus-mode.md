@@ -56,9 +56,9 @@ agent's icon and its title on one compact line, with native token usage at the t
 The heading counts every archived session in the view's scope, including children omitted from the preview. Clicking a
 row selects it while leaving it archived. Its action menu offers **Reopen**, which selects and resumes the session,
 then **Copy session ID** when a clipboard is available (see "Session rows" in `docs/product/sidebar.md`),
-and after a separator **Delete**. A Delete shortcut immediately before the action-menu button appears only when
-deletion needs no confirmation, under the same rules as "Session rows" in `docs/product/sidebar.md`. It takes the
-same deletion action as the menu (see "Deleting archived sessions" in `docs/product/deleting-sessions.md` for the
+and after a separator **Delete**. A Delete shortcut immediately before the action-menu button appears for an
+unused session that is not still starting, under the same rules as "Session rows" in `docs/product/sidebar.md`. It
+takes the same deletion action as the menu (see "Deleting archived sessions" in `docs/product/deleting-sessions.md` for the
 confirmation rules). The menu and an available shortcut show with the row's other controls as described in
 "Rows, names and keyboard focus" in `docs/product/sidebar.md`. Reopening follows "Archiving, interruption and
 resuming" in `docs/product/sessions.md`.

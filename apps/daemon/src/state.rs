@@ -572,31 +572,31 @@ impl AppState {
 
     /// Deletes the session's record and its saved output if it is unused (see
     /// `Store::delete_session_if_unused`), and broadcasts `session_deleted` when it was. It is
-    /// refused when the session is in use, is gone already, or is being launched right now.
+    /// refused when the session is in use, is gone already, or is being launched right now. The
+    /// returned session carries the native identity captured atomically with the deletion.
     pub fn delete_if_unused(&self, id: &str) -> Result<Deletion> {
         self.delete_where(id, |store| store.delete_session_if_unused(id))
-    }
-
-    /// Deletes an unused session only if its native-record identity still matches the one inspected.
-    pub fn delete_if_unused_matching(&self, expected: &Session) -> Result<Deletion> {
-        self.delete_where(&expected.id, |store| {
-            store.delete_session_if_unused_matching(expected)
-        })
     }
 
     fn delete_where(
         &self,
         id: &str,
-        delete: impl FnOnce(&Store) -> Result<bool>,
+        delete: impl FnOnce(&Store) -> Result<Option<Session>>,
     ) -> Result<Deletion> {
         let live = self.live.read().expect("live sessions lock poisoned");
-        if live.launching.contains(id) || !delete(&self.store)? {
+        if live.launching.contains(id) {
             return Ok(Deletion::Refused);
         }
+        let Some(session) = delete(&self.store)? else {
+            return Ok(Deletion::Refused);
+        };
         let process = live.sessions.get(id).cloned();
         drop(live);
         self.forget_deleted(id);
-        Ok(Deletion::Deleted { process })
+        Ok(Deletion::Deleted {
+            process,
+            session: Box::new(session),
+        })
     }
 
     /// Deletes the record of a session whose launch failed and tells every client it is gone. The
@@ -1499,9 +1499,11 @@ struct LiveSessions {
 pub enum Deletion {
     Refused,
     /// The record is gone. `process` is the session's process, read under the lock that keeps a
-    /// resume from registering a new one, for the caller to end.
+    /// resume from registering a new one, for the caller to end. `session` is the row returned by
+    /// the delete statement, including native identity changes made since an earlier read.
     Deleted {
         process: Option<Arc<LiveSession>>,
+        session: Box<Session>,
     },
 }
 
