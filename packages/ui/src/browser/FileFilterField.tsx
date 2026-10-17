@@ -66,7 +66,7 @@ export function FileFilterField({ state, label, placeholder, contextKey }: { sta
   return (
     <div className="contents" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
       {state.filterOpen && (
-        <div className="shrink-0 border-b border-separator px-3 py-2" onKeyDownCapture={guardComposition} onBlur={onBlur}>
+        <div className="shrink-0 border-b border-separator px-(--pane-inset) py-2" onKeyDownCapture={guardComposition} onBlur={onBlur}>
           <SearchField aria-label={label} value={state.filter} onChange={state.onFilterChange} fullWidth variant="secondary">
             <SearchField.Group>
               <SearchField.SearchIcon />

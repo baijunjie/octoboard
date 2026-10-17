@@ -398,6 +398,16 @@ const reviewScenarios: Scenario[] = [
     steps: [...openGit, (ui) => ui.scrollCollection(ui.t("git.list.label"), 180)],
   },
   {
+    id: "git-changes-cut-short",
+    group: GROUP,
+    category: "exceptional",
+    title: "A change list with notes above and below it",
+    description: "The worktree has no folder for the project, which a note says under the Worktree selector, and the daemon stopped listing early, which a note says under the list.",
+    state,
+    git: normalRepository({ ...SAMPLE_GIT, worktrees: [{ ...WORKTREES[0]!, scope_present: false }, ...WORKTREES.slice(1)], cutShort: true }),
+    steps: openGit,
+  },
+  {
     id: "git-worktree-gone",
     group: GROUP,
     category: "exceptional",
@@ -482,9 +492,9 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "One compared branch moved and the other deleted",
-    description: "Two notices under the commits line: main has moved, and feature/ranking-experiments no longer exists. The moved notice does not advise Refresh, which could not compare the deleted branch.",
+    description: "Two notices under the commits line: main has moved, and feature/ranking-experiments no longer exists. The moved notice does not advise Refresh, which could not compare the deleted branch. The list is also cut short, which a note under it says.",
     state,
-    git: { ...SAMPLE_GIT, moved: { main: FEATURE_TIP }, gone: ["feature/ranking-experiments"] },
+    git: { ...SAMPLE_GIT, moved: { main: FEATURE_TIP }, gone: ["feature/ranking-experiments"], cutShort: true },
     steps: [
       ...compare("main", "feature/ranking-experiments"),
       (ui) => ui.wait(10_500),

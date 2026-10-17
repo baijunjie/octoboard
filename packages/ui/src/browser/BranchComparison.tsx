@@ -23,6 +23,7 @@ import type { ChangeViewState } from "./changeView";
 import type { ChangeItem } from "./changes";
 import { comparisonNotices } from "./comparisonNotices";
 import { GitFailure, GitLoading } from "./gitStates";
+import { PaneNote } from "./paneNote";
 import type { BranchList } from "./useBranchList";
 import type { Comparison } from "./useBranchComparison";
 import { shortCommit } from "./useChangeReader";
@@ -85,7 +86,7 @@ export function BranchComparisonView({
   const branchesError = branches.state === "error" ? branches.message : branches.state === "loaded" ? branches.error : undefined;
   return (
     <>
-      <div ref={selectorsRef} className="flex shrink-0 items-center gap-1 border-b border-separator py-2 ps-3 pe-2">
+      <div ref={selectorsRef} className="flex shrink-0 items-center gap-1 border-b border-separator py-2 px-(--pane-inset)">
         {/* One grid for both selectors, each a subgrid of it, so the label column is as wide as
             the widest label in the current language. */}
         <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
@@ -124,9 +125,9 @@ export function BranchComparisonView({
         </TitledControl>
       </div>
       {branchesError !== undefined && !(comparison.state === "idle" && branches.state === "error") && (
-        <p role="alert" className="shrink-0 px-3 py-2 text-xs text-app-muted">
+        <PaneNote role="alert">
           <Message id="git.compare.branchesError" params={{ message: failureParam(branchesError) }} />
-        </p>
+        </PaneNote>
       )}
       <div className="flex min-h-0 flex-1 flex-col" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
         <ComparisonContent
@@ -177,14 +178,14 @@ function ComparisonContent({
   const notices = comparisonNotices(branches, comparison);
   return (
     <>
-      <p className="shrink-0 px-3 py-2 text-xs text-app-muted">
+      <PaneNote>
         <Message
           id="git.compare.commits"
           params={{ base: <InlineChip monospace wrap size="inherit">{shortCommit(base)}</InlineChip>, to: <InlineChip monospace wrap size="inherit">{shortCommit(right.commit)}</InlineChip> }}
         />
-      </p>
+      </PaneNote>
       {/* Mounted for as long as the comparison is, so a notice appearing in it is announced. */}
-      <div ref={noticesRef} role="status" className="relative flex shrink-0 flex-col gap-1 px-3 text-xs text-app-muted not-empty:pb-2">
+      <div ref={noticesRef} role="status" className="relative flex shrink-0 flex-col gap-1 px-(--pane-inset) text-xs text-app-muted not-empty:pb-2">
         {notices.map((notice) => (
           <p key={notice.branch} data-list-motion={notice.branch} className="flex items-start gap-1.5">
             <TriangleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0" />
@@ -205,7 +206,7 @@ function ComparisonContent({
       ) : (
         <>
           <ChangeList items={items} selected={selectedChange} label={t("git.compare.list.label")} onOpen={onOpen} listRef={listRef} changeView={changeView} />
-          {!complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-app-muted">{t("git.partial")}</p>}
+          {!complete && <PaneNote divided>{t("git.partial")}</PaneNote>}
         </>
       )}
     </>

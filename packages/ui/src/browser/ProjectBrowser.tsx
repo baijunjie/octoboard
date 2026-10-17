@@ -29,6 +29,7 @@ import { buildFileResults, resultDirectories } from "./filesView";
 import { FileTree } from "./FileTree";
 import { focusRow } from "./focusRow";
 import { GitView } from "./GitView";
+import { PaneNote } from "./paneNote";
 import { buildTree, fileEvidence, listingSaysDirectory, neighbours, parentPath, rereadFor, rowKey, type DirListing, type FileEvidence } from "./tree";
 import { RowPathScope } from "./RowActions";
 import { ROW_HEIGHT } from "./treeRow";
@@ -245,7 +246,7 @@ export function ProjectBrowser({
           }}
           className="project-browser-view flex min-h-0 flex-1 flex-col gap-0"
         >
-          <div className="flex h-(--pane-header-height) shrink-0 items-center gap-1 border-b border-separator px-2 text-sm">
+          <div className="flex h-(--pane-header-height) shrink-0 items-center gap-1 border-b border-separator px-(--pane-inset) text-sm">
             <FolderOpen aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
             <h2 className="flex min-w-8 max-w-40 flex-1 font-medium">
               <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={project.name}>{project.name}</FadeOverflow>
@@ -291,7 +292,7 @@ export function ProjectBrowser({
               ) : tree.nodes.length === 0 && (listingFiles || root?.state === "loaded" && root.complete) ? (
                 <>
                   <CenteredEmptyPanel icon={searching ? SearchX : FolderX} message={t(searching ? "browser.filter.noMatch" : "browser.empty")} />
-                  {listingFiles && search.result.state === "loaded" && !search.result.complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-app-muted">{t("browser.filter.partial")}</p>}
+                  {listingFiles && search.result.state === "loaded" && !search.result.complete && <PaneNote divided>{t("browser.filter.partial")}</PaneNote>}
                 </>
               ) : (
                 <>
@@ -307,7 +308,7 @@ export function ProjectBrowser({
                       treeRef={treeRef}
                     />
                   </RowPathScope.Provider>
-                  {(listingFiles ? search.result.state === "loaded" && !search.result.complete : root?.state === "loaded" && !root.complete) && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-app-muted">{t(listingFiles ? "browser.filter.partial" : "browser.partial")}</p>}
+                  {(listingFiles ? search.result.state === "loaded" && !search.result.complete : root?.state === "loaded" && !root.complete) && <PaneNote divided>{t(listingFiles ? "browser.filter.partial" : "browser.partial")}</PaneNote>}
                 </>
               )}
             </div>

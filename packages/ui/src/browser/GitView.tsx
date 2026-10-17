@@ -23,6 +23,7 @@ import { ChangeList } from "./ChangeList";
 import type { ChangeViewState } from "./changeView";
 import type { ChangeItem } from "./changes";
 import { GitFailure, GitLoading } from "./gitStates";
+import { PaneNote } from "./paneNote";
 import type { ChangeList as ChangeListState } from "./useChangeList";
 import type { SourceState } from "./useProjectSource";
 
@@ -162,7 +163,7 @@ function WorktreeChanges({
         onChange={(id) => onWorktreeChange(id === own ? undefined : id)}
       />
       <div className="flex min-h-0 flex-1 flex-col" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
-        {shown && !gone && !shown.scope_present && <p className="shrink-0 px-3 py-2 text-xs text-app-muted">{t("git.worktree.scopeMissing")}</p>}
+        {shown && !gone && !shown.scope_present && <PaneNote>{t("git.worktree.scopeMissing")}</PaneNote>}
         {gone ? (
           <CenteredEmptyPanel icon={TriangleAlert} message={t("git.worktree.gone")} description={t("git.worktree.gone.description")} />
         ) : list.state === "loading" ? (
@@ -174,7 +175,7 @@ function WorktreeChanges({
         ) : (
           <>
             <ChangeList items={list.items} selected={selectedChange} label={t("git.list.label")} onOpen={onOpen} listRef={listRef} changeView={changeView} />
-            {!list.complete && <p className="shrink-0 border-t border-separator px-3 py-2 text-xs text-app-muted">{t("git.partial")}</p>}
+            {!list.complete && <PaneNote divided>{t("git.partial")}</PaneNote>}
           </>
         )}
       </div>
@@ -205,7 +206,7 @@ function WorktreeSelect({
   const current = worktrees.find((w) => w.id === value);
   const currentName = current ? worktreeName(t, current) : missing ? t("git.worktree.goneName") : "";
   return (
-    <div ref={ref} className="shrink-0 border-b border-separator px-3 py-2">
+    <div ref={ref} className="shrink-0 border-b border-separator px-(--pane-inset) py-2">
       <Select fullWidth variant="secondary" value={value} onChange={(key) => key !== null && onChange(String(key))}>
         <Label className="sr-only">{t("git.worktree.label")}</Label>
         <Select.Trigger>

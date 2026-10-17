@@ -121,6 +121,14 @@
   --row-control-gap: 4px;
   --row-controls-max-width: calc(2 * var(--row-control-size) + 2 * var(--row-control-gap));
 
+  /* The horizontal inset shared by the sidebar and the right pane: a header, a bar, a heading or a
+     row's content starts `--pane-inset` from the pane's edge. A row's hover or selected fill sits
+     `--row-fill-inset` from the edge, so the row pads its content by the difference,
+     `--row-content-inset`. */
+  --pane-inset: 16px;
+  --row-fill-inset: 8px;
+  --row-content-inset: calc(var(--pane-inset) - var(--row-fill-inset));
+
   /* A tooltip is a label: it closes the instant the pointer leaves its trigger, where HeroUI's
      default (0.5s) lingers and keeps it hoverable. `Tooltip` reads this as its default close
      delay, so it holds for every tooltip, those added later included. HeroUI reads the token once,

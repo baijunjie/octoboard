@@ -300,7 +300,7 @@ export function Sidebar({
     content = (
       <>
         <ConsoleHeader handlers={handlers} current={shownConsole} />
-        <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT} className="min-h-0 flex-1 px-2 pb-2">
+        <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT} className="min-h-0 flex-1 px-(--row-fill-inset) pb-2">
           <ConsoleBody
             handlers={handlers}
             console={shownConsole}
@@ -403,7 +403,7 @@ function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers; curre
   return (
     // The list under this header is inset twice — the scroll area, then each heading and row — so
     // the end padding matches that and this menu lines up with the rows' menus.
-    <div ref={headerRef} className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator ps-4 pe-4">
+    <div ref={headerRef} className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator px-(--pane-inset)">
       <RowLabel title={current.name}>
         <span className="text-base font-semibold">{current.name}</span>
       </RowLabel>

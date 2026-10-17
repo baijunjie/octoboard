@@ -60,7 +60,7 @@ export function TreeRow({
   selected,
   locked,
   expanded,
-  className = "min-h-8 items-center gap-2 px-2",
+  className = "min-h-8 items-center gap-2 px-(--row-content-inset)",
   children,
   ref,
 }: {
@@ -242,7 +242,7 @@ export function SectionHeading({
   inline?: React.ReactNode;
 }): React.ReactElement {
   return (
-    <div className="mt-2 mb-0.5 px-2">
+    <div className="mt-2 mb-0.5 px-(--row-content-inset)">
       <div className="flex items-center gap-2">
         <h3 className={`flex h-7 items-center text-xs font-medium text-app-muted ${inline ? "shrink-0" : "min-w-0 flex-1"}`}>{children}</h3>
         {inline && <div className="flex h-7 min-w-0 flex-1 items-center">{inline}</div>}

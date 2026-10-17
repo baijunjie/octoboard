@@ -106,6 +106,10 @@ stays on a light surface in both appearances" in `docs/product/appearance.md`. I
 language and writing direction whatever the UI's language is — see "What follows the language" in
 `docs/product/language.md`.
 
+A page's body gets a default inline margin of **16 px** on each side, in place of the browser's 8 px, so its content
+starts where the panel's bar does. Any margin the page sets itself takes precedence, a universal reset such as
+`* { margin: 0 }` included; the default leaves the body's top and bottom margins to the browser.
+
 ## Submitting a form back to the console session
 
 A page sends data back **only through a native HTML form**, and only when the user submits it —

@@ -200,7 +200,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
           worktree: body.worktree ?? null,
           head: git?.worktrees.find((w) => w.id === worktree)?.head ?? null,
           changes: changes.map((change) => change.entry),
-          complete: true,
+          complete: !git?.cutShort,
         };
       }
       case "list_project_branches": {
@@ -230,7 +230,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
         }
         // A right branch that is an ancestor of the left one forks at its own tip, which is no change.
         const changes = fork === right.commit ? [] : (git?.comparisons?.[key] ?? []);
-        return { type: "project_comparison", project: body.project, left, right, base: fork, changes: changes.map((change) => change.entry), complete: true };
+        return { type: "project_comparison", project: body.project, left, right, base: fork, changes: changes.map((change) => change.entry), complete: !git?.cutShort };
       }
       case "read_project_comparison_change": {
         const changes = git?.comparisons?.[`${body.left.branch}..${body.right.branch}`] ?? [];

@@ -60,7 +60,7 @@ every value is a literal at its call site.
 
 ## Milestones
 
-1. [One horizontal inset for both panes](01-pane-inset.md)
+1. 01 One horizontal inset for both panes (closed)
 2. [Shadow edges and groove dividers](02-shadow-edges-and-groove-dividers.md)
 3. [Split right pane](03-split-right-pane.md)
 4. [Shell terminals in the daemon](04-daemon-shell-terminals.md)

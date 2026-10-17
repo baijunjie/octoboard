@@ -53,10 +53,10 @@ function FocusHeader({
 }): React.ReactElement {
   const t = useT();
   return (
-    // A row or card below sits in the scroll area (`px-2`), then inside its own padding (a card's
-    // border and padding add up to `px-2`), so the end padding matches that and this header's
-    // trailing menus line up with the menu on a row or card. The start stays put.
-    <div ref={ref} className="flex h-(--pane-header-height) shrink-0 items-center gap-1 border-b border-separator ps-2 pe-4">
+    // A row or card below sits in the scroll area (`--row-fill-inset`), then inside its own padding (a
+    // card's border and padding add up to `--row-content-inset`), so the end padding matches that and
+    // this header's trailing menus line up with the menu on a row or card. The start stays put.
+    <div ref={ref} className="flex h-(--pane-header-height) shrink-0 items-center gap-1 border-b border-separator ps-(--row-fill-inset) pe-(--pane-inset)">
       <TitledControl title={t("sidebar.focus.exit")}>
         <Button
           isIconOnly
@@ -150,7 +150,7 @@ export function ProjectFocusView({
           />
         </RowIconGroup>
       </FocusHeader>
-      <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT} className="min-h-0 flex-1 px-2 pb-2">
+      <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT} className="min-h-0 flex-1 px-(--row-fill-inset) pb-2">
         <section>
           <StickySectionHeading
             action={elsewhere && (
@@ -246,7 +246,7 @@ export function ConsoleSessionFocusView({
           selected={consoleSession.id === selectedSessionId}
           locked={consoleSession.locked}
           onActivate={() => handlers.onSelectSession(consoleSession)}
-          className="min-h-10 min-w-16 flex-1 items-center gap-2 px-2"
+          className="min-h-10 min-w-16 flex-1 items-center gap-2 px-(--row-content-inset)"
         >
           <BindingBadge owner={consoleSession} decorative />
           <div className="min-w-0 flex-1">
@@ -273,7 +273,7 @@ export function ConsoleSessionFocusView({
         </RowIconGroup>
       </FocusHeader>
       {strip.length > 1 && <SwitchStrip handlers={handlers} entries={strip} currentId={consoleSession.id} />}
-      <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT} className="min-h-0 flex-1 px-2 pb-2">
+      <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT} className="min-h-0 flex-1 px-(--row-fill-inset) pb-2">
         <section>
           <StickySectionHeading>{t("sidebar.focus.sessions", { count: liveCount })}</StickySectionHeading>
           {projects.length === 0 ? (
@@ -341,7 +341,7 @@ function SwitchStrip({
       hideScrollBar
       role="group"
       aria-label={t("sidebar.focus.switchStrip")}
-      className="relative flex shrink-0 gap-1 px-2 py-2"
+      className="relative flex shrink-0 gap-1 px-(--row-fill-inset) py-2"
     >
       {entries.map(({ consoleSession, activity }) => {
         const current = consoleSession.id === currentId;
@@ -411,7 +411,7 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
   const openSessionHolder = useRef<HTMLDivElement>(null);
   return (
     <>
-      <div ref={headerRef} className="mb-1 flex min-h-7 items-center gap-1 ps-2 pe-2">
+      <div ref={headerRef} className="mb-1 flex min-h-7 items-center gap-1 px-(--row-content-inset)">
         <h4 className="min-w-0 flex-1">
           <RowLabel title={project.name} className="block min-w-0">
             <span className="text-sm font-medium">{project.name}</span>
@@ -456,7 +456,7 @@ function BoundElsewhere({
   const t = useT();
   const ownersRef = useListMotion<HTMLDivElement>();
   return (
-    <div className="px-2 pt-3 pb-2">
+    <div className="px-(--row-content-inset) pt-3 pb-2">
       <p className="text-xs text-app-muted">
         {t("sidebar.focus.boundElsewhere", { count })}
       </p>
@@ -604,7 +604,7 @@ const SessionCard = memo(function SessionCard({
       selected={selected}
       locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
-      className="min-h-8 flex-col gap-1 border border-separator p-[7px] data-selected:border-accent-glyph"
+      className="min-h-8 flex-col gap-1 border border-separator px-[calc(var(--row-content-inset)-1px)] py-[7px] data-selected:border-accent-glyph"
     >
       <RowIconLine icon={<StatusIcon status={session.status} decorative />}>
         <span className="text-xs font-medium text-app-muted">{statusLabel(t, session.status)}</span>

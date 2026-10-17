@@ -249,7 +249,7 @@ export function FileViewer({
       footer={null}
       resetKey={subject.key}
     >
-      <div ref={headerRef} data-viewer-description="" className="flow-root min-h-8 min-w-0 shrink-0 px-4 text-xs leading-8">
+      <div ref={headerRef} data-viewer-description="" className="flow-root min-h-8 min-w-0 shrink-0 px-(--pane-inset) text-xs leading-8">
         {/* Copy path, then fixed places for the Markdown view choice, the layout choice and the
             wrap choice, so Tab order matches the screen whichever mounts first.
             Copy path is here, not beside the path it copies, because the group sits at the row's end

@@ -52,6 +52,9 @@ export interface FixtureGit {
   missing?: string[];
   moved?: Record<string, string>;
   gone?: string[];
+  /** The daemon stopped listing before it reached the end, so every change list and comparison
+   * is answered `complete: false` and the pane says under the list that it is not whole. */
+  cutShort?: boolean;
 }
 
 /** Which section of a change list a change with two sides belongs to; `committed` is a branch

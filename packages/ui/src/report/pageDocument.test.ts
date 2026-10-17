@@ -26,6 +26,17 @@ async function render(html: string, isHistory = false, options: PageDocumentOpti
   return { document: window.document, messages, window };
 }
 
+describe("the report page's default inset", () => {
+  // jsdom does not resolve `:where` in its cascade, so this checks the rule's shape rather than the
+  // margin it produces.
+  it("sets the inset with zero specificity, ahead of the page's own styles", async () => {
+    const { document } = await render("<style>* { margin: 0 }</style><p>text</p>");
+    const styles = document.querySelectorAll("style");
+    expect(styles[0]?.textContent).toBe(":where(body){margin-inline:16px}");
+    expect(styles[styles.length - 1]?.textContent).toBe("* { margin: 0 }");
+  });
+});
+
 describe("the report page's sanitizer", () => {
   it("removes every script and network channel, and keeps what a document needs", async () => {
     const { document } = await render(`<!doctype html><html lang="ja" dir="rtl"><head>
@@ -54,7 +65,7 @@ describe("the report page's sanitizer", () => {
     expect(document.querySelector("form")?.hasAttribute("method")).toBe(false);
     expect(document.querySelector('input[name="name"][type="text"][required]')).not.toBeNull();
     expect(document.querySelector('button[name="choice"][value="a"]')).not.toBeNull();
-    expect(document.querySelector("style")?.textContent).toContain("color: red");
+    expect(document.querySelector("style:last-of-type")?.textContent).toContain("color: red");
     expect(document.querySelector("p")?.getAttribute("style")).toBe("color: blue");
     expect(document.querySelector("#img")?.getAttribute("src")).toMatch(/^data:/);
     expect(document.documentElement.getAttribute("lang")).toBe("ja");

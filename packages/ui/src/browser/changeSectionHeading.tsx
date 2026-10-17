@@ -138,7 +138,7 @@ export function ChangeSectionHeading({
       excludeFromTabOrder
       preventFocusOnPress
       onPress={toggle}
-      className="flex h-full w-full min-w-0 items-center gap-2 px-3 text-start outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-app-focus data-[focus-visible]:ring-inset"
+      className="flex h-full w-full min-w-0 items-center gap-2 px-(--pane-inset) text-start outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-app-focus data-[focus-visible]:ring-inset"
     >
       {/* The chevron mirrors under right-to-left while it points along the text. */}
       {isCollapsed ? (

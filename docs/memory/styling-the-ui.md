@@ -86,3 +86,16 @@ An observer on its own is not enough, in two ways that each look from the outsid
 A `MutationObserver` is not the answer either: those changes reach the DOM as a text node's new value or a swapped
 class, which only an observer watching every attribute and character of the subtree reports, and on a virtualized list
 that observation has to be rebuilt as rows come and go. The scroll fade and `FadeOverflow` are both built the way above.
+
+## Horizontal padding in the sidebar and the right pane comes from the inset tokens
+
+In the sidebar and the right pane, any horizontal padding or margin that places content relative to the pane's edge
+is written with the tokens in `packages/ui/src/style.css` — `--pane-inset`, `--row-fill-inset`,
+`--row-content-inset` — never with a literal such as `px-2`, `px-3` or `px-4`, so both panes keep one inset. A header,
+a bar, a notice or a heading outside a row takes `px-(--pane-inset)`; a row's hover or selected fill sits
+`--row-fill-inset` from the edge (as `mx-` on the row, or as `px-` on the scroller holding the rows), and the row pads
+its content inside the fill by `--row-content-inset`. Anything layered on top — a tree's per-level indent, a bordered
+card's border width — is a `calc` of the token, not a literal in its place.
+
+The tokens are horizontal only: vertical padding keeps a value of its own, even on an element whose horizontal padding
+is a `calc` of a token (`px-[calc(var(--row-content-inset)-1px)] py-[7px]`, not one `p-[calc(...)]` for both).

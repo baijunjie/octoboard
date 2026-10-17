@@ -40,7 +40,7 @@ export function DirectoryRow({ name, isExpanded, link = false, children }: { nam
  * `group` its end-of-row controls key their visibility off, so a row laid out without this class
  * would hold an actions button that never appears. */
 export const ROW_CLASS = [
-  "group mx-1 my-0.5 cursor-default rounded-md text-sm outline-none select-none hover:bg-panel-hover data-[current]:bg-panel-selected",
+  "group mx-(--row-fill-inset) my-0.5 cursor-default rounded-md text-sm outline-none select-none hover:bg-panel-hover data-[current]:bg-panel-selected",
   "data-[focus-visible]:ring-2 data-[focus-visible]:ring-app-focus data-[focus-visible]:ring-inset",
 ].join(" ");
 
@@ -49,7 +49,7 @@ export const ROW_CLASS = [
  * row also sits a little looser, having no indent to carry part of the separation. */
 export function RowContent({ children, flat = false, chevron }: { children: React.ReactNode; flat?: boolean; chevron?: React.ReactNode }): React.ReactElement {
   return (
-    <div className={`flex h-7 min-w-0 items-center ${flat ? "gap-2 px-2" : "gap-1.5 pe-2 ps-[calc((var(--tree-item-level)-1)*0.875rem+0.5rem)]"}`}>
+    <div className={`flex h-7 min-w-0 items-center ${flat ? "gap-2 px-(--row-content-inset)" : "gap-1.5 pe-(--row-content-inset) ps-[calc((var(--tree-item-level)-1)*0.875rem+var(--row-content-inset))]"}`}>
       {!flat && <span className="flex size-4 shrink-0 items-center justify-center">{chevron}</span>}
       {children}
     </div>

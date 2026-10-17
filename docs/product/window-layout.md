@@ -60,6 +60,12 @@ the sidebar and the right pane become drawers" below), and its headers are **47 
 — shorter by that inset and by the card's own 1 px top border — so the line under a card's header stays level with the
 line under the headers docked beside it; the text in a card's header therefore sits 4.5 px lower than theirs.
 
+**The sidebar and the right pane share one horizontal inset**, docked, floating or shown as drawers alike: a header,
+a bar, a section heading, a notice or a row's content starts **16 px** from the pane's edge, and a row's hover or
+selected fill sits **8 px** from it. In the right pane this holds for the project pane, the report panel's bar and
+the file viewer's header; a report page's own content lines up with it by default (see "What a page may contain, and
+what it cannot do" in `docs/product/report-panel.md`).
+
 On the screens shown before there is anything to show — while connecting to the daemon, and the screens for a daemon
 that could not start or a UI that failed — there is no rail: under the top bar, the content panel spans the window.
 

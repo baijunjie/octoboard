@@ -69,6 +69,12 @@ function pageCsp(nonce: string): string {
  * page's CSS sets, which `<iframe sandbox>` does not stop. */
 const COLOR_SCHEME_META = '<meta name="color-scheme" content="light">';
 
+/** Starts the page's content at the pane inset (`--pane-inset`) instead of the browser's 8px body
+ * margin, so it lines up with the panel's bar. The frame is a separate document that cannot read
+ * the window's tokens, hence the literal. `:where` keeps its specificity at zero and it comes
+ * before the page's own styles, so any margin the page sets, a universal reset included, wins. */
+const PAGE_INSET_STYLE = "<style>:where(body){margin-inline:16px}</style>";
+
 /** DOMPurify's minified build, without its trailing source-map comment, which names a `.map` file
  * that does not exist in the frame. */
 const PURIFY_SOURCE = purify.replace(/\n?\/\/# sourceMappingURL=.*$/, "");
@@ -87,13 +93,13 @@ export interface PageDocumentOptions {
 }
 
 /**
- * Builds the iframe's `srcdoc` document: the CSP meta tag, then the colour-scheme meta, then
- * Octoboard's own scripts, in that order — a CSP delivered by `<meta>` only covers what the parser
- * reaches after it. The page is never part of the document's markup: it travels as a string
- * literal to the bridge (`pageBridge.js`), which sanitizes it with DOMPurify and renders the result,
- * so a page is a static document with native forms and its own scripts never run. Composed as a
- * plain string and handed to React's `srcDoc` prop (a DOM property assignment, not
- * string-concatenation into surrounding markup).
+ * Builds the iframe's `srcdoc` document: the CSP meta tag, then the colour-scheme meta, then the
+ * default inset style, then Octoboard's own scripts, in that order — a CSP delivered by `<meta>`
+ * only covers what the parser reaches after it. The page is never part of the document's markup:
+ * it travels as a string literal to the bridge (`pageBridge.js`), which sanitizes it with
+ * DOMPurify and renders the result, so a page is a static document with native forms and its own
+ * scripts never run. Composed as a plain string and handed to React's `srcDoc` prop (a DOM
+ * property assignment, not string-concatenation into surrounding markup).
  *
  * `nonce` has to be unguessable and fresh for each document: it is what tells Octoboard's scripts
  * from anything else the frame might come to hold.
@@ -127,7 +133,7 @@ export function composePageDocument(
   };
   const config = `window.OCTOBOARD_PAGE = ${scriptJson(page)};`;
   return (
-    `<meta http-equiv="Content-Security-Policy" content="${pageCsp(nonce)}">${COLOR_SCHEME_META}` +
+    `<meta http-equiv="Content-Security-Policy" content="${pageCsp(nonce)}">${COLOR_SCHEME_META}${PAGE_INSET_STYLE}` +
     `<script nonce="${nonce}">${PURIFY_SOURCE}</script>` +
     `<script nonce="${nonce}">${config}</script>` +
     `<script nonce="${nonce}">${bridge}</script>`
