@@ -169,12 +169,13 @@ Tauri's predefined `close_window_with_text`, which carries ⌘W and arrives as t
 gesture does is the user's choice (`set_run_in_background`, off by default). With the choice on it hides the window and
 takes the application out of the Dock, leaving it reachable through the menu bar icon, the Dock icon, a reopen from the
 Finder or Spotlight, or activation by a system notification. With it off it is an ordinary quit gesture, taking the same
-exit flow as Cmd+Q: a live session gets the quit confirmation, and cancelling it leaves the window open. It differs
-from Cmd+Q in one deliberate way: it goes through `request_quit_from_window`, which never arms the `FORCE_QUIT_WINDOW`
-debounce, so a repeated close press (a double click) never forces the quit through the way a double Cmd+Q does; a
-webview that stopped answering therefore cannot be quit through the close button alone. When the daemon
-is not running (it failed to start or has exited, tracked by `DaemonState` in `src-tauri/src/sidecar.rs`) there is
-nothing to keep in the background, so it quits whatever the choice, and a quit gesture needs no confirmation.
+exit flow as Cmd+Q: a session starting, working or waiting for the user gets the quit confirmation, and cancelling it
+leaves the window open. It differs from Cmd+Q in one deliberate way: it goes through `request_quit_from_window`, which
+never arms the `FORCE_QUIT_WINDOW` debounce, so a repeated close press (a double click) never forces the quit through
+the way a double Cmd+Q does; a webview that stopped answering therefore cannot be quit through the close button alone.
+When the daemon is not running (it failed to start or has exited, tracked by `DaemonState` in
+`src-tauri/src/sidecar.rs`) there is nothing to keep in the background, so it quits whatever the choice, and a quit
+gesture needs no confirmation.
 
 The window has no native titlebar
 background or title text: it is created with an overlay titlebar and a hidden title on macOS, and the traffic lights

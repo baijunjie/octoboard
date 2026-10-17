@@ -4,7 +4,7 @@ import { useLatest } from "../components/useLatest";
 import { isolate } from "../i18n/isolate";
 import { t } from "../i18n/language";
 import { usePlatform } from "../platform/react";
-import { isLive, type Session } from "../protocol";
+import type { Session, SessionStatus } from "../protocol";
 
 /** How long `doQuit` waits for `shutdown`'s `ack` before giving up on it. The daemon drops the
  * serving future as soon as it starts shutting down, so the ack usually never arrives at all — that
@@ -13,6 +13,16 @@ import { isLive, type Session } from "../protocol";
  * reconnect left to retry it) would wait on a request that can now only time out on its own much
  * later, or never settle at all, leaving the exit confirmation dialog wedged with no way out. */
 const SHUTDOWN_TIMEOUT_MS = 2000;
+
+/** The statuses a quit asks about: a session starting, working, or waiting for the user. One
+ * awaiting instructions is in the middle of nothing that is reported, so it does not hold a quit
+ * up, though the quit still ends it and leaves it interrupted and resumable like the rest. */
+const BUSY_STATUSES: ReadonlySet<SessionStatus> = new Set(["starting", "working", "waiting_user"]);
+
+/** Whether quitting with these sessions asks for confirmation first. */
+export function holdsQuit(sessions: readonly Session[]): boolean {
+  return sessions.some((s) => BUSY_STATUSES.has(s.status));
+}
 
 interface UseAppExitOptions {
   /** Current sessions, read fresh each time a quit is requested rather than once at mount — omit
@@ -52,10 +62,10 @@ interface UseAppExitResult {
  * menu bar icon's Quit, the Dock icon's own Quit, and a system-initiated logout/restart/shutdown —
  * that the Rust side cannot itself ask the user about; the window's close button is one too unless
  * the user has chosen to run in the background, in which case it hides the window), asking for
- * confirmation when a session is still live (bringing the window to the front to do so), and the
- * `shutdown`-then-`confirm_quit` sequence that actually ends the process. With `getSessions` and
- * `requestShutdown` omitted it quits straight away, which is what a screen with no daemon behind it
- * needs.
+ * confirmation when a session holds the quit up (see `holdsQuit`; bringing the window to the front
+ * to do so), and the `shutdown`-then-`confirm_quit` sequence that actually ends the process. With
+ * `getSessions` and `requestShutdown` omitted it quits straight away, which is what a screen with
+ * no daemon behind it needs.
  */
 export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
   const { exit, nativeWindow } = usePlatform();
@@ -99,8 +109,7 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
     // never reaches this line at all, so the debounce stays armed and the escape hatch in
     // `should_let_quit_through` (`apps/desktop/src-tauri/src/exit.rs`) still fires for it.
     await exit.heartbeat().catch(() => {});
-    const liveSessions = (optionsRef.current.getSessions?.() ?? []).filter((s) => isLive(s.status));
-    if (liveSessions.length > 0) {
+    if (holdsQuit(optionsRef.current.getSessions?.() ?? [])) {
       setExitConfirmOpen(true);
       // A quit from outside the window (the Dock icon's own Quit, the menu bar icon's) leaves it
       // wherever it was, hidden in the background or behind another app, where the dialog would go

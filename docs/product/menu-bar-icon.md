@@ -59,9 +59,9 @@ opened only brings the window back.
 
 ### Quit Octoboard
 
-Quit Octoboard is a quit like `Cmd+Q`: with a session running it asks the same confirmation, bringing a window closed
-into the background back to ask it, and with none it quits at once (see "Quitting" in
-`docs/product/application-lifecycle.md`).
+Quit Octoboard is a quit like `Cmd+Q`: with a session starting, working or waiting for the user it asks the same
+confirmation, bringing a window closed into the background back to ask it, and otherwise it quits at once (see
+"Quitting" in `docs/product/application-lifecycle.md`).
 
 ## What has been tried by hand
 

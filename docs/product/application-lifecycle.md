@@ -143,11 +143,11 @@ thing, deliberately, and what they do is the user's choice: the **Keep running i
 closed** switch in Settings' General section, which is **off to begin with** (see "Keep running in the background" in
 `docs/product/settings.md`).
 
-**With the switch off, closing the window quits.** It is an ordinary quit gesture, taking exactly the path `Cmd+Q`
-takes (see "Quitting" below): with a session running it asks the same confirmation, where Cancel leaves the window
-open and everything running, and with none it quits at once. The sessions a confirmed close ends are left
-*interrupted* and resumable, just as any confirmed quit leaves them (see "Archiving, interruption and resuming" in
-`docs/product/sessions.md`).
+**With the switch off, closing the window quits.** It is an ordinary quit gesture, taking exactly the path `Cmd+Q` takes
+(see "Quitting" below): with a session starting, working or waiting for the user it asks the same confirmation, where
+Cancel leaves the window open and everything running, and otherwise it quits at once. The sessions a confirmed close
+ends are left *interrupted* and resumable, just as any confirmed quit leaves them (see "Archiving, interruption and
+resuming" in `docs/product/sessions.md`).
 
 **With the switch on, closing the window closes it into the background**: the window is hidden, Octoboard leaves the
 Dock, and the focus passes to the application used before it. The daemon, every session and its agent process keep
@@ -245,17 +245,21 @@ system logout were not tried by hand; an AppleEvent quit, which goes through the
 path, was, and asked the same way. A quit by closing the window was seen to ask while a session ran, and to end the
 application on confirmation (see "Closing the window" above).
 
-- **While any session has a running process, or is still starting, quitting asks for confirmation.** The message
-  says that quitting interrupts those sessions and that each stays resumable next time. Asking brings Octoboard to the front first,
-  restoring its window if it was minimized and bringing it back if it was closed into the background, so a quit from
-  outside the window — the Dock icon's own Quit while another application covers it, the menu bar icon's Quit or a
-  logout while the window is closed — does not leave the question unseen. The menu bar icon's Quit with the window
-  closed was seen to bring it back and ask; the other cases were not yet tried by hand.
+- **While any session is *starting*, *working* or *waiting for the user*, quitting asks for confirmation.** A
+  session *awaiting instructions* does not count: it is in the middle of nothing that is reported, and the quit still
+  leaves it interrupted and resumable like the others. The message says that quitting interrupts those sessions and
+  that each stays resumable next time. Asking brings Octoboard to the front first, restoring its window if it was
+  minimized and bringing it back if it was closed into the background, so a quit from outside the window — the Dock
+  icon's own Quit while another application covers it, the menu bar icon's Quit or a logout while the window is closed —
+  does not leave the question unseen. The menu bar icon's Quit with the window closed was seen to bring it back and ask;
+  the other cases were not yet tried by hand.
 - Once confirmed, every session process is ended and every one of those sessions is left **interrupted**, never
   archived. Clicking one next time resumes it (see "Archiving, interruption and resuming" in
   `docs/product/sessions.md`).
-- With no session running, quitting is immediate and asks nothing, and a window closed into the background is not
-  brought back for it; seen with the menu bar icon's Quit.
+- With no session *starting*, *working* or *waiting for the user* — none at all, or only ones *awaiting
+  instructions* — quitting is immediate and asks nothing, and a window closed into the background is not brought back
+  for it. Seen with the menu bar icon's Quit and no session at all; with only sessions *awaiting instructions* not yet
+  tried by hand.
 - While the daemon is not running — it failed to start, or has exited — every quit is immediate and asks nothing.
 - The daemon stopping as part of a quit is not reported as the daemon exiting: no notice is shown and a closed window
   is not brought back for it. Seen with the menu bar icon's Quit while the window was closed and no session was
