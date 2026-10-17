@@ -680,6 +680,8 @@ export function App(): React.ReactElement {
         onToggleSidebar={stableToggleSidebar}
         onSidebarToggleEnter={panes.sidebarPeek.reveal}
         onSidebarToggleLeave={panes.sidebarPeek.leave}
+        asideSpan={hasAside ? columnSpan(asideColumnPhase, asideWidth.width) : 0}
+        asideEasing={isDockEasing(asideColumnPhase)}
         aside={asideOwner?.kind}
         asideShown={panes.asideShown}
         onToggleAside={stableToggleAside}

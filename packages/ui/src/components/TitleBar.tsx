@@ -119,6 +119,11 @@ interface TitleBarProps {
    * showing the current console. */
   onSidebarToggleEnter: () => void;
   onSidebarToggleLeave: () => void;
+  /** The docked aside column's target width in px (0 while hidden), which the end segment follows
+   * above the `docked` breakpoint, so the breadcrumb ends where the aside begins. */
+  asideSpan: number;
+  /** The aside column is easing to `asideSpan`, so the segment eases with it. */
+  asideEasing: boolean;
   /** What owns the aside, which its toggle names: a console session's report or a project's files.
    * With no owner there is no aside, and no toggle. */
   aside?: AsideOwner["kind"];
@@ -146,8 +151,9 @@ interface TitleBarProps {
  * area: the other window controls are on the rail (`Rail.tsx`). The end is the reading direction's,
  * so under right-to-left it is at the window's left, where the bar's own padding keeps the macOS
  * window buttons clear (`BarFrame`). Above the `docked` breakpoint, the start segment tracks the
- * docked sidebar's clip (`.title-bar-start`), so the breadcrumb stays over the main area while that
- * column eases open or closed.
+ * docked sidebar's clip (`.title-bar-start`) and the end segment the docked aside's
+ * (`.title-bar-end`), so the breadcrumb stays over the main area while either column eases open or
+ * closed.
  */
 export function TitleBar({
   sidebarShown,
@@ -157,6 +163,8 @@ export function TitleBar({
   onToggleSidebar,
   onSidebarToggleEnter,
   onSidebarToggleLeave,
+  asideSpan,
+  asideEasing,
   aside,
   asideShown,
   onToggleAside,
@@ -207,23 +215,31 @@ export function TitleBar({
       <div className="flex min-w-0 flex-1 items-center px-3">
         {viewTrail ? <Trail names={viewTrail} /> : selectedSession && <Breadcrumb session={selectedSession} />}
       </div>
-      {aside && (
-        <div className="flex shrink-0 items-center px-2">
-          <ChromeButton
-            label={t(asideShown ? ASIDE_LABELS[aside].hide : ASIDE_LABELS[aside].show)}
-            onPress={onToggleAside}
-            expanded={asideShown}
-            controls={PANE_ID.aside}
-            onMouseHoverChange={(hovered) => (hovered ? onAsideToggleEnter() : onAsideToggleLeave())}
-          >
-            {asideShown ? (
-              <PanelRight aria-hidden="true" className="size-4 rtl:-scale-x-100" />
-            ) : (
-              <PanelRightDashed aria-hidden="true" className="size-4 rtl:-scale-x-100" />
-            )}
-          </ChromeButton>
-        </div>
-      )}
+      {/* Above the `docked` breakpoint, as wide as the docked aside's clip and never narrower than
+          its toggle, so the breadcrumb stops over the main area instead of running on above the
+          aside; below the breakpoint the class does not apply. */}
+      <div
+        className={`title-bar-end flex shrink-0 items-center justify-end ${asideEasing ? "title-bar-end-easing" : ""}`}
+        style={{ "--aside-span": `${asideSpan}px` } as React.CSSProperties}
+      >
+        {aside && (
+          <div className="flex items-center px-2">
+            <ChromeButton
+              label={t(asideShown ? ASIDE_LABELS[aside].hide : ASIDE_LABELS[aside].show)}
+              onPress={onToggleAside}
+              expanded={asideShown}
+              controls={PANE_ID.aside}
+              onMouseHoverChange={(hovered) => (hovered ? onAsideToggleEnter() : onAsideToggleLeave())}
+            >
+              {asideShown ? (
+                <PanelRight aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+              ) : (
+                <PanelRightDashed aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+              )}
+            </ChromeButton>
+          </div>
+        )}
+      </div>
     </BarFrame>
   );
 }

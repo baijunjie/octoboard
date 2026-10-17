@@ -157,8 +157,13 @@ It runs, left to right:
   or closed (see "Hiding the sidebar and the right pane" below). The start of the bar never becomes narrower than the
   buttons there — in the macOS application, that includes the clear space kept for the window buttons. Once the column no longer
   reaches past that start, the breadcrumb stays beside the sidebar toggle, which is also where it sits while the
-  sidebar is hidden. Below 1168 px it starts right after the sidebar toggle as well. A trail too long for the bar
-  fades out at its right edge, as in "Names too long for their space" in
+  sidebar is hidden. Below 1168 px it starts right after the sidebar toggle as well. Its end mirrors this: at
+  1168 px and wider, while the right pane is shown, the breadcrumb's space ends where the terminal's area does, over
+  the right pane's inner edge, rather than running on over the right pane, and follows that edge while the right pane
+  is resized and while its docked column eases open or closed. The end of the bar never becomes narrower than the
+  right pane's toggle, so once the column no longer reaches past the toggle, and while the right pane is hidden or
+  has no owner, the breadcrumb's space runs on to the toggle, or to the bar's end where there is none; below 1168 px
+  it does so as well. A trail too long for its space fades out at its right edge, as in "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`, and the status icon always stays visible. With no session selected there is
   no breadcrumb. While the archive view is open (see "The archive view" in `docs/product/sidebar.md`) the breadcrumb
   shows where that is instead, with no status icon: *console › project › Archived sessions*, *console › console
@@ -485,8 +490,9 @@ parts of the window:
 - The rail is down the window's right edge, the sidebar on the right inside the content panel, beside the rail, and
   the right pane on the left; the content panel's rounded corner is its top right. The top bar's Back, Forward and
   sidebar toggle are at its right end, in mirrored order, the right pane's toggle at its left end, and the breadcrumb
-  runs leftward from them, starting over the terminal's area while the sidebar is shown and following the column's
-  inner edge while that column eases, as in "The top bar" above.
+  runs leftward from them, starting over the terminal's area while the sidebar is shown and ending over the right
+  pane's inner edge, on the window's left, while the right pane is shown, following each column's inner edge while
+  that column is resized or eases, as in "The top bar" above.
 - Drawers slide in from their own pane's side: the sidebar's from behind the rail, the right pane's from the window's
   left edge. Floating cards keep their vertical fade and drift in either reading direction. The edge strip that brings up a hidden
   right pane is along the window's left edge too, and 8 px wide there rather than 4 px.

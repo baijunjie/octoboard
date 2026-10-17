@@ -226,13 +226,27 @@
     min-width: min-content;
   }
 
-  .title-bar-start-easing {
+  /* The end segment likewise spans the docked aside's clip (`--aside-span`), so the breadcrumb ends
+     where the aside begins. Under right-to-left the aside is at the window's left, where the bar's
+     own padding already covers `--window-controls-inset` of it. */
+  .title-bar-end {
+    width: var(--aside-span, 0px);
+    min-width: min-content;
+  }
+
+  .title-bar-end:dir(rtl) {
+    width: calc(var(--aside-span, 0px) - var(--window-controls-inset, 0px));
+  }
+
+  .title-bar-start-easing,
+  .title-bar-end-easing {
     transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .title-bar-start-easing {
+  .title-bar-start-easing,
+  .title-bar-end-easing {
     transition: none;
   }
 }

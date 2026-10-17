@@ -74,7 +74,7 @@ export const busyScenarios: Scenario[] = [
     category: "normal",
     title: "Many consoles, projects and sessions",
     description:
-      "Twelve projects with long and pinned names and long paths, a pinned session, all three agents. Sessions in every status the list shows (Working, Waiting for you, Awaiting instructions, Interrupted, and Starting with a muted turning arc), one of them waiting in another console. A session of Media gateway with a title far wider than the sidebar row is selected: the breadcrumb in the top bar and its row both have to fit it.",
+      "Twelve projects with long and pinned names and long paths, a pinned session, all three agents. Sessions in every status the list shows (Working, Waiting for you, Awaiting instructions, Interrupted, and Starting with a muted turning arc), one of them waiting in another console. A session of Media gateway with a title far wider than the sidebar row is selected, with its project's pane open at the end edge: the breadcrumb in the top bar fades out where that pane begins, its status icon still visible, and the row fits the sidebar.",
     state,
     steps: [(ui) => ui.press(ui.session(SECOND_LONG_TITLE))],
   },
