@@ -2,6 +2,14 @@
 
 const MAX_TITLE_BYTES: usize = 4096;
 
+/// Both phases of Codex's blinking activity title identify a visible user interaction.
+pub(crate) fn codex_action_required(title: &str) -> bool {
+    matches!(
+        title.split(" | ").next().map(str::trim),
+        Some("[ ! ] Action Required" | "[ . ] Action Required")
+    )
+}
+
 /// Whether `c` is one of the glyphs an agent puts at the start of its title to show what it is
 /// doing: Claude Code's rotating circle and its idle star, the braille spinners Codex and other
 /// terminal tools use, and the star and diamond markers other agent CLIs use. The set is
@@ -140,6 +148,20 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn codex_action_markers_are_activity_items_rather_than_task_text() {
+        assert!(codex_action_required("[ ! ] Action Required | project"));
+        assert!(codex_action_required("[ . ] Action Required | project"));
+        for title in [
+            "| [ ! ] Action Required | project",
+            "Fix [ ! ] Action Required | project",
+            "Task | [ ! ] Action Required | project",
+            "| project",
+        ] {
+            assert!(!codex_action_required(title), "{title}");
+        }
+    }
 
     #[test]
     fn titles_survive_every_byte_boundary_and_both_terminators() {

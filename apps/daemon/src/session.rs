@@ -63,12 +63,33 @@ struct TitleObserver {
     parser: crate::terminal_title::Parser,
     latest: Option<Option<String>>,
     state: Weak<crate::state::AppState>,
+    runtime: Option<tokio::runtime::Handle>,
+}
+
+impl TitleObserver {
+    fn publish(&self, session: &LiveSession) {
+        if let (Some(state), Some(title)) = (self.state.upgrade(), &self.latest) {
+            if state.record_terminal_title(session, title.as_deref()) {
+                // Output arrives on the PTY reader thread, outside the Tokio runtime. A write
+                // must not block that reader while the agent is still draining its output.
+                if let Some(runtime) = &self.runtime {
+                    let id = session.id.clone();
+                    runtime.spawn_blocking(move || {
+                        if let Ok(record) = state.session_record(&id) {
+                            state.flush_outbox(&id, state.agent_status(&record));
+                        }
+                    });
+                }
+            }
+        }
+    }
 }
 
 pub struct LiveSession {
     pub id: String,
     pub agent: Agent,
     title: Mutex<TitleObserver>,
+    action_required: AtomicBool,
     pub pid: u32,
     /// The PTY master descriptor, in non-blocking mode. Reads and writes both go through it;
     /// `master` is kept only so the window can be resized.
@@ -93,9 +114,8 @@ pub struct LiveSession {
     /// Per-session scratch directory (Grok's `GROK_HOME` symlink farm), removed when the session's
     /// process is gone.
     scratch_dir: Mutex<Option<std::path::PathBuf>>,
-    /// The agent resolves approval requests itself for this session, so its permission hook fires
-    /// with no dialog ever shown. A raised hand here would ask the user to answer something they
-    /// never see.
+    /// Permission hooks can describe automatic reviews without a dialog. Visible action prompts
+    /// are observed separately, since this setting does not rule out manual approvals.
     pub resolves_approvals_itself: bool,
     /// Watches the session's output for its agent's folder-trust confirmation.
     pub trust: TrustState,
@@ -136,6 +156,7 @@ impl LiveSession {
             id: session.id,
             agent: session.agent,
             title: Mutex::new(TitleObserver::default()),
+            action_required: AtomicBool::new(false),
             pid: session.pid,
             fd: session.fd,
             master: Mutex::new(session.master),
@@ -164,9 +185,18 @@ impl LiveSession {
     pub(crate) fn observe_titles(&self, state: &Arc<crate::state::AppState>) {
         let mut observer = self.title.lock().expect("title observer lock poisoned");
         observer.state = Arc::downgrade(state);
-        if let Some(title) = &observer.latest {
-            state.record_terminal_title(self, title.as_deref());
-        }
+        observer.runtime = tokio::runtime::Handle::try_current().ok();
+        observer.publish(self);
+    }
+
+    pub(crate) fn needs_user_action(&self) -> bool {
+        self.action_required.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn observe_action_title(&self, title: Option<&str>) -> bool {
+        let waiting = self.agent == Agent::Codex
+            && title.is_some_and(crate::terminal_title::codex_action_required);
+        self.action_required.swap(waiting, Ordering::AcqRel) != waiting
     }
 
     pub fn fd(&self) -> RawFd {
@@ -310,9 +340,7 @@ impl LiveSession {
                 let changed = observer.latest.as_ref() != Some(&title);
                 observer.latest = Some(title.clone());
                 if changed {
-                    if let Some(state) = observer.state.upgrade() {
-                        state.record_terminal_title(self, title.as_deref());
-                    }
+                    observer.publish(self);
                 }
             }
         }

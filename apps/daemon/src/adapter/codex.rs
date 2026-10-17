@@ -36,10 +36,10 @@
 //!   work — no hash captured once could ever match a different session's.
 //!
 //! The effective `approvals_reviewer` changes what Octoboard may promise: with it set to auto review,
-//! Codex resolves an approval request itself — the `PermissionRequest` hook
-//! fires, no modal is ever shown, and the tool proceeds. A raised hand there asks the user to
-//! answer something they will never be shown, so the adapter resolves the account override or
-//! reads the setting and says so in its plan.
+//! the `PermissionRequest` hook fires for requests resolved without showing a modal. The adapter
+//! resolves the account override or reads the user's setting so those events do not raise a hand.
+//! Actual action prompts are observed separately from the terminal activity title, since automatic
+//! review does not rule out manual approvals.
 //!
 //! Codex cannot pre-allocate a session id, and in the interactive TUI the thread is created lazily
 //! on the first prompt submission — so a session the user opens without a task has no
@@ -101,7 +101,9 @@ impl AgentAdapter for CodexAdapter {
             .split(" | ")
             .map(str::trim)
             .filter(|item| {
-                !item.is_empty() && !super::is_spinner(item) && *item != "[ ! ] Action Required"
+                !item.is_empty()
+                    && !super::is_spinner(item)
+                    && !crate::terminal_title::codex_action_required(item)
             })
             .collect();
         if items
@@ -370,6 +372,7 @@ mod tests {
             "⠙ | proj",
             "| proj",
             "[ ! ] Action Required | proj",
+            "[ . ] Action Required | proj",
             "",
         ] {
             assert_eq!(task(raw), None, "{raw}");

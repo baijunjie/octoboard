@@ -239,10 +239,9 @@ pub struct LaunchPlan {
     pub args: Vec<String>,
     /// Environment entries layered on top of the shell snapshot.
     pub env: Vec<(String, String)>,
-    /// The agent resolves approval requests itself for this session, so its permission hook fires
-    /// without any dialog ever reaching the user. Octoboard must not raise a hand for one: nobody
-    /// would have anything to answer, and the tool proceeds regardless. Only Codex can be in this
-    /// state, because of the user's configuration or account override.
+    /// Codex's user configuration or account override can resolve permissions automatically, so
+    /// a permission hook alone does not establish a user interaction. Visible action prompts are
+    /// observed separately.
     pub resolves_approvals_itself: bool,
     /// Something about this launch the user has to be told, because the agent will not tell them
     /// in a way they can act on. Surfaced once, when the session starts.

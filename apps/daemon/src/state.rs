@@ -387,29 +387,33 @@ impl AppState {
     /// identity and storing its title. Only this column is written: status and user names may move
     /// concurrently. A deleted record is never recreated. An agent re-sends its title as often as
     /// its spinner turns, so the title is always stored but published only when it changes what
-    /// clients are shown.
-    pub(crate) fn record_terminal_title(&self, session: &LiveSession, title: Option<&str>) {
+    /// clients are shown. Returns whether a visible action prompt has just been answered, so
+    /// the observer can release queued messages without writing on the PTY reader thread.
+    pub(crate) fn record_terminal_title(&self, session: &LiveSession, title: Option<&str>) -> bool {
         let live = self.live.read().expect("live sessions lock poisoned");
         if !live
             .sessions
             .get(&session.id)
             .is_some_and(|current| std::ptr::eq(current.as_ref(), session))
         {
-            return;
+            return false;
         }
         let names = std::cell::OnceCell::new();
         let before = match self.store.get_session(&session.id) {
             Ok(Some(record)) => self.resolved_title(&record, &names),
-            Ok(None) => return,
+            Ok(None) => return false,
             Err(err) => {
                 tracing::warn!(session = %session.id, %err, "reading the session for its terminal title failed");
-                return;
+                return false;
             }
         };
+        let action_changed = session.observe_action_title(title);
         let stored = self.store.set_terminal_title(&session.id, title);
         drop(live);
         match stored {
-            Ok(Some(record)) if self.resolved_title(&record, &names) != before => {
+            Ok(Some(record))
+                if action_changed || self.resolved_title(&record, &names) != before =>
+            {
                 self.publish_session(&record)
             }
             Ok(_) => {}
@@ -417,6 +421,7 @@ impl AppState {
                 tracing::warn!(session = %session.id, %err, "storing the terminal title failed")
             }
         }
+        action_changed && !session.needs_user_action()
     }
 
     /// The title a client is shown for the session. `names` holds the project's names once asked.
@@ -456,13 +461,13 @@ impl AppState {
         )
     }
 
-    /// The session as a client receives it, with its resolved title and a live trust wait.
-    /// Trust leaves the stored agent status intact so answering restores it even before a hook.
+    /// The session as a client receives it, with its resolved title and live user interactions.
+    /// These leave the stored agent status intact so answering restores it even before a hook.
     pub(crate) fn wire_session(&self, mut session: Session) -> Session {
         if !session.status.is_dormant()
             && self
                 .live_session(&session.id)
-                .is_some_and(|live| live.trust.needs_user())
+                .is_some_and(|live| live.trust.needs_user() || live.needs_user_action())
         {
             session.status = SessionStatus::WaitingUser;
         }
@@ -701,9 +706,16 @@ impl AppState {
     }
 
     /// The status the session's agent is at, which is the record's except while a session
-    /// request holds the hand up. Whatever the daemon decides about the agent itself reads this;
-    /// the record is what the window shows.
+    /// request holds the hand up or a visible action prompt overrides the hooks. Whatever the
+    /// daemon decides about the agent itself reads this; clients receive `wire_session`.
     pub fn agent_status(&self, session: &Session) -> SessionStatus {
+        if !session.status.is_dormant()
+            && self
+                .live_session(&session.id)
+                .is_some_and(|live| live.needs_user_action())
+        {
+            return SessionStatus::WaitingUser;
+        }
         self.request_hands
             .lock()
             .expect("request hands lock poisoned")
@@ -957,8 +969,8 @@ impl AppState {
     /// **Blocks** on the PTY write, so callers on an async path go through
     /// [`Self::spawn_flush_outbox`].
     pub fn flush_outbox(&self, id: &str, status: SessionStatus) -> Drain {
-        // The gate is the session's hook-reported state, never the terminal: a write while a modal
-        // dialog is up has its trailing Enter confirm whatever option is highlighted.
+        // A write while a modal dialog is up has its trailing Enter confirm whatever option is
+        // highlighted. Check both the caller's hook state and the live interaction below.
         if !matches!(status, SessionStatus::Working | SessionStatus::Idle) {
             return Drain::Pending;
         }
@@ -976,7 +988,7 @@ impl AppState {
         // Nor while the agent may be showing its trust screen, which the paste's trailing Enter
         // would accept (Codex, Grok Build) or decline (Claude Code); see `crate::trust`. The press
         // that answers it, its first hook or the end of the watch releases the queue.
-        if live.trust.holds_writes() {
+        if live.trust.holds_writes() || live.needs_user_action() {
             return Drain::Pending;
         }
         let outcome = self.outbox.drain(&live);
@@ -1702,6 +1714,103 @@ mod tests {
             assert!(Instant::now() < deadline, "the exit was never recorded");
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
+    }
+
+    #[test]
+    fn codex_manual_approval_overrides_auto_review_and_concurrent_hook_statuses() {
+        let (state, dir) = app_state("codex-manual-approval");
+        insert_record(&state, &dir, "s", SessionStatus::Working);
+        let mut record = state.session_record("s").unwrap();
+        record.agent = Agent::Codex;
+        state.save_session(&record).unwrap();
+        let live = fake_live_session("s", Agent::Codex, 80, 24, "sleep 30").with_auto_review();
+        assert!(live.resolves_approvals_itself);
+        state.register_live(live.clone());
+        live.on_output(include_bytes!("../testdata/codex_working_title.bin"));
+        let previous_title = state
+            .wire_session(state.session_record("s").unwrap())
+            .terminal_title;
+        let mut events = state.subscribe();
+        let approval = include_bytes!("../testdata/codex_approval_title.bin");
+        for byte in approval {
+            live.on_output(std::slice::from_ref(byte));
+        }
+        assert_eq!(state.agent_status(&record), SessionStatus::WaitingUser);
+        let Event::SessionUpserted { session } = events.try_recv().unwrap() else {
+            panic!("the approval must publish its hand even when the task title stays the same")
+        };
+        assert_eq!(session.status, SessionStatus::WaitingUser);
+        assert_eq!(session.terminal_title, previous_title);
+        for status in [SessionStatus::Idle, SessionStatus::Working] {
+            state.apply_hook_status("s", status).unwrap();
+            let record = state.session_record("s").unwrap();
+            assert_eq!(state.agent_status(&record), SessionStatus::WaitingUser);
+            assert_eq!(
+                state.wire_session(record).status,
+                SessionStatus::WaitingUser
+            );
+        }
+        live.on_output(b"\x1b]0;[ . ] Action Required | octoboard\x07");
+        assert!(
+            live.needs_user_action(),
+            "the blinking title must keep the hand up"
+        );
+        state.raise_request_hand("s").unwrap();
+        live.on_output(include_bytes!("../testdata/codex_working_title.bin"));
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::WaitingUser
+        );
+        assert_eq!(
+            state.agent_status(&state.session_record("s").unwrap()),
+            SessionStatus::Working
+        );
+        state.forget_request_hand("s");
+        // Dormancy is written by the coordinator, never by hooks.
+        let mut record = state.session_record("s").unwrap();
+        record.status = SessionStatus::Interrupted;
+        state.save_session(&record).unwrap();
+        live.on_output(approval);
+        assert_eq!(
+            state.wire_session(record.clone()).status,
+            SessionStatus::Interrupted
+        );
+        assert_eq!(state.agent_status(&record), SessionStatus::Interrupted);
+    }
+
+    #[tokio::test]
+    async fn answering_a_codex_manual_approval_releases_queued_messages_off_the_reader() {
+        let (state, dir) = app_state("codex-approval-outbox");
+        insert_record(&state, &dir, "s", SessionStatus::Working);
+        let live = fake_live_session("s", Agent::Codex, 80, 24, "sleep 30").with_auto_review();
+        state.register_live(live.clone());
+        live.on_output(include_bytes!("../testdata/codex_working_title.bin"));
+        assert!(
+            !live.needs_user_action(),
+            "ordinary auto-review work raises no hand"
+        );
+        live.on_output(include_bytes!("../testdata/codex_approval_title.bin"));
+        state.queue_message("s", "Queued while waiting");
+        assert_eq!(
+            state.flush_outbox("s", SessionStatus::Working),
+            Drain::Pending
+        );
+        assert_eq!(state.outbox.len("s"), 1);
+        let reader = live.clone();
+        std::thread::spawn(move || {
+            reader.on_output(include_bytes!("../testdata/codex_working_title.bin"));
+        })
+        .join()
+        .unwrap();
+        let deadline = Instant::now() + PATIENCE;
+        while state.outbox.len("s") != 0 {
+            assert!(
+                Instant::now() < deadline,
+                "answering must release the message without another hook"
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(!live.needs_user_action());
     }
 
     #[test]

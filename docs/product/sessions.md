@@ -324,8 +324,8 @@ Transitions:
   *awaiting instructions* otherwise, unless the agent's own first report has already moved it on (see "Opening a
   session"). A launch that fails removes the session.
 - While the process runs, reports from the agent move the session between *working*, *waiting for the user* and
-  *awaiting instructions* — except while a folder-trust confirmation or session request holds it at *waiting for the user* (see
-  "What the statuses are derived from" below).
+  *awaiting instructions* — except while a folder-trust confirmation, Codex action prompt or session request holds
+  it at *waiting for the user* (see "What the statuses are derived from" below).
 - The process ending for any reason other than archiving — the agent exiting on its own, a crash, the application
   quitting — leaves the session *interrupted*.
 - Archiving leaves the session *archived*. Archiving an owner also archives the *interrupted* sessions under it, and
@@ -341,8 +341,8 @@ Transitions:
 
 ### What the statuses are derived from
 
-Status comes from hook events Octoboard injects into each agent per launch, with the exceptions below. Four things
-besides those events bear on a running session's status, and only these four.
+Status comes from hook events Octoboard injects into each agent per launch, with the exceptions below. Five things
+besides those events bear on a running session's status, and only these five.
 
 - While a **Claude Code** session is *waiting for the user*, Octoboard also reads that session's own transcript file —
   the machine-readable record the agent keeps of the conversation, still not its rendered output — because a declined
@@ -350,6 +350,9 @@ besides those events bear on a running session's status, and only these four.
 - While a **Codex** session has a turn open, Octoboard also reads that session's own rollout file — the record Codex
   keeps of the session, again not its rendered output — because a turn that ends in an error is reported by no hook
   event at all; see "A Codex turn that ends in an error" below.
+- A **Codex** terminal title showing `Action Required` holds the session at *waiting for the user*, including
+  a prompt for one of Codex's subagents. Both phases of its blinking indicator keep the hand up; other hook reports
+  cannot lower it while that title remains. See "The raised hand" below for its limits.
 - A recognised folder-trust confirmation that needs the user holds its session at *waiting for the user*, even
   before the agent's first hook report. Its raised hand follows the confirmation rather than the dialog; see
   "What happens when a confirmation comes up" in `docs/product/folder-trust.md`.
@@ -373,7 +376,8 @@ limitations of what the agents expose rather than of this one:
   turn-end backstop was seen to follow about a minute later in one run (see "When a session does not report" in
   `docs/product/hub-orchestration.md`), but it finds the session already awaiting instructions.
 - A question the agent asks through **its own ask-the-user tool** is reported by Claude Code and Grok
-  Build but not by Codex, which has no such event; a Codex session asking that way reads as *working*.
+  Build but not by Codex, which has no such event; a Codex session asking that way reads as *working* unless its
+  terminal title signals `Action Required`.
 
 Part of the Grok Build case above is Octoboard's own attribution rule rather than a limit of what the agent exposes.
 Grok Build's turn-end backstop carries no turn id, so the daemon attributes it by clock. An ending that names its own
@@ -414,14 +418,16 @@ own row:
   `docs/product/sidebar.md`).
 
 **Where the hand is the agent's own, the user answers in the session's terminal**, and the status leaves *waiting for
-the user* on the agent's next event — or, where the answer was a decline and no event follows, on the decline showing
-up in the agent's own record of the conversation, which only Claude Code sessions are read for (see "Declining a
-Claude Code prompt or question" below). Nobody can answer for them: a session driving others — a console session, or a
+the user* on the agent's next event or when its Codex action title clears — or, where the answer was a decline and no
+event follows, on the decline showing up in the agent's own record of the conversation, which only Claude Code
+sessions are read for (see "Declining a Claude Code prompt or question" below). Nobody can answer for them: a session
+driving others — a console session, or a
 project session that started sessions — is told to leave such a session alone, and a message addressed to it is held
 until the user is done — see "Messages held until a session can take them" in `docs/product/message-delivery.md`.
 
-**A granted tool permission prompt lowers the hand only once the call it let through has finished.** The user answering *yes*
-is itself reported by no event, so the next event the session produces is normally the end of that tool call — the hand
+**A granted tool permission prompt reported through hooks lowers the hand only once the call it let through has
+finished.** The user answering *yes* is itself reported by no event, so the next event the session produces is normally
+the end of that tool call — the hand
 stays up from the moment the prompt appeared until the call is done, which is a moment for a file write and minutes for
 a build or a test run. For that whole time the session reads as *waiting for the user* everywhere the hand is shown, it
 counts in the rail's waiting count and the Dock badge, and a message addressed to it goes on being held. There is no
@@ -435,10 +441,18 @@ when a confirmation comes up" in `docs/product/folder-trust.md`.
 A hand Octoboard raised for a waiting session request is answered in that request's dialog instead, so a message
 addressed to such a session is not held (see "Waiting for the answer" in `docs/product/session-requests.md`).
 
-Where Codex's effective approval mode **resolves approval requests by itself** — from the account's explicit
-choice or its own configuration (see "Agent accounts" in `docs/product/settings.md`) — Octoboard raises no hand at all:
-the permission event still fires, but Codex resolves the request, no dialog ever reaches the user and the tool proceeds
-— a hand there would ask them to answer something they never see. Those sessions keep reading as *working*.
+Where Codex's effective approval mode enables **automatic approval review** (`auto_review`) — from the account's
+explicit choice or its own configuration (see "Agent accounts" in `docs/product/settings.md`) — a permission event
+alone raises no hand: requests Codex resolves itself keep the session reading as *working*. If a manual prompt
+does reach the terminal, its `Action Required` title raises the hand, including a prompt labelled as belonging to
+a Codex subagent. Messages addressed to the session are held while that signal is present. When Codex changes the
+title back after the answer, the session returns to its last hook-reported status and queued messages are released
+if that status permits delivery, without waiting for another hook event.
+
+The title does not override a hook-reported wait after it clears: ordinary approvals whose last hook status is
+still *waiting for the user* keep the hand up until the tool finishes, as described above. This detection also
+requires Codex's activity title: disabling terminal titles, or customising `tui.terminal_title` to omit activity
+or its blinking indicator, removes the signal. Octoboard does not change the user's Codex configuration to enable it.
 
 ### Declining a Claude Code prompt or question
 

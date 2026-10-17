@@ -552,7 +552,7 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
                 let believable = read_turn_boundary(state, session_id, agent, &event, &payload);
                 if believable {
                     if let Some(status) = hooks::status_from_event(agent, &event, &payload) {
-                        let status = suppress_unanswerable_hand(state, session_id, status);
+                        let status = suppress_auto_review_hook(state, session_id, status);
                         if let Err(err) = state.apply_hook_status(session_id, status) {
                             tracing::debug!(session = %session_id, %event, %err, "applying the hook status failed");
                         }
@@ -647,12 +647,11 @@ fn read_turn_boundary(
     }
 }
 
-/// Turns a raised hand nobody can answer back into plain work.
+/// Automatic reviews do not establish that a person is being asked to act.
 ///
 /// With Codex's `approvals_reviewer` set to auto review, the permission hook fires, Codex resolves
-/// the request itself, no modal is ever shown and the tool proceeds. Raising a hand there would
-/// ask the user to answer something they never see, and nothing would ever clear it.
-fn suppress_unanswerable_hand(
+/// the request itself. Visible action prompts override this hook status independently.
+fn suppress_auto_review_hook(
     state: &Arc<AppState>,
     session_id: &str,
     status: crate::protocol::SessionStatus,

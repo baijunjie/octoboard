@@ -219,6 +219,15 @@ pub(crate) fn output_containing(live: &LiveSession, needle: &str) -> String {
 /// goes.
 pub(crate) struct StandIn(Arc<LiveSession>);
 
+impl StandIn {
+    pub(crate) fn with_auto_review(mut self) -> Self {
+        Arc::get_mut(&mut self.0)
+            .expect("configure before registering the stand-in")
+            .resolves_approvals_itself = true;
+        self
+    }
+}
+
 impl Deref for StandIn {
     type Target = Arc<LiveSession>;
 
