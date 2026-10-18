@@ -65,7 +65,7 @@ function Cell({
   return (
     <td
       role="cell"
-      className={`items-baseline gap-2 py-0.5 ${empty ? "hidden" : "flex"} @xl:table-cell @xl:px-2 @xl:py-2 @xl:align-top`}
+      className={`items-baseline gap-2 py-0.5 ${empty ? "hidden" : "flex"} @xl:table-cell @xl:groove-b @xl:group-last/row:border-b-0 @xl:px-2 @xl:py-2 @xl:align-top`}
     >
       <span aria-hidden="true" className="w-20 shrink-0 text-app-muted [overflow-wrap:anywhere] @xl:hidden">
         {label}
@@ -170,21 +170,23 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
               row of cells, and nothing scrolls sideways. The table's container, not the window, is what
               tells: the dialog narrows with the window, and a window under the `docked` breakpoint can
               still hold it at full width. */}
+          {/* The table is `border-separate` at `@xl` and the groove sits on its cells: in collapse mode
+              `border-image` does not apply to rows or cells, and in separate mode a `tr` draws no border. */}
           {/* Explicit roles on every part: stacked, the parts are `display: block`, which some
               browsers take as leaving the table, and the roles keep it one. */}
           <table
             role="table"
             aria-label={t("configuration.import.result.table.label")}
-            className="block w-full text-start @xl:table @xl:table-fixed"
+            className="block w-full text-start @xl:table @xl:table-fixed @xl:border-separate @xl:border-spacing-0"
           >
             <thead role="rowgroup" className="sr-only @xl:not-sr-only">
-              <tr role="row" className="@xl:border-b @xl:border-separator">
+              <tr role="row">
                 {COLUMNS.map(({ key, width }) => (
                   <th
                     key={key}
                     role="columnheader"
                     scope="col"
-                    className={`px-2 pb-2 text-start font-medium text-app-muted ${width}`}
+                    className={`px-2 pb-2 text-start font-medium text-app-muted @xl:groove-b ${width}`}
                   >
                     {t(key)}
                   </th>
@@ -198,7 +200,7 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
                   <tr
                     key={index}
                     role="row"
-                    className="block border-b border-separator py-2 last:border-b-0 @xl:table-row @xl:py-0"
+                    className="group/row block groove-b py-2 last:border-b-0 @xl:table-row @xl:py-0"
                   >
                     <Cell label={t(COLUMNS[0].key)}>
                       <span className="font-medium text-foreground">{line.console}</span>

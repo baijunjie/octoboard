@@ -56,9 +56,26 @@ header (see `docs/product/sidebar.md` and `docs/product/focus-mode.md`), the arc
 view" in `docs/product/sidebar.md`), the project pane's header and the report panel's bar — so the lines under them
 run on as one line across the panel. The top bar's 40 px is a tier of its own and no part of this. A floating pane or
 an overlay drawer is a card inset from the panel's edges (see "A hidden pane floats in on hover" and "Below 1168 px:
-the sidebar and the right pane become drawers" below), and its headers are **47 px**
-— shorter by that inset and by the card's own 1 px top border — so the line under a card's header stays level with the
-line under the headers docked beside it; the text in a card's header therefore sits 4.5 px lower than theirs.
+the sidebar and the right pane become drawers" below), and its headers are **48 px** — shorter by that 8 px inset,
+the card's edge taking no space — so the line under a card's header stays level with the line under the headers docked
+beside it; the text in a card's header therefore sits 4 px lower than theirs.
+
+**The lines that divide a pane's parts are grooves**: the line under every pane header, and the lines that divide
+parts and rows elsewhere in the window — under the project pane's filter bar, the Git mode's worktree selector bar and
+Compare's From and To row, above a note under a pane's list, between Settings' rows and sections, in the configuration
+import's lists, in the welcome screen's list of agents, and in the token-usage tooltip. On a display of 2× pixel density
+or more a groove is two 0.5 px lines, a dark one above a light one, so that it reads as pressed into the surface; below
+2× it is a single 1 px dark line. Either way it takes 1 px. In the light appearance, on a surface that is white or
+nearly so — a dialog such as Settings, or the archive view — the light line cannot show, and the groove reads as a
+single 0.5 px dark line. The borders of controls and of a selected item, the session tree's connectors, the dashed
+outline of an empty column in the file viewer and the lines a rendered document draws are not grooves.
+
+**What floats over the content is raised by a large shadow; what lies in the layout takes the soft one.** The floating
+panes and the drawers (see "A hidden pane floats in on hover" and "Below 1168 px: the sidebar and the right pane become
+drawers" below) and the notice floating over the terminal (see "Interrupted, archived and dormant sessions" in
+`docs/product/session-terminal.md`) each cast a large elevation shadow. A card lying in the layout, such as a focus
+mode's session card (see "What both views show" in `docs/product/focus-mode.md`), has no outline and is set apart by
+the same soft shadow as the content panel's edges.
 
 **The sidebar and the right pane share one horizontal inset**, docked, floating or shown as drawers alike: a header,
 a bar, a section heading, a notice or a row's content starts **16 px** from the pane's edge, and a row's hover or
@@ -380,7 +397,9 @@ is fitted once the column comes to rest (see "Output, scrollback and size" in `d
 
 At 1168 px and wider, a hidden pane can be brought up for a moment without showing it for good. This is a **floating
 pane**, and both panes float in as the same kind of card: inset from the window chrome and the window's edges, with
-rounded corners, a border and a shadow. Below 1168 px the overlay drawers share this card appearance (see "Below
+rounded corners, a hairline edge and a large elevation shadow (see "The window chrome and the content panel" above).
+The hairline is 0.5 px on a display of 2× pixel density or more and
+1 px below that, and it takes no space, so the card is exactly its box. Below 1168 px the overlay drawers share this card appearance (see "Below
 1168 px: the sidebar and the right pane become drawers" below). Docked panes open and close as full-height columns
 (see "Hiding the sidebar and the right pane" above).
 
@@ -405,7 +424,7 @@ rounded corners, a border and a shadow. Below 1168 px the overlay drawers share 
     connection banner), never drawn over the rail.
   - The **right pane's card** keeps the same 8 px gap from the top bar, from the window's right edge and from the
     window's bottom (or the connection banner).
-  - A card's own headers are 9 px shorter than the docked panes' — the 8 px gap plus the card's own 1 px top border —
+  - A card's own headers are 8 px shorter than the docked panes' — the 8 px gap, the card's edge taking no space —
     so the line under a header stays level across the panel (see "The window chrome and the content panel" above).
 - **How it goes away**: 200 ms after the pointer has left it, the card fades out while moving downward 6 px over
   240 ms, with the same easing as its entrance, or disappears at once where the system asks for reduced motion.
@@ -439,11 +458,11 @@ Below 1168 px wide, the top bar and the rail stay as they are, and the terminal 
 and fills its width. The sidebar and the right pane each become an **overlay drawer** over it, **closed by
 default**:
 
-- Both drawers have the same rounded corners, border and shadow as the floating panes. Each keeps an **8 px gap**
+- Both drawers have the same rounded corners, hairline edge and shadow as the floating panes. Each keeps an **8 px gap**
   from the top bar and from the window's bottom (or the connection banner when it is shown). The sidebar drawer
   slides in from behind the rail and out behind it, never drawn over the rail, and keeps an 8 px gap from it when
   open. The right pane's drawer slides in from the window's right edge and keeps an 8 px gap from that edge.
-  Their headers are 47 px high (see "The window chrome and the content panel" above).
+  Their headers are 48 px high (see "The window chrome and the content panel" above).
 - The sidebar drawer is 280 px wide; the right pane's drawer is 420 px wide, capped at 92% of the viewport. Both are
   also capped to the space after the rail minus two 8 px gaps, so neither touches the opposite edge of the content
   panel on a narrow screen. The dimmed area behind an open drawer covers the content panel, including the gaps,

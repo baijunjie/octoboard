@@ -91,7 +91,7 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
                   const unavailable = availability === "unavailable";
                   const StatusIcon = available ? Check : unavailable ? Minus : CircleDashed;
                   return (
-                    <li key={value} className="border-b border-separator py-3 first:pt-0 last:border-b-0 last:pb-0">
+                    <li key={value} className="groove-b py-3 first:pt-0 last:border-b-0 last:pb-0">
                       <div role="status" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                         <span className="flex min-w-0 items-center gap-3 text-sm font-medium">
                           <AgentIcon agent={value} className="size-5 shrink-0" />

@@ -14,7 +14,7 @@
 ## Technical design
 
 - [ ] A panel kind registry: each kind gives its title, icon, header actions and content, so a later kind is one entry.
-- [ ] Each panel is its own rounded card with the panel card edge from milestone 2. The cards are the right pane: in
+- [ ] Each panel is its own rounded card with the panel card edge (`panel-edge`). The cards are the right pane: in
       docked, floating and drawer forms the pane has no frame or edge of its own around them. They fill the pane edge to
       edge with no margin, separated only by a gap that holds the resize handle. The gap shows the sidebar's background
       in every form.
@@ -62,3 +62,10 @@
   `docs/product/moving-focus-between-regions.md`, `docs/ui-accessibility.md`,
   `docs/memory/focus-and-key-handling-in-the-ui.md`, `docs/memory/what-goes-on-the-window-material.md`,
   `docs/memory/keeping-the-ui-responsive-in-webkit.md`.
+
+## Handoff
+
+- `packages/ui/src/layout/AsidePane.tsx` still rounds the right pane's floating card and takes the `panel-edge`
+  hairline that the pane overlay's drawer class applies, marked with a `TODO` naming this milestone. Once the project
+  view's right pane is a stack of panel cards that carry their own edge (`panel-edge` plus `shadow-(--panel-shadow)` in
+  the layout, `shadow-xl` when floating), remove that rounding and edge there and the `TODO` with them.

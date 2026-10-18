@@ -60,7 +60,7 @@ export function AgentAccountsSection(): React.ReactElement {
                 {unavailable ? t("agents.notInstalled", { agent: AGENT_LABEL[agent] }) : AGENT_LABEL[agent]}
               </h3>
               {agent === "codex" && <p className="pb-2 text-sm text-app-muted">{t("settings.accounts.approval.description")}</p>}
-              <div className={`grid grid-cols-1 border-t border-separator ${agent === "codex" && owned.length > 0 ? "sm:grid-cols-[minmax(0,1fr)_auto_auto]" : "sm:grid-cols-[minmax(0,1fr)_auto]"}`}>
+              <div className={`grid grid-cols-1 groove-t ${agent === "codex" && owned.length > 0 ? "sm:grid-cols-[minmax(0,1fr)_auto_auto]" : "sm:grid-cols-[minmax(0,1fr)_auto]"}`}>
                 <AccountRow
                   motionKey={`default:${agent}`}
                   label={t("settings.accounts.defaultName")}
@@ -144,7 +144,7 @@ function AccountRow({ label, description, reviewer, children, motionKey }: {
   motionKey: string;
 }): React.ReactElement {
   return (
-    <div data-list-motion={motionKey} className="col-span-full grid grid-cols-subgrid items-center gap-x-4 gap-y-3 border-b border-separator py-4 last:border-b-0">
+    <div data-list-motion={motionKey} className="col-span-full grid grid-cols-subgrid items-center gap-x-4 gap-y-3 groove-b py-4 last:border-b-0">
       <div className="min-w-0">
         <div className="text-sm font-medium">{label}</div>
         <div className="text-sm text-app-muted">{description}</div>

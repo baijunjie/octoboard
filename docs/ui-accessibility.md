@@ -576,8 +576,10 @@ the surface in both appearances.
 
 ### Hand-built rows and cards
 
-A hand-built row or card that its content already identifies takes HeroUI's separator colour for its outline
-(`border-separator`, as the focus-mode session cards do), even though that is under 3:1. Its selected state still has to
+A hand-built card that its content already identifies has no outline of its own: it is set apart by the short two-layer panel
+shadow (`shadow-(--panel-shadow)`, as the focus-mode session cards are), with a transparent border holding the place a
+selected state's border takes. That edge is decorative and is not held to 3:1; a panel card's hairline (`panel-edge`)
+and a groove divider (`groove-b` and its other sides) are decorative in the same way. Its selected state still has to
 reach 3:1 (`border-accent-glyph`).
 
 An unarchived locked session keeps a yellow inset outline without changing its size or position. Its persistent lock button

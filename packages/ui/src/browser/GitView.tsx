@@ -179,7 +179,7 @@ function ChangesView({
 
   return (
     <>
-      <div ref={selectorsRef} className="shrink-0 border-b border-separator py-2 px-(--pane-inset)">
+      <div ref={selectorsRef} className="shrink-0 groove-b py-2 px-(--pane-inset)">
         <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3">
           <BranchSelect
             label={t("git.changes.branch")}

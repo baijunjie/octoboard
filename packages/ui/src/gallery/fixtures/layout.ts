@@ -112,7 +112,7 @@ export const layoutScenarios: Scenario[] = [
     title: "Hidden docked sidebar",
     state: railState,
     preferences: { sidebarVisible: false, sidebarConsole: main.id },
-    description: "The breadcrumb remains while the sidebar is hidden. From fully closed, hover the sidebar toggle, then Main's avatar and another console's avatar: each inset preview fades in while rising 6px over 240ms, shows its console and fades downward on exit, so let it fully close before comparing the next trigger. Press the toggle to compare the docked column's 200ms opening and closing with the report pane.",
+    description: "The breadcrumb remains while the sidebar is hidden. From fully closed, hover the sidebar toggle, then Main's avatar and another console's avatar: each inset preview fades in while rising 6px over 240ms, shows its console and fades downward on exit, so let it fully close before comparing the next trigger. A preview card's header line runs level with the docked report header's. Press the toggle to compare the docked column's 200ms opening and closing with the report pane.",
     steps: [
       (ui) => ui.press(ui.session("Hub")),
     ],
@@ -124,7 +124,7 @@ export const layoutScenarios: Scenario[] = [
     title: "Hidden docked report",
     state: railState,
     preferences: { asideVisible: false },
-    description: "Hover the end edge or report toggle from fully closed: the inset report preview fades in and out like the sidebar's. Press the toggle to compare the docked pane's 200ms opening and closing with the sidebar.",
+    description: "Hover the end edge or report toggle from fully closed: the inset report preview fades in and out like the sidebar's, its header line level with the docked sidebar header's. Press the toggle to compare the docked pane's 200ms opening and closing with the sidebar.",
     steps: [
       (ui) => ui.press(ui.session("Hub")),
     ],
@@ -137,7 +137,7 @@ export const layoutScenarios: Scenario[] = [
     width: 390,
     state: railState,
     preferences: { sidebarConsole: main.id },
-    description: "The mobile sidebar floats over a dimmed terminal with an 8px gap below the top bar, past the rail and above the bottom edge, its rounded border and shadow matching the hidden desktop sidebar's preview. Close and reopen it with the toggle to inspect the slide from behind the rail: the card and shadow stay clear of the avatars throughout. The backdrop and Escape also close it; Arabic mirrors the card and rail.",
+    description: "The mobile sidebar floats over a dimmed terminal with an 8px gap below the top bar, past the rail and above the bottom edge, its rounded corners, hairline edge and drop shadow matching the hidden desktop sidebar's preview. Close and reopen it with the toggle to inspect the slide from behind the rail: the card and shadow stay clear of the avatars throughout. The backdrop and Escape also close it; Arabic mirrors the card and rail.",
     steps: [
       (ui) => ui.press(ui.t("titleBar.sidebar.show")),
     ],

@@ -490,7 +490,7 @@ export function TerminalPane({
           exist before its content changes to be announced. */}
       <div role="status" className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
         {session && isDormant && !resuming && (
-          <Surface className="pointer-events-auto flex items-center gap-3 rounded-lg border border-separator px-3 py-2 text-sm shadow-lg">
+          <Surface className="pointer-events-auto flex items-center gap-3 rounded-lg px-3 py-2 text-sm shadow-lg">
             <span className="text-app-muted">
               {t(session.status === "archived" ? "terminal.archived" : "terminal.notRunning")}
             </span>

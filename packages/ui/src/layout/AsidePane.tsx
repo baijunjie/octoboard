@@ -36,7 +36,7 @@ export interface AsideLayout {
  * During its own toggle the pane keeps its rendered width inside a clip that eases to zero,
  * so its content never reflows during the close. With the docked pane hidden,
  * `drawerClass` keeps it an overlay, fading in while
- * `peek` is active at `--aside-width` (still capped at 92vw), as a rounded, bordered card like the
+ * `peek` is active at `--aside-width` (still capped at 92vw), as a rounded, edged card like the
  * floating sidebar; `overflow-hidden` clips what it holds to the rounded edge. In every form the
  * pane is painted `--panel-sidebar`, the sidebar's colour, so a drawer or a floating pane keeps
  * an empty state from showing the terminal through.
@@ -84,8 +84,11 @@ export function AsidePane({
     observer.observe(clip);
     return () => observer.disconnect();
   }, [dock.phase]);
+  // TODO: removed by the split-panel-terminal topic's "Split right pane" milestone (03): once the
+  // project view's right pane is a stack of panel cards that carry their own edge, this owner stops
+  // rounding the card and stops taking the `panel-edge` that `drawerClass` applies.
   const overlay = dock.inset
-    ? `docked:w-(--aside-width) docked:rounded-xl docked:border docked:overflow-hidden ${drawerClass("end", "floating", open, dock.insetShown)}${dock.preparingInset ? " docked:transition-none" : ""}`
+    ? `docked:w-(--aside-width) docked:rounded-xl docked:overflow-hidden ${drawerClass("end", "floating", open, dock.insetShown)}${dock.preparingInset ? " docked:transition-none" : ""}`
     : `${dock.phase === "open" ? "docked:w-full" : dock.phase === "closing" ? "docked:w-[var(--aside-close-width,var(--aside-width))]" : "docked:w-(--aside-width)"} docked:max-w-none docked:shrink-0 docked:h-full ${drawerClass("end", "drawer", open)}${dock.phase === "closed" ? " docked:invisible" : ""}`;
   return (
     <>
@@ -107,7 +110,7 @@ export function AsidePane({
           onTransitionEnd={dock.onInsetTransitionEnd}
           onPointerEnter={peek?.keep}
           onPointerLeave={peek?.leave}
-          className={`flex min-h-0 flex-col border-separator bg-panel-sidebar w-[420px] max-w-[92vw] max-docked:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] ${overlay} ${className}`}
+          className={`flex min-h-0 flex-col bg-panel-sidebar w-[420px] max-w-[92vw] max-docked:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] ${overlay} ${className}`}
         >
           {children}
         </div>

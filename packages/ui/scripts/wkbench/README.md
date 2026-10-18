@@ -36,6 +36,13 @@ measure a frozen page. Leave the machine alone while it runs. A first run also b
 takes minutes; on a machine whose endpoint-security software inspects every process spawn, each step can stall for
 seconds, which is normal.
 
+The window is opened at a fixed position and never moved, so it lands on the main display and the page runs at that
+display's pixel density. The `restyle` table prints it as `devicePixelRatio`. A run on a 1x display does not exercise
+what a 2x display draws differently (half-pixel `border-image` gradients and 0.5px hairlines, which
+`packages/ui/src/style.css` swaps for 1px lines under `@media (max-resolution: 1.99dppx)`), and the tables carry no
+other trace of the density. For a change that affects painting, run the base and the branch on the same display, and on
+a 2x one to measure the high-density path.
+
 Each scenario is limited to 150 s plus 30 s per `--reps`, and the run gives up on a page that posts nothing for 150 s
 (longer than any one step of the driver's own timeouts). The page posts a frame count every 5 s, so the message says
 whether it never loaded or loaded and then ran no frames (a window nobody sees gets none).
@@ -104,6 +111,9 @@ Scroll and idle rows show frame pacing over the driven window. The restyle table
 the cost of one pass (a custom property and 1px of padding changed on the region, so style recalculation of everything
 under it plus the layout that depends on it): multiply by the number of forced passes an interaction makes (each
 synchronous layout read after a DOM change is one) to judge it, and make the restyle cheap first.
+
+Compare only tables with the same `devicePixelRatio`: the density changes what is painted, so two runs on different
+displays are not a before and after.
 
 Run-to-run noise is easily 10 to 20 percent, more with other apps busy: compare medians of at least 3 rounds, on the
 same machine, with nothing else running.

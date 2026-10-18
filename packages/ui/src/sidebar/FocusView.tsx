@@ -56,7 +56,7 @@ function FocusHeader({
     // A row or card below sits in the scroll area (`--row-fill-inset`), then inside its own padding (a
     // card's border and padding add up to `--row-content-inset`), so the end padding matches that and
     // this header's trailing menus line up with the menu on a row or card. The start stays put.
-    <div ref={ref} className="flex h-(--pane-header-height) shrink-0 items-center gap-1 border-b border-separator ps-(--row-fill-inset) pe-(--pane-inset)">
+    <div ref={ref} className="flex h-(--pane-header-height) shrink-0 items-center gap-1 groove-b ps-(--row-fill-inset) pe-(--pane-inset)">
       <TitledControl title={t("sidebar.focus.exit")}>
         <Button
           isIconOnly
@@ -187,7 +187,10 @@ export function ProjectFocusView({
               action={{ label: t("sidebar.project.openSession"), onPress: () => handlers.onOpenDialog(newSession()) }}
             />
           ) : (
-            <SessionCards handlers={handlers} sessions={live} selectedSessionId={selectedSessionId} consoleOwner={includeConsoleSessions ? consoleOwner : undefined} />
+            // The padding covers the cards' shadow so the opaque sticky headings do not paint over it.
+            <div className="py-1.5">
+              <SessionCards handlers={handlers} sessions={live} selectedSessionId={selectedSessionId} consoleOwner={includeConsoleSessions ? consoleOwner : undefined} />
+            </div>
           )}
           {!includeConsoleSessions && elsewhere && <BoundElsewhere handlers={handlers} count={elsewhere.count} owners={elsewhere.owners} />}
         </section>
@@ -287,7 +290,8 @@ export function ConsoleSessionFocusView({
           ) : groups.length === 0 ? (
             <EmptyPanel compact icon={MessageSquarePlus} message={t("sidebar.focus.noBoundSessions")} />
           ) : (
-            <div ref={groupsRef} className="relative flex flex-col gap-2">
+            // The padding covers the cards' shadow so the opaque sticky headings do not paint over it.
+            <div ref={groupsRef} className="relative flex flex-col gap-2 pb-1.5">
               {groups.map(({ project }) => (
                 <div key={project.id} data-flip={project.id}>
                   <FocusProjectGroup
@@ -604,7 +608,7 @@ const SessionCard = memo(function SessionCard({
       selected={selected}
       locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
-      className="min-h-8 flex-col gap-1 border border-separator px-[calc(var(--row-content-inset)-1px)] py-[7px] data-selected:border-accent-glyph"
+      className="min-h-8 flex-col gap-1 border border-transparent shadow-(--panel-shadow) px-[calc(var(--row-content-inset)-1px)] py-[7px] data-selected:border-accent-glyph"
     >
       <RowIconLine icon={<StatusIcon status={session.status} decorative />}>
         <span className="text-xs font-medium text-app-muted">{statusLabel(t, session.status)}</span>

@@ -99,3 +99,20 @@ card's border width — is a `calc` of the token, not a literal in its place.
 
 The tokens are horizontal only: vertical padding keeps a value of its own, even on an element whose horizontal padding
 is a `calc` of a token (`px-[calc(var(--row-content-inset)-1px)] py-[7px]`, not one `p-[calc(...)]` for both).
+
+## Dividers are grooves, and cards are edged by shadows rather than decorative borders
+
+In `packages/ui`, a line that divides a pane's parts or rows is a groove utility from `packages/ui/src/style.css`
+(`groove-b` and its siblings), never `border-b border-separator`, a bare `border-*` or a `divide-*`. `--separator` is
+left to HeroUI's own components and to the few lines the "The window chrome and the content panel" section of
+`docs/product/window-layout.md` lists as not grooves. A card takes no decorative outline border, and its shadow
+depends on whether it floats:
+
+- A card lying in the layout takes the short two-layer `shadow-(--panel-shadow)`, as the "Hand-built rows and cards" section of
+  `docs/ui-accessibility.md` sets out.
+- Whatever floats over the content — the floating cards and drawers of both panes, the notice floating over the
+  terminal — keeps its elevation shadow (`shadow-xl`, `shadow-lg`) and drops only its outline border; it never takes
+  the short shadow in its place.
+- A panel card (the floating pane, a drawer) adds `panel-edge` for its hairline alongside its shadow.
+
+Borders that identify a control or show a selected state are not decorative and stay, at their 3:1 colour.

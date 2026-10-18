@@ -10,7 +10,6 @@
   letter-spacing: 0.02em;
   color: var(--foreground);
   background: var(--background);
-  border-bottom: 1px solid var(--separator);
 }
 
 .website-preview-app {

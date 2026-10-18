@@ -71,7 +71,7 @@ export function PermissionsSection(): React.ReactElement {
           paragraph above would otherwise run straight into a description in the same muted text —
           here several lines of it. The wrapper draws that rule, as `TrustedFoldersSection` and
           `AgentAccountsSection` do for the same reason. */}
-      <div className="border-t border-separator">
+      <div className="groove-t">
         {PERMISSIONS.map(({ kind, label, description, refused: refusedKey }) => {
           const granted = status[kind];
           // Accessibility is never granted in place: its request only shows the system's dialog and

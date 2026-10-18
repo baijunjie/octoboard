@@ -87,7 +87,7 @@ function ProjectRow({
   const target = targetOf(project, row);
   const inPlace = row.choice === "exported_path" && target === project.path;
   return (
-    <li className="@container flex flex-col gap-1.5 py-2.5">
+    <li className="@container flex flex-col gap-1.5 groove-b py-2.5 last:border-b-0">
       {/* The name and the choice made for it are one decision, so they share a line; the choice is
           only as wide as its labels need and drops under the name where the dialog is narrow. */}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
@@ -198,7 +198,7 @@ function ConsoleGroup({
       {console.projects.length === 0 ? (
         <p>{t("configuration.import.console.noProjects")}</p>
       ) : (
-        <ul className="flex flex-col divide-y divide-separator">
+        <ul className="flex flex-col">
           {console.projects.map((project, p) => {
             const row = review[index][p];
             const problem = shown(directoryProblem(row));

@@ -31,7 +31,7 @@ export function TrustedFoldersSection(): React.ReactElement {
         {t("settings.trusted.description")}
       </p>
       {directories.length === 0 ? (
-        <div className="border-t border-separator py-2">
+        <div className="groove-t py-2">
           {/* `-ms-2` cancels the `ps-2` that `EmptyPanel`'s compact row carries for the sidebar rows
               it was built for, which here would stand its glyph 8px in from the section's own
               content edge. Change the two together. */}
@@ -40,7 +40,7 @@ export function TrustedFoldersSection(): React.ReactElement {
           </div>
         </div>
       ) : (
-        <div ref={listRef} className="relative border-t border-separator">
+        <div ref={listRef} className="relative groove-t">
           {directories.map((path) => (
             <SettingRow
               key={path}

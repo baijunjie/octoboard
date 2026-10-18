@@ -80,7 +80,7 @@ async function start(): Promise<void> {
           <ErrorBoundary>
             <ThemeProvider>
               {!embedded && (
-                <div className="website-preview-label">{copy.demo}</div>
+                <div className="website-preview-label groove-b">{copy.demo}</div>
               )}
               <div className="website-preview-app">
                 <PageDocumentTransform value={reportDocument}>

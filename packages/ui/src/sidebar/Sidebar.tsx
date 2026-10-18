@@ -78,7 +78,7 @@ interface SidebarProps extends SidebarHandlers {
    * longer needs it). */
   open: boolean;
   /** The hover reveal of the sidebar while the user has hidden it from the top bar. The card
-   * (fixed, inset from the rail and the other chrome, rounded, bordered, shadowed) is only up
+   * (fixed, inset from the rail and the other chrome, rounded, edged) is only up
    * while this hover is, or while that card is sliding away. The rest of the time a hidden docked
    * sidebar is the same column as the shown one, clipped to nothing. `undefined` while the docked
    * sidebar is shown. */
@@ -240,7 +240,7 @@ export function Sidebar({
   // that; the inset card is a later state, only once the column is out of the row.
   const dock = usePaneDockMotion(peek === undefined, peek?.active ?? false, onColumnPhase);
   const drawerClassName = dock.inset
-    ? `docked:rounded-xl docked:border ${drawerClass("start", "floating", open, dock.insetShown)}${dock.preparingInset ? " docked:transition-none" : ""}`
+    ? `docked:rounded-xl ${drawerClass("start", "floating", open, dock.insetShown)}${dock.preparingInset ? " docked:transition-none" : ""}`
     : `${drawerClass("start", "drawer", open)} docked:h-full`;
 
   // What the sidebar is showing, and how it arrived there: going down into a focus mode slides the
@@ -378,7 +378,7 @@ export function Sidebar({
           id={PANE_ID.sidebar}
           data-pane="sidebar"
           data-region="sidebar"
-          className={`flex w-70 max-docked:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] flex-col overflow-hidden sidebar-fills border-separator bg-panel-sidebar shrink-0 docked:w-(--sidebar-width) ${drawerClassName}${dock.phase === "closed" && !dock.inset ? " docked:invisible" : ""}`}
+          className={`flex w-70 max-docked:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] flex-col overflow-hidden sidebar-fills bg-panel-sidebar shrink-0 docked:w-(--sidebar-width) ${drawerClassName}${dock.phase === "closed" && !dock.inset ? " docked:invisible" : ""}`}
           onPointerEnter={peek?.keep}
           onPointerLeave={peek?.leave}
           onPointerDownCapture={peek ? onPeekPress : undefined}
@@ -405,7 +405,7 @@ function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers; curre
   return (
     // The list under this header is inset twice — the scroll area, then each heading and row — so
     // the end padding matches that and this menu lines up with the rows' menus.
-    <div ref={headerRef} className="flex h-(--pane-header-height) shrink-0 items-center gap-2 border-b border-separator px-(--pane-inset)">
+    <div ref={headerRef} className="flex h-(--pane-header-height) shrink-0 items-center gap-2 groove-b px-(--pane-inset)">
       <RowLabel title={current.name}>
         <span className="text-base font-semibold">{current.name}</span>
       </RowLabel>

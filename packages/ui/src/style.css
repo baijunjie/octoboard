@@ -106,6 +106,93 @@
   --breakpoint-docked: 1168px;
 }
 
+/* How thick the pieces of a groove and the hairline of a panel card are, which a display's density
+   decides. A 1x display cannot draw half a pixel, so a groove's two lines would blend into one
+   pixel of a single colour: there its dark line takes the whole 1px, the light one has none, and
+   the hairline is 1px. Declared once here so no utility restates the condition. The half pixels
+   line up only at exactly 2x: at 3x or a zoomed page the middle device pixel blends, which is
+   accepted. */
+html {
+  --groove-span: 0.5px;
+  --hairline-width: 0.5px;
+}
+
+@media (max-resolution: 1.99dppx) {
+  html {
+    --groove-span: 1px;
+    --hairline-width: 1px;
+  }
+}
+
+/* A divider drawn as a groove: a dark line above or beside a light one, which reads as a seam
+   pressed into the surface. It takes exactly the 1px a `border-b` takes, so a header carrying it
+   keeps its height and its line runs on across panes. The pair is a `border-image`, a gradient
+   whose slice keeps only the 1px strip at the border's edge. `groove-b` goes under a box and
+   `groove-t` over it, the dark line above the light one in both. The vertical forms put the dark
+   line on the left and never mirror under right-to-left, whichever side of the box they are on:
+   `groove-l` and `groove-r` name the physical side, `groove-s` and `groove-e` the inline start and
+   end, whose side and slice swap under `rtl:` while the colour order stays put. The sides are
+   physical borders, so `last:border-b-0` and the like still reset them. A table's groove goes on
+   its cells, with the table in `border-separate border-spacing-0`: `border-image` draws nothing on
+   rows or cells under `border-collapse: collapse`, which the preflight gives every table, and a row
+   draws no border at all once the table is separate. */
+@utility groove-b {
+  border-bottom: 1px solid var(--groove-dark);
+  border-image: linear-gradient(to top, var(--groove-light) calc(1px - var(--groove-span)), var(--groove-dark) calc(1px - var(--groove-span)) 1px, transparent 1px) 0 0 1 0;
+}
+
+@utility groove-t {
+  border-top: 1px solid var(--groove-dark);
+  border-image: linear-gradient(to bottom, var(--groove-dark) var(--groove-span), var(--groove-light) var(--groove-span) 1px, transparent 1px) 1 0 0 0;
+}
+
+@utility groove-l {
+  border-left: 1px solid var(--groove-dark);
+  border-image: linear-gradient(to right, var(--groove-dark) var(--groove-span), var(--groove-light) var(--groove-span) 1px, transparent 1px) 0 0 0 1;
+}
+
+@utility groove-r {
+  border-right: 1px solid var(--groove-dark);
+  border-image: linear-gradient(to left, var(--groove-light) calc(1px - var(--groove-span)), var(--groove-dark) calc(1px - var(--groove-span)) 1px, transparent 1px) 0 1 0 0;
+}
+
+@utility groove-s {
+  border-inline-start: 1px solid var(--groove-dark);
+  border-image: linear-gradient(to right, var(--groove-dark) var(--groove-span), var(--groove-light) var(--groove-span) 1px, transparent 1px) 0 0 0 1;
+  @variant rtl {
+    border-image: linear-gradient(to left, var(--groove-light) calc(1px - var(--groove-span)), var(--groove-dark) calc(1px - var(--groove-span)) 1px, transparent 1px) 0 1 0 0;
+  }
+}
+
+@utility groove-e {
+  border-inline-end: 1px solid var(--groove-dark);
+  border-image: linear-gradient(to left, var(--groove-light) calc(1px - var(--groove-span)), var(--groove-dark) calc(1px - var(--groove-span)) 1px, transparent 1px) 0 1 0 0;
+  @variant rtl {
+    border-image: linear-gradient(to right, var(--groove-dark) var(--groove-span), var(--groove-light) var(--groove-span) 1px, transparent 1px) 0 0 0 1;
+  }
+}
+
+/* The edge of a panel card (the floating pane, a drawer): a hairline outline, `--hairline-width`
+   wide. It is a shadow, which takes no layout space unlike a border, so the card is exactly its
+   box and its headers line up with the docked ones (`--pane-header-height-floating`). It carries
+   only the hairline: the caller adds the card's own shadow (`shadow-(--panel-shadow)` for a card
+   lying in the layout, `shadow-xl` for one that floats) and may add a focus ring (`ring-2`).
+   The pieces combine because they sit in different slots of Tailwind's box-shadow composition,
+   which every `shadow-*` and `ring-*` utility spells out in full, so whichever sets `box-shadow`
+   last still draws all of them. The hairline takes the inset-shadow slot, which nothing here
+   uses, rather than `--tw-shadow` or the ring's, which it would erase. The slot draws above a
+   ring, covering the ring's innermost half pixel. The fallbacks keep the declaration valid on
+   a page where no utility has registered the properties. */
+@utility panel-edge {
+  --tw-inset-shadow: 0 0 0 var(--hairline-width) var(--panel-hairline);
+  box-shadow:
+    var(--tw-inset-shadow),
+    var(--tw-inset-ring-shadow, 0 0 #0000),
+    var(--tw-ring-offset-shadow, 0 0 #0000),
+    var(--tw-ring-shadow, 0 0 #0000),
+    var(--tw-shadow, 0 0 #0000);
+}
+
 @utility row-icon-control {
   width: var(--row-control-size);
   height: var(--row-control-size);
@@ -143,21 +230,21 @@
 
   /* The header of each pane in the content panel (the sidebar's console and focus headers, the
      archive view's, the project pane's, the report panel's): one height for all of them, so their
-     bottom borders run on as one line across the panel. A second tier beside the top bar's 40px.
+     bottom lines run on as one line across the panel. A second tier beside the top bar's 40px.
      An overlay pane is a card inset by `--peek-gap`, so its headers take the floating value
-     instead, which puts their bottom border at the same height as the docked ones'
-     (`floatingFrame` in `layout/paneOverlay.tsx`). The gap comes off, and the card's own 1px top
-     border with it: a docked pane's header starts at `--top-chrome-height` while the card's
-     starts `--peek-gap` plus that border lower.
+     instead, which puts their bottom line at the same height as the docked ones'
+     (`floatingFrame` in `layout/paneOverlay.tsx`). Only the gap comes off: the card's edge is a
+     shadow (`panel-edge`) and takes no space, so a docked pane's header starting at
+     `--top-chrome-height` and the card's starting `--peek-gap` lower differ by the gap alone.
      The floating value is not a cycle although `floatingFrame` overrides `--pane-header-height`
      with it: a custom property is substituted where it is declared, so this one is already
      `calc(56px - 8px)` when it is inherited, and the override cannot reach back into it. Declared
      on the card too it would be a real cycle, and both properties would be invalid at
-     computed-value time, so the headers fall back to their content height and their bottom border no
+     computed-value time, so the headers fall back to their content height and their bottom line no
      longer lines up. It therefore belongs on an element that does not itself override
      `--pane-header-height`. */
   --pane-header-height: 56px;
-  --pane-header-height-floating: calc(var(--pane-header-height) - var(--peek-gap) - 1px);
+  --pane-header-height-floating: calc(var(--pane-header-height) - var(--peek-gap));
 
   /* The left rail under the top bar (`Rail.tsx`): the window chrome's second half, at the reading
      direction's start. The content panel starts where it ends, so that is also where the
@@ -296,7 +383,17 @@
   --panel-sidebar: oklch(0.965 0.002 286);
   --panel-hover: oklch(0 0 0 / 0.04);
   --panel-selected: oklch(0 0 0 / 0.07);
-  --panel-shadow: 0 0 4px oklch(0 0 0 / 0.08);
+  --panel-shadow: 0 0 1px oklch(0 0 0 / 0.18), 0 1px 4px oklch(0 0 0 / 0.12);
+  /* `--panel-hairline` is the outline of a panel card (`panel-edge`); `--groove-dark` and
+     `--groove-light` are the two lines of a divider (`groove-b` and its siblings), the one darker
+     and the other lighter than the surface it crosses. All three are translucent black or white,
+     so one value serves the panel, the sidebar, the settings and a tooltip alike. On a surface
+     that is already white or nearly so (a light dialog or `--panel`) the light line cannot be
+     lighter and the groove reads as a single 0.5px dark line there. Decorative, so not held to
+     3:1. */
+  --panel-hairline: oklch(0 0 0 / 0.12);
+  --groove-dark: oklch(0 0 0 / 0.12);
+  --groove-light: oklch(1 0 0 / 0.9);
   --sidebar-fill: oklch(0 0 0 / 0.08);
   --sidebar-fill-hover: oklch(0 0 0 / 0.12);
   --control-fill: oklch(0.92 0.004 286);
@@ -314,7 +411,10 @@
   --panel-sidebar: oklch(0.27 0.006 286);
   --panel-hover: oklch(1 0 0 / 0.045);
   --panel-selected: oklch(1 0 0 / 0.075);
-  --panel-shadow: 0 0 4px oklch(0 0 0 / 0.5);
+  --panel-shadow: 0 0 1px oklch(0 0 0 / 0.8), 0 1px 4px oklch(0 0 0 / 0.55);
+  --panel-hairline: oklch(1 0 0 / 0.12);
+  --groove-dark: oklch(0 0 0 / 0.45);
+  --groove-light: oklch(1 0 0 / 0.08);
   --sidebar-fill: oklch(1 0 0 / 0.07);
   --sidebar-fill-hover: oklch(1 0 0 / 0.11);
   --control-fill: oklch(0.33 0.006 286);
@@ -370,16 +470,16 @@
   --default-soft-hover: var(--control-fill-hover);
 }
 
-/* HeroUI's `--separator`, the 1px line that divides a pane's parts (under its header, between
-   its sections) and outlines a floating card or a drawer, is set a step further from the surfaces
-   than HeroUI's own, whose dark value (L 0.25) is the dark sidebar's own colour and vanishes there.
-   Neither the content panel's edge nor the docked panes' inner edges carry such a line: each is
-   set apart by contrast and the same soft shadow (`--panel-shadow`). This is a quiet line on
-   every surface it divides: 1.29 / 1.22 against `--panel` and `--panel-sidebar` in light,
-   1.35 / 1.23 in dark, lighter than the dark surfaces rather than darker so it reads as an edge.
-   Not a control's boundary, so it is not held to 3:1. The light selector excludes the dark theme
-   rather than relying on order, since an unlayered root declaration would otherwise beat the
-   library's layered dark rule. */
+/* HeroUI's `--separator`, the 1px line its own components divide their parts with (the action
+   menu's separator), and which the app still draws with itself where a groove does not fit: the
+   session tree's branch connectors and the dashed outline of an empty column in the file viewer.
+   It is set a step further from the surfaces than HeroUI's own, whose dark value (L 0.25) is the
+   dark sidebar's own colour and vanishes there, as a branch connector on the dark sidebar would.
+   This is a quiet line on every surface it divides: 1.29 / 1.22 against `--panel` and
+   `--panel-sidebar` in light, 1.35 / 1.23 in dark, lighter than the dark surfaces rather than
+   darker so it reads as an edge. Not a control's boundary, so it is not held to 3:1. The light
+   selector excludes the dark theme rather than relying on order, since an unlayered root
+   declaration would otherwise beat the library's layered dark rule. */
 :root:not(.dark):not([data-theme="dark"]) {
   --separator: oklch(0.9 0.004 286);
 }

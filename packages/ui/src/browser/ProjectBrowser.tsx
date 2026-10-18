@@ -239,7 +239,7 @@ export function ProjectBrowser({
           onSelectionChange={(key) => browser.setMode(key === "changes" ? "git" : "files")}
           className="project-browser-view flex min-h-0 flex-1 flex-col gap-0"
         >
-          <div className="flex h-(--pane-header-height) shrink-0 items-center gap-1 border-b border-separator px-(--pane-inset) text-sm">
+          <div className="flex h-(--pane-header-height) shrink-0 items-center gap-1 groove-b px-(--pane-inset) text-sm">
             <FolderOpen aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
             <h2 className="flex min-w-0 max-w-40 font-medium">
               <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={project.name}>{project.name}</FadeOverflow>

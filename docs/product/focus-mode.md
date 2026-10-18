@@ -42,7 +42,9 @@ for their space" in `docs/product/labels-and-tooltips.md`. The agent's icon has 
 "Session rows" in `docs/product/sidebar.md`). Clicking a card selects the session. They are in the order of "Order of
 projects and sessions" in `docs/product/sidebar.md`. Cards have an opaque background distinct from the sidebar's,
 which stays opaque while they move, so text from other cards, the console-session summary or the archive does not
-show through them.
+show through them. Cards have no outline: each is set apart by the same soft shadow as the content panel's edges (see
+"The window chrome and the content panel" in `docs/product/window-layout.md`), and the selected card is outlined in
+the accent colour.
 
 A card for a session **bound to a project session the same view lists** is **inset under that session's card** and
 follows it, as a session row is under its owner's row (see "Project rows" in `docs/product/sidebar.md`). A connector

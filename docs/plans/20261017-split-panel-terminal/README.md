@@ -14,7 +14,7 @@ every value is a literal at its call site.
 ## Plan outline
 
 1. Give both panes one horizontal inset token and bring the right pane onto it.
-2. Replace decorative outline borders with a 4px thin shadow, edge panel cards with a 0.5px hairline and that shadow,
+2. Replace decorative outline borders with a short two-layer shadow, edge panel cards with a 0.5px hairline and that shadow,
    and draw dividers as a 0.5px double line that reads as a groove.
 3. Turn the project's right pane into a vertical stack of panels, in the manner of Claude's desktop app: each panel
    kind (Files, Terminal to begin with) is its own card with a header holding its title, actions, maximize and close,
@@ -27,18 +27,27 @@ every value is a literal at its call site.
 
 - **The inset is 16px in both panes**, the sidebar's current value. Rows keep the sidebar's structure: an 8px outer
   inset for the hover and selected fill, content at 16px. Only the right pane changes visibly.
-- **No decorative outline borders, except a panel card's hairline.** Every decorative outline border gives way to the
-  4px thin shadow. The one exception, after Claude's desktop app, is a panel card — each panel in the split right pane,
-  and the floating pane and the drawer while they hold a report: it keeps a 0.5px hairline outline together with the
-  shadow, a 1px line on a 1x display. Borders that identify a control (form fields and the like) and borders that show a
-  selected state stay, at the 3:1 contrast they need.
+- **No decorative outline borders, except a panel card's hairline.** Every decorative outline border on a card gives
+  way to the short two-layer shadow. The one exception, after Claude's desktop app, is a panel card — each panel in the split
+  right pane, the floating pane and the drawer while they hold a report, and the sidebar's floating card and drawer: it
+  keeps a 0.5px hairline outline, a 1px line on a 1x display. Borders that identify a control (form fields and the
+  like) and borders that show a selected state stay, at the 3:1 contrast they need.
+- **A floating window keeps its elevation shadow.** The short two-layer shadow is for cards lying in the layout. Whatever
+  floats over the content — the floating cards and the drawers of both panes, the notice floating over the terminal —
+  keeps the larger elevation shadow it has today, and loses only its outline border (a panel card keeping its
+  hairline).
 - **The right pane is its panel cards.** In the project view the right pane has no frame of its own, in any form: it is
   the stack of panel cards, as in Claude's desktop app. The cards fill the pane edge to edge with no margin around them,
   and only a gap between neighbouring cards. The gap shows the sidebar's background in every form, so a floating pane or
   a drawer never shows the agent terminal through it. The pane's 16px inset is measured from the card's edge.
 - **Dividers are grooves.** A divider is a 0.5px double line, dark beside light, that reads as recessed. A 1x display
   cannot draw it — two half-pixel lines blend into one pixel of a single colour, scaled or not — so there the divider
-  falls back to a single 1px dark line, the same thickness as on a high-density display, without the recess.
+  falls back to a single 1px dark line, the same thickness as on a high-density display, without the recess. A
+  vertical groove does not mirror under right-to-left: its dark line stays on the left, so the light it implies keeps
+  one physical direction.
+- **Rendered documents keep their own rules.** The lines and frames a rendered document draws (a Markdown theme's
+  table rules, quote bar and heading rules, a fenced code block's frame, a footnote rule) are the document's
+  typography, not the app's chrome, and stay as they are.
 - **Splitting applies to the project view only.** A console session's report stays a single-owner pane with no panel
   stack and no terminal toggle. This keeps the first version to one owner kind; a terminal needs a project's
   directory anyway.
@@ -58,17 +67,29 @@ every value is a literal at its call site.
   lets anything local type into agent PTYs, but it makes arbitrary command execution one click away in any client.
   The server form must not ship with it before remote access has credentials.
 
+## Carrying out this plan
+
+The user's standing instruction for whoever picks this plan up:
+
+- The main session does not write the code: it dispatches subagents (`implement`, or `investigate` for harder work)
+  for all development, and keeps to briefing, reviewing their results, running the delivery checks, reporting to the
+  user and merging.
+- It carries the remaining milestones one after another itself, through the final confirmation and the deletion of
+  this directory, without handing the plan to another session. Each milestone gets its own worktree and branch, and
+  is closed and merged only after the user confirms its preview.
+- It asks the user about an Open item, with options to pick from, as soon as a milestone depends on it.
+
 ## Milestones
 
 1. 01 One horizontal inset for both panes (closed)
-2. [Shadow edges and groove dividers](02-shadow-edges-and-groove-dividers.md)
+2. 02 Shadow edges and groove dividers (closed)
 3. [Split right pane](03-split-right-pane.md)
 4. [Shell terminals in the daemon](04-daemon-shell-terminals.md)
 5. [Terminal panel](05-terminal-panel.md)
+6. [Final confirmation](06-final-confirmation.md)
 
 ## Open
 
-- Whether a vertical groove mirrors under right-to-left, which also flips the light direction it implies.
 - What a per-kind toggle does while the whole pane is hidden: show the pane with that panel, or only change the stack
   for the next time the pane shows.
 - What closing the last panel in the stack does: close the pane, or leave it empty.

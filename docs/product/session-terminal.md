@@ -119,8 +119,9 @@ or disconnected, the cover described in "Reconnecting" above is shown in its pla
   card, and never resume it: moving with Back or Forward (see "Moving back and forward" in
   `docs/product/navigation-history.md`), and `Ctrl+Tab` / `Ctrl+Shift+Tab` in a console session's focus mode (see
   "The switch strip" in `docs/product/focus-mode.md`). While a session has no process and no resume of
-  it is under way, the terminal shows a card at its bottom centre: for an interrupted session it reads "Not running"
-  and offers "Resume"; for an archived one it says the session is archived and that typing reopens it, and offers
+  it is under way, the terminal shows a card at its bottom centre, raised over it by a large shadow with no outline
+  (see "The window chrome and the content panel" in `docs/product/window-layout.md`): for an interrupted session it
+  reads "Not running" and offers "Resume"; for an archived one it says the session is archived and that typing reopens it, and offers
   "Reopen". The card is hidden while the session is being resumed.
 - **Typing into an archived session's terminal reopens it.** The first input starts the relaunch, and what is typed
   until the session is connected is held and handed to the agent once it is, so it reaches the agent's prompt.

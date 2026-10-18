@@ -22,7 +22,7 @@ const FLOATING_INSET =
 /** Drawers use the same card geometry as desktop peeks. Scope it below the breakpoint so the
  * docked sidebar can still ease as a full-height column without changing shape. */
 const DRAWER_FRAME =
-  "max-docked:top-[calc(var(--top-chrome-height)+var(--peek-gap))] max-docked:bottom-[calc(var(--bottom-chrome-height)+var(--peek-gap))] max-docked:[--pane-header-height:var(--pane-header-height-floating)] max-docked:rounded-xl max-docked:border max-docked:overflow-hidden max-docked:pointer-events-auto";
+  "max-docked:top-[calc(var(--top-chrome-height)+var(--peek-gap))] max-docked:bottom-[calc(var(--bottom-chrome-height)+var(--peek-gap))] max-docked:[--pane-header-height:var(--pane-header-height-floating)] max-docked:rounded-xl max-docked:overflow-hidden max-docked:pointer-events-auto";
 
 /** The two sides are the reading direction's start and end, so under right-to-left the sidebar is on
  * the right. The classes that differ between them are written out in full: Tailwind emits a utility
@@ -33,7 +33,7 @@ const DRAWER_FRAME =
  * further, including the inset and shadow, to get off screen entirely. Every overlay is a card
  * inset by `--peek-gap` from the top bar and the bottom chrome, and from the rail (start) or the
  * window's edge (end). Mobile drawers clear the rail and their shadows while sliding away. A card's
- * headers take `--pane-header-height-floating` (`style.css`) so that their bottom border lines up
+ * headers take `--pane-header-height-floating` (`style.css`) so that their bottom line lines up
  * with the docked headers' in the same row; `floatingFrame` sets it for everything inside. */
 const SIDE_CLASSES = {
   start: {
@@ -54,8 +54,9 @@ const SIDE_CLASSES = {
  * `--bottom-chrome-height`, with a card inset from the surrounding chrome. Drawers slide from `side`; desktop
  * floating cards fade vertically. The start side is inset from the rail; the end side from the window edge.
  * `open` is whether the drawer is open below the breakpoint. Callers add their own
- * width/flex/border classes on top of this string; the slide direction and what "closed" means on
- * either side are this function's job, not theirs.
+ * width/flex classes on top of this string; the slide direction, what "closed" means on either
+ * side and the card's edge (the `panel-edge` hairline together with the `shadow-xl` elevation,
+ * while it floats or is an open drawer) are this function's job, not theirs.
  *
  * In `drawer` mode `docked:` turns the pane back into a plain row sibling — no fixed positioning,
  * no stacking context, no transition. `docked:translate-none` rather than `docked:translate-x-0`
@@ -87,9 +88,9 @@ export function drawerClass(side: PaneEdge, mode: PaneMode, open: boolean, peeki
   const form =
     mode === "drawer"
       ? `transition-[translate,visibility] ${dockedReset}`
-      : `transition-[translate,visibility] ${floatingFrame} docked:translate-x-0 docked:rtl:translate-x-0 docked:shadow-xl docked:transition-[translate,opacity,visibility] docked:duration-240 docked:ease-[cubic-bezier(0.2,0,0,1)] ${peeking ? "docked:translate-y-0 docked:opacity-100 docked:pointer-events-auto" : "docked:translate-y-1.5 docked:opacity-0 docked:pointer-events-none docked:invisible"}`;
+      : `transition-[translate,visibility] ${floatingFrame} docked:translate-x-0 docked:rtl:translate-x-0 docked:panel-edge docked:shadow-xl docked:transition-[translate,opacity,visibility] docked:duration-240 docked:ease-[cubic-bezier(0.2,0,0,1)] ${peeking ? "docked:translate-y-0 docked:opacity-100 docked:pointer-events-auto" : "docked:translate-y-1.5 docked:opacity-0 docked:pointer-events-none docked:invisible"}`;
   const base = "fixed bottom-(--bottom-chrome-height) top-(--top-chrome-height) z-40 duration-200 motion-reduce:transition-none";
-  return `${base} ${DRAWER_FRAME} ${anchor} ${open ? "translate-x-0 max-docked:shadow-xl" : `${closed} max-docked:invisible`} ${form}`;
+  return `${base} ${DRAWER_FRAME} ${anchor} ${open ? "translate-x-0 max-docked:panel-edge max-docked:shadow-xl" : `${closed} max-docked:invisible`} ${form}`;
 }
 
 /**

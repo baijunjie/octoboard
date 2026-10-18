@@ -22,7 +22,7 @@ export function CodeGallery(): React.ReactElement {
           <section className="flex flex-col gap-3" aria-labelledby="chip-prose-title">
             <h2 id="chip-prose-title" className="font-semibold">Inherited prose: equal size, height and baseline</h2>
             {[12, 14, 16].map((size) => (
-              <div key={size} data-prose-size={size} className="min-w-0 rounded-lg border border-separator bg-surface p-3" style={{ fontSize: size }}>
+              <div key={size} data-prose-size={size} className="min-w-0 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3" style={{ fontSize: size }}>
                 <p className="mb-3 font-medium">{size}px — {size === 12 ? "Field description / validation" : size === 14 ? "Body / label" : "Dialog heading"}</p>
                 <p data-prose-comparison="" className="leading-relaxed">
                   Remove <InlineChip size="inherit" data-chip-kind="name">Main 控制台</InlineChip>, choose <InlineChip size="inherit" data-chip-kind="label">Skip 跳过</InlineChip>,
@@ -38,7 +38,7 @@ export function CodeGallery(): React.ReactElement {
             <h2 id="chip-sizes-title" className="font-semibold">Four sizes, regular and monospace</h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {SIZES.map((size) => (
-                <div key={size} data-chip-size-sample={size} className="flex min-w-0 flex-col items-start gap-3 rounded-lg border border-separator p-3">
+                <div key={size} data-chip-size-sample={size} className="flex min-w-0 flex-col items-start gap-3 rounded-lg border border-transparent shadow-(--panel-shadow) p-3">
                   <h3 className="text-sm font-medium">{size}</h3>
                   <InlineChip size={size}>Ready</InlineChip>
                   <InlineChip size={size} monospace>AGENTS.md</InlineChip>
@@ -51,7 +51,7 @@ export function CodeGallery(): React.ReactElement {
             <h2 id="code-colors-title" className="font-semibold">Six colors outside alerts</h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {COLORS.map((color) => (
-                <div key={color} data-code-sample={color} className="min-w-0 rounded-lg border border-separator p-3">
+                <div key={color} data-code-sample={color} className="min-w-0 rounded-lg border border-transparent shadow-(--panel-shadow) p-3">
                   <p className="mb-2 text-sm">{color}: <InlineChip monospace wrap size="inherit" color={color}>VITE_DAEMON_PORT</InlineChip></p>
                   <CodeBlock color={color}>{"env -0\nOCTOBOARD_DAEMON_PORT=5174"}</CodeBlock>
                 </div>

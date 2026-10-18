@@ -20,7 +20,7 @@ function UsageTooltip({ total, rows, format }: {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="font-medium">{total}</div>
-      <hr className="border-separator" />
+      <hr className="groove-t" />
       <dl className="grid grid-cols-[auto_auto] gap-x-4 gap-y-0.5">
         {rows.map((row) => (
           <React.Fragment key={row.key}>
