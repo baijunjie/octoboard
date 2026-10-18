@@ -60,9 +60,9 @@ const TOOLTIP_TRIGGER = "[data-slot=tooltip-trigger]";
 const POLL_MS = 50;
 const TIMEOUT_MS = 5000;
 
-/** HeroUI's default tooltip delay (`--tooltip-delay`), which the app leaves as it is: a tooltip
- * opens this long after the pointer comes to rest on its trigger. */
-const TOOLTIP_DELAY_MS = 1500;
+/** The app's global `--tooltip-delay`: a tooltip opens this long after the pointer comes to rest
+ * on its trigger. */
+const TOOLTIP_DELAY_MS = 500;
 /** Left after the delay for the tooltip to mount, be placed and finish fading in. */
 const TOOLTIP_SHOW_MS = 500;
 
@@ -559,7 +559,10 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     async hoverTerminalLink(text) {
       await pointTerminalText(text);
       await wait(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
-      if (!doc.querySelector("[data-anchored-tooltip]")) throw new Error(`Hovering ${text} in the terminal opened no tooltip: it is not a hyperlink`);
+      await waitFor(
+        () => doc.querySelector("[data-anchored-tooltip]") ?? undefined,
+        `Hovering ${text} in the terminal opened no tooltip: it is not a hyperlink`,
+      );
     },
     async hoverTerminalUrl(text) {
       await pointTerminalText(text);

@@ -217,6 +217,8 @@ html {
   --row-fill-inset: 8px;
   --row-content-inset: calc(var(--pane-inset) - var(--row-fill-inset));
 
+  --tooltip-delay: 0.5s;
+
   /* A tooltip is a label: it closes the instant the pointer leaves its trigger, where HeroUI's
      default (0.5s) lingers and keeps it hoverable. `Tooltip` reads this as its default close
      delay, so it holds for every tooltip, those added later included. HeroUI reads the token once,

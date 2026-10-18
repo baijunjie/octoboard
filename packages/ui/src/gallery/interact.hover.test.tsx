@@ -19,7 +19,14 @@ import { ProjectFilterSummary } from "../sidebar/ProjectFilter";
 import { gitStatusOf } from "./fixtures/builders";
 import { createUi } from "./interact";
 
-beforeEach(() => vi.useFakeTimers());
+beforeEach(() => {
+  vi.useFakeTimers();
+  // jsdom does not load the app's styles, so supply its global tooltip delay for HeroUI.
+  document.documentElement.style.setProperty("--tooltip-delay", "0.5s");
+  onTestFinished(() => {
+    document.documentElement.style.removeProperty("--tooltip-delay");
+  });
+});
 afterEach(() => vi.useRealTimers());
 
 /** The placements the hover steps reach, built from the real glyph: the top bar, a session row with

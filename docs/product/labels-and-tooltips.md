@@ -8,7 +8,7 @@ explanations are kept out of the visible text.
 Every tooltip in the window is the application's own, drawn in its own styling and under one set of rules, whatever
 carries it — a control, an indicator or a label too long for its space:
 
-- It opens once the pointer has rested on what carries it for about a second and a half. Within half a second of
+- It opens once the pointer has rested on what carries it for 500 ms. Within half a second of
   another tooltip closing it opens at once instead, so moving from one to the next does not wait again at each one,
   whether along a row of controls or between two marks side by side, such as a session's status glyph and its agent
   icon.
