@@ -395,3 +395,25 @@ fn text_cannot_forge_the_structure_of_the_package() {
         "{text}"
     );
 }
+
+#[test]
+fn the_sweep_removes_packages_of_no_session_and_half_written_files() {
+    let (state, _dir) = app_state("handoff-sweep");
+    state.store.insert_console(&console(&_dir)).unwrap();
+    let repo = repo_with("handoff-sweep-repo", &[(b"a.txt", b"one\n")]);
+    insert_project(&state, &repo);
+    state
+        .store
+        .insert_session(&session("kept", Agent::Claude, None))
+        .unwrap();
+    let directory = state.handoff_dir().to_path_buf();
+    let kept = write_in(&directory, "kept", "x").unwrap();
+    let orphan = write_in(&directory, "gone", "x").unwrap();
+    let partial = directory.join(".partial-7");
+    std::fs::write(&partial, "x").unwrap();
+
+    sweep(&state).unwrap();
+
+    assert!(kept.exists());
+    assert!(!orphan.exists() && !partial.exists());
+}

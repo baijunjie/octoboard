@@ -257,6 +257,7 @@ async fn handle_inner(
             }
             for session_id in &session_ids {
                 state.forget_saved_output(session_id);
+                state.forget_handoff_package(session_id);
             }
             // The working directory is Octoboard's own, under `~/.octoboard/consoles/`; no project
             // directory is ever touched by this.
@@ -445,6 +446,7 @@ async fn handle_inner(
             crate::branch_origin::project_deleted_in(state, repository);
             for session_id in &session_ids {
                 state.forget_saved_output(session_id);
+                state.forget_handoff_package(session_id);
             }
             state.broadcast(Event::ProjectDeleted {
                 project: id.clone(),
@@ -642,6 +644,7 @@ async fn handle_inner(
                     origin: Origin::User,
                     bound_to,
                     resume_agent_session_id,
+                    session_id: None,
                 },
             )
             .await?;
@@ -670,6 +673,30 @@ async fn handle_inner(
         RequestBody::SwitchSessionAccount { session, account } => {
             switch_session_account(state, &session, account, env_shell::launch_snapshot).await?;
             Ok(None)
+        }
+
+        RequestBody::HandOffSession {
+            session,
+            agent,
+            account,
+            model,
+            effort,
+        } => {
+            let receiving = crate::handoff::operation::hand_off(
+                state,
+                crate::handoff::operation::Handoff {
+                    session,
+                    agent,
+                    account,
+                    model,
+                    effort,
+                },
+            )
+            .await?;
+            Ok(Some(Event::SessionOpened {
+                id: request_id,
+                session: state.wire_session(receiving),
+            }))
         }
 
         RequestBody::InspectSessionRecords { sessions } => {
@@ -1796,6 +1823,9 @@ pub struct OpenRequest {
     /// session continues instead of starting one. What is refused is in [`checked_resume_id`] and
     /// [`locate_conversation_to_resume`].
     pub resume_agent_session_id: Option<String>,
+    /// The id to record the session under, for a caller that needs it before the session exists
+    /// (a handoff names its package by it); `None` makes a new one.
+    pub session_id: Option<String>,
 }
 
 /// The conversation id `requested` to resume, trimmed, or `None` for none (blank counting as
@@ -1946,8 +1976,18 @@ struct StartingSession {
 /// would otherwise be told of a session that may yet vanish. The user's own request is
 /// [`open_session_detached`].
 pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result<Session> {
+    open_session_with(state, request, term::launch).await
+}
+
+/// [`open_session`], launching through `launch`: `term::launch` outside the tests, which cannot
+/// start an agent.
+pub(crate) async fn open_session_with(
+    state: &Arc<AppState>,
+    request: OpenRequest,
+    launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
+) -> Result<Session> {
     let starting = begin_open(state, request).await?;
-    finish_open(state, starting, term::launch)
+    finish_open(state, starting, launch)
         .await
         .map_err(OpenError::into_error)
 }
@@ -2163,6 +2203,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         task,
         title,
         origin,
+        session_id,
         ..
     } = request;
     let resume_shell_env = match resume_agent_session_id.clone() {
@@ -2195,7 +2236,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         .filter(|title| !title.is_empty());
 
     let session = Session {
-        id: Uuid::new_v4().to_string(),
+        id: session_id.unwrap_or_else(|| Uuid::new_v4().to_string()),
         agent,
         // Recorded with `has_conversation`, so an interrupt before the first prompt does not drop
         // the id on a relaunch (see [`resumable_agent_session_id`]).
@@ -5010,6 +5051,7 @@ mod tests {
                     origin: Origin::User,
                     bound_to: None,
                     resume_agent_session_id: None,
+                    session_id: None,
                 },
             )
             .await
@@ -7610,6 +7652,7 @@ mod tests {
                 origin: Origin::User,
                 bound_to: None,
                 resume_agent_session_id: Some("my-title".to_string()),
+                session_id: None,
             },
         )
         .await
@@ -9524,6 +9567,7 @@ mod tests {
             origin: Origin::User,
             bound_to: None,
             resume_agent_session_id: None,
+            session_id: None,
         }
     }
 

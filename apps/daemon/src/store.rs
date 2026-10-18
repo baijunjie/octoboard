@@ -1377,6 +1377,47 @@ impl Store {
             .optional()?)
     }
 
+    /// Moves the sessions bound to `from` to `to`, and, with `lead_of`, binds `to`, an unbound
+    /// project session, to that console session as a lead session, all in one transaction.
+    /// Returns the ids of the sessions moved, or `None` when the lead binding did not apply (`to`
+    /// was bound meanwhile, or `lead_of` is not a console session) and nothing changed. What may
+    /// own what is the caller's to check.
+    pub fn hand_over_binding(
+        &self,
+        from: &str,
+        to: &str,
+        lead_of: Option<&str>,
+    ) -> Result<Option<Vec<String>>> {
+        let mut conn = self.lock();
+        let tx = conn.transaction()?;
+        if let Some(owner) = lead_of {
+            let bound = tx.execute(
+                "UPDATE sessions SET bound_to = ?2, lead = 1
+                 WHERE id = ?1 AND role = ?3 AND bound_to IS NULL
+                   AND EXISTS (SELECT 1 FROM sessions AS owner WHERE owner.id = ?2 AND owner.role = ?4)",
+                params![
+                    to,
+                    owner,
+                    enum_to_text(&Role::Project),
+                    enum_to_text(&Role::Console)
+                ],
+            )?;
+            if bound == 0 {
+                return Ok(None);
+            }
+        }
+        let moved = tx
+            .prepare("SELECT id FROM sessions WHERE bound_to = ?1")?
+            .query_map(params![from], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        tx.execute(
+            "UPDATE sessions SET bound_to = ?2 WHERE bound_to = ?1",
+            params![from, to],
+        )?;
+        tx.commit()?;
+        Ok(Some(moved))
+    }
+
     pub fn set_session_locked(&self, id: &str, locked: bool) -> Result<()> {
         self.lock().execute(
             "UPDATE sessions SET locked = ?2 WHERE id = ?1",

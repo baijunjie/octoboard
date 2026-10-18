@@ -28,16 +28,6 @@ fn bound_tools(agent: Agent) -> String {
         .join(", ")
 }
 
-/// A session as a message names it: its kind, id and title.
-fn named_session(session: &Session) -> String {
-    format!(
-        "the {} session `{}` (\"{}\")",
-        session.role.kind(),
-        session.id,
-        sharing::one_line(&session.title)
-    )
-}
-
 /// What a delivery to `who` came to, for the sender's result.
 fn told(delivery: &Result<Delivery>, who: &str) -> String {
     match delivery {
@@ -75,8 +65,8 @@ pub(super) async fn transfer_session(
          your owner from now on: take work only from it, or from the user typing in this \
          terminal, and report to it with `{report}`. This replaces what you were told of your \
          owner when you were started; `{from_id}` no longer drives you.{tools}",
-        from = named_session(caller),
-        to = named_session(&owner),
+        from = sharing::named_session(caller),
+        to = sharing::named_session(&owner),
         report = tool("report"),
         from_id = caller.id,
     );
@@ -91,7 +81,7 @@ pub(super) async fn transfer_session(
          you. It is yours from now on: it reports to you, and you drive it like any session of \
          yours, with `{send_message}`, `{archive_session}` and `{reopen_session}`.{lead} The \
          handover note:\n\n{note}\n— end of the handover note —",
-        from = named_session(caller),
+        from = sharing::named_session(caller),
         id = moved.id,
         title = sharing::one_line(&moved.title),
         place = sharing::place_of(state, &moved),
@@ -111,7 +101,7 @@ pub(super) async fn transfer_session(
     let mut result_note = format!(
         "Handed over: `{id}` now reports to {to} and is no longer yours. {child} {owner}",
         id = moved.id,
-        to = named_session(&owner),
+        to = sharing::named_session(&owner),
         child = told(&child, "It"),
         owner = told(&told_owner, "Its new owner"),
     );
@@ -203,7 +193,7 @@ pub(super) async fn bind_to_session(
          per round of work. This replaces anything your role description says about being \
          unbound and not calling `{report}`. {what_now} You are bound now, so do not call \
          `{bind}` again.",
-        owner = named_session(&owner),
+        owner = sharing::named_session(&owner),
         as_lead = if lead { ", as its lead session" } else { "" },
         report = tool("report"),
         bind = tool("bind_to_session"),

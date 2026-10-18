@@ -102,6 +102,8 @@ pub struct AppState {
     saved_output: SavedOutput,
     /// Parent of the consoles' working directories; see [`AppState::console_workdir`].
     consoles_dir: std::path::PathBuf,
+    /// Where the handoff packages are kept, one file per receiving session; see `crate::handoff`.
+    handoff_dir: std::path::PathBuf,
     /// The bounds every connection's browse requests share: how many reads run at once, and how
     /// many bytes their replies may hold before they are written.
     pub browse_gate: Arc<crate::browse::lane::Gate>,
@@ -173,6 +175,76 @@ pub enum TurnClose {
     NotThisTurn,
 }
 
+/// A session's queue held by [`AppState::hold_outbox`]. While it lives the queue is kept, whatever
+/// becomes of the session's process. Dropping it ends the hold, and where the queue goes depends on
+/// whether the holder has named a successor ([`Self::forward_to`]): to the successor, in order,
+/// or, without one, to the session itself if it is still running and nowhere if it is not, since a
+/// session without a process takes nothing and would leave the queue stranded.
+pub struct OutboxHold {
+    state: Arc<AppState>,
+    id: String,
+    successor: std::sync::Mutex<Option<String>>,
+}
+
+impl OutboxHold {
+    /// From now on whatever is queued for the held session goes to `successor` when the hold ends.
+    pub fn forward_to(&self, successor: &str) {
+        *self.successor.lock().expect("hold lock poisoned") = Some(successor.to_string());
+    }
+}
+
+impl Drop for OutboxHold {
+    fn drop(&mut self) {
+        let successor = self.successor.lock().expect("hold lock poisoned").take();
+        let target = match &successor {
+            Some(successor) => {
+                for text in self.state.outbox.take(&self.id) {
+                    self.state.outbox.push(successor, &text);
+                }
+                successor
+            }
+            None => &self.id,
+        };
+        self.state.outbox.release_hold(&self.id);
+        let record = self.state.store.get_session(target).ok().flatten();
+        // Judged by the process as well as the status: between a process leaving the live map and
+        // the exit being saved the record still reads running.
+        let writable = record
+            .filter(|record| !record.status.is_dormant())
+            .filter(|_| self.state.live_session(target).is_some());
+        let Some(record) = writable else {
+            // A successor being launched is no process yet but will be: a resume saves it running
+            // and queues its instruction first. The launch flushes what is queued, and
+            // `unregister_live` forgets it if the launch fails.
+            if successor.is_some() && self.state.is_launching(target) {
+                return;
+            }
+            // Nothing to write to, and a queue left in the map would be replayed on a later resume.
+            let dropped = self.state.outbox.forget(target);
+            if dropped > 0 {
+                self.state.broadcast(
+                    Notice::new(
+                        notice_code::QUEUED_MESSAGES_DROPPED,
+                        format!(
+                            "{} dropped {dropped} message(s) queued for this session, which has no \
+                             process to receive them",
+                            crate::APP_NAME
+                        ),
+                        &[],
+                    )
+                    .about(target),
+                );
+            }
+            return;
+        };
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            let (state, id) = (self.state.clone(), target.clone());
+            let status = state.agent_status(&record);
+            runtime.spawn_blocking(move || state.flush_outbox(&id, status));
+        }
+    }
+}
+
 impl AppState {
     pub fn new(
         store: Store,
@@ -180,6 +252,7 @@ impl AppState {
         self_exe: String,
         saved_output_dir: std::path::PathBuf,
         consoles_dir: std::path::PathBuf,
+        handoff_dir: std::path::PathBuf,
     ) -> Self {
         let (events, _) = broadcast::channel(1024);
         Self {
@@ -220,6 +293,7 @@ impl AppState {
             ),
             saved_output: SavedOutput::new(saved_output_dir),
             consoles_dir,
+            handoff_dir,
             browse_gate: Arc::new(crate::browse::lane::Gate::with_budget()),
             session_requests: Default::default(),
             agent_models: Default::default(),
@@ -249,6 +323,11 @@ impl AppState {
             ));
         }
         self.store.set_session_locked(id, locked)
+    }
+
+    /// Where the handoff packages are kept; see `crate::handoff`.
+    pub fn handoff_dir(&self) -> &std::path::Path {
+        &self.handoff_dir
     }
 
     /// The working directory a console of this id gets, under the directory the daemon was started
@@ -534,7 +613,12 @@ impl AppState {
             live.sessions.remove(&session.id);
             // Under the same lock as the removal: a relaunch claiming this id the moment it leaves
             // the map would otherwise queue an instruction that this cleanup then threw away.
-            let dropped = self.outbox.forget(&session.id);
+            // A held queue is its holder's to forward or discard.
+            let dropped = if self.outbox.is_held(&session.id) {
+                0
+            } else {
+                self.outbox.forget(&session.id)
+            };
             if dropped > 0 {
                 tracing::warn!(session = %session.id, dropped, "the session ended with messages still queued");
             }
@@ -661,6 +745,7 @@ impl AppState {
     /// telling every client.
     fn forget_deleted(&self, id: &str) {
         self.forget_saved_output(id);
+        self.forget_handoff_package(id);
         self.forget_request_hand(id);
         self.broadcast(Event::SessionDeleted {
             session: id.to_string(),
@@ -1069,6 +1154,23 @@ impl AppState {
         tokio::task::spawn_blocking(move || state.flush_outbox(&id, status));
     }
 
+    /// Holds a session's queue for as long as the guard lives: messages for it are accepted and
+    /// queued, none is written. A handoff holds the original's, so that nothing reaches a session
+    /// whose work is being moved; see [`OutboxHold`].
+    pub fn hold_outbox(self: &Arc<Self>, id: &str) -> OutboxHold {
+        self.outbox.hold(id);
+        OutboxHold {
+            state: self.clone(),
+            id: id.to_string(),
+            successor: std::sync::Mutex::new(None),
+        }
+    }
+
+    /// Removes and returns what is queued for a session, oldest first.
+    pub fn take_queued(&self, id: &str) -> Vec<String> {
+        self.outbox.take(id)
+    }
+
     /// Throws away anything queued for a session that will never take it — a relaunch that failed,
     /// so nothing would ever release what was queued ahead of it.
     pub fn discard_outbox(&self, id: &str) {
@@ -1281,6 +1383,15 @@ impl AppState {
     /// it.
     pub fn forget_saved_output(&self, id: &str) {
         self.saved_output.remove(id);
+    }
+
+    /// Removes the handoff package written for a session, which is named by the session's id. Called
+    /// wherever a record is deleted; a session that was never a receiving one has none. A failure
+    /// is logged: the record is gone either way.
+    pub fn forget_handoff_package(&self, id: &str) {
+        if let Err(err) = crate::handoff::remove(self, id) {
+            tracing::warn!(session = %id, %err, "removing a handoff package failed");
+        }
     }
 
     // -- git status ------------------------------------------------------------
@@ -2219,6 +2330,53 @@ mod tests {
         // A relaunch that failed has nothing left that would ever release these.
         state.discard_outbox("s");
         assert_eq!(state.outbox.len("s"), 0);
+    }
+
+    /// A handoff holds the queue of the session it moves. The queue is not forgotten when that
+    /// session's process ends meanwhile; it goes to the successor the holder names, and is
+    /// discarded, not stranded, when the session has nowhere to be written and no successor.
+    #[test]
+    fn a_held_queue_outlives_its_sessions_process_and_goes_where_its_holder_says() {
+        let (state, dir) = app_state("state-held-queue");
+        insert_record(&state, &dir, "t", SessionStatus::Idle);
+        let successor = crate::test_support::idle_stand_in("t");
+        state.register_live(successor.clone());
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        let hold = state.hold_outbox("s");
+        state.queue_message("s", "one");
+        state.unregister_live(&live);
+        assert_eq!(state.outbox.len("s"), 1);
+
+        // No runtime here, so the successor's queue is left for a flush to write.
+        hold.forward_to("t");
+        drop(hold);
+        assert_eq!((state.outbox.len("s"), state.outbox.len("t")), (0, 1));
+
+        let hold = state.hold_outbox("u");
+        state.queue_message("u", "two");
+        drop(hold);
+        assert_eq!(state.outbox.len("u"), 0);
+
+        // A successor with no process takes nothing either, and keeps nothing for a later resume.
+        let hold = state.hold_outbox("v");
+        state.queue_message("v", "three");
+        hold.forward_to("w");
+        drop(hold);
+        assert_eq!((state.outbox.len("v"), state.outbox.len("w")), (0, 0));
+
+        // Unless it is being launched: the launch will flush what is queued for it.
+        state
+            .store
+            .insert_session(&session_record("x", SessionStatus::Idle))
+            .unwrap();
+        let claim = state.begin_launch("x").unwrap();
+        let hold = state.hold_outbox("y");
+        state.queue_message("y", "four");
+        hold.forward_to("x");
+        drop(hold);
+        assert_eq!(state.outbox.len("x"), 1);
+        drop(claim);
     }
 
     /// A check that panics must still release its project's claim, or a wedged step excludes that

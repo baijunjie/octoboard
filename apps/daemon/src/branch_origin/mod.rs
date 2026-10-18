@@ -309,6 +309,23 @@ pub fn hand_over(
     )
 }
 
+/// Moves every branch `from` is responsible for to `to`, a session of the same project, and
+/// returns the branches moved, as wire paths. Blocking: it reads the repository's origins and
+/// takes its gate.
+pub fn hand_over_all(state: &AppState, from: &Session, to: &Session) -> Result<Vec<String>> {
+    let mut moved = Vec::new();
+    for repo in bound::bound_in(state, std::slice::from_ref(from))? {
+        // `bound_in` lists only the branches `from` is responsible for.
+        let branches: Vec<String> = repo
+            .branches
+            .into_iter()
+            .map(|branch| branch.branch)
+            .collect();
+        moved.extend(hand_over(state, &repo.repo, &branches, &from.id, &to.id, &to.title)?.moved);
+    }
+    Ok(moved)
+}
+
 // -- a project's deletion ----------------------------------------------------
 
 /// Forgets the origins of the repository a deleted project was in, unless another project is in it

@@ -243,10 +243,13 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
         self_exe,
         paths::saved_output_dir(),
         paths::consoles_dir(),
+        paths::handoff_dir(),
     ));
     // Saved output whose session is gone (a daemon that died between deleting the record and the
     // file) or whose write was cut short has nothing else to remove it.
     state.sweep_saved_output()?;
+    // Likewise for a handoff package whose session is gone.
+    handoff::sweep(&state)?;
 
     // Printed before anything else can block: the application waits for this line to know where to
     // connect.

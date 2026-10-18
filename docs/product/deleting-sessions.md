@@ -24,7 +24,9 @@ is not archived keeps its own sessions. Deleting an archived bound session on it
 neither deleting a project's archived sessions nor deleting the archived sessions under a console session touches a
 console session.
 
-- **Deleting removes Octoboard's record of the session**, for good, and the last output Octoboard kept for it. The
+- **Deleting removes Octoboard's record of the session**, for good, the last output Octoboard kept for it, and, for a
+  session that received a handoff, its handoff package (see "The handoff package" in
+  `docs/product/handing-off-sessions.md`). The
   session disappears from every client, and the orchestration tools' `list_archived` and `reopen_session` no longer
   find it. The project's directory is never touched. The agent's own record of the conversation, in the agent's own
   configuration directory, is handled as described in "Moving the agent's own records to the Trash" below.

@@ -137,6 +137,7 @@ fn asked(console: &str, project: Option<&str>) -> OpenRequest {
         origin: Origin::Console,
         bound_to: None,
         resume_agent_session_id: None,
+        session_id: None,
     }
 }
 

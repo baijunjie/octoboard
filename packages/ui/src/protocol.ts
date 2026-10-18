@@ -948,6 +948,15 @@ export type RequestBody =
    * id, or `null` for the default account; it is always sent. Answered once the relaunched session
    * has stayed up, or with the reason it did not. */
   | { type: "switch_session_account"; session: string; account: string | null }
+  /** Hands a session off to a new session of another agent, which takes its whole place: kind,
+   * project or console, role, owner and title, the branches the session is responsible for and the
+   * sessions it owns. The new session starts with a handoff package built from the original's
+   * records named in its opening prompt; the original is archived once the place has moved.
+   * `agent` is required and must differ from the session's own (moving to another account of the
+   * same agent is `switch_session_account`); `account`, `model` and `effort` are as in
+   * `open_session`. Answered with `session_opened` for the new session; a refusal, and a failure
+   * after the new session is running (the error names it), come back as `error`. */
+  | { type: "hand_off_session"; session: string; agent: Agent; account?: string | null; model?: string | null; effort?: string | null }
   /** Removes Octoboard's record of one session: an archived one, or one that has never been used
    * (no turn, bound to no owner, none bound to it), whose process is stopped; refused with
    * `session_not_deletable` otherwise, or while it is starting. The agent's own records of the
@@ -1192,7 +1201,7 @@ export type Event =
    * it. */
   | { type: "session_notice"; session: string; code: string; params: MessageParams; message: string }
   | { type: "console_session_title"; id?: string; console: string; title: string }
-  /** The reply to `open_session`, and to an approving `answer_session_request`: the session that
+  /** The reply to `open_session`, to `hand_off_session` and to an approving `answer_session_request`: the session that
    * was started. The same record is also broadcast as `session_upserted`, but that broadcast
    * carries no request id, so this is the only way the caller can tell which session in the tree
    * is the one it just opened. */

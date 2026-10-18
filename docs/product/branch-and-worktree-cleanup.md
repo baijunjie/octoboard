@@ -28,7 +28,8 @@ Sessions store no branch or worktree of their own.
 - **An agent's**: `archive_session`, `archive_self`, and the archive a `done` report with no open items brings (see
   "Archives made by an agent" below).
 
-Ending a session's process otherwise — an interruption, an account switch — removes nothing. Removing a project
+Ending a session's process otherwise — an interruption, an account switch — removes nothing, and neither does the
+archive that ends a handoff to another agent (see `docs/product/handing-off-sessions.md`). Removing a project
 without moving its folder to the Trash ends its sessions and removes no branch or worktree, and neither does deleting
 a console.
 

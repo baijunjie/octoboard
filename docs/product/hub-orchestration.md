@@ -149,7 +149,8 @@ A **lead session** is a project session bound to a console session of its consol
 own project. A session becomes one by binding itself, while unbound, to a running console session with
 `bind_to_session` (see "Binding an unbound session to an owner" below). One with no console session to bind to can
 first ask the user for one with `request_session`, of kind `console`, and bind to it once it has been started (see
-`docs/product/session-requests.md`). A session opened bound to a console session, or started by one, is not a lead
+`docs/product/session-requests.md`). A session that takes a lead session's place in a handoff is one too (see
+`docs/product/handing-off-sessions.md`). A session opened bound to a console session, or started by one, is not a lead
 session: it has the role of a bound one.
 
 - **It keeps its sessions.** The sessions it had started stay bound to it, and it goes on driving them with the
@@ -182,10 +183,12 @@ session and is driven by it like any other session of its own.
 
 ## Changing a session's owner
 
-A binding can change after a session was opened, in two ways and only these, neither of which asks the user: an owner
-hands a session of its own to another owner with `transfer_session`, and an unbound project session binds itself to an
-owner with `bind_to_session`. A binding is never cleared: a bound session does not become unbound again. Every
-connected window shows the change at once, the session moving to its new place in the sidebar and focus modes.
+A binding can change after a session was opened in two ways that sessions make themselves, neither of which asks the
+user: an owner hands a session of its own to another owner with `transfer_session`, and an unbound project session
+binds itself to an owner with `bind_to_session`. The rules and messages below are theirs. The one other change is a
+handoff to another agent, which binds every session the original owns to the receiving session (see
+`docs/product/handing-off-sessions.md`). A binding is never cleared: a bound session does not become unbound again.
+Every connected window shows the change at once, the session moving to its new place in the sidebar and focus modes.
 
 ### Who can own a session
 
@@ -283,7 +286,8 @@ delivered is reported in the note, with the reason, and the caller is told to se
 A session's role description is written when it launches, from who it reports to then, and two of the agents keep what
 a conversation was first given on every resume (see "What is injected on every launch" in
 `docs/product/launching-agents.md`). So a change of owner is told to the session in prose instead — in the message a
-handover writes into it, or in the result of its own `bind_to_session` call — and its role description says that what
+handover or a handoff writes into it, or in the result of its own `bind_to_session` call — and its role description
+says that what
 Octoboard tells it of a later change replaces what it says of its owner.
 
 The tools follow the binding as it stands. Octoboard checks every call against it, so a tool the session no longer has

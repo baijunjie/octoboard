@@ -290,6 +290,7 @@ fn session_in(
         origin: Origin::Console,
         bound_to: None,
         resume_agent_session_id: None,
+        session_id: None,
     })
 }
 

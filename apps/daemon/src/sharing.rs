@@ -86,6 +86,16 @@ pub(crate) fn one_line(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// A session as a message names it: its kind, id and title.
+pub(crate) fn named_session(session: &Session) -> String {
+    format!(
+        "the {} session `{}` (\"{}\")",
+        session.role.kind(),
+        session.id,
+        one_line(&session.title)
+    )
+}
+
 /// Where `session` runs, for a message to name it: ` in the project "…"`, or ` in the console "…"`
 /// for a console session, and nothing when the record is gone.
 pub(crate) fn place_of(state: &Arc<AppState>, session: &Session) -> String {

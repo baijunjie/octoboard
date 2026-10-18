@@ -122,6 +122,7 @@ pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
         "/opt/octoboardd".to_string(),
         dir.join("output"),
         dir.join("consoles"),
+        dir.join("handoff"),
     ));
     state.host_tools.replace(host_tools());
     (state, dir)

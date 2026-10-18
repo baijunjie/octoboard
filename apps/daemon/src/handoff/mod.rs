@@ -14,9 +14,7 @@
 //! A package lives in Octoboard's own data directory, in a file named for the key it is written
 //! under; [`remove`] is the end of that file's life.
 
-// TODO: nothing calls the package yet; remove once the handoff operation does.
-#![allow(dead_code)]
-
+pub mod operation;
 pub mod record;
 #[cfg(test)]
 mod tests;
@@ -421,13 +419,9 @@ fn render_todo(out: &mut String, todo: &Todo) {
 
 // -- the file ------------------------------------------------------------------
 
-/// Where the package written under `key` is: a known path per key, so whoever needs it later (the
-/// receiving session's brief, its deletion) finds it without asking. `None` for a key that is not
-/// a plain id, which no package is ever written under.
-pub fn package_path(key: &str) -> Option<PathBuf> {
-    package_path_in(&crate::paths::handoff_dir(), key)
-}
-
+/// Where the package written under `key` is in `dir`: a known path per key, so whoever needs it
+/// later finds it without asking. `None` for a key that is not a plain id, which no package is ever
+/// written under.
 fn package_path_in(dir: &Path, key: &str) -> Option<PathBuf> {
     let plain = !key.is_empty()
         && key
@@ -446,7 +440,7 @@ pub fn prepare(
     key: &str,
 ) -> Result<PathBuf> {
     let package = build(state, session, brief)?;
-    write_in(&crate::paths::handoff_dir(), key, &package.render())
+    write_in(state.handoff_dir(), key, &package.render())
 }
 
 fn write_in(dir: &Path, key: &str, text: &str) -> Result<PathBuf> {
@@ -475,9 +469,37 @@ fn write_in(dir: &Path, key: &str, text: &str) -> Result<PathBuf> {
     Ok(path)
 }
 
+/// Removes the packages whose key names no session, and the half-written files a crash left
+/// behind. A package is removed with its session, so only a daemon that died between deleting the
+/// record and the file, or between starting a handoff and recording its session, leaves one.
+pub fn sweep(state: &AppState) -> Result<()> {
+    let Ok(entries) = std::fs::read_dir(state.handoff_dir()) else {
+        return Ok(());
+    };
+    let ids: std::collections::HashSet<String> = state
+        .store
+        .list_sessions()?
+        .into_iter()
+        .map(|session| session.id)
+        .collect();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let orphan = match name.strip_suffix(".md") {
+            Some(key) => !ids.contains(key),
+            None => name.starts_with(".partial-"),
+        };
+        if orphan {
+            if let Err(err) = std::fs::remove_file(entry.path()) {
+                tracing::warn!(file = %name, %err, "removing a stale handoff package failed");
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Removes the package written under `key`; one that is already gone is no failure.
-pub fn remove(key: &str) -> std::io::Result<()> {
-    remove_in(&crate::paths::handoff_dir(), key)
+pub fn remove(state: &AppState, key: &str) -> std::io::Result<()> {
+    remove_in(state.handoff_dir(), key)
 }
 
 fn remove_in(dir: &Path, key: &str) -> std::io::Result<()> {

@@ -616,11 +616,13 @@ Archiving a session that is still *starting* stands: it is archived at once, and
 as it comes up.
 An archived session keeps its pin, if it had one (see "Order of projects and sessions" in `docs/product/sidebar.md`).
 
-Besides the user, three things archive a session: its owner, explicitly; a project session's own report saying the
-work is finished with nothing left open (see "Automatic archiving" in `docs/product/hub-orchestration.md`); and a
+Besides the user, four things archive a session: its owner, explicitly; a project session's own report saying the
+work is finished with nothing left open (see "Automatic archiving" in `docs/product/hub-orchestration.md`); a
 console session or unbound project session archiving itself, which it can do only once every session under it is
-archived (see "A session archiving itself" in `docs/product/hub-orchestration.md`). Each archives that one session and
-nothing else, except that an owner archiving a lead session archives it as an owner, under the rules below.
+archived (see "A session archiving itself" in `docs/product/hub-orchestration.md`); and a handoff to another agent,
+which archives the original once its place has moved (see `docs/product/handing-off-sessions.md`). Each archives that
+one session and nothing else, except that an owner archiving a lead session archives it as an owner, under the rules
+below.
 
 **Archiving an owner — a console session, or a project session that has started sessions — follows its bindings.**
 It reaches every session **under** it: the sessions bound directly to it and, for a console session, those under a
@@ -681,6 +683,12 @@ there, where it is listed, and that selecting an archived one does not relaunch 
 
 A session can be moved to another account of its own agent, ending and relaunching its process with its conversation
 carried along; how, and what is carried, is in `docs/product/switching-session-accounts.md`.
+
+### Handing a session off to another agent
+
+A session's work can be moved to a new session of another agent, which takes its place — its owner, its branches and
+the sessions it owns — and reads a package built from its conversation, while the original is archived; see
+`docs/product/handing-off-sessions.md`.
 
 ### Archived sessions
 

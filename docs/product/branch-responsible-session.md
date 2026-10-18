@@ -4,7 +4,8 @@ Octoboard records, for a local branch of a project's repository, its **responsib
 it now (see "The responsible session" below). The project pane's Git mode marks the branches that have one, and
 follows in its branch selector the branch the selected session most recently became responsible for (see "Following the
 selected session" in `docs/product/project-pane-git-mode.md`). A branch gets a responsible session only when **a
-session's own git reported creating it**, and it moves only by an explicit handover; every other branch is unmarked.
+session's own git reported creating it**, and it moves only by an explicit handover or a handoff; every other branch is
+unmarked.
 Nothing is inferred from timing, from which session was busy or from where a session works, so a responsible session
 is never a guess, and a branch with none — most branches — is no failure.
 
@@ -45,11 +46,13 @@ A branch has at most one responsible session at a time; a session can be respons
 - **It starts as the session whose own git reported creating the branch**, from the branch's creation on (see "When a
   branch gets a responsible session" below). A branch no session's git reported creating has none, and cannot be handed
   over.
-- **It moves only by an explicit handover** of the branch to another session: the user's approval of a
-  `request_session` call that names the branch, which makes the session the approval starts its responsible session
-  (see "Handing branches over" in `docs/product/session-requests.md`). Nothing else moves it; handing a session to
-  another owner, or a session binding itself to one, leaves the branches it is responsible for where they are. Who
-  was responsible for a branch before is not kept.
+- **It moves only by an explicit handover** of the branch to another session, in one of two ways: the user's approval
+  of a `request_session` call that names the branch, which makes the session the approval starts its responsible
+  session (see "Handing branches over" in `docs/product/session-requests.md`); or a handoff of the session to another
+  agent, which makes the receiving session responsible for every branch the original was (see
+  `docs/product/handing-off-sessions.md`). Nothing else moves it; handing a session to another owner, or a session
+  binding itself to one, leaves the branches it is responsible for where they are. Who was responsible for a branch
+  before is not kept.
 - **The record holds the session's title from when it became responsible**, to name a session that no longer exists:
   for the session whose git reported the branch, its title when the report was taken; for a session a handover made
   responsible, the title it was started with. Either is cut to its first 80 characters.

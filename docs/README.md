@@ -37,6 +37,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   agent: the confirmation and the console-wide switch, what is copied per agent (Claude Code sidecars and rewind
   checkpoints, Codex rollouts compressed or not, subagent rollouts left behind), the all-or-nothing copy, and when a
   switch fails.
+- [Handing a session off to another agent](product/handing-off-sessions.md) — the daemon's `hand_off_session`:
+  when a session can be handed off, the handoff package built from its records, how the receiving session takes over
+  its owner, branches and owned sessions, who is told, messages held during the handoff, and when it fails.
 - [Deleting sessions](product/deleting-sessions.md) — deleting archived sessions one at a time or all at once (an
   archived owner takes its bound archived sessions along), deleting a never-used session without confirmation, and
   moving agent records to the Trash automatically for unused sessions or optionally for used sessions.

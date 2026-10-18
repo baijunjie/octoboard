@@ -1,7 +1,7 @@
 # 04 Handoff tool for owners
 
 > Goal: let an owner hand off a session of its own to another agent through an Octoboard tool, without the user.
-> Completion criteria: an owner's `handoff_session` call runs the operation from milestone 02 for one of its own
+> Completion criteria: an owner's `handoff_session` call runs the daemon's `hand_off_session` operation for one of its own
 > sessions and returns the receiving session; a call on a session that is not the caller's, or that the operation
 > would refuse, is refused with the reason in prose and changes nothing. Verified by daemon integration tests from a
 > console session and from an unbound project session.

@@ -1,0 +1,134 @@
+# Handing a session off to another agent
+
+A **handoff** moves a session's work to a new session of **another agent**, which takes the original's whole place in
+Octoboard; the original is archived. The agents' conversation records cannot resume one another, so the conversation
+itself does not move: the new session — the **receiving session** — starts by reading a **handoff package** built from
+the original's records. Moving a session to another account of the same agent, which keeps the conversation itself, is
+switching its account instead (see `docs/product/switching-session-accounts.md`).
+
+A handoff is made with the daemon client protocol's `hand_off_session` request, which names the session, the receiving
+agent, and optionally the receiving session's account, model and reasoning effort. There is no entry for it in the
+window and no orchestration tool for it yet.
+
+## What can be handed off
+
+A project session or a console session, of any role — unbound, lead or bound — can be handed off while it is waiting
+for instructions, waiting for the user or interrupted. A handoff is refused, with nothing changed, when:
+
+- the session does not exist (`unknown_session`), is archived (`session_archived`; reopen it first), or is in the middle
+  of a turn or still starting (`session_working`: a session still at work goes on writing to its worktree while the
+  receiving session starts on it);
+- a launch, resume or account switch of it is under way (`session_already_starting`);
+- it is locked (`session_locked`; see "Locking a session" in `docs/product/sessions.md`);
+- the receiving agent is the session's own (`handoff_to_same_agent`, which points to switching its account);
+- the receiving agent is not available (`agent_not_available`), the account named is not one of that agent's
+  (`unknown_account`), or the model or reasoning effort is not one the agent offers (`invalid_launch_setting`);
+- for a session bound to an owner, opening a session bound to that owner would be refused.
+
+The account, model and reasoning effort follow the rules for opening a session (see "Which account a session uses" and
+"Which model and reasoning effort a session uses" in `docs/product/sessions.md`): left out, they come from the project
+or console as for any new session of that agent.
+
+From the moment a handoff is accepted until it ends, the original cannot be resumed, switched to another account or
+deleted.
+
+## The handoff package
+
+The package is a Markdown file built by program alone — no model is called — from the original's records, for the
+receiving session to read. It holds:
+
+- **the original session**: its title, id, agent and account, kind and project or console, its status when handed off,
+  the title of the session it reports to, if any, and where the agent's own conversation record is;
+- **the branches it is responsible for** (see "The responsible session" in
+  `docs/product/branch-responsible-session.md`), each as git has it at that moment: the worktree it is checked out in
+  and whether that worktree has uncommitted changes, its head, and, against the branch it is compared with (as the
+  project pane's Git mode compares it), the commits not in that branch (the first 50 listed) and the files changed
+  since it forked (the first 200 listed);
+- **the sessions it owns**, archived ones included, each with its title, status and id;
+- **its latest todo list**, as the agent's last update left it;
+- **the files its edits changed**, as its edit and write calls named them;
+- **the conversation**: every user message and every reply, in order, each set apart so nothing in it reads as the
+  file's own structure. Tool output, file contents read, command output, the model's reasoning, and what the agent
+  injects into the conversation on its own are left out. Where the agent compacted its history and rewrote its record
+  (Grok Build), the package keeps the summary it wrote and names the files holding the earlier conversation.
+
+The original's brief is not kept by Octoboard, so it is not carried separately: where the agent recorded it, it is the
+first user message of the conversation. A conversation record that is missing or cannot be read gives a package
+without the conversation, which says why; it does not stop the handoff. Building the package reads only: nothing is
+written to the agent's directories or to the project's repository.
+
+The package is written to `~/.octoboard/handoff/<receiving session id>.md`, readable by its owner alone, since a
+conversation can hold secrets. It stays for as long as the receiving session's record does; when it is removed is in
+"Files Octoboard owns" in `docs/product/application-lifecycle.md`.
+
+## What the receiving session takes over
+
+The receiving session starts with an opening prompt that names the original, gives the package's path and tells it to
+read the package whole before doing anything else and to carry on where the original stopped; it also tells it that
+its place is about to move to it, that it will be told what it holds, and not to message the original. It comes up
+*working* on that prompt.
+
+Once it is running, it takes the original's whole place:
+
+- **the same kind, project or console, and title** as the original;
+- **the same role and owner**: a bound session is bound to the original's owner from its first launch; a lead session
+  launches as an unbound project session does and is then bound to the original's console session as its lead session
+  (see "Lead sessions" in `docs/product/hub-orchestration.md`); an unbound session stays unbound;
+- **every session the original owns**, archived ones included, bound to it instead;
+- **the branches the original is responsible for**, which name it as their responsible session from then on;
+- **the original's pin**, when it had one.
+
+The binding and the owned sessions move together. Every connected window shows the moves at once. The original is
+then archived, last, once nothing is bound to it: it keeps its saved screen as any archived session does, none of the
+sessions that moved is archived with it, and **its branches and worktrees are not cleaned up**, since they moved to the
+receiving session.
+
+## Who is told
+
+The sessions concerned are told by messages written through the delivery every message takes (see "Messages held
+until a session can take them" in `docs/product/message-delivery.md`):
+
+- **each moved session that has a process** is told that its owner has changed, which session took the original's
+  place, that it takes work only from it or from the user typing in its terminal and reports to it, that this replaces
+  what it was told of its owner when it was started, and that the original is archived;
+- **the owner, when there is one and it has a process,** is told that its session was handed off to a session of
+  another agent, which now reports to it and which it drives like any session of its own, and that the original is
+  archived;
+- **the receiving session** is told what it now holds: its owner and how to report to it — for a lead session, also
+  that this replaces what its role description says about being unbound, and how its reports archive it — or that it
+  has no owner and reports to the user; the branches it is now responsible for, or that they could not be moved and
+  still name the original; and each session it now owns, with its status.
+
+A session with no process — interrupted or archived — is told nothing: a relaunch tells it who its owner is.
+
+## Messages for the original during a handoff
+
+From the moment a handoff is accepted, messages for the original are **held**: they are accepted and queued as for a
+session that cannot take one right now, and none is written into it, so that none starts a turn on work that is being
+moved. The held queue is kept even if the original's process ends meanwhile.
+
+- Once the receiving session has taken the place, everything queued for the original, including what was already
+  waiting there before the handoff, is forwarded to the receiving session, in order, before the original is archived.
+  So is anything queued for the original after that, until the handoff ends.
+- A handoff that fails before the receiving session has started, or before its place has moved, releases the hold: the
+  queue is written into the original as usual.
+- Forwarded to a receiving session that is being resumed at that moment, the queue is delivered once it is up, and
+  goes with it if that launch fails.
+- Where the queue ends up with a session that has no process to take it, it is dropped, and every window is notified
+  that messages queued for that session were dropped. So is a forwarded message that cannot be written.
+
+## When a handoff fails
+
+Every refusal comes before anything is written or started. After that:
+
+- **Writing the package or starting the receiving session fails** — opening it is refused, or its agent does not come
+  up: the package is removed again, and the original, its binding, its branches and its sessions are left as they were.
+- **Anything that fails once the receiving session is running** — the original's owner no longer able to take a lead
+  session when the binding moves, recording the move, or archiving the original — is answered with an error that names
+  the receiving session, which is left running. Where the binding had not moved yet, nothing of the original's moved
+  and it is not archived; where it had, the place stays with the receiving session and the original may be left
+  unarchived.
+- **Branches that cannot be moved** do not fail the handoff: they stay with the original, and the receiving session is
+  told so.
+
+A handoff that succeeds is answered with the receiving session.

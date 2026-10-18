@@ -57,11 +57,20 @@ Octoboard's records, and only Octoboard can move them.
   or console, with the same role (unbound, lead or bound) and the same owner; the branches it was responsible for name
   the receiving session from then on; every session it owned, archived ones included, is bound to the receiving
   session. The sessions concerned and the owner are told, as with a handover between owners.
+- **Messages for the original during a handoff are not lost and do not start a turn on it.** From the moment the
+  handoff claims the original, deliveries to it are queued instead of written; once the receiving session has taken its
+  place, the original's queue (what was already in its outbox included) is forwarded to the receiving session before the
+  original is archived. A handoff that fails before the receiving session has started writes the queue to the original
+  as usual.
+- **The receiving session carries over the original's pinned state.**
+- **The original's brief is not carried separately.** Sessions do not store their brief, so the receiving session's
+  opening prompt holds the package's path and the read-first instruction only; the brief reaches it as the first user
+  message in the package's conversation.
 
 ## Milestones
 
 1. 01 Handoff package (closed)
-2. [Handoff operation](02-handoff-operation.md)
+2. 02 Handoff operation (closed)
 3. [Hand off entry in the UI](03-handoff-ui.md)
 4. [Handoff tool for owners](04-handoff-tool.md)
 5. [Account switch tool for owners](05-account-switch-tool.md)

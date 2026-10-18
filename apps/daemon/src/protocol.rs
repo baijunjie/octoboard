@@ -1589,6 +1589,23 @@ pub enum RequestBody {
         #[serde(default, deserialize_with = "present_option")]
         account: Option<Option<String>>,
     },
+    /// Hands a session off to a new session of another agent, which takes its whole place: kind,
+    /// project or console, role, owner, the branches it is responsible for and the sessions it
+    /// owns. `agent` is required and must differ from the session's own (moving to another account
+    /// of the same agent is `switch_session_account`). `account`, `model` and `effort` are as in
+    /// `open_session`. The session must exist, not be archived, locked or starting, and not be in
+    /// the middle of a turn. Answered with `session_opened` for the receiving session once it is
+    /// running and the place has moved. See `crate::handoff::operation`.
+    HandOffSession {
+        session: String,
+        agent: Agent,
+        #[serde(default, deserialize_with = "present_option")]
+        account: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        model: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        effort: Option<Option<String>>,
+    },
     /// Fresh native-record presence for exactly the supplied sessions, aggregated across accounts.
     InspectSessionRecords {
         sessions: Vec<String>,
@@ -2705,6 +2722,12 @@ pub mod error_code {
     /// A switch was asked for an archived session. Reopening one is a resume's job, and a switch
     /// must not do it as a side effect.
     pub const SESSION_ARCHIVED: &str = "session_archived";
+    /// A handoff was asked for a session in the middle of a turn, or still starting. `params`
+    /// names the `session`.
+    pub const SESSION_WORKING: &str = "session_working";
+    /// A handoff was asked to the agent the session already runs on. `params` names the `session`
+    /// and the `agent`.
+    pub const HANDOFF_TO_SAME_AGENT: &str = "handoff_to_same_agent";
     /// A switch found no conversation record of the session in the account it is on. `params`
     /// names `agent` and the `path` of that account's directory.
     pub const CONVERSATION_NOT_FOUND: &str = "conversation_not_found";
@@ -3016,6 +3039,13 @@ mod tests {
                 r#"{"type":"switch_session_account","id":"request-1","session":"session-7","account":null}"#,
                 |body| match body {
                     RequestBody::SwitchSessionAccount { session, .. } => Some(session),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"hand_off_session","id":"request-1","session":"session-7","agent":"codex"}"#,
+                |body| match body {
+                    RequestBody::HandOffSession { session, .. } => Some(session),
                     _ => None,
                 },
             ),

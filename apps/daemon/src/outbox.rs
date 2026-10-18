@@ -10,6 +10,10 @@
 //! - **Nothing is dropped once accepted**, with two exceptions: a half-written message (below),
 //!   whose drain reports the loss; and a session whose process ends, which takes its queue with it.
 //!   Short of those, whoever queued a message was told not to send it again and is right.
+//! - **A held queue is kept and not written.** A handoff holds the original's queue: messages are
+//!   still accepted, a drain in progress stops at its next message, and the queue survives the
+//!   session's process ending, so that its holder can forward it to the session that takes over
+//!   (`AppState::hold_outbox`).
 //! - **One drainer per session.** Two of them interleaving between a pop and its write would
 //!   reorder the queue.
 //!
@@ -62,6 +66,9 @@ pub struct Outbox {
     queues: Mutex<HashMap<String, VecDeque<String>>>,
     /// The sessions a drainer currently owns.
     draining: Mutex<HashSet<String>>,
+    /// The sessions whose queue is held: messages are still accepted but none is written, because
+    /// the session is being handed off and what is queued for it goes to its successor.
+    held: Mutex<HashSet<String>>,
 }
 
 impl Outbox {
@@ -100,6 +107,9 @@ impl Outbox {
         // The claim is released before the queue is re-read, so there is no ordering in which the
         // producer both fails to claim and lets this loop exit.
         loop {
+            if self.is_held(id) {
+                return Drain::Pending;
+            }
             if !self.claim(id) {
                 // Another drainer owns it and will take whatever was just pushed.
                 return Drain::Pending;
@@ -119,6 +129,10 @@ impl Outbox {
         write: &mut impl FnMut(&str) -> Result<(), PartialWrite>,
     ) -> Drain {
         loop {
+            // Re-read for every message: a hold taken while this pass runs stops it at the next one.
+            if self.is_held(id) {
+                return Drain::Pending;
+            }
             let Some(text) = self.pop(id) else {
                 return Drain::Clear;
             };
@@ -171,6 +185,38 @@ impl Outbox {
             .remove(id)
             .map(|queue| queue.len())
             .unwrap_or(0)
+    }
+
+    /// Stops writing this session's queue until [`Self::release_hold`]. Pushing still works.
+    pub fn hold(&self, id: &str) {
+        self.held
+            .lock()
+            .expect("outbox hold lock poisoned")
+            .insert(id.to_string());
+    }
+
+    pub fn release_hold(&self, id: &str) {
+        self.held
+            .lock()
+            .expect("outbox hold lock poisoned")
+            .remove(id);
+    }
+
+    pub fn is_held(&self, id: &str) -> bool {
+        self.held
+            .lock()
+            .expect("outbox hold lock poisoned")
+            .contains(id)
+    }
+
+    /// Removes and returns what is queued for this session, oldest first.
+    pub fn take(&self, id: &str) -> Vec<String> {
+        self.queues
+            .lock()
+            .expect("outbox lock poisoned")
+            .remove(id)
+            .map(Vec::from)
+            .unwrap_or_default()
     }
 
     fn claim(&self, id: &str) -> bool {

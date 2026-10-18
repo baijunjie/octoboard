@@ -23,7 +23,9 @@ when it clears, delivery resumes if the last hook-reported status permits it (se
 `docs/product/sessions.md`).
 
 A message for a session with no process running is refused outright: a resume starts the agent at
-its prompt and replays nothing. Anything still queued when a session's process ends goes with it.
+its prompt and replays nothing. Anything still queued when a session's process ends goes with it, unless the session
+is being handed off to another agent, whose queue is kept for the session that takes its place (see
+"Messages for the original during a handoff" in `docs/product/handing-off-sessions.md`).
 
 **Messages are also held while a session's trust confirmation may be up.** A message's trailing Enter would answer
 the agent's own folder-trust confirmation (see `docs/product/folder-trust.md`) — accepting it, and so trusting the
