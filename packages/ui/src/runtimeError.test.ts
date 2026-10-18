@@ -11,3 +11,10 @@ it("preserves Error metadata and reports thrown primitives and errors from other
   expect(runtimeError(new ErrorEvent("error", { message: "fallback diagnostic" }))).toBe("fallback diagnostic");
   expect(runtimeError(new Event("error"))).toBeUndefined();
 });
+
+it("ignores the browser's ResizeObserver loop notice but not an exception that shares its text", () => {
+  expect(runtimeError(new ErrorEvent("error", { message: "ResizeObserver loop completed with undelivered notifications." }))).toBeUndefined();
+  expect(runtimeError(new ErrorEvent("error", { message: "ResizeObserver loop limit exceeded" }))).toBeUndefined();
+  const error = new Error("ResizeObserver loop limit exceeded");
+  expect(runtimeError(new ErrorEvent("error", { message: error.message, error }))).toBe(error);
+});
