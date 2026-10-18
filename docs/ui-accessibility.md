@@ -30,6 +30,11 @@ A notice toast (HeroUI's accent variant) tints its indicator with the title's `-
 does itself for its success, warning and danger toasts, instead of leaving it in the plain foreground under an accent
 title.
 
+A tooltip over a dialog in dark takes `--tooltip-on-dialog`, a step lighter than the dialog (1.30:1), instead of
+HeroUI's `--overlay`: HeroUI draws both on that one colour and gives the tooltip no edge in dark but a faint inset
+line, so it cannot be told from the dialog under it. In light it keeps HeroUI's own surface, whose drop shadow already
+sets it apart. The rule is the `.tooltip` one under `html:has(.modal__backdrop, …)` in `packages/ui/src/style.css`.
+
 ## Keyboard
 
 Every interactive control is reachable from the keyboard and operable with Enter / Space, with one exception inside a

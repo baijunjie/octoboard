@@ -425,6 +425,7 @@ html {
   --sidebar-fill-hover: oklch(0 0 0 / 0.12);
   --control-fill: oklch(0.92 0.004 286);
   --control-fill-hover: oklch(0.89 0.004 286);
+  --tooltip-on-dialog: var(--overlay);
 }
 
 .dark,
@@ -446,6 +447,7 @@ html {
   --sidebar-fill-hover: oklch(1 0 0 / 0.11);
   --control-fill: oklch(0.33 0.006 286);
   --control-fill-hover: oklch(0.36 0.006 286);
+  --tooltip-on-dialog: oklch(0.3 0.006 286);
 }
 
 /* The fills of HeroUI's `--default` family inside the sidebar and report panel. A ghost button's hover and pressed
@@ -734,6 +736,23 @@ html {
 .tooltip {
   word-break: normal;
   overflow-wrap: break-word;
+}
+
+/* A tooltip over a dialog: HeroUI draws both on `--overlay`, so the tooltip lands on its own colour
+   and only `--overlay-shadow` marks its edge. In light that shadow is a real drop shadow and is
+   left alone; in dark it is a faint inset line and nothing else, so the tooltip takes a step off
+   the dialog's surface there (`--tooltip-on-dialog`, 1.30:1 against a dark dialog). This is a
+   deliberate departure from HeroUI's look, kept in docs/ui-accessibility.md's "Confirmed visual
+   choices" section. Setting `--overlay` on the tooltip reaches its arrow too, which HeroUI fills
+   from the same token. Light's `--tooltip-on-dialog` is `var(--overlay)`, which resolves to the
+   plain surface where it is declared, on the root, before the tooltip inherits it; declared on the
+   tooltip itself, beside the `--overlay` this rule sets, the two would form a cycle and the tooltip
+   would lose its background. A tooltip is portalled to the document's end rather than drawn
+   inside the dialog, so the dialog is found from the root. While a modal is open, everything
+   outside it but the toast region and the connection banner is inert; a tooltip on those sits on
+   the same colour in dark, so the step fits it as well. */
+html:has(.modal__backdrop, .alert-dialog__backdrop) .tooltip {
+  --overlay: var(--tooltip-on-dialog);
 }
 
 /* A checkbox's box sits on its label's first line, centred in that line, whether the label wraps or
