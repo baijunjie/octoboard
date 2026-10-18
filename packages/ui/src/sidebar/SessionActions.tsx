@@ -10,7 +10,7 @@ import { sessionDisplayTitle } from "../sessionLabel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useDaemonStore } from "../store";
 import { offersDelete, sessionMenu } from "./menus";
-import { archiveNeedsConfirmation } from "./order";
+import { archiveNeedsConfirmation, isUnusedSession } from "./order";
 import { RowIconButton } from "./rows";
 import type { SidebarHandlers } from "./types";
 
@@ -42,7 +42,7 @@ export function SessionActions({
   });
   const handoff = useFocusHandoff(() => rowRef.current?.focus());
   const title = sessionDisplayTitle(t, session);
-  const deletable = session.status !== "starting" && !session.has_conversation && !session.bound_to && !hasBoundSessions;
+  const deletable = isUnusedSession(session, hasBoundSessions);
   const archivable = !offersDelete(session, hasBoundSessions) && atOnce;
   return (
     <>

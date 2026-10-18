@@ -1508,20 +1508,23 @@ impl Store {
             .optional()?)
     }
 
-    /// Deletes the session only while it is unused: it has had no turn, is bound to no owner and
-    /// has no session bound to it, whatever its status. The returned identity comes from the same
-    /// statement as the delete, so native-record cleanup cannot use an earlier hook snapshot.
+    /// Deletes the session only while it is unused: it has had no turn, has no session bound to it
+    /// and is either bound to no owner or was opened by the user (one an agent started was
+    /// dispatched by its owner, which expects it to exist, so it is archived instead), whatever
+    /// its status. The returned identity comes from the same statement as the delete, so
+    /// native-record cleanup cannot use an earlier hook snapshot.
     pub fn delete_session_if_unused(&self, id: &str) -> Result<Option<Session>> {
         Ok(self
             .lock()
             .query_row(
                 &format!(
                     "DELETE FROM sessions
-                     WHERE id = ?1 AND has_conversation = 0 AND bound_to IS NULL
+                     WHERE id = ?1 AND has_conversation = 0
+                       AND (bound_to IS NULL OR origin = ?2)
                        AND NOT EXISTS (SELECT 1 FROM sessions WHERE bound_to = ?1)
                      RETURNING {SESSION_COLUMNS}"
                 ),
-                params![id],
+                params![id, enum_to_text(&Origin::User)],
                 read_session,
             )
             .optional()?)

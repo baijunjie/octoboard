@@ -150,6 +150,16 @@ export function boundArchivedSessions(sessions: Session[], ownerId: string): Ses
   return archivedSessions(sessions.filter((s) => s.bound_to === ownerId || (s.bound_to && ids.has(s.bound_to))));
 }
 
+/** Whether `session` has never been used, so that it is deleted outright: no conversation on the
+ * agent's side (no turn taken, none resumed at open), no session bound to it, and either bound to
+ * no owner or opened by the user. One an agent started was dispatched by its owner, which handed it
+ * work and expects it to exist, so deleting it would silently cancel that task: it keeps Archive,
+ * and so does one still starting, which the daemon refuses to delete. */
+export function isUnusedSession(session: Session, hasBoundSessions: boolean): boolean {
+  return session.status !== "starting" && !session.has_conversation && !hasBoundSessions
+    && (!session.bound_to || session.origin === "user");
+}
+
 /** Whether archiving `session` asks the user first, as far as the sessions say. One sitting at its
  * prompt (`idle`) or with no process (`interrupted`) is archived at once, since nothing is cut
  * short; one at work or raising a hand asks, and so does one with an unarchived session bound to it

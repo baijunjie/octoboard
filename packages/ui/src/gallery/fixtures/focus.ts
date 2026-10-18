@@ -232,9 +232,21 @@ const hierarchyState = {
   ]),
 };
 
+// Two sessions bound to `hub1` in which nothing was ever said: one the user opened in its focus mode
+// and one an agent started with `new_session`. Only the first is deleted outright; the second was
+// dispatched by its owner, which expects it to exist, so it is archived. Started most recently, so
+// they sit at the top of the idle cards, within sight without scrolling.
+const unusedBoundSessions = [
+  sessionOf("s-bound-unused-user", console_.id, project.id, "Draft the changelog", "idle", { bound_to: hub1.id, origin: "user", has_conversation: false, started_at: minutesAgo(3) }),
+  sessionOf("s-bound-unused-agent", console_.id, project.id, "Start the benchmark run", "idle", { bound_to: hub1.id, origin: "console", has_conversation: false, started_at: minutesAgo(4) }),
+];
+
 const lockedFocusState = {
   ...scrollingFocusState,
-  sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, id === hub1.id || id === "s-1" ? { ...session, locked: true } : session])),
+  sessions: new Map([
+    ...[...scrollingFocusState.sessions].map(([id, session]) => [id, id === hub1.id || id === "s-1" ? { ...session, locked: true } : session] as const),
+    ...unusedBoundSessions.map((session) => [session.id, session] as const),
+  ]),
 };
 
 export const focusScenarios: Scenario[] = [
@@ -289,8 +301,9 @@ export const focusScenarios: Scenario[] = [
     category: "normal",
     title: "Console session focus",
     state: lockedFocusState,
+    sessionRecords: Object.fromEntries(unusedBoundSessions.map((session) => [session.id, "absent" as const])),
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "The focused Hub header and the pinned Add idempotency keys card have persistent Unlock controls before their actions, without lock borders; unlocking keeps their order. The switch strip includes waiting, working and inactive sessions; hover markers for details. Set Modifier to Held to see the header plus menu and each project group's new-session button as the bolt; choosing a project from the menu then creates with defaults.",
+    description: "The focused Hub header and the pinned Add idempotency keys card have persistent Unlock controls before their actions, without lock borders; unlocking keeps their order. Draft the changelog and Start the benchmark run are both bound to Hub and were never used; the first was opened by the user, so its shortcut and menu offer Delete, while the second was started by an agent and keeps Archive. The switch strip includes waiting, working and inactive sessions; hover markers for details. Set Modifier to Held to see the header plus menu and each project group's new-session button as the bolt; choosing a project from the menu then creates with defaults.",
     steps: [
       (ui) => ui.press(addIdempotencyKeys(ui)),
     ],

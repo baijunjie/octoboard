@@ -11,7 +11,7 @@ import type { Translate } from "../i18n/catalog";
 import type { Account, Console, Project, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { FocusShortcutKbd } from "./focusShortcut";
-import { archivePreviewSessions } from "./order";
+import { archivePreviewSessions, isUnusedSession } from "./order";
 import { SessionColourSwatches } from "./SessionColourSwatches";
 import type { SidebarHandlers } from "./types";
 
@@ -186,14 +186,10 @@ function handOffItem(t: Translate, handlers: SidebarHandlers, session: Session):
 }
 
 /** Whether a session's menu offers Delete in place of Archive: it is archived already, or it has
- * never been used — no conversation on the agent's side (no turn taken, none resumed at open),
- * bound to no owner and no session bound to it — and is deleted outright. One bound to an owner
- * keeps Archive even before its first prompt lands, since it reports to that owner, and so does an
- * owner that already has a session under it. One still starting keeps Archive too: the daemon
- * refuses to delete it, and archiving it works. */
+ * never been used (see `isUnusedSession`) and is deleted outright. One still starting keeps
+ * Archive: the daemon refuses to delete it, and archiving it works (`isUnusedSession` rejects it). */
 export function offersDelete(session: Session, hasBoundSessions: boolean): boolean {
-  if (session.status === "starting") return false;
-  return session.status === "archived" || (!session.has_conversation && !session.bound_to && !hasBoundSessions);
+  return session.status === "archived" || isUnusedSession(session, hasBoundSessions);
 }
 
 /** The palette of a console session's colour, as a panel beside the menu. Choosing a swatch applies

@@ -60,6 +60,11 @@ it.each<[Session["status"], boolean, string | undefined]>([
   }
 });
 
+it("offers a bound unused session the user opened the Delete shortcut", () => {
+  const { container } = mount({ ...unused, status: "idle", bound_to: "owner", origin: "user" }, async () => ({ type: "ack" }));
+  expect(shortcut(container, "Delete")).not.toBeNull();
+});
+
 it("removes the delete shortcut as soon as the first conversation is reported", () => {
   const { container, daemon, render } = mount({ ...unused, status: "idle" }, async () => ({ type: "ack" }));
   expect(shortcut(container, "Delete")).not.toBeNull();

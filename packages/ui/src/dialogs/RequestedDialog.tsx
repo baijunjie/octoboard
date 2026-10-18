@@ -14,7 +14,13 @@ import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { isLive, type Project, type Session, type SessionBranchItem } from "../protocol";
 import { sessionAgentLabel, sessionDisplayTitle } from "../sessionLabel";
-import { boundArchivedSessions, boundSessionsArchivedWith, compareSessions } from "../sidebar/order";
+import {
+  boundArchivedSessions,
+  boundSessionsArchivedWith,
+  compareSessions,
+  hasBoundSessions,
+  isUnusedSession,
+} from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ConsoleDialog } from "./ConsoleDialog";
@@ -410,8 +416,7 @@ export function RequestedDialog({
     case "delete-session": {
       // An archived owner takes the archived sessions bound to it, and those bound to those, along.
       const withIt = boundArchivedSessions(Array.from(sessions.values()), dialog.session.id);
-      const unused = dialog.session.status !== "starting" && !dialog.session.has_conversation && !dialog.session.bound_to
-        && !Array.from(sessions.values()).some((s) => s.bound_to === dialog.session.id);
+      const unused = isUnusedSession(dialog.session, hasBoundSessions(sessions.values(), dialog.session.id));
       return unused
         ? <DeleteUnusedSession key={dialog.session.id} sessionId={dialog.session.id} onClose={onClose} />
         : <DeleteSessionDialog session={dialog.session} withIt={withIt} onClose={onClose} />;

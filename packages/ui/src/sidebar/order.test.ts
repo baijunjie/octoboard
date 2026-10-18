@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Project, Session, SessionStatus } from "../protocol";
-import { archiveNeedsConfirmation, consoleActivity, INACTIVE_PROJECT_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sortProjects, switchStrip } from "./order";
+import { archiveNeedsConfirmation, isUnusedSession, consoleActivity, INACTIVE_PROJECT_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sortProjects, switchStrip } from "./order";
 
 const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to?: string): Session => ({
   id,
@@ -119,6 +119,21 @@ describe("boundSessionsArchivedWith", () => {
       session("old-child", "archived", 10, false, "lead"),
     ];
     expect(boundSessionsArchivedWith(sessions, "s-console").map((s) => s.id)).toEqual(["bound-live", "lead", "under-archived", "under-lead-live", "under-live", "under-lead"]);
+  });
+});
+
+describe("isUnusedSession", () => {
+  const unused = (extra: Partial<Session>) => ({ ...session("s", "idle", 1), ...extra });
+
+  it.each([
+    ["an unbound session with no conversation", {}, false, true],
+    ["a session that has had a turn", { has_conversation: true }, false, false],
+    ["a session still starting", { status: "starting" }, false, false],
+    ["an owner with a session bound to it", {}, true, false],
+    ["a bound session the user opened", { bound_to: "h", origin: "user" }, false, true],
+    ["a bound session an agent started", { bound_to: "h", origin: "console" }, false, false],
+  ] as const)("%s: %s", (_, extra, hasBound, expected) => {
+    expect(isUnusedSession(unused(extra), hasBound)).toBe(expected);
   });
 });
 

@@ -232,7 +232,9 @@ hand is not bound**, unless they choose a console session under "Report to" in t
 session" in `docs/product/sessions.md`); the choice is none by default and offers console sessions only. A binding
 changes afterwards only when its owner hands the session over, when an unbound session binds itself, or when its owner
 is handed off to another agent and the session moves to the one that takes the owner's place, and is never cleared
-(see `docs/product/changing-session-owners.md`).
+(see `docs/product/changing-session-owners.md`). A session the user opened bound to an owner can still be deleted by
+the user while it is unused, and the owner is not told (see "Deleting an unused session" in
+`docs/product/deleting-sessions.md`); one started with `new_session` cannot.
 
 An owner drives only the sessions bound to it. Every session record it reads names that session's owner, and a session
 that is unbound, or bound to any other session, is not this one's to drive: it can read such a session, but is told

@@ -56,8 +56,11 @@ A session is unused, whatever its status, while all of these hold:
 - **It has no conversation yet.** The first prompt its agent reports as submitted makes it used for good, whether the
   user typed it or Octoboard wrote it in; a session opened to resume a conversation is used from the moment it is
   opened (see "Resuming a conversation started outside Octoboard" in `docs/product/sessions.md`).
-- **It is bound to no owner.** A live session another session started, or one opened to report to a console session,
-  keeps Archive even before its first prompt lands, since it reports to that owner.
+- **It is bound to no owner, or the user opened it.** A session the user opened bound to an owner — choosing a
+  console session under "Report to" in the session dialog, or opening it from a console session's focus mode (see
+  "A console session's focus mode" in `docs/product/focus-mode.md`) — can be unused. A session an agent started with
+  `new_session`, a console session's or a project session's, keeps Archive even before its first prompt lands: its
+  owner handed it work and expects it to exist.
 - **No session is bound to it.** A live owner with any session under it, in any status, keeps Archive.
 
 A session still *starting* (see "Session statuses" in `docs/product/sessions.md`) is offered **Archive**, not Delete,
@@ -73,6 +76,10 @@ Deleting removes the session's record as described in "Deleting archived session
 worktrees included, with nothing forced since nothing is asked. Its process is stopped, and nothing is left in the
 archive. A trust confirmation or session request of the session's that is still waiting is
 dropped with it (see "How a request ends" in `docs/product/session-requests.md`).
+
+**Deleting an unused session bound to an owner tells the owner nothing.** The session simply disappears: it is no
+longer among the sessions the owner lists or reads, and the owner's later tool calls naming its id are refused as an
+unknown session.
 
 - The check is made at the moment of the delete: a session that has become used by then — a prompt submitted at the
   same moment wins — is refused as in "Deleting archived sessions" above, and keeps its record and its process. So is a

@@ -575,7 +575,7 @@ describe("the fixture daemon's native session records", () => {
   });
 
   it("refuses guarded deletion for used, bound and owner sessions, and any deletion while starting", async () => {
-    const bound = { ...unused, id: "unused-bound", bound_to: owner.id };
+    const bound = { ...unused, id: "unused-bound", bound_to: owner.id, origin: "console" as const };
     const unusedOwner = { ...unused, id: "unused-owner" };
     const boundChild = { ...unused, id: "unused-child", bound_to: unusedOwner.id };
     const starting = { ...unused, id: "starting", status: "starting" as const };
@@ -585,6 +585,15 @@ describe("the fixture daemon's native session records", () => {
       expect(daemon.store.getState().sessions.has(session.id)).toBe(true);
     }
     await expect(daemon.request({ type: "delete_session", session: starting.id })).rejects.toMatchObject({ code: "session_not_deletable" });
+  });
+
+  it("removes an unused session the user opened under an owner, and keeps one an agent started", async () => {
+    const opened = { ...unused, id: "opened", bound_to: owner.id, origin: "user" as const };
+    const started = { ...unused, id: "started", bound_to: owner.id, origin: "console" as const };
+    const daemon = createFixtureDaemon({ ...scenario, state: snapshotState({ sessions: [owner, opened, started] }) });
+    await expect(daemon.request({ type: "delete_session", session: started.id, only_if_unused: true })).rejects.toMatchObject({ code: "session_not_deletable" });
+    await daemon.request({ type: "delete_session", session: opened.id, only_if_unused: true });
+    expect([...daemon.store.getState().sessions.keys()]).toEqual([owner.id, started.id]);
   });
 
   it("takes archived children with a confirmed archived lead and preserves live children", async () => {

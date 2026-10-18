@@ -3670,11 +3670,11 @@ fn session_ids_where(
 /// both levels: left behind, reopening one would have no owner to come back with. Deleting an
 /// archived bound session on its own leaves its owner alone.
 ///
-/// A session that is not archived is deleted only while it is unused: no turn yet, bound to no
-/// owner and with none bound to it. That is decided in the same step as the delete (see
-/// `Store::delete_session_if_unused`), so a turn racing the request wins and the request is
-/// refused. Its process is ended after the record is gone, and not before, so a refused delete
-/// never costs the session its process.
+/// A session that is not archived is deleted only while it is unused: no turn yet, with none
+/// bound to it, and bound to no owner or opened by the user. That is decided in the same step as
+/// the delete (see `Store::delete_session_if_unused`), so a turn racing the request wins and the
+/// request is refused. Its process is ended after the record is gone, and not before, so a
+/// refused delete never costs the session its process.
 ///
 /// The record takes its saved terminal output with it. Nothing else of Octoboard's hangs off a
 /// session: its queue, MCP token and turn bookkeeping go when its process does, and so does its
@@ -9170,7 +9170,10 @@ mod tests {
             .unwrap();
         state
             .store
-            .insert_session(&bound_session("child", SessionStatus::Archived, "owner"))
+            .insert_session(&Session {
+                origin: Origin::Console,
+                ..bound_session("child", SessionStatus::Archived, "owner")
+            })
             .unwrap();
         for id in ["first-turn", "owner", "child"] {
             let err = handle(
@@ -9191,9 +9194,9 @@ mod tests {
         assert_eq!(session_ids(&state), ["child", "first-turn", "owner"]);
     }
 
-    /// A session that is not archived is deleted only while it is unused: no turn yet, bound to no
-    /// owner and with none bound to it. Deleting one stops its process; any other is refused and
-    /// keeps both its record and its process.
+    /// A session that is not archived is deleted only while it is unused: no turn yet, with none
+    /// bound to it, and bound to no owner or opened by the user. Deleting one stops its process;
+    /// any other is refused and keeps both its record and its process.
     #[tokio::test]
     async fn deleting_a_session_that_is_not_archived_needs_it_to_be_unused() {
         use SessionStatus::{Idle, Interrupted};
@@ -9206,7 +9209,11 @@ mod tests {
                 ..project_session("used", Agent::Claude, Idle)
             },
             console_session("hub", Idle),
-            bound_session("worker", Idle, "hub"),
+            bound_session("opened-by-user", Idle, "hub"),
+            Session {
+                origin: Origin::Console,
+                ..bound_session("started-by-agent", Idle, "hub")
+            },
         ] {
             state.store.insert_session(&session).unwrap();
         }
@@ -9232,8 +9239,9 @@ mod tests {
         assert_eq!(code_of(&err), error_code::SESSION_NOT_DELETABLE);
         drop(claim);
         delete_session(&state, "never-used").unwrap();
+        delete_unused_session(&state, "opened-by-user").unwrap();
 
-        for refused in ["used", "hub", "worker"] {
+        for refused in ["used", "hub", "started-by-agent"] {
             let err = delete_session(&state, refused).expect_err(refused);
             assert_eq!(
                 code_of(&err),
@@ -9241,7 +9249,7 @@ mod tests {
                 "{refused}"
             );
         }
-        assert_eq!(session_ids(&state), ["hub", "used", "worker"]);
+        assert_eq!(session_ids(&state), ["hub", "started-by-agent", "used"]);
         assert!(!used.poll_exit());
     }
 

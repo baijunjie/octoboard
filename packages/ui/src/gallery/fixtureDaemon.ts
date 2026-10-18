@@ -568,7 +568,12 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const session = store.getState().sessions.get(body.session);
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: "Unknown session" });
           refuseLocked([session]);
-          const unused = !session.has_conversation && !session.bound_to && !all.some((s) => s.bound_to === session.id);
+          // As `delete_session_if_unused` of `store.rs`, repeated here and not taken from the sidebar's
+          // `isUnusedSession`: no conversation, nothing bound to it, and either no owner or opened by
+          // the user (one an agent started was dispatched by its owner, which expects it to exist,
+          // so it is archived instead).
+          const unused = !session.has_conversation && !all.some((s) => s.bound_to === session.id)
+            && (!session.bound_to || session.origin === "user");
           if (session.status === "starting" || (body.only_if_unused && !unused)
             || (session.status !== "archived" && !unused)) {
             return fail({ code: "session_not_deletable", params: { session: session.id }, message: "Session is no longer unused or is still starting" });

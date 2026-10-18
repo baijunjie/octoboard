@@ -414,10 +414,10 @@ action menu offers:
   `docs/product/hub-orchestration.md`) — under a warning with their number, as the ones archived with it, and the
   archive is refused, with the sessions named, while any session under it has a process running. A project session that
   has started sessions is archived under the same rule, with the same confirmation while any of them is unarchived.
-- **Delete**, in place of Archive for a session that has never been used — no turn yet, bound to no owner and with no
-  session bound to it — and is not still starting; it stops the session and deletes it outright, leaving nothing in
-  the archive. Deletion needs no confirmation and automatically moves its agent records to the Trash, as described
-  in "Deleting an unused session" in `docs/product/deleting-sessions.md`.
+- **Delete**, in place of Archive for a session that has never been used and is not still starting (what counts as
+  unused is in "Deleting an unused session" in `docs/product/deleting-sessions.md`); it stops the session and deletes
+  it outright, leaving nothing in the archive. Deletion needs no confirmation and automatically moves its agent records
+  to the Trash, as described in that section.
 
 Archive and Delete menu items are disabled while the session is locked.
 

@@ -134,7 +134,7 @@ describe("the Archive and Delete entries", () => {
   it.each([
     ["a session that has had a turn", "Archive", session({}), false],
     ["a session that has never been used", "Delete", session({ has_conversation: false }), false],
-    ["an unused session bound to an owner", "Archive", session({ has_conversation: false, bound_to: "h" }), false],
+    ["an unused session the user opened under an owner", "Delete", session({ has_conversation: false, bound_to: "h", origin: "user" }), false],
     ["an unused owner with a bound session", "Archive", session({ has_conversation: false }), true],
     ["an archived session", "Delete", session({ status: "archived" }), false],
   ] as const)("%s gets %s", (_, label, target, hasBound) => {
