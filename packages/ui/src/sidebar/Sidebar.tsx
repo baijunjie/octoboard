@@ -9,7 +9,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { setInteractionModality } from "react-aria";
-import React, { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { memo, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { noAgentAvailable } from "../agents";
@@ -21,6 +21,7 @@ import { handFocusOff } from "../components/handFocusOff";
 import { PATH_VAR_PARAMS } from "../components/literalParams";
 import { RowControls, RowIconGroup, RowIconSlot } from "../components/RowControls";
 import { FadedScroller } from "../components/scrollFade";
+import { hasVisibleUsage, SessionUsageLabel } from "../components/SessionMetadata";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { StatusIcon } from "../components/StatusIcon";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
@@ -841,6 +842,7 @@ const SessionRow = memo(function SessionRow({
   under?: Session;
   selected: boolean;
 }): React.ReactElement {
+  const metadataId = useId();
   const t = useT();
   const language = useCurrentLanguage();
   const accounts = useDaemonStore((s) => s.settings.accounts);
@@ -852,6 +854,7 @@ const SessionRow = memo(function SessionRow({
   return (
     <TreeRow
       ref={rowRef}
+      describedBy={hasVisibleUsage(session.usage) ? metadataId : undefined}
       ariaLabel={sessionAriaLabel(t, language, session, accounts, owner)}
       selected={selected}
       locked={session.locked}
@@ -859,7 +862,10 @@ const SessionRow = memo(function SessionRow({
     >
       <StatusIcon status={session.status} decorative withTooltip />
       <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
-      <RowLabel title={sessionDisplayTitle(t, session)}>{sessionDisplayTitle(t, session)}</RowLabel>
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0">{sessionDisplayTitle(t, session)}</RowLabel>
+        {hasVisibleUsage(session.usage) && <span id={metadataId} className="shrink-0"><SessionUsageLabel usage={session.usage} /></span>}
+      </div>
       <RowControls
         fixed={badgeOwner?.colour || session.pinned || session.locked ? (
           <>

@@ -356,7 +356,10 @@ exits unsuccessfully. The refusal carries the reason as `detail`.
 
 A session row shows the session's status glyph (see "Session statuses" in `docs/product/sessions.md`), its agent's icon,
 its displayed title (see "Displayed names" in `docs/product/session-titles.md`), and its pin button when it is pinned
-(see "Pinning" below). A project session bound to a console session also
+(see "Pinning" below). Outside focus mode, every console and project session row, nested sessions included, shows
+native token usage immediately after its title when the total is positive (see "Native session usage" in
+`docs/product/session-usage.md`). The title clips and fades when space is short, keeping the usage chip visible.
+The row's accessible description carries the usage counts. A project session bound to a console session also
 carries that console session's **binding badge**: a small dot in the console session's colour, whose tooltip names it
 (see "The binding badge" below); one bound to a project session carries none, since its row is listed under that
 session instead (see "Project rows" above), with the owner named in the row's own accessible name. A console session's

@@ -312,7 +312,7 @@ Nothing enforces a minimum when the UI is opened in a browser, so the narrow lay
 
 | Pane | Default | Range the user can choose |
 |---|---|---|
-| Sidebar | 280 px | 200–480 px |
+| Sidebar | 280 px | 280–480 px |
 | Right pane | 420 px | 320–720 px |
 | Terminal | everything left over | never below 520 px (about 53 columns) |
 
@@ -321,7 +321,7 @@ below), and neither grows past it: width a wider window frees goes to the termin
 whichever owner it has.
 
 **The terminal always keeps its 520 px.** Where the window cannot afford every pane its chosen width, the right pane
-gives up width first, down to 320 px, and only then the sidebar, down to 200 px. At the 1168 px minimum with both panes
+gives up width first, down to 320 px, and only then the sidebar, down to 280 px. At the 1168 px minimum with both panes
 shown that makes, beside the 48 px rail, the sidebar 280 px, the terminal 520 px and the right pane 320 px. This never
 changes the remembered width: when the window widens again, each pane gets its chosen width back.
 
@@ -354,7 +354,7 @@ closed; it is there only once the column is fully open.
 
 **Each pane's chosen width is remembered per client**, in that client's own browser storage, as the appearance choice
 is (see "Where the choice is stored" in `docs/product/appearance.md`); without that storage a choice lasts until the
-page is reloaded.
+page is reloaded. A stored sidebar width below 280 px is used as 280 px.
 
 ## Hiding the sidebar and the right pane
 

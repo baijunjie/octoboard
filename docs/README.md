@@ -44,7 +44,7 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Session titles](product/session-titles.md) — the task title alongside created session names: where it is
   displayed, what renaming edits, where it comes from (the agent's records, its decorated terminal title, the first
   prompt), how titles are retained, and the accepted terminal sequences.
-- [Session usage](product/session-usage.md) — native per-session token totals in focus mode and the archive, cache
+- [Session usage](product/session-usage.md) — native per-session token totals in sidebar rows, focus mode and the archive, cache
   accounting across agents, live refresh and retained historical usage, and what missing records mean.
 - [Sidebar](product/sidebar.md) — one console at a time, picked on the rail's console switcher with each console's
   activity badge and the session a switch brings back into the terminal, previewing another console from the rail

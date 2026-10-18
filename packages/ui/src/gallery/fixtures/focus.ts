@@ -203,7 +203,14 @@ const hierarchyState = {
   ...state,
   projects: new Map([...state.projects!].map(([id, item]) => [id, id === project.id ? { ...item, pinned: true } : item])),
   sessions: new Map([
-    ...[...state.sessions!].map(([id, session]) => [id, id === "s-3b" ? { ...session, pinned: true, locked: true } : id === "s-3" ? { ...session, pinned: true } : id === "s-2" ? { ...session, terminal_title: "Review search result accuracy and verify long session row titles scroll only while hovering their text" } : session] as const),
+    ...[...state.sessions!].map(([id, session]) => {
+      const row = id === "s-3b" ? { ...session, pinned: true, locked: true }
+        : id === "s-3" ? { ...session, pinned: true }
+          : id === "s-2" ? { ...session, terminal_title: "Review search result accuracy and verify long session row titles scroll only while hovering their text" }
+            : session;
+      const showsUsage = [hub1.id, longHub.id, "s-lead-1", "s-2"].includes(id);
+      return [id, showsUsage ? { ...row, usage: lead.usage } : row] as const;
+    }),
     // Locking also protects an unused session that would otherwise offer immediate deletion.
     ["s-unused", sessionOf("s-unused", console_.id, project.id, "Draft the release notes", "idle", { has_conversation: false, locked: true })] as const,
   ]),
@@ -222,8 +229,8 @@ export const focusScenarios: Scenario[] = [
     title: "Project session hierarchy",
     state: hierarchyState,
     sessionRecords: { "s-unused": "absent" },
-    preferences: { sidebarConsole: console_.id },
-    description: "The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches join each project session to its nested sessions and end at the last child. Binding dots and pins stay visible while action menus hide. Hover or focus a row to compare the evenly spaced controls, then unpin a session to see the remaining controls close together. An Archive button precedes the menu only on a session that archives without confirmation: idle or interrupted, with no unarchived session bound under it, like Rework the retry loop. The pinned, locked Profile the slow query shows a persistent Unlock icon without a lock border, and its menu offers Unlock with Archive disabled. The unused but locked Draft the release notes has no Delete shortcut, and its menu offers Unlock with Delete disabled. Set Modifier to Held to see the console header's and each project row's new-session buttons as the bolt that creates with defaults.",
+    preferences: { sidebarWidth: 280, sidebarConsole: console_.id },
+    description: "At the sidebar’s 280px minimum width, usage chips follow console, project and nested session titles, staying visible beside long clipped titles; zero and missing totals leave no chip. Hover a chip for its exact total and cache breakdown. The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches join each project session to its nested sessions and end at the last child. Binding dots and pins stay visible while action menus hide. Hover or focus a row to compare the evenly spaced controls, then unpin a session to see the remaining controls close together. An Archive button precedes the menu only on a session that archives without confirmation: idle or interrupted, with no unarchived session bound under it, like Rework the retry loop. The pinned, locked Profile the slow query shows a persistent Unlock icon without a lock border, and its menu offers Unlock with Archive disabled. The unused but locked Draft the release notes has no Delete shortcut, and its menu offers Unlock with Delete disabled. Set Modifier to Held to see the console header's and each project row's new-session buttons as the bolt that creates with defaults.",
   },
   {
     id: "focus-project",
@@ -298,7 +305,7 @@ export const focusScenarios: Scenario[] = [
     category: "normal",
     title: "Long console session and project names",
     state: state,
-    preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `consoleSession:${longHub.id}` },
+    preferences: { sidebarWidth: 280, sidebarConsole: console_.id, sidebarFocus: `consoleSession:${longHub.id}` },
     description: "Long English agent task titles with original session names in the header and cards, alongside long session names and project headings. Hover the clipped console subtitle or a session heading to run only that text's marquee: after a 600-millisecond initial pause it rests three seconds at the far end, returns in about 200 milliseconds, waits three seconds and runs again, resetting as soon as the pointer leaves. Hovering header controls leaves both still.",
   },
   {

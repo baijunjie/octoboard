@@ -186,14 +186,14 @@ export const gitScenarios: Scenario[] = [
     id: "git-badges-errors", group: GROUP, category: "exceptional",
     title: "Fetch and branch-read failures",
     description: "Deliberate fetch and HEAD errors replace the branch glyph with a warning. Hover warnings for their causes.",
-    state: failureState, preferences: { sidebarWidth: 200 },
+    state: failureState, preferences: { sidebarWidth: 280 },
   },
   {
     id: "git-badge-focus-long-error", group: GROUP, category: "exceptional",
     title: "Long branch with a fetch failure in project focus",
     description: "The warning is deliberate: fetch cannot resolve origin. Hover it for the failure; long branch text and counts retain their marquee.",
     state: longFailureState,
-    preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
+    preferences: { sidebarWidth: 280, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
   },
   {
     id: "git-project-menu",
@@ -268,7 +268,7 @@ export const gitScenarios: Scenario[] = [
     category: "normal",
     title: "Branch badges",
     state: badgesState,
-    preferences: { sidebarWidth: 200 },
+    preferences: { sidebarWidth: 280 },
     description: "Remote counts, spinning checks and transfers, detached and missing branches, and long labels. Hover a clipped project name or branch to scroll only that text, with counts moving with their branch; hovering row controls leaves both labels still. Hover badges for their full details, and drag the sidebar wider to inspect clipping.",
   },
   {
@@ -286,7 +286,7 @@ export const gitScenarios: Scenario[] = [
     category: "normal",
     title: "Long branch pushing in project focus",
     state: badgesState,
-    preferences: { sidebarWidth: 200, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
+    preferences: { sidebarWidth: 280, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
     description: "The left loading glyph spins during pushing, and the ahead-count arrow scrolls upward when its part of the long line is revealed; hover the glyph for the pushing status. The long project name and branch fade separately and run their own marquees on hover, the branch scrolling together with its counts; hovering the console subtitle or header controls leaves both still.",
   },
   {

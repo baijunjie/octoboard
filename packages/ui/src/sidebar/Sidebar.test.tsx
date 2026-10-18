@@ -33,7 +33,7 @@ const team = [
   sessionOf("web-team-2", main.id, web.id, "Measure the first paint", "working", { bound_to: lead.id }),
 ];
 const unbound = sessionOf("web-unbound", main.id, web.id, "Tidy the changelog", "interrupted");
-const sidebarWidth = { width: 280, min: 200, max: 480, setWidth: () => {}, persist: () => {}, reset: () => {} };
+const sidebarWidth = { width: 280, min: 280, max: 480, setWidth: () => {}, persist: () => {}, reset: () => {} };
 
 beforeEach(() => {
   vi.useFakeTimers();

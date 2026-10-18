@@ -2,9 +2,10 @@
 
 ## Native session usage
 
-Focus mode's live session cards, its archive preview rows and the full archive view show the session's token total
-only when its agent has recorded a positive total. The visible total is a compact, localized number without a unit
-label, shown in a small neutral chip (rounded, on a neutral fill) and set apart from neighbouring text by spacing
+The sidebar's session rows outside focus mode, focus mode's live session cards, its archive preview rows and the
+full archive view show the session's token total only when its agent has recorded a positive total. The visible total
+is a compact, localized number without a unit label, shown in a small neutral chip (rounded, on a neutral fill) and
+set apart from neighbouring text by spacing
 alone, with no separator character. Its tooltip identifies it as token usage: a heading line with the exact total, a
 divider, then a table of labelled counts, one row each for **Input**, **Output** and, only when the agent reports
 them, **Cached input** and **Cache write**, the numbers aligned at the row's end. Its accessible name is one plain
@@ -27,5 +28,6 @@ or unreadable records do not create a zero estimate or erase the last saved coun
 the same native conversation preserves its usage; moving to a different native conversation clears the previous
 conversation's counts until the new one supplies usage.
 
-For where the live-card total appears, see "What both views show" in `docs/product/focus-mode.md`. Archive dates and
+For where the sidebar-row total appears, see "Session rows" in `docs/product/sidebar.md`; for the live-card total,
+see "What both views show" in `docs/product/focus-mode.md`. Archive dates and
 the archive metadata block are described in "The archive view" in `docs/product/sidebar.md`.

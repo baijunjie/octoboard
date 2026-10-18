@@ -25,7 +25,7 @@ window.matchMedia = ((query: string) => ({ matches: true, media: query, addEvent
 const main = consoleOf("c-1", "Main");
 const web = projectOf("p-web", main.id, "Website");
 const sessions = [sessionOf("web-free", main.id, web.id, "Tidy the changelog", "idle")];
-const sidebarWidth = { width: 280, min: 200, max: 480, setWidth: () => {}, persist: () => {}, reset: () => {} };
+const sidebarWidth = { width: 280, min: 280, max: 480, setWidth: () => {}, persist: () => {}, reset: () => {} };
 
 /** Where the badge sits: on a sidebar project row, whose own name folds the badge's in, or in
  * focus mode's header, where the badge names itself. */

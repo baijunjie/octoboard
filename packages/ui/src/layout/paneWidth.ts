@@ -10,7 +10,7 @@ export type PaneSide = "sidebar" | "aside";
  * a double-click on its handle returns to) and the bounds of a chosen width. Below the breakpoint
  * each is a fixed-width drawer instead. */
 const PANES = {
-  sidebar: { key: PREFERENCE_KEYS.sidebarWidth, min: 200, default: 280, max: 480 },
+  sidebar: { key: PREFERENCE_KEYS.sidebarWidth, min: 280, default: 280, max: 480 },
   aside: { key: PREFERENCE_KEYS.asideWidth, min: 320, default: 420, max: 720 },
 } satisfies Record<PaneSide, { key: string; min: number; default: number; max: number }>;
 
