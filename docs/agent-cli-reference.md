@@ -521,7 +521,7 @@ carried a control in the same run.
 | Agent | What to copy | Where it goes |
 |---|---|---|
 | Claude Code | `<session id>.jsonl` | `<config dir>/projects/<cwd slug>/` |
-| Codex | `rollout-<timestamp>-<thread id>.jsonl` | anywhere under `<home>/sessions/` |
+| Codex | `rollout-<timestamp>-<thread id>.jsonl`, or `….jsonl.zst` once Codex has compressed it | anywhere under `<home>/sessions/` |
 | Grok Build | the `<session id>/` directory, whole | `<home>/sessions/<url-encoded cwd>/` |
 
 **The record's path relative to the config directory is what matters**, and the source directory already holds it, so a
@@ -539,6 +539,30 @@ built from, never the per-session home itself, which is discarded with the proce
   with the conversation intact: the date directories are how Codex writes, not how it looks up, and
   `session_index.jsonl` is not consulted. Control: a thread id with no record in the home answers `thread/resume:
   thread/resume failed: no rollout found for thread id <id>`. Resolution precedes the login check here too.
+- **Codex, a rollout it has compressed** — Codex replaces a rollout older than about a week with
+  `rollout-…-<thread id>.jsonl.zst` in the same directory (zstd; 286 of the rollouts on the measured machine, none of
+  them newer than that). Its database does **not** follow: `threads.rollout_path` in `state_5.sqlite` still names the
+  `.jsonl` path that no longer exists (no row of 1,212 ends in `.zst`; read from a copy of the real database). A
+  compressed rollout copied alone, byte for byte, into a fresh home with no database resumed with the conversation
+  intact (`codex exec resume <thread id>`, 0.162.1, rollout written by 0.160.0; the session id echoed was the
+  original's). Codex **decompresses it on resume**: afterwards the target home held a plain `.jsonl` at the same
+  place, the `.zst` was gone, and the new database's `rollout_path` named that `.jsonl` inside the target home. So the
+  database path is no obstacle to a copy, and the target's rollout is a plain file again until it ages out once more.
+- **Codex, subagent rollouts** — a spawned agent's rollout is a file of its own,
+  `rollout-<child start>-<parent thread id>_<child thread id>.jsonl` (or `.zst`), whose `session_meta` names the parent
+  as `parent_thread_id` and carries `source.subagent`. It sits in the date directory of the *child's* start, which can
+  differ from the parent's. **A resume by the parent's thread id picks one of them when they are present**: with the
+  parent's compressed rollout and two compressed subagent rollouts in a home (a real session copied into scratch
+  homes), `codex exec resume <parent id>` opened the newest subagent rollout, decompressed that one, and recorded
+  *its* path in the home's database, in the source copy as much as in the copy made by Octoboard's switch code; with
+  the parent's rollout alone it opened the parent's. (In a home whose database already holds the parent's row the
+  recorded path is presumably used instead; not measured.) Codex appears to match any rollout whose file name
+  contains the id and take the newest.
+  Octoboard's switch therefore leaves subagent rollouts behind and carries the parent's rollout alone.
+- **Claude Code, beside the transcript** — `projects/<slug>/<session id>/` holds `subagents/`, `tool-results/` and
+  `custom-title.json`, and `file-history/<session id>/` holds the rewind checkpoints (`<hash>@v<n>`). Both are layout
+  as found on disk; a resume with the transcript alone was measured above, and what a resume without these loses
+  (rewind, subagent transcripts) was not.
 - **Grok Build** — the session directory copied under a different working directory's encoded name resumed with the
   conversation intact; `sessions/session_search.sqlite` is not consulted. **An unauthenticated home does not refuse**:
   measured with Grok Build 1.0.46, `grok --resume <id>` against a home with no login stays up on a browser device-code

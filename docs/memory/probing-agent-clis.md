@@ -123,6 +123,21 @@ event, because the event you were waiting for is armed by a step the path under 
 Establish that mechanism, not a duration; without it the probe has measured its own patience and "wait longer" stays an
 objection you cannot answer.
 
+## Moving files into a config directory is proven only by a resume that opens the intended conversation
+
+Applies whenever a change copies, links or shares an agent's files between config directories — what a session-account
+switch carries, a directory two accounts share — or decides to leave some behind. Neither "the files arrived" nor "the
+resume started without an error" settles it: carrying more of a conversation is not monotonically safer, because an
+agent can resolve a resume by matching file names, and an extra file named with the id can become what it opens — Codex
+does this with subagent rollouts (the "Moving a conversation to another config directory" section of
+`docs/agent-cli-reference.md`).
+
+So the check is a real resume under the target directory, built from a copy of a real session's files with everything
+the source holds for that id — subagent files, compressed records — since a fixture holding only the main record cannot
+show a wrong pick. Then confirm which conversation came up: its earlier turns, or the record the agent went on to use
+(Codex writes the path of the rollout it opened into the home's database). Repeat it for every arrangement the change
+can produce, a target that already holds files of that id included.
+
 ## A permission probe cannot assume that anything prompts: set the mode yourself and read it back
 
 Permission-prompt behaviour cannot be probed before reading the settings file of the config directory the CLI resolves

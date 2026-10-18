@@ -13,6 +13,8 @@
       fails, neither copying nor sharing gives a usable cross-account resume — report before going on.
 - [ ] Codex over a linked `sessions/`: home B resuming a rollout home A compressed; whether one home's compression
       touches a rollout another home is actively writing; each home's database after the other home's maintenance.
+- [ ] Codex over a linked `sessions/`: a home with no database row for a thread resuming it while subagent rollouts
+      `…-<id>_<child>` sit in the shared directory — does it open the parent or a subagent?
 - [ ] Claude Code over a linked `projects/`: whether one account's `cleanupPeriodDays` prunes the other's
       conversations.
 - [ ] Grok Build: resuming under account B a session created by account A, given its remote session registry.

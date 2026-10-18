@@ -394,7 +394,7 @@ action menu offers:
   A project session's row has no such entry, and neither has an archived console session's.
 - **Switch account** — a submenu of the accounts of the session's agent, the default account first, with the one the
   session is on checked and doing nothing; picking another asks for confirmation, then moves the session to it (see
-  "Switching a session's account" in `docs/product/sessions.md`). Its last entry, **Manage accounts…**, opens Settings
+  `docs/product/switching-session-accounts.md`). Its last entry, **Manage accounts…**, opens Settings
   at the Agent accounts section. A session whose account has since been removed still shows it, checked and named by
   the directory the session recorded. The entry is present for a console session's row as well as a project session's,
   and only when the session's agent has more than one account to be on; with just the default account it is left out

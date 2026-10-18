@@ -32,13 +32,13 @@ This is the guarantee the whole design rests on:
 - **The user's own agent configuration is never written to, with two narrow exceptions.** Octoboard does not edit
   `~/.claude.json`, `~/.codex/`, `~/.grok/`, an account's config directory, or anything else the agent reads as the
   user's global setup, and it never makes a trust decision of its own in any of them. The first exception is switching
-  a session to another account (see "Switching a session's account" in `docs/product/sessions.md`): it copies the one
-  conversation record of that one session into the target account's directory, adding it there or replacing an
-  earlier copy of the same record. It builds the copy in a transient `.octoboard-switch` directory at the root of the
-  target directory, which it removes again, so a failure never leaves a half-written record among the agent's own. It
-  touches no settings file of the agent's, none of the other records in either directory, and it leaves the original
-  where it was. The second is Grok Build's trust store: once Grok's own trust confirmation has been accepted, the one
-  entry Grok wrote into its session's copy of the store is carried, unchanged, into the user's own (see "Carrying Grok
+  a session to another account: it copies that one session's conversation — its record and what the agent keeps of
+  the conversation beside it — into the target account's directory, adding it there or replacing an earlier copy, by
+  way of a transient `.octoboard-switch` directory at the root of the target directory, so a failure never leaves a
+  half-written item among the agent's own (what is copied for each agent, and how a failed copy is undone, are in
+  "Carrying the conversation" in `docs/product/switching-session-accounts.md`). It touches no settings file of the
+  agent's, nothing of other sessions in either directory, and it leaves the originals where they were.
+  The second is Grok Build's trust store: once Grok's own trust confirmation has been accepted, the one entry Grok wrote into its session's copy of the store is carried, unchanged, into the user's own (see "Carrying Grok
   Build's trust record" in `docs/product/folder-trust.md`). Creating a Codex account's directory that does not exist
   yet, empty, before its first launch is not an exception: Codex refuses to start without it, and nothing of the
   user's is in it.
@@ -343,8 +343,14 @@ Grok console session reads the console's instruction file (see "The console sess
 Conversation history and session records belong to each agent and stay wherever that agent keeps them. Their
 retention and cleanup follow the agent's own rules, except for the automatic and opt-in moves to the system Trash
 when deleting sessions described in "Moving the agent's own records to the Trash" in
-`docs/product/deleting-sessions.md`. Octoboard copies a session's record only when the
-user switches that session to another account of the same agent: the session's own record, and no other, is added to the
-target account's directory so the conversation can continue there. Copying leaves the record in the account it came
-from as well, so switching back needs no second copy; and a record Octoboard copied is the agent's own from then on,
-retained and cleaned up by the agent's rules like any other.
+`docs/product/deleting-sessions.md`. Octoboard copies a session's records only when the user switches that session to
+another account of the same agent, and only that session's (see "Carrying the conversation" in
+`docs/product/switching-session-accounts.md`). Copying leaves the records in the account they came from as well, so
+switching back needs no second copy; and what Octoboard copied is the agent's own from then on, retained and cleaned up
+by the agent's rules like any other.
+
+Codex compresses a session's rollout once it is about a week old, replacing `rollout-<timestamp>-<thread id>.jsonl` with
+`rollout-<timestamp>-<thread id>.jsonl.zst` in the same directory. Octoboard takes the compressed rollout for the
+session's record wherever it looks for one: the session's token usage and task title are still read from it, the check
+for a session's records before a deletion finds it, it is moved to the Trash with the session, and an account switch
+copies it.

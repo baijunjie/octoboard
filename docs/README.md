@@ -32,8 +32,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   agent and account selection, Advanced launch settings, the five session statuses, their
   glyphs and their transitions, the raised hand and its notification, how a declined Claude Code prompt lowers the
   hand from the agent's own transcript and what that costs to keep working, archiving, interruption and resuming,
-  switching a session to another account of its agent, how a console session's archive and reopen follow the
-  sessions bound to it, and where archived sessions are kept.
+  how a console session's archive and reopen follow the sessions bound to it, and where archived sessions are kept.
+- [Switching a session's account](product/switching-session-accounts.md) — moving a session to another account of its
+  agent: the confirmation and the console-wide switch, what is copied per agent (Claude Code sidecars and rewind
+  checkpoints, Codex rollouts compressed or not, subagent rollouts left behind), the all-or-nothing copy, and when a
+  switch fails.
 - [Deleting sessions](product/deleting-sessions.md) — deleting archived sessions one at a time or all at once (an
   archived owner takes its bound archived sessions along), deleting a never-used session without confirmation, and
   moving agent records to the Trash automatically for unused sessions or optionally for used sessions.
@@ -196,7 +199,7 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   Settings, how the system's languages map onto the list, what follows the current language and what does not (report
   pages, text aimed at agents), where the choice is kept, and what is translated so far.
 - [Launching agents](product/launching-agents.md) — the guarantee that Octoboard installs nothing into a project and
-  never writes the user's agent configuration (the two narrow exceptions being the conversation record a switch of a
+  never writes the user's agent configuration (the two narrow exceptions being the conversation a switch of a
   session's account copies and the Grok Build trust entry carried to the user's own store), and that a fast-forward
   and a push are the ways it changes a project repository, both only at the user's word; the three things injected
   per launch and the console's one generated instruction file shared by every agent, ending with the console's own

@@ -185,7 +185,7 @@ nothing but the user changes it afterwards: not an edit to the project's or the 
 account's directory. Resuming or reopening it relaunches with that same directory, because the agent keeps the
 conversation inside it. The user can move the session to another account of its agent from its action menu; that
 copies the conversation into the target's directory and reads that account's configuration, while keeping explicit
-model and reasoning effort choices (see "Switching a session's account" in `docs/product/sessions.md`). A session opened on the default account
+model and reasoning effort choices (see `docs/product/switching-session-accounts.md`). A session opened on the default account
 holds no directory and resumes under whatever the user's shell exports at that moment.
 The Codex account's approval mode is looked up again for each launch; keeping a directory does not freeze that
 choice (see "Agent accounts" in `docs/product/settings.md`).

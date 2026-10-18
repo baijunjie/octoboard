@@ -497,6 +497,45 @@ mod tests {
         );
     }
 
+    /// A rollout Codex has compressed is found by the record index and read through its
+    /// decompression, so a session idle for a week keeps its usage.
+    #[test]
+    fn a_compressed_codex_rollout_is_indexed_and_read() {
+        const ID: &str = "019a0000-0000-7000-8000-000000000001";
+        let (state, directory) = crate::test_support::app_state("usage-collector-compressed");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&directory))
+            .unwrap();
+        let console_id = state.store.list_consoles().unwrap()[0].id.clone();
+        let root = directory.join("account");
+        let rollout = root
+            .join("sessions/2026/10/01")
+            .join(format!("rollout-2026-10-01T00-00-00-{ID}.jsonl.zst"));
+        std::fs::create_dir_all(rollout.parent().unwrap()).unwrap();
+        let capture = include_str!("../testdata/usage_codex_0.162.1.jsonl");
+        std::fs::write(&rollout, zstd::encode_all(capture.as_bytes(), 0).unwrap()).unwrap();
+        let session: crate::protocol::Session = serde_json::from_value(json!({
+            "id":"s","agent":"codex","agent_session_id":ID,"console_id":console_id,
+            "host_id":"local","role":"console","origin":"user","title":"Session",
+            "status":"archived","has_conversation":true,"pinned":false,"started_at":0,
+            "config_dir":root.to_string_lossy()}))
+        .unwrap();
+        state.store.insert_session(&session).unwrap();
+
+        collect(&state, &mut Cursors::default());
+
+        assert_eq!(
+            state
+                .session_record("s")
+                .unwrap()
+                .usage
+                .unwrap()
+                .total_tokens,
+            18_829
+        );
+    }
+
     #[test]
     fn native_totals_do_not_add_cache_or_reasoning_twice() {
         let value = json!({"session":{"inputTokens":100,"outputTokens":20,"totalTokens":120,

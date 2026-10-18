@@ -101,15 +101,21 @@ impl Conversation {
     }
 }
 
-/// Reads the conversation held in the record file at `path`.
+/// Reads the conversation held in the record file at `path`, decompressing a Codex rollout that
+/// Codex has compressed. A read that fails part-way (a compressed record cut short) yields what
+/// was read before it; one that fails before anything was read is the error.
 pub fn read(agent: Agent, path: &Path) -> std::io::Result<Conversation> {
-    let mut reader = std::io::BufReader::new(std::fs::File::open(path)?);
+    let mut reader = crate::line_file::open(path, 0)?;
     let mut conversation = Conversation::default();
     let mut line = Vec::new();
+    let mut lines = 0;
     loop {
         line.clear();
-        if reader.read_until(b'\n', &mut line)? == 0 {
-            return Ok(conversation);
+        match reader.read_until(b'\n', &mut line) {
+            Ok(0) => return Ok(conversation),
+            Ok(_) => lines += 1,
+            Err(_) if lines > 0 => return Ok(conversation),
+            Err(err) => return Err(err),
         }
         let Ok(value) = serde_json::from_slice::<Value>(&line) else {
             continue;
@@ -624,5 +630,23 @@ mod tests {
         let conversation = read(Agent::Claude, &path).unwrap();
         assert_eq!(conversation.messages, [say(Speaker::User, "hello")]);
         assert!(read(Agent::Claude, &dir.join("missing.jsonl")).is_err());
+    }
+
+    /// A compressed record cut short yields the messages before the cut, not a failure.
+    #[test]
+    fn a_compressed_record_cut_short_yields_what_came_before_the_cut() {
+        let dir = crate::test_support::ScratchDir::new("handoff-record-truncated");
+        let path = dir.join("record.jsonl.zst");
+        let record: String = (0..40_000)
+            .map(|n| format!("{{\"type\":\"user\",\"message\":{{\"content\":\"message {n}\"}}}}\n"))
+            .collect();
+        let mut packed = zstd::encode_all(record.as_bytes(), 0).unwrap();
+        packed.truncate(packed.len() / 2);
+        std::fs::write(&path, packed).unwrap();
+
+        let conversation = read(Agent::Claude, &path).unwrap();
+
+        assert!(!conversation.messages.is_empty());
+        assert!(conversation.messages.len() < 40_000);
     }
 }

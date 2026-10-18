@@ -1,8 +1,11 @@
 //! A file read again and again as it grows, such as an agent's append-only record: which file it
 //! is, how far it has been read and what it looked like then, so a later pass reads only what was
-//! added, and starts over when the file was replaced, truncated or rewritten.
+//! added, and starts over when the file was replaced, truncated or rewritten. A file compressed
+//! with zstd (Codex's `.jsonl.zst` rollouts, which it never appends to again) is read through its
+//! decompression, with offsets counted in decompressed bytes. [`open`] is the one way to open an
+//! agent's record for reading, since Codex may have compressed it.
 
-use std::io::{BufRead, Seek, SeekFrom};
+use std::io::{BufRead, Read, Seek, SeekFrom};
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::time::SystemTime;
@@ -68,13 +71,26 @@ impl LineFile {
     }
 }
 
+/// Opens the file at `path` for reading from byte `offset`, decompressing it first when it is
+/// zstd-compressed (a `.zst` name), in which case the offset counts decompressed bytes. For
+/// anything that reads an agent's record directly, as Codex may have compressed it.
+pub fn open(path: &Path, offset: u64) -> std::io::Result<Box<dyn BufRead>> {
+    let mut file = std::fs::File::open(path)?;
+    if path.extension().is_some_and(|ext| ext == "zst") {
+        let mut decoded = std::io::BufReader::new(zstd::stream::read::Decoder::new(file)?);
+        std::io::copy(&mut (&mut decoded).take(offset), &mut std::io::sink())?;
+        Ok(Box::new(decoded))
+    } else {
+        file.seek(SeekFrom::Start(offset))?;
+        Ok(Box::new(std::io::BufReader::new(file)))
+    }
+}
+
 /// Read complete lines with bounded memory even when a tool writes a very large body. A record
 /// larger than 8 MiB is not a supported record and is skipped, never deserialized. The
 /// offset still stops before an unfinished line.
 fn scan_lines(path: &Path, offset: u64, mut visit: impl FnMut(&str)) -> std::io::Result<u64> {
-    let mut file = std::fs::File::open(path)?;
-    file.seek(SeekFrom::Start(offset))?;
-    let mut reader = std::io::BufReader::new(file);
+    let mut reader = open(path, offset)?;
     let mut complete = offset;
     let mut position = offset;
     let mut line = Vec::new();

@@ -1,7 +1,7 @@
 //! Where an agent keeps its own on-disk records of a session: Claude Code's transcript (and the
-//! directory of subagent transcripts beside it), Codex's rollout file, Grok Build's session
-//! directory with its usage ledger. Shared by the usage collector, which reads them (`usage.rs`),
-//! and by a session's deletion, which moves them to the Trash (`record_paths`).
+//! directory of subagent transcripts beside it), Codex's rollout file (compressed or not), Grok
+//! Build's session directory with its usage ledger. Shared by the usage collector, which reads
+//! them (`usage.rs`), and by a session's deletion, which moves them to the Trash (`record_paths`).
 //!
 //! A record is found by its name, which carries the agent session id, in one account's own
 //! directory (the path a hook reported is only a hint). Both the id and the hint come from the
@@ -205,11 +205,12 @@ fn index_records(agent: Agent, root: &Path) -> Index {
                 Agent::Claude if kind.is_dir() && depth == 1 && plausible_id(&name) => {
                     Some(name.clone())
                 }
-                Agent::Codex if kind.is_file() && name.starts_with("rollout-") => name
-                    .strip_suffix(".jsonl")
-                    .filter(|name| name.len() >= 36)
-                    .and_then(|name| name.get(name.len() - 36..))
-                    .map(str::to_owned),
+                Agent::Codex if kind.is_file() && name.starts_with("rollout-") => {
+                    rollout_stem(&name)
+                        .filter(|name| name.len() >= 36)
+                        .and_then(|name| name.get(name.len() - 36..))
+                        .map(str::to_owned)
+                }
                 Agent::Grok if kind.is_dir() && depth == 1 => Some(name),
                 _ => None,
             };
@@ -245,6 +246,13 @@ fn index_records(agent: Agent, root: &Path) -> Index {
 
 fn modified(path: &Path) -> Option<SystemTime> {
     std::fs::metadata(path).ok()?.modified().ok()
+}
+
+/// A Codex rollout's file name without its extension: `.jsonl`, or `.jsonl.zst` once Codex has
+/// compressed it (it does so for rollouts older than a week).
+pub fn rollout_stem(name: &str) -> Option<&str> {
+    name.strip_suffix(".jsonl")
+        .or_else(|| name.strip_suffix(".jsonl.zst"))
 }
 
 /// The agent's own records of `session`, for the ones to be moved to the Trash with it: Claude's
@@ -394,7 +402,7 @@ pub fn presence(
 }
 
 /// Whether `id` is a canonical UUID, the shape of every agent's session ids.
-fn plausible_id(id: &str) -> bool {
+pub fn plausible_id(id: &str) -> bool {
     id.len() == 36
         && id.bytes().enumerate().all(|(at, byte)| match at {
             8 | 13 | 18 | 23 => byte == b'-',
@@ -420,9 +428,10 @@ fn in_real_directories(record: &Path, dir: &Path) -> bool {
 
 /// What `record` stands for, when it is named for `agent_id` the way the agent names its own and
 /// sits exactly where the agent puts it, under `dir` (the account's records directory): Claude
-/// `<dir>/<project>/<id>.jsonl`, Codex `<dir>/<year>/<month>/<day>/rollout-<time>-<id>.jsonl`, Grok
-/// `<dir>/<working directory>/<id>/usage.json`. No other depth is taken, so a name that merely
-/// equals a directory's, or a file inside a session's own directory, never names that directory.
+/// `<dir>/<project>/<id>.jsonl`, Codex `<dir>/<year>/<month>/<day>/rollout-<time>-<id>.jsonl` (or
+/// `.jsonl.zst`), Grok `<dir>/<working directory>/<id>/usage.json`. No other depth is taken, so a
+/// name that merely equals a directory's, or a file inside a session's own directory, never names
+/// that directory.
 fn own_paths(agent: Agent, agent_id: &str, record: &Path, dir: &Path) -> Vec<PathBuf> {
     let name = record.file_name().and_then(|name| name.to_str());
     let Some(parent) = record.parent() else {
@@ -437,7 +446,7 @@ fn own_paths(agent: Agent, agent_id: &str, record: &Path, dir: &Path) -> Vec<Pat
         }
         (Agent::Codex, Ok(4))
             if name.is_some_and(|name| {
-                name.strip_suffix(".jsonl").is_some_and(|stem| {
+                rollout_stem(name).is_some_and(|stem| {
                     stem.starts_with("rollout-")
                         && stem.len() >= 36
                         && stem.get(stem.len() - 36..) == Some(agent_id)
@@ -632,6 +641,36 @@ mod tests {
                 &session(Agent::Grok, CLAUDE_ID, Some(&account))
             ),
             [grok]
+        );
+    }
+
+    /// Codex compresses a rollout in place once it is a week old: the compressed file is indexed
+    /// and named for the Trash like the plain one.
+    #[test]
+    fn a_compressed_codex_rollout_is_a_record_too() {
+        let dir = crate::test_support::ScratchDir::new("agent-records-compressed");
+        let account = dir.join("account");
+        let mut locator = Locator::with_shell(HashMap::from([(
+            "HOME".to_owned(),
+            dir.join("home").to_string_lossy().into_owned(),
+        )]));
+        let day = account.join("sessions/2026/10/01");
+        let compressed = day.join(format!("rollout-2026-10-01T00-00-00-{CODEX_ID}.jsonl.zst"));
+        touch(&compressed);
+        touch(&day.join("rollout-2026-10-01T00-00-00-other.jsonl.zst"));
+
+        assert_eq!(
+            locator.newest(Agent::Codex, &account, CODEX_ID),
+            Some(compressed.clone())
+        );
+        assert_eq!(
+            record_paths(
+                &Hints::default(),
+                &mut locator,
+                &[],
+                &session(Agent::Codex, CODEX_ID, Some(&account))
+            ),
+            [compressed]
         );
     }
 

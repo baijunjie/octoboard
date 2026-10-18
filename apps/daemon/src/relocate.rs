@@ -11,12 +11,15 @@
 //! the directories are the account's own (the source home a per-session home is built from), never
 //! a per-session home, which is discarded with its process.
 //!
-//! The record alone is sufficient for all three agents — no index, registry or per-project entry
-//! is copied with it — and nothing else is touched in either directory: the copy only ever adds
-//! (or replaces) the one record of the one session, besides a transient staging directory at the
-//! target's root that it creates and removes again. It copies rather than moves, so a switch that
-//! fails afterwards leaves the original where it was and switching back needs no second copy.
-//! The measurements are in `docs/agent-cli-reference.md`.
+//! The record alone is sufficient for all three agents to resume — no index, registry or
+//! per-project entry is copied with it — but it is not the whole conversation, so what the agent
+//! keeps beside it travels too ([`companions`]): Claude Code's directory of the same name (subagent
+//! transcripts, tool results) and its rewind checkpoints. Nothing else is touched in either
+//! directory: the copy only ever adds (or replaces) those items of the one session, besides a
+//! transient staging directory at the target's root that it creates and removes again. It copies
+//! rather than moves, so a switch that fails afterwards leaves the original where it was and
+//! switching back needs no second copy. The measurements are in
+//! `docs/agent-cli-reference.md`.
 
 use std::collections::BTreeMap;
 use std::fs::FileType;
@@ -26,6 +29,7 @@ use std::time::SystemTime;
 
 use anyhow::Result;
 
+use crate::agent_records::{plausible_id, rollout_stem};
 use crate::protocol::{error_code, Agent, CodedError};
 
 /// Where an agent keeps its session records inside a config directory (`root`), how deep below it
@@ -47,14 +51,15 @@ fn layout(agent: Agent) -> Layout {
             depth: 2,
             is_record: |name, kind, id| kind.is_file() && name == format!("{id}.jsonl"),
         },
-        // `sessions/<date directories>/rollout-<timestamp>-<thread id>.jsonl`
+        // `sessions/<date directories>/rollout-<timestamp>-<thread id>.jsonl`, or `….jsonl.zst`
+        // once Codex has compressed it
         Agent::Codex => Layout {
             root: "sessions",
             depth: 6,
             is_record: |name, kind, id| {
                 kind.is_file()
                     && name.starts_with("rollout-")
-                    && name.ends_with(&format!("-{id}.jsonl"))
+                    && rollout_stem(name).is_some_and(|stem| stem.ends_with(&format!("-{id}")))
             },
         },
         // `sessions/<url-encoded cwd>/<session id>/`, a directory kept whole
@@ -100,6 +105,36 @@ pub fn locate(agent: Agent, source: &Path, agent_session_id: &str) -> Result<Pat
                 ],
             )
         })
+}
+
+/// What the agent keeps for the session besides its record, as paths relative to `source` that
+/// exist there, for a switch to carry with it. Claude Code only: the directory of the record's own
+/// name beside it (subagent transcripts, tool results, the custom title) and `file-history/<id>`
+/// (rewind checkpoints). An id that is no canonical UUID yields nothing, as it is joined into a
+/// path here.
+pub fn companions(
+    agent: Agent,
+    source: &Path,
+    record: &Path,
+    agent_session_id: &str,
+) -> Vec<PathBuf> {
+    if !plausible_id(agent_session_id) {
+        return Vec::new();
+    }
+    match agent {
+        Agent::Claude => [
+            record.with_extension(""),
+            Path::new("file-history").join(agent_session_id),
+        ]
+        .into_iter()
+        .filter(|relative| std::fs::symlink_metadata(source.join(relative)).is_ok())
+        .collect(),
+        // Codex's subagent rollouts (`rollout-<timestamp>-<thread id>_<child id>`) stay behind:
+        // a home with no database row for the thread resumes the newest rollout whose name
+        // contains the id, which with those present is a subagent's, not the thread's (measured
+        // with 0.162.1). Grok keeps everything inside the session directory.
+        Agent::Codex | Agent::Grok => Vec::new(),
+    }
 }
 
 fn search(
@@ -167,49 +202,89 @@ pub fn sweep_staging<'a>(config_dirs: impl IntoIterator<Item = &'a Path>) {
     }
 }
 
-/// Copies the record at `relative` from `source` to the same place in `target`, creating the
-/// directories in between, replacing a record already there. Done only once the copy is complete
-/// and matches the original, so the target never holds a half-written record: it is built in
-/// [`STAGING`], checked, and then moved into place. A record already there is replaced by the
-/// rename itself where the rename can (a file), and set aside until the new one is in place where
-/// it cannot (a directory), so a failure leaves the older record rather than none. Anything short
-/// of complete is `relocation_failed`, and the caller must not relaunch. Two accounts that share a
-/// directory have nothing to copy.
-pub fn copy(source: &Path, target: &Path, relative: &Path) -> Result<()> {
-    let from = source.join(relative);
-    let to = target.join(relative);
-    if is_same_file(&from, &to) {
-        return Ok(());
-    }
-    let Some(name) = to.file_name() else {
+/// Copies the `record` and its `companions` (see [`companions`]) from `source` to the same
+/// places in `target`, creating the directories in between, replacing what is already there.
+/// Done only once every copy is complete and matches its original, so the target never holds a
+/// half-written item: they are all built in [`STAGING`], checked, and only then moved into place,
+/// each set aside first what it replaces. A swap that fails puts back every item already swapped
+/// and the older ones set aside, so the target holds all of the new items or the older ones, bar
+/// empty parent directories the swap may have created. Where an older item cannot be put back,
+/// its staging directory is kept (it holds the item) and the error says so; it survives only
+/// until the next daemon start ([`sweep_staging`]) or the next switch of this session into this
+/// account, which clears it. Anything short of
+/// complete is `relocation_failed`, and the caller must not relaunch. An item that is the same
+/// file on both sides (two accounts that share a directory) has nothing to copy.
+pub fn copy(source: &Path, target: &Path, record: &Path, companions: &[PathBuf]) -> Result<()> {
+    let Some(name) = record.file_name() else {
         return Err(CodedError::raised(
             error_code::RELOCATION_FAILED,
             "the record has no name",
             &[("path", &target.to_string_lossy()), ("detail", "no name")],
         ));
     };
+    let items: Vec<(PathBuf, PathBuf)> = std::iter::once(record)
+        .chain(companions.iter().map(PathBuf::as_path))
+        .map(|relative| (source.join(relative), target.join(relative)))
+        .filter(|(from, to)| !is_same_file(from, to))
+        .collect();
+    if items.is_empty() {
+        return Ok(());
+    }
     let shared = target.join(STAGING);
     let staging = shared.join(name);
     // This copy's own subdirectory only, cleared before and after; the shared parent is left for
     // the other copies that may be using it, and removed here only once empty.
+    let mut kept = false;
     let outcome = remove_any(&staging)
-        .and_then(|()| stage_and_swap(&from, &to, &staging))
-        .map_err(|err| {
+        .map_err(Failed::from)
+        .and_then(|()| stage_and_swap(&items, &staging))
+        .map_err(|failed| {
+            kept = failed.unrestored;
+            let detail = if kept {
+                format!(
+                    "{}; an older item could not be put back and is kept in `{}` until the next \
+                     daemon start or switch of this session into this account",
+                    failed.err,
+                    staging.display()
+                )
+            } else {
+                failed.err.to_string()
+            };
             CodedError::raised(
                 error_code::RELOCATION_FAILED,
                 format!(
-                    "copying the conversation into `{}` did not complete: {err}",
+                    "copying the conversation into `{}` did not complete: {detail}",
                     target.display()
                 ),
-                &[
-                    ("path", &target.to_string_lossy()),
-                    ("detail", &err.to_string()),
-                ],
+                &[("path", &target.to_string_lossy()), ("detail", &detail)],
             )
         });
-    remove_any(&staging).ok();
-    std::fs::remove_dir(&shared).ok();
+    if kept {
+        tracing::warn!(
+            path = %staging.display(),
+            "an older item was not put back; staging kept until the next start or switch"
+        );
+    } else {
+        remove_any(&staging).ok();
+        std::fs::remove_dir(&shared).ok();
+    }
     outcome
+}
+
+/// A copy that did not complete, and whether it left an older item set aside in the staging
+/// directory instead of back in its place.
+struct Failed {
+    err: io::Error,
+    unrestored: bool,
+}
+
+impl From<io::Error> for Failed {
+    fn from(err: io::Error) -> Self {
+        Self {
+            err,
+            unrestored: false,
+        }
+    }
 }
 
 fn is_same_file(from: &Path, to: &Path) -> bool {
@@ -219,39 +294,60 @@ fn is_same_file(from: &Path, to: &Path) -> bool {
     }
 }
 
-fn stage_and_swap(from: &Path, to: &Path, staging: &Path) -> io::Result<()> {
-    let name = to
-        .file_name()
-        .ok_or_else(|| io::Error::other("the record has no name"))?;
-    let parent = to
-        .parent()
-        .ok_or_else(|| io::Error::other("the record has no parent directory"))?;
-    std::fs::create_dir_all(staging)?;
-    let stage = staging.join(name);
-    copy_tree(from, &stage)?;
-    if footprint(from)? != footprint(&stage)? {
-        return Err(io::Error::other("the copy differs from the original"));
+/// Builds each item `(from, to)` in `staging/new/<n>`, checks it, then swaps them all into place.
+fn stage_and_swap(items: &[(PathBuf, PathBuf)], staging: &Path) -> Result<(), Failed> {
+    let mut staged = Vec::new();
+    for (n, (from, to)) in items.iter().enumerate() {
+        let stage = staging.join("new").join(n.to_string());
+        std::fs::create_dir_all(stage.parent().expect("a stage has a parent"))?;
+        copy_tree(from, &stage)?;
+        if footprint(from)? != footprint(&stage)? {
+            return Err(io::Error::other("the copy differs from the original").into());
+        }
+        staged.push((
+            stage,
+            to.as_path(),
+            staging.join("previous").join(n.to_string()),
+        ));
     }
-    std::fs::create_dir_all(parent)?;
-    swap_into_place(&stage, to, staging)
+    swap_into_place(&staged)
 }
 
-/// Moves `stage` to `to`. A file replaces a file in the rename itself. Anything else (a directory
-/// either side) cannot be renamed over, so what is there is set aside in `staging` first and put
-/// back if the rename fails.
-fn swap_into_place(stage: &Path, to: &Path, staging: &Path) -> io::Result<()> {
-    let replacing_file = std::fs::symlink_metadata(to).is_ok_and(|old| old.is_file())
-        && std::fs::symlink_metadata(stage).is_ok_and(|new| new.is_file());
-    if std::fs::symlink_metadata(to).is_ok() && !replacing_file {
-        let aside = staging.join("previous");
-        std::fs::rename(to, &aside)?;
-        if let Err(err) = std::fs::rename(stage, to) {
-            std::fs::rename(&aside, to).ok();
-            return Err(err);
+/// Moves each stage to its place, setting aside what is there first (in the third path, which
+/// lies in the staging directory), since a directory cannot be renamed over. If any step fails,
+/// everything moved so far is undone: the new items removed and the older ones put back.
+fn swap_into_place(items: &[(PathBuf, &Path, PathBuf)]) -> Result<(), Failed> {
+    // The items whose place now holds the new one, and whether an older one was set aside for it.
+    let mut done: Vec<(&Path, &Path, bool)> = Vec::new();
+    for (stage, to, aside) in items {
+        let step = (|| {
+            if let Some(parent) = to.parent() {
+                std::fs::create_dir_all(parent).map_err(|err| (err, false))?;
+            }
+            let replaced = std::fs::symlink_metadata(to).is_ok();
+            if replaced {
+                std::fs::create_dir_all(aside.parent().expect("an aside has a parent"))
+                    .and_then(|()| std::fs::rename(to, aside))
+                    .map_err(|err| (err, false))?;
+            }
+            if let Err(err) = std::fs::rename(stage, to) {
+                let put_back = !replaced || std::fs::rename(aside, to).is_ok();
+                return Err((err, !put_back));
+            }
+            Ok(replaced)
+        })();
+        match step {
+            Ok(replaced) => done.push((to, aside, replaced)),
+            Err((err, mut unrestored)) => {
+                for (to, aside, replaced) in done.into_iter().rev() {
+                    unrestored |= remove_any(to).is_err()
+                        || (replaced && std::fs::rename(aside, to).is_err());
+                }
+                return Err(Failed { err, unrestored });
+            }
         }
-        return Ok(());
     }
-    std::fs::rename(stage, to)
+    Ok(())
 }
 
 fn remove_any(path: &Path) -> io::Result<()> {
@@ -367,7 +463,7 @@ mod tests {
             let relative = locate(agent, &source, id).expect("found");
             assert_eq!(relative, Path::new(record), "{agent:?}");
 
-            copy(&source, &target, &relative).expect("copied");
+            copy(&source, &target, &relative, &[]).expect("copied");
             assert_eq!(
                 std::fs::read_to_string(target.join(file)).unwrap(),
                 "conversation",
@@ -381,6 +477,138 @@ mod tests {
         }
     }
 
+    const CLAUDE_ID: &str = "11111111-2222-3333-4444-555555555555";
+    const CODEX_ID: &str = "019a0000-0000-7000-8000-000000000001";
+
+    /// A Codex rollout Codex has compressed is located like a plain one and copied as it is (the
+    /// bytes stay compressed). Its subagent rollouts, plain or compressed, stay behind: a home
+    /// with no database row for the thread resumes the newest rollout whose name contains the id
+    /// (measured with 0.162.1), which with them present is a subagent's, not the thread's.
+    #[test]
+    fn a_compressed_codex_rollout_is_carried_alone() {
+        let source = temp_dir("codex-source");
+        let target = temp_dir("codex-target");
+        let record =
+            format!("sessions/2026/10/01/rollout-2026-10-01T01-02-03-{CODEX_ID}.jsonl.zst");
+        let child = "019a0000-0000-7000-8000-00000000000a";
+        let subagents = [
+            format!("sessions/2026/10/01/rollout-2026-10-01T01-05-00-{CODEX_ID}_{child}.jsonl.zst"),
+            format!("sessions/2026/10/02/rollout-2026-10-02T00-00-01-{CODEX_ID}_{child}.jsonl"),
+        ];
+        write(&source, &record, "compressed bytes");
+        for file in &subagents {
+            write(&source, file, "subagent");
+        }
+
+        let located = locate(Agent::Codex, &source, CODEX_ID).expect("found");
+        assert_eq!(located, Path::new(&record));
+        let relatives = companions(Agent::Codex, &source, &located, CODEX_ID);
+        assert!(relatives.is_empty());
+
+        copy(&source, &target, &located, &relatives).expect("copied");
+        assert_eq!(
+            std::fs::read_to_string(target.join(&record)).unwrap(),
+            "compressed bytes"
+        );
+        assert!(source.join(&record).is_file(), "moved");
+        for file in &subagents {
+            assert!(!target.join(file).exists(), "{file} was carried");
+        }
+    }
+
+    /// Claude Code's directory beside the transcript and the rewind checkpoints travel with it
+    /// when they exist, and are not invented when they do not.
+    #[test]
+    fn a_claude_transcripts_sidecar_directory_and_rewind_checkpoints_are_carried() {
+        let source = temp_dir("claude-sidecar-source");
+        let target = temp_dir("claude-sidecar-target");
+        let record = format!("projects/-Users-me-repo/{CLAUDE_ID}.jsonl");
+        write(&source, &record, "conversation");
+        write(
+            &source,
+            &format!("projects/-Users-me-repo/{CLAUDE_ID}/subagents/agent-1.jsonl"),
+            "subagent",
+        );
+        write(
+            &source,
+            &format!("projects/-Users-me-repo/{CLAUDE_ID}/tool-results/r.txt"),
+            "result",
+        );
+        write(
+            &source,
+            &format!("file-history/{CLAUDE_ID}/0123@v1"),
+            "checkpoint",
+        );
+        write(&source, "file-history/another/0123@v1", "someone else's");
+
+        let located = locate(Agent::Claude, &source, CLAUDE_ID).expect("found");
+        let relatives = companions(Agent::Claude, &source, &located, CLAUDE_ID);
+        assert_eq!(
+            relatives,
+            [
+                PathBuf::from(format!("projects/-Users-me-repo/{CLAUDE_ID}")),
+                PathBuf::from(format!("file-history/{CLAUDE_ID}")),
+            ]
+        );
+        copy(&source, &target, &located, &relatives).expect("copied");
+
+        for file in [
+            record.clone(),
+            format!("projects/-Users-me-repo/{CLAUDE_ID}/subagents/agent-1.jsonl"),
+            format!("projects/-Users-me-repo/{CLAUDE_ID}/tool-results/r.txt"),
+            format!("file-history/{CLAUDE_ID}/0123@v1"),
+        ] {
+            assert!(target.join(&file).is_file(), "{file} was not carried");
+            assert!(source.join(&file).is_file(), "{file} was moved");
+        }
+        assert!(!target.join("file-history/another").exists());
+
+        // A session with neither has only its transcript, and an id that is no UUID names no path.
+        let bare = temp_dir("claude-sidecar-bare");
+        write(&bare, &record, "conversation");
+        assert!(companions(Agent::Claude, &bare, Path::new(&record), CLAUDE_ID).is_empty());
+        assert!(companions(Agent::Claude, &source, Path::new(&record), "..").is_empty());
+    }
+
+    /// The items of one switch are replaced and rolled back together: a copy that cannot complete
+    /// on any of them leaves the target as it was, and so does a swap that fails part-way, after
+    /// the earlier items were already in place.
+    #[test]
+    fn the_carried_items_complete_or_roll_back_together() {
+        let source = temp_dir("together-source");
+        let record = format!("projects/slug/{CLAUDE_ID}.jsonl");
+        let sidecar = format!("file-history/{CLAUDE_ID}");
+        write(&source, &record, "new conversation");
+        write(&source, &format!("{sidecar}/a@v1"), "new checkpoint");
+        let (record_path, companions) = (PathBuf::from(&record), [PathBuf::from(&sidecar)]);
+
+        // The second item cannot be copied: the first is not left in the target.
+        let target = temp_dir("together-target");
+        std::os::unix::fs::symlink("/etc/hosts", source.join(&sidecar).join("link")).unwrap();
+        let err =
+            copy(&source, &target, &record_path, &companions).expect_err("a link in the sidecar");
+        assert_eq!(code_of(&err), error_code::RELOCATION_FAILED);
+        assert!(!target.join(&record).exists());
+        assert!(!target.join(STAGING).exists());
+        std::fs::remove_file(source.join(&sidecar).join("link")).unwrap();
+
+        // The second item cannot be put in place: the first is put back as it was.
+        let blocked = temp_dir("together-blocked");
+        write(&blocked, &record, "older conversation");
+        write(&blocked, "file-history", "a file where a directory must be");
+        let err = copy(&source, &blocked, &record_path, &companions).expect_err("blocked");
+        assert_eq!(code_of(&err), error_code::RELOCATION_FAILED);
+        assert_eq!(
+            std::fs::read_to_string(blocked.join(&record)).unwrap(),
+            "older conversation"
+        );
+        assert!(!blocked.join(STAGING).exists());
+
+        // And with nothing in the way both are in place.
+        copy(&source, &target, &record_path, &companions).expect("copied");
+        assert!(target.join(&record).is_file() && target.join(&sidecar).join("a@v1").is_file());
+    }
+
     /// Switching back finds an older copy in the account it returns to, and the newer record
     /// replaces it whole — a stale file of the older copy does not survive in a directory record.
     #[test]
@@ -391,7 +619,7 @@ mod tests {
         write(&target, "sessions/enc/grok-id/messages.jsonl", "old");
         write(&target, "sessions/enc/grok-id/stale.json", "stale");
 
-        copy(&source, &target, Path::new("sessions/enc/grok-id")).expect("copied");
+        copy(&source, &target, Path::new("sessions/enc/grok-id"), &[]).expect("copied");
 
         assert_eq!(
             std::fs::read_to_string(target.join("sessions/enc/grok-id/messages.jsonl")).unwrap(),
@@ -402,7 +630,13 @@ mod tests {
         // A file record is replaced by the rename itself, and nothing of the staging stays.
         write(&source, "projects/slug/claude-id.jsonl", "new");
         write(&target, "projects/slug/claude-id.jsonl", "old");
-        copy(&source, &target, Path::new("projects/slug/claude-id.jsonl")).expect("copied");
+        copy(
+            &source,
+            &target,
+            Path::new("projects/slug/claude-id.jsonl"),
+            &[],
+        )
+        .expect("copied");
         assert_eq!(
             std::fs::read_to_string(target.join("projects/slug/claude-id.jsonl")).unwrap(),
             "new"
@@ -433,7 +667,7 @@ mod tests {
         let dir = temp_dir("shared");
         write(&dir, "projects/slug/claude-id.jsonl", "conversation");
 
-        copy(&dir, &dir, Path::new("projects/slug/claude-id.jsonl")).expect("nothing to do");
+        copy(&dir, &dir, Path::new("projects/slug/claude-id.jsonl"), &[]).expect("nothing to do");
 
         assert_eq!(
             std::fs::read_to_string(dir.join("projects/slug/claude-id.jsonl")).unwrap(),
@@ -453,7 +687,7 @@ mod tests {
         std::fs::write(blocked.join("sessions"), "a file where a directory must be").unwrap();
 
         for (target, why) in [(&target, "symlink"), (&blocked, "blocked")] {
-            let err = copy(&source, target, Path::new("sessions/enc/grok-id")).expect_err(why);
+            let err = copy(&source, target, Path::new("sessions/enc/grok-id"), &[]).expect_err(why);
             assert_eq!(code_of(&err), error_code::RELOCATION_FAILED, "{why}");
         }
         assert!(!target.join("sessions/enc/grok-id").exists());
@@ -469,7 +703,7 @@ mod tests {
             ".octoboard-switch/grok-id/leftover",
             "from a crash",
         );
-        copy(&source, &target, Path::new("sessions/enc/grok-id")).expect_err("symlink");
+        copy(&source, &target, Path::new("sessions/enc/grok-id"), &[]).expect_err("symlink");
         assert_eq!(
             std::fs::read_to_string(target.join("sessions/enc/grok-id/messages.jsonl")).unwrap(),
             "older"
@@ -478,8 +712,8 @@ mod tests {
     }
 
     /// Copies into one account at the same moment each keep to their own stage: a copy that starts
-    /// while another is part-way, including one holding its set-aside previous record, clears
-    /// nothing of the other's, and both records are in place afterwards.
+    /// while another is part-way, clears nothing of the other's, and both records are in place
+    /// afterwards.
     #[test]
     fn copies_into_one_account_do_not_clear_each_others_staging() {
         let source = temp_dir("concurrent-source");
@@ -488,13 +722,13 @@ mod tests {
         write(&source, "sessions/enc/b/messages.jsonl", "b");
         write(&target, "sessions/enc/b/messages.jsonl", "older b");
 
-        // Copy A is part-way: its stage exists. Copy B (a directory over an older directory, the
-        // set-aside branch) runs its whole course meanwhile.
+        // Copy A is part-way: its stage exists. Copy B (a directory over an older directory)
+        // runs its whole course meanwhile.
         let a_stage = target.join(STAGING).join("a.jsonl");
         std::fs::create_dir_all(&a_stage).unwrap();
         std::fs::write(a_stage.join("partial"), "a in progress").unwrap();
 
-        copy(&source, &target, Path::new("sessions/enc/b")).expect("b copied");
+        copy(&source, &target, Path::new("sessions/enc/b"), &[]).expect("b copied");
         assert_eq!(
             std::fs::read_to_string(target.join("sessions/enc/b/messages.jsonl")).unwrap(),
             "b"
@@ -506,7 +740,7 @@ mod tests {
         assert!(!target.join(STAGING).join("b").exists());
 
         // A then completes its own copy over what is left of its stage.
-        copy(&source, &target, Path::new("projects/slug/a.jsonl")).expect("a copied");
+        copy(&source, &target, Path::new("projects/slug/a.jsonl"), &[]).expect("a copied");
         assert_eq!(
             std::fs::read_to_string(target.join("projects/slug/a.jsonl")).unwrap(),
             "a"
@@ -514,8 +748,8 @@ mod tests {
         assert!(!target.join(STAGING).exists());
     }
 
-    /// The set-aside branch puts the older record back when the swap fails, and a sweep at start
-    /// removes whatever a crash left.
+    /// A swap that fails puts the older record back, and a sweep at start removes whatever a
+    /// crash left.
     #[test]
     fn a_failed_swap_restores_the_older_record_and_a_sweep_clears_a_crashs_leftovers() {
         let source = temp_dir("aside-source");
@@ -525,8 +759,10 @@ mod tests {
         let to = target.join("sessions/enc/b");
         let staging = target.join(STAGING).join("b");
         std::fs::create_dir_all(&staging).unwrap();
-        // The set-aside succeeds and the rename into place cannot, as `stage` does not exist.
-        assert!(swap_into_place(&staging.join("b"), &to, &staging).is_err());
+        // The older record is set aside and the rename into place cannot succeed, as `stage`
+        // does not exist.
+        let items = [(staging.join("b"), &*to, staging.join("previous"))];
+        assert!(swap_into_place(&items).is_err());
         assert_eq!(
             std::fs::read_to_string(to.join("messages.jsonl")).unwrap(),
             "older b"

@@ -3341,9 +3341,11 @@ struct SwitchPlan {
     /// The snapshot the default account was resolved from, handed on to the relaunch so the copy
     /// and the launch cannot disagree about where the default account is.
     shell_env: Option<HashMap<String, String>>,
-    /// The conversation to copy: from the source account's directory to the target's, at the
-    /// path relative to both. None for a session with no conversation on the agent's side.
-    relocation: Option<(PathBuf, PathBuf, PathBuf)>,
+    /// The conversation to copy: from the source account's directory to the target's, the path
+    /// relative to both of the record, and the agent session id it belongs to. What the agent
+    /// keeps beside it is listed only once the process is down, as it may still be creating
+    /// some. None for a session with no conversation on the agent's side.
+    relocation: Option<(PathBuf, PathBuf, PathBuf, String)>,
 }
 
 /// Everything a switch can refuse before it ends the session's process: the launch rule on the
@@ -3374,10 +3376,10 @@ fn prepare_switch(
     };
     let resolve = |pinned: Option<&str>| account_dir(agent, pinned, shell_env.as_ref());
     let (from, to) = (resolve(source), resolve(target));
-    let relative = relocate::locate(agent, &from, resume_id)?;
+    let record = relocate::locate(agent, &from, resume_id)?;
     Ok(SwitchPlan {
         shell_env,
-        relocation: Some((from, to, relative)),
+        relocation: Some((from, to, record, resume_id.to_owned())),
     })
 }
 
@@ -3467,8 +3469,13 @@ async fn switch_session_account_with(
         return Err(session_archived(id));
     }
 
-    if let Some((from, to, relative)) = plan.relocation {
-        tokio::task::spawn_blocking(move || relocate::copy(&from, &to, &relative)).await??;
+    if let Some((from, to, record, agent_session_id)) = plan.relocation {
+        let agent = before.agent;
+        tokio::task::spawn_blocking(move || {
+            let companions = relocate::companions(agent, &from, &record, &agent_session_id);
+            relocate::copy(&from, &to, &record, &companions)
+        })
+        .await??;
     }
     state.set_session_account(id, target_account.as_deref(), target_dir.as_deref())?;
 
@@ -7763,13 +7770,14 @@ mod tests {
             snapshot,
         )
         .unwrap();
-        let (from, to, relative) = plan.relocation.expect("a conversation to relocate");
+        let relocation = plan.relocation.expect("a conversation to relocate");
         assert_eq!(
-            (from, to, relative),
+            relocation,
             (
                 default_dir.clone(),
                 PathBuf::from(&target),
-                PathBuf::from("projects/slug/agent-1.jsonl")
+                PathBuf::from("projects/slug/agent-1.jsonl"),
+                "agent-1".to_owned()
             )
         );
         assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
@@ -7790,6 +7798,34 @@ mod tests {
         let plan = prepare_switch(Agent::Claude, None, Some(&target), None, snapshot).unwrap();
         assert!(plan.shell_env.is_some() && plan.relocation.is_none());
         assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+    }
+
+    /// A Codex session whose rollout Codex has compressed is planned for the copy under its
+    /// `.jsonl.zst` name.
+    #[test]
+    fn a_compressed_codex_rollout_is_planned_for_a_switch() {
+        const THREAD: &str = "019a0000-0000-7000-8000-000000000001";
+        let dir = temp_dir("switch-prepare-compressed");
+        let (source, target) = (dir.join("codex-a"), dir.join("codex-b"));
+        let record = format!("sessions/2026/10/01/rollout-2026-10-01T01-02-03-{THREAD}.jsonl.zst");
+        std::fs::create_dir_all(source.join(&record).parent().unwrap()).unwrap();
+        std::fs::write(source.join(&record), "bytes").unwrap();
+        let (source_dir, target_dir) = (source.to_string_lossy(), target.to_string_lossy());
+        let plan = |id| {
+            prepare_switch(
+                Agent::Codex,
+                Some(id),
+                Some(&source_dir),
+                Some(&target_dir),
+                || unreachable!("both accounts are pinned"),
+            )
+        };
+
+        let planned = plan(THREAD).unwrap().relocation;
+        assert_eq!(
+            planned,
+            Some((source, target, PathBuf::from(&record), THREAD.to_owned()))
+        );
     }
 
     /// A relaunch that is refused after the conversation was copied and the account recorded puts

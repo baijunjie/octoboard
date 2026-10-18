@@ -60,6 +60,37 @@ fn place_record(agent: Agent, account: &Path, name: &str) {
     std::fs::copy(testdata(name), target).unwrap();
 }
 
+/// Codex compresses a rollout a week after it was last written: the package is built from the
+/// decompressed conversation.
+#[test]
+fn a_compressed_codex_rollout_is_read_for_the_package() {
+    let (state, dir) = app_state("handoff-compressed");
+    state.store.insert_console(&console(&dir)).unwrap();
+    let repo = repo_with("handoff-compressed-repo", &[(b"a.txt", b"one\n")]);
+    insert_project(&state, &repo);
+    let account = dir.join("account");
+    let record = account
+        .join("sessions/2026/10/01")
+        .join(format!("rollout-2026-10-01T03-00-00-{AGENT_ID}.jsonl.zst"));
+    std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+    let plain = std::fs::read(testdata("handoff_codex_0.162.1_rollout.jsonl")).unwrap();
+    std::fs::write(&record, zstd::encode_all(plain.as_slice(), 0).unwrap()).unwrap();
+    let original = session("compressed", Agent::Codex, Some(&account));
+    state.store.insert_session(&original).unwrap();
+
+    let text = build_with(&state, &original, None, &mut locator(&dir))
+        .unwrap()
+        .render();
+
+    for expected in [
+        "### User\n\n```\nFix the flaky test\n```\n",
+        "### Assistant\n\n```\nBoth pass.\n```\n",
+        "- [x] Fix the test\n",
+    ] {
+        assert!(text.contains(expected), "lacks {expected:?}:\n{text}");
+    }
+}
+
 #[test]
 fn the_package_of_each_agent_holds_the_conversation_and_no_tool_output() {
     let (state, dir) = app_state("handoff-agents");

@@ -47,7 +47,7 @@ once.
 | `src/session_request/` | `request_session`: a session asking the user to approve a session with no owner, with the pending requests, the wait for the answer and the carrying out of an approval |
 | `src/reporting.rs` | The channel between an owner and the sessions bound to it: briefs, messages into a running session, reports reaching the owner or synthesised when a session stops, automatic archiving, and report-panel form submissions |
 | `src/sharing.rs` | Information one session shares with another, delivered through `reporting.rs`'s message writing |
-| `src/relocate.rs` | Copying a session's conversation record between account configuration directories for an account switch |
+| `src/relocate.rs` | Copying a session's conversation record, with what the agent keeps beside it, between account configuration directories for an account switch |
 | `src/outbox.rs` | The per-session ordered queue every message Octoboard writes into an agent passes through |
 | `src/store.rs` | The coordinator's SQLite storage: consoles, projects, sessions, pages, agent accounts, branch origins, trusted folders, user settings and the host table |
 | `src/state.rs` | Shared daemon state: session status and turn bookkeeping, record-watch bookkeeping, each project's live git status and check claim, pending `request_session` requests, agent availability, the model cache, the account quotas and the hook queues |
@@ -70,7 +70,7 @@ once.
 | `src/hostfs.rs`, `src/open_directory.rs`, `src/open_terminal.rs` | Host filesystem work (browsing, Trash, repository discovery, clone, remote probing, agent detection) and launching the system terminal, file manager or default application |
 | `src/subprocess.rs` | Running a spawned process to completion within bounds (`run_bounded`, `run_with_timeout`), exchanging lines with one that answers on stdout while stdin stays open (`run_exchange`), and detached spawning |
 | `src/hooks.rs`, `src/hook_queue.rs`, `src/hook_mode.rs` | Reading what an agent's hook payload says, the per-session ordered queue of unapplied hook events, and the `octoboardd hook` mode |
-| `src/transcript.rs`, `src/rollout.rs`, `src/record_watch.rs`, `src/line_file.rs` | Watching an agent's own session record for status changes hooks never report (Claude Code transcript, Codex rollout), over a shared offset-tracked line reader |
+| `src/transcript.rs`, `src/rollout.rs`, `src/record_watch.rs`, `src/line_file.rs` | Watching an agent's own session record for status changes hooks never report (Claude Code transcript, Codex rollout), over a shared offset-tracked line reader whose `open` is the one way to open an agent's record, since Codex may have compressed it (zstd) |
 | `src/agent_records.rs`, `src/record_titles.rs`, `src/session_title.rs`, `src/usage.rs` | Where each agent keeps its on-disk session records (and which file holds a session's conversation, `conversation_record`), the titles they give a conversation, the title a session shows, and native token statistics |
 | `src/git_ref_mode.rs`, `src/loopback.rs` | The `octoboardd git-ref` mode, and the minimal HTTP client for the daemon's own loopback address shared by the CLI modes |
 | `src/instance_lock.rs`, `src/paths.rs` | One daemon per data directory, and where Octoboard keeps its files under `~/.octoboard` (including `handoff_dir`) |

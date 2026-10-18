@@ -35,7 +35,7 @@ submenu of the console's newest archived console sessions, each of which can be 
 to the archive view of all of them (see "The console header" in `docs/product/sidebar.md`). The console
 header's **New console session** button opens the session dialog described in "Opening a session" below — whereas resuming or reopening a console session keeps its
 recorded agent and account; only switching accounts changes its account (see "Agent config directories" in
-`docs/product/consoles-and-projects.md` and "Switching a session's account" below).
+`docs/product/consoles-and-projects.md` and `docs/product/switching-session-accounts.md`).
 
 A console session carries no project; it runs in the console's working directory. It is given
 Octoboard's orchestration tools and dispatches work to sessions in the console's projects — see
@@ -390,7 +390,7 @@ Transitions:
   whose owner is *archived* first does the same to its archived owners, the topmost first.
 - Switching a session to another account of its agent ends and relaunches its process without archiving it: it reads
   as *interrupted* while the process is down and comes back in *awaiting instructions*, and a switch that fails leaves
-  it *interrupted* on the account it had (see "Switching a session's account").
+  it *interrupted* on the account it had (see `docs/product/switching-session-accounts.md`).
 - An agent's report never moves a session out of *interrupted* or *archived*: whether a stopped session is one or the
   other is Octoboard's own record, not the agent's.
 
@@ -639,7 +639,7 @@ sessions started by the owner.
 - All paths check the owner and every descendant for a lock before ending any process or archiving any session;
   an already archived descendant's lock also blocks the operation (see "Locking a session" above).
 - Sessions outside those bindings are not touched. Ending an owner's process for an account switch archives
-  nothing (see "Switching a session's account" below).
+  nothing (see `docs/product/switching-session-accounts.md`).
 
 **Resuming** an interrupted session happens by selecting it, or by pressing "Resume" on its terminal's card (see
 "Interrupted, archived and dormant sessions" in `docs/product/session-terminal.md`, which also names the two ways of showing an interrupted session that do not resume it).
@@ -658,7 +658,7 @@ relaunches the same agent in the same directory and reassembles everything Octob
   typing into its terminal is then handed what was typed (see "Interrupted, archived and dormant sessions" in
   `docs/product/session-terminal.md`).
 - A session relaunches with the account and the config directory it last recorded for its agent — the one it was
-  opened with until the user switches it (see "Switching a session's account" below), not the console's current
+  opened with until the user switches it (see `docs/product/switching-session-accounts.md`), not the console's current
   reference — and is refused if that directory no longer exists, but only when the session has a conversation to
   resume; one with none yet, opened and never typed into without resuming a conversation, launches into the missing
   directory instead (see "Agent config directories" in `docs/product/consoles-and-projects.md`).
@@ -679,62 +679,8 @@ there, where it is listed, and that selecting an archived one does not relaunch 
 
 ### Switching a session's account
 
-A session can be moved to another account of its own agent from its row's **Switch account** submenu (see "Session
-rows" in `docs/product/sidebar.md`); a console session is switched from its own row, among that session's own agent's
-accounts. The submenu is offered only when the agent has more than one account, and the user is asked
-to confirm. It is the user's action alone: Octoboard never switches a session on its own, and reads no sign that an
-account's usage has run out.
-
-The confirmation has an **unchecked by default** checkbox to switch every session of the same agent in that console
-to the selected account. It includes console sessions, project sessions and bound sessions, across all projects in
-the console; archived sessions and sessions already on the target account are excluded. The confirmation shows how
-many sessions are eligible. Leaving the checkbox unchecked switches only the selected session. Neither choice
-changes the console's or projects' account defaults for future sessions.
-
-Confirming fixes the set of sessions to process and locks the checkbox. Sessions opened afterwards do not join that
-set, including on a retry. Sessions are switched one at a time; one that has been removed, archived or moved to the
-target account before its turn is skipped. A progress bar shows the number processed out of the fixed total, counting
-failed and skipped sessions as processed, and the title of the session currently being switched is shown and
-announced to assistive technology. A failure does not stop the remaining sessions: an error alert lists each failed
-session and its reason when the pass finishes. After acknowledgement, the confirmation offers Retry for those failures alone. Successful switches are kept and never repeated
-by Retry. The confirmation closes when the pass finishes without failures.
-
-A switch ends the session's process the way archiving does, copies the session's conversation into the target
-account's config directory, records the new account and directory on the session, and relaunches it as a resume does,
-with everything Octoboard injects reassembled. It archives nothing: while the process is down the session reads as
-*interrupted*, and it comes back in *awaiting instructions* like any resumed session. Ending an owner's process this
-way does not itself switch or archive the sessions bound to it; the console-wide choice switches each eligible bound
-session separately.
-
-- **The conversation continues** where the agent has one stored: the session's own record is copied — added to the
-  target directory, or replacing an earlier copy there — and the original stays in the account it came from, so a
-  failed switch loses nothing and switching back needs no second copy. A session nobody ever typed into, unless it
-  was opened to resume a conversation, has no conversation to copy; the switch records the account and relaunches into
-  a fresh conversation, as a resume of such a session does. The default account is a target like any other: the directory it resolves to at that moment is where
-  the conversation is copied, and the relaunch runs against that same resolution.
-- **The session reads the target account's configuration and keeps its explicit model and reasoning effort choices.**
-  An account's directory holds the agent's global configuration as well as its login. Settings kept only in the old
-  account's directory do not follow the session; values explicitly supplied by Octoboard still apply according to
-  `docs/product/model-and-reasoning-effort.md`. The same conversation can come up with different account defaults.
-- **A switch that cannot be made leaves the session on the account it had, and says why.** It is refused, with nothing
-  recorded, when the session is being launched or resumed at that moment, when it is archived, when it is on that
-  account already, when the target is a Grok Build directory that is not an initialized Grok home, when the user's
-  shell environment could not be captured — which is read whenever either side of the switch is the default account,
-  since that is what resolves its directory (see "The launch environment" in `docs/product/launching-agents.md`) — and
-  when the conversation record is not where it should be; the session's process is then left running. The one further
-  refusal comes after the process has been asked to end: a process that has not gone within 30 seconds stops the
-  switch, with nothing copied and nothing recorded, and that process may still be running. Once the process has been
-  ended, a copy that does not complete, a relaunch the launch rules refuse and a relaunch whose process ends at once
-  are each reported as a failed switch, not as a success: the session is left *interrupted* on its old account,
-  resumable as before, and already reads so everywhere by the time the failure is shown. Octoboard tells that last
-  case from a success by the process ending within a few seconds of the relaunch, never by reading what the agent
-  printed. An account that is not signed in is therefore not a failed switch: every agent, Grok Build included, comes
-  up on its own sign-in rather than exiting, so the switch succeeds and the session's terminal shows that agent's
-  sign-in, which may start its sign-in flow.
-- **It can take a few seconds**, the time the agent is given to exit and the time the relaunched process is watched; the
-  confirmation stays open, its button reading "Switching account…" and the session's terminal "Resuming session…",
-  until the result is known, and shows a failure in place. The confirmation cannot be dismissed meanwhile, and the
-  session cannot be resumed or switched again.
+A session can be moved to another account of its own agent, ending and relaunching its process with its conversation
+carried along; how, and what is carried, is in `docs/product/switching-session-accounts.md`.
 
 ### Archived sessions
 

@@ -29,7 +29,7 @@
 
 ## Notes for the developer
 
-- **Prerequisites**: milestone 1 (complete migration, used by the merge) and milestone 2's measured answers.
+- **Prerequisites**: milestone 2's measured answers.
 - **Reusable capabilities**: the relocation copy; the agent record index; the configuration export; Grok Build's
   per-session home, which already links `sessions/`.
 - **Reference docs**: `docs/agent-cli-reference.md` ("Moving a conversation to another config directory", "What a

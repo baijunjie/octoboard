@@ -11,8 +11,9 @@ config directory into the new one, then resumes it there. The copy is cheap, but
   `conversation_not_found`; usage, titles and trash-on-delete miss it too. Inferred from code and the measured
   compression, not yet hit by a real session.
 - **The copy leaves parts of the conversation behind.** Claude Code: the `projects/<slug>/<id>/` directory beside the
-  transcript (subagent transcripts, tool results, custom title), `file-history/<id>/` (rewind checkpoints). Codex:
-  subagent rollouts named `rollout-…-<parent>_<child>.jsonl`.
+  transcript (subagent transcripts, tool results, custom title), `file-history/<id>/` (rewind checkpoints). Codex's
+  subagent rollouts (`rollout-…-<parent>_<child>.jsonl`) are left behind deliberately: carried, a resume in a home with
+  no database row opens a subagent's rollout instead of the parent's.
 - **The old account keeps a stale copy**, which its own terminal resume picker still lists.
 
 The user also wants an account to be able to share its sessions with the default account, so switching between them
@@ -54,11 +55,11 @@ needs no migration at all.
 
 ## Milestones
 
-1. [Complete account migration](01-complete-account-migration.md)
+1. 01 Complete account migration (closed)
 2. [Measure cross-account sharing](02-measure-cross-account-sharing.md)
 3. [Shared session directories](03-shared-session-directories.md)
 
-Milestone 3 depends on 1 and 2.
+Milestone 3 depends on 2.
 
 ## Open
 
@@ -67,3 +68,6 @@ Milestone 3 depends on 1 and 2.
   from a terminal `grok` run under that account).
 - Whether the stale copy left in the old account after a switch (without sharing) is removed, kept, or left to the
   user.
+- Whether switching back into an account that still holds the thread's subagent rollouts, or resuming a compressed
+  rollout whose database row still names the uncompressed path, hits Codex's newest-name-match fallback and opens a
+  subagent instead of the parent; unmeasured.
