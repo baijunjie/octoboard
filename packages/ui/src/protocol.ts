@@ -269,6 +269,10 @@ export interface Session {
   started_at: number;
   ended_at?: number | null;
   usage?: SessionUsage | null;
+  /** The model and reasoning effort the agent's records show the session running with, as the
+   * agent spells them; unlike `model` and `effort`, which are the launch overrides. */
+  observed_model?: string;
+  observed_effort?: string;
 }
 
 /** One page a console session pushed to its report panel; it belongs to that console session, not to its

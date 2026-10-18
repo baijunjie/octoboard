@@ -382,11 +382,13 @@ as carrying it instead, and each leaves the mark without one:
   tooltip is deliberately held back — while hovering the avatar floats the hidden sidebar in instead. It would also
   put a second indicator trigger inside a real `<button>`, which this standard keeps as one exception, below.
 
-One mark keeps its tooltip beside a text that names it: the agent icon, whose tooltip means the account the session
-runs under wherever it carries one. A meaning the window has settled does not come and go placement by placement, so
-it stays on a focus mode's card and an archive view's row. The text beside the icon names the agent alone; the
-account remains in the icon's tooltip and in the session row's accessible name, or in visually hidden text where
-there is no row name.
+The agent icon is such a mark wherever the text beside it does not name the agent. A focus mode's card puts the model line
+there, so the icon's tooltip, which names the agent and the account the session runs under, is the only route on screen to
+both. The one place the text beside the icon does name the agent is an archive view's row, and the tooltip stays there
+too: a meaning the window has settled does not come and go placement by placement, and it adds the account the text
+leaves out. The agent and the account are also in the session row's accessible name, or in visually hidden text where
+there is no row name, and a card's accessible name carries the model line as well, since the row is one button and
+nothing inside it is announced.
 
 One gap is left open on purpose: no mark on a menu's transient surface carries a tooltip — a clipped path label in a
 menu item does carry its own through the anchored shape, as in the Switch account submenu, but no indicator there

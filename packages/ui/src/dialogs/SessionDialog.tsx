@@ -2,7 +2,7 @@ import { Tabs } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
 import { choiceGroups, choiceKey, currentChoice, findEntry, inheritedAccount, initialChoice } from "../accountChoices";
-import { AGENT_CONSOLE_EFFORT_FIELD, AGENT_CONSOLE_MODEL_FIELD, AGENT_LABEL, noAgentAvailable, projectSessionLaunch } from "../agents";
+import { AGENT_LABEL, inheritedSessionLaunch, launchWithOverrides, noAgentAvailable } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -115,13 +115,8 @@ export function SessionDialog({
   const choice = currentChoice(picked, initialChoice(parentConsole, project, accounts, agentAvailability), groups);
   const accountEntries = groups.find((group) => group.agent === choice.agent)?.entries ?? [];
   const overrides = launchSettings[choice.agent];
-  // What the session takes when it chooses nothing: a project session's project value, else its
-  // console's project session one; a console session's console session one.
-  const inherited = project
-    ? projectSessionLaunch(parentConsole, project, choice.agent)
-    : { model: parentConsole[AGENT_CONSOLE_MODEL_FIELD[choice.agent]] ?? null, effort: parentConsole[AGENT_CONSOLE_EFFORT_FIELD[choice.agent]] ?? null };
-  const model = overrides?.model === undefined ? inherited.model : overrides.model;
-  const effort = overrides?.effort === undefined ? inherited.effort : overrides.effort;
+  const inherited = inheritedSessionLaunch(parentConsole, project, choice.agent);
+  const { model, effort } = launchWithOverrides(inherited, overrides);
 
   // The select is shown from the moment there is a console session to offer and stays mounted
   // for the rest of the dialog's life, even if the list later empties, leaving "none" alone: it is

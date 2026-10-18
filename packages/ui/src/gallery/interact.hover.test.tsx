@@ -70,7 +70,7 @@ function mountWindow(): void {
         <ul>
           <li>
             <StatusIcon status="interrupted" withTooltip />
-            <AgentIcon agent="claude" tooltip="Work" />
+            <AgentIcon agent="claude" tooltip="Claude Code (Work)" />
             <span className="sr-only">Claude Code</span>
             <span>Tidy the changelog</span>
           </li>
@@ -226,17 +226,17 @@ it("hoverCalloutStatus fails for a session that is not listed", async () => {
   expect(openTooltip()).toBeNull();
 });
 
-it("hoverCalloutAgent puts up the account of the callout's session it names", async () => {
+it("hoverCalloutAgent puts up the agent and account of the callout's session it names", async () => {
   mountWindow();
-  await settledLive(createUi(document, "en").hoverCalloutAgent("Tidy the changelog", "Work"));
-  expect(openTooltip()?.textContent).toBe("Work");
+  await settledLive(createUi(document, "en").hoverCalloutAgent("Tidy the changelog", "Claude Code (Work)"));
+  expect(openTooltip()?.textContent).toBe("Claude Code (Work)");
   release(document.querySelector("[role=alertdialog] li")!.children[1]);
 });
 
 it("hoverCalloutAgent fails where the tooltip is not the one it was told", async () => {
   mountWindow();
-  const done = expect(createUi(document, "en").hoverCalloutAgent("Tidy the changelog", "Home")).rejects.toThrow(
-    /has no tooltip "Home": its last tooltip is "Work"/,
+  const done = expect(createUi(document, "en").hoverCalloutAgent("Tidy the changelog", "Claude Code (Home)")).rejects.toThrow(
+    /has no tooltip "Claude Code \(Home\)": its last tooltip is "Claude Code \(Work\)"/,
   );
   await vi.advanceTimersByTimeAsync(3000);
   await done;
@@ -245,7 +245,32 @@ it("hoverCalloutAgent fails where the tooltip is not the one it was told", async
 
 it("hoverCalloutAgent fails for an agent icon with no tooltip", async () => {
   mountWindow();
-  const done = expect(createUi(document, "en").hoverCalloutAgent("Bare glyph", "Work")).rejects.toThrow(/with an agent icon to hover/);
+  const done = expect(createUi(document, "en").hoverCalloutAgent("Bare glyph", "Claude Code (Work)")).rejects.toThrow(/with an agent icon to hover/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await done;
+  expect(openTooltip()).toBeNull();
+});
+
+it("hoverSessionAgent puts up the agent and account of the card it names", async () => {
+  mountWindow();
+  await settledLive(createUi(document, "en").hoverSessionAgent(row("Card"), "Claude Code (Work)"));
+  expect(openTooltip()?.textContent).toBe("Claude Code (Work)");
+  release(document.querySelector('[aria-label^="Card"] [role=presentation]')!);
+});
+
+it("hoverSessionAgent fails where the tooltip is not the one it was told", async () => {
+  mountWindow();
+  const done = expect(createUi(document, "en").hoverSessionAgent(row("Card"), "Claude Code (Home)")).rejects.toThrow(
+    /has no tooltip "Claude Code \(Home\)": its last tooltip is "Claude Code \(Work\)"/,
+  );
+  await vi.advanceTimersByTimeAsync(3000);
+  await done;
+  release(document.querySelector('[aria-label^="Card"] [role=presentation]')!);
+});
+
+it("hoverSessionAgent fails for a card with no agent mark", async () => {
+  mountWindow();
+  const done = expect(createUi(document, "en").hoverSessionAgent(row("Docs"), "Claude Code (Work)")).rejects.toThrow(/with an agent mark to hover/);
   await vi.advanceTimersByTimeAsync(6000);
   await done;
   expect(openTooltip()).toBeNull();

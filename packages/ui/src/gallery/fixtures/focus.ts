@@ -1,4 +1,5 @@
-import type { SessionUsage } from "../../protocol";
+import { AGENT_LABEL } from "../../agents";
+import type { Session, SessionUsage } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import { consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
@@ -163,6 +164,18 @@ const archivePreviewEleven = archivePreviewState(11);
 const projectArchivePreviewTen = archivePreviewState(10, true);
 const projectArchivePreviewEleven = archivePreviewState(11, true);
 
+// What each card's line beside the agent's mark reads in the project's focus mode: the model and
+// effort observed for a Claude, a Codex and a Grok session; a Claude model named with a release
+// date and no effort known; and a session whose launch overrides leave both to the agent's default.
+// The cards left out follow the project's setting.
+const observedLaunches: Record<string, Partial<Session>> = {
+  "s-1": { observed_model: "claude-opus-5-5", observed_effort: "high" },
+  "s-lead-1": { agent: "codex", observed_model: "gpt-6.1-sol", observed_effort: "xhigh" },
+  "s-3d": { agent: "grok", observed_model: "grok-4.7", observed_effort: "high" },
+  "s-3c": { observed_model: "claude-haiku-4-5-20251001", effort: null },
+  "s-3a": { model: null, effort: null },
+};
+
 // Long bound titles exercise the single-line fade and full-title hover without displacing the owner badge.
 const combinedState = {
   ...scrollingFocusState,
@@ -170,8 +183,11 @@ const combinedState = {
     { id: "a-long", agent: "claude" as const, name: "Release coordination across every production environment", config_dir: "/Users/dev/.claude-release" },
     { id: "a-release", agent: "claude" as const, name: "Production release coordination and regression review account", config_dir: "/Users/dev/.claude-regression" },
   ] },
+  // The project's own setting is what a card with nothing observed or overridden follows.
+  projects: new Map([...scrollingFocusState.projects!].map(([id, item]) => [id, id === project.id ? { ...item, claude_session_model: "sonnet", claude_session_effort: "medium" } : item])),
   sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, {
     ...session,
+    ...observedLaunches[id],
     account_id: id === "s-2" ? "a-long" : id === "s-lead-2" ? "a-release" : session.account_id,
     terminal_title: id === "s-2"
       ? "Fix the rounding of partial search results and preserve precision across every supported currency"
@@ -252,10 +268,20 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus including console sessions",
     state: combinedState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "Agent names sit on the left of the metadata line, and a compact usage chip and creation age on the right in the same muted colour. Zero totals and missing native records omit the chip without adding a row. Account names appear only in agent icon tooltips. Bound cards keep status, owner and agent marks in one column, with owner badges before long single-line titles. Hover a badge for the owner's name. Titles scroll only when their text is hovered, and titles without a badge start at the content edge. Nested cards inherit their owner's colour. Rounded branches connect the single child under Write the migration and the two under Rework the result ranking. A vertical rail crosses the card gaps and stops at the last child's centre, with none beside top-level cards. Arabic mirrors the branches. Pinned cards come first, then Waiting for you, Awaiting instructions, Working and Interrupted.",
+    description: "The metadata line shows the agent's mark, the model and effort on its left, and a compact usage chip and creation age on its right in the same muted colour. Zero totals and missing native records omit the chip without adding a row. The model and effort, not the agent's name, follow the mark: Add idempotency keys reads Opus 5.5 · high, the Codex session under Rework the result ranking gpt-6.1-sol · xhigh, Document the retry policy (Grok) grok-4.7 · high, and Rework the retry loop Haiku 4.5 with a Default effort. Write the migration follows the project's own setting, Sonnet · medium, as do the other cards left unchanged; Check the index sizes, launched with the agent's defaults, reads Default model. Bound cards keep status, owner and agent marks in one column, with owner badges before long single-line titles. Hover a badge for the owner's name. Titles scroll only when their text is hovered, and titles without a badge start at the content edge. Nested cards inherit their owner's colour. Rounded branches connect the single child under Write the migration and the two under Rework the result ranking. A vertical rail crosses the card gaps and stops at the last child's centre, with none beside top-level cards. Arabic mirrors the branches. Pinned cards come first, then Waiting for you, Awaiting instructions, Working and Interrupted.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Compare ranking strategies", name: "Rework the result ranking" }))),
     ],
+  },
+  {
+    id: "focus-agent-tooltip",
+    group: GROUP,
+    category: "normal",
+    title: "Agent mark tooltip",
+    description: "The pointer rests on the Claude Code mark of Add idempotency keys. The tooltip names the agent and, in brackets, the account the session runs under: Claude Code (Work).",
+    state: combinedState,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}`, projectFocusIncludeConsoleSessions: true },
+    steps: [(ui) => ui.hoverSessionAgent(addIdempotencyKeys(ui), ui.t("session.agentAccount", { agent: AGENT_LABEL.claude, account: "Work" }))],
   },
   {
     id: "focus-console-session",

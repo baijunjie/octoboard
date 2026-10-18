@@ -30,11 +30,16 @@ The session lock button on live cards and the console session header follows
 `docs/product/sidebar.md`), the session's action menu and, just before it, a Delete or Archive button
 (both always shown when available; see "Session rows" in `docs/product/sidebar.md` for when the
 shortcut is there and what it does), its title on one line, its agent's icon
-and name, and how long ago it was created at the trailing end of the agent line. Resuming or
-reopening does not reset that time. When native token usage has a positive total, it appears immediately before
+followed by the **model line**, and how long ago it was created at the trailing end of the agent line. The model line
+reads "<model> · <effort>" — the model and reasoning effort the session runs with, as "The model and effort a session
+is shown running with" in `docs/product/model-and-reasoning-effort.md` decides them — and reads **Default model** when
+neither is known; the agent's name is not shown on the card. The model line is one line that fades where it is cut off,
+with its full text as its tooltip while cut (see "Names too long for their space" in
+`docs/product/labels-and-tooltips.md`), and the card's accessible name ends with the same text. Resuming or
+reopening does not reset the creation time. When native token usage has a positive total, it appears immediately before
 the creation time on that same agent line and updates while the session runs (see "Native session usage" in
 `docs/product/session-usage.md`), set apart from the creation time by spacing alone; without visible usage, the trailing
-block contains creation time alone. The agent name has no adjacent separator or visible account suffix. The status
+block contains creation time alone. The model line has no adjacent separator. The status
 and agent lines share aligned leading icons and text starts. A title with a console-session colour dot shares that
 alignment;
 a title without one starts at the card’s leading content edge, with no empty icon space. Long titles follow "Names too long

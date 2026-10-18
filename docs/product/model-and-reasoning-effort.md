@@ -131,3 +131,36 @@ not finish in time, or what it printed held no model that could be read. None of
 Model field says which it was, and offers the stored value alone, marked as not in the list, or nothing at all when
 there is none; the effort picker has no list to offer but stays operable, so a stored level can still be cleared.
 Neither a missing list nor one still being fetched stops the dialog from being saved.
+
+## The model and effort a session is shown running with
+
+Where a session's model and reasoning effort are shown — the model line of focus mode's session cards (see "What both
+views show" in `docs/product/focus-mode.md`) — each of the two is decided on its own, taking the first of these that
+gives a value:
+
+1. what the agent's own records show the session running with (below);
+2. the session's own choice when it was opened: a chosen value, or the agent's own default when it cleared the value;
+3. for a value the session inherits, what the defaults at the top of this doc give at that moment — a project
+   session's project, else its console's project session pair; a console session's console session pair.
+
+An item none of these knows, the agent's own default included, reads **Default**; a session knowing neither reads
+**Default model** instead of the pair.
+
+**Names.** A Claude Code model id is shortened to its family and version, its release date dropped: `claude-opus-5-5`
+reads "Opus 5.5". Claude Code's aliases are capitalised — Opus, Sonnet, Haiku — and the `best` alias is named "Best
+available", as the launch pickers name it. Every other id, a Claude Code one of an unfamiliar shape included, and every
+effort is shown as the agent spells it.
+
+**What the records show.** The daemon reads, as each agent records them:
+
+| Agent | Read from |
+|---|---|
+| Claude Code | The model and effort of each reply in the session's main conversation; its own native subagents, which run other models, and Claude Code's own notices are skipped. |
+| Codex | The model and effort of each turn's context record. |
+| Grok Build | The model and effort the session's summary records as configured, not the model a request was served by. |
+
+The last record that names a model, or an effort, wins; a record that names neither leaves the last one known in place.
+They are collected alongside native usage and as often (see "Native session usage" in `docs/product/session-usage.md`),
+kept through archiving and restarting Octoboard, and cleared when the session moves to a different native
+conversation, until the new one shows its own. They are reported on the session as `observed_model` and
+`observed_effort`, separate from the session's launch choices `model` and `effort`.

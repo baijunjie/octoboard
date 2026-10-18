@@ -299,6 +299,9 @@ export const zhHans: Translation<"other"> = {
   "statusItem.open": "打开 {appName}",
 
   "session.agentAccount": "{agent}（{account}）",
+  "session.modelEffort": "{model} · {effort}",
+  "session.modelEffort.unknownItem": "默认",
+  "session.modelEffort.default": "默认模型",
   "session.defaultName": "{name} 会话",
   "session.displayTitle": "{title}｜{name}",
   "session.withLocation": "{session}，{location}",

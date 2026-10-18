@@ -13,7 +13,7 @@ import { ImportConfigurationDialog } from "../configuration/ImportConfigurationD
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { isLive, type Project, type Session, type SessionBranchItem } from "../protocol";
-import { sessionAccountTooltip, sessionAgentLabel, sessionDisplayTitle } from "../sessionLabel";
+import { sessionAgentLabel, sessionDisplayTitle } from "../sessionLabel";
 import { boundArchivedSessions, boundSessionsArchivedWith, compareSessions } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -53,7 +53,7 @@ function ConfirmWarning({ title, sessions, lines = [] }: { title?: string; sessi
             {sessions.map((session) => (
               <li key={session.id} data-list-motion={session.id} className="flex min-w-0 items-center gap-2">
                 {session.status !== "archived" && <StatusIcon status={session.status} withTooltip />}
-                <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
+                <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts)} />
                 {/* The icon is decorative, and nothing else here names the agent. */}
                 <span className="sr-only">{sessionAgentLabel(t, session, accounts)}</span>
                 <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={sessionDisplayTitle(t, session)}>

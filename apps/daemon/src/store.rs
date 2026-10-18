@@ -173,6 +173,9 @@ impl Store {
                 record_title     TEXT,
                 record_prompt    TEXT,
                 usage            TEXT,
+                -- The model and reasoning effort the agent's records show the session running with.
+                observed_model   TEXT,
+                observed_effort  TEXT,
                 status           TEXT NOT NULL,
                 has_conversation INTEGER NOT NULL DEFAULT 0,
                 -- The console session this (project) session reports to, or NULL outside the
@@ -348,6 +351,14 @@ impl Store {
         }
         if !column_exists(&conn, "sessions", "usage")? {
             conn.execute("ALTER TABLE sessions ADD COLUMN usage TEXT", [])?;
+        }
+        for column in ["observed_model", "observed_effort"] {
+            if !column_exists(&conn, "sessions", column)? {
+                conn.execute(
+                    &format!("ALTER TABLE sessions ADD COLUMN {column} TEXT"),
+                    [],
+                )?;
+            }
         }
         if !column_exists(&conn, "sessions", "terminal_title")? {
             conn.execute("ALTER TABLE sessions ADD COLUMN terminal_title TEXT", [])?;
@@ -1151,7 +1162,9 @@ impl Store {
                                  has_conversation = ?6, started_at = ?7, ended_at = ?8,
                                  usage = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN usage ELSE NULL END,
                                  record_title = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN record_title ELSE NULL END,
-                                 record_prompt = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN record_prompt ELSE NULL END
+                                 record_prompt = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN record_prompt ELSE NULL END,
+                                 observed_model = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN observed_model ELSE NULL END,
+                                 observed_effort = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN observed_effort ELSE NULL END
              WHERE id = ?1",
             params![
                 session.id,
@@ -1198,7 +1211,19 @@ impl Store {
                 .titles
                 .as_ref()
                 .filter(|titles| &session.record_titles != *titles);
-            if usage.is_none() && titles.is_none() {
+            let observed_model = update
+                .observed_model
+                .as_ref()
+                .filter(|model| session.observed_model.as_ref() != Some(*model));
+            let observed_effort = update
+                .observed_effort
+                .as_ref()
+                .filter(|effort| session.observed_effort.as_ref() != Some(*effort));
+            if usage.is_none()
+                && titles.is_none()
+                && observed_model.is_none()
+                && observed_effort.is_none()
+            {
                 continue;
             }
             if let Some(usage) = usage {
@@ -1214,6 +1239,20 @@ impl Store {
                     params![source.id, titles.named, titles.prompt],
                 )?;
                 session.record_titles = titles.clone();
+            }
+            if let Some(model) = observed_model {
+                tx.execute(
+                    "UPDATE sessions SET observed_model = ?2 WHERE id = ?1",
+                    params![source.id, model],
+                )?;
+                session.observed_model = Some(model.clone());
+            }
+            if let Some(effort) = observed_effort {
+                tx.execute(
+                    "UPDATE sessions SET observed_effort = ?2 WHERE id = ?1",
+                    params![source.id, effort],
+                )?;
+                session.observed_effort = Some(effort.clone());
             }
             changed.push(session);
         }
@@ -1820,13 +1859,17 @@ pub struct RecordUpdate {
     pub session: Session,
     pub usage: Option<crate::protocol::SessionUsage>,
     pub titles: Option<RecordTitles>,
+    /// The model and effort the records show, where they show one; an absent value keeps what is
+    /// stored.
+    pub observed_model: Option<String>,
+    pub observed_effort: Option<String>,
 }
 
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
                                role, origin, title, status, has_conversation, bound_to, colour,
                                ordinal, account_id, config_dir, pinned, started_at, ended_at,
                                lead, terminal_title, model, effort, model_override, effort_override, usage,
-                               record_title, record_prompt, locked";
+                               record_title, record_prompt, locked, observed_model, observed_effort";
 
 const CONSOLE_COLUMNS: &str = "id, name, workdir, console_session_agent, default_agent,
                                claude_account_id, codex_account_id, grok_account_id,
@@ -1899,9 +1942,9 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             (id, agent, agent_session_id, console_id, project_id, host_id, role, origin, title,
              status, has_conversation, bound_to, colour, ordinal, account_id, config_dir, pinned,
              started_at, ended_at, lead, terminal_title, model, effort, model_override, effort_override, usage,
-             record_title, record_prompt, locked)
+             record_title, record_prompt, locked, observed_model, observed_effort)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
+                 ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31)",
         params![
             session.id,
             enum_to_text(&session.agent),
@@ -1932,6 +1975,8 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             session.record_titles.named,
             session.record_titles.prompt,
             session.locked,
+            session.observed_model,
+            session.observed_effort,
         ],
     )?;
     Ok(())
@@ -2068,6 +2113,8 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         config_dir: row.get(15)?,
         pinned: row.get(16)?,
         locked: row.get(28)?,
+        observed_model: row.get(29)?,
+        observed_effort: row.get(30)?,
         started_at: row.get(17)?,
         ended_at: row.get(18)?,
         lead: row.get(19)?,
@@ -2197,6 +2244,8 @@ mod tests {
             terminal_title: None,
             record_titles: Default::default(),
             usage: None,
+            observed_model: None,
+            observed_effort: None,
             model: None,
             effort: None,
             has_conversation: false,
@@ -3972,6 +4021,8 @@ mod tests {
                 .set_record_data(&[RecordUpdate {
                     session: source.clone(),
                     usage: Some(usage.clone()),
+                    observed_model: None,
+                    observed_effort: None,
                     titles: None
                 }])
                 .unwrap()
@@ -3982,6 +4033,8 @@ mod tests {
             .set_record_data(&[RecordUpdate {
                 session: source.clone(),
                 usage: Some(usage.clone()),
+                observed_model: None,
+                observed_effort: None,
                 titles: None
             }])
             .unwrap()
@@ -4010,6 +4063,8 @@ mod tests {
             .set_record_data(&[RecordUpdate {
                 session: source.clone(),
                 usage: Some(changed),
+                observed_model: None,
+                observed_effort: None,
                 titles: None
             }])
             .unwrap()
@@ -4027,6 +4082,8 @@ mod tests {
             .set_record_data(&[RecordUpdate {
                 session: source,
                 usage: Some(usage),
+                observed_model: None,
+                observed_effort: None,
                 titles: None
             }])
             .unwrap()
@@ -4056,6 +4113,8 @@ mod tests {
         let updates = [RecordUpdate {
             session: source.clone(),
             usage: None,
+            observed_model: None,
+            observed_effort: None,
             titles: Some(titles.clone()),
         }];
         assert_eq!(store.set_record_data(&updates).unwrap().len(), 1);
@@ -4082,6 +4141,46 @@ mod tests {
                 .record_titles,
             RecordTitles::default(),
             "another conversation does not inherit the titles"
+        );
+    }
+
+    #[test]
+    fn observed_model_and_effort_migrate_persist_and_follow_the_agent_session() {
+        let path = temp_db("observed");
+        let store = Store::open(&path).unwrap();
+        store.insert_console(&console(None, None, None)).unwrap();
+        store.insert_session(&session(None)).unwrap();
+        drop(store);
+        let conn = Connection::open(&path).unwrap();
+        for column in ["observed_model", "observed_effort"] {
+            conn.execute(&format!("ALTER TABLE sessions DROP COLUMN {column}"), [])
+                .unwrap();
+        }
+        drop(conn);
+        let store = Store::open(&path).unwrap();
+        let mut source = store.get_session("session-1").unwrap().unwrap();
+        let updates = [RecordUpdate {
+            session: source.clone(),
+            usage: None,
+            observed_model: Some("claude-opus-5-5".to_owned()),
+            observed_effort: Some("high".to_owned()),
+            titles: None,
+        }];
+        assert_eq!(store.set_record_data(&updates).unwrap().len(), 1);
+        assert!(store.set_record_data(&updates).unwrap().is_empty());
+        source.title = "Renamed".to_owned();
+        store.update_session(&source).unwrap();
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        let stored = store.get_session("session-1").unwrap().unwrap();
+        assert_eq!(stored.observed_model.as_deref(), Some("claude-opus-5-5"));
+        assert_eq!(stored.observed_effort.as_deref(), Some("high"));
+        source.agent_session_id = Some("another".to_owned());
+        store.update_session(&source).unwrap();
+        let stored = store.get_session("session-1").unwrap().unwrap();
+        assert_eq!(
+            (stored.observed_model, stored.observed_effort),
+            (None, None)
         );
     }
 

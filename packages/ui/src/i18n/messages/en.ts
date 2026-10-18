@@ -342,6 +342,9 @@ export const en = {
   "statusItem.open": "Open {appName}",
 
   "session.agentAccount": "{agent} ({account})",
+  "session.modelEffort": "{model} · {effort}",
+  "session.modelEffort.unknownItem": "Default",
+  "session.modelEffort.default": "Default model",
   "session.defaultName": "{name} session",
   "session.displayTitle": "{title}｜{name}",
   "session.withLocation": "{session} — {location}",

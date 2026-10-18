@@ -3,7 +3,8 @@
 //! their process exits. No conversation content is retained or published here. Missing usage stays
 //! unknown. Cache and reasoning counts are subsets, never added to a native total twice. Where the
 //! records live is `agent_records.rs`'s business; this module scans and sums them, and hands each
-//! line to `record_titles.rs` on the way, which keeps the titles the records give.
+//! line to `record_titles.rs` and `record_observed.rs` on the way, which keep the titles and the
+//! model and effort the records give.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -14,8 +15,9 @@ use serde_json::Value;
 
 use crate::adapter::adapter_for;
 use crate::agent_records::Locator;
-use crate::line_file::{Change, LineFile};
+use crate::line_file::{Change, LineFile, Signature};
 use crate::protocol::{Agent, SessionUsage};
+use crate::record_observed::Observed;
 use crate::record_titles::{SharedTitles, Titles};
 use crate::state::AppState;
 use crate::store::RecordUpdate;
@@ -30,6 +32,27 @@ struct Cursor {
     dormant: bool,
     children: HashMap<PathBuf, Cursor>,
     titles: Titles,
+    observed: Observed,
+    /// The summary file beside the record, which Grok keeps its titles and configured model in.
+    summary: SummaryFile,
+}
+
+/// A small JSON file read again whenever it changes.
+#[derive(Default)]
+struct SummaryFile(Option<Signature>);
+
+impl SummaryFile {
+    /// What the file holds, when it differs from the last read.
+    fn read(&mut self, path: &Path) -> Option<Value> {
+        let metadata = std::fs::metadata(path).ok()?;
+        let signature = (metadata.len(), metadata.modified().ok());
+        if self.0 == Some(signature) || metadata.len() > 8 * 1024 * 1024 {
+            return None;
+        }
+        let summary = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+        self.0 = Some(signature);
+        Some(summary)
+    }
 }
 
 #[derive(Default)]
@@ -149,12 +172,24 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                     .filter(|total| session.usage.as_ref() != Some(total));
             }
             if let Some(summary) = crate::agent_records::title_files(session.agent).summary {
-                cursor.titles.read_summary(
-                    adapter_for(session.agent).as_ref(),
-                    &path.with_file_name(summary),
-                );
+                if let Some(summary) = cursor.summary.read(&path.with_file_name(summary)) {
+                    cursor
+                        .titles
+                        .fold_summary(adapter_for(session.agent).as_ref(), &summary);
+                    cursor.observed.fold_grok(&summary);
+                }
             }
         }
+        let observed_model = cursor
+            .observed
+            .model
+            .clone()
+            .filter(|model| session.observed_model.as_ref() != Some(model));
+        let observed_effort = cursor
+            .observed
+            .effort
+            .clone()
+            .filter(|effort| session.observed_effort.as_ref() != Some(effort));
         let shared = shared_keys
             .get(&session.id)
             .zip(session.agent_session_id.as_deref())
@@ -162,11 +197,17 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
         let titles = cursor.titles.merged(shared, &session.record_titles);
         let titles = (titles != session.record_titles).then_some(titles);
         cursor.dormant = !live;
-        if usage.is_some() || titles.is_some() {
+        if usage.is_some()
+            || titles.is_some()
+            || observed_model.is_some()
+            || observed_effort.is_some()
+        {
             updates.push(RecordUpdate {
                 session,
                 usage,
                 titles,
+                observed_model,
+                observed_effort,
             });
         }
     }
@@ -186,6 +227,8 @@ fn scan(agent: Agent, path: &Path, cursor: &mut Cursor) -> std::io::Result<()> {
         cursor.total = None;
         cursor.children.clear();
         cursor.titles.clear();
+        cursor.observed = Observed::default();
+        cursor.summary = SummaryFile::default();
     }
     if change != Change::Unchanged {
         if agent == Agent::Grok {
@@ -204,8 +247,14 @@ fn scan(agent: Agent, path: &Path, cursor: &mut Cursor) -> std::io::Result<()> {
                     if let Some(usage) = codex_usage(line) {
                         cursor.total = Some(usage);
                     }
-                } else if let Some((id, usage)) = claude_usage(line) {
-                    cursor.messages.insert(id, usage);
+                    cursor.observed.fold_codex(line);
+                } else if line.contains("\"usage\"") {
+                    if let Ok(value) = serde_json::from_str::<Value>(line) {
+                        if let Some((id, usage)) = claude_usage(&value) {
+                            cursor.messages.insert(id, usage);
+                        }
+                        cursor.observed.fold_claude(&value);
+                    }
                 }
                 cursor.titles.fold_line(adapter.as_ref(), line);
             })?;
@@ -278,11 +327,7 @@ fn codex_usage(line: &str) -> Option<SessionUsage> {
     })
 }
 
-fn claude_usage(line: &str) -> Option<(String, SessionUsage)> {
-    if !line.contains("\"usage\"") {
-        return None;
-    }
-    let value: Value = serde_json::from_str(line).ok()?;
+fn claude_usage(value: &Value) -> Option<(String, SessionUsage)> {
     if value.get("type")?.as_str()? != "assistant" {
         return None;
     }
@@ -349,7 +394,10 @@ mod tests {
     #[test]
     fn committed_native_captures_replay_through_the_usage_readers() {
         let claude = include_str!("../testdata/usage_claude_2.1.296.jsonl");
-        let messages: HashMap<_, _> = claude.lines().filter_map(claude_usage).collect();
+        let messages: HashMap<_, _> = claude
+            .lines()
+            .filter_map(|line| claude_usage(&serde_json::from_str(line).ok()?))
+            .collect();
         assert_eq!(messages.len(), 2);
         let usage = sum_usage(messages.values());
         assert_eq!(usage.input_tokens, 100_813);
@@ -534,6 +582,90 @@ mod tests {
                 .total_tokens,
             18_829
         );
+    }
+
+    #[test]
+    fn claudes_last_main_transcript_turn_names_the_model_and_effort() {
+        let capture = include_str!("../testdata/observed_claude.jsonl");
+        let file = crate::test_support::ScratchFile::new("usage-observed", "session.jsonl");
+        let first = capture.lines().next().unwrap().to_owned() + "\n";
+        std::fs::write(&file, &first).unwrap();
+        let mut cursor = Cursor::default();
+        scan(Agent::Claude, &file, &mut cursor).unwrap();
+        assert_eq!(cursor.observed.model.as_deref(), Some("claude-opus-5"));
+        assert_eq!(cursor.observed.effort.as_deref(), Some("high"));
+        // The later turn wins; the sidechain turn and the synthetic notice after it do not.
+        std::fs::write(&file, capture).unwrap();
+        scan(Agent::Claude, &file, &mut cursor).unwrap();
+        assert_eq!(cursor.observed.model.as_deref(), Some("claude-opus-5-5"));
+        assert_eq!(cursor.observed.effort.as_deref(), Some("medium"));
+        // A record that restarts leaves nothing of the old one behind.
+        std::fs::write(&file, r#"{"type":"user"}"#.to_owned() + "\n").unwrap();
+        scan(Agent::Claude, &file, &mut cursor).unwrap();
+        assert!(cursor.observed.model.is_none() && cursor.observed.effort.is_none());
+    }
+
+    #[test]
+    fn codexs_last_turn_context_names_the_model_and_effort() {
+        let file = crate::test_support::ScratchFile::new("usage-observed-codex", "rollout.jsonl");
+        std::fs::write(
+            &file,
+            include_str!("../testdata/observed_codex_0.162.1.jsonl"),
+        )
+        .unwrap();
+        let mut cursor = Cursor::default();
+        scan(Agent::Codex, &file, &mut cursor).unwrap();
+        assert_eq!(cursor.observed.model.as_deref(), Some("codex-auto-review"));
+        assert_eq!(cursor.observed.effort.as_deref(), Some("low"));
+    }
+
+    #[test]
+    fn groks_summary_names_the_configured_model_and_effort_again_when_it_changes() {
+        let directory = crate::test_support::ScratchDir::new("usage-observed-grok");
+        let path = directory.join("summary.json");
+        let capture = include_str!("../testdata/titles_grok_1.0.60_summary.json");
+        std::fs::write(&path, capture).unwrap();
+        let (mut file, mut observed) = (SummaryFile::default(), Observed::default());
+        observed.fold_grok(&file.read(&path).unwrap());
+        assert_eq!(observed.model.as_deref(), Some("grok-4.7"));
+        assert_eq!(observed.effort.as_deref(), Some("high"));
+        assert!(
+            file.read(&path).is_none(),
+            "an unchanged file is not read again"
+        );
+        std::fs::write(
+            &path,
+            capture
+                .replace("\"grok-4.7\"", "\"grok-4.8-mini\"")
+                .replace("\"high\"", "\"low\""),
+        )
+        .unwrap();
+        observed.fold_grok(&file.read(&path).unwrap());
+        assert_eq!(observed.model.as_deref(), Some("grok-4.8-mini"));
+        assert_eq!(observed.effort.as_deref(), Some("low"));
+    }
+
+    /// A subagent's transcript is scanned for its usage, but nothing of what it shows of the model
+    /// and effort reaches the session's own.
+    #[test]
+    fn a_subagents_turns_do_not_change_the_sessions_model_and_effort() {
+        let capture = include_str!("../testdata/observed_claude.jsonl");
+        let mut lines = capture.lines();
+        let (main, sidechain) = (lines.nth(1).unwrap(), lines.next().unwrap());
+        let file = crate::test_support::ScratchFile::new("usage-observed-family", "session.jsonl");
+        std::fs::write(&file, main.to_owned() + "\n").unwrap();
+        let directory = file.with_extension("").join("subagents");
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            directory.join("agent-child.jsonl"),
+            sidechain.to_owned() + "\n",
+        )
+        .unwrap();
+        let mut cursor = Cursor::default();
+        scan(Agent::Claude, &file, &mut cursor).unwrap();
+        assert_eq!(cursor.children.len(), 1, "the subagent's file was read");
+        assert_eq!(cursor.observed.model.as_deref(), Some("claude-opus-5-5"));
+        assert_eq!(cursor.observed.effort.as_deref(), Some("medium"));
     }
 
     #[test]

@@ -2,7 +2,6 @@ import { Badge, Button, Switch, Tooltip } from "@heroui/react";
 import { ArrowLeft, FolderPlus, List, MessageSquarePlus } from "lucide-react";
 import React, { memo, useId, useLayoutEffect, useRef } from "react";
 
-import { AGENT_LABEL } from "../agents";
 import { ActionMenu } from "../components/ActionMenu";
 import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentIcon } from "../components/AgentIcon";
@@ -21,7 +20,8 @@ import { joinPhrases } from "../i18n/joinPhrases";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
-import { activityLabelKey, sessionAccountTooltip, sessionAriaLabel, sessionDisplayTitle, statusLabel } from "../sessionLabel";
+import { activityLabelKey, sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, statusLabel } from "../sessionLabel";
+import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessionModel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useHasBoundSessions, useProjectSessions, useSessionProjectId } from "../sessions/useSessions";
 import { useDaemon, useDaemonStore, useDaemonStoreEqual } from "../store";
@@ -575,8 +575,9 @@ function ArchivedList({
   );
 }
 
-/** A session in focus mode: its status put into words, its agent and account, its title on one
- * fading line, and when it started. The combined project view also names and marks its console owner.
+/** A session in focus mode: its status put into words, its title on one fading line, the model and
+ * reasoning effort it runs with beside its agent's mark (the agent and account are in the mark's
+ * tooltip), and when it started. The combined project view also names and marks its console owner.
  * `under`, the project session this one is bound to and is inset below, goes into its accessible name,
  * which is what carries that nesting to assistive technology. */
 const SessionCard = memo(function SessionCard({
@@ -599,12 +600,17 @@ const SessionCard = memo(function SessionCard({
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const hasBound = useHasBoundSessions(session.id);
   const rowRef = useRef<HTMLDivElement>(null);
-  const label = sessionAriaLabel(t, language, session, accounts, under ?? consoleOwner);
+  const inherited = useDaemonStoreEqual((s) => inheritedLaunch(session, s.consoles, s.projects));
+  const modelLabel = sessionModelLabel(t, session.agent, sessionModelEffort(session, inherited));
+  // The row is one button, so the model line beside the agent's mark reaches assistive technology
+  // only through the row's name, where it comes last.
+  const name = [sessionAriaLabel(t, language, session, accounts, under ?? consoleOwner)];
+  if (under && consoleOwner) name.push(t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, consoleOwner)) }));
   return (
     <TreeRow
       ref={rowRef}
       describedBy={hasVisibleUsage(session.usage) ? metadataId : undefined}
-      ariaLabel={under && consoleOwner ? joinPhrases(language, [label, t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, consoleOwner)) })]) : label}
+      ariaLabel={joinPhrases(language, [...name, modelLabel])}
       selected={selected}
       locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
@@ -624,15 +630,15 @@ const SessionCard = memo(function SessionCard({
         </FadeOverflow>
       </div>
       <RowIconLine
-        icon={<AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />}
+        icon={<AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts)} />}
         className="text-xs text-app-muted"
       >
         <FadeOverflow
           as="span"
           className="min-w-0 flex-1"
-          titleWhenClipped={AGENT_LABEL[session.agent]}
+          titleWhenClipped={modelLabel}
         >
-          {AGENT_LABEL[session.agent]}
+          {modelLabel}
         </FadeOverflow>
         <div className="flex shrink-0 items-center gap-2">
           {hasVisibleUsage(session.usage) && <div id={metadataId}><SessionUsageLabel usage={session.usage} /></div>}
@@ -666,7 +672,7 @@ function ArchivedRow({
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
     >
-      <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
+      <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts)} />
       <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0 flex-1">
         <span className="text-app-muted">{sessionDisplayTitle(t, session)}</span>
       </RowLabel>

@@ -371,10 +371,11 @@ session instead (see "Project rows" above), with the owner named in the row's ow
 own row carries no *binding* badge — what it shows there instead is its own colour (see "The binding badge" below).
 Selecting a row resumes it when it is interrupted; no menu item does that. The row shows its agent as an icon alone;
 wherever the agent is named in visible session metadata, its name appears without an account suffix. The agent's
-icon identifies the account in its tooltip: the account's name, the agent's default account, or, for a removed
-account, the directory the session recorded. With no account to name, the tooltip names the agent instead. The
-tooltip shows on pointer hover only, and the icon adds no tab stop. It is also available on focus mode's session
-cards and archived rows (see `docs/product/focus-mode.md`), the archive view's rows (see "The archive view" below),
+icon names the agent and the account the session runs under in its tooltip, the account in parentheses after the
+agent ("Claude Code (Work)"): the account's name, **Default** for the agent's default account, or, for a removed
+account, the directory the session recorded. A removed account that recorded no directory leaves the agent's name
+alone. The tooltip shows on pointer hover only, and the icon adds no tab stop. It is also available on focus mode's
+session cards and archived rows (see `docs/product/focus-mode.md`), the archive view's rows (see "The archive view" below),
 and sessions listed in a confirmation. Session rows, focus mode cards and the archive view's rows retain the account in
 their accessible names; confirmations provide the agent and account as hidden accessible text beside the icon. Its
 action menu offers:

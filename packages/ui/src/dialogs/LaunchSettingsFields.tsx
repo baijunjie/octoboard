@@ -1,6 +1,7 @@
 import { Description, Disclosure } from "@heroui/react";
 import React, { useState } from "react";
 
+import type { LaunchPair } from "../agents";
 import { effortLevels, launchSettingOptions } from "../agentLaunchSettings";
 import { codedMessageNode } from "../components/DaemonErrorMessage";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
@@ -41,9 +42,6 @@ export function useLaunchModels(agent: Agent, account: string | null, enabled: b
 }
 
 export type LaunchModels = ReturnType<typeof useLaunchModels>;
-
-/** One pair's model and reasoning effort, each `null` while unset. */
-export type LaunchPair = { model: string | null; effort: string | null };
 
 /** What an unset picker says in place of "unset": the value it resolves to, or that it is the agent's
  * own setting while that is none. */

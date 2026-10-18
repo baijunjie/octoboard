@@ -587,6 +587,13 @@ pub struct Session {
     /// Last known native cumulative usage, retained after archiving. Absent until reported.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage: Option<SessionUsage>,
+    /// The model the agent's records show the session running with, as the agent spells it. Unlike
+    /// `model`, which is the launch override, this is what was observed; absent until reported.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_model: Option<String>,
+    /// The reasoning effort the agent's records show the session running with.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_effort: Option<String>,
     pub status: SessionStatus,
     /// Whether this session has a conversation on the agent's side: a turn taken, or one resumed
     /// at open. Until it has, the agent has stored no conversation to resume: `claude --resume`

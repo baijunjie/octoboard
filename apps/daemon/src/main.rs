@@ -41,6 +41,7 @@ mod outbox;
 mod paths;
 mod protocol;
 mod ptyio;
+mod record_observed;
 mod record_titles;
 mod record_watch;
 mod relocate;

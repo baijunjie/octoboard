@@ -130,6 +130,17 @@ it("removing the last live console-bound session hides the switch, restores focu
   expect(localStorage.getItem(PREFERENCE_KEYS.projectFocusIncludeConsoleSessions)).toBe("true");
 });
 
+it("a card's accessible name ends with the model line shown beside its agent mark", () => {
+  const observed = sessionOf("web-observed", main.id, web.id, "Observe the model", "idle", { observed_model: "claude-opus-5-5", observed_effort: "high" });
+  const { container, text, unmount } = mount((h) => (
+    <ProjectFocusView handlers={h} console={main} project={web} sessions={[observed]} owners={owners} />
+  ));
+  expect(text()).toContain(`${isolate("Opus 5.5")} · ${isolate("high")}`);
+  const label = sessionLabels(container).find((l) => l.includes("Observe the model"));
+  expect(label?.endsWith(`${isolate("Opus 5.5")} · ${isolate("high")}`)).toBe(true);
+  unmount();
+});
+
 it("a console session's focus mode shows only its projects and sessions without inline account names", () => {
   const { container, text, handlers, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions} />
@@ -138,7 +149,7 @@ it("a console session's focus mode shows only its projects and sessions without 
   expect(labels.filter((l) => l.includes(" session,") && !l.startsWith(isolate("Hub"))).map((l) => l.split(" session,")[0]).sort()).toEqual(
     ["Add idempotency keys", "An old bound spike", "Fix the layout"].map(isolate).sort(),
   );
-  expect(text()).toContain("Claude Code");
+  expect(text()).toContain("Default model");
   expect(text()).not.toContain("(Work)");
   expect(text()).toContain("Website");
   expect(text()).toContain("Search API");
@@ -350,6 +361,8 @@ it("combining project sessions replaces the console summary with cards carrying 
   }
   expect(card(underLead.title).getAttribute("aria-label")).toContain(isolate(lead.title));
   expect(card(underLead.title).parentElement!.className).toContain("ms-[17px]");
+  // A nested card bound to a console session names that owner, and the model line comes last.
+  expect(card(underLead.title).getAttribute("aria-label")).toMatch(new RegExp(`${isolate(hub1.title)}[^]*, Default model$`));
   expect(card("Tidy the changelog").querySelector(".session-colour-dot")).toBeNull();
   expect(text()).toContain("An old bound spike");
   expect(text()).not.toContain(archivedChild.title);

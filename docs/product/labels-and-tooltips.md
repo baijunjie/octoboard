@@ -157,8 +157,8 @@ These are:
 - the binding badge, the coloured dot on a project session's row bound to a console session, whose tooltip names that
   console session (see "The binding badge" in `docs/product/sidebar.md`);
 - a session's agent icon on its row, on a focus mode's card or archived row, on the archive view's row and on each
-  session a confirmation lists among the ones it affects, whose tooltip names the account the session runs under (see
-  "Session rows" in `docs/product/sidebar.md`);
+  session a confirmation lists among the ones it affects, whose tooltip names the agent and the account the session
+  runs under (see "Session rows" in `docs/product/sidebar.md`);
 - a project's branch badge, on its sidebar row and in focus mode's header, which carries **one tooltip for the whole
   badge** rather than one per mark: resting the mouse on its state glyph, on the branch name or on either upstream
   count shows the same sentence, the one the badge's whole state is said in — the branch, each count while it is not
@@ -184,8 +184,8 @@ there, a branch's name in its branch selector, a picked tag's label (see "Picked
 heading, which counts as one label (see "Filtering the project list" in `docs/product/sidebar.md`) — fades out where
 it is cut off rather than ending in an ellipsis. The same holds for action-menu items and submenu names, a select's current choice or placeholder and
 its listed options, directory-picker rows, the console name above a focus view's title, the archive view's heading
-and count, and the agent name on a focus mode card or full archive row. A fixed session-owner label and a
-diff's collapsed-line label follow the same fade and marquee rules.
+and count, the model line on a focus mode card and the agent name on a full archive row. A fixed session-owner label
+and a diff's collapsed-line label follow the same fade and marquee rules.
 
 Except for the report timestamp, clipped text then has its full text as its tooltip — for the project filter's strip,
 its conditions drawn as the same tags the strip shows (see "Filtering the project list" in `docs/product/sidebar.md`)
@@ -205,10 +205,11 @@ state, shown whether or not the line is cut (see "The branch badge" in `docs/pro
 
 - The pointer has to be over the label itself. In sidebar rows, focus headers and session cards, and archive headers
   and rows, each text label runs independently: a project's name and branch-and-count line, a console name and focus
-  title, a session title and agent name, or an archive heading and count do not start one another's marquee.
+  title, a session title and its model line or agent name, or an archive heading and count do not start one another's
+  marquee.
   Pointing at a status or agent icon, a branch glyph, a row or header button, or the surrounding space starts none of
   those labels. The branch and its counts remain one line and run together; session usage and time fields remain
-  separate from the agent name's marquee.
+  separate from the model line's and the agent name's marquees.
 - An action-menu item or submenu item, a select's option or directory-picker row runs its one label while the pointer
   is anywhere over that item or row. A select's current choice or placeholder runs while the pointer is over its
   trigger, and a picked tag while it is over the tag. The project filter's strip of conditions runs as a whole while

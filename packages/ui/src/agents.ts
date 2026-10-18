@@ -130,10 +130,13 @@ export function agentPickerOptions(
   );
 }
 
+/** One pair's model and reasoning effort, each `null` while unset. */
+export type LaunchPair = { model: string | null; effort: string | null };
+
 /** The model and reasoning effort a project session of `agent` takes from its console when
  * neither it nor its project names one: the console's project session pair, `null` for the agent's
  * own default. */
-export function consoleProjectLaunch(owner: Console, agent: Agent): { model: string | null; effort: string | null } {
+export function consoleProjectLaunch(owner: Console, agent: Agent): LaunchPair {
   return {
     model: owner[AGENT_CONSOLE_PROJECT_MODEL_FIELD[agent]] ?? null,
     effort: owner[AGENT_CONSOLE_PROJECT_EFFORT_FIELD[agent]] ?? null,
@@ -143,15 +146,33 @@ export function consoleProjectLaunch(owner: Console, agent: Agent): { model: str
 /** The model and reasoning effort a project session of `agent` runs with when it chose neither,
  * each value taken from the project, else from the console's project session pair, else `null`,
  * the agent's own default. */
-export function projectSessionLaunch(
-  owner: Console,
-  project: Project,
-  agent: Agent,
-): { model: string | null; effort: string | null } {
+export function projectSessionLaunch(owner: Console, project: Project, agent: Agent): LaunchPair {
   const fallback = consoleProjectLaunch(owner, agent);
   return {
     model: project[AGENT_PROJECT_MODEL_FIELD[agent]] ?? fallback.model,
     effort: project[AGENT_PROJECT_EFFORT_FIELD[agent]] ?? fallback.effort,
+  };
+}
+
+/** What a session of `agent` takes when it chooses nothing: a project session's project value,
+ * else its console's project session one; a console session's console session one. */
+export function inheritedSessionLaunch(owner: Console, project: Project | undefined, agent: Agent): LaunchPair {
+  if (project) return projectSessionLaunch(owner, project, agent);
+  return {
+    model: owner[AGENT_CONSOLE_MODEL_FIELD[agent]] ?? null,
+    effort: owner[AGENT_CONSOLE_EFFORT_FIELD[agent]] ?? null,
+  };
+}
+
+/** `inherited` with each value an override sets: absent follows `inherited`, `null` is the agent's
+ * own default. */
+export function launchWithOverrides(
+  inherited: LaunchPair,
+  overrides: { model?: string | null; effort?: string | null } | undefined,
+): LaunchPair {
+  return {
+    model: overrides?.model === undefined ? inherited.model : overrides.model,
+    effort: overrides?.effort === undefined ? inherited.effort : overrides.effort,
   };
 }
 

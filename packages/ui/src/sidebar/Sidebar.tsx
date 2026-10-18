@@ -34,7 +34,7 @@ import { COLUMN_EASE_CLASS, columnSpan, isDockEasing, usePaneDockMotion, type Do
 import type { PanePeek } from "../layout/usePaneToggles";
 import { effectiveTags, matchesFilter, tagVocabulary } from "../projectFiltering";
 import type { Console, Project, Session } from "../protocol";
-import { activityLabelKey, sessionAccountTooltip, sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
+import { activityLabelKey, sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useDaemonStore } from "../store";
 import { BindingBadge } from "./BindingBadge";
@@ -868,7 +868,7 @@ const SessionRow = memo(function SessionRow({
       onActivate={() => handlers.onSelectSession(session)}
     >
       <StatusIcon status={session.status} decorative withTooltip />
-      <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
+      <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts)} />
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0">{sessionDisplayTitle(t, session)}</RowLabel>
         {hasVisibleUsage(session.usage) && <span id={metadataId} className="shrink-0"><SessionUsageLabel usage={session.usage} /></span>}

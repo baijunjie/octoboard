@@ -29,6 +29,8 @@ fn session(id: &str, status: SessionStatus) -> Session {
         terminal_title: None,
         record_titles: Default::default(),
         usage: None,
+        observed_model: None,
+        observed_effort: None,
         model: None,
         effort: None,
         has_conversation: true,

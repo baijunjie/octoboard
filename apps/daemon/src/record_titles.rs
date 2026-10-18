@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use crate::adapter::AgentAdapter;
-use crate::line_file::{Change, LineFile, Signature};
+use crate::line_file::{Change, LineFile};
 use crate::session_title::RecordTitles;
 
 /// The longest title taken from a record's name for the conversation.
@@ -22,7 +22,6 @@ pub struct Titles {
     /// The name, and the precedence it was found at.
     named: Option<(u8, String)>,
     prompt: Option<String>,
-    summary: Option<Signature>,
 }
 
 impl Titles {
@@ -43,28 +42,14 @@ impl Titles {
         }
     }
 
-    /// Reads the small JSON file that names a conversation, again whenever it changes.
-    pub fn read_summary(&mut self, adapter: &dyn AgentAdapter, path: &Path) {
-        let Ok(metadata) = std::fs::metadata(path) else {
-            return;
-        };
-        let signature = (metadata.len(), metadata.modified().ok());
-        if self.summary == Some(signature) || metadata.len() > 8 * 1024 * 1024 {
-            return;
-        }
-        let Some(summary) = std::fs::read(path)
-            .ok()
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        else {
-            return;
-        };
+    /// Takes the small JSON file that names a conversation.
+    pub fn fold_summary(&mut self, adapter: &dyn AgentAdapter, summary: &serde_json::Value) {
         if let Some(text) = adapter
-            .summary_title(&summary)
+            .summary_title(summary)
             .and_then(|title| named_title(&title))
         {
             self.named = Some((0, text));
         }
-        self.summary = Some(signature);
     }
 
     /// What was read before no longer holds.
@@ -223,25 +208,28 @@ mod tests {
             assert_eq!(codex.named, None, "{name}");
         }
 
-        // Grok: the summary's generated title, read again once the file changes.
+        // Grok: the summary's generated title, and no title from one that has none.
         let adapter = adapter_for(Agent::Grok);
+        let summary = |text: &str| serde_json::from_str(text).unwrap();
         let mut grok = Titles::default();
-        grok.read_summary(
+        grok.fold_summary(
             adapter.as_ref(),
-            &capture("titles_grok_1.0.60_summary.json"),
+            &summary(&std::fs::read_to_string(capture("titles_grok_1.0.60_summary.json")).unwrap()),
         );
         assert_eq!(
             grok.merged(None, &stored).named.as_deref(),
             Some("Explain in one sentence what a pseudo terminal is. Do")
         );
-        let directory = crate::test_support::ScratchDir::new("record-titles-summary");
-        let summary = directory.join("summary.json");
-        std::fs::write(&summary, r#"{"session_summary":"A prompt, no title"}"#).unwrap();
         let mut grok = Titles::default();
-        grok.read_summary(adapter.as_ref(), &summary);
+        grok.fold_summary(
+            adapter.as_ref(),
+            &summary(r#"{"session_summary":"A prompt, no title"}"#),
+        );
         assert_eq!(grok.merged(None, &stored), stored);
-        std::fs::write(&summary, r#"{"generated_title":"Now titled"}"#).unwrap();
-        grok.read_summary(adapter.as_ref(), &summary);
+        grok.fold_summary(
+            adapter.as_ref(),
+            &summary(r#"{"generated_title":"Now titled"}"#),
+        );
         assert_eq!(
             grok.merged(None, &stored).named.as_deref(),
             Some("Now titled")

@@ -15,7 +15,7 @@ import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen"
 import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Account, Console, Project, Session } from "../protocol";
-import { sessionAccountTooltip, sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
+import { sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
 import { archivedSessionRows, boundArchivedSessions } from "../sidebar/order";
 import { NESTED_ROW_CLASS, TreeRow } from "../sidebar/rows";
 import { useFlip } from "../sidebar/useFlip";
@@ -250,7 +250,7 @@ function ArchiveRow({
       onActivate={() => onSelect(session)}
       className="min-h-12 flex-wrap items-center gap-x-3 gap-y-1 px-2 py-2"
     >
-      <AgentIcon agent={session.agent} tooltip={sessionAccountTooltip(t, session, accounts)} />
+      <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts)} />
       <div className="min-w-24 flex-1">
         <FadeOverflow dir="auto" className="text-sm" titleWhenClipped={sessionDisplayTitle(t, session)}>
           {sessionDisplayTitle(t, session)}

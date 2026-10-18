@@ -145,7 +145,7 @@ export interface Ui {
   /** Moves the pointer onto the agent icon of the session titled `title` in the open confirmation
    * dialog's callout list, and leaves it there, as `hoverIndicator` does: the list row's second
    * element child, after the status glyph. Fails while no dialog lists such a session, and also
-   * unless the tooltip open afterwards reads `tooltip`, the account the icon should name: an
+   * unless the tooltip open afterwards reads `tooltip`, the agent and account the icon should name: an
    * icon drawn without a tooltip has no trigger to hover, so it is reported as not found, and a
    * tooltip left up from the status glyph beside it (hovered earlier, and never left) would
    * otherwise be taken for this one's. */
@@ -204,6 +204,11 @@ export interface Ui {
    * so a card or row with no count (usage hidden, or none reported) fails there, naming `row`. The
    * step then fails if the tooltip that opens is not the usage table, one that has no Input entry. */
   hoverSessionUsage: (row: Matcher) => Promise<void>;
+  /** Moves the pointer onto the agent's mark of the focus mode card named `row` (`session(title)`)
+   * and leaves it there, as `hoverIndicator` does, for the tooltip `tooltip` that names the agent
+   * and the account. The mark is the card's last tooltip trigger drawn as a bare glyph; it fails
+   * if the tooltip that opens is any other. */
+  hoverSessionAgent: (row: Matcher, tooltip: string) => Promise<void>;
   /** Moves the pointer onto the project filter's conditions on the Projects heading's line and
    * leaves it there, as `hoverIndicator` does, for the tooltip that carries the whole filter. The
    * strip is the box around the keyword and tag groups; it carries a tooltip only while it is
@@ -563,6 +568,19 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
         throw new Error(
           `The token count of ${String(row)} did not open the usage table, which has an ${t("session.usage.input")} entry: ${shown.length > 0 ? `its entries are ${shown.join(", ")}` : "no table"} is up`,
         );
+      }
+    },
+    async hoverSessionAgent(row, tooltip) {
+      await hover(
+        () =>
+          Array.from(find(row)?.querySelectorAll<HTMLElement>("[role=presentation]") ?? [])
+            .filter((trigger) => trigger.firstElementChild?.matches("svg[aria-hidden=true]"))
+            .at(-1),
+        `No session card matching ${String(row)} with an agent mark to hover`,
+      );
+      const shown = withoutIsolates(doc.querySelector("[role=tooltip]")?.textContent ?? "").trim();
+      if (shown !== tooltip) {
+        throw new Error(`The agent mark of ${String(row)} has no tooltip "${tooltip}": its last tooltip is ${shown ? `"${shown}"` : "none"}`);
       }
     },
     async hoverFilterConditions() {

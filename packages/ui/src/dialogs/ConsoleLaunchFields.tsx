@@ -11,6 +11,7 @@ import {
   AGENT_LABEL,
   AGENT_OPTIONS,
   isAgentUnavailable,
+  type LaunchPair,
 } from "../agents";
 import { AgentIcon } from "../components/AgentIcon";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
@@ -18,7 +19,7 @@ import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useT } from "../i18n/react";
 import type { Agent } from "../protocol";
 import { useDaemonStore } from "../store";
-import { AdvancedSection, EffortPicker, type LaunchModels, type LaunchPair, ModelPicker, useLaunchModels } from "./LaunchSettingsFields";
+import { AdvancedSection, EffortPicker, type LaunchModels, ModelPicker, useLaunchModels } from "./LaunchSettingsFields";
 
 type LaunchField =
   | (typeof AGENT_CONSOLE_MODEL_FIELD)[Agent]

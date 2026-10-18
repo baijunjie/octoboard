@@ -350,6 +350,7 @@ Project { id, console_id, host_id, name, path, default_agent?, source, remote_ur
           trust_consent, pinned, tags: string[] }
 Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
           role: "console"|"project", origin: "console"|"user", title, terminal_title?, usage?: SessionUsage,
+          observed_model?: string, observed_effort?: string,
           status: "starting"|"working"|"waiting_user"|"idle"|"interrupted"|"archived",
           has_conversation, bound_to?, colour?: "<family>", ordinal?,
           account_id?, config_dir?, model?: string|null, effort?: string|null, pinned, locked, started_at, ended_at? }
@@ -399,6 +400,15 @@ Codex reads `event_msg.payload.info.total_token_usage` on `token_count` records;
 ledger's `session` totals (the same ledger exposed by `grok usage`). These are usage counts, not current context size or
 billing estimates. Inherited usage follows each agent's own resume/fork records. A change of native conversation id clears
 the old usage; switching accounts with the same conversation preserves it.
+
+`Session.observed_model` and `Session.observed_effort` are the model and reasoning effort the agent's own records show the
+session running with, in the agent's spelling; they are not `model` and `effort`, which are the launch overrides. The last
+record that names one wins, and a value the records do not show stays unknown rather than being cleared. Claude reads the
+`message.model` and the top-level `effort` of the main transcript's assistant lines, skipping sidechain lines and the
+`<synthetic>` model, and never the subagent transcripts, which run other models. Codex reads `payload.model` and
+`payload.effort` of `turn_context` records. Grok reads the summary file's `current_model_id` and `reasoning_effort`, the
+configured ids rather than the ones a request was served by. They are stored and collected like `usage`, retained when
+archived, and cleared with it when the native conversation id changes.
 
 One daemon collector checks live sources at a one-second interval, reading only newly completed JSONL lines and skipping
 unchanged ledgers. Updates appear when the agent writes its own usage, which may be after a model call or turn completes;
