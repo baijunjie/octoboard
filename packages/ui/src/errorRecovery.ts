@@ -5,7 +5,8 @@ export type ErrorRecovery =
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session"
   | "configuration" | "image" | "clipboard" | "file" | "git" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
-  | "contentSyntax" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject";
+  | "contentSyntax" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
+  | "sessionBranches" | "projectBranches";
 
 /** A local failure whose user remedy is known without inspecting its translated message. */
 export class ActionableError extends DaemonRequestError {
@@ -42,6 +43,8 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   noCommits: ["no_commits_to_push", "no_commits_to_restore"],
   git: ["git_clone_failed", "git_push_failed", "git_switch_failed", "git_restore_failed", "git_operation_in_progress", "no_push_remote", "upstream_not_a_remote"],
   gitHistory: ["no_merge_base", "no_merge_base_shallow"],
+  sessionBranches: ["session_branches_not_removed"],
+  projectBranches: ["project_branches_not_determined"],
   branch: ["not_on_a_branch", "restore_not_on_branch", "invalid_branch_name", "unknown_branch", "worktree_unavailable"],
   refresh: ["source_changed", "unknown_commit", "page_not_current", "unknown_page", "unknown_project", "unknown_console", "queued_messages_lost", "queued_messages_dropped"],
   scope: ["outside_scope", "unsupported_file_type", "clean_filtered"],

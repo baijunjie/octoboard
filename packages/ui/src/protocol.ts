@@ -7,6 +7,37 @@
 /** Unknown when the daemon cannot prove presence or absence of the sessions’ native files. */
 export type SessionRecordsPresence = "present" | "absent" | "unknown";
 
+/** Where a git branch or linked worktree bound to a session stands: `removable` goes without
+ * asking; `uncommitted_changes`, `submodules`, `unmerged` and `locked` go only when a request names
+ * them in `force_remove`; the rest stay whatever is asked. */
+export type SessionBranchState =
+  | "removable" | "uncommitted_changes" | "submodules" | "unmerged" | "checked_out" | "locked" | "project_folder" | "failed";
+
+/** A git branch whose responsible session is one of the inspected sessions, or a linked worktree
+ * with such a branch checked out; a project's removal also takes worktrees bound to no session.
+ * `repository`, `branch` and `path` are wire paths. */
+export interface SessionBranchItem {
+  kind: "worktree" | "branch";
+  repository: string;
+  /** For a worktree, the branch it has checked out; null for one with a detached `HEAD`. */
+  branch: string | null;
+  /** A worktree's root; null for a branch. */
+  path: string | null;
+  /** Whether a worktree has modified or untracked files, whatever its state; false where it was
+   * not read. */
+  uncommitted: boolean;
+  project: string;
+  /** The branch's responsible session; null for a worktree bound to none. */
+  session: string | null;
+  state: SessionBranchState;
+  /** Git's own message, for `failed`. */
+  detail: string | null;
+}
+
+/** A bound item a request forces or keeps, named as its `SessionBranchItem` names it and in the
+ * state the user was shown it in: a forced removal goes only while it still stands so. */
+export type SessionBranchTarget = Pick<SessionBranchItem, "kind" | "repository" | "branch" | "path" | "state" | "uncommitted">;
+
 export type Agent = "claude" | "codex" | "grok";
 export type Role = "console" | "project";
 export type Origin = "console" | "user";
@@ -856,8 +887,9 @@ export type RequestBody =
   /** `stop_sessions` ends the project's running sessions first (as `archive_session` does) instead
    * of being refused with `project_has_running_sessions`; default false. `trash_directory` moves
    * the project's folder to the system Trash first, and keeps the project when that fails or
-   * the folder is shared with another project; default false. */
-  | { type: "delete_project"; project: string; stop_sessions?: boolean; trash_directory?: boolean }
+   * the folder is shared with another project; default false. With it, `force_remove` names the
+   * locked worktrees `inspect_project_removal` listed that go too. */
+  | { type: "delete_project"; project: string; stop_sessions?: boolean; trash_directory?: boolean; force_remove?: SessionBranchTarget[] }
   | { type: "list_dir"; path: string }
   /** Answered with `agent_detected`, or an error when `path` is not an existing directory. */
   | { type: "detect_directory_agent"; path: string }
@@ -907,7 +939,10 @@ export type RequestBody =
     resume_agent_session_id?: string;
   }
   | { type: "resume_session"; session: string }
-  | { type: "archive_session"; session: string }
+  /** Bound branches and worktrees go once the archived sessions' processes have ended; those
+   * `force_remove` names go although git would refuse them, and those `keep` names, which the
+   * confirmation listed and the user kept, are not reported when they stay. */
+  | { type: "archive_session"; session: string; force_remove?: SessionBranchTarget[]; keep?: SessionBranchTarget[] }
   /** Moves the session to another account of its own agent: its process ends, its conversation is
    * copied into that account's directory, and it is relaunched there. `account` is the target by
    * id, or `null` for the default account; it is always sent. Answered once the relaunched session
@@ -920,14 +955,22 @@ export type RequestBody =
    * for unused sessions, and also for used sessions with `trash_agent_records` (default false).
    * `only_if_unused` atomically rejects unless the session remains unused, including when archived;
    * it never falls back to deleting an archived owner's group. */
-  | { type: "delete_session"; session: string; trash_agent_records?: boolean; only_if_unused?: boolean }
+  | { type: "delete_session"; session: string; trash_agent_records?: boolean; only_if_unused?: boolean; force_remove?: SessionBranchTarget[]; keep?: SessionBranchTarget[] }
   /** Inspects the agent-native files of the entire supplied deletion scope; reads no transcripts. */
   | { type: "inspect_session_records"; sessions: string[] }
+  /** The git branches and linked worktrees bound to exactly the supplied sessions, as an archive
+   * or a deletion of them would find them now. */
+  | { type: "inspect_session_branches"; sessions: string[] }
+  /** What `delete_project` with `trash_directory` would also remove: the linked worktrees outside
+   * its folder (every one when the folder holds the repository, those bound to its sessions
+   * otherwise) and, when the repository outlives the folder, the bound branches. Refused as that
+   * removal would be. */
+  | { type: "inspect_project_removal"; project: string }
   /** With `project`: every archived session of that project. With `console_session`: every
    * archived session under it (bound to it, or to an archived lead session bound to it). With
    * neither: every archived console session of the console. Naming both is refused. Each removal
    * is broadcast as `session_deleted`. */
-  | { type: "delete_archived_sessions"; console: string; project?: string; console_session?: string; trash_agent_records?: boolean }
+  | { type: "delete_archived_sessions"; console: string; project?: string; console_session?: string; trash_agent_records?: boolean; force_remove?: SessionBranchTarget[]; keep?: SessionBranchTarget[] }
   | { type: "set_session_pinned"; session: string; pinned: boolean }
   | { type: "set_session_locked"; session: string; locked: boolean }
   /** Refused for a project session. */
@@ -1099,6 +1142,8 @@ export type Request = RequestBody & { id?: string };
 
 export type Event =
   | { type: "session_records_inspected"; id?: string; presence: SessionRecordsPresence }
+  | { type: "session_branches_inspected"; id?: string; items: SessionBranchItem[] }
+  | { type: "project_removal_inspected"; id?: string; items: SessionBranchItem[] }
   | {
     type: "snapshot";
     hosts: Host[];

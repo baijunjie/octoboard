@@ -138,3 +138,44 @@ it("does not try to parse old or malformed running-session lists out of quoted t
     expect(container.querySelector("[data-inline-chip]")).toBeNull();
   }
 });
+
+it("names each branch or worktree still there as code with its reason, a comma in a name included", () => {
+  const items = [
+    { kind: "worktree", name: "/home/dev/wt, two", branch: "a", state: "locked", uncommitted: true, detail: null },
+    { kind: "branch", name: "fix/a,b", branch: "fix/a,b", state: "failed", uncommitted: false, detail: "error: refused" },
+    { kind: "branch", name: "long", branch: "long", state: "failed", uncommitted: false, detail: "error: one\nhint: two" },
+  ];
+  const error = new DaemonRequestError("plain fallback", "session_branches_not_removed", { count: "3", items: JSON.stringify(items) });
+  const daemon = { store: createStateStore({ homeDir: "/home/dev" }) } as Daemon;
+  const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  expect(Array.from(container.querySelectorAll("p"), (lead) => lead.textContent)).toEqual(["Removing these failed:", "This worktree is locked:"]);
+  const announced = (row: Element) => {
+    const copy = row.cloneNode(true) as Element;
+    copy.querySelectorAll("[aria-hidden=true]").forEach((hidden) => hidden.remove());
+    // Screen readers skip the bidi isolates around substituted values.
+    return copy.textContent?.replace(/[\u2066-\u2069]/g, "");
+  };
+  expect(Array.from(container.querySelectorAll("li"), announced)).toEqual([
+    "fix/a,berror: refused",
+    "longerror: one\nhint: two",
+    "~/wt, two on branch a, uncommitted changes",
+  ]);
+  // Git's own messages are code blocks, never chips inside the sentence.
+  expect(Array.from(container.querySelectorAll("pre"), (block) => block.textContent)).toEqual(["error: refused", "error: one\nhint: two"]);
+  expect(Array.from(container.querySelectorAll("[data-inline-chip]"), (chip) => chip.textContent)).toEqual(["fix/a,b", "long", "~/wt, two", "a", "uncommitted changes"]);
+});
+
+it("shows the reason what goes with a removed project's folder is unknown as a code block under the sentence", () => {
+  const error = new DaemonRequestError("plain fallback", "project_branches_not_determined", { name: "Docs", detail: "fatal: not a git repository" });
+  const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  expect(container.querySelector("pre")?.textContent).toBe("fatal: not a git repository");
+  expect(container.querySelector("span")?.textContent).not.toContain("fatal");
+});
+
+it("leaves the line over the groups out when there is one group, whose lead says it all", () => {
+  const items = [{ kind: "branch", name: "fix/a", branch: "fix/a", state: "unmerged", uncommitted: false, detail: null }];
+  const error = new DaemonRequestError("plain fallback", "session_branches_not_removed", { count: "1", items: JSON.stringify(items) });
+  const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  expect(container.textContent).not.toContain("still there");
+  expect(container.querySelector("p")?.textContent).toBe("This branch is not merged:");
+});

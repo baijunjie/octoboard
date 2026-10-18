@@ -17,6 +17,7 @@ use uuid::Uuid;
 use crate::account_quotas;
 use crate::adapter;
 use crate::agent_records;
+use crate::branch_origin;
 use crate::config_export;
 use crate::config_import;
 use crate::env_shell;
@@ -36,7 +37,8 @@ use crate::open_terminal;
 use crate::protocol::{
     error_code, error_parts, notice_code, now_millis, Account, Agent, ApprovalReviewer,
     Availability, CodedError, Console, ConsoleSessionColour, Event, Notice, Origin, Present,
-    Project, ProjectAccount, ProjectSource, RequestBody, Role, Session, SessionStatus,
+    Project, ProjectAccount, ProjectSource, RequestBody, Role, Session, SessionBranchItem,
+    SessionBranchTarget, SessionStatus,
 };
 use crate::relocate;
 use crate::reporting;
@@ -365,6 +367,7 @@ async fn handle_inner(
             project: id,
             stop_sessions,
             trash_directory,
+            force_remove,
         } => {
             let _removal = state.claim_session_removal();
             let deleted = state
@@ -392,6 +395,27 @@ async fn handle_inner(
             } else {
                 None
             };
+            // What goes along with the folder is found while the folder, and the records that say
+            // what is bound to the project's sessions, are still there.
+            // A failure to find it out leaves everything outside the folder, and is told once the
+            // removal stands.
+            let (along, undetermined) = if to_trash.is_some() {
+                let (state, project) = (Arc::clone(state), deleted.clone());
+                match tokio::task::spawn_blocking(move || {
+                    branch_origin::cleanup::project::plan(
+                        &state,
+                        &project,
+                        branch_origin::cleanup::project::Reads::Removal,
+                    )
+                })
+                .await?
+                {
+                    Ok(along) => (along, None),
+                    Err(err) => (None, Some(format!("{err:#}"))),
+                }
+            } else {
+                (None, None)
+            };
             if stop_sessions {
                 stop_project_sessions(state, in_project)?;
             }
@@ -402,7 +426,8 @@ async fn handle_inner(
             let repository = crate::branch_origin::repository_of(Path::new(&deleted.path));
             if let Some(directory) = to_trash {
                 // Off the runtime's worker: a move across volumes copies.
-                tokio::task::spawn_blocking(move || hostfs::move_to_trash(&directory)).await??;
+                let trash = state.host_tools.get().trash;
+                tokio::task::spawn_blocking(move || trash(&directory)).await??;
                 // Requests run concurrently, so a session may have been started in the project
                 // while the folder moved, and nothing held it back. The folder is gone by now, so
                 // the project is removed regardless: such a session is ended here as well as it
@@ -421,8 +446,62 @@ async fn handle_inner(
             for session_id in &session_ids {
                 state.forget_saved_output(session_id);
             }
-            state.broadcast(Event::ProjectDeleted { project: id });
+            state.broadcast(Event::ProjectDeleted {
+                project: id.clone(),
+            });
+            if let Some(detail) = undetermined {
+                let failure = CodedError::raised(
+                    error_code::PROJECT_BRANCHES_NOT_DETERMINED,
+                    format!(
+                        "what goes with the project folder could not be determined, so the \
+                         worktrees outside it, and its branches if the repository stays, were \
+                         left: {detail}"
+                    ),
+                    &[("name", &deleted.name), ("detail", &detail)],
+                );
+                state.broadcast(Event::from_error(None, &failure));
+            }
+            if let Some(along) = along {
+                let state = Arc::clone(state);
+                tokio::spawn(async move {
+                    let missed = branch_origin::cleanup::project::carry_out_once_stopped(
+                        state.clone(),
+                        session_ids,
+                        along,
+                        force_remove,
+                    )
+                    .await;
+                    report_not_removed(&state, &missed);
+                });
+            }
             Ok(None)
+        }
+
+        RequestBody::InspectProjectRemoval { project } => {
+            let state = Arc::clone(state);
+            let items = tokio::task::spawn_blocking(move || {
+                let project = state
+                    .store
+                    .get_project(&project)?
+                    .ok_or_else(|| CodedError::unknown_project(&project))?;
+                // A removal that would be refused takes nothing along: its refusal is the answer,
+                // and a client lists nothing for it.
+                directory_to_trash(&project, &state.store.list_projects()?)?;
+                Ok::<_, anyhow::Error>(
+                    branch_origin::cleanup::project::plan(
+                        &state,
+                        &project,
+                        branch_origin::cleanup::project::Reads::Inspection,
+                    )?
+                    .map(|along| along.items())
+                    .unwrap_or_default(),
+                )
+            })
+            .await??;
+            Ok(Some(Event::ProjectRemovalInspected {
+                id: request_id,
+                items,
+            }))
         }
 
         RequestBody::ListDir { path } => {
@@ -578,8 +657,13 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::ArchiveSession { session } => {
-            archive_session_group(state, &session, true)?;
+        RequestBody::ArchiveSession {
+            session,
+            force_remove,
+            keep,
+        } => {
+            let archived = archive_session_group(state, &session, true)?;
+            remove_branches_once_stopped(state, archived, force_remove, keep);
             Ok(None)
         }
 
@@ -600,16 +684,35 @@ async fn handle_inner(
             }))
         }
 
+        RequestBody::InspectSessionBranches { sessions } => {
+            let state = Arc::clone(state);
+            let items = tokio::task::spawn_blocking(move || {
+                let mut found = Vec::new();
+                for id in &sessions {
+                    found.extend(state.store.get_session(id)?);
+                }
+                branch_origin::cleanup::inspect(&state, &found)
+            })
+            .await??;
+            Ok(Some(Event::SessionBranchesInspected {
+                id: request_id,
+                items,
+            }))
+        }
+
         RequestBody::DeleteSession {
             session,
             trash_agent_records,
             only_if_unused,
+            force_remove,
+            keep,
         } => {
             let deleted = if only_if_unused {
                 delete_unused_session(state, &session)?
             } else {
                 delete_session(state, &session)?
             };
+            remove_branches_once_stopped(state, deleted.clone(), force_remove, keep);
             let records_to_trash = deleted
                 .into_iter()
                 .filter(|session| trash_agent_records || !session.has_conversation)
@@ -623,6 +726,8 @@ async fn handle_inner(
             project,
             console_session,
             trash_agent_records,
+            force_remove,
+            keep,
         } => {
             let deleted = delete_archived_sessions(
                 state,
@@ -630,6 +735,7 @@ async fn handle_inner(
                 project.as_deref(),
                 console_session.as_deref(),
             )?;
+            remove_branches_once_stopped(state, deleted.clone(), force_remove, keep);
             if trash_agent_records {
                 trash_agent_records_after_delete(state, deleted).await;
             }
@@ -2903,24 +3009,37 @@ async fn start_process(
 /// the role of a bound session, or an owner that started none — never reaches another session: the
 /// owner's tool, a `done` report with no open items, a `delete_project` that stops sessions.
 /// The user's control-socket request instead explicitly ends running descendants too.
-pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
+///
+/// Returns the sessions it archived, as they were before, for the removal of the branches bound
+/// to them (`branch_origin::cleanup`), which is the caller's: a project's deletion stops its
+/// sessions this way and removes none.
+pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Session>> {
     archive_session_group(state, id, false)
 }
 
 /// A user-confirmed archive may end every process in the group; agent tools retain the
-/// unfinished-work safeguard. Validate all locks before changing any session.
-fn archive_session_group(state: &Arc<AppState>, id: &str, stop_descendants: bool) -> Result<()> {
+/// unfinished-work safeguard. Validate all locks before changing any session. Returns the sessions
+/// archived, as [`archive_session`] does.
+fn archive_session_group(
+    state: &Arc<AppState>,
+    id: &str,
+    stop_descendants: bool,
+) -> Result<Vec<Session>> {
     let _removal = state.claim_session_removal();
     let session = state.session_record(id)?;
     let descendants = team(state, &session)?;
     ensure_unlocked(std::iter::once(session.clone()).chain(descendants.clone()))?;
+    let mut archived = Vec::new();
     if stop_descendants {
         for bound in descendants {
             if bound.status != SessionStatus::Archived {
                 archive_record(state, &bound.id)?;
+                archived.push(bound);
             }
         }
-        return archive_record(state, id);
+        archive_record(state, id)?;
+        archived.push(session);
+        return Ok(archived);
     }
     // "Not running" is taken to mean interrupted by exclusion: a status that is neither archived
     // nor backed by a process would be archived here without anyone having decided so. One gap is
@@ -2957,8 +3076,57 @@ fn archive_session_group(state: &Arc<AppState>, id: &str, stop_descendants: bool
     }
     for bound in dormant {
         archive_record(state, &bound.id)?;
+        archived.push(bound);
     }
-    archive_record(state, id)
+    archive_record(state, id)?;
+    archived.push(session);
+    Ok(archived)
+}
+
+/// Removes the branches and worktrees bound to `sessions` once their processes have ended, off
+/// the request's path, forcing what `forced` names; every client is told of what is still there
+/// and was not kept on purpose (`session_branches_not_removed`, see `cleanup::to_report`). The
+/// archive or deletion it follows stands either way.
+fn remove_branches_once_stopped(
+    state: &Arc<AppState>,
+    sessions: Vec<Session>,
+    forced: Vec<SessionBranchTarget>,
+    keep: Vec<SessionBranchTarget>,
+) {
+    if sessions.is_empty() {
+        return;
+    }
+    let state = Arc::clone(state);
+    tokio::spawn(async move {
+        let left =
+            branch_origin::cleanup::remove_once_stopped(state.clone(), sessions, forced.clone())
+                .await;
+        report_not_removed(
+            &state,
+            &branch_origin::cleanup::to_report(left, &forced, &keep),
+        );
+    });
+}
+
+/// Tells every client of the branches and worktrees an archive, a deletion or a project's removal
+/// was to take and that are still there (`session_branches_not_removed`); nothing when there are
+/// none.
+fn report_not_removed(state: &AppState, missed: &[SessionBranchItem]) {
+    if missed.is_empty() {
+        return;
+    }
+    let failure = CodedError::raised(
+        error_code::SESSION_BRANCHES_NOT_REMOVED,
+        format!(
+            "these were to be removed and are still there: {}",
+            branch_origin::cleanup::lines(missed).join("; ")
+        ),
+        &[
+            ("count", &missed.len().to_string()),
+            ("items", &branch_origin::cleanup::for_client(missed)),
+        ],
+    );
+    state.broadcast(Event::from_error(None, &failure));
 }
 
 pub(crate) fn ensure_unlocked(sessions: impl IntoIterator<Item = Session>) -> Result<()> {
@@ -3052,9 +3220,7 @@ fn is_disk_root(directory: &Path) -> bool {
 ///
 /// [`PROJECT_DIRECTORY_PROTECTED`]: error_code::PROJECT_DIRECTORY_PROTECTED
 fn directory_to_trash(deleted: &Project, projects: &[Project]) -> Result<Option<PathBuf>> {
-    let resolve = |path: &Path| {
-        std::fs::canonicalize(path).unwrap_or_else(|_| hostfs::lexically_normalise(path))
-    };
+    let resolve = hostfs::resolve;
     let directory = resolve(Path::new(&deleted.path));
     let home = crate::paths::known_home_dir().map(|home| resolve(&home));
     if is_disk_root(&directory)
@@ -4604,6 +4770,7 @@ mod tests {
             project: "project-1".to_string(),
             stop_sessions: true,
             trash_directory: false,
+            force_remove: Vec::new(),
         };
 
         let claim = state.begin_launch("project").unwrap();
@@ -4626,11 +4793,14 @@ mod tests {
                 session: "s".to_string(),
                 trash_agent_records: false,
                 only_if_unused: false,
+                force_remove: Vec::new(),
+                keep: Vec::new(),
             },
             RequestBody::DeleteProject {
                 project: "project-1".to_string(),
                 stop_sessions: false,
                 trash_directory: false,
+                force_remove: Vec::new(),
             },
             RequestBody::DeleteConsole {
                 console: "console-1".to_string(),
@@ -7878,6 +8048,8 @@ mod tests {
             None,
             RequestBody::ArchiveSession {
                 session: "hub".to_string(),
+                force_remove: Vec::new(),
+                keep: Vec::new(),
             },
         )
         .await
@@ -8095,6 +8267,8 @@ mod tests {
         state.store.set_session_locked("nested", true).unwrap();
         let request = || RequestBody::ArchiveSession {
             session: "hub".to_string(),
+            force_remove: Vec::new(),
+            keep: Vec::new(),
         };
         let err = handle(&state, None, request()).await.unwrap_err();
         assert_eq!(code_of(&err), error_code::SESSION_LOCKED);
@@ -8615,6 +8789,8 @@ mod tests {
                 session: "unused".to_owned(),
                 only_if_unused: true,
                 trash_agent_records: false,
+                force_remove: Vec::new(),
+                keep: Vec::new(),
             },
         )
         .await
@@ -8734,6 +8910,8 @@ mod tests {
                     session: id.to_owned(),
                     only_if_unused: true,
                     trash_agent_records: false,
+                    force_remove: Vec::new(),
+                    keep: Vec::new(),
                 },
             )
             .await
@@ -9129,6 +9307,7 @@ mod tests {
                 project: "project-1".to_string(),
                 stop_sessions: true,
                 trash_directory: false,
+                force_remove: Vec::new(),
             },
         )
         .await

@@ -83,6 +83,16 @@ it("press takes the control inside a band of the same name, not the band", async
   expect(pressed).toEqual(["fold"]);
 });
 
+it("pressEach presses every control of that name once, in document order", async () => {
+  document.body.innerHTML = "<button id=\"a\">Details</button><button id=\"b\">Details</button><button id=\"c\">Other</button>";
+  const pressed: string[] = [];
+  document.addEventListener("click", (event) => pressed.push((event.target as Element).id));
+  const done = createUi(document, "en").pressEach("Details");
+  await vi.advanceTimersByTimeAsync(1000);
+  await done;
+  expect(pressed).toEqual(["a", "b"]);
+});
+
 it("changeRow names a change row by its file and status in the window's language, whatever follows", () => {
   const english = createUi(document, "en").changeRow("new-name.ts", "renamed");
   const chinese = createUi(document, "zh-Hans").changeRow("new-name.ts", "renamed");

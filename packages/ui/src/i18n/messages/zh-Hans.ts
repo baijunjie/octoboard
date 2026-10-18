@@ -82,6 +82,8 @@ export const zhHans: Translation<"other"> = {
   "error.recovery.git": "请通过项目操作菜单打开终端，处理上方 Git 错误（例如远程访问或尚未完成的 Git 操作），然后重试。",
   "error.recovery.gitHistory": "请选择具有共同历史的分支。浅克隆仓库请先在项目终端获取完整历史，然后刷新。",
   "error.recovery.branch": "请在项目分支菜单选择存在的本地分支；工作树不可用时，请先选择其他分支或恢复该工作树。",
+  "error.recovery.projectBranches": "请在仓库中打开终端，运行 {worktreeList} 和 {branchList} 查看保留的内容，然后用 Git 删除不再需要的部分，或保留不动。",
+  "error.recovery.sessionBranches": "请在仓库中打开终端（项目仍在时可通过项目操作菜单打开），按报告的原因逐一处理，然后自行用 Git 删除或移到废纸篓，或保留不动。",
   "error.recovery.refresh": "请刷新相关视图，或重新选择当前项目或会话后重试。重新发送丢失消息前，请先检查会话终端。",
   "error.recovery.scope": "请选择允许范围内的受支持文件或项目文件夹。请保留受保护或共享的文件夹，需要时可在项目终端查看内容。",
   "error.recovery.limit": "请缩小选择范围或打开较小的文件，然后重试。较大的内容可在项目终端查看。",
@@ -388,6 +390,13 @@ export const zhHans: Translation<"other"> = {
   "dialog.restoreProjectChanges.pending": "正在还原…",
   "daemon.restore_not_on_branch": "此项目当前不在分支上。请先切换到分支，再还原文件变更。",
   "daemon.git_restore_failed": "Git 无法还原文件变更：{detail}",
+  "daemon.project_branches_not_determined": "项目 {name} 已移除，但无法确定随其文件夹一并移除的内容，因此文件夹以外的工作树已保留；若仓库仍保留，其分支也已保留。",
+  "daemon.session_branches_not_removed": {
+    other: "以下内容本应删除，但仍然保留：{items}",
+  },
+  "daemon.session_branches_not_removed.list": {
+    other: "以下内容本应删除，但仍然保留：",
+  },
   "daemon.no_commits_to_restore": "此仓库还没有可用于还原文件的提交。",
   "daemon.git_operation_in_progress": "请先完成或中止当前的 Git 操作，再还原文件变更。",
   "sidebar.project.rename": "重命名",
@@ -837,6 +846,13 @@ export const zhHans: Translation<"other"> = {
   "dialog.removeProject.confirmTrash": "移除并移到废纸篓",
   "dialog.removeProject.confirmRunningTrash": "结束、移除并移到废纸篓",
   "dialog.removeProject.pendingTrash": "正在移到废纸篓…",
+  "dialog.removeProject.alongUnknown": "项目文件夹以外的该仓库工作树也可能一并移到废纸篓，其分支也可能被永久删除。",
+  "dialog.removeProject.alongLockedRemove": {
+    other: "同时将已锁定的工作树移到废纸篓（{count}\u00a0个）",
+  },
+  "dialog.removeProject.alongLockedHint": {
+    other: "将无视锁定一并移走，可以从废纸篓中找回。",
+  },
   "dialog.archiveSession.title": "确认归档 {title}？",
   "dialog.archiveSession.message": "会话进程将结束。之后可以重新打开。",
   "dialog.archiveSession.boundAndEnded": {
@@ -866,10 +882,78 @@ export const zhHans: Translation<"other"> = {
   "dialog.deleteSession.title": "确认永久删除 {title}？",
   "dialog.deleteSession.message": "将删除此会话。项目文件会保留。",
   "dialog.deleteSession.trashRecords": "同时将智能体自己的会话记录移到废纸篓",
-  "dialog.deleteSession.trashRecordsHint": "智能体保存的此会话对话记录会被移走，无论它存放在本机的哪个位置。之后将无法在智能体本身中恢复此会话。可以从废纸篓中找回。",
-  "dialog.deleteSession.trashRecordsHintBound": "智能体保存的此会话及一并删除的会话的对话记录会被移走，无论它们存放在本机的哪个位置。之后将无法在智能体本身中恢复这些会话。可以从废纸篓中找回。",
+  "dialog.deleteSession.trashRecordsNote": "之后将无法在智能体本身中恢复此会话。可以从废纸篓中找回这些记录。",
+  "dialog.deleteSession.trashRecordsNoteBound": "之后将无法在智能体本身中恢复这些会话。可以从废纸篓中找回这些记录。",
+  "dialog.deleteSession.trashRecordsLine": "还将把智能体保存的此会话记录移到废纸篓。",
+  "dialog.deleteSession.trashRecordsLineBound": "还将把智能体保存的此会话及一并删除的会话的记录移到废纸篓。",
   "dialog.deleteArchived.trashRecords": "同时将智能体自己的会话记录移到废纸篓",
-  "dialog.deleteArchived.trashRecordsHint": "所有被删除的会话（包括一并删除的会话）在智能体中保存的对话记录都会被移走，无论它们存放在本机的哪个位置。之后将无法在智能体本身中恢复这些会话。可以从废纸篓中找回。",
+  "dialog.deleteArchived.trashRecordsNote": "之后将无法在智能体本身中恢复这些会话。可以从废纸篓中找回这些记录。",
+  "dialog.deleteArchived.trashRecordsLine": "还将把智能体保存的这些会话记录移到废纸篓。",
+  "branchCleanup.worktree": "{path}（{branch}）",
+  "branchCleanup.worktreeDetached": "{path}（分离的 HEAD）",
+  "branchCleanup.uncommittedTag": "有未提交的更改",
+  "branchCleanup.detached": "分离的 HEAD",
+  "branchCleanup.onBranch": "分支 {branch}",
+  "branchCleanup.withTag": "{name}，{tag}",
+  "branchCleanup.failed": "{name}：{detail}",
+  "branchCleanup.plain.group": "{lead}{items}",
+  "branchCleanup.plain.items": "{before}；{after}",
+  "branchCleanup.plain.groups": "{before}。{after}",
+  "branchCleanup.plain.end": "{groups}。",
+  "branchCleanup.group.notRemoved": {
+    other: "以下内容删除失败：",
+  },
+  "branchCleanup.group.uncommitted": {
+    other: "以下工作树有未提交的更改：",
+  },
+  "branchCleanup.group.submodules": {
+    other: "以下工作树包含已初始化的子模块：",
+  },
+  "branchCleanup.group.locked": {
+    other: "以下工作树已锁定：",
+  },
+  "branchCleanup.group.unmerged": {
+    other: "以下分支尚未合并：",
+  },
+  "branchCleanup.group.checkedOut": {
+    other: "以下分支已在保留的工作树中检出：",
+  },
+  "branchCleanup.group.projectFolder": {
+    other: "以下工作树是项目文件夹：",
+  },
+  "branchCleanup.group.trashed": "随文件夹移到废纸篓：",
+  "branchCleanup.group.deleted": "永久删除：",
+  "branchCleanup.consequence.force": {
+    other: "还将永久删除 Git 保留的 {count}\u00a0项工作树和分支。",
+  },
+  "branchCleanup.consequence.locked": {
+    other: "还将永久删除 {count}\u00a0个已锁定的工作树，包括其中未提交的更改。",
+  },
+  "branchCleanup.consequence.trashed": {
+    other: "还将把文件夹以外的 {count}\u00a0个工作树移到废纸篓。",
+  },
+  "branchCleanup.consequence.deleted": {
+    other: "还将永久删除其会话的 {count}\u00a0个分支。",
+  },
+  "branchCleanup.consequence.lockedTrash": {
+    other: "还将把 {count}\u00a0个已锁定的工作树连同未提交的更改移到废纸篓。",
+  },
+  "branchCleanup.details": "详情",
+  "branchCleanup.along": {
+    other: "随之移除的内容（{count}\u00a0项）",
+  },
+  "dialog.sessionBranches.force": {
+    other: "同时强制删除 Git 保留的工作树和分支（{count}\u00a0项）",
+  },
+  "dialog.lockedWorktrees.remove": {
+    other: "同时删除已锁定的工作树（{count}\u00a0个）",
+  },
+  "dialog.sessionBranches.forceHint": {
+    other: "其中未提交的更改和未合并的提交将无法恢复。",
+  },
+  "dialog.lockedWorktrees.removeHint": {
+    other: "将无视锁定一并删除，且无法恢复。",
+  },
   "dialog.deleteSession.bound": {
     other: "它名下的 {count} 个已归档会话将一并删除",
   },

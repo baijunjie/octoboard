@@ -63,8 +63,8 @@ console sessions are listed, are in "Console sessions and project sessions" in
 | `get_session` | `session` | The record of any session, of any console — status, title, agent, whether it is a console session, its console and project, which session owns it and whether that owner is a console session or a project session (or that it is unbound), whether it is the caller's, timestamps — plus a tail of what it has printed. |
 | `rename_session` | `session`, `title` | Changes the title of one of the caller's sessions, under the rules of "Renaming a session" in `docs/product/sessions.md`. Answers with the session's record. |
 | `set_session_pinned` | `session`, `pinned` | Pins or unpins one of the caller's sessions (see "Pinning" in `docs/product/sidebar.md`). Answers with the session's record. |
-| `archive_session` | `session` | Ends the process of one of the caller's sessions and archives it. |
-| `archive_self` | — | Ends the caller's own process and archives the caller, once every session under it is archived. See "A session archiving itself" below. |
+| `archive_session` | `session` | Ends the process of one of the caller's sessions and archives it. Once the process has ended, the git branches the archived sessions were working on, and the linked worktrees that have them checked out, are removed where git can do so without force; the answer waits for that and names in `branches_left` what stays, and why (see "Archives made by an agent" in `docs/product/branch-and-worktree-cleanup.md`). |
+| `archive_self` | — | Ends the caller's own process and archives the caller, once every session under it is archived, removing its branches and worktrees as `archive_session` does. See "A session archiving itself" below. |
 | `list_archived` | `project` | The archived sessions of one of this console's projects, whoever owns them, each with its owner. |
 | `reopen_session` | `session`, `text?` | Relaunches an archived or interrupted session of the caller's, continuing its conversation, and optionally hands it an instruction — its next task — delivered once the relaunched session can take one. The caller is the console session the session is bound to and is running, so reopening one never brings a console session back. |
 | `transfer_session` | `session`, `to`, `note` | Hands one of the caller's running sessions to another owner, without the user. See "Handing a session to another owner" below. |
@@ -381,7 +381,10 @@ unfinished-session refusal for a lead session's completion report does not apply
 retroactively archive it; a later qualifying report or an explicit archive must do so.
 
 A report with `status: done` and **no** open items, with no lock blocking it, wraps the session up: once the report
-has been accepted for its owner, the session's process is ended and the session is archived.
+has been accepted for its owner, the session's process is ended and the session is archived. The git branches it was
+working on, and the linked worktrees that have them checked out, are then removed where git can do so without force,
+and the report's answer names those that will stay (see "Archives made by an agent" in
+`docs/product/branch-and-worktree-cleanup.md`).
 "Accepted" rather than "read" — an owner that is merely busy has the report queued for it,
 and the session is archived anyway rather than being left alive until the owner gets round
 to it.
@@ -436,4 +439,6 @@ and changes nothing:
 
 Otherwise the call is answered first — with the caller's id, the status `archived` and a note that its process will
 now end — and then the caller's process is ended and the caller is archived, as an owner's explicit archive does.
-Only the caller is archived; nothing under it is touched.
+Only the caller is archived; nothing under it is touched. When the removal following the archive will leave some of
+the branches and worktrees bound to the caller, judged before the archive, the answer names them in `branches_left`
+(see "Archives made by an agent" in `docs/product/branch-and-worktree-cleanup.md`).

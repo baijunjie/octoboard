@@ -490,6 +490,18 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
         }
         case "inspect_session_records":
           return { type: "session_records_inspected", presence: recordsPresence(body.sessions) };
+        case "inspect_session_branches": {
+          if (scenario.sessionBranches === "pending") return new Promise<Event>(() => {});
+          const sessions = store.getState().sessions;
+          const asked = new Set(body.sessions.filter((id) => sessions.has(id)));
+          return { type: "session_branches_inspected", items: (scenario.sessionBranches ?? []).filter((item) => item.session !== null && asked.has(item.session)) };
+        }
+        case "inspect_project_removal": {
+          if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
+          const found = scenario.projectRemovalBranches?.[body.project] ?? [];
+          if ("code" in found) return fail(found);
+          return { type: "project_removal_inspected", items: found };
+        }
         case "delete_session": {
           const all = [...store.getState().sessions.values()];
           const session = store.getState().sessions.get(body.session);

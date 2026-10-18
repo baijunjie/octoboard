@@ -1,5 +1,5 @@
 import { DaemonRequestError } from "./daemon-client";
-import { CODE_PARAMS, NAME_PARAMS, runningSessionIds, messageCode, withUiParams } from "./daemonMessage";
+import { CODE_PARAMS, leftBranchItems, NAME_PARAMS, runningSessionIds, messageCode, withUiParams } from "./daemonMessage";
 import type { MessageParams } from "./protocol";
 
 /** Daemon codes and parameters remain available for rendering and recovery classification. */
@@ -12,6 +12,7 @@ export function hasShellTimeoutDetails(error: { code: string; params: MessagePar
 /** Whether `error` has every param its message shows as a chip, the UI's own included. */
 export function hasCodeParams(error: { code: string; params: MessageParams }): boolean {
   if (error.code === "session_has_running_sessions" && runningSessionIds(error.params)) return true;
+  if (leftBranchItems(error.code, error.params)) return true;
   const params = withUiParams(error.code, error.params);
   const code = messageCode(error.code, params);
   const names = [...(CODE_PARAMS[code] ?? []), ...(NAME_PARAMS[code] ?? [])];

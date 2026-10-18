@@ -1,7 +1,7 @@
 import type { Agent, AgentAvailability } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
-import { SAMPLE, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
+import { SAMPLE, branchItemOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "./builders";
 import { SAMPLE_CODEX_MODELS } from "./agentModels";
 import { IMAGES } from "./viewerImages";
 import { SHELL_TIMEOUT } from "./shellTimeout";
@@ -194,6 +194,18 @@ const dialogState = {
   sessions: new Map([...twoHubsState.sessions!, ...removeState.sessions!, ...cascadeState.sessions!]),
 };
 
+// An archived session of the Docs Site project: the one whose branches and worktree its removal with
+// the folder takes along.
+const docsSession = sessionOf("s-docs-1", console_.id, tagged[0].id, "Redesign the landing page", "archived");
+const removalState = { ...dialogState, sessions: new Map([...dialogState.sessions, [docsSession.id, docsSession]]) };
+
+// The sessions of the Hub 4 archive that the bound branches and worktrees belong to.
+const hubSessions = {
+  web: cascadeState.sessions!.get("s-web-3")!,
+  api: cascadeState.sessions!.get("s-api-3")!,
+  review: cascadeState.sessions!.get("s-api-4")!,
+};
+
 const dialogFixture = { state: dialogState, directories: { "/Users/dev": HOME_LISTING }, detections: { ...{ "~/code/slow": "pending" },
   ...{ "~/code/site": { agent: "codex" } },
   ...{
@@ -293,6 +305,51 @@ const submitConsoleSwitch = [
   (ui: Ui) => ui.press(ui.t("dialog.switchAccount.all", { agent: "Claude Code" })),
   (ui: Ui) => ui.confirm(),
 ];
+
+const removeProjectTrash: Scenario = {
+  ...dialogFixture,
+  id: "dialog-remove-project-trash",
+  group: "Projects",
+  category: "normal",
+  title: "Remove project and move its folder to the Trash",
+  description: "The Trash option is checked: the message, the hint under the option and the confirming button all say the folder goes too. Under the option, the disclosure \"What goes with it (4)\" is closed, and the locked-worktree option \"Also move the locked worktrees to the Trash (4)\" follows as a plain block, unchecked, with its own closed Details. Under the options, the dialog's one warning has appeared because the Trash option is checked, with a line each for the worktrees moved to the Trash and the branches deleted permanently.",
+  state: removalState,
+  projectRemovalBranches: {
+    [tagged[0].id]: [
+      worktreeItemOf(tagged[0], docsSession, "feat/redesign", "/Users/dev/worktrees/docs-site-redesign"),
+      branchItemOf(tagged[0], docsSession, "fix/footer-links"),
+      branchItemOf(tagged[0], docsSession, "feat/search-box"),
+      worktreeItemOf(tagged[0], null, null, "/Users/dev/worktrees/docs-site-scratch", "removable"),
+      worktreeItemOf(tagged[0], docsSession, "feat/old-nav", "/Users/dev/worktrees/docs-site-old-nav", "locked"),
+      worktreeItemOf(tagged[0], docsSession, "feat/new-footer", "/Users/dev/worktrees/docs-site-new-footer", "locked", true),
+      worktreeItemOf(tagged[0], null, null, "/Users/dev/worktrees/docs-site-hotfix", "locked"),
+      worktreeItemOf(tagged[0], null, null, "/Users/dev/worktrees/docs-site-spike", "locked", true),
+      branchItemOf(tagged[0], docsSession, "feat/old-nav"),
+    ],
+  },
+  steps: removeDocsSite,
+};
+
+const archiveConsoleSession: Scenario = {
+  ...dialogFixture,
+  id: "dialog-archive-console-session",
+  group: "Archive view",
+  category: "normal",
+  title: "Archive console session and its bound sessions",
+  description: "The confirmation offers two plain options, unchecked, each a checkbox with its count in the label, a short note and a closed Details disclosure: \"Also force-remove the worktrees and branches Git keeps (5)\" and \"Also delete the locked worktree\". Under them, the one warning lists the running manually bound session, the waiting lead and its interrupted child; nothing but the sessions is in it. Confirming stops and archives all of them together.",
+  sessionBranches: [
+    worktreeItemOf(web, hubSessions.web, "feat/changelog-tidy", "/Users/dev/worktrees/website-changelog-tidy"),
+    worktreeItemOf(web, hubSessions.web, null, "/Users/dev/worktrees/website-changelog-scratch"),
+    worktreeItemOf(api, hubSessions.api, "feat/vendored-parser", "/Users/dev/worktrees/search-api-vendored-parser", "submodules"),
+    worktreeItemOf(api, hubSessions.api, null, "/Users/dev/worktrees/search-api-fixtures", "submodules"),
+    branchItemOf(api, hubSessions.api, "fix/rename-index"),
+    worktreeItemOf(api, hubSessions.review, "feat/migration-review", "/Users/dev/worktrees/search-api-migration-review", "locked", true),
+  ],
+  steps: [
+    (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),
+    (ui) => ui.press(ui.t("sidebar.session.archive")),
+  ],
+};
 
 export const dialogScenarios: Scenario[] = [
   {
@@ -600,13 +657,24 @@ export const dialogScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("sidebar.project.remove")),
     ],
   },
+  removeProjectTrash,
+  {
+    ...removeProjectTrash,
+    id: "dialog-remove-project-trash-expanded",
+    title: "Remove project to the Trash, lists opened",
+    description: "Both disclosures are open (What goes with it, Details), and the locked-worktree option is ticked: under the Trash option, the worktrees moved to the Trash with the folder (one on a detached HEAD) and the branches deleted permanently; under the locked option, the four locked worktrees in each wording, those with uncommitted changes ending \"uncommitted changes\". The one warning, under the options, gains a line for the locked worktrees moved to the Trash, and the locked worktree's branch, now going with it, joins the branches.",
+    steps: [...removeDocsSite, (ui) => ui.press(ui.t("branchCleanup.along", { count: 4 })), (ui) => ui.pressEach(ui.t("branchCleanup.details")), (ui) => ui.press(ui.t("dialog.removeProject.alongLockedRemove", { count: 4 }))],
+  },
   {
     ...dialogFixture,
-    id: "dialog-remove-project-trash",
+    projectRemovalBranches: {
+      [tagged[0].id]: { code: "internal_error", params: { detail: "git could not be run" }, message: "git could not be run" },
+    },
+    id: "dialog-remove-project-trash-inspection-failed",
     group: "Projects",
-    category: "normal",
-    title: "Remove project and move its folder to the Trash",
-    description: "The Trash option is checked: the message, the hint under the option and the confirming button all say the folder goes too.",
+    category: "exceptional",
+    title: "Remove project to the Trash, what goes along unknown",
+    description: "The Trash option is checked but the daemon could not say what else goes: the dialog's one warning, under the option, appears with the single line that outside worktrees may be moved to the Trash with the project and its branches deleted permanently, with no disclosure or locked-worktree option. Confirm stays available.",
     steps: removeDocsSite,
   },
   {
@@ -616,11 +684,15 @@ export const dialogScenarios: Scenario[] = [
       params: { project: tagged[1].name },
       message: "The folder is shared with another project",
     },
+    // The inspection is refused for the same reason, so the dialog lists nothing and shows no warning.
+    projectRemovalBranches: {
+      [tagged[0].id]: { code: "project_directory_shared", params: { project: tagged[1].name }, message: "The folder is shared with another project" },
+    },
     id: "dialog-remove-project-folder-shared",
     group: "Projects",
     category: "exceptional",
     title: "Project folder shared with another project",
-    description: "The daemon refuses to move the folder to the Trash; the error shows in the dialog and nothing is changed.",
+    description: "With Trash checked the dialog lists nothing and shows no warning about what goes along. The daemon refuses to move the folder to the Trash; the error shows in the dialog and nothing is changed.",
     steps: [...removeDocsSite, (ui) => ui.confirm()],
   },
   {
@@ -630,11 +702,14 @@ export const dialogScenarios: Scenario[] = [
       params: { path: tagged[0].path },
       message: "This folder is too important to move to the Trash from here",
     },
+    projectRemovalBranches: {
+      [tagged[0].id]: { code: "project_directory_protected", params: { path: tagged[0].path }, message: "This folder is too important to move to the Trash from here" },
+    },
     id: "dialog-remove-project-folder-protected",
     group: "Projects",
     category: "exceptional",
     title: "Project folder protected from the Trash",
-    description: "The daemon refuses to move a protected folder (the home directory, the root of a disk, or one holding Octoboard's data); a separate error alert names why, and the project is kept.",
+    description: "With Trash checked the dialog lists nothing and shows no warning about what goes along. The daemon refuses to move a protected folder (the home directory, the root of a disk, or one holding Octoboard's data); a separate error alert names why, and the project is kept.",
     steps: [...removeDocsSite, (ui) => ui.confirm()],
   },
   {
@@ -651,13 +726,27 @@ export const dialogScenarios: Scenario[] = [
     description: "The move to the Trash failed; a separate error alert requires acknowledgement and the project is kept.",
     steps: [...removeDocsSite, (ui) => ui.confirm()],
   },
+  archiveConsoleSession,
+  {
+    ...archiveConsoleSession,
+    id: "dialog-archive-console-session-expanded",
+    title: "Archive console session, lists opened",
+    description: "Both Details disclosures are open and both options ticked: under the force-remove option, the worktrees with uncommitted changes and with initialized submodules (each with its branch chip, or plain detached HEAD text) and the unmerged branch, each group under its lead line; under the locked option, the locked worktree with its row ending \"uncommitted changes\". The one warning, under the options and still holding the sessions, gains a line for each ticked option saying it also permanently deletes them.",
+    steps: [
+      ...archiveConsoleSession.steps!,
+      (ui) => ui.pressEach(ui.t("branchCleanup.details")),
+      (ui) => ui.press(ui.t("dialog.sessionBranches.force", { count: 5 })),
+      (ui) => ui.press(ui.t("dialog.lockedWorktrees.remove", { count: 1 })),
+    ],
+  },
   {
     ...dialogFixture,
-    id: "dialog-archive-console-session",
+    sessionBranches: "pending",
+    id: "dialog-archive-console-session-inspecting",
     group: "Archive view",
     category: "normal",
-    title: "Archive console session and its bound sessions",
-    description: "The confirmation lists the running manually bound session, the waiting lead and its interrupted child. Confirming stops and archives all of them together.",
+    title: "Archive confirmation while the bound branches are inspected",
+    description: "The sessions warning is shown at once, but Confirm is pending and cannot be pressed until the inspection of bound branches and worktrees answers, so nothing is archived before the user has seen what would be left. The same hold applies to every archive, delete and remove-project confirmation.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),
       (ui) => ui.press(ui.t("sidebar.session.archive")),

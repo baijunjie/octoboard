@@ -1120,6 +1120,10 @@ html.pane-resizing * {
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
+.inline-chip.inline-chip--unbroken {
+  display: inline-block;
+  max-width: 100%;
+}
 .inline-chip__code {
   font: inherit;
   font-family: var(--font-mono);

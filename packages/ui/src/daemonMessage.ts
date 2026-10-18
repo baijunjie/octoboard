@@ -2,8 +2,9 @@ import { EXAMPLE_CONVERSATION_ID } from "./conversationId";
 import { format, isMessageKey } from "./i18n/catalog";
 import { joinPhrases } from "./i18n/joinPhrases";
 import { isolate } from "./i18n/isolate";
+import { abbreviateHome } from "./pathDisplay";
 import type { Language } from "./i18n/languages";
-import { DEFAULT_ACCOUNT_NAME, type MessageParams } from "./protocol";
+import { DEFAULT_ACCOUNT_NAME, type MessageParams, type SessionBranchState } from "./protocol";
 import type { State } from "./store";
 
 /** The params that are record ids, and what each is shown as: the record's current name. */
@@ -13,7 +14,7 @@ const RECORD_NAMES: Record<string, (state: RecordNames, id: string) => string | 
   session: (state, id) => state.sessions.get(id)?.title,
 };
 
-type RecordNames = Pick<State, "consoles" | "projects" | "sessions">;
+type RecordNames = Pick<State, "consoles" | "projects" | "sessions"> & { homeDir?: State["homeDir"] };
 
 /** The params a message shows as code, by message code: a technical literal (an ID, a path) that
  * reads better set apart from the sentence than quoted inside it. The plain text of such a message
@@ -73,6 +74,7 @@ export const NAME_PARAMS: Record<string, readonly string[]> = {
   launch_failed: ["title"],
   "launch_failed.title": ["title"],
   session_did_not_stop: ["session"],
+  project_branches_not_determined: ["name"],
   switch_did_not_come_up: ["session"],
 };
 
@@ -86,6 +88,74 @@ export function runningSessionIds(params: MessageParams): string[] | undefined {
     return undefined;
   }
 }
+
+/** One bound branch or worktree a `session_branches_not_removed` alert names: `name` is its path or
+ * branch name as text, `state` why it is still there, `uncommitted` whether a worktree has
+ * uncommitted changes, `detail` the reason given for a `failed` one. */
+export type LeftBranchItem = { kind: "worktree" | "branch"; name: string; branch: string | null; state: SessionBranchState; uncommitted?: boolean; detail: string | null };
+
+/** The groups a `session_branches_not_removed` alert sorts its items into, in the order shown, each
+ * with the lead line that says once why its items are still there; what could not be removed at
+ * all comes first. */
+type LeftBranchLead =
+  | "branchCleanup.group.notRemoved" | "branchCleanup.group.uncommitted" | "branchCleanup.group.submodules"
+  | "branchCleanup.group.locked" | "branchCleanup.group.unmerged" | "branchCleanup.group.checkedOut"
+  | "branchCleanup.group.projectFolder";
+const LEFT_BRANCH_GROUPS: Array<{ key: string; lead: LeftBranchLead; states: SessionBranchState[] }> = [
+  { key: "notRemoved", lead: "branchCleanup.group.notRemoved", states: ["failed", "removable"] },
+  { key: "uncommitted", lead: "branchCleanup.group.uncommitted", states: ["uncommitted_changes"] },
+  { key: "submodules", lead: "branchCleanup.group.submodules", states: ["submodules"] },
+  { key: "locked", lead: "branchCleanup.group.locked", states: ["locked"] },
+  { key: "unmerged", lead: "branchCleanup.group.unmerged", states: ["unmerged"] },
+  { key: "checkedOut", lead: "branchCleanup.group.checkedOut", states: ["checked_out"] },
+  { key: "projectFolder", lead: "branchCleanup.group.projectFolder", states: ["project_folder"] },
+];
+const LEFT_BRANCH_STATES = new Set(LEFT_BRANCH_GROUPS.flatMap((group) => group.states));
+
+/** `items` sorted into their groups, leaving out the empty ones. */
+export function leftBranchGroups(items: LeftBranchItem[]): Array<{ key: string; lead: LeftBranchLead; items: LeftBranchItem[] }> {
+  return LEFT_BRANCH_GROUPS
+    .map(({ key, lead, states }) => ({ key, lead, items: items.filter((item) => states.includes(item.state)) }))
+    .filter((group) => group.items.length > 0);
+}
+
+/** How an item of a `session_branches_not_removed` alert is named to a person: a worktree's path
+ * with the daemon host's home written as `~`, a branch's name as it is. */
+export function leftBranchName(item: LeftBranchItem, homeDir: string | null | undefined): string {
+  return item.kind === "worktree" ? abbreviateHome(item.name, homeDir) : item.name;
+}
+
+/** An item of a `session_branches_not_removed` alert in plain text: its name, the branch a worktree
+ * has checked out, and a locked worktree's uncommitted changes or the reason a removal failed. */
+function leftBranchText(language: Language, item: LeftBranchItem, homeDir: string | null | undefined): string {
+  const path = isolate(leftBranchName(item, homeDir));
+  let name = item.kind === "branch"
+    ? path
+    : item.branch === null
+      ? format(language, "branchCleanup.worktreeDetached", { path })
+      : format(language, "branchCleanup.worktree", { path, branch: isolate(item.branch) });
+  if (item.state === "locked" && item.uncommitted) name = format(language, "branchCleanup.withTag", { name, tag: format(language, "branchCleanup.uncommittedTag", {}) });
+  return item.detail ? format(language, "branchCleanup.failed", { name, detail: isolate(item.detail) }) : name;
+}
+
+/** The items of a `session_branches_not_removed` alert, which travel as one JSON param so a name
+ * holding a comma, or any other character, is never split. */
+export function leftBranchItems(code: string, params: MessageParams): LeftBranchItem[] | undefined {
+  if (code !== "session_branches_not_removed" || !params.items) return undefined;
+  try {
+    const items: unknown = JSON.parse(params.items);
+    if (!Array.isArray(items) || items.length === 0) return undefined;
+    const valid = items.every((item: Partial<LeftBranchItem> | null) =>
+      !!item && typeof item.name === "string" && typeof item.state === "string" && LEFT_BRANCH_STATES.has(item.state));
+    return valid ? items as LeftBranchItem[] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The codes whose `detail` is raw diagnostic text — git's own message — which is shown under the
+ * sentence in a code block, never inside it. */
+export const DETAIL_BLOCK_CODES = new Set(["project_branches_not_determined"]);
 
 /** The params of a message that the UI supplies itself, by message code, beneath what the daemon
  * sends. */
@@ -147,6 +217,18 @@ export function daemonParams<V = never>(
   );
   const running = code === "session_has_running_sessions" ? runningSessionIds(all) : undefined;
   if (running) shown.sessions = joinPhrases(language, running.map((id) => paramText(records, "session", id)));
+  const left = leftBranchItems(code, all);
+  if (left) {
+    // Each group's lead says why once. A name or a detail may hold commas of its own, so the
+    // catalog sets the items of a group apart, and the groups, with marks of its own.
+    const joined = (key: "branchCleanup.plain.items" | "branchCleanup.plain.groups", parts: string[]) =>
+      parts.reduce((before, after) => format(language, key, { before, after }));
+    const groups = leftBranchGroups(left).map((group) => format(language, "branchCleanup.plain.group", {
+      lead: format(language, group.lead, { count: group.items.length }),
+      items: joined("branchCleanup.plain.items", group.items.map((item) => leftBranchText(language, item, records.homeDir))),
+    }));
+    shown.items = format(language, "branchCleanup.plain.end", { groups: joined("branchCleanup.plain.groups", groups) });
+  }
   // A count arrives as text; as a number it selects the singular or plural wording.
   if (/^\d+$/.test(all.count ?? "")) shown.count = Number(all.count);
   const reasonKey = `daemon.trust_reason.${all.reason_code}`;
@@ -173,5 +255,11 @@ export function daemonMessage(
 ): string {
   const key = `daemon.${messageCode(code, params)}`;
   if (!isMessageKey(key)) return fallback;
-  return format(language, key, daemonParams(language, code, params, records));
+  const shown = daemonParams(language, code, params, records);
+  // A single group of leftovers is said by its own lead, without the line over the groups.
+  const left = leftBranchItems(code, params);
+  if (left && leftBranchGroups(left).length === 1) return String(shown.items);
+  const text = format(language, key, shown);
+  // As plain text the diagnostic follows on a line of its own.
+  return DETAIL_BLOCK_CODES.has(code) && params.detail ? `${text}\n${params.detail}` : text;
 }

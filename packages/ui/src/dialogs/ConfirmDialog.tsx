@@ -25,6 +25,11 @@ export interface ConfirmDialogProps {
    * what the action covers; the caller holds its state and reads it in `onConfirm`. A function is
    * given whether `onConfirm` is running, for a control to freeze while it does. */
   extraControl?: React.ReactNode | ((busy: boolean) => React.ReactNode);
+  /** The one warning the dialog shows, under its options and over its buttons, so that a line it
+   * gains when an option is ticked moves no checkbox. */
+  warning?: React.ReactNode;
+  /** Holds Confirm, shown as pending, while what it would act on is still being found out. */
+  waiting?: boolean;
   /** Names what the dialog currently asks about, for one reused across subjects: a change clears
    * the failure shown for the previous one. */
   resetKey?: string;
@@ -46,6 +51,8 @@ export function ConfirmDialog({
   pendingLabel,
   cancelLabel,
   extraControl,
+  warning,
+  waiting = false,
   destructive,
   unprompted,
   resetKey,
@@ -80,7 +87,7 @@ export function ConfirmDialog({
           so Enter confirms at once, unless the action is destructive or the question unprompted:
           there Enter must not be the way in, and focus stays on the dialog until the user moves it.
           A typed word takes focus for its field instead. */}
-      <Button ref={confirmRef} type="submit" variant={destructive ? "danger" : "primary"} isPending={busy}
+      <Button ref={confirmRef} type="submit" variant={destructive ? "danger" : "primary"} isPending={busy || waiting}
         isDisabled={!confirmed} autoFocus={!destructive && !unprompted && word === undefined}>
         {busy && pendingLabel ? pendingLabel : (confirmLabel ?? t("common.confirm"))}
       </Button>
@@ -88,13 +95,14 @@ export function ConfirmDialog({
   );
 
   return (
-    <Dialog title={title} onClose={busy ? () => {} : onCancel} footer={footer} resetKey={resetKey} size={size} onSubmit={() => confirmed && !busy && void run(onConfirm)} alert>
+    <Dialog title={title} onClose={busy ? () => {} : onCancel} footer={footer} resetKey={resetKey} size={size} onSubmit={() => confirmed && !busy && !waiting && void run(onConfirm)} alert>
       {typeof message === "string" ? (
         <p className="text-sm">{message}</p>
       ) : (
         <div className="flex flex-col gap-3 text-sm text-foreground">{message}</div>
       )}
       {typeof extraControl === "function" ? extraControl(busy) : extraControl}
+      {warning}
       {word !== undefined && (
         <TextField
           fullWidth

@@ -76,6 +76,9 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   `sessionOpenError`, `terminal: "refuse"`, `clipboard: "unavailable"` (a plain browser over insecure http),
   `externalLinks` (the external-link capability stub),
   `macosPermissions` (stubs the desktop shell's privacy grants; without it the page is a plain browser's),
+  `sessionBranches` / `projectRemovalBranches` (the branches and worktrees bound to sessions, and those a project's
+  removal with its folder in the Trash takes along, that the fixture daemon's inspections find; built with `branchItemOf` /
+  `worktreeItemOf`),
   `agentModels` (what the fixture daemon lists per agent, default `SAMPLE_CLAUDE_MODELS`), `files` / `filesByProject` /
   `git` (replace the project browser's fixtures; a `null` `git` is no repository) and `viewer` (renders the file
   viewer alone, in the "File viewer" group).
@@ -166,4 +169,4 @@ them. Nothing enforces this.
 | `src/configuration/` | Configuration export and import: `ExportConfigurationDialog`, `ImportConfigurationDialog` (review and result steps) and the pure `importPlan.ts` |
 | `src/quota/` | Agent account plan quota: `quotaFormat.ts` (React-free wording, percent, countdown and plan formatting), `useAccountQuota` (an account's reading, aware of whether its agent is available), `QuotaMeter`, `AccountQuotaSummary` and `QuotaPlan` |
 | `src/settings/` | The settings modal: `SettingsDialog` with its sections, `useSettingsDialog` and `useMacosPermissions` |
-| `src/dialogs/` | The console, project, session, rename, confirmation and directory-picker dialogs and the daemon's two questions (trust prompt, session request) on the shared `Dialog` frame, `ErrorAlerts` (the window's acknowledgement host), the shared form controls and `dialogRequest.ts` / `RequestedDialog.tsx` (dialog requests raised from menus) |
+| `src/dialogs/` | The console, project, session, rename, confirmation and directory-picker dialogs and the daemon's two questions (trust prompt, session request) on the shared `Dialog` frame, `ErrorAlerts` (the window's acknowledgement host), the shared form controls and `dialogRequest.ts` / `RequestedDialog.tsx` (dialog requests raised from menus), and `BranchCleanupOptions.tsx` with `useSessionBranches.ts` (the branches and worktrees bound to sessions that an archive, deletion or project removal would take along, asked of the daemon and offered in the confirmations as `ConfirmOption` checkboxes) |

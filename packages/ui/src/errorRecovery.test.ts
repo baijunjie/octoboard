@@ -10,6 +10,7 @@ it.each([
   ["path_not_found", "path"], ["path_already_exists", "pathExists"], ["session_locked", "unlock"],
   ["account_name_taken", "uniqueName"], ["invalid_launch_setting", "launchSetting"],
   ["connection_closed", "connection"], ["not_a_git_repository", "repository"],
+  ["session_branches_not_removed", "sessionBranches"], ["project_branches_not_determined", "projectBranches"],
 ])("classifies the known domain code %s with its specific remedy", (code, recovery) => {
   const error = new DaemonRequestError("localized text", code, { session: "s1" });
   expect(errorPresentation(error)).toBe(error);

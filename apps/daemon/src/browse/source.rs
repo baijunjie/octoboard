@@ -262,17 +262,19 @@ pub(crate) fn admin_dir(root: &Path) -> Option<PathBuf> {
 
 /// One record of `git worktree list --porcelain -z`.
 #[derive(Debug, Default, PartialEq, Eq)]
-struct WorktreeRecord {
-    path: Vec<u8>,
-    head: Option<String>,
-    branch: Option<Vec<u8>>,
-    bare: bool,
-    prunable: bool,
+pub(crate) struct WorktreeRecord {
+    pub(crate) path: Vec<u8>,
+    pub(crate) head: Option<String>,
+    /// The checked-out branch, below `refs/heads/`, as raw bytes.
+    pub(crate) branch: Option<Vec<u8>>,
+    pub(crate) bare: bool,
+    pub(crate) locked: bool,
+    pub(crate) prunable: bool,
 }
 
 /// Parses `git worktree list --porcelain -z`: NUL-terminated attribute lines, each record ended
 /// by an empty one. Paths are taken as bytes, so a worktree path holding a newline is read whole.
-fn parse_worktree_list(stdout: &[u8]) -> Vec<WorktreeRecord> {
+pub(crate) fn parse_worktree_list(stdout: &[u8]) -> Vec<WorktreeRecord> {
     let mut records = Vec::new();
     let mut current: Option<WorktreeRecord> = None;
     for field in stdout.split(|&b| b == 0) {
@@ -307,6 +309,7 @@ fn parse_worktree_list(stdout: &[u8]) -> Vec<WorktreeRecord> {
                     .map(<[u8]>::to_vec);
             }
             b"bare" => record.bare = true,
+            b"locked" => record.locked = true,
             b"prunable" => record.prunable = true,
             _ => {}
         }

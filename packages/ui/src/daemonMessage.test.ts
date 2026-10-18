@@ -95,3 +95,24 @@ it.each([
   expect(daemonMessage("en", code, params, "x", records)).toContain(isolate("Default"));
   expect(daemonMessage("zh-Hans", code, { ...params, name: "Work" }, "x", records)).toContain(isolate("Work"));
 });
+
+it("words each branch or worktree still there with its reason in plain text, one apart from the next", () => {
+  const items = JSON.stringify([
+    { kind: "branch", name: "fix/a,b", branch: "fix/a,b", state: "unmerged", uncommitted: false, detail: null },
+    { kind: "worktree", name: "/home/dev/wt", branch: null, state: "failed", uncommitted: false, detail: "error: x, y" },
+  ]);
+  const message = daemonMessage("en", "session_branches_not_removed", { count: "2", items }, "fallback", { ...records, homeDir: "/home/dev" });
+  expect(message).toBe(`These were to be removed and are still there: Removing this failed: ${isolate("~/wt")} (detached HEAD): ${isolate("error: x, y")}. This branch is not merged: ${isolate("fix/a,b")}.`);
+  const zh = daemonMessage("zh-Hans", "session_branches_not_removed", { count: "2", items }, "fallback", { ...records, homeDir: "/home/dev" });
+  expect(zh).toBe(`以下内容本应删除，但仍然保留：以下内容删除失败：${isolate("~/wt")}（分离的 HEAD）：${isolate("error: x, y")}。以下分支尚未合并：${isolate("fix/a,b")}。`);
+});
+
+it("puts the reason what goes with a removed project's folder is unknown on a line of its own", () => {
+  const message = daemonMessage("en", "project_branches_not_determined", { name: "Docs", detail: "fatal: not a git repository" }, "fallback", records);
+  expect(message.endsWith(".\nfatal: not a git repository")).toBe(true);
+});
+
+it("says a single group of leftovers by its own lead alone", () => {
+  const items = JSON.stringify([{ kind: "branch", name: "fix/a", branch: "fix/a", state: "unmerged", uncommitted: false, detail: null }]);
+  expect(daemonMessage("en", "session_branches_not_removed", { count: "1", items }, "fallback", records)).toBe(`This branch is not merged: ${isolate("fix/a")}.`);
+});

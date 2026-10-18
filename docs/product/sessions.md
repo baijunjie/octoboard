@@ -607,8 +607,11 @@ exit first and is killed only if it does not; a kill takes the agent's tool subp
 Archiving is available for a session that is not already archived, including an interrupted one, subject to
 "Locking a session" above. A console session is archived from its own row's menu, like any other (see "Console sessions and
 project sessions" above). The user archives a session from its row's menu. A session at its prompt or
-interrupted, with no unarchived session under it, is archived at once, since nothing is cut short; one starting, at
-work, waiting for the user, being resumed, or with an unarchived session under it asks for confirmation first. A session that has never been used offers **Delete** there instead, unless it is still starting (see "Deleting an unused session" in `docs/product/deleting-sessions.md`).
+interrupted, with no unarchived session under it, is archived at once, since nothing is cut short, unless a branch or
+worktree bound to it needs the user's word; one starting, at work, waiting for the user, being resumed, or with an unarchived session under it asks for confirmation first. A session that has never been used offers **Delete** there instead, unless it is still starting (see "Deleting an unused session" in `docs/product/deleting-sessions.md`).
+Once the processes have ended, an archive removes the git branches the archived sessions were working on, and the
+linked worktrees that have them checked out, where git can do so safely; its confirmation lists what git refuses, and
+locked worktrees, with the choice of taking them along (see `docs/product/branch-and-worktree-cleanup.md`).
 Archiving a session that is still *starting* stands: it is archived at once, and its agent's process is ended as soon
 as it comes up.
 An archived session keeps its pin, if it had one (see "Order of projects and sessions" in `docs/product/sidebar.md`).

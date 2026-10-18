@@ -405,7 +405,10 @@ const ARCHIVE_SESSION: ToolDef = ToolDef {
     description: "End a session's process and archive it. Use it to wrap a session up \
                   explicitly; a session that finishes cleanly with nothing left open is \
                   archived without being asked. Refused for a session that is not yours \
-                  (`yours: false`): it is somebody else's, to be left alone.",
+                  (`yours: false`): it is somebody else's, to be left alone. The git branches the \
+                  sessions archived created, and the linked worktrees that have them checked \
+                  out, are removed once their processes have ended, wherever git can do it without \
+                  force; `branches_left` in the answer names any that stay, and why.",
     schema: || {
         object_schema(
             json!({
@@ -427,7 +430,10 @@ const ARCHIVE_SELF: ToolDef = ToolDef {
                   `archive_session` first; for one bound to a lead session, wait for the lead \
                   session to finish it or archive the lead session with `archive_session`. \
                   Refused while this session or a session under it is locked. The call is \
-                  answered before the process ends.",
+                  answered before the process ends. The git branches this session created, and \
+                  the linked worktrees that have them checked out, are removed once it has ended, \
+                  wherever git can do it without force; `branches_left` in the answer names any \
+                  that will stay, and why.",
     schema: || object_schema(json!({}), &[]),
 };
 
@@ -487,9 +493,11 @@ const REPORT: ToolDef = ToolDef {
     description: "Report the round of work back to your owner, the session this one is bound to: \
                   a console session or a project session. `summary` is natural language; `status` \
                   and `open_items` are what your owner acts on. With `done` and no open items the \
-                  session is archived once the report is delivered; anything else leaves it \
-                  running and awaiting instructions. Refused while this session is unbound: \
-                  nobody owns it but the user.",
+                  session is archived once the report is delivered, and the git branches it \
+                  created, with the linked worktrees that have them checked out, are removed once \
+                  it has ended wherever git can do it without force (the answer names any that \
+                  will stay); anything else leaves it running and awaiting instructions. Refused \
+                  while this session is unbound: nobody owns it but the user.",
     schema: || {
         object_schema(
             json!({

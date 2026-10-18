@@ -11,6 +11,7 @@ export function RecoveryGuidance({ recovery }: { recovery: ErrorRecovery }): Rea
     case "path": return <Message id="error.recovery.path" params={{ browse: <InlineChip size="inherit">{t("common.browse")}</InlineChip> }} />;
     case "account": return <Message id="error.recovery.account" params={{ settings: <InlineChip size="inherit">{t("settings.title")}</InlineChip>, accounts: <InlineChip size="inherit">{t("settings.section.accounts")}</InlineChip> }} />;
     case "unlock": return <Message id="error.recovery.unlock" params={{ unlock: <InlineChip size="inherit">{t("sidebar.session.unlock")}</InlineChip> }} />;
+    case "projectBranches": return <Message id="error.recovery.projectBranches" params={{ worktreeList: <InlineChip monospace size="inherit">git worktree list</InlineChip>, branchList: <InlineChip monospace size="inherit">git branch</InlineChip> }} />;
     default: return <>{t(`error.recovery.${recovery}`)}</>;
   }
 }

@@ -150,10 +150,12 @@ export function boundArchivedSessions(sessions: Session[], ownerId: string): Ses
   return archivedSessions(sessions.filter((s) => s.bound_to === ownerId || (s.bound_to && ids.has(s.bound_to))));
 }
 
-/** Whether archiving `session` asks the user first. One sitting at its prompt (`idle`) or with no
- * process (`interrupted`) is archived at once, since nothing is cut short; one at work or raising
- * a hand asks, and so does one with an unarchived session bound to it or to one bound to it, since
- * the archive reaches both levels and ends their processes too. */
+/** Whether archiving `session` asks the user first, as far as the sessions say. One sitting at its
+ * prompt (`idle`) or with no process (`interrupted`) is archived at once, since nothing is cut
+ * short; one at work or raising a hand asks, and so does one with an unarchived session bound to it
+ * or to one bound to it, since the archive reaches both levels and ends their processes too. A
+ * bound branch or worktree git refuses to remove makes it ask as well, which only the daemon can
+ * say. */
 export function archiveNeedsConfirmation(sessions: Iterable<Session>, session: Session): boolean {
   if (session.status !== "idle" && session.status !== "interrupted") return true;
   // One pass, so that a one-shot iterator such as a Map's `values()` serves too.

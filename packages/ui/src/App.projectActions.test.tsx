@@ -234,6 +234,100 @@ it("hands focus on once an unselected session archived from its menu reads archi
   expect(reactAria.setInteractionModality).toHaveBeenCalledWith("keyboard");
 });
 
+/** Mounts the app with the idle session `s-archive`, answering its branch inspection only once
+ * `answer` is called, with `items`. */
+function mountWithPendingInspection(items: unknown[] = []) {
+  const mounted = mountApp(false, undefined, true);
+  let answer!: () => void;
+  const answered = new Promise<void>((done) => { answer = done; });
+  vi.mocked(mounted.daemon.request).mockImplementation(async (body) => {
+    if (body.type !== "inspect_session_branches") return { type: "ack" };
+    await answered;
+    return { type: "session_branches_inspected", items } as never;
+  });
+  return { ...mounted, answer: () => act(async () => answer()) };
+}
+
+const archiveFromMenu = async () => {
+  await press(`Actions for session ${isolate("Fix bug")}`);
+  await press("Archive");
+};
+const sentOf = (daemon: Daemon, type: string) => vi.mocked(daemon.request).mock.calls.filter(([body]) => body.type === type);
+
+it("ignores a repeated archive press while the first one's inspection is out", async () => {
+  const { daemon, answer } = mountWithPendingInspection();
+  await archiveFromMenu();
+  await archiveFromMenu();
+  await answer();
+  expect(sentOf(daemon, "inspect_session_branches")).toHaveLength(1);
+  expect(sentOf(daemon, "archive_session")).toHaveLength(1);
+});
+
+it("asks after all when the session turned busy while its inspection was out", async () => {
+  const { daemon, answer } = mountWithPendingInspection();
+  await archiveFromMenu();
+  await act(async () => daemon.store.setState((state) => ({
+    sessions: new Map(state.sessions).set("s-archive", { ...state.sessions.get("s-archive")!, status: "working" }),
+  })));
+  await answer();
+  expect(sentOf(daemon, "archive_session")).toHaveLength(0);
+  expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
+});
+
+it("asks after all when a session was bound to it while its inspection was out", async () => {
+  const { daemon, answer } = mountWithPendingInspection();
+  await archiveFromMenu();
+  await act(async () => daemon.store.setState((state) => ({
+    sessions: new Map(state.sessions).set("s-bound", sessionOf("s-bound", "c-actions", "p-actions", "Bound", "working", { bound_to: "s-archive" })),
+  })));
+  await answer();
+  expect(sentOf(daemon, "archive_session")).toHaveLength(0);
+  expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
+});
+
+it("leaves a dialog opened while the inspection was out in place", async () => {
+  const { daemon, answer } = mountWithPendingInspection([{
+    kind: "branch", repository: "/r/.git", branch: "feature", path: null, project: "p-actions",
+    session: "s-archive", state: "unmerged", uncommitted: false, detail: null,
+  }]);
+  await archiveFromMenu();
+  await press(`Actions for session ${isolate("Fix bug")}`);
+  await press("Rename");
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  await answer();
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(sentOf(daemon, "archive_session")).toHaveLength(0);
+});
+
+it("archives an idle session at once when what is bound to it cannot be inspected", async () => {
+  const { daemon } = mountApp(false, undefined, true);
+  vi.mocked(daemon.request).mockImplementation(async (body) => {
+    if (body.type === "inspect_session_branches") throw new Error("Connection lost");
+    return { type: "ack" };
+  });
+  await press(`Actions for session ${isolate("Fix bug")}`);
+  await press("Archive");
+  expect(daemon.request).toHaveBeenCalledWith({ type: "archive_session", session: "s-archive" });
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+});
+
+it("asks before archiving an idle session that has a bound worktree git refuses to remove", async () => {
+  const { daemon } = mountApp(false, undefined, true);
+  vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "inspect_session_branches"
+    ? {
+      type: "session_branches_inspected",
+      items: [{
+        kind: "worktree", repository: "/r/.git", branch: "feature", path: "/r-feature", project: "p-actions",
+        session: "s-archive", state: "uncommitted_changes", uncommitted: true, detail: null,
+      }],
+    }
+    : { type: "ack" });
+  await press(`Actions for session ${isolate("Fix bug")}`);
+  await press("Archive");
+  expect(daemon.request).toHaveBeenCalledWith({ type: "inspect_session_branches", sessions: ["s-archive"] });
+  expect(daemon.request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "archive_session" }));
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("has uncommitted changes");
+});
 
 it("opens the project repository through the platform and reports an opening failure", async () => {
   const links = { open: vi.fn(async () => {}) };

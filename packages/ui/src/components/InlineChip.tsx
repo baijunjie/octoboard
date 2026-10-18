@@ -10,6 +10,9 @@ export type InlineChipProps = Omit<React.ComponentProps<typeof Chip<"span">>, "s
   color?: CodeColor | "accent";
   monospace?: boolean;
   wrap?: boolean;
+  /** Moves to the next line as one box rather than splitting where the line ends, so no empty
+   * start of it is left behind; text longer than the line still wraps inside it (with `wrap`). */
+  unbroken?: boolean;
   startContent?: React.ReactNode;
 };
 
@@ -21,6 +24,7 @@ export function InlineChip({
   variant = "soft",
   monospace = false,
   wrap = false,
+  unbroken = false,
   startContent,
   dir = monospace ? "ltr" : undefined,
   className = "",
@@ -41,7 +45,7 @@ export function InlineChip({
       data-inline-chip=""
       data-size={size}
       data-color={resolvedColor}
-      className={`inline-chip ${size === "xs" ? "inline-chip--xs" : size === "inherit" ? "inline-chip--inherit" : ""} ${wrap ? "inline-chip--wrap" : ""} ${monospace ? "select-text" : ""} ${resolvedColor === "secondary" ? "inline-chip--secondary" : ""} ${className}`}
+      className={`inline-chip ${size === "xs" ? "inline-chip--xs" : size === "inherit" ? "inline-chip--inherit" : ""} ${wrap ? "inline-chip--wrap" : ""} ${unbroken ? "inline-chip--unbroken" : ""} ${monospace ? "select-text" : ""} ${resolvedColor === "secondary" ? "inline-chip--secondary" : ""} ${className}`}
     >
       {startContent}
       <Chip.Label>

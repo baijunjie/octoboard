@@ -27,6 +27,7 @@ mod git_watch;
 mod hook_mode;
 mod hook_queue;
 mod hooks;
+mod host_tools;
 mod hostfs;
 mod instance_lock;
 mod launch_settings;

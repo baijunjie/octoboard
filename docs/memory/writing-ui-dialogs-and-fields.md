@@ -6,6 +6,26 @@ Any confirmation in `packages/ui` — including one where the user has to type a
 `ConfirmDialog` (`packages/ui/src/dialogs/ConfirmDialog.tsx`, whose `typeToConfirm` asks for that word), never a
 dialog of its own.
 
+## A confirmation's options sit outside its warning, and the dialog has one warning, under them
+
+This is the user's design rule for every confirmation in `packages/ui` that offers options, such as taking more
+along with what is deleted:
+
+- A checkbox never goes inside a warning box. It is a plain block of its own: its label says what ticking it deletes
+  (and how many), its `Description` note is kept short so it does not repeat the consequence line below, and the
+  items it covers go under it in a Details disclosure that starts collapsed.
+- The dialog never shows two warning boxes. It has one, in `ConfirmDialog`'s `warning` slot, which renders it under
+  the options and over the buttons, so a line it gains never moves a checkbox. A warning the dialog shows before any
+  option is ticked (the sessions it takes along) is that same box, not one above the options.
+- Every option, whatever it covers, adds its consequence line to that box while it is ticked. If the dialog had no
+  warning, the box appears with the first ticked option and goes away when none are.
+- A disclosure stays the way the user left it. Never collapse it or remount it because something else in the dialog
+  changed.
+
+The box is `ConfirmWarning` in `packages/ui/src/dialogs/RequestedDialog.tsx`, whose `lines` are the ticked options'
+consequences; the remove-project dialog's Trash option, in `packages/ui/src/dialogs/BranchCleanupOptions.tsx`, shows
+the option's shape.
+
 ## Read the project's placeholder standard before adding or changing a field
 
 For an input in `packages/ui`, follow `docs/ui-accessibility.md`, "Input placeholders", before choosing its

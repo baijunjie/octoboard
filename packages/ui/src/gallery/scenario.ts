@@ -2,7 +2,7 @@ import type { Language } from "../i18n/languages";
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/ImportReview";
 import type { MacosPermissionsStatus } from "../platform";
-import type { Agent, AgentModel, DirEntry, GitStatus, MessageParams, ModelsUnavailable, SessionRecordsPresence } from "../protocol";
+import type { Agent, AgentModel, DirEntry, GitStatus, MessageParams, ModelsUnavailable, SessionBranchItem, SessionRecordsPresence } from "../protocol";
 import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
 import type { GroupTitle } from "./fixtures/groups";
 import type { FixtureGit } from "./fixtures/changeFixtures";
@@ -144,6 +144,15 @@ export interface Scenario {
    * has_conversation does not establish whether files exist. Aggregate presence is present if
    * any inspected session has files, otherwise unknown if any cannot be established. */
   sessionRecords?: Record<string, SessionRecordsPresence>;
+  /** The branches and worktrees bound to sessions, as `inspect_session_branches` finds them: those
+   * whose `session` is among the sessions asked about and still exists. Without it none are bound,
+   * so an archive or deletion shows no section about them; `"pending"` is an inspection that is never
+   * answered, so Confirm stays pending. */
+  sessionBranches?: SessionBranchItem[] | "pending";
+  /** What `inspect_project_removal` finds per project: the worktrees and branches its removal with
+   * the folder in the Trash takes along, or the error the inspection fails with. A project not
+   * listed has none. */
+  projectRemovalBranches?: Record<string, SessionBranchItem[] | FixtureError>;
   /** Per-session account-switch refusals or a request kept pending. Unlisted sessions switch
    * normally, updating their account and recorded configuration directory. */
   sessionAccountSwitches?: Record<string, FixtureError | "pending">;

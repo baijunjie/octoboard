@@ -34,6 +34,10 @@ console session.
   way out can be deleted.
 - Deleting everything at once skips a session that stopped being archived meanwhile, because a resume got there first,
   rather than failing.
+- **Deleting also removes the git branches the deleted sessions were working on**, and the linked worktrees that have
+  them checked out, where git can do so safely. The confirmation, for one session or all at once, lists what git
+  refuses, and locked worktrees, with the choice of taking them along; the rules are in
+  `docs/product/branch-and-worktree-cleanup.md`.
 
 Removing a project or deleting a console also deletes its archived sessions along with every other session record
 (see "Removing a project" and "Deleting a console" in `docs/product/consoles-and-projects.md`).
@@ -63,8 +67,9 @@ Its agent records are automatically moved to the system Trash under the rules in
 the Trash" below. The session must still be unused when deletion takes place; if it no longer qualifies, deletion
 is refused and an error is shown.
 
-Deleting removes the session's record as described in "Deleting archived sessions" above. Its process is stopped,
-and nothing is left in the archive. A trust confirmation or session request of the session's that is still waiting is
+Deleting removes the session's record as described in "Deleting archived sessions" above, its bound branches and
+worktrees included, with nothing forced since nothing is asked. Its process is stopped, and nothing is left in the
+archive. A trust confirmation or session request of the session's that is still waiting is
 dropped with it (see "How a request ends" in `docs/product/session-requests.md`).
 
 - The check is made at the moment of the delete: a session that has become used by then — a prompt submitted at the
@@ -90,10 +95,12 @@ symbolic link can leave the result unknown. Having no conversation does not itse
 
 The confirmation — for one session or all archived sessions at once — hides its cleanup option when the result is
 absent. Otherwise it offers an **unchecked by default** checkbox to also move the agent's own session records to the
-Trash, including while the check is pending or its result is unknown. Its hint says that the
-agent's transcript goes, wherever this machine keeps it, that the session can then no longer be resumed in the agent
-itself, and that it can be recovered from the Trash; when archived sessions are deleted along, the hint covers their
-transcripts too. Unticked, used sessions' agent records are kept; for a bulk deletion, every session's agent records
+Trash, including while the check is pending or its result is unknown. It is a plain block, not inside a warning, and
+its hint says that the session, or the sessions, can then no longer be resumed in the agent itself and that the
+records can be recovered from the Trash. While it is ticked, the confirmation's one warning, below its options and
+above its buttons, gains a line saying that the agent's own records of the session — and of the sessions deleted with
+it, or of all the sessions deleted at once — are also moved to the Trash; a confirmation that had no warning gets one
+then (see "The confirmation" in `docs/product/branch-and-worktree-cleanup.md` for the warning's other lines). Unticked, used sessions' agent records are kept; for a bulk deletion, every session's agent records
 are kept. Either way the confirmation's message says that the project's files are kept. While a deletion with the
 option ticked runs, the button says it is moving to the Trash,
 and the confirmation stays open until the move has finished; while any deletion runs, the option cannot be changed.

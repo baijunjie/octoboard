@@ -39,6 +39,7 @@
 //!   `gc.reflogExpire` (90 days by default) drops it, the row goes. A branch deleted and made again
 //!   at the same commit inside one second has the same first entry and keeps the old row.
 
+pub mod cleanup;
 mod gate;
 mod git_files;
 pub mod git_hooks;

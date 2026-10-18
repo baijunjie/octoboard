@@ -6,7 +6,8 @@ import { expect, it, vi } from "vitest";
 import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../components/tooltipTestSupport";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
-import type { Account, Session } from "../protocol";
+import type { Account, Session, SessionBranchItem } from "../protocol";
+import { DaemonRequestError } from "../daemon-client";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import type { DialogRequest } from "./dialogRequest";
 import { RequestedDialog } from "./RequestedDialog";
@@ -156,7 +157,14 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
+/** The bodies of the requests of `type` the dialog sent. */
+function sent(daemon: Daemon, type: string): unknown[] {
+  return vi.mocked(daemon.request).mock.calls.map(([body]) => body).filter((body) => body.type === type);
+}
+
 async function submitDialog(): Promise<void> {
+  // An inspection the confirmation holds Confirm for settles first.
+  await act(async () => {});
   await act(async () => {
     document.body.querySelector("[role=alertdialog] form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
@@ -176,13 +184,13 @@ it("lists every bound descendant before archiving and refreshes the list while o
   const titles = () => [...document.querySelectorAll("[role=alertdialog] li")].map((row) => row.textContent);
   expect(titles()).toHaveLength(3);
   for (const title of [manual.title, lead.title, nested.title]) expect(titles().some((text) => text?.includes(title))).toBe(true);
-  expect(daemon.request).not.toHaveBeenCalled();
+  expect(sent(daemon, "archive_session")).toEqual([]);
   const late = sessionOf("late", console_.id, project.id, "New session", "starting", { bound_to: hub.id });
   act(() => daemon.store.setState({ sessions: new Map([...daemon.store.getState().sessions, [late.id, late]]) }));
   expect(titles()).toHaveLength(4);
   expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("Their processes end.");
   await submitDialog();
-  expect(daemon.request).toHaveBeenCalledExactlyOnceWith({ type: "archive_session", session: hub.id });
+  expect(sent(daemon, "archive_session")).toEqual([{ type: "archive_session", session: hub.id }]);
   expect(onClose).toHaveBeenCalledOnce();
 });
 
@@ -403,7 +411,7 @@ it("retains confirmation and cleanup when inspecting records fails", async () =>
   await act(async () => {});
   expect(document.querySelector("[role=alertdialog]")).not.toBeNull();
   expect(document.querySelector("[role=alertdialog] input[type=checkbox]")).not.toBeNull();
-  expect(daemon.request).toHaveBeenCalledTimes(1);
+  expect(sent(daemon, "inspect_session_records")).toHaveLength(1);
 });
 
 
@@ -438,6 +446,346 @@ it("does not close a used session's confirmation when an earlier direct deletion
   act(() => daemon.store.setState({ sessions: new Map([[owner.id, owner]]) }));
   await act(async () => waiting.resolve());
   expect(document.querySelector("[role=alertdialog]")).not.toBeNull();
-  expect(daemon.request).toHaveBeenCalledTimes(2);
+  expect(sent(daemon, "delete_session")).toHaveLength(1);
+  expect(sent(daemon, "inspect_session_records")).toHaveLength(1);
   expect(onClose).not.toHaveBeenCalled();
+});
+
+const UNCOMMITTED: SessionBranchItem = {
+  kind: "worktree", repository: "/r/.git", branch: "feature", path: "/r-feature", project: project.id,
+  session: owner.id, state: "uncommitted_changes", uncommitted: true, detail: null,
+};
+const UNMERGED: SessionBranchItem = { ...UNCOMMITTED, kind: "branch", path: null, state: "unmerged", uncommitted: false };
+const KEPT: SessionBranchItem = { ...UNMERGED, branch: "main", state: "checked_out" };
+const LOCKED: SessionBranchItem = { ...UNCOMMITTED, branch: "pinned", path: "/r-pinned", state: "locked", uncommitted: false };
+const PINNED: SessionBranchItem = { ...UNMERGED, branch: "pinned", state: "removable" };
+
+/** `item` as a request names it back. */
+function targetOf({ kind, repository, branch, path, state, uncommitted }: SessionBranchItem) {
+  return { kind, repository, branch, path, state, uncommitted };
+}
+
+/** A row's text as assistive technology reads it: what is hidden from it left out. */
+function announced(row: Element): string {
+  const copy = row.cloneNode(true) as Element;
+  copy.querySelectorAll("[aria-hidden=true]").forEach((hidden) => hidden.remove());
+  // Screen readers skip the bidi isolates around substituted values.
+  return (copy.textContent ?? "").replace(/[\u2066-\u2069]/g, "");
+}
+const listed = () => [...document.querySelectorAll("[role=alertdialog] li")].map(announced);
+const boxes = () => [...document.querySelectorAll<HTMLInputElement>('[role=alertdialog] input[type="checkbox"]')];
+
+// Each confirmation that removes the bound branches of its sessions, with the request it sends.
+const BRANCH_CONFIRMATIONS: Array<[string, DialogRequest, Record<string, unknown>]> = [
+  ["archiving a session", { kind: "archive-session", session: owner }, { type: "archive_session", session: owner.id }],
+  ["deleting an archived session", { kind: "delete-session", session: { ...owner, status: "archived" } },
+    { type: "delete_session", session: owner.id, trash_agent_records: false }],
+  ["deleting all archived sessions", { kind: "delete-archived", console: console_, project, count: 1 },
+    { type: "delete_archived_sessions", console: console_.id, project: project.id, trash_agent_records: false }],
+];
+
+it.each(BRANCH_CONFIRMATIONS)("lists what git refuses to remove when %s and forces it only once the checkbox is selected", async (_, dialog, body) => {
+  const archived = { ...owner, status: "archived" as const };
+  const { daemon } = mount(dialog, [dialog.kind === "archive-session" ? owner : archived], [], {
+    request: async (sentBody) => sentBody.type === "inspect_session_branches"
+      ? { type: "session_branches_inspected", items: [UNCOMMITTED, UNMERGED, KEPT] }
+      : { type: "session_records_inspected", presence: "absent" },
+  });
+  await act(async () => {});
+  expect(sent(daemon, "inspect_session_branches")).toEqual([{ type: "inspect_session_branches", sessions: [owner.id] }]);
+  expect(listed()).toEqual(["/r-feature on branch feature", "feature"]);
+  const text = document.querySelector("[role=alertdialog]")?.textContent;
+  expect(text).toContain("This worktree has uncommitted changes:");
+  expect(text).toContain("This branch is not merged:");
+  expect(checkbox().checked).toBe(false);
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ ...body, keep: [targetOf(UNCOMMITTED), targetOf(UNMERGED)] });
+  checkAll();
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ ...body, force_remove: [targetOf(UNCOMMITTED), targetOf(UNMERGED)] });
+});
+
+it("offers nothing to force when everything bound can go or has to stay", async () => {
+  mount({ kind: "archive-session", session: owner }, [owner], [], {
+    request: async () => ({ type: "session_branches_inspected", items: [{ ...UNMERGED, state: "removable" }, KEPT] }),
+  });
+  await act(async () => {});
+  expect(document.querySelector("[role=alertdialog] input[type=checkbox]")).toBeNull();
+});
+
+it("lists locked worktrees apart, with their changes, under a checkbox of their own that forces them alone", async () => {
+  const { daemon } = mount({ kind: "archive-session", session: owner }, [owner], [], {
+    request: async () => ({ type: "session_branches_inspected", items: [UNMERGED, { ...LOCKED, uncommitted: true }] }),
+  });
+  await act(async () => {});
+  expect(boxes()).toHaveLength(2);
+  expect(listed()).toContain("/r-pinned on branch pinned, uncommitted changes");
+  act(() => boxes()[1].click());
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({
+    type: "archive_session", session: owner.id,
+    force_remove: [targetOf({ ...LOCKED, uncommitted: true })], keep: [targetOf(UNMERGED)],
+  });
+});
+
+it("unchecks a choice once the list it was made over changes, and keeps the list up while asking again", async () => {
+  const late = sessionOf("s-late", console_.id, project.id, "Late", "idle", { bound_to: owner.id });
+  const second = deferred();
+  const { daemon } = mount({ kind: "archive-session", session: { ...owner, status: "working" } }, [owner], [], {
+    request: async (body) => {
+      if (body.type !== "inspect_session_branches") return { type: "ack" };
+      if (body.sessions.length === 1) return { type: "session_branches_inspected", items: [UNMERGED] };
+      await second.promise;
+      return { type: "session_branches_inspected", items: [UNMERGED, { ...UNMERGED, branch: "late" }] };
+    },
+  });
+  await act(async () => {});
+  checkAll();
+  act(() => daemon.store.setState({ sessions: new Map([[owner.id, owner], [late.id, late]]) }));
+  // The newer question is on its way: the list stands, and Confirm waits.
+  expect(listed()).toContain("feature");
+  expect(checkbox().checked).toBe(true);
+  await act(async () => document.body.querySelector("[role=alertdialog] form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  expect(sent(daemon, "archive_session")).toEqual([]);
+  await act(async () => second.resolve());
+  expect(listed()).toContain("late");
+  expect(checkbox().checked).toBe(false);
+});
+
+it("drops an answer that arrives after a newer question", async () => {
+  const late = sessionOf("s-late", console_.id, project.id, "Late", "idle", { bound_to: owner.id });
+  const first = deferred();
+  const { daemon } = mount({ kind: "archive-session", session: { ...owner, status: "working" } }, [owner], [], {
+    request: async (body) => {
+      if (body.type !== "inspect_session_branches") return { type: "ack" };
+      if (body.sessions.length === 1) {
+        await first.promise;
+        return { type: "session_branches_inspected", items: [{ ...UNMERGED, branch: "stale" }] };
+      }
+      return { type: "session_branches_inspected", items: [UNMERGED] };
+    },
+  });
+  act(() => daemon.store.setState({ sessions: new Map([[owner.id, owner], [late.id, late]]) }));
+  await act(async () => {});
+  await act(async () => first.resolve());
+  expect(listed()).toContain("feature");
+  expect(listed()).not.toContain("stale");
+});
+
+it("lists what goes along with a project's folder, asked afresh each time moving it to the Trash is chosen", async () => {
+  const { daemon } = mount({ kind: "delete-project", project }, [], [], {
+    request: async () => ({ type: "project_removal_inspected", items: [UNCOMMITTED, UNMERGED] }),
+  });
+  await act(async () => {});
+  expect(sent(daemon, "inspect_project_removal")).toEqual([]);
+  checkAll();
+  await act(async () => {});
+  expect(listed()).toEqual(["/r-feature on branch feature", "feature"]);
+  const text = document.querySelector("[role=alertdialog]")?.textContent;
+  expect(text).toContain("Moved to the Trash with the folder:");
+  expect(text).toContain("Deleted permanently:");
+  checkAll();
+  expect(listed()).toEqual([]);
+  checkAll();
+  await act(async () => {});
+  expect(sent(daemon, "inspect_project_removal")).toHaveLength(2);
+});
+
+it("holds a project's removal while what goes along is asked, and says more may go when that fails", async () => {
+  const answer = deferred();
+  const { daemon } = mount({ kind: "delete-project", project }, [], [], {
+    request: async (body) => {
+      if (body.type !== "inspect_project_removal") return { type: "ack" };
+      await answer.promise;
+      throw new Error("Connection lost");
+    },
+  });
+  checkAll();
+  await act(async () => document.body.querySelector("[role=alertdialog] form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  expect(sent(daemon, "delete_project")).toEqual([]);
+  await act(async () => answer.resolve());
+  expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("its branches deleted permanently");
+  await submitDialog();
+  expect(sent(daemon, "delete_project")).toHaveLength(1);
+});
+
+it("takes a locked worktree, and the branch it has checked out, along with a project only when chosen", async () => {
+  const { daemon } = mount({ kind: "delete-project", project }, [], [], {
+    request: async () => ({ type: "project_removal_inspected", items: [UNCOMMITTED, LOCKED, PINNED] }),
+  });
+  checkAll();
+  await act(async () => {});
+  expect(listed()).toEqual(["/r-feature on branch feature", "/r-pinned on branch pinned"]);
+  act(() => boxes()[1].click());
+  expect(listed()).toContain("pinned");
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({
+    type: "delete_project", project: project.id, stop_sessions: false, trash_directory: true,
+    force_remove: [targetOf(LOCKED)],
+  });
+  // Without the folder nothing goes along, whatever was ticked for it.
+  act(() => boxes()[0].click());
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: false });
+});
+
+/** The warning boxes the confirmation shows. */
+const warnings = () => [...document.querySelectorAll("[role=alertdialog] [data-slot=alert-root]")];
+
+it("says that more may go along with a project in the dialog's one warning", async () => {
+  mount({ kind: "delete-project", project }, [], [], {
+    request: async (body) => {
+      if (body.type === "inspect_project_removal") throw new Error("Connection lost");
+      return { type: "ack" };
+    },
+  });
+  expect(warnings()).toHaveLength(0);
+  checkAll();
+  await act(async () => {});
+  expect(warnings()).toHaveLength(1);
+  expect(warnings()[0].textContent).toContain("deleted permanently");
+});
+
+it("adds what a ticked option does to the dialog's one warning, which holds no checkbox", async () => {
+  const child = sessionOf("s-child", console_.id, project.id, "Child", "archived", { bound_to: owner.id });
+  mount({ kind: "delete-session", session: { ...owner, status: "archived" } }, [owner, child], [], {
+    request: async (body) => body.type === "inspect_session_branches"
+      ? { type: "session_branches_inspected", items: [UNCOMMITTED, UNMERGED, LOCKED] }
+      : { type: "session_records_inspected", presence: "absent" },
+  });
+  await act(async () => {});
+  expect(warnings()).toHaveLength(1);
+  expect(warnings()[0].querySelector("input[type=checkbox]")).toBeNull();
+  act(() => boxes()[0].click());
+  act(() => boxes()[1].click());
+  expect(warnings()).toHaveLength(1);
+  expect(warnings()[0].textContent).toContain("Also permanently deletes 2 worktrees and branches Git keeps.");
+  expect(warnings()[0].textContent).toContain("Also permanently deletes the locked worktree, uncommitted changes included.");
+  act(() => boxes()[0].click());
+  expect(warnings()[0].textContent).not.toContain("worktrees and branches Git keeps");
+});
+
+it("shows a warning only once an option is ticked where the confirmation has none of its own", async () => {
+  mount({ kind: "archive-session", session: owner }, [owner], [], {
+    request: async () => ({ type: "session_branches_inspected", items: [UNMERGED] }),
+  });
+  await act(async () => {});
+  expect(warnings()).toHaveLength(0);
+  checkAll();
+  expect(warnings()).toHaveLength(1);
+  checkAll();
+  expect(warnings()).toHaveLength(0);
+});
+
+it("forces no locked worktree once the Trash option is unticked after the locked one was ticked", async () => {
+  const { daemon } = mount({ kind: "delete-project", project }, [], [], {
+    request: async () => ({ type: "project_removal_inspected", items: [LOCKED] }),
+  });
+  checkAll();
+  await act(async () => {});
+  act(() => boxes()[1].click());
+  expect(boxes()[1].checked).toBe(true);
+  act(() => boxes()[0].click());
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: false });
+});
+
+it("warns of nothing going along with a project whose removal would be refused", async () => {
+  const { daemon } = mount({ kind: "delete-project", project }, [], [], {
+    request: async (body) => {
+      if (body.type === "inspect_project_removal") throw new DaemonRequestError("shared", "project_directory_shared", { project: "p-2" });
+      return { type: "ack" };
+    },
+  });
+  checkAll();
+  await act(async () => {});
+  expect(document.querySelector("[role=alertdialog]")?.textContent).not.toContain("deleted permanently");
+  expect(listed()).toEqual([]);
+  await submitDialog();
+  expect(sent(daemon, "delete_project")).toHaveLength(1);
+});
+
+/** The disclosure button under an option, by the words it shows. */
+function disclosure(text: string): HTMLButtonElement {
+  return [...document.querySelectorAll<HTMLButtonElement>("[role=alertdialog] button[aria-expanded]")].find((button) => button.textContent?.includes(text))!;
+}
+
+it("folds what an option covers under a Details button described by its option, left as the user leaves it", async () => {
+  const late = sessionOf("s-late", console_.id, project.id, "Late", "idle", { bound_to: owner.id });
+  const { daemon } = mount({ kind: "archive-session", session: { ...owner, status: "working" } }, [owner], [], {
+    request: async (body) => {
+      if (body.type !== "inspect_session_branches") return { type: "ack" };
+      return { type: "session_branches_inspected", items: body.sessions.length === 1 ? [UNMERGED, LOCKED] : [UNMERGED, LOCKED, { ...UNMERGED, branch: "late" }] };
+    },
+  });
+  await act(async () => {});
+  const details = () => [...document.querySelectorAll<HTMLButtonElement>("[role=alertdialog] button[aria-expanded]")];
+  expect(details().map((button) => button.textContent)).toEqual(["Details", "Details"]);
+  expect(details()[0].getAttribute("aria-expanded")).toBe("false");
+  expect(details()[0].closest("h1, h2, h3, h4, h5, h6")).toBeNull();
+  const description = document.getElementById(details()[0].getAttribute("aria-describedby")!)!;
+  expect(description.textContent).toContain("Also force-remove the worktree or branch Git keeps");
+  act(() => details()[0].click());
+  // Ticking another option, or the list changing, leaves it open.
+  act(() => boxes()[1].click());
+  expect(details()[0].getAttribute("aria-expanded")).toBe("true");
+  act(() => daemon.store.setState({ sessions: new Map([[owner.id, owner], [late.id, late]]) }));
+  await act(async () => {});
+  expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("Also force-remove the worktrees and branches Git keeps (2)");
+  expect(details()[0].getAttribute("aria-expanded")).toBe("true");
+});
+
+it("folds what goes with a project's folder under the Trash option, counting it", async () => {
+  mount({ kind: "delete-project", project }, [], [], {
+    request: async () => ({ type: "project_removal_inspected", items: [UNCOMMITTED, UNMERGED] }),
+  });
+  checkAll();
+  await act(async () => {});
+  const along = disclosure("What goes with it (2)");
+  expect(along.getAttribute("aria-expanded")).toBe("false");
+  expect(document.getElementById(along.getAttribute("aria-describedby")!)?.textContent).toContain("Also move the project folder to the Trash");
+  act(() => along.click());
+  expect(disclosure("What goes with it (2)").getAttribute("aria-expanded")).toBe("true");
+});
+
+it("leaves what goes with a project's folder open when the locked option changes what it lists", async () => {
+  mount({ kind: "delete-project", project }, [], [], {
+    request: async () => ({ type: "project_removal_inspected", items: [UNCOMMITTED, LOCKED, PINNED] }),
+  });
+  checkAll();
+  await act(async () => {});
+  act(() => disclosure("What goes with it").click());
+  act(() => boxes()[1].click());
+  expect(disclosure("What goes with it (2)").getAttribute("aria-expanded")).toBe("true");
+});
+
+it("puts the one warning under the options, so a line it gains moves no checkbox, and says what moving the records does", async () => {
+  const child = sessionOf("s-child", console_.id, project.id, "Child", "archived", { bound_to: owner.id });
+  mount({ kind: "delete-session", session: { ...owner, status: "archived" } }, [owner, child], [], {
+    request: async (body) => body.type === "inspect_session_branches"
+      ? { type: "session_branches_inspected", items: [UNMERGED] }
+      : { type: "session_records_inspected", presence: "present" },
+  });
+  await act(async () => {});
+  const [warning] = warnings();
+  for (const box of boxes()) expect(box.compareDocumentPosition(warning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const tops = boxes().map((box) => box.closest("label"));
+  act(() => boxes()[1].click());
+  expect(boxes().map((box) => box.closest("label"))).toEqual(tops);
+  expect(warnings()[0].textContent).toContain("Also moves the agent's own records of this session and of the sessions deleted with it to the Trash.");
+});
+
+it("describes the Trash option by the line saying more may go, while it shows", async () => {
+  mount({ kind: "delete-project", project }, [], [], {
+    request: async (body) => {
+      if (body.type === "inspect_project_removal") throw new Error("Connection lost");
+      return { type: "ack" };
+    },
+  });
+  checkAll();
+  await act(async () => {});
+  const ids = (checkbox().getAttribute("aria-describedby") ?? "").split(" ");
+  expect(ids.map((id) => document.getElementById(id)?.textContent).join(" ")).toContain("deleted permanently");
+  checkAll();
+  expect((checkbox().getAttribute("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent ?? "").join(" ")).not.toContain("deleted permanently");
 });

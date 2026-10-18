@@ -15,8 +15,10 @@ import { RowIconButton } from "./rows";
 import type { SidebarHandlers } from "./types";
 
 /** A session row's or card's controls: its action menu, and before it a Delete or Archive shortcut
- * only while that action needs no confirmation. When a shortcut
- * disappears while holding keyboard focus, focus moves to the row (`rowRef`). */
+ * only while the sessions alone call for no confirmation of that action. An archive through the
+ * shortcut can still ask, once the daemon says a branch or worktree bound to the session needs the
+ * user's word. When a shortcut disappears while holding keyboard focus, focus moves to the row
+ * (`rowRef`). */
 export function SessionActions({
   handlers,
   session,

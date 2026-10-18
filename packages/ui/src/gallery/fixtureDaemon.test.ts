@@ -8,7 +8,7 @@ import type { RequestBody } from "../protocol";
 import { exportedDocument } from "./fixtureConfiguration";
 import { createFixtureDaemon } from "./fixtureDaemon";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore";
-import { consoleOf, gitStatusOf, pageOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
+import { branchItemOf, consoleOf, gitStatusOf, pageOf, projectOf, sessionOf, snapshotState, worktreeItemOf } from "./fixtures/builders";
 
 describe("the fixture daemon's session archiving", () => {
   it("archives running and interrupted descendants and supports reopening", async () => {
@@ -448,6 +448,50 @@ describe("the fixture daemon's console saving", () => {
     await d.request({ type: "update_console", console: owner.id, console_session_prompt: "x" });
     await d.request({ type: "update_console", console: owner.id, console_session_prompt: "  ", codex_console_session_model: null });
     expect(d.store.getState().consoles.get(owner.id)).toMatchObject({ console_session_prompt: null, codex_console_session_model: null });
+  });
+});
+
+describe("the fixture daemon's bound branches and worktrees", () => {
+  const project = projectOf("p", "c", "Site");
+  const owner = sessionOf("owner", "c", project.id, "Owner", "archived");
+  const other = sessionOf("other", "c", project.id, "Other", "idle");
+  const worktree = worktreeItemOf(project, owner, "feat/a", "/Users/dev/worktrees/a");
+  const branch = branchItemOf(project, other, "fix/b");
+  const unbound = worktreeItemOf(project, null, null, "/Users/dev/worktrees/c", "removable");
+  const scenario = {
+    id: "branches",
+    group: "Archive view" as const,
+    category: "normal" as const,
+    title: "",
+    state: snapshotState({ projects: [project], sessions: [owner, other] }),
+    sessionBranches: [worktree, branch, unbound],
+    projectRemovalBranches: { [project.id]: [worktree, unbound] },
+  };
+
+  it("finds what is bound to exactly the sessions asked about that still exist", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(daemon.request({ type: "inspect_session_branches", sessions: [owner.id, "missing"] })).resolves.toEqual({ type: "session_branches_inspected", items: [worktree] });
+    // A worktree bound to no session belongs to no inspection of sessions.
+    await expect(daemon.request({ type: "inspect_session_branches", sessions: [owner.id, other.id] })).resolves.toMatchObject({ items: [worktree, branch] });
+    await expect(createFixtureDaemon({ ...scenario, sessionBranches: undefined }).request({ type: "inspect_session_branches", sessions: [owner.id] })).resolves.toMatchObject({ items: [] });
+  });
+
+  it("answers a project removal per project and refuses an unknown one", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(daemon.request({ type: "inspect_project_removal", project: project.id })).resolves.toEqual({ type: "project_removal_inspected", items: [worktree, unbound] });
+    await expect(createFixtureDaemon({ ...scenario, projectRemovalBranches: undefined }).request({ type: "inspect_project_removal", project: project.id })).resolves.toMatchObject({ items: [] });
+    await expect(daemon.request({ type: "inspect_project_removal", project: "missing" })).rejects.toMatchObject({ code: "unknown_project" });
+  });
+
+  it("can fail a project's inspection, and leave a session inspection unanswered", async () => {
+    const error = { code: "internal_error", params: { detail: "no git" }, message: "no git" };
+    const failing = createFixtureDaemon({ ...scenario, projectRemovalBranches: { [project.id]: error } });
+    await expect(failing.request({ type: "inspect_project_removal", project: project.id })).rejects.toMatchObject({ code: "internal_error" });
+    const silent = createFixtureDaemon({ ...scenario, sessionBranches: "pending" });
+    const answered = vi.fn();
+    void silent.request({ type: "inspect_session_branches", sessions: [owner.id] }).then(answered);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(answered).not.toHaveBeenCalled();
   });
 });
 

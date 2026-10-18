@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use anyhow::{bail, Result};
 
+use crate::branch_origin::cleanup;
 use crate::outbox::Drain;
 use crate::protocol::{error_code, CodedError, Session, SessionStatus};
 use crate::state::{AppState, TurnClose};
@@ -203,6 +204,21 @@ pub fn deliver_report(
     session_id: &str,
     report: Report<'_>,
 ) -> Result<String> {
+    // What it archived is dropped, its branches with it: the one caller that archives in earnest,
+    // a session's own `done` report, goes through `deliver_own_report`, which removes them, and a
+    // synthesised report is never `done`.
+    deliver_and_archive(state, session_id, report).map(|(note, _)| note)
+}
+
+/// [`deliver_report`], also returning the sessions it archived, for the removal of the branches
+/// bound to them once their processes have ended, which is the caller's. The answer names the
+/// bound branches and worktrees that removal will leave, judged before the archive, since it has
+/// to reach the session before its process is ended.
+fn deliver_and_archive(
+    state: &Arc<AppState>,
+    session_id: &str,
+    report: Report<'_>,
+) -> Result<(String, Vec<Session>)> {
     let _removal = state.claim_session_removal();
     let session = state.session_record(session_id)?;
     let Some(bound_to) = &session.bound_to else {
@@ -253,11 +269,14 @@ pub fn deliver_report(
     // archived on the strength of a report its owner never got.
     let delivery = write_message(state, &owner.id, &message, WhenBlocked::Queue)?;
 
-    if finished {
-        coordinator::archive_session(state, session_id)?;
-    }
+    let (left, archived) = if finished {
+        let left = cleanup::will_be_left(state, std::slice::from_ref(&session));
+        (left, coordinator::archive_session(state, session_id)?)
+    } else {
+        (Vec::new(), Vec::new())
+    };
 
-    Ok(match (delivery, finished) {
+    let mut note = match (delivery, finished) {
         (Delivery::Written, true) => {
             format!("Reported to the {owner_kind}. This session is now archived.")
         }
@@ -269,7 +288,14 @@ pub fn deliver_report(
         (Delivery::Queued, false) => format!(
             "Report accepted; the {owner_kind} will see it as soon as it can take a message."
         ),
-    })
+    };
+    if !left.is_empty() {
+        note.push_str(&format!(
+            " These git branches and worktrees bound to this session will not be removed: {}.",
+            cleanup::lines(&left).join("; ")
+        ));
+    }
+    Ok((note, archived))
 }
 
 /// Closes the session's open turn on `turn` ending it, and has a report synthesised for the owner
@@ -373,7 +399,7 @@ pub async fn deliver_own_report(
         let session_id = session_id.to_string();
         // Delivery writes into the owner's PTY, which blocks.
         tokio::task::spawn_blocking(move || {
-            deliver_report(
+            deliver_and_archive(
                 &state,
                 &session_id,
                 Report {
@@ -388,7 +414,9 @@ pub async fn deliver_own_report(
         .map_err(anyhow::Error::from)
         .and_then(|delivered| delivered)
     };
-    delivered.inspect_err(|_| state.clear_reported(session_id))
+    let (note, archived) = delivered.inspect_err(|_| state.clear_reported(session_id))?;
+    cleanup::remove_in_background(state, archived);
+    Ok(note)
 }
 
 /// The report as it is written into the owner. Plain prose with the structured fields spelled out:

@@ -1,6 +1,6 @@
 import type { Agent } from "../../protocol";
 import type { Scenario } from "../scenario";
-import { consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
+import { branchItemOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "./builders";
 
 const GROUP = "Archive view";
 
@@ -140,6 +140,29 @@ const emptyConsoleArchiveState = snapshotState({
   sessions: [sessionOf("s-live", console_.id, project.id, "Live session", "idle")],
 });
 
+const deleteBoundSessions: Scenario = {
+  id: "archive-delete-bound-sessions",
+  group: GROUP,
+  category: "normal",
+  title: "Delete an archived lead session",
+  state: archiveState,
+  sessionRecords: Object.fromEntries([...archiveState.sessions.keys()].map((id) => [id, id === underArchivedLead[0].id ? "present" as const : "absent" as const])),
+  preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
+  description: "Native files exist for a child, so the confirmation keeps the agent-records Trash option, unchecked, with a short note. Above it, two plain options with closed Details: \"Also force-remove the worktrees and branches Git keeps (2)\" for an uncommitted worktree and an unmerged branch, and \"Also delete the locked worktrees (4)\", each unchecked. Under the options, the one warning lists both archived children deleted with the session.",
+  sessionBranches: [
+    worktreeItemOf(boundProject, underArchivedLead[0], "feat/pagination", "/Users/dev/worktrees/search-api-pagination"),
+    branchItemOf(boundProject, archivedLead, "release/retry-policy"),
+    worktreeItemOf(boundProject, underArchivedLead[0], "feat/ranking", "/Users/dev/worktrees/search-api-ranking", "locked"),
+    worktreeItemOf(boundProject, underArchivedLead[1], "feat/synonyms", "/Users/dev/worktrees/search-api-synonyms", "locked", true),
+    worktreeItemOf(boundProject, underArchivedLead[1], null, "/Users/dev/worktrees/search-api-spike", "locked"),
+    worktreeItemOf(boundProject, archivedLead, null, "/Users/dev/worktrees/search-api-profiling", "locked", true),
+  ],
+  steps: [
+    (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
+    (ui) => ui.press((name) => name === ui.t("archive.delete", { title: archivedLead.title })),
+  ],
+};
+
 export const archiveScenarios: Scenario[] = [
   {
     id: "archive-project-preview",
@@ -232,18 +255,18 @@ export const archiveScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
     ],
   },
+  deleteBoundSessions,
   {
-    id: "archive-delete-bound-sessions",
-    group: GROUP,
-    category: "normal",
-    title: "Delete an archived lead session",
-    state: archiveState,
-    sessionRecords: Object.fromEntries([...archiveState.sessions.keys()].map((id) => [id, id === underArchivedLead[0].id ? "present" as const : "absent" as const])),
-    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
-    description: "Native files exist for a child, so the confirmation keeps the Trash option, unchecked, with the hint that the sessions deleted with it go too. It lists both archived children with their agent icons and titles.",
+    ...deleteBoundSessions,
+    id: "archive-delete-bound-sessions-ticked",
+    title: "Delete an archived lead session, every option ticked",
+    description: "All three options are ticked and the two Details disclosures opened: the force-remove list (the uncommitted worktree and the unmerged branch), the locked worktrees in each wording, and the agent-records Trash option. The one warning, under the options, lists both archived children deleted with the session and gains a line for each ticked option, among them that the agent's records of this session and of the sessions deleted with it are moved to the Trash.",
     steps: [
-      (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
-      (ui) => ui.press((name) => name === ui.t("archive.delete", { title: archivedLead.title })),
+      ...deleteBoundSessions.steps!,
+      (ui) => ui.pressEach(ui.t("branchCleanup.details")),
+      (ui) => ui.press(ui.t("dialog.sessionBranches.force", { count: 2 })),
+      (ui) => ui.press(ui.t("dialog.lockedWorktrees.remove", { count: 4 })),
+      (ui) => ui.press(ui.t("dialog.deleteSession.trashRecords")),
     ],
   },
   {
@@ -265,7 +288,11 @@ export const archiveScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Delete all archived console sessions",
-    description: "The confirmation counts the archived console sessions and the archived session deleted along with them. Under it, the unchecked option to also move the agents' own session records to the Trash, with its hint.",
+    description: "The confirmation counts the archived console sessions. Plain options come first: the force-remove option counting the worktree with uncommitted changes and the unmerged branch left by the sessions deleted (Details closed, unchecked), then the unchecked option to also move the agents' own session records to the Trash with its short note. Under them, the one warning says the archived session deleted along with them goes too.",
+    sessionBranches: [
+      worktreeItemOf(project, deleteAllState.sessions.get("s-under-hub")!, "feat/hub-handoff", "/Users/dev/worktrees/search-api-hub-handoff"),
+      branchItemOf(project, deleteAllState.sessions.get("s-under-hub")!, "fix/stale-cache"),
+    ],
     state: deleteAllState,
     sessionRecords: { "s-under-hub": "present" },
     steps: [

@@ -83,6 +83,11 @@ pub struct AppState {
     /// Per repository, the gate every write to its branch origins takes and when rows were last
     /// added (`crate::branch_origin`).
     pub branch_origins: crate::branch_origin::Gates,
+    /// The removal of the branches and worktrees bound to sessions archived or deleted: its gate
+    /// per repository.
+    pub branch_cleanups: crate::branch_origin::cleanup::Cleanups,
+    /// What requests reach the host through where a test stands in: `git`, the Trash.
+    pub host_tools: crate::host_tools::HostTools,
     pub record_hints: crate::agent_records::Hints,
     /// The repositories' refs under watch, so a commit made outside the daemon is re-read
     /// (`crate::git_watch`).
@@ -194,6 +199,8 @@ impl AppState {
             git_checks: Mutex::new(HashMap::new()),
             git_check_completed: Mutex::new(HashMap::new()),
             branch_origins: Default::default(),
+            branch_cleanups: Default::default(),
+            host_tools: Default::default(),
             record_hints: Default::default(),
             git_watch: Default::default(),
             agent_availability: RwLock::new(

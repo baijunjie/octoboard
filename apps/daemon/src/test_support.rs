@@ -116,16 +116,36 @@ impl AsRef<Path> for ScratchFile {
 pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
     let dir = ScratchDir::new(label);
     let store = Store::open(&dir.join("octoboard.db")).expect("store");
-    (
-        Arc::new(AppState::new(
-            store,
-            1234,
-            "/opt/octoboardd".to_string(),
-            dir.join("output"),
-            dir.join("consoles"),
-        )),
-        dir,
-    )
+    let state = Arc::new(AppState::new(
+        store,
+        1234,
+        "/opt/octoboardd".to_string(),
+        dir.join("output"),
+        dir.join("consoles"),
+    ));
+    state.host_tools.replace(host_tools());
+    (state, dir)
+}
+
+/// What requests reach the host through in a test: the system `git` over [`isolated_git_env`], and
+/// a Trash that deletes, so no test runs the user's login shell or fills their Trash.
+pub(crate) fn host_tools() -> crate::host_tools::Tools {
+    crate::host_tools::Tools {
+        git: || {
+            Ok(crate::branch_origin::cleanup::Git::new(
+                SYSTEM_GIT,
+                isolated_git_env(),
+            ))
+        },
+        trash: |path| {
+            if path.is_dir() {
+                std::fs::remove_dir_all(path)?;
+            } else {
+                std::fs::remove_file(path)?;
+            }
+            Ok(())
+        },
+    }
 }
 
 /// A console whose working directory is below `dir`, for a store that needs one to hold projects

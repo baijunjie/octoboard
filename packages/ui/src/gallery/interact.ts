@@ -92,6 +92,10 @@ export interface Ui {
    * on the sidebar's heading row (earlier in the DOM) and in the filter picker, so pressing it
    * again to unpick it would hit the sidebar row. */
   press: (matcher: Matcher) => Promise<void>;
+  /** Presses every control named `matcher` that is there when the first appears, in document order:
+   * for controls that keep one name whatever their state, such as the disclosures of a dialog's
+   * options, where pressing the name twice would fold the first again. */
+  pressEach: (matcher: Matcher) => Promise<void>;
   /** Opens a row’s context menu at a point within the named control. */
   contextMenu: (matcher: Matcher) => Promise<void>;
   /** Opens the terminal's edit menu once the terminal has rendered its output. */
@@ -313,12 +317,13 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     await wait(150);
   };
 
-  const find = (matcher: Matcher): HTMLElement | undefined => {
+  const findAll = (matcher: Matcher): HTMLElement[] => {
     const named = Array.from(doc.querySelectorAll<HTMLElement>(PRESSABLE)).filter((element) => isEnabled(element) && matches(matcher, nameOf(element)));
     // A control that stands inside another of the same name is the one to press: a section heading
     // is a `role="row"` band holding the button that folds it, and the band does nothing.
-    return named.find((element) => !named.some((other) => other !== element && element.contains(other)));
+    return named.filter((element) => !named.some((other) => other !== element && element.contains(other)));
   };
+  const find = (matcher: Matcher): HTMLElement | undefined => findAll(matcher)[0];
 
   /** Puts the pointer on the terminal's text `text`, waiting for a row that holds it. */
   const pointTerminalText = async (text: string): Promise<void> => {
@@ -656,6 +661,13 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async press(matcher) {
       await clickWhenFound(() => find(matcher), `Nothing to press matching ${String(matcher)}`);
+    },
+    async pressEach(matcher) {
+      const controls = await waitFor(() => {
+        const found = findAll(matcher);
+        return found.length > 0 ? found : undefined;
+      }, `Nothing to press matching ${String(matcher)}`);
+      for (const control of controls) await clickWhenFound(() => (control.isConnected ? control : undefined), `${String(matcher)} went away before it was pressed`);
     },
     async confirm() {
       await clickWhenFound(

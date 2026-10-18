@@ -5,7 +5,6 @@ import { useStableHandler } from "../components/useLatest";
 import { errorPresentation } from "../errorPresentation";
 import { useListMotion } from "../components/useListMotion";
 import { InlineChip } from "../components/InlineChip";
-import { useFocusHandoff } from "../components/useFocusHandoff";
 import { AgentIcon } from "../components/AgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { StatusIcon } from "../components/StatusIcon";
@@ -13,7 +12,7 @@ import { TintedAlert } from "../components/TintedAlert";
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
-import { isLive, type Project, type Session } from "../protocol";
+import { isLive, type Project, type Session, type SessionBranchItem } from "../protocol";
 import { sessionAccountTooltip, sessionAgentLabel, sessionDisplayTitle } from "../sessionLabel";
 import { boundArchivedSessions, boundSessionsArchivedWith, compareSessions } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
@@ -24,23 +23,29 @@ import { ProjectDialog } from "./ProjectDialog";
 import { RenameDialog } from "./RenameDialog";
 import { SessionDialog } from "./SessionDialog";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";
-import { TrashOption } from "./TrashOption";
+import { useBranchCleanup, useProjectRemovalCleanup, type WarningLine } from "./BranchCleanupOptions";
+import { ConfirmOption } from "./ConfirmOption";
+import { KeepFocusInDialog } from "./KeepFocusInDialog";
 import { useSessionRecords } from "./useSessionRecords";
 
-/** A warning callout for what a confirmation is about to take along, over the list of sessions when
- * there is one to show: each with its agent's icon and title, plus a status glyph for live sessions.
- * Archived sessions are already identified by the warning's wording. HeroUI's own
- * warning tint rather than its default surface, which is the dialog's own fill and leaves the
- * callout unmarked. */
-function SessionCallout({ title, sessions }: { title: string; sessions?: Session[] }): React.ReactElement {
+/** The one warning a confirmation shows, under its options, for what it is about to take along:
+ * `title` over the list of sessions when there is one to show — each with its agent's icon and
+ * title, plus a status glyph for live sessions; archived sessions are already identified by the
+ * warning's wording — and under them `lines`, one more consequence for each option the user has
+ * ticked, a line with an `id` for an option to be described by. With neither a title nor a line it
+ * is not there at all, so a dialog never shows a second warning. HeroUI's own warning tint rather
+ * than its default surface, which is the dialog's own fill and leaves the callout unmarked. */
+function ConfirmWarning({ title, sessions, lines = [] }: { title?: string; sessions?: Session[]; lines?: WarningLine[] }): React.ReactElement | null {
   const t = useT();
   const sessionsRef = useListMotion<HTMLUListElement>();
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const linesRef = useListMotion<HTMLDivElement>();
+  if (!title && lines.length === 0) return null;
   return (
     <TintedAlert status="warning" className="shadow-none">
       <Alert.Indicator />
       <Alert.Content className="min-w-0">
-        <Alert.Title>{title}</Alert.Title>
+        {title && <Alert.Title>{title}</Alert.Title>}
         {/* The list is a sibling of the description rather than inside it: the description is a
             `<span>`, which cannot hold a list. */}
         {sessions && (
@@ -58,6 +63,9 @@ function SessionCallout({ title, sessions }: { title: string; sessions?: Session
             ))}
           </ul>
         )}
+        <div ref={linesRef} className={`relative flex min-w-0 flex-col gap-1 self-stretch text-sm text-foreground ${title && lines.length > 0 ? "mt-2" : ""}`}>
+          {lines.map((line) => <p key={line.key} id={line.id} data-list-motion={line.key}>{line.text}</p>)}
+        </div>
       </Alert.Content>
     </TintedAlert>
   );
@@ -65,11 +73,14 @@ function SessionCallout({ title, sessions }: { title: string; sessions?: Session
 
 /** Confirms removing a project. The folder stays on disk unless the user opts in to moving it to
  * the Trash, which the daemon does before removing the project and refuses (keeping the project)
- * when it cannot. */
+ * when it cannot. With the folder go the worktrees outside it that the daemon lists and, where the
+ * repository outlives the folder, the branches of the project's sessions, listed once the option is
+ * chosen; a locked worktree only when the user also says so, with the branch it has checked out. */
 function DeleteProjectDialog({ project, running, onClose }: { project: Project; running: Session[]; onClose: () => void }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
   const [trash, setTrash] = useState(false);
+  const cleanup = useProjectRemovalCleanup(project.id, trash, setTrash);
   const confirmKey =
     running.length > 0
       ? trash
@@ -81,32 +92,61 @@ function DeleteProjectDialog({ project, running, onClose }: { project: Project; 
   return (
     <ConfirmDialog
       title={<Message id="dialog.removeProject.title" params={{ name: <InlineChip dir="auto" wrap size="inherit">{project.name}</InlineChip> }} />}
-      message={
-        <>
-          <p>{t(trash ? "dialog.removeProject.messageTrash" : "dialog.removeProject.message")}</p>
-          {running.length > 0 && <SessionCallout title={t("dialog.removeProject.running", { count: running.length })} sessions={running} />}
-        </>
-      }
+      message={t(trash ? "dialog.removeProject.messageTrash" : "dialog.removeProject.message")}
+      warning={<ConfirmWarning title={running.length > 0 ? t("dialog.removeProject.running", { count: running.length }) : undefined} sessions={running.length > 0 ? running : undefined} lines={cleanup.consequences} />}
       confirmLabel={t(confirmKey)}
       pendingLabel={trash ? t("dialog.removeProject.pendingTrash") : undefined}
       destructive
-      extraControl={(busy) => (
-        <TrashOption isSelected={trash} onChange={setTrash} isReadOnly={busy} label={t("dialog.removeProject.trash")} hint={t("dialog.removeProject.trashHint")} />
-      )}
+      waiting={cleanup.pending}
+      extraControl={cleanup.extraControl}
       onCancel={onClose}
       onConfirm={async () => {
-        await request({ type: "delete_project", project: project.id, stop_sessions: running.length > 0, trash_directory: trash });
+        await request({
+          type: "delete_project",
+          project: project.id,
+          stop_sessions: running.length > 0,
+          trash_directory: trash,
+          ...cleanup.choices,
+        });
         onClose();
       }}
     />
   );
 }
 
-/** Keeps focus inside the confirmation when a completed inspection removes its cleanup option. */
-function SessionRecordsTrashOption({ visible, ...props }: React.ComponentProps<typeof TrashOption> & { visible: boolean }): React.ReactElement {
-  const ref = useRef<HTMLDivElement>(null);
-  const handoff = useFocusHandoff(() => ref.current?.closest<HTMLElement>("[role=alertdialog]")?.focus());
-  return <div ref={ref} className="contents" {...handoff}>{visible && <TrashOption {...props} />}</div>;
+/** The option of also moving the agent's own records to the Trash, which a completed inspection
+ * can take away. */
+function SessionRecordsTrashOption({ visible, ...props }: React.ComponentProps<typeof ConfirmOption> & { visible: boolean }): React.ReactElement {
+  return <KeepFocusInDialog>{visible && <ConfirmOption {...props} />}</KeepFocusInDialog>;
+}
+
+/** Confirms archiving a session and every unarchived session under it, listing the bound branches
+ * and worktrees git refuses to remove with the choice of forcing them. */
+function ArchiveSessionDialog({ session, withIt, branches, onClose }: {
+  session: Session;
+  withIt: Session[];
+  /** An inspection of the bound branches already made for this archive. */
+  branches?: SessionBranchItem[];
+  onClose: () => void;
+}): React.ReactElement {
+  const t = useT();
+  const { request } = useDaemon();
+  const cleanup = useBranchCleanup([session.id, ...withIt.map((s) => s.id)], branches);
+  return (
+    <ConfirmDialog
+      title={<Message id="dialog.archiveSession.title" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, session)}</InlineChip> }} />}
+      message={t("dialog.archiveSession.message")}
+      warning={<ConfirmWarning title={withIt.length > 0 ? t("dialog.archiveSession.boundAndEnded", { count: withIt.length }) : undefined} sessions={withIt.length > 0 ? withIt : undefined} lines={cleanup.consequences} />}
+      confirmLabel={t("dialog.archiveSession.confirm")}
+      waiting={cleanup.pending}
+      extraControl={cleanup.extraControl}
+      onCancel={onClose}
+      onConfirm={async () => {
+        await request({ type: "archive_session", session: session.id, ...cleanup.choices });
+        onClose();
+      }}
+    />
+  );
 }
 
 /** The daemon checks the unused state atomically before deleting and cleaning up native records. */
@@ -136,34 +176,42 @@ function DeleteSessionDialog({ session, withIt, onClose }: { session: Session; w
   const t = useT();
   const { request } = useDaemon();
   const [trash, setTrash] = useState(false);
-  const presence = useSessionRecords([session.id, ...withIt.map((s) => s.id)]);
+  const scope = [session.id, ...withIt.map((s) => s.id)];
+  const presence = useSessionRecords(scope);
+  const cleanup = useBranchCleanup(scope);
   const canTrash = presence !== "absent";
   const moveRecords = canTrash && trash;
   return (
     <ConfirmDialog
       title={<Message id="dialog.deleteSession.title" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, session)}</InlineChip> }} />}
-      message={
-        <>
-          <p>{t("dialog.deleteSession.message")}</p>
-          {withIt.length > 0 && <SessionCallout title={t("dialog.deleteSession.bound", { count: withIt.length })} sessions={withIt} />}
-        </>
-      }
+      message={t("dialog.deleteSession.message")}
+      warning={(
+        <ConfirmWarning
+          title={withIt.length > 0 ? t("dialog.deleteSession.bound", { count: withIt.length }) : undefined}
+          sessions={withIt.length > 0 ? withIt : undefined}
+          lines={[...cleanup.consequences, ...(moveRecords ? [{ key: "records", text: t(withIt.length > 0 ? "dialog.deleteSession.trashRecordsLineBound" : "dialog.deleteSession.trashRecordsLine") }] : [])]}
+        />
+      )}
       confirmLabel={t("common.delete")}
       pendingLabel={moveRecords ? t("dialog.removeProject.pendingTrash") : undefined}
       destructive
+      waiting={cleanup.pending}
       extraControl={(busy) => (
-        <SessionRecordsTrashOption
-          visible={canTrash}
-          isSelected={trash}
-          onChange={setTrash}
-          isReadOnly={busy}
-          label={t("dialog.deleteSession.trashRecords")}
-          hint={t(withIt.length > 0 ? "dialog.deleteSession.trashRecordsHintBound" : "dialog.deleteSession.trashRecordsHint")}
-        />
+        <>
+          {cleanup.extraControl(busy)}
+          <SessionRecordsTrashOption
+            visible={canTrash}
+            isSelected={trash}
+            onChange={setTrash}
+            isReadOnly={busy}
+            label={t("dialog.deleteSession.trashRecords")}
+            hint={t(withIt.length > 0 ? "dialog.deleteSession.trashRecordsNoteBound" : "dialog.deleteSession.trashRecordsNote")}
+          />
+        </>
       )}
       onCancel={onClose}
       onConfirm={async () => {
-        await request({ type: "delete_session", session: session.id, trash_agent_records: moveRecords });
+        await request({ type: "delete_session", session: session.id, trash_agent_records: moveRecords, ...cleanup.choices });
         onClose();
       }}
     />
@@ -187,29 +235,35 @@ function DeleteArchivedDialog({
   const { request } = useDaemon();
   const [trash, setTrash] = useState(false);
   const presence = useSessionRecords(targets.map((s) => s.id));
+  const cleanup = useBranchCleanup(targets.map((s) => s.id));
   const canTrash = presence !== "absent";
   const moveRecords = canTrash && trash;
   return (
     <ConfirmDialog
       title={t("dialog.deleteArchived.title", { count: dialog.count })}
-      message={
-        <>
-          <p>{t("dialog.deleteArchived.message", { count: dialog.count })}</p>
-          {withThem > 0 && <SessionCallout title={t("dialog.deleteArchived.bound", { count: withThem })} />}
-        </>
-      }
+      message={t("dialog.deleteArchived.message", { count: dialog.count })}
+      warning={(
+        <ConfirmWarning
+          title={withThem > 0 ? t("dialog.deleteArchived.bound", { count: withThem }) : undefined}
+          lines={[...cleanup.consequences, ...(moveRecords ? [{ key: "records", text: t("dialog.deleteArchived.trashRecordsLine") }] : [])]}
+        />
+      )}
       confirmLabel={t("dialog.deleteArchived.confirm")}
       pendingLabel={moveRecords ? t("dialog.removeProject.pendingTrash") : undefined}
       destructive
+      waiting={cleanup.pending}
       extraControl={(busy) => (
-        <SessionRecordsTrashOption
-          visible={canTrash}
-          isSelected={trash}
-          onChange={setTrash}
-          isReadOnly={busy}
-          label={t("dialog.deleteArchived.trashRecords")}
-          hint={t("dialog.deleteArchived.trashRecordsHint")}
-        />
+        <>
+          {cleanup.extraControl(busy)}
+          <SessionRecordsTrashOption
+            visible={canTrash}
+            isSelected={trash}
+            onChange={setTrash}
+            isReadOnly={busy}
+            label={t("dialog.deleteArchived.trashRecords")}
+            hint={t("dialog.deleteArchived.trashRecordsNote")}
+          />
+        </>
       )}
       onCancel={onClose}
       onConfirm={async () => {
@@ -219,6 +273,7 @@ function DeleteArchivedDialog({
           project: dialog.project?.id,
           console_session: dialog.consoleSession?.id,
           trash_agent_records: moveRecords,
+          ...cleanup.choices,
         });
         onClose();
       }}
@@ -347,23 +402,7 @@ export function RequestedDialog({
       // Read live: every unarchived session under this owner goes along, with running
       // processes ended too. Sessions opened or bound while the dialog is open join the list.
       const withIt = boundSessionsArchivedWith(Array.from(sessions.values()), dialog.session.id);
-      return (
-        <ConfirmDialog
-          title={<Message id="dialog.archiveSession.title" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, dialog.session)}</InlineChip> }} />}
-          message={
-            <>
-              <p>{t("dialog.archiveSession.message")}</p>
-              {withIt.length > 0 && <SessionCallout title={t("dialog.archiveSession.boundAndEnded", { count: withIt.length })} sessions={withIt} />}
-            </>
-          }
-          confirmLabel={t("dialog.archiveSession.confirm")}
-          onCancel={onClose}
-          onConfirm={async () => {
-            await request({ type: "archive_session", session: dialog.session.id });
-            onClose();
-          }}
-        />
-      );
+      return <ArchiveSessionDialog session={dialog.session} withIt={withIt} branches={dialog.branches} onClose={onClose} />;
     }
     case "switch-account":
       return (

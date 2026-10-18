@@ -56,7 +56,9 @@ A branch has at most one responsible session at a time; a session can be respons
 - **It is part of the branch's record** (see "What the record is" below) and follows it: it moves to the new name with
   a rename, goes when the branch is deleted, is not inherited by a branch deleted and created again under the same
   name, and is cleared with the rest when the repository's records are. It can name a session that no longer exists:
-  deleting a session leaves it as it is.
+  deleting a session leaves it as it is. Archiving or deleting a session does delete the branches it is responsible
+  for where git can do so safely, and a deleted branch's record goes with it (see
+  `docs/product/branch-and-worktree-cleanup.md`); a branch that stays keeps its record.
 
 ## When a branch gets a responsible session
 
@@ -147,9 +149,10 @@ tree.
 
 ## What the record is
 
-- **Nothing is written to the user's repository.** No reference, note or configuration entry carries the record; it
-  lives in Octoboard's own storage only, and the Git mode stays read-only (see "Reading only" in
-  `docs/product/project-pane-git-mode.md`).
+- **Nothing is written to the user's repository for the record.** No reference, note or configuration entry carries
+  it; it lives in Octoboard's own storage only, and the Git mode stays read-only (see "Reading only" in
+  `docs/product/project-pane-git-mode.md`). The record is what decides which branches and worktrees go when a session
+  is archived or deleted (see "What is bound to a session" in `docs/product/branch-and-worktree-cleanup.md`).
 - **What a record holds**: the branch's birth — the commit and the second it was created at, which recognise the same
   branch across a rename and tell one deleted and created again under the same name apart — and its responsible
   session, with the title recorded for that session and when it became responsible. Nothing else about who created

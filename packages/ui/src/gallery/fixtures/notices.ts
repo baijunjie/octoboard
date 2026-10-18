@@ -4,6 +4,12 @@ import { SHELL_TIMEOUT } from "./shellTimeout";
 
 const TRUST = "Trust prompts and toasts";
 
+// Git's own multi-line refusal, as `failed` carries it.
+const GIT_REFUSAL = [
+  "error: cannot delete branch 'fix/rename-index' used by worktree at '/Users/dev/worktrees/search-api-rename-index'",
+  "hint: to remove it, first remove the worktree with git worktree remove, then run git branch -D fix/rename-index again once nothing else holds the branch",
+].join("\n");
+
 const { console: console_, web, api } = SAMPLE;
 // A session of each of the other two agents, for the prompts and notices that name the agent.
 const codexSession = sessionOf("s-api-codex", console_.id, api.id, "Review the retry logic", "working", {
@@ -175,6 +181,60 @@ export const noticeScenarios: Scenario[] = [
     externalLinks: { error: "The operating system could not open the default browser" },
     toasts: [{ kind: "error", code: "internal_error", params: { detail: "Unexpected session state while applying an update" }, message: "Unexpected session state while applying an update" }],
     steps: [(ui) => ui.press(ui.t("error.issue.report"))],
+  },
+  {
+    id: "toast-session-branches-not-removed",
+    group: TRUST,
+    category: "exceptional",
+    title: "Branches and worktrees left after an archive",
+    description: "Under the header saying these were to be removed and are still there, the danger alert groups the leftovers by reason under short lead lines: a locked worktree, its path shortened with ~, its row ending \"uncommitted changes\", and under \"Removing this failed:\" a branch git failed to delete, whose multi-line git message is a code block under its name. Recovery guidance follows. The archive itself stands.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{
+      kind: "error",
+      code: "session_branches_not_removed",
+      params: {
+        count: "2",
+        items: JSON.stringify([
+          { kind: "worktree", name: "/Users/dev/worktrees/website-changelog-tidy", branch: "changelog-tidy", state: "locked", uncommitted: true, detail: null },
+          { kind: "branch", name: "fix/rename-index", branch: "fix/rename-index", state: "failed", uncommitted: false, detail: GIT_REFUSAL },
+        ]),
+      },
+      message: "The worktree is locked; the branch could not be deleted",
+    }],
+  },
+  {
+    id: "toast-session-branches-not-removed-locked",
+    group: TRUST,
+    category: "exceptional",
+    title: "Only locked worktrees left after an archive",
+    description: "With a single group of leftovers the alert has no header over it: only the lead line of its group (the worktrees are locked), over a worktree with a branch chip and one on a plain detached HEAD, then the recovery guidance.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{
+      kind: "error",
+      code: "session_branches_not_removed",
+      params: {
+        count: "2",
+        items: JSON.stringify([
+          { kind: "worktree", name: "/Users/dev/worktrees/search-api-ranking", branch: "feat/ranking", state: "locked", uncommitted: false, detail: null },
+          { kind: "worktree", name: "/Users/dev/worktrees/search-api-spike", branch: null, state: "locked", uncommitted: false, detail: null },
+        ]),
+      },
+      message: "The worktrees are locked",
+    }],
+  },
+  {
+    id: "toast-project-branches-not-determined",
+    group: TRUST,
+    category: "exceptional",
+    title: "Project removed, what went with its folder not found out",
+    description: "The danger alert names the removed project as a chip and says the worktrees outside its folder, and its branches if the repository stays, were left, with git's reason in a code block below the sentence, then its own recovery guidance. The project itself is gone.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{
+      kind: "error",
+      code: "project_branches_not_determined",
+      params: { name: "Docs Site", detail: "fatal: not a git repository: '/Users/dev/code/docs-site/.git'" },
+      message: "",
+    }],
   },
   {
     id: "toast-running-session-titles",

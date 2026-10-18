@@ -151,6 +151,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   viewer: its tags and the subtitle naming the commits a committed change is read from, what a change shows (diffs,
   images, renames, type changes, conflicts, no differences), expanding the lines a diff collapses, moving between
   changes, closing it, when the open change is read again, and its errors.
+- [Branch and worktree cleanup](product/branch-and-worktree-cleanup.md) — which git branches and linked worktrees go
+  when sessions are archived or deleted, or a project's folder is moved to the Trash: what counts as bound to a
+  session, what is removed without asking, what the confirmations offer to force (uncommitted or unmerged items, and
+  locked worktrees on their own), when the removal runs, and how leftovers are reported to the user and to agents.
 - [Which session is working on a branch](product/branch-responsible-session.md) — the responsible-session badge on a
   branch's row in the Git mode's branch selector list: the title it names the session by (the session's own while it
   exists, the recorded one once it is gone) and the filled ring a branch of the selected session takes; the
@@ -321,7 +325,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   tooltip shapes — `TitledControl`, `IndicatorTooltip`, `AnchoredTooltip` — with why `Tooltip.Trigger` is not one of
   them.
 - [Writing UI dialogs and fields](memory/writing-ui-dialogs-and-fields.md) — dialogs and form fields in `packages/ui`:
-  a confirmation, typed-word deletions included, being `ConfirmDialog` rather than a dialog of its own, a single-line
+  a confirmation, typed-word deletions included, being `ConfirmDialog` rather than a dialog of its own, a
+  confirmation's options sitting outside its one warning, which sits under them (each ticked option adding its line to it, the items behind a
+  Details disclosure that stays as the user left it), a single-line
   field handing its form the trimmed value through `useTrimmedField`, what is wrong with one field
   showing under that field from the first submit on and the two conditions a field built outside `TextInput` has to
   meet to mark itself invalid, a field's note being its `Description` while HeroUI typography inside a field throws,

@@ -400,8 +400,9 @@ action menu offers:
   and only when the session's agent has more than one account to be on; with just the default account it is left out
   rather than shown disabled. A session in the archive has no such entry, and neither has one still starting.
 - **Archive** — archives the session (see "Archiving, interruption and resuming" in `docs/product/sessions.md`). A
-  session at its prompt or interrupted, with no unarchived session under it, is archived at once; any other asks for
-  confirmation first, and so does one still being resumed. When the archived row takes keyboard focus with it, focus
+  session at its prompt or interrupted, with no unarchived session under it, is archived at once, unless a branch or
+  worktree bound to it needs the user's word (see "The confirmation" in `docs/product/branch-and-worktree-cleanup.md`);
+  any other asks for confirmation first, and so does one still being resumed. When the archived row takes keyboard focus with it, focus
   goes to the terminal. For a console session this is the user's only way to archive it — the console session can
   also archive itself once nothing under it is unarchived (see "A session archiving itself" in
   `docs/product/hub-orchestration.md`); its confirmation lists the
@@ -424,7 +425,8 @@ automatic cleanup of its agent records; deletion is refused if the session is no
 A row whose menu offers **Archive** instead carries an Archive button while archiving would go through without a
 confirmation: the session is at its prompt or interrupted, no unarchived session is bound to it or to a session
 bound to it, and it has been used. Pressing Archive does what the menu's **Archive** does — a session still being
-resumed asks for confirmation first there too — and when the row leaves with keyboard focus, focus goes to the terminal.
+resumed asks for confirmation first there too, and so does one with a bound branch or worktree that needs the user's
+word — and when the row leaves with keyboard focus, focus goes to the terminal.
 When the Archive conditions stop holding — the session starts working or raises a hand, or a session becomes bound
 to it — the button goes away.
 

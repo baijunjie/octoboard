@@ -1462,6 +1462,10 @@ pub enum RequestBody {
         /// and removes the project only if that worked. Absent is false.
         #[serde(default)]
         trash_directory: bool,
+        /// With `trash_directory`, the locked worktrees to take along as well (see
+        /// `inspect_project_removal`); absent means none.
+        #[serde(default)]
+        force_remove: Vec<SessionBranchTarget>,
     },
     ListDir {
         path: String,
@@ -1567,6 +1571,14 @@ pub enum RequestBody {
     },
     ArchiveSession {
         session: String,
+        /// Bound branches and worktrees to remove even though git would refuse it (see
+        /// `SessionBranchTarget`); absent means none.
+        #[serde(default)]
+        force_remove: Vec<SessionBranchTarget>,
+        /// The ones the confirmation listed as refused and the user chose to keep, as they were
+        /// listed: one left in that state is not reported. Absent means none.
+        #[serde(default)]
+        keep: Vec<SessionBranchTarget>,
     },
     /// Moves a session to another account of its own agent: ends its process, copies its
     /// conversation record into the target account's directory, records the account on the
@@ -1581,6 +1593,19 @@ pub enum RequestBody {
     InspectSessionRecords {
         sessions: Vec<String>,
     },
+    /// What removing `project` with its folder moved to the Trash would also remove: the linked
+    /// worktrees outside the folder (every one when the folder holds the repository, those bound
+    /// to the project's sessions otherwise) and, when the repository outlives the folder, the bound
+    /// branches. Refused as `delete_project` with `trash_directory` would be. See
+    /// `branch_origin::cleanup::project`.
+    InspectProjectRemoval {
+        project: String,
+    },
+    /// The git branches and linked worktrees bound to exactly the supplied sessions, as an archive
+    /// or a deletion of them would find them now. See `branch_origin::cleanup`.
+    InspectSessionBranches {
+        sessions: Vec<String>,
+    },
     /// Removes Octoboard's record of one session, archived or never used. A session that is not
     /// archived is deleted only while it has had no turn and nothing is bound to it or from it, and
     /// its process is stopped. Unused sessions' agent records are moved to the Trash automatically;
@@ -1593,6 +1618,12 @@ pub enum RequestBody {
         only_if_unused: bool,
         #[serde(default)]
         trash_agent_records: bool,
+        /// As `ArchiveSession`'s.
+        #[serde(default)]
+        force_remove: Vec<SessionBranchTarget>,
+        /// As `ArchiveSession`'s.
+        #[serde(default)]
+        keep: Vec<SessionBranchTarget>,
     },
     /// Removes every archived session of `project`, or every archived session under
     /// `console_session` (bound to it, or to an archived lead session bound to it), or, with
@@ -1606,6 +1637,12 @@ pub enum RequestBody {
         /// Moves native records to the Trash for every session deleted; defaults to false.
         #[serde(default)]
         trash_agent_records: bool,
+        /// As `ArchiveSession`'s.
+        #[serde(default)]
+        force_remove: Vec<SessionBranchTarget>,
+        /// As `ArchiveSession`'s.
+        #[serde(default)]
+        keep: Vec<SessionBranchTarget>,
     },
     SetSessionPinned {
         session: String,
@@ -1783,12 +1820,92 @@ pub enum SessionRecordPresence {
     Unknown,
 }
 
+/// A git branch or a linked worktree bound to a session: a branch whose responsible session it
+/// is, or a linked worktree with such a branch checked out. What `inspect_session_branches`
+/// reports, and what an archive or a deletion leaves behind. A project's removal also takes
+/// worktrees bound to no session (`inspect_project_removal`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SessionBranchItem {
+    pub kind: SessionBranchKind,
+    /// The repository's canonical common directory, as a wire path.
+    pub repository: String,
+    /// The branch, as a wire path; for a worktree, the branch it has checked out, `None` for one
+    /// with a detached `HEAD`.
+    pub branch: Option<String>,
+    /// The worktree's canonical root, as a wire path; `None` for a branch.
+    pub path: Option<String>,
+    /// Whether the worktree has modified or untracked files, whatever its state; false for a
+    /// branch, and where it was not read.
+    pub uncommitted: bool,
+    /// The project of the session the item was found through.
+    pub project: String,
+    /// The branch's responsible session; `None` for a worktree a project's removal takes although
+    /// no session is bound to it.
+    pub session: Option<String>,
+    pub state: SessionBranchState,
+    /// Git's own message, for `failed`.
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionBranchKind {
+    Worktree,
+    Branch,
+}
+
+/// Where a bound item stands. `uncommitted_changes`, `submodules`, `unmerged` and `locked` are what
+/// a forced removal takes; `checked_out`, `project_folder` and `failed` are left whatever is asked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionBranchState {
+    /// Goes without asking: a clean, unlocked worktree, or a branch git takes as merged.
+    Removable,
+    /// A worktree with modified or untracked files.
+    UncommittedChanges,
+    /// A worktree with initialized submodules, which git removes only by force.
+    Submodules,
+    /// A branch not merged into its upstream, or into `HEAD` when it has none.
+    Unmerged,
+    /// A branch checked out in a worktree that stays.
+    CheckedOut,
+    /// A locked worktree.
+    Locked,
+    /// A worktree that is a project's folder, or holds one.
+    ProjectFolder,
+    /// Git refused or failed to remove it, or to say where it stands.
+    Failed,
+}
+
+/// A bound item a request names, as `SessionBranchItem` names it and in the state the user was
+/// shown it in: a forced removal goes only while the item still stands that way.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct SessionBranchTarget {
+    pub kind: SessionBranchKind,
+    pub repository: String,
+    #[serde(default)]
+    pub branch: Option<String>,
+    #[serde(default)]
+    pub path: Option<String>,
+    pub state: SessionBranchState,
+    #[serde(default)]
+    pub uncommitted: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
     SessionRecordsInspected {
         id: Option<String>,
         presence: SessionRecordPresence,
+    },
+    SessionBranchesInspected {
+        id: Option<String>,
+        items: Vec<SessionBranchItem>,
+    },
+    ProjectRemovalInspected {
+        id: Option<String>,
+        items: Vec<SessionBranchItem>,
     },
     Snapshot {
         hosts: Vec<Host>,
@@ -2684,6 +2801,17 @@ pub mod error_code {
     pub const GIT_OPERATION_IN_PROGRESS: &str = "git_operation_in_progress";
     /// Restoring tracked changes failed. `params` names `detail`, Git's message when it ran.
     pub const GIT_RESTORE_FAILED: &str = "git_restore_failed";
+    /// Broadcast after an archive, a deletion or a project's removal the user asked for, when a
+    /// branch or worktree it was to remove is still there. The operation itself stands. `params`
+    /// names `count` and `items`, a JSON list with one `{kind, name, branch, state, uncommitted,
+    /// detail}` per item left.
+    pub const SESSION_BRANCHES_NOT_REMOVED: &str = "session_branches_not_removed";
+    /// Broadcast after a project's removal with its folder moved to the Trash, when what goes along
+    /// with the folder could not be determined: the worktrees outside it were left, and the
+    /// branches too if the repository outlives the folder (otherwise they went with it).
+    /// The removal itself stands. `params` names the removed project's `name`, as it is no longer
+    /// on record, and `detail`, the reason.
+    pub const PROJECT_BRANCHES_NOT_DETERMINED: &str = "project_branches_not_determined";
     /// A `read_project_change` whose change names no side its group can read.
     pub const INVALID_CHANGE: &str = "invalid_change";
     /// A body asked of a side on the disk whose path has a clean filter in effect: the patch was
@@ -2784,6 +2912,43 @@ mod tests {
         }
     }
 
+    /// The bound items a request forces or keeps arrive with the state they were shown in, and
+    /// leaving both lists out names none.
+    #[test]
+    fn forced_and_kept_items_are_read_with_their_state_and_default_to_none() {
+        let json = r#"{"type":"archive_session","session":"s","force_remove":[{"kind":"worktree","repository":"/r/.git","branch":null,"path":"/w","state":"locked","uncommitted":true}],"keep":[{"kind":"branch","repository":"/r/.git","branch":"b","state":"unmerged"}]}"#;
+        match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::ArchiveSession {
+                force_remove, keep, ..
+            } => {
+                assert_eq!(force_remove[0].state, super::SessionBranchState::Locked);
+                assert!(force_remove[0].uncommitted && force_remove[0].branch.is_none());
+                assert_eq!(keep[0].branch.as_deref(), Some("b"));
+                assert!(!keep[0].uncommitted);
+            }
+            _ => panic!("not archive_session"),
+        }
+        for json in [
+            r#"{"type":"delete_session","session":"s"}"#,
+            r#"{"type":"delete_archived_sessions","console":"c"}"#,
+            r#"{"type":"delete_project","project":"p"}"#,
+        ] {
+            let empty = match serde_json::from_str::<Request>(json).unwrap().body {
+                RequestBody::DeleteSession {
+                    force_remove, keep, ..
+                }
+                | RequestBody::DeleteArchivedSessions {
+                    force_remove, keep, ..
+                } => force_remove.is_empty() && keep.is_empty(),
+                RequestBody::DeleteProject { force_remove, .. } => force_remove.is_empty(),
+                _ => false,
+            };
+            assert!(empty, "{json}");
+        }
+        let unshown = r#"{"type":"archive_session","session":"s","force_remove":[{"kind":"branch","repository":"/r","branch":"b"}]}"#;
+        assert!(serde_json::from_str::<Request>(unshown).is_err());
+    }
+
     /// `github` is the old name of the `git` source; a request still naming it must be accepted,
     /// and the source is emitted as `git`.
     #[test]
@@ -2827,6 +2992,13 @@ mod tests {
                 },
             ),
             (
+                r#"{"type":"inspect_project_removal","id":"request-1","project":"project-7"}"#,
+                |body| match body {
+                    RequestBody::InspectProjectRemoval { project } => Some(project),
+                    _ => None,
+                },
+            ),
+            (
                 r#"{"type":"update_project","id":"request-1","project":"project-7"}"#,
                 |body| match body {
                     RequestBody::UpdateProject { project, .. } => Some(project),
@@ -2836,7 +3008,7 @@ mod tests {
             (
                 r#"{"type":"archive_session","id":"request-1","session":"session-7"}"#,
                 |body| match body {
-                    RequestBody::ArchiveSession { session } => Some(session),
+                    RequestBody::ArchiveSession { session, .. } => Some(session),
                     _ => None,
                 },
             ),

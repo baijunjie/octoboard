@@ -1,4 +1,4 @@
-import type { AccountQuota, Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionStatus, Settings } from "../../protocol";
+import type { AccountQuota, Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionBranchItem, SessionBranchState, SessionStatus, Settings } from "../../protocol";
 import type { SessionRequest, State, TrustPrompt } from "../../store";
 
 const NOW = Date.now();
@@ -72,6 +72,25 @@ export function sessionOf(
     ...(status === "archived" ? { ended_at: minutesAgo(30) } : {}),
     ...extra,
   };
+}
+
+/** A branch bound to `session` of `project` that git refuses to delete as it stands. */
+export function branchItemOf(project: Project, session: Session, branch: string, state: SessionBranchState = "unmerged"): SessionBranchItem {
+  return { kind: "branch", repository: `${project.path}/.git`, branch, path: null, project: project.id, session: session.id, state, uncommitted: false, detail: null };
+}
+
+/** A linked worktree of `project`'s repository at `path`, with `branch` checked out (`null` for a
+ * detached `HEAD`), bound to `session` (`null` for one bound to none). `uncommitted` is whether it
+ * has modified or untracked files, which a locked one can have as well. */
+export function worktreeItemOf(
+  project: Project,
+  session: Session | null,
+  branch: string | null,
+  path: string,
+  state: SessionBranchState = "uncommitted_changes",
+  uncommitted: boolean = state === "uncommitted_changes",
+): SessionBranchItem {
+  return { kind: "worktree", repository: `${project.path}/.git`, branch, path, project: project.id, session: session?.id ?? null, state, uncommitted, detail: null };
 }
 
 export function pageOf(id: string, consoleSessionId: string, html: string, minutes: number): Page {

@@ -31,6 +31,7 @@ import type { DialogRequest } from "./dialogs/dialogRequest";
 import { PendingQuestionDialog, usePendingQuestion } from "./dialogs/PendingQuestionDialog";
 import { RequestedDialog } from "./dialogs/RequestedDialog";
 import { useQuickCreateSession } from "./dialogs/useQuickCreateSession";
+import { forcibleBranches, inspectSessionBranches, lockedWorktrees } from "./dialogs/useSessionBranches";
 import { useT } from "./i18n/react";
 import type { AsideLayout } from "./layout/AsidePane";
 import { ASIDE_LABELS, liveOwner, ownerAfterMove, ownerForSession, ownerKey, sameOwner, type AsideOwner } from "./layout/asideOwner";
@@ -599,17 +600,37 @@ export function App(): React.ReactElement {
     setInteractionModality("keyboard");
     focusTerminal();
   }, [archivingStatus]);
-  // A session being resumed still asks: archiving it would cut the resume short.
+  // A session being resumed still asks: archiving it would cut the resume short. So does one with
+  // a bound branch or worktree git refuses to remove, or a locked worktree, which only the
+  // confirmation can take along; the daemon removes the rest once the process has ended. Finding
+  // that out takes a round trip, during which the session can change, a repeated press is ignored,
+  // and a dialog opened meanwhile is left alone.
+  const resuming = useLatest(resumingIds);
+  const openedDialog = useLatest(dialogRequest);
+  const inspectingArchive = useRef(new Set<string>());
+  const asksBeforeArchiving = (session: Session) =>
+    resuming.current.has(session.id) || archiveNeedsConfirmation(allSessions(), session);
   const archiveSession = (session: Session) => {
     const live = store.getState().sessions.get(session.id) ?? session;
-    if (resumingIds.has(live.id) || archiveNeedsConfirmation(allSessions(), live)) {
+    if (asksBeforeArchiving(live)) {
       openDialog({ kind: "archive-session", session });
       return;
     }
-    setArchivingId(live.id);
-    request({ type: "archive_session", session: live.id }).catch((err: unknown) => {
-      setArchivingId(undefined);
-      toastError(errorPresentation(err as Error));
+    if (inspectingArchive.current.has(live.id)) return;
+    inspectingArchive.current.add(live.id);
+    void inspectSessionBranches(request, [live.id]).then((branches) => {
+      inspectingArchive.current.delete(live.id);
+      const now = store.getState().sessions.get(live.id);
+      if (!now || now.status === "archived") return;
+      if (asksBeforeArchiving(now) || forcibleBranches(branches).length > 0 || lockedWorktrees(branches).length > 0) {
+        if (!openedDialog.current) openDialog({ kind: "archive-session", session: now, branches });
+        return;
+      }
+      setArchivingId(now.id);
+      request({ type: "archive_session", session: now.id }).catch((err: unknown) => {
+        setArchivingId(undefined);
+        toastError(errorPresentation(err as Error));
+      });
     });
   };
 

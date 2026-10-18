@@ -1,4 +1,4 @@
-import type { Console, Project, Session } from "../protocol";
+import type { Console, Project, Session, SessionBranchItem } from "../protocol";
 
 /** How a new session is bound to a console session, by where the dialog was opened from: the user
  * `choose`s one of the console's console sessions or none (the full project list); the session is
@@ -21,7 +21,8 @@ export type DialogRequest =
   | { kind: "new-session"; console: Console; project: Project; binding: NewSessionBinding }
   | { kind: "rename-project"; project: Project }
   | { kind: "rename-session"; session: Session }
-  | { kind: "archive-session"; session: Session }
+  /** `branches` is an inspection of the bound branches already made for this archive. */
+  | { kind: "archive-session"; session: Session; branches?: SessionBranchItem[] }
   /** Moves `session` to `account` (`null`, the default account), named `accountName` in the
    * dialog. */
   | { kind: "switch-account"; session: Session; account: string | null; accountName: string }

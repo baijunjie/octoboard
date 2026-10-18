@@ -27,6 +27,7 @@ use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
 use crate::branch_origin;
+use crate::branch_origin::cleanup;
 use crate::browse::wire_path;
 use crate::coordinator::{self, OpenRequest};
 use crate::git_remote;
@@ -79,8 +80,8 @@ pub async fn call(
         "get_session" => get_session(state, &session, arguments).await,
         "rename_session" => rename_session(state, &session, arguments),
         "set_session_pinned" => set_session_pinned(state, &session, arguments),
-        "archive_session" => archive_session(state, &session, arguments),
-        "archive_self" => archive_self(state, &session),
+        "archive_session" => archive_session(state, &session, arguments).await,
+        "archive_self" => archive_self(state, &session).await,
         "list_archived" => list_archived(state, &session, arguments),
         "reopen_session" => reopen_session(state, &session, arguments).await,
         "show_page" => show_page(state, &session, arguments),
@@ -361,7 +362,10 @@ async fn recent_output(state: &Arc<AppState>, id: &str) -> Option<String> {
     })
 }
 
-fn archive_session(
+/// Archives a session of the caller's, and once its process has ended removes what can go of the
+/// branches and worktrees bound to it, never forcing anything; what stays is named in the answer,
+/// so the caller can deal with it.
+async fn archive_session(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
@@ -374,8 +378,29 @@ fn archive_session(
         );
     }
     let target = resolve_owned_session(state, caller, wanted)?;
-    coordinator::archive_session(state, &target.id)?;
-    Ok(json!({ "session": target.id, "status": SessionStatus::Archived }))
+    let archived = coordinator::archive_session(state, &target.id)?;
+    // A task of its own, so the removal finishes even if the call it answers is dropped.
+    let left = tokio::spawn(cleanup::remove_once_stopped(
+        state.clone(),
+        archived,
+        Vec::new(),
+    ))
+    .await
+    .unwrap_or_else(|err| {
+        tracing::warn!(%err, "removing the branches of an archived session did not finish");
+        Vec::new()
+    });
+    let mut answer = json!({ "session": target.id, "status": SessionStatus::Archived });
+    if !left.is_empty() {
+        answer["branches_left"] = cleanup::for_agent(&left);
+        answer["note"] = json!(
+            "Archived. The git branches and worktrees in `branches_left` are bound to the sessions \
+             archived and were not removed, for the reason given with each. If they are yours to \
+             clean up, deal with what keeps each (commit or discard the changes, merge the \
+             branch), then remove them with `git worktree remove` and `git branch -d`."
+        );
+    }
+    Ok(answer)
 }
 
 /// Archives the caller itself, which only a session that reports to nobody does: a lead session
@@ -383,9 +408,36 @@ fn archive_session(
 /// archives each once its task is done, so one that is not (running or interrupted alike) means
 /// unfinished work and the call is refused, changing nothing. Once the record is archived the
 /// process is ended off the caller's path, so this answer still reaches it.
-fn archive_self(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
+///
+/// The branches and worktrees bound to the caller are removed after its process has ended, where
+/// they can go without forcing anything. What will stay is judged before the archive, since the
+/// answer has to be on its way before the process is ended.
+async fn archive_self(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
     // Held across the checks and the archive, so a lock set in between cannot slip past them.
     let _removal = state.claim_session_removal();
+    let caller = archivable_self(state, caller)?;
+    let left = cleanup::left_by(state, vec![caller.clone()]).await;
+    let archived = coordinator::archive_session(state, &caller.id)?;
+    cleanup::remove_in_background(state, archived);
+    let mut answer = json!({
+        "session": caller.id,
+        "status": SessionStatus::Archived,
+        "note": "Archived; this session's process will now end.",
+    });
+    if !left.is_empty() {
+        answer["branches_left"] = cleanup::for_agent(&left);
+        answer["note"] = json!(
+            "Archived; this session's process will now end. The git branches and worktrees in \
+             `branches_left` are bound to this session and will not be removed, for the reason \
+             given with each; the rest that are bound to it are removed once the process has \
+             ended."
+        );
+    }
+    Ok(answer)
+}
+
+/// The caller's own record, once it is a session that may archive itself now; otherwise why not.
+fn archivable_self(state: &Arc<AppState>, caller: &Session) -> Result<Session> {
     let caller = state.session_record(&caller.id)?;
     // A lead session is offered the tool with the unbound session's set, so being bound is checked
     // here.
@@ -418,12 +470,7 @@ fn archive_self(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
     if let Some(refusal) = unarchived_refusal(&caller.id, &unarchived) {
         bail!(refusal);
     }
-    coordinator::archive_session(state, &caller.id)?;
-    Ok(json!({
-        "session": caller.id,
-        "status": SessionStatus::Archived,
-        "note": "Archived; this session's process will now end.",
-    }))
+    Ok(caller)
 }
 
 /// What refuses `archive_self` while sessions under the caller are not archived, or `None` when
