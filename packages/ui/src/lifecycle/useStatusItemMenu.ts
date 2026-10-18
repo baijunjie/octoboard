@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import { useLatest } from "../components/useLatest";
-import { useT } from "../i18n/react";
+import { useCurrentLanguage, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
 import { useDaemon } from "../store";
@@ -16,17 +16,22 @@ interface UseStatusItemMenuOptions {
 }
 
 /**
- * Keeps the shell's menu bar icon menu listing the live sessions (`buildStatusItemMenu`), and
- * selects a session chosen there. Best-effort, like the Dock badge: a menu left a moment behind is
- * not worth surfacing.
+ * Keeps the shell's menu bar icon menu listing the live sessions and each available agent's quota
+ * (`buildStatusItemMenu`), and selects a session chosen there. Best-effort, like the Dock badge: a
+ * menu left a moment behind is not worth surfacing.
+ *
+ * Opening the menu asks the daemon to refresh the quotas that are due. The menu is never replaced
+ * while open, so what that brings lands in the menu's next update.
  *
  * It follows the store through a subscription of its own rather than through props, so the menu is
- * rebuilt on each change of the consoles, projects or sessions without rendering anything.
+ * rebuilt on each change of the consoles, projects, sessions, accounts, availability or quotas
+ * without rendering anything.
  */
 export function useStatusItemMenu({ ready, onSessionChosen }: UseStatusItemMenuOptions): void {
   const { statusItem } = usePlatform();
-  const { store } = useDaemon();
+  const { store, request } = useDaemon();
   const t = useT();
+  const language = useCurrentLanguage();
   // Status flips are frequent and most change nothing the menu shows.
   const lastSentRef = useRef<string | undefined>(undefined);
   const pendingRef = useRef<Promise<void>>(Promise.resolve());
@@ -34,13 +39,15 @@ export function useStatusItemMenu({ ready, onSessionChosen }: UseStatusItemMenuO
   useEffect(() => {
     if (!statusItem || !ready) return;
     const push = () => {
-      const { consoles, projects, sessions } = store.getState();
+      const { consoles, projects, sessions, settings, agentAvailability, accountQuotas } = store.getState();
       const draft = buildStatusItemMenu(t, {
         consoles: Array.from(consoles.values()),
         projects: Array.from(projects.values()),
         sessions: Array.from(sessions.values()),
         consoleMap: consoles,
         projectMap: projects,
+        // Countdowns are as of this push; the menu is not rebuilt for the clock alone.
+        quota: { language, now: Date.now(), accounts: settings.accounts, agentAvailability, accountQuotas },
       });
       const serialized = JSON.stringify(draft);
       if (serialized === lastSentRef.current) return;
@@ -55,9 +62,18 @@ export function useStatusItemMenu({ ready, onSessionChosen }: UseStatusItemMenuO
     };
     push();
     return store.subscribe((state, previous) => {
-      if (state.consoles !== previous.consoles || state.projects !== previous.projects || state.sessions !== previous.sessions) push();
+      if (
+        state.consoles !== previous.consoles ||
+        state.projects !== previous.projects ||
+        state.sessions !== previous.sessions ||
+        state.settings.accounts !== previous.settings.accounts ||
+        state.agentAvailability !== previous.agentAvailability ||
+        state.accountQuotas !== previous.accountQuotas
+      ) {
+        push();
+      }
     });
-  }, [statusItem, ready, t, store]);
+  }, [statusItem, ready, t, language, store]);
 
   // Read at call time: the subscription is made once.
   const chooseRef = useLatest(onSessionChosen);
@@ -68,5 +84,11 @@ export function useStatusItemMenu({ ready, onSessionChosen }: UseStatusItemMenuO
         if (session) chooseRef.current(session);
       }),
     [statusItem, store],
+  );
+
+  // As the rail's panel and Settings ask; the daemon refreshes only the readings that are due.
+  useEffect(
+    () => (ready ? statusItem?.onOpened(() => void request({ type: "refresh_account_quotas" }).catch(() => {})) : undefined),
+    [statusItem, ready, request],
   );
 }

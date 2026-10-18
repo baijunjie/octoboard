@@ -8,6 +8,7 @@ import { errorPresentation, noticeErrorPresentation } from "./errorPresentation"
 import { errorText } from "./errorText";
 import { currentLanguage } from "./i18n/language";
 import { daemonWsUrl, type DaemonOrigin } from "./daemon";
+import { accountQuotaOf } from "./quota/accountQuotaOf";
 import { sameValue } from "./sameValue";
 import {
   isLive,
@@ -215,12 +216,6 @@ function keepSameQuotas(previous: AccountQuota[], quotas: AccountQuota[]): Accou
     const held = accountQuotaOf(previous, quota.agent, quota.account);
     return held !== undefined && sameValue(held, quota) ? held : quota;
   });
-}
-
-/** The quota entry of an account (`null` for an agent's default account), if the daemon has
- * reported on it. */
-export function accountQuotaOf(quotas: AccountQuota[], agent: Agent, account: string | null): AccountQuota | undefined {
-  return quotas.find((quota) => quota.agent === agent && quota.account === account);
 }
 
 function reducer(state: State, action: Action): State {

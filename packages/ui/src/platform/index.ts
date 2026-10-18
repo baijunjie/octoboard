@@ -1,5 +1,6 @@
 import { browserPlatform } from "./browser";
 import { tauriPlatform } from "./tauri";
+import type { Agent } from "../protocol";
 
 export { ConfigurationFileError } from "./configurationFileError";
 
@@ -139,6 +140,9 @@ export interface AppMenuCapability {
 /** The menu bar icon's menu, already in the UI's language. */
 export interface StatusItemMenu {
   sections: StatusItemSection[];
+  /** Submenus after the sessions and before Open, such as an agent's quota; none until the UI has
+   * what they list. */
+  submenus: StatusItemSubmenu[];
   /** Each picture the lines name, once, by the key a line's `icon` gives. */
   icons: Record<string, StatusItemIcon>;
   open: string;
@@ -167,12 +171,31 @@ export interface StatusItemEntry {
   session?: string;
 }
 
+/** A submenu, opened from a line of the menu itself, whose lines cannot be chosen. */
+export interface StatusItemSubmenu {
+  title: string;
+  items: StatusItemSubmenuItem[];
+}
+
+/** What a submenu holds. The shell draws a window's bar, so the menu carries what it needs to,
+ * and a line cannot be chosen. */
+export type StatusItemSubmenuItem =
+  | { kind: "header"; title: string }
+  /** A window's name and, right-aligned, its detail, with a bar of `fraction` (0 to 1) beneath in
+   * `agent`'s colour. `label` is the whole line as one phrase, for assistive technology. */
+  | { kind: "window"; name: string; detail: string; label: string; fraction: number; agent: Agent }
+  | { kind: "note"; text: string }
+  | { kind: "separator" };
+
 export interface StatusItemCapability {
   /** Replaces the menu bar icon's menu. */
   setMenu(menu: StatusItemMenu): Promise<void>;
   /** Subscribes to a session being chosen in that menu, returning the function that undoes it. The
    * shell has already brought the window to the front. */
   onSessionChosen(handler: (sessionId: string) => void): () => void;
+  /** Subscribes to the menu beginning to open, returning the function that undoes it. A menu sent
+   * while it is open is held until it closes, so what the handler asks for lands on the next one. */
+  onOpened(handler: () => void): () => void;
 }
 
 export interface ClipboardCapability {

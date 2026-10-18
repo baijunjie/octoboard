@@ -345,6 +345,12 @@ export const en = {
   },
   "statusItem.noSessions": "No sessions running",
   "statusItem.open": "Open {appName}",
+  "statusItem.quota": "{agent} quota",
+  "statusItem.quota.account": "{account} · {plan}",
+  "statusItem.quota.detail": "{percent}% remaining · {resets}",
+  "statusItem.quota.detailNoReset": "{percent}% remaining",
+  "statusItem.quota.window": "{window} {percent}% remaining · {resets}",
+  "statusItem.quota.windowNoReset": "{window} {percent}% remaining",
 
   "session.agentAccount": "{agent} ({account})",
   "session.modelEffort": "{model} · {effort}",

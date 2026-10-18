@@ -47,7 +47,8 @@ Claude Code accounts have no such choice, although Claude Code takes a permissio
   per available agent, listing that agent's accounts.
 - **The menu bar icon's menu shows one submenu per agent** ("Claude quota ▸", "Codex quota ▸", "Grok quota ▸"),
   placed after the sessions and before Open Octoboard. Inside, accounts are grouped, each with its window lines. A
-  native menu cannot host custom views, so each bar is a menu item whose image is a generated bar picture.
+  line that cannot be chosen is drawn dimmed by the system, so each window is a menu item with a view of its own: the
+  window's name and detail over a bar the shell draws, at full strength and never highlighted.
 - **Claude Code's approval mode offers four choices:** Follow account configuration (no flag; the account's
   `settings.json` decides), Automatic (`--permission-mode auto`), Ask me (`--permission-mode manual`), and Approve
   everything (`--permission-mode bypassPermissions`). It is per account plus a default for the default account, like
@@ -59,7 +60,7 @@ Claude Code accounts have no such choice, although Claude Code takes a permissio
 1. 01 Daemon account quotas (closed)
 2. 02 Account management with quotas (closed)
 3. 03 Rail quota entry (closed)
-4. [Menu bar quota submenus](04-menu-bar-quota-submenus.md)
+4. 04 Menu bar quota submenus (closed)
 5. [Claude Code approval mode](05-claude-approval-mode.md)
 6. [Final confirmation](06-final-confirmation.md)
 

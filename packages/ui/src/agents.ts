@@ -22,6 +22,14 @@ export const AGENT_LABEL: Record<Agent, string> = {
   grok: "Grok Build",
 };
 
+/** The agents' names as the menu bar icon's menu uses them, shorter than the labels above ("Claude
+ * quota", not "Claude Code quota"). Brand names, so not translated. */
+export const AGENT_SHORT_NAME: Record<Agent, string> = {
+  claude: "Claude",
+  codex: "Codex",
+  grok: "Grok",
+};
+
 export const AGENT_OPTIONS: { value: Agent; label: string }[] = (Object.keys(AGENT_LABEL) as Agent[]).map(
   (value) => ({ value, label: AGENT_LABEL[value] }),
 );

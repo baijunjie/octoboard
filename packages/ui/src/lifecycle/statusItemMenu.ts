@@ -4,6 +4,7 @@ import type { Console, Project, Session, SessionStatus } from "../protocol";
 import { sessionWithLocation, statusLabel } from "../sessionLabel";
 import { sessionsInTreeOrder } from "../sidebar/order";
 import { agentIconKey, statusIconKey } from "./statusItemIconKeys";
+import { buildQuotaSubmenus, type StatusItemQuotaSource } from "./statusItemQuota";
 
 /** The live statuses the menu lists, each under its own heading, most pressing first. */
 const SECTION_ORDER: SessionStatus[] = ["waiting_user", "working", "idle"];
@@ -22,12 +23,13 @@ export interface StatusItemMenuSource {
   sessions: Session[];
   consoleMap: Map<string, Console>;
   projectMap: Map<string, Project>;
+  quota: StatusItemQuotaSource;
 }
 
 /** The live sessions — waiting for the user, working, awaiting instructions — in the sidebar's
- * order, each status under its own heading. */
+ * order, each status under its own heading, then a quota submenu per available agent. */
 export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource): StatusItemMenuDraft {
-  const { consoles, projects, sessions, consoleMap, projectMap } = source;
+  const { consoles, projects, sessions, consoleMap, projectMap, quota } = source;
   const sections = SECTION_ORDER.flatMap((status): StatusItemSection[] => {
     const listed = sessionsInTreeOrder(consoles, projects, sessions, (s) => s.status === status);
     if (listed.length === 0) return [];
@@ -43,6 +45,7 @@ export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource):
   });
   return {
     sections: sections.length > 0 ? sections : [{ heading: t("statusItem.noSessions"), items: [] }],
+    submenus: buildQuotaSubmenus(t, quota),
     open: t("statusItem.open"),
     quit: t("menu.quit"),
   };

@@ -6,7 +6,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 
 - [Account quotas](product/account-quotas.md) — each agent account's plan quota: which accounts have one, how it is
   read through the agent's own CLI and when, the windows per agent and their labels, how a quota is shown, the
-  reading / unavailable / out-of-date states and their reasons, and what a reading leaves in the account's directory.
+  reading / unavailable / out-of-date states and their reasons, what a reading leaves in the account's directory, and
+  the rail's quota panel.
 - [Collection motion](product/collection-motion.md) — entry, exit and position transitions for dynamic collections, including
   horizontal and wrapping items, virtualized rows, keyboard focus and reduced motion.
 - [Consoles](product/consoles.md) — consoles: their fields and working directory, the two default agents, agents
@@ -236,7 +237,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   stores.
 - [Menu bar icon](product/menu-bar-icon.md) — the macOS menu bar icon: what a click does, its menu
   (running sessions grouped by status in sidebar order, at most 10 per group with an "N more…" line, "No sessions
-  running", the status and agent pictures, Open, Quit), choosing a session from it, and its Quit.
+  running", the status and agent pictures, the per-agent quota submenus, Open, Quit), choosing a session from it, and
+  its Quit.
 
 - [Website](product/website.md) — the localized homepage and its two product goals, privacy and error pages, keyboard
   navigation, motion, interactive workflow illustration, sample application preview, release download links,

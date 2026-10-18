@@ -3,8 +3,9 @@
 How much of an account's plan quota is left: the plan an account is on, and for each of the plan's usage windows how
 much remains and when it resets. Octoboard shows it for every account of an agent — the agent's default account and
 every account the user owns (see "Agent accounts" in `docs/product/settings.md`) — for Claude Code, Codex and Grok
-Build alike. It is shown in Settings' **Agent accounts** section and in the rail's account quota panel (see "The
-account quota panel on the rail" below).
+Build alike. It is shown in Settings' **Agent accounts** section, in the rail's account quota panel (see "The
+account quota panel on the rail" below) and, in the macOS application, in the quota submenus of the menu bar icon's
+menu (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
 
 ## Which accounts have a quota
 
@@ -36,6 +37,8 @@ again.
 - **Opening the Agent accounts section** of Settings asks for a fresh reading of the accounts whose last attempt is
   older than the interval above; accounts read more recently keep their reading, so opening the section repeatedly
   starts nothing extra. The readings already held are shown at once either way.
+- **Opening the menu bar icon's menu**, in the macOS application, asks for the same, each time the menu begins to
+  open (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
 - **Opening the rail's account quota panel** asks for the same, each time the panel opens, whether it floats in or
   is pinned; pinning a panel that is already floating in is not a new opening (see "The account quota panel on the
   rail" below).
@@ -60,8 +63,8 @@ these windows are shown: extra usage, spend, credit balances and pace estimates 
 
 ## How an account's quota is shown
 
-The account's plan sits beside its name as a small chip, absent when the agent does not name one. Beneath the account
-each window has:
+In Settings and in the rail's panel, the account's plan sits beside its name as a small chip, absent when the agent
+does not name one. Beneath the account each window has:
 
 - a line reading "<window> N% remaining", where N is what remains of the window as a whole percent from 0 to 100 (a
   window the agent reports as more than fully used shows 0%);
@@ -79,6 +82,9 @@ is named by its window and carries the remaining percent and the countdown as it
 is not read separately.
 
 ## Quota states
+
+This is what Settings and the rail's panel show; the menu bar icon's menu differs as "The icon's menu" in
+`docs/product/menu-bar-icon.md` says.
 
 | State | What the account shows |
 |---|---|

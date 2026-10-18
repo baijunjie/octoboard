@@ -128,6 +128,13 @@ function tauriStatusItem(): StatusItemCapability {
       });
       return undo;
     },
+    onOpened(handler) {
+      const { track, undo } = unlistenTracker();
+      void import("@tauri-apps/api/event").then(async ({ listen }) => {
+        track(await listen("tray-menu-opened", () => handler()));
+      });
+      return undo;
+    },
   };
 }
 

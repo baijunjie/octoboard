@@ -4,16 +4,23 @@ import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import type { Session, SessionStatus } from "../protocol";
+import type { Account, AccountQuota, Agent, QuotaWindow, Session, SessionStatus } from "../protocol";
 import { buildStatusItemMenu, MAX_PER_SECTION } from "./statusItemMenu";
+import type { StatusItemQuotaSource } from "./statusItemQuota";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
 
 const consoles = [consoleOf("c", "Main")];
 const projects = [projectOf("p", "c", "Alpha")];
 
-const menuOf = (sessions: Session[]) =>
+const NOW = Date.UTC(2026, 9, 19, 12);
+const MINUTE = 60_000;
+
+const NO_QUOTA: StatusItemQuotaSource = { language: "en", now: NOW, accounts: [], agentAvailability: new Map(), accountQuotas: [] };
+
+const menuOf = (sessions: Session[], quota: StatusItemQuotaSource = NO_QUOTA) =>
   buildStatusItemMenu(t, {
+    quota,
     consoles,
     projects,
     sessions,
@@ -59,5 +66,105 @@ describe("buildStatusItemMenu", () => {
     expect(section.heading).toBe(`Working (${many.length})`);
     expect(section.items).toHaveLength(MAX_PER_SECTION + 1);
     expect(section.items.at(-1)).toEqual({ label: "3 more…" });
+  });
+});
+
+describe("buildStatusItemMenu quota submenus", () => {
+  const available = (...agents: Agent[]): StatusItemQuotaSource["agentAvailability"] =>
+    new Map(agents.map((agent) => [agent, { agent, availability: "available", default_config_dir: null } as never]));
+  const window = (patch: Partial<QuotaWindow>): QuotaWindow => ({
+    kind: "session",
+    label: null,
+    used_percent: 18,
+    resets_at: NOW + 117 * MINUTE,
+    window_minutes: 300,
+    ...patch,
+  });
+  const quotaOf = (agent: Agent, account: string | null, patch: Partial<AccountQuota> = {}): AccountQuota => ({
+    agent,
+    account,
+    fetched_at: NOW - MINUTE,
+    plan: "max",
+    windows: [window({}), window({ kind: "weekly", used_percent: 5, resets_at: null })],
+    unavailable: null,
+    ...patch,
+  });
+  const source = (patch: Partial<StatusItemQuotaSource>): StatusItemQuotaSource => ({ ...NO_QUOTA, ...patch });
+  /** Each line as the text it shows: a header's title, a window's name and detail, a note's text. */
+  const labels = (menu: ReturnType<typeof menuOf>, index = 0) =>
+    menu.submenus[index].items.map((item) => {
+      switch (item.kind) {
+        case "header":
+          return item.title;
+        case "window":
+          return `${item.name} | ${item.detail}`;
+        case "note":
+          return item.text;
+        case "separator":
+          return "---";
+      }
+    });
+
+  it("has no submenu for an agent that is not available", () => {
+    expect(menuOf([], source({ agentAvailability: new Map([["codex", { agent: "codex", availability: "unavailable" } as never]]) })).submenus).toEqual([]);
+    expect(menuOf([]).submenus).toEqual([]);
+  });
+
+  it("has one submenu per available agent, in the agents' usual order", () => {
+    const menu = menuOf([], source({ agentAvailability: available("grok", "claude") }));
+    expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["Claude quota", "Grok quota"]);
+  });
+
+  it("lists an account's plan, then a row per window with its fraction, agent and whole line", () => {
+    const menu = menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null)] }));
+    expect(menu.submenus[0].items).toEqual([
+      { kind: "header", title: "Default · Max" },
+      {
+        kind: "window",
+        name: "5-hour",
+        detail: "82% remaining · resets in 1h 57m",
+        label: "5-hour 82% remaining · resets in 1h 57m",
+        fraction: 0.82,
+        agent: "claude",
+      },
+      { kind: "window", name: "Weekly", detail: "95% remaining", label: "Weekly 95% remaining", fraction: 0.95, agent: "claude" },
+    ]);
+  });
+
+  it("groups the owned accounts after the default one, each set off by a separator", () => {
+    const owned: Account[] = [{ id: "a1", agent: "codex", name: "Work", config_dir: "/w" }];
+    const menu = menuOf([], source({
+      accounts: owned,
+      agentAvailability: available("codex"),
+      accountQuotas: [quotaOf("codex", null, { plan: null, windows: [window({})] }), quotaOf("codex", "a1", { plan: "pro_lite", windows: [window({ used_percent: 100 })] })],
+    }));
+    expect(labels(menu)).toEqual([
+      "Default",
+      "5-hour | 82% remaining · resets in 1h 57m",
+      "---",
+      `${isolate("Work")} · Pro Lite`,
+      "5-hour | 0% remaining · resets in 1h 57m",
+    ]);
+  });
+
+  it("says so in one line when an account's quota is unavailable or not read yet", () => {
+    const unavailable = quotaOf("claude", null, { plan: null, windows: [], unavailable: { code: "quota_timed_out", params: {}, message: "" } });
+    expect(labels(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [unavailable] })))).toEqual(["Default", "Quota unavailable"]);
+    expect(labels(menuOf([], source({ agentAvailability: available("claude") })))).toEqual(["Default", "Reading quota…"]);
+    // An entry with no windows and no failure to explain still gets the line, rather than a bare header.
+    const empty = quotaOf("claude", null, { plan: null, windows: [] });
+    expect(labels(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [empty] })))).toEqual(["Default", "Quota unavailable"]);
+  });
+
+  it("keeps the last windows of an out-of-date reading under a line saying so", () => {
+    const stale = quotaOf("claude", null, { fetched_at: NOW - 12 * MINUTE, unavailable: { code: "quota_timed_out", params: {}, message: "" } });
+    const lines = labels(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [stale] })));
+    expect(lines.slice(0, 3)).toEqual(["Default · Max", "Out of date: last read 12 minutes ago", "5-hour | 82% remaining · resets in 1h 57m"]);
+  });
+
+  it("counts the countdown from the moment given and says so once the reset has passed", () => {
+    const quota = quotaOf("claude", null, { windows: [window({ resets_at: NOW - MINUTE })] });
+    const lines = labels(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [quota] })));
+    expect(lines[1]).toBe("5-hour | 82% remaining · resets now");
   });
 });

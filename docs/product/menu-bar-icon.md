@@ -37,10 +37,42 @@ From top to bottom:
      ("N more…"); the heading's number still counts them all.
    - With no session in any of these groups — none running, or only ones still starting — this part is a single line
      that cannot be chosen: **No sessions running**.
-2. **Open Octoboard**, which brings a window closed into the background back, as described under "Closing the window"
+2. **The quota submenus**, one per available agent — **Claude quota**, **Codex quota**, **Grok quota**, in that
+   order, the agents' names never translated — each opening to that agent's accounts and showing what Settings and
+   the rail's panel show (see "Quota windows" and "How an account's quota is shown" in
+   `docs/product/account-quotas.md`). An agent that is not available, or whose availability is not yet determined,
+   has none. The submenus are set off from the sessions and from Open Octoboard by separators. Inside a submenu,
+   nothing can be chosen:
+   - each account is a section header with its name, **Default** for the agent's default account, and its plan after
+     a dot where the agent names one ("Default · Max"), the default account first and then the accounts the user
+     owns, each set off by a separator. Before macOS 14, which has section headers, it is a plain line in the
+     disabled grey;
+   - under the header, each window is one row: its name on the left ("5-hour"), "N% remaining · resets in
+     <countdown>" ("82% remaining · resets in 1h 57m", "resets now" once the time has passed, no countdown for a
+     window with no reset time) right-aligned in the secondary text colour, and a bar of what remains directly
+     below, on a translucent grey track. The bar is orange for Claude Code and blue for Codex, each one fixed colour
+     whether the menu is light or dark (their contrast against the track is not measured), and the text colour for
+     Grok Build. A row whose text needs more room than the submenu's usual width widens the submenu rather than
+     being cut short. A row is read by assistive technology as one phrase ("5-hour 82% remaining · resets in
+     1h 57m");
+   - a row and a note are not dimmed the way a menu line that cannot be chosen is: the window's name is at full
+     strength, and neither ever highlights under the pointer. Their text and the bar's track take the system's
+     colours for the menu they are drawn in, light or dark;
+   - an account never read shows **Reading quota…** in place of windows, and an account with no windows to show
+     shows **Quota unavailable**, in the secondary text colour and without the reason. That includes an entry that
+     has no windows and no failure to explain, which Settings and the rail show nothing for. One whose latest
+     reading failed after a good one keeps its last windows under a note "Out of date: last read 12 minutes ago",
+     without the reason either.
+
+   Countdowns and the age of an out-of-date reading are as of the last time the menu was updated, which a change of
+   the sessions, consoles, projects, accounts, agents' availability, quotas or the UI's language causes, not the
+   clock alone, so they can lag behind the clock. Opening the menu asks the daemon to refresh the quotas that are
+   due, as opening the rail's panel or Settings' section does; since the menu never changes while open, what that
+   brings shows from the next time it is opened. The menu does not wait for the reply.
+3. **Open Octoboard**, which brings a window closed into the background back, as described under "Closing the window"
    in `docs/product/application-lifecycle.md`. A window that is shown, or minimized, is brought to the front, restored
    first if it was minimized.
-3. **Quit Octoboard**, after a separator, described below.
+4. **Quit Octoboard**, after a separator, described below.
 
 The menu follows the sessions as they change, including while the window is closed into the background. It is never
 replaced while open, though: while any of Octoboard's menus is open — this one or the application menu — changes
@@ -48,7 +80,7 @@ wait, and once no menu is open the icon's menu takes on the latest of them, so a
 until it is dismissed or an item is chosen. It is worded in the UI's current language (see
 "What follows the language" in `docs/product/language.md`). Until the window's UI has loaded and received the
 daemon's state — and throughout on the screen shown when the daemon failed to start — the menu holds only Open
-Octoboard and Quit Octoboard, in English.
+Octoboard and Quit Octoboard, in English, with no quota submenus.
 
 ### Choosing a session
 
@@ -72,10 +104,18 @@ turned that on (see "Closing the window" in `docs/product/application-lifecycle.
 Chinese); the menu updating within about 1.5 seconds of a session changing while the window was closed; opening and
 dismissing the menu without choosing anything leaving a closed window closed; choosing a session bringing the window
 back with that session selected; and Open Octoboard. What was seen of Quit Octoboard is under "Quitting" in
-`docs/product/application-lifecycle.md`.
+`docs/product/application-lifecycle.md`. Also observed, with a quota submenu popped up natively over a light-looking
+desktop (not opened from the icon's own menu): the system's section header over each account, a Codex account's two
+window rows with the name at full strength, the detail right-aligned in grey and a bar whose fill is the remaining
+share (72% over a gray track), a Grok Build row at 0% as a bare rounded track, and a note under an account with no
+quota.
 
-**Not yet observed** in the packaged application: the pictures in the menu, in a light and in a dark menu, and a left
-click opening the menu.
+**Not yet observed** in the packaged application: the pictures in the menu (the session lines' agent marks and the
+headings' status glyphs), in a light and in a dark menu; the quota submenus opened from the icon's own menu; a Claude
+Code account's quota in a submenu; opening the menu asking for a refresh of the quotas; any quota row in a dark menu,
+and a menu changing between light and dark while the app runs; a row never highlighting under the pointer; a row
+widened by a long window name; assistive technology reading a row once, as one phrase; and a left click opening the
+menu.
 
 **Observed caveat:** for about the first 0.6 seconds after closing the window from native fullscreen, a click on the
 icon is lost — a right click does not even open the menu — apparently swallowed by macOS during its exit from

@@ -18,3 +18,10 @@
       Settings, plays its open and close motion, and stays within the window at the narrowest window width.
 - [ ] With a long account list in the rail panel, Tab reaches the "Accounts" list and it shows its focus ring; Tab and
       Shift+Tab out of a keyboard-pinned panel close it and move on to the control after or before the quota button.
+- [ ] In the installed app, the menu bar icon's quota submenus, opened from the icon itself, show a Claude Code
+      account's real quota, and their rows read correctly in both a light and a dark menu, including after switching
+      the system appearance while the app runs; a row never highlights under the pointer, and a long window name or
+      account widens the submenu instead of being cut.
+- [ ] Opening the menu bar icon's menu refreshes an account whose reading is due, and the new reading shows on the
+      next opening.
+- [ ] VoiceOver reads a quota row of the menu bar icon's menu once, as its whole phrase.

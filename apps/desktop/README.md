@@ -66,7 +66,7 @@ The shell defines eleven Tauri IPC commands, permitted through `src-tauri/capabi
 - `frontend_exit_heartbeat` — marks the webview as the one handling the exit flow, and is re-invoked on every quit gesture.
 - `confirm_quit` — marks a pending quit as user-confirmed and exits.
 - `set_menu_labels` (`menu.rs`) — takes the menu's labels from the UI and rebuilds the native menu bar.
-- `set_tray_menu` (`tray.rs`) — takes the menu bar icon's menu (worded lines, session ids, picture keys) from the UI.
+- `set_tray_menu` (`tray.rs`) — takes the menu bar icon's menu (worded lines, session ids, quota submenus of headers, window rows and notes, picture keys) from the UI.
 - `set_run_in_background` (`background.rs`) — the UI's choice of whether closing the window keeps the app running.
 - `bring_to_front` (`background.rs`) — shows, restores and activates the window.
 - `macos_permissions_status`, `macos_request_permission`, `macos_open_privacy_settings` (`permissions.rs`) — read, request
@@ -75,7 +75,7 @@ The shell defines eleven Tauri IPC commands, permitted through `src-tauri/capabi
   through the system's save and open dialogs.
 
 Events the shell emits to the webview: `settings-requested` (the menu's Settings… item), `tray-session-chosen` (a session
-line of the menu bar icon's menu, carrying the session id), `exit-requested` (a quit gesture needing the UI's exit
+line of the menu bar icon's menu, carrying the session id), `tray-menu-opened` (that menu begins to open), `exit-requested` (a quit gesture needing the UI's exit
 flow) and `daemon-exited` (the sidecar ended). `packages/ui/src/platform/tauri.ts` maps commands and events onto the
 platform adapter's capabilities. `capabilities/default.json` also allowlists the notification, clipboard read and write text,
 shell open, Dock badge, window theme, window show and window drag/zoom commands the UI uses.
@@ -88,7 +88,8 @@ shell open, Dock badge, window theme, window show and window drag/zoom commands 
 | `src-tauri/src/lib.rs` | `run()`: builds the Tauri app, wires the menu, exit flow, close request and reopen event, and opens the main window (overlay titlebar, translucent material, hidden until the UI reveals it) |
 | `src-tauri/src/exit.rs` | The exit-confirmation flow: `ExitState`, the two exit-flow commands, `request_quit` and `request_quit_from_window`, and the `applicationShouldTerminate:` override for Dock Quit and system shutdown |
 | `src-tauri/src/background.rs` | Running in the background: `set_run_in_background`, the close button hiding the window when chosen, and `bring_to_front` |
-| `src-tauri/src/tray.rs` | The menu bar icon: its menu rebuilt from `set_tray_menu`, and the `tray-session-chosen` event |
+| `src-tauri/src/tray.rs` | The menu bar icon: its menu rebuilt from `set_tray_menu`, and the `tray-session-chosen` and `tray-menu-opened` events |
+| `src-tauri/src/tray_lines.rs` | The rows of the menu bar icon's submenus: section headers, and menu items with views of their own for a quota window's name, detail and bar, so they are neither dimmed nor highlighted |
 | `src-tauri/src/menu.rs` | The native macOS menu bar built from the UI's labels, including the Settings… item |
 | `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated, and keeps `DaemonState` |
 | `src-tauri/src/permissions.rs` | The macOS privacy permission commands and `capture_launch_state()` |

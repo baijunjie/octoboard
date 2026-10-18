@@ -434,6 +434,13 @@ the surface around it does not forbid selection. It is accepted there because th
 - The selected row of a hand-built list or tree carries `aria-current` (as the sidebar rows do).
 - HeroUI's `Tabs` and `ListBox` mark their selection themselves with `aria-selected` and get no `aria-current` on top.
 
+### An information line in a native menu
+
+A line of the menu bar icon's menu that only shows information (a quota window) is a custom row, not a disabled menu
+item: AppKit dims a disabled item's text whatever colour it names, so the row draws its own text in the system's
+label colours. To assistive technology the row is one static-text element carrying the whole phrase ("5-hour 82%
+remaining · resets in 1h 57m"); its text pieces and its bar are not elements of their own.
+
 ### Standalone errors use the shared Alert
 
 Every runtime failure also opens the dedicated error alert dialog and remains there until the user presses its

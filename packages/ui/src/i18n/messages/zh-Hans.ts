@@ -302,6 +302,12 @@ export const zhHans: Translation<"other"> = {
   },
   "statusItem.noSessions": "没有正在运行的会话",
   "statusItem.open": "打开 {appName}",
+  "statusItem.quota": "{agent} 额度",
+  "statusItem.quota.account": "{account} · {plan}",
+  "statusItem.quota.detail": "剩余 {percent}% · {resets}",
+  "statusItem.quota.detailNoReset": "剩余 {percent}%",
+  "statusItem.quota.window": "{window}剩余 {percent}% · {resets}",
+  "statusItem.quota.windowNoReset": "{window}剩余 {percent}%",
 
   "session.agentAccount": "{agent}（{account}）",
   "session.modelEffort": "{model} · {effort}",

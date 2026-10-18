@@ -16,9 +16,10 @@
 //! `set_run_in_background` (a single boolean, the Settings switch; both in `background.rs`) are
 //! bare signals, `set_menu_labels` (in `menu.rs`) is the UI's menu text, and `set_tray_menu` (in
 //! `tray.rs`) is the text of the menu bar icon's menu, with the opaque ids of the sessions it
-//! lists, which `tray-session-chosen` hands back, and the pictures beside its lines, drawn by the
-//! UI. That is display material the UI words and draws from the sessions it already shows, as it
-//! does the Dock badge's count; the shell never asks the daemon anything. The three in
+//! lists, which `tray-session-chosen` hands back, its quota submenus, and the pictures beside its
+//! lines, drawn by the UI; `tray-menu-opened` tells the UI the menu is opening. That is display
+//! material the UI words and draws from the sessions and quotas it already shows, as it does the
+//! Dock badge's count; the shell never asks the daemon anything. The three in
 //! `permissions.rs` ask the system instead: a read of this process's own privacy grants, the one
 //! prompt that asks the user for one, and a System Settings deep link. The two in
 //! `configuration_file.rs` raise the system's save and open dialogs for the configuration document
@@ -33,6 +34,8 @@ mod page_isolation;
 mod permissions;
 mod sidecar;
 mod tray;
+#[cfg(target_os = "macos")]
+mod tray_lines;
 mod window_state;
 
 use std::thread;

@@ -3,7 +3,8 @@ import { expect, it, vi } from "vitest";
 
 import { sessionOf } from "./gallery/fixtures/builders";
 import type { Event } from "./protocol";
-import { accountQuotaOf, createDaemon } from "./store";
+import { accountQuotaOf } from "./quota/accountQuotaOf";
+import { createDaemon } from "./store";
 
 const client = vi.hoisted(() => ({
   onEvent: undefined as ((event: Event) => void) | undefined,
