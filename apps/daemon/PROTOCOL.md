@@ -1666,7 +1666,7 @@ the one waiting request a session may have, are described in `docs/product/sessi
 | `new_session`, `send_message`, `get_session`, `archive_session`, `reopen_session`, `rename_session`, `set_session_pinned` | yes | yes | — |
 | `list_sessions`, `share_info` | yes | yes | yes |
 | `archive_self` | yes | yes (refused once bound, a lead session included, which wraps up with `report`) | — |
-| `handoff_session`, `transfer_session` | yes | yes | — |
+| `handoff_session`, `switch_session_account`, `transfer_session` | yes | yes | — |
 | `bind_to_session` | — | yes (refused once bound, a lead session included) | — |
 | `request_session` | yes | yes | yes |
 | `report`, `get_project` | — | yes (`report` is refused until bound) | yes |
@@ -1752,6 +1752,13 @@ console, changes a project's path, source, host, remote or `trust_consent`, or w
   moved; `branches` is `[]`, with the reason in `note`, when the branches could not be moved), and a `note`. A
   session that is not the caller's, and anything `hand_off_session` refuses, is refused in prose and changes
   nothing.
+- `switch_session_account` takes `session` (one of the caller's) and `account` (an account's id or name, or `default`),
+  read for the session's own agent, and needs no approval: it runs `switch_session_account` on the session, which keeps
+  its conversation. The session is sent no message for it. The result carries `session`, `agent`, `account` (the id,
+  `default` for the default account), `account_name` and a `note`; the session comes back awaiting instructions, so
+  the note tells the caller to send it the next step. A session that is not the caller's, an account of another
+  agent, and anything `switch_session_account` refuses is refused in prose and changes nothing; the session must
+  still be the caller's once the switch holds its claim.
 - `list_sessions` answers every running session but the caller's, in every console and project, console sessions
   included, with `owner`, `owner_kind`, `yours` and `your_owner`; `get_session` and `share_info` reach any session,
   whichever console or project it is in, while the tools that act on a session (`send_message`, `rename_session` and so

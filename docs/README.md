@@ -41,9 +41,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   hand from the agent's own transcript and what that costs to keep working, archiving, interruption and resuming,
   how a console session's archive and reopen follow the sessions bound to it, and where archived sessions are kept.
 - [Switching a session's account](product/switching-session-accounts.md) — moving a session to another account of its
-  agent: the confirmation and the console-wide switch, what is copied per agent (Claude Code sidecars and rewind
-  checkpoints, Codex rollouts compressed or not, subagent rollouts left behind), the all-or-nothing copy, and when a
-  switch fails.
+  agent: the confirmation and the console-wide switch, an owner's `switch_session_account` tool, what is copied per
+  agent (Claude Code sidecars and rewind checkpoints, Codex rollouts compressed or not, subagent rollouts left behind),
+  the all-or-nothing copy, and when a switch fails.
 - [Handing a session off to another agent](product/handing-off-sessions.md) — the session row's Hand off entry and its
   dialog, an owner's `handoff_session` tool (its arguments, result and refusals), and the daemon's `hand_off_session`:
   when a session can be handed off, the handoff package built from its records, how the receiving session takes over

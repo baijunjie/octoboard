@@ -10,7 +10,8 @@ A handoff is made with the daemon client protocol's `hand_off_session` request, 
 agent, and optionally the receiving session's account, model and reasoning effort. In the window it is made from a
 session's **Hand off** menu item (see "Handing off from the window" below). An owner hands off a session of its own
 with the `handoff_session` tool (see "Handing off from an owner's tool" below). All of them run the same handoff,
-described in the rest of this document.
+described in the rest of this document. A handoff is made only when the user or an owner asks for one: Octoboard never
+hands a session off on its own, and reads no sign that an account's usage has run out.
 
 ## What can be handed off
 

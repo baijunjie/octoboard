@@ -22,7 +22,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 use uuid::Uuid;
 
 use crate::coordinator::{self, OpenRequest};
@@ -69,16 +69,7 @@ pub(crate) async fn hand_off_with(
     // Held from the claim on, before anything is read: a refusal just drops it.
     let hold = state.hold_outbox(&request.session);
     let original = state.session_record(&request.session)?;
-    // The asker checked ownership before the claim; it may have changed since.
-    if let Some(asker) = request.asked_by.as_deref() {
-        if original.bound_to.as_deref() != Some(asker) {
-            bail!(
-                "`{}` (\"{}\") is no longer yours: it was handed to another owner meanwhile",
-                original.id,
-                one_line(&original.title)
-            );
-        }
-    }
+    coordinator::refuse_unless_still_askers(&original, request.asked_by.as_deref())?;
     refuse_unless_it_can_be_handed_off(&original, request.agent)?;
 
     let key = Uuid::new_v4().to_string();

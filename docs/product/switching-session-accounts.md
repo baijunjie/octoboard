@@ -3,8 +3,10 @@
 A session can be moved to another account of its own agent from its row's **Switch account** submenu (see "Session
 rows" in `docs/product/sidebar.md`); a console session is switched from its own row, among that session's own agent's
 accounts. The submenu is offered only when the agent has more than one account, and the user is asked
-to confirm. It is the user's action alone: Octoboard never switches a session on its own, and reads no sign that an
-account's usage has run out.
+to confirm. An owner moves a session of its own with the `switch_session_account` tool (see "Switching from an owner's
+tool" below). Both run the same switch, described from "What a switch does" on. A switch is made only when the user or
+an owner asks for one: Octoboard never switches a session on its own, and reads no sign that an account's usage has run
+out.
 
 ## Confirming a switch
 
@@ -21,6 +23,47 @@ failed and skipped sessions as processed, and the title of the session currently
 announced to assistive technology. A failure does not stop the remaining sessions: an error alert lists each failed
 session and its reason when the pass finishes. After acknowledgement, the confirmation offers Retry for those failures alone. Successful switches are kept and never repeated
 by Retry. The confirmation closes when the pass finishes without failures.
+
+## Switching from an owner's tool
+
+`switch_session_account` is offered to every session that can own sessions — a console session, an unbound project
+session and a lead session — and not to a session with the role of a bound one (see "The console session's tools" and
+"The unbound project session's tools" in `docs/product/hub-orchestration.md`). It needs no approval: an owner switches
+a session of its own without the user. It switches the one session it names; it has no counterpart of the
+confirmation's console-wide choice.
+
+| Argument | Required | Contents |
+|---|---|---|
+| `session` | yes | The session to switch: one of the caller's (`yours: true`). |
+| `account` | yes | The account to move it to: an account's id, an account's name (matched ignoring case and surrounding spaces), or `default` for the agent's default account. It is looked up among the accounts of the session's own agent. |
+
+The session is sent no message about the switch, and neither is the caller, which has the result instead. The session
+comes back *awaiting instructions* like any switched session; a turn it was in the middle of when its process was ended
+is cut off, so the caller sends it its next step with `send_message`. A session with no conversation yet (see "Carrying
+the conversation" below) starts a fresh one on the new account. The call is answered once the switch's outcome is
+known, which can take a few seconds (see "What a switch does" below).
+
+The call returns:
+
+| Field | Contents |
+|---|---|
+| `session` | The switched session's id. |
+| `agent` | Its agent. |
+| `account` | The account it is now on: the account's id, or `default` for the default account. |
+| `account_name` | That account's name; `Default` for the default account. |
+| `note` | Prose naming the account and agent the session is now on, saying that it is back awaiting instructions with any turn in progress cut off and is to be sent its next step with `send_message`, and, for a session that had no conversation yet, that it starts fresh there. |
+
+Refused, with the reason in prose (as a tool error) and nothing changed:
+
+- a session that is not the caller's — an unbound one, one bound to another session, a console session, or the caller
+  itself — with a reason naming who owns it, as for the other tools that act on a session of the caller's;
+- a session that stopped being the caller's after the call was checked and before the switch took hold of it, handed
+  to another owner meanwhile;
+- an `account` that is not one of the session's agent's, an account of another agent included;
+- everything a switch refuses (see "When a switch fails" below), such as an archived session or the account the
+  session is on already.
+
+What fails after that is answered as in "When a switch fails" below, as a tool error.
 
 ## What a switch does
 

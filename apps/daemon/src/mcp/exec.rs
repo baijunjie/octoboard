@@ -40,6 +40,7 @@ use crate::session_request::{self, Handover};
 use crate::sharing::{self, OwnerCopy};
 use crate::state::AppState;
 
+use super::account_switch;
 use super::args::{
     console_projects, find_console, find_project, optional_agent, optional_bool, optional_string,
     optional_string_list, own_console, own_project, present_text, raw_text, required_str,
@@ -87,6 +88,16 @@ pub async fn call(
         "reopen_session" => reopen_session(state, &session, arguments).await,
         "handoff_session" => {
             handoff::handoff_session(state, &session, arguments, crate::term::launch).await
+        }
+        "switch_session_account" => {
+            account_switch::switch_session_account(
+                state,
+                &session,
+                arguments,
+                crate::env_shell::launch_snapshot,
+                crate::term::launch,
+            )
+            .await
         }
         "show_page" => show_page(state, &session, arguments),
         "report" => report(state, &session, arguments).await,
@@ -1759,6 +1770,7 @@ pub(super) mod tests {
             ("a", "report"),
             ("mine", "transfer_session"),
             ("mine", "handoff_session"),
+            ("mine", "switch_session_account"),
             ("mine", "bind_to_session"),
             ("a", "bind_to_session"),
         ] {

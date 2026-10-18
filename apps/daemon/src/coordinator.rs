@@ -3452,8 +3452,8 @@ fn prepare_switch(
 
 /// Moves a session to another account of its own agent: ends its process the way archiving does,
 /// copies its conversation into the target account's directory, records the account and the
-/// directory on the session, and relaunches it as a resume does. The user's action alone —
-/// nothing calls this on a usage signal.
+/// directory on the session, and relaunches it as a resume does. Only the user or an owner asks
+/// for it — nothing calls this on a usage signal.
 ///
 /// `account` is the target by id, `None` for the default account. Refused, with nothing recorded
 /// and (where it can be told beforehand) the process left running: a launch, resume or switch of
@@ -3482,13 +3482,18 @@ pub async fn switch_session_account(
     account: Option<Option<String>>,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
 ) -> Result<()> {
-    switch_session_account_with(state, id, account, snapshot, term::launch).await
+    switch_session_account_with(state, id, account, None, snapshot, term::launch).await
 }
 
-async fn switch_session_account_with(
+/// [`switch_session_account`] with the asker: `asked_by` is the asking owner's id, `None` for the
+/// user. The session must still be bound to the owner once the switch holds its claim (the owner
+/// checked before it), else the switch is refused with nothing changed. `launch` is
+/// `term::launch` outside the tests, which cannot start an agent.
+pub(crate) async fn switch_session_account_with(
     state: &Arc<AppState>,
     id: &str,
     account: Option<Option<String>>,
+    asked_by: Option<&str>,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<()> {
@@ -3499,6 +3504,7 @@ async fn switch_session_account_with(
     // of those is under way.
     let claim = state.begin_switch(id)?;
     let before = state.session_record(id)?;
+    refuse_unless_still_askers(&before, asked_by)?;
     if before.status == SessionStatus::Archived {
         return Err(session_archived(id));
     }
@@ -3565,6 +3571,20 @@ async fn switch_session_account_with(
         ));
     }
     Ok(())
+}
+
+/// Refuses, in prose, an operation an owner asked for on a session that is no longer its own. The
+/// asker checked before the operation took its claim; this repeats it under the claim, with
+/// `session` read there. `None` is the user, who owns nothing to check.
+pub(crate) fn refuse_unless_still_askers(session: &Session, asked_by: Option<&str>) -> Result<()> {
+    match asked_by {
+        Some(asker) if session.bound_to.as_deref() != Some(asker) => anyhow::bail!(
+            "`{}` (\"{}\") is no longer yours: it was handed to another owner meanwhile",
+            session.id,
+            crate::sharing::one_line(&session.title)
+        ),
+        _ => Ok(()),
+    }
 }
 
 /// Records the account and directory a switched session had before, `before`'s. A revert that
@@ -7925,6 +7945,36 @@ mod tests {
         drop(claim);
     }
 
+    /// The ownership an owner's tool checked before the switch claimed the session is checked again
+    /// under the claim: a session handed to another owner meanwhile is refused and left alone.
+    #[tokio::test]
+    async fn a_session_handed_to_another_owner_meanwhile_is_not_switched() {
+        let (state, dir) = switch_fixture("switch-handed-over");
+        let mut worker = bound_session("worker", SessionStatus::Idle, "hub");
+        worker.has_conversation = true;
+        state.store.insert_session(&worker).unwrap();
+        let live = idle_stand_in("worker");
+        state.register_live(live.clone());
+        state.watch_exit(live.clone());
+
+        let err = switch_session_account_with(
+            &state,
+            "worker",
+            Some(Some("claude-a".to_string())),
+            Some("other-hub"),
+            shell_env(&dir),
+            |_| panic!("a refused switch launches nothing"),
+        )
+        .await
+        .expect_err("no longer the asker's");
+
+        assert!(err.to_string().contains("no longer yours"), "{err}");
+        assert!(!live.poll_exit(), "the process was left running");
+        let after = state.store.get_session("worker").unwrap().unwrap();
+        assert_eq!(after.status, SessionStatus::Idle);
+        assert_eq!((after.account_id, after.config_dir), (None, None));
+    }
+
     /// The default account resolves from one shell snapshot, taken once, and that same snapshot is
     /// what the relaunch is handed; an account with a directory of its own needs none. A session
     /// with no conversation has nothing to relocate whichever side is the default.
@@ -8237,6 +8287,7 @@ mod tests {
                         &state,
                         "worker",
                         Some(Some("claude-a".to_string())),
+                        None,
                         || Ok(HashMap::new()),
                         launch,
                     )

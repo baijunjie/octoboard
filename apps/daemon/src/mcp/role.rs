@@ -57,9 +57,9 @@ fn console_session_pointer(agent: Agent) -> String {
 }
 
 /// The ways a session relates to another, in the words every project session's role text gives
-/// them: which tool makes a session one's own, the ones that move a session to another agent or
-/// another owner or bind this one to an owner, which one makes a session nobody's, then
-/// information, which needs none.
+/// them: which tool makes a session one's own, the ones that move a session to another agent,
+/// another account or another owner or bind this one to an owner, which one makes a session
+/// nobody's, then information, which needs none.
 fn relationships(agent: Agent, owns: bool) -> String {
     let tool = |name: &str| qualified_tool_name(agent, name);
     let mut lines = Vec::new();
@@ -76,6 +76,14 @@ fn relationships(agent: Agent, owns: bool) -> String {
              — when its account has run out of quota, say. The new session takes its place and \
              stays yours, and the original is archived. No approval is needed.",
             handoff_session = tool("handoff_session"),
+        ));
+        lines.push(format!(
+            "- `{switch_session_account}` moves a session of yours to another account of its own \
+             agent — when its account has run out of quota, say. It keeps its conversation and \
+             comes back awaiting instructions (a turn in progress is cut off), so send it the \
+             next step with `{send_message}`. No approval is needed.",
+            switch_session_account = tool("switch_session_account"),
+            send_message = tool("send_message"),
         ));
         lines.push(format!(
             "- `{transfer_session}` hands a session of yours to another owner — a console session \

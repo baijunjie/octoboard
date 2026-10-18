@@ -21,6 +21,7 @@
 //! `docs/agent-cli-reference.md`), which is why [`qualified_tool_name`] exists rather than the
 //! role text spelling a prefix out.
 
+mod account_switch;
 mod args;
 mod bindings;
 pub mod console_instructions;
@@ -358,6 +359,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     },
     REOPEN_SESSION,
     HANDOFF_SESSION,
+    SWITCH_SESSION_ACCOUNT,
     TRANSFER_SESSION,
     REQUEST_SESSION,
     LIST_SESSIONS,
@@ -555,6 +557,38 @@ const HANDOFF_SESSION: ToolDef = ToolDef {
                 },
             }),
             &["session", "agent"],
+        )
+    },
+};
+
+/// How an owner moves a session of its own to another account of its agent, keeping the
+/// conversation, as the user's Switch account does.
+const SWITCH_SESSION_ACCOUNT: ToolDef = ToolDef {
+    name: "switch_session_account",
+    description: "Move one of your sessions (`yours: true`) to another account of the agent it \
+                  runs on, for instance when its account has run out of quota. The session \
+                  keeps its conversation: its process is ended, the conversation is copied to \
+                  the account and the session is relaunched resuming it. It is not sent a \
+                  message for this: it comes back awaiting instructions, and a turn in progress \
+                  is cut off, so send it the next step with `send_message`. Needs no approval. \
+                  Refused, changing nothing, for an account of another agent, the account the session is \
+                  on already, and an archived session. Returns the session with its new \
+                  account.",
+    schema: || {
+        object_schema(
+            json!({
+                "session": {
+                    "type": "string",
+                    "description": "The id of the session of yours to move.",
+                },
+                "account": {
+                    "type": "string",
+                    "description": "The account to move it to: an account's id or name, or \
+                                    `default` for the agent's default account. It must belong \
+                                    to the session's own agent.",
+                },
+            }),
+            &["session", "account"],
         )
     },
 };
@@ -782,6 +816,7 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     RENAME_SESSION,
     SET_SESSION_PINNED,
     HANDOFF_SESSION,
+    SWITCH_SESSION_ACCOUNT,
     TRANSFER_SESSION,
     BIND_TO_SESSION,
     REQUEST_SESSION,
@@ -987,6 +1022,7 @@ mod tests {
                 "rename_session",
                 "set_session_pinned",
                 "handoff_session",
+                "switch_session_account",
                 "transfer_session",
                 "bind_to_session",
                 "request_session",
@@ -1016,6 +1052,7 @@ mod tests {
                 "list_archived",
                 "reopen_session",
                 "handoff_session",
+                "switch_session_account",
                 "transfer_session",
                 "request_session",
                 "list_sessions",

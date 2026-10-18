@@ -68,6 +68,7 @@ console sessions are listed, are in "Console sessions and project sessions" in
 | `list_archived` | `project` | The archived sessions of one of this console's projects, whoever owns them, each with its owner. |
 | `reopen_session` | `session`, `text?` | Relaunches an archived or interrupted session of the caller's, continuing its conversation, and optionally hands it an instruction — its next task — delivered once the relaunched session can take one. The caller is the console session the session is bound to and is running, so reopening one never brings a console session back. |
 | `handoff_session` | `session`, `agent`, `account?`, `model?`, `effort?`, `note?` | Hands one of the caller's sessions off to a new session of another agent, which takes its place and stays the caller's, and archives the original; without the user. See "Handing off from an owner's tool" in `docs/product/handing-off-sessions.md`. |
+| `switch_session_account` | `session`, `account` | Moves one of the caller's sessions to another account of its own agent, keeping its conversation; without the user. See "Switching from an owner's tool" in `docs/product/switching-session-accounts.md`. |
 | `transfer_session` | `session`, `to`, `note` | Hands one of the caller's running sessions to another owner, without the user. See "Handing a session to another owner" in `docs/product/changing-session-owners.md`. |
 | `request_session` | `kind`, `project?`, `console?`, `brief`, `agent?`, `account?`, `model?`, `effort?`, `branches?` | Asks the user to start a session that is nobody's. See `docs/product/session-requests.md`. |
 | `list_sessions`, `share_info` | see `docs/product/information-between-sessions.md` | As for every session. |
@@ -92,9 +93,10 @@ console's own projects, whoever owns them; `get_session` reads any session of an
 every running one. Each carries `owner` (the id of the session it is bound to, or null when it is unbound — always
 null for a console session, which is never bound), `owner_kind` (`console` or `project`, the kind of session that owner
 is; null when it is unbound) and `yours` (whether that owner is the caller). `send_message`, `rename_session`,
-`set_session_pinned`, `archive_session`, `reopen_session`, `handoff_session` and `transfer_session` act only on a
-session bound to the caller; for any other — unbound, bound to another console session or to a project session, a
-console session, or the caller itself — they refuse, with a reason naming who owns it, and change nothing.
+`set_session_pinned`, `archive_session`, `reopen_session`, `handoff_session`, `switch_session_account` and
+`transfer_session` act only on a session bound to the caller; for any other — unbound, bound to another console
+session or to a project session, a console session, or the caller itself — they refuse, with a reason naming who owns
+it, and change nothing.
 `archive_session` aimed at the caller itself is refused pointing to `archive_self` instead. `new_session` always binds the new
 session to the caller, so a console session cannot start one on another's behalf: it can hand one over afterwards with
 `transfer_session`, or ask the user for one that is nobody's with `request_session`. The reads are not narrowed because
@@ -123,6 +125,7 @@ own project and drive them, the way a console session drives its console's:
 | `rename_session` | `session`, `title` | As the console session's. |
 | `set_session_pinned` | `session`, `pinned` | As the console session's. |
 | `handoff_session` | `session`, `agent`, `account?`, `model?`, `effort?`, `note?` | As the console session's. |
+| `switch_session_account` | `session`, `account` | As the console session's. |
 | `transfer_session` | `session`, `to`, `note` | As the console session's. See "Handing a session to another owner" in `docs/product/changing-session-owners.md`. |
 | `bind_to_session` | `owner`, `summary` | Binds the caller, while it is unbound, to an owner, without the user. Refused for a lead session, which is bound already. See "Binding an unbound session to an owner" in `docs/product/changing-session-owners.md`. |
 | `request_session` | as the console session's | Asks the user to start a session that is nobody's. See `docs/product/session-requests.md`. |
@@ -135,11 +138,11 @@ It has no `list_projects`, `list_archived`, `add_project` or `show_page`, and no
 
 **Reads are wide, writes are the caller's own** — the console session's rule. `get_session` reads any session of any
 project or console, carrying `owner`, `owner_kind` and `yours` as above. `send_message`, `rename_session`,
-`set_session_pinned`, `archive_session`, `reopen_session`, `handoff_session` and `transfer_session` act only on a
-session bound to the caller, and refuse, with a reason naming who owns it, and change nothing, for any other: an
-unbound session, one bound to a console session or to another project session, the caller itself, or a console
-session. For an unbound project
-session, `archive_session` aimed at itself is refused pointing to `archive_self` instead.
+`set_session_pinned`, `archive_session`, `reopen_session`, `handoff_session`, `switch_session_account` and
+`transfer_session` act only on a session bound to the caller, and refuse, with a reason naming who owns it, and change
+nothing, for any other: an unbound session, one bound to a console session or to another project session, the caller
+itself, or a console session. For an unbound project session, `archive_session` aimed at itself is refused pointing to
+`archive_self` instead.
 
 A session a project session starts is bound to it, so it has the role of a bound one: it is offered `report`,
 `list_sessions`, `share_info`, `get_project` and `request_session`, and cannot start or drive sessions of its own, nor
@@ -181,9 +184,10 @@ reopening and deleting follow the bindings across both levels; see "Archiving, i
 **The console session sees the lead session's sessions but does not drive them.** A lead session's `owner_kind` reads
 `console`; its own sessions read `project`, with the lead session as their `owner`. They appear in the console
 session's `list_projects`, `get_session` and `list_sessions`, not as its own; `send_message`, `rename_session`,
-`set_session_pinned`, `archive_session`, `reopen_session`, `handoff_session` and `transfer_session` aimed at one are
-refused, naming the lead session as its owner (see "Which sessions an owner drives" below). The lead session itself is
-bound to the console session and is driven by it like any other session of its own.
+`set_session_pinned`, `archive_session`, `reopen_session`, `handoff_session`, `switch_session_account` and
+`transfer_session` aimed at one are refused, naming the lead session as its owner (see "Which sessions an owner
+drives" below). The lead session itself is bound to the console session and is driven by it like any other session of
+its own.
 
 ## Handing out a task: the brief
 

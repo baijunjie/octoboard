@@ -65,6 +65,8 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            starting over, handing it its next task.\n\
          - `handoff_session` — move a session of yours to a new session of another agent, for \
            instance when its account has run out of quota; the new session takes its place.\n\
+         - `switch_session_account` — move a session of yours to another account of its own \
+           agent, keeping its conversation.\n\
          - `transfer_session` — hand a session of yours to another owner, with a note on where it \
            stands.\n\
          - `request_session` — ask the user to start a session that is nobody's: in any project, \
@@ -120,6 +122,12 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            is yours like the original was, and the original is archived. Only a session that is \
            not in the middle of a turn can be handed off; moving to another account of the same \
            agent is not a handoff.\n\
+         - `switch_session_account` moves a session of yours to another account of its own agent, \
+           without asking the user. The session keeps its conversation: its process is ended and \
+           relaunched resuming it on the new account, and it is sent no message for it. It \
+           comes back awaiting instructions and a turn in progress is cut off, so send it the \
+           next step with `send_message`. Use it rather than a handoff when the same agent can \
+           go on.\n\
          - `transfer_session` passes a session of yours to another owner — another console \
            session of this console, or a project session of that session's project that can own \
            sessions — without asking the user. A session with sessions of its own (a lead \

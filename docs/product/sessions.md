@@ -661,7 +661,7 @@ relaunches the same agent in the same directory and reassembles everything Octob
   typing into its terminal is then handed what was typed (see "Interrupted, archived and dormant sessions" in
   `docs/product/session-terminal.md`).
 - A session relaunches with the account and the config directory it last recorded for its agent — the one it was
-  opened with until the user switches it (see `docs/product/switching-session-accounts.md`), not the console's current
+  opened with until it is switched to another account (see `docs/product/switching-session-accounts.md`), not the console's current
   reference — and is refused if that directory no longer exists, but only when the session has a conversation to
   resume; one with none yet, opened and never typed into without resuming a conversation, launches into the missing
   directory instead (see "Agent config directories" in `docs/product/consoles.md`).
@@ -683,7 +683,9 @@ there, where it is listed, and that selecting an archived one does not relaunch 
 ### Switching a session's account
 
 A session can be moved to another account of its own agent, ending and relaunching its process with its conversation
-carried along; how, and what is carried, is in `docs/product/switching-session-accounts.md`.
+carried along. The user does it from the session's **Switch account** submenu, and an owner with the
+`switch_session_account` tool for a session of its own; how, and what is carried, is in
+`docs/product/switching-session-accounts.md`.
 
 ### Handing a session off to another agent
 
