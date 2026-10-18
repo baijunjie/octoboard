@@ -93,7 +93,8 @@ export function Notice({
   const hidden = speak !== undefined || announced === true;
   return (
     <>
-      {/* The document variant removes the indicator's extra inset and centres it on the first text line. */}
+      {/* A text line as tall as the indicator's box centres the glyph on the first line; the document
+          variant removes that inset and drops the bare glyph onto the line instead. */}
       <TintedAlert
         aria-hidden={hidden || undefined}
         dir={inDocument ? direction : undefined}
@@ -102,7 +103,7 @@ export function Notice({
       >
         <Alert.Indicator className={inDocument ? "mt-1 shrink-0 p-0" : undefined} />
         <Alert.Content>
-          <Alert.Description className={inDocument ? "break-words text-foreground leading-6" : "text-foreground"}>{children}</Alert.Description>
+          <Alert.Description className={`text-foreground leading-6 ${inDocument ? "break-words" : ""}`}>{children}</Alert.Description>
         </Alert.Content>
       </TintedAlert>
       {speak !== undefined && tone !== "failed" && <StatusAnnouncer text={speak} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} />}
