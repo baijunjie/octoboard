@@ -58,7 +58,7 @@ console sessions are listed, are in "Console sessions and project sessions" in
 | `update_project` | `project`, `name?`, `tags?`, `add_tags?`, `remove_tags?`, `pinned?`, `default_agent?`, `accounts?`, `launch?` | Changes one of this console's projects' settings. See "Changing a project: `update_project`" in `docs/product/agent-settings-tools.md`. |
 | `get_console`, `update_console` | — / `name?`, `default_agent?`, `project_session_agent?`, `accounts?`, `launch?`, `project_session_launch?` | Reads or changes the calling console session's own console. See "The console's own settings: `get_console` and `update_console`" in `docs/product/agent-settings-tools.md`. |
 | `get_settings`, `update_settings` | — / `auto_pull_repositories?`, `default_clone_dir?` | Reads or changes the application-wide settings. See "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`. |
-| `start_session` | `project`, `brief`, `agent?`, `account?`, `model?`, `effort?` | Starts a session in one of this console's projects, bound to the calling console session for its whole life, and hands it the brief as its opening prompt. Needs no approval. `agent`, `account`, `model` and `effort` override those for that one session, as the session dialog's choices do (see "Opening a session" in `docs/product/sessions.md`): `account` is an account by id or name, or `default` for the agent's default account, and must belong to the agent the session will run; a blank `model` or `effort` is the agent's own default, and any other must be one the agent offers (see "The Advanced section" in `docs/product/model-and-reasoning-effort.md`). Answers with the new session's id and its agent. Refused, with the reason in prose, when the session's resolved agent has been determined unavailable on this machine — never while that determination is still pending. |
+| `new_session` | `project`, `brief`, `agent?`, `account?`, `model?`, `effort?` | Starts a session in one of this console's projects, bound to the calling console session for its whole life, and hands it the brief as its opening prompt. Needs no approval. `agent`, `account`, `model` and `effort` override those for that one session, as the session dialog's choices do (see "Opening a session" in `docs/product/sessions.md`): `account` is an account by id or name, or `default` for the agent's default account, and must belong to the agent the session will run; a blank `model` or `effort` is the agent's own default, and any other must be one the agent offers (see "The Advanced section" in `docs/product/model-and-reasoning-effort.md`). Answers with the new session's id and its agent. Refused, with the reason in prose, when the session's resolved agent has been determined unavailable on this machine — never while that determination is still pending. |
 | `send_message` | `session`, `text` | Appends an instruction to a running session of the caller's. Answers with whether it was written or queued. |
 | `get_session` | `session` | The record of any session, of any console — status, title, agent, whether it is a console session, its console and project, which session owns it and whether that owner is a console session or a project session (or that it is unbound), whether it is the caller's, timestamps — plus a tail of what it has printed. |
 | `rename_session` | `session`, `title` | Changes the title of one of the caller's sessions, under the rules of "Renaming a session" in `docs/product/sessions.md`. Answers with the session's record. |
@@ -94,7 +94,7 @@ is; null when it is unbound) and `yours` (whether that owner is the caller). `se
 `set_session_pinned`, `archive_session`, `reopen_session` and `transfer_session` act only on a session bound to the
 caller; for any other — unbound, bound to another console session or to a project session, a console session, or the
 caller itself — they refuse, with a reason naming who owns it, and change nothing. `archive_session` aimed at the
-caller itself is refused pointing to `archive_self` instead. `start_session` always binds the new
+caller itself is refused pointing to `archive_self` instead. `new_session` always binds the new
 session to the caller, so a console session cannot start one on another's behalf: it can hand one over afterwards with
 `transfer_session`, or ask the user for one that is nobody's with `request_session`. The reads are not narrowed because
 two console sessions can dispatch into the same project, and so the same working directory, at once; one that could not
@@ -113,7 +113,7 @@ own project and drive them, the way a console session drives its console's:
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `start_session` | `brief`, `agent?`, `account?`, `model?`, `effort?` | Starts a session in the caller's own project, bound to the caller for its whole life, and hands it the brief as its opening prompt, exactly as the console session's `start_session` does, with the same overrides (see "Handing out a task: the brief" below). Needs no approval. There is no `project` argument; a call that names another project anyway is refused before anything is launched. `agent` may name any agent, not only the caller's own. Answers with the new session's id and its agent. Refused, with the reason in prose, when the session's resolved agent has been determined unavailable on this machine — never while that determination is still pending. |
+| `new_session` | `brief`, `agent?`, `account?`, `model?`, `effort?` | Starts a session in the caller's own project, bound to the caller for its whole life, and hands it the brief as its opening prompt, exactly as the console session's `new_session` does, with the same overrides (see "Handing out a task: the brief" below). Needs no approval. There is no `project` argument; a call that names another project anyway is refused before anything is launched. `agent` may name any agent, not only the caller's own. Answers with the new session's id and its agent. Refused, with the reason in prose, when the session's resolved agent has been determined unavailable on this machine — never while that determination is still pending. |
 | `send_message` | `session`, `text` | As the console session's. |
 | `get_session` | `session` | As the console session's: any session, of any project or console. |
 | `archive_session` | `session` | As the console session's. |
@@ -273,7 +273,7 @@ it takes work from, or the user typing in its terminal, and it reports to it wit
 which replaces what its role description says about being unbound and not calling `report`; that `done` with no open
 items archives it, subject to "Automatic archiving" below — refused for a lead session while a session it started
 is not archived and no lock blocks automatic archiving — while `needs_decision` or
-open items leave it running; that a lead session keeps driving its own sessions with `start_session` and the tools that
+open items leave it running; that a lead session keeps driving its own sessions with `new_session` and the tools that
 go with it, and that any other can no longer start or drive sessions, with the list of the Octoboard tools it has left;
 and not to call `bind_to_session` again. Once the caller is bound, the binding stands: a summary that could not be
 delivered is reported in the note, with the reason, and the caller is told to send it with `report` itself.
@@ -295,7 +295,7 @@ session, and a lead session handed to one — and they leave the bound session's
 
 ## Handing out a task: the brief
 
-`start_session` takes a `brief` of four natural-language fields:
+`new_session` takes a `brief` of four natural-language fields:
 
 | Field | Required | Contents |
 |---|---|---|
@@ -309,11 +309,11 @@ section per field, in the order above, headed `## Goal`, `## Context`, `## Accep
 `## Constraints`. A field the caller left out or left blank is omitted entirely rather than
 sent as an empty heading.
 
-A session started with `start_session` is **titled from its goal** rather than from its project — the
+A session started with `new_session` is **titled from its goal** rather than from its project — the
 goal's first non-blank line, shortened to roughly 48 characters on a word boundary with an ellipsis —
 so several sessions dispatched into one project can be told apart in the menu.
 
-A session started with `start_session` in a folder its agent has not been told to trust can first stop
+A session started with `new_session` in a folder its agent has not been told to trust can first stop
 on that agent's own trust confirmation. When the user has given that project the trust permission, or
 has trusted a folder its directory lies under, Octoboard presses the confirmation and the session
 carries on without them; otherwise the user is asked in a dialog — again after the application
@@ -395,7 +395,7 @@ covered in "Archiving, interruption and resuming" in `docs/product/sessions.md`.
 
 ## Which sessions an owner drives
 
-A session started with `start_session` is always bound to the session that started it — a console session, or a
+A session started with `new_session` is always bound to the session that started it — a console session, or a
 project session that is unbound or a lead session — so it reports to it, and it is that owner's for its whole life:
 the owner instructs it, archives it once it is done and reopens it when it has another task. A session started on a
 `request_session`, once the user approves, is bound to nobody: it reports to the user, and neither the session that

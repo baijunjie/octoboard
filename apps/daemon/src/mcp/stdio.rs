@@ -151,7 +151,7 @@ impl ServerHandler for OctoboardMcp {
         let path = format!("/mcp/{}", self.token);
         // Only a session request is withdrawn when its call is cancelled. Any other call is left to
         // finish in the daemon: the daemon stops serving a call whose connection goes, and a
-        // `start_session` or a `report` cut off part-way would leave its work half done.
+        // `new_session` or a `report` cut off part-way would leave its work half done.
         let cancelled = async {
             if request.name == WITHDRAWN_ON_CANCEL {
                 context.ct.cancelled().await;

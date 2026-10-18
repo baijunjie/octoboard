@@ -83,7 +83,7 @@ environment" below):
   owner, that call's result tells it what changes. A lead session, bound to a console session only after it was opened,
   is given that same unbound project session's text on every launch, as at its first (see "Lead sessions" in
   `docs/product/hub-orchestration.md`). Every project session's text also sets out how it relates to other sessions:
-  `start_session` for a session of its own where it has it, `transfer_session` and `bind_to_session` where it has them,
+  `new_session` for a session of its own where it has it, `transfer_session` and `bind_to_session` where it has them,
   `request_session` for a session that is nobody's, and `list_sessions` and `share_info` for information. The text is
   written from who the session reports to when it launches, and says that what Octoboard tells it of a later change of
   owner replaces what it says (see "When a binding changes while a session runs" in

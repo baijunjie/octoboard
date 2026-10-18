@@ -74,7 +74,7 @@ pub async fn call(
         "update_console" => settings::update_console(state, &session, arguments).await,
         "get_settings" => settings::get_settings(state),
         "update_settings" => settings::update_settings(state, arguments),
-        "start_session" => start_session(state, &session, arguments).await,
+        "new_session" => new_session(state, &session, arguments).await,
         "send_message" => send_message(state, &session, arguments).await,
         "get_session" => get_session(state, &session, arguments).await,
         "rename_session" => rename_session(state, &session, arguments),
@@ -196,7 +196,7 @@ fn check_clone_url(url: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-async fn start_session(
+async fn new_session(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
@@ -214,7 +214,7 @@ async fn start_session(
     Ok(json!({ "session": session.id, "agent": session.agent }))
 }
 
-/// Reads what `start_session` asks for into the session to open, unbound: in the project the
+/// Reads what `new_session` asks for into the session to open, unbound: in the project the
 /// console session names, or in a project session's own.
 fn session_to_start(
     state: &Arc<AppState>,
@@ -237,7 +237,7 @@ fn session_to_start(
     )
 }
 
-/// Reads a brief and the overrides — `start_session`'s arguments, and `request_session`'s alike —
+/// Reads a brief and the overrides — `new_session`'s arguments, and `request_session`'s alike —
 /// into the session to open, unbound, in `project` of `console`, or a console session of `console`
 /// for none.
 fn session_in(
@@ -635,7 +635,7 @@ async fn report(
 // -- session requests --------------------------------------------------------
 
 /// Asks the user for a session with no owner, and waits for the answer; see
-/// `crate::session_request`. Read and checked as `start_session` is, in whichever project or
+/// `crate::session_request`. Read and checked as `new_session` is, in whichever project or
 /// console the call names.
 async fn request_session(
     state: &Arc<AppState>,
@@ -1019,13 +1019,13 @@ pub(super) mod tests {
     }
 
     /// The refusal `coordinator::open_session` raises for an unavailable agent is not only the
-    /// control socket's — a console session reaches it through its own `start_session` tool, and
+    /// control socket's — a console session reaches it through its own `new_session` tool, and
     /// comes back with a tool error carrying the reason in prose, as "The console session's
     /// tools" in `docs/product/hub-orchestration.md` promises for any refusal.
     #[tokio::test]
-    async fn an_unavailable_agent_refuses_the_console_sessions_own_start_session_tool() {
+    async fn an_unavailable_agent_refuses_the_console_sessions_own_new_session_tool() {
         let (state, _dir) =
-            crate::test_support::app_state("mcp-exec-start-session-agent-unavailable");
+            crate::test_support::app_state("mcp-exec-new-session-agent-unavailable");
         state.store.insert_console(&console()).unwrap();
         state
             .store
@@ -1068,14 +1068,14 @@ pub(super) mod tests {
         .unwrap()
         .clone();
 
-        let err = call(&state, &owner.id, "start_session", &arguments)
+        let err = call(&state, &owner.id, "new_session", &arguments)
             .await
             .expect_err("refused");
         assert!(err.to_string().contains("Claude Code"), "{err}");
     }
 
     /// A session request is refused before the user is asked whenever the same call to
-    /// `start_session` would be, and so is one whose arguments do not say where the session would
+    /// `new_session` would be, and so is one whose arguments do not say where the session would
     /// be.
     #[tokio::test]
     async fn a_session_request_is_refused_before_the_user_is_asked() {
@@ -1688,7 +1688,7 @@ pub(super) mod tests {
     async fn only_an_unbound_project_session_may_call_the_orchestration_tools() {
         let (state, _dir) = peer_state("peer-tool-gating");
         for (caller, tool) in [
-            ("mine", "start_session"),
+            ("mine", "new_session"),
             ("mine", "send_message"),
             ("of-a", "archive_session"),
             ("starter", "list_projects"),
@@ -1726,10 +1726,10 @@ pub(super) mod tests {
         (state, dir)
     }
 
-    /// A lead session keeps the unbound project session's tools, so its `start_session` gets as
+    /// A lead session keeps the unbound project session's tools, so its `new_session` gets as
     /// far as the launch (an unavailable agent is refused there), binding the new session to it,
     /// and its `bind_to_session` is refused in prose; a session bound to it still has no
-    /// `start_session`.
+    /// `new_session`.
     #[tokio::test]
     async fn a_lead_session_keeps_its_tools_and_its_sessions_still_cannot_start_any() {
         let (state, _dir) = lead_state("lead-tools");
@@ -1740,11 +1740,11 @@ pub(super) mod tests {
         }]);
         let brief = arguments(json!({ "brief": { "goal": "x" }, "agent": "claude" }));
 
-        let err = call(&state, "starter", "start_session", &brief)
+        let err = call(&state, "starter", "new_session", &brief)
             .await
             .expect_err("agent unavailable");
         assert!(err.to_string().contains("Claude Code"), "{err}");
-        let err = call(&state, "mine", "start_session", &brief)
+        let err = call(&state, "mine", "new_session", &brief)
             .await
             .expect_err("not offered");
         assert!(err.to_string().contains("is not a tool"), "{err}");
@@ -1935,7 +1935,7 @@ pub(super) mod tests {
             let err = call(
                 &state,
                 "starter",
-                "start_session",
+                "new_session",
                 &arguments(json!({ "project": project, "brief": { "goal": "x" } })),
             )
             .await
@@ -1951,7 +1951,7 @@ pub(super) mod tests {
     /// Without a `project`, or naming the one the caller is in, the call gets as far as the launch
     /// the console session's tool uses: an unavailable agent is refused there, in prose.
     #[tokio::test]
-    async fn an_unbound_project_sessions_start_session_reaches_the_launch_in_its_own_project() {
+    async fn an_unbound_project_sessions_new_session_reaches_the_launch_in_its_own_project() {
         let (state, _dir) = peer_state("peer-start-launch");
         state.set_agent_availability(vec![AgentAvailability {
             agent: Agent::Claude,
@@ -1963,7 +1963,7 @@ pub(super) mod tests {
             if let Some(project) = project {
                 input.insert("project".to_string(), json!(project));
             }
-            let err = call(&state, "starter", "start_session", &input)
+            let err = call(&state, "starter", "new_session", &input)
                 .await
                 .expect_err("agent unavailable");
             assert!(
@@ -2693,11 +2693,11 @@ pub(super) mod tests {
         assert_eq!(project["launch"]["claude"]["effort"], "low");
     }
 
-    /// `start_session`'s account must belong to the session's agent, and its model must be one the
+    /// `new_session`'s account must belong to the session's agent, and its model must be one the
     /// agent offers; both are refused before anything is launched.
     #[tokio::test]
-    async fn start_session_refuses_another_agents_account_and_a_model_not_offered() {
-        let (state, _dir) = settings_state("start-session-overrides");
+    async fn new_session_refuses_another_agents_account_and_a_model_not_offered() {
+        let (state, _dir) = settings_state("new-session-overrides");
         for (extra, expected) in [
             (json!({ "account": "acct-codex" }), "unknown account"),
             (json!({ "model": "gpt-9" }), "is not a model"),
@@ -2706,7 +2706,7 @@ pub(super) mod tests {
             args.as_object_mut()
                 .unwrap()
                 .extend(extra.as_object().unwrap().clone());
-            let message = refused(&state, "a", "start_session", args).await;
+            let message = refused(&state, "a", "new_session", args).await;
             assert!(message.contains(expected), "{message}");
         }
         assert_eq!(state.store.list_sessions().unwrap().len(), 8);

@@ -144,13 +144,13 @@ behind it (see "The launch environment" in `docs/product/launching-agents.md`). 
 launch: it closes as soon as the session is recorded, and the session's terminal says it is starting until the agent
 is up (see "Loading" in `docs/product/session-terminal.md`). A refusal that can be known before anything is recorded —
 an unknown owner, an unavailable agent, a model the agent does not offer, the refusals about a conversation to resume
-below — is still shown in the dialog, which stays open. A session an agent opens with `start_session`, and the session
+below — is still shown in the dialog, which stays open. A session an agent opens with `new_session`, and the session
 an approved request for one starts (see "On approval" in `docs/product/session-requests.md`), are listed as *starting*
 the same way, but the agent's call, or the approval, is answered only once the launch has settled, with the launch's
 own refusal when it fails.
 
 The dialog takes no task: once up, a session the user opens by hand is in *awaiting instructions*, sitting at the
-agent's prompt, and is given its work by typing into its terminal. Only a session started with `start_session` — by a
+agent's prompt, and is given its work by typing into its terminal. Only a session started with `new_session` — by a
 console session or a project session — or on another session's request that the user approved is handed an opening
 prompt, the brief it is started with (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md` and
 "On approval" in `docs/product/session-requests.md`); once up, it is in *working*.
@@ -170,7 +170,7 @@ defaults" below), the failure is reported in an error alert that names
 the session and gives the reason, worded from the failure's own code in the UI's language; for a shell environment
 capture that ran out of time, the title names the session alone and the explanation is laid out beneath it — the
 command that did not finish and its time limit, the likely cause, and what to fix. Should the session's record itself
-fail to be removed, it is left *interrupted* instead, and the error alert is shown all the same. For `start_session` and an
+fail to be removed, it is left *interrupted* instead, and the error alert is shown all the same. For `new_session` and an
 approved session request the failure is reported through that call instead (see "When an approval cannot be carried
 out" in `docs/product/session-requests.md` for the latter). A missing config directory does not fail a brand new
 session for the other two agents: it has no conversation to lose, so Claude Code creates the directory itself and
@@ -179,7 +179,7 @@ Octoboard creates it for Codex.
 **With every agent determined unavailable, opening a session is refused outright, before any of that**: the dialog
 cannot be submitted, the console header's new-session action is disabled, no **+** offers to open a session with
 defaults (see "Opening a session with defaults" below), and a console session's
-`start_session` tool is refused with a reason it can report (see "The console session's tools" in
+`new_session` tool is refused with a reason it can report (see "The console session's tools" in
 `docs/product/hub-orchestration.md`). The dialog and the tool's refusal say which agents Octoboard supports and that one
 of them has to be on the user's `PATH`, without saying how to install one; the console sessions section, with room for
 less, says only that no agent was found on the user's `PATH` (see "The console sessions section and the project list" in
@@ -245,7 +245,7 @@ other in the same console, and all read the same instruction file, described in 
 file" in `docs/product/launching-agents.md`.
 
 The same order settles the agent everywhere a session's agent is not given outright: the session dialog's initial
-choice, a session opened with defaults, `start_session` without an `agent`, a session request without one once it is
+choice, a session opened with defaults, `new_session` without an `agent`, a session request without one once it is
 approved (see `docs/product/session-requests.md`), and a session of a project associated with "Detect from files" whose
 directory named no agent (see "The project's default agent" in `docs/product/consoles-and-projects.md`).
 
@@ -270,7 +270,7 @@ neither pins anything. The session's account is identified by its agent icon's t
 name, without an account suffix in visible session metadata (see "Session rows" in `docs/product/sidebar.md`).
 
 A session that makes no choice of its own — one a console session or a project session starts with its own
-`start_session` tool, or one started on another session's request, without an `account` — takes the project's
+`new_session` tool, or one started on another session's request, without an `account` — takes the project's
 setting. The dialog that opens a session by hand always makes a choice,
 opening on the account the rest of the chain resolves to (the project's setting for the agent, else the console's, else
 the agent's default account) and sending that as the session's own choice, so a session opened there runs under that
@@ -292,7 +292,7 @@ conversation** tab, beside the default **New conversation** tab at the head of t
 **Session ID** field for the conversation's session ID — the one the agent's own resume command takes. The tabs are
 offered for a project session only, from the project list, the terminal's **New session** offer and a project's focus
 mode alike: the dialog for a console session has none, and neither has the dialog opened from a console session's
-focus mode, whose session always reports to that console session. A session started with `start_session` never resumes one. In the daemon protocol, `open_session` takes the ID
+focus mode, whose session always reports to that console session. A session started with `new_session` never resumes one. In the daemon protocol, `open_session` takes the ID
 as `resume_agent_session_id`; blank is read as absent.
 
 The tab's other fields apply to a resumed session as to a new one: its name, its agent and account, and the model and
@@ -345,7 +345,7 @@ tools are there; whether the role description takes effect in it is in "What is 
 
 | Status | Wire value | Glyph | Meaning |
 |---|---|---|---|
-| Starting | `starting` | a muted arc turning | A newly opened session — from the dialog, by an agent's `start_session`, or by an approved session request — whose agent is still being launched; it has no process yet. It becomes *awaiting instructions*, or *working* for a session started with a brief, once the process is up, and is removed again if the launch fails (see "Opening a session"). |
+| Starting | `starting` | a muted arc turning | A newly opened session — from the dialog, by an agent's `new_session`, or by an approved session request — whose agent is still being launched; it has no process yet. It becomes *awaiting instructions*, or *working* for a session started with a brief, once the process is up, and is removed again if the launch fails (see "Opening a session"). |
 | Working | `working` | an accent-coloured dot pulsing a fading copy of itself outward | The agent is executing a turn. |
 | Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision, including its folder-trust confirmation, or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a session request (see "Waiting for the answer" in `docs/product/session-requests.md`). |
 | Awaiting instructions | `idle` | a green speech bubble | The process is running and sitting at its prompt. |
@@ -375,7 +375,7 @@ instructions still differ by shape as well as by colour. The starting arc stands
 Transitions:
 
 - Opening a session puts it in *starting*; once its process is up it moves to *working* when it is handed an opening
-  prompt (a session started with `start_session`, or on another session's request that the user approved), and to
+  prompt (a session started with `new_session`, or on another session's request that the user approved), and to
   *awaiting instructions* otherwise, unless the agent's own first report has already moved it on (see "Opening a
   session"). A launch that fails removes the session.
 - While the process runs, reports from the agent move the session between *working*, *waiting for the user* and

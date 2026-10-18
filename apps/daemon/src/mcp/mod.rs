@@ -290,7 +290,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         },
     },
     ToolDef {
-        name: "start_session",
+        name: "new_session",
         description: "Start a session in one of this console's projects and hand it a task. It \
                       is yours for its whole life: it reports to this console session, its \
                       owner, and you instruct it with `send_message`, archive it once it is done \
@@ -298,7 +298,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       approval. Returns the new session's id. The brief is rendered into the \
                       session's opening prompt. A session that should not report to you is one \
                       `request_session` asks the user for.",
-        schema: || start_session_schema(true),
+        schema: || new_session_schema(true),
     },
     SEND_MESSAGE,
     ToolDef {
@@ -629,14 +629,14 @@ const BIND_TO_SESSION: ToolDef = ToolDef {
 };
 
 /// How every session, of whatever kind, has a session started that is nobody's: through a
-/// confirmation the user gives. The brief and the overrides are `start_session`'s, and are checked
+/// confirmation the user gives. The brief and the overrides are `new_session`'s, and are checked
 /// the same way before the user is asked.
 const REQUEST_SESSION: ToolDef = ToolDef {
     name: "request_session",
     description: "Ask the user to start a session that is nobody's — neither yours nor your \
                   owner's: it reports to the user, and you and it can only exchange information \
                   (`share_info`). It can be a project session in any project of any console, or a \
-                  console session. A session you want to drive yourself is one `start_session` \
+                  console session. A session you want to drive yourself is one `new_session` \
                   starts, where you have it. The user is asked first, and the call waits for \
                   their answer, for several minutes at most. On approval Octoboard starts it with \
                   your brief as its opening prompt, and you carry on as you were. A refusal, or no \
@@ -666,7 +666,7 @@ const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
 /// same reason `archive_self` is announced to a lead session and refused at the call.
 const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
-        name: "start_session",
+        name: "new_session",
         description: "Start a session in this project and hand it a task. It is yours for its \
                       whole life: it reports to this session, its owner, and you instruct it with \
                       `send_message`, archive it once it is done and reopen it with \
@@ -676,7 +676,7 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
                       started this way cannot start sessions of its own, and only this project is \
                       available; a session elsewhere, or one that should not report to you, is \
                       one `request_session` asks the user for.",
-        schema: || start_session_schema(false),
+        schema: || new_session_schema(false),
     },
     SEND_MESSAGE,
     ToolDef {
@@ -710,9 +710,9 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     GET_PROJECT,
 ];
 
-/// The schema of `request_session`: `start_session`'s, and where the new session is to be.
+/// The schema of `request_session`: `new_session`'s, and where the new session is to be.
 fn request_session_schema() -> Value {
-    let mut schema = start_session_schema(false);
+    let mut schema = new_session_schema(false);
     schema["properties"]["kind"] = json!({
         "type": "string",
         "enum": ["project", "console"],
@@ -742,9 +742,9 @@ fn request_session_schema() -> Value {
     schema
 }
 
-/// The schema of `start_session`. `with_project` is for the console session, which chooses a
+/// The schema of `new_session`. `with_project` is for the console session, which chooses a
 /// project; a project session always starts in its own, so it is not asked.
-fn start_session_schema(with_project: bool) -> Value {
+fn new_session_schema(with_project: bool) -> Value {
     let mut properties = json!({
         "brief": {
             "type": "object",
@@ -897,7 +897,7 @@ mod tests {
         assert_eq!(
             names(Role::Project, false),
             [
-                "start_session",
+                "new_session",
                 "send_message",
                 "get_session",
                 "archive_session",
@@ -924,7 +924,7 @@ mod tests {
                 "update_console",
                 "get_settings",
                 "update_settings",
-                "start_session",
+                "new_session",
                 "send_message",
                 "get_session",
                 "rename_session",
@@ -953,11 +953,11 @@ mod tests {
     /// An unbound project session starts sessions only in its own project, so it is not asked
     /// which one.
     #[test]
-    fn only_the_console_sessions_start_session_asks_for_a_project() {
+    fn only_the_console_sessions_new_session_asks_for_a_project() {
         let schema = |tools: &'static [ToolDef]| {
             let tool = tools
                 .iter()
-                .find(|tool| tool.name == "start_session")
+                .find(|tool| tool.name == "new_session")
                 .unwrap();
             (tool.schema)()
         };

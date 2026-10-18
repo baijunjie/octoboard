@@ -50,7 +50,7 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            effort (for console sessions and for project sessions). A change to your own model or \
            effort takes effect when this session is next launched. `get_settings` / \
            `update_settings` — read or change the application-wide settings.\n\
-         - `start_session` — start a session in a project and hand it a `brief`. Fill in `goal`, \
+         - `new_session` — start a session in a project and hand it a `brief`. Fill in `goal`, \
            and `context`, `acceptance` and `constraints` wherever you actually have something to \
            say; an empty field is omitted from the session's opening prompt rather than sent \
            blank. Returns the session's id. The session is yours for its whole life.\n\
@@ -105,7 +105,7 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          \n\
          ## How sessions relate\n\
          \n\
-         - A session `start_session` starts is yours: you drive its whole life — instruct it, \
+         - A session `new_session` starts is yours: you drive its whole life — instruct it, \
            archive it when it is done, reopen it when it has another task. No approval is \
            needed.\n\
          - `request_session` is for a session that should be nobody's: it reports to the user, \
@@ -308,7 +308,7 @@ mod tests {
     #[test]
     fn the_instruction_file_names_no_agents_prefix() {
         let text = console_session_instructions(None);
-        assert!(text.contains("`start_session`"));
+        assert!(text.contains("`new_session`"));
         assert!(!text.contains("mcp__"));
         assert!(!text.contains("octoboard__"));
     }
@@ -361,7 +361,7 @@ mod tests {
             .filter(|token| token.contains('_'))
             .collect();
         assert!(
-            named.contains(&"start_session"),
+            named.contains(&"new_session"),
             "the tools section names no tool"
         );
         for tool in &named {

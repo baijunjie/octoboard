@@ -3,8 +3,8 @@
 A **session request** is a session's `request_session` call asking the user to start a session that has **no owner**:
 it reports to the user, and neither the caller nor the caller's owner drives it (see "Which sessions an owner drives"
 in `docs/product/hub-orchestration.md`). It can be a project session in any project of any console, or a console
-session. A session the caller wants to drive itself is one its `start_session` starts, which needs no approval; a
-request is for a session that should be nobody's, or for one in a place `start_session` does not reach.
+session. A session the caller wants to drive itself is one its `new_session` starts, which needs no approval; a
+request is for a session that should be nobody's, or for one in a place `new_session` does not reach.
 
 **The user's confirmation is enforced by Octoboard, not by a prompt.** Nothing is started on the call alone: the call
 waits while the user is asked, and only the user's approval starts anything.
@@ -22,12 +22,12 @@ instruction file describe it.
 | `kind` | yes | `project` for a session in a project, `console` for a console session. No other value is accepted. |
 | `project` | no | For `project`: the project, by id in any console, or by a name that is unambiguous among the caller's own console's projects, else among every console's. Defaults to a project session's own project; a console session has to give it. Refused with `kind: console`. |
 | `console` | no | For `console`: the console, by id or by an unambiguous name. Defaults to the caller's own console. Refused with `kind: project`, whose session is in its project's console. |
-| `brief` | yes | The task, as `start_session`'s brief (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md`). |
-| `agent`, `account`, `model`, `effort` | no | Overrides for the new session, exactly as `start_session` takes them (see "The console session's tools" in `docs/product/hub-orchestration.md`); `account` is read among the accounts of the agent the new session will run. |
+| `brief` | yes | The task, as `new_session`'s brief (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md`). |
+| `agent`, `account`, `model`, `effort` | no | Overrides for the new session, exactly as `new_session` takes them (see "The console session's tools" in `docs/product/hub-orchestration.md`); `account` is read among the accounts of the agent the new session will run. |
 | `branches` | no | For `project`: local branches, by name, to hand over to the new session (see "Handing branches over" below). Left out, or an empty list, the request hands nothing over and behaves as one without it. |
 
 **A request that could never be carried out is refused before the user is asked**, with the reason in prose and no
-dialog shown: whatever `start_session` would refuse for the same brief and overrides — a missing brief or a blank
+dialog shown: whatever `new_session` would refuse for the same brief and overrides — a missing brief or a blank
 goal, an unknown agent or account, an account of another agent, an agent determined unavailable on this machine (never
 while that determination is still pending), a model or effort the agent does not offer — and a `kind` that is neither
 value, a `project` or `console` given for the other kind, a project or console that does not exist, a name that names
@@ -120,7 +120,7 @@ waiting.
 
 Once the user approves, the dialog closes everywhere at once, and then:
 
-1. **The session is started where the request named, exactly as `start_session` would start it** with the same brief
+1. **The session is started where the request named, exactly as `new_session` would start it** with the same brief
    and overrides: titled from its goal, the overrides applied, listed as *starting* until its launch settles, and its
    folder-trust confirmation handled the same way (see "Handing out a task: the brief" in
    `docs/product/hub-orchestration.md`). A console session is started in the named console, with that console's badge

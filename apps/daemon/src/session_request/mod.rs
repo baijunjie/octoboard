@@ -334,7 +334,7 @@ impl Drop for WithdrawOnDrop<'_> {
 /// `request_session`: asks the user to start a session with no owner — a project session in any
 /// project, or a console session — and waits up to `limit` for the answer, which is what the call
 /// returns. `open` must be unbound: a session with no owner is the point of the request, and the
-/// caller binding it is for `start_session`, or for the caller binding itself afterwards. What the
+/// caller binding it is for `new_session`, or for the caller binding itself afterwards. What the
 /// session could never be started for is refused before the user is asked. The `Err` case is what
 /// the model is shown as the reason, so it is written for it. `handover` is moved to the session
 /// on approval and only then.

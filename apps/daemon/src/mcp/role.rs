@@ -52,7 +52,7 @@ fn console_session_pointer(agent: Agent) -> String {
          instructions, which take precedence over the rest of it wherever they disagree but \
          never change what you do and do not do.",
         filename = console_session_instruction_filename(agent),
-        prefix = qualified_tool_name(agent, "start_session"),
+        prefix = qualified_tool_name(agent, "new_session"),
     )
 }
 
@@ -64,10 +64,10 @@ fn relationships(agent: Agent, owns: bool) -> String {
     let mut lines = Vec::new();
     if owns {
         lines.push(format!(
-            "- `{start_session}` starts a session that is yours for its whole life: you instruct \
+            "- `{new_session}` starts a session that is yours for its whole life: you instruct \
              it, archive it when it is done, and reopen it with `{reopen_session}` when it has \
              another task. No approval is needed.",
-            start_session = tool("start_session"),
+            new_session = tool("new_session"),
             reopen_session = tool("reopen_session"),
         ));
         lines.push(format!(
@@ -80,10 +80,10 @@ fn relationships(agent: Agent, owns: bool) -> String {
             "- While you are unbound, `{bind_to_session}` binds you to an owner — a console \
              session of this console, or a project session of this project that can own sessions \
              — and you become one of its sessions. Only a session with no sessions of its own can \
-             bind to a project session, and it then loses `{start_session}` and the other tools \
+             bind to a project session, and it then loses `{new_session}` and the other tools \
              that drive sessions. No approval is needed.",
             bind_to_session = tool("bind_to_session"),
-            start_session = tool("start_session"),
+            new_session = tool("new_session"),
         ));
     }
     lines.push(format!(
@@ -172,7 +172,7 @@ fn unbound_project_session_description(agent: Agent) -> String {
          \n\
          You may start sessions in this project, with any available agent, and drive them:\n\
          \n\
-         - `{start_session}` starts a session here and hands it a `brief`; only this project is \
+         - `{new_session}` starts a session here and hands it a `brief`; only this project is \
            available. Fill in `goal`, and `context`, `acceptance` and `constraints` wherever you \
            have something to say. Returns the new session's id.\n\
          - A session you start reports back to you: its report arrives here as a message, so do \
@@ -202,7 +202,7 @@ fn unbound_project_session_description(agent: Agent) -> String {
          Everything else is the ordinary work of this project: its own instructions, conventions \
          and configuration apply unchanged.",
         report = tool("report"),
-        start_session = tool("start_session"),
+        new_session = tool("new_session"),
         send_message = tool("send_message"),
         get_session = tool("get_session"),
         archive_session = tool("archive_session"),
@@ -228,7 +228,7 @@ mod tests {
             let console_session = role_description(Role::Console, None, agent);
             let project_session = role_description(Role::Project, Some(&Owner::Console), agent);
             let unbound_session = role_description(Role::Project, None, agent);
-            assert!(console_session.contains(&qualified_tool_name(agent, "start_session")));
+            assert!(console_session.contains(&qualified_tool_name(agent, "new_session")));
             assert!(project_session.contains(&qualified_tool_name(agent, "report")));
             // Every tool each kind is offered is named in its text, by that agent's name for it.
             for (text, bound) in [(&project_session, true), (&unbound_session, false)] {
@@ -278,7 +278,7 @@ mod tests {
         assert!(!project.contains("A console session dispatched"));
         assert!(!unbound.contains("dispatched this task"));
         assert!(unbound.contains("do not call"));
-        assert!(unbound.contains("start_session"));
+        assert!(unbound.contains("new_session"));
     }
 
     /// A session is told who it takes work from: the session that dispatched it, or the user for

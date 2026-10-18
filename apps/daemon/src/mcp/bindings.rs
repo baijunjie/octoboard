@@ -185,9 +185,9 @@ pub(super) async fn bind_to_session(
         format!(
             "`done` with no open items archives this session, and is refused while a session you \
              started is not archived; `needs_decision` or open items leave it running. You keep \
-             the sessions you started and go on driving them with `{start_session}` and the \
+             the sessions you started and go on driving them with `{new_session}` and the \
              tools that go with it.",
-            start_session = tool("start_session"),
+            new_session = tool("new_session"),
         )
     } else {
         format!(
@@ -306,7 +306,7 @@ mod tests {
         let err = call(
             &state,
             "loose",
-            "start_session",
+            "new_session",
             &arguments(json!({ "brief": { "goal": "x" } })),
         )
         .await

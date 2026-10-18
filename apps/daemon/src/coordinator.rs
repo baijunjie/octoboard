@@ -1836,7 +1836,7 @@ struct StartingSession {
 
 /// Opens a session and returns it once it has launched: running, or with the launch's refusal
 /// as the error and nothing left behind. For a caller that has nothing to show before the agent
-/// is up — an agent's `start_session` tool, or the approval of a session request — which
+/// is up — an agent's `new_session` tool, or the approval of a session request — which
 /// would otherwise be told of a session that may yet vanish. The user's own request is
 /// [`open_session_detached`].
 pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result<Session> {
@@ -3692,7 +3692,7 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
 /// Refuses to open a session whose resolved agent has been *determined* unavailable — never while
 /// that determination is still pending, which the launch's own refusal of a missing binary already
 /// covers; see "Opening a session" in `docs/product/sessions.md`. Checked here, ahead of
-/// everything that follows, so this is also what a console session's own `start_session` tool is
+/// everything that follows, so this is also what a console session's own `new_session` tool is
 /// refused through — it calls this same function.
 fn refuse_if_agent_unavailable(state: &Arc<AppState>, agent: Agent) -> Result<()> {
     if state.agent_availability_of(agent).availability != Availability::Unavailable {
