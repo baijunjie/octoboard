@@ -223,7 +223,7 @@ export const focusScenarios: Scenario[] = [
     state: hierarchyState,
     sessionRecords: { "s-unused": "absent" },
     preferences: { sidebarConsole: console_.id },
-    description: "The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches join each project session to its nested sessions and end at the last child. Binding dots and pins stay visible while action menus hide. Hover or focus a row to compare the evenly spaced controls, then unpin a session to see the remaining controls close together. An Archive button precedes the menu only on a session that archives without confirmation: idle or interrupted, with no unarchived session bound under it, like Rework the retry loop. The pinned, locked Profile the slow query keeps a yellow border and an Unlock icon instead, and its menu offers Unlock with Archive disabled. The unused but locked Draft the release notes has no Delete shortcut, and its menu offers Unlock with Delete disabled. Set Modifier to Held to see the console header's and each project row's new-session buttons as the bolt that creates with defaults.",
+    description: "The console header keeps New console session immediately before its actions menu. Scroll the sidebar: Console sessions stays pinned until Projects pushes it away, then Projects and its controls stay above the fade. Rounded branches join each project session to its nested sessions and end at the last child. Binding dots and pins stay visible while action menus hide. Hover or focus a row to compare the evenly spaced controls, then unpin a session to see the remaining controls close together. An Archive button precedes the menu only on a session that archives without confirmation: idle or interrupted, with no unarchived session bound under it, like Rework the retry loop. The pinned, locked Profile the slow query shows a persistent Unlock icon without a lock border, and its menu offers Unlock with Archive disabled. The unused but locked Draft the release notes has no Delete shortcut, and its menu offers Unlock with Delete disabled. Set Modifier to Held to see the console header's and each project row's new-session buttons as the bolt that creates with defaults.",
   },
   {
     id: "focus-project",
@@ -257,7 +257,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console session focus",
     state: lockedFocusState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "The focused Hub header and the pinned Add idempotency keys card have yellow lock borders and persistent Unlock controls before their actions; unlocking keeps their order. The switch strip includes waiting, working and inactive sessions; hover markers for details. Set Modifier to Held to see the header plus menu and each project group's new-session button as the bolt; choosing a project from the menu then creates with defaults.",
+    description: "The focused Hub header and the pinned Add idempotency keys card have persistent Unlock controls before their actions, without lock borders; unlocking keeps their order. The switch strip includes waiting, working and inactive sessions; hover markers for details. Set Modifier to Held to see the header plus menu and each project group's new-session button as the bolt; choosing a project from the menu then creates with defaults.",
     steps: [
       (ui) => ui.press(addIdempotencyKeys(ui)),
     ],
@@ -318,7 +318,7 @@ export const focusScenarios: Scenario[] = [
     title: "Archived session actions",
     state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The menu offers Reopen, Copy session ID and a destructive Delete after a divider. Used archived rows have no Delete shortcut, because deleting needs confirmation. Archived rows have no lock controls or yellow outlines. Reopen selects the session and moves it from Archived to Sessions.",
+    description: "The menu offers Reopen, Copy session ID and a destructive Delete after a divider. Used archived rows have no Delete shortcut, because deleting needs confirmation. Archived rows have no lock controls. Reopen selects the session and moves it from Archived to Sessions.",
     steps: [(ui) => ui.press(ui.t("sidebar.session.actions", { title: previewLead.title }))],
   },
   {

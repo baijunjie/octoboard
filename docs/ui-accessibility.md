@@ -611,10 +611,9 @@ selected state's border takes. That edge is decorative and is not held to 3:1; a
 and a groove divider (`groove-b` and its other sides) are decorative in the same way. Its selected state still has to
 reach 3:1 (`border-accent-glyph`).
 
-An unarchived locked session keeps a yellow inset outline without changing its size or position. Its persistent lock button
-also communicates the state through its Unlock accessible name and tooltip, so the outline is decorative. Hovering
-or keyboard-focusing the button changes the glyph to an open lock; unlocking hands keyboard focus to the row before
-the button disappears. The focus ring remains visible alongside the lock outline.
+An unarchived locked session communicates its state through a persistent yellow lock button with an Unlock
+accessible name and tooltip. Hovering or keyboard-focusing the button changes the glyph to an open lock; unlocking
+hands keyboard focus to the row before the button disappears. Keyboard focus keeps its own visible ring.
 
 Focus-mode session cards use the opaque `--panel` surface over the sidebar's `--panel-sidebar`, with the existing
 hover and selected tints on top. Their titles use the shared single-line fading label, including its full-name

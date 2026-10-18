@@ -176,7 +176,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive, many entries",
     state: archiveState,
-    description: "Seventy entries are loaded thirty at a time; the newest keep their last active task titles (one of them long) and the first two show usage chips. Rows offer Reopen and Delete, without lock controls or yellow outlines. Delete an entry: it fades out to the right by a quarter of its own width over 300ms while the remaining rows slide into place, and the reduced-motion preference keeps the change immediate.",
+    description: "Seventy entries are loaded thirty at a time; the newest keep their last active task titles (one of them long) and the first two show usage chips. Rows offer Reopen and Delete, without lock controls. Delete an entry: it fades out to the right by a quarter of its own width over 300ms while the remaining rows slide into place, and the reduced-motion preference keeps the change immediate.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),

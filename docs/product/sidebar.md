@@ -577,18 +577,14 @@ Lock controls are offered only for sessions that are not archived. Their action 
 **Unlock**, including nested sessions and a console session's focus header. Protection and persistence follow
 "Locking a session" in `docs/product/sessions.md`.
 
-A locked session has a yellow inset outline on its sidebar row or focus card; a console session in focus has the
-same outline around its selectable header title. This does not change the row's size or its list order, and
-keyboard focus keeps its own ring.
-
-A locked session also has a persistent yellow lock button before its other action controls, ahead of its pin
+A locked session has a persistent yellow lock button before its other action controls, ahead of its pin
 button when there is one. It remains visible without hover on sidebar rows, focus cards and a console session's
 focus header. Pointer hover or visible keyboard focus changes the closed lock
 to an open lock. Its tooltip offers unlocking, and its accessible name also identifies the session. Pressing it
 unlocks that session; a mouse press neither selects the session nor moves keyboard focus. When the disappearing
 button holds keyboard focus, focus goes to its row, card or focus header with a visible focus ring.
 
-Archived sessions have no Lock or Unlock action, lock button or yellow outline, in either the full archive or
+Archived sessions have no Lock or Unlock action or lock button, in either the full archive or
 focus mode's compact preview. A stored lock remains effective: Delete is disabled for a locked archived session,
 and the full archive's Delete all button is disabled while a listed session is locked. Reopen that session to reach
 its live Unlock control. A lock among descendants outside the list still refuses deletion under the rules of

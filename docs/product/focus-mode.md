@@ -23,7 +23,7 @@ opaque background and stay clear of the edge fade, which begins below the headin
 view stays below both the heading and the fade. The other scrolling rules are in "The edge that hides content
 fades" and "Scrolling a surface from the keyboard" in `docs/product/scrolling-surfaces.md`.
 
-The session lock button and yellow outline on live cards and the console session header follow
+The session lock button on live cards and the console session header follows
 "Session lock controls" in `docs/product/sidebar.md`.
 
 **Session cards**, in both: the status glyph with the status in words, the pin button when pinned (see "Pinning" in
