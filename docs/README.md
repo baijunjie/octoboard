@@ -21,9 +21,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   like any other, the opt-in application setting, and what is refused before anything is created against what is
   reported as failed afterwards.
 - [Model and reasoning effort](product/model-and-reasoning-effort.md) — the model and reasoning effort a console's
-  console sessions and a project's sessions launch with: parent defaults, persistent session overrides, what unset
-  means, how the model list is asked of the agent itself for the account in question, how the effort levels follow
-  the chosen model, and what the pickers do while that list is out or cannot be had.
+  console sessions and a project's sessions launch with: the console's two per-agent pairs, a project session's fallback
+  from the project to the console's project-session pair, persistent session overrides, what unset means, how the model
+  list is asked of the agent itself for the account in question, how the effort levels follow the chosen model, and what
+  the pickers do while that list is out or cannot be had.
 - [Sessions](product/sessions.md) — console and project sessions, their shared creation dialog, optional names,
   agent and account selection, Advanced launch settings, the five session statuses, their
   glyphs and their transitions, the raised hand and its notification, how a declined Claude Code prompt lowers the

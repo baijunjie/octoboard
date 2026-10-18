@@ -56,6 +56,22 @@ describe("initialChoice", () => {
     expect(initialChoice(owner, project(projectAgent), accounts, availability(states))).toEqual(expected);
   });
 
+  it("opens a project session on the console's project session agent when the project names none", () => {
+    const split = consoleOf("c-1", "Main", { project_session_agent: "codex", codex_account_id: "c" });
+    expect(initialChoice(split, project(), accounts, availability({}))).toEqual({ agent: "codex", account: "c" });
+    expect(initialChoice(split, project("grok"), accounts, availability({}))).toEqual({ agent: "grok", account: null });
+  });
+
+  it("opens a console session on the console session agent, whatever the project session agent is", () => {
+    const split = consoleOf("c-1", "Main", { project_session_agent: "codex" });
+    expect(initialChoice(split, undefined, accounts, availability({}))).toEqual({ agent: "claude", account: null });
+  });
+
+  it("opens a project session on the console session agent for a console stored without the setting", () => {
+    const legacy = consoleOf("c-1", "Main", { default_agent: "codex" });
+    expect(initialChoice(legacy, project(), accounts, availability({}))).toEqual({ agent: "codex", account: null });
+  });
+
   it("opens on the project's account for the agent it moved to when the first is missing", () => {
     const moved = projectOf("p-1", "c-1", "App", { codex_account_id: { kind: "account", id: "c2" } });
     const stored = [...accounts, account("c2", "codex", "Codex 2")];

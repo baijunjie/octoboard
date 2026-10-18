@@ -15,7 +15,7 @@ use serde_json::{json, Map, Value};
 
 use super::args::{
     optional_agent, optional_bool, optional_string_list, own_console, own_project, parse_agent,
-    present_text, raw_text, required_str, resolve_project,
+    present_agent, present_text, raw_text, required_str, resolve_project,
 };
 use crate::coordinator::{self, ConsoleChanges, ProjectChanges};
 use crate::git_remote;
@@ -35,17 +35,12 @@ pub(super) async fn update_project(
         &console_session.console_id,
         required_str(arguments, "project")?,
     )?;
-    let default_agent = match arguments.get("default_agent") {
-        None => None,
-        Some(Value::Null) => Some(None),
-        Some(Value::String(text)) => Some(Some(parse_agent(text)?)),
-        Some(_) => bail!("`default_agent` must be an agent or null"),
-    };
+    let default_agent = present_agent(arguments, "default_agent")?;
     let changes = ProjectChanges {
         name: raw_text(arguments, "name")?,
         default_agent,
         accounts: project_accounts_argument(state, arguments)?,
-        launch: launch_argument(arguments)?,
+        launch: launch_argument(arguments, "launch")?,
         pinned: optional_bool(arguments, "pinned")?,
         tags: optional_string_list(arguments, "tags")?,
         add_tags: optional_string_list(arguments, "add_tags")?.unwrap_or_default(),
@@ -67,8 +62,10 @@ pub(super) async fn update_console(
     let changes = ConsoleChanges {
         name: raw_text(arguments, "name")?,
         default_agent: optional_agent(arguments, "default_agent")?,
+        project_session_agent: present_agent(arguments, "project_session_agent")?,
         accounts: console_accounts_argument(state, arguments)?,
-        launch: launch_argument(arguments)?,
+        launch: launch_argument(arguments, "launch")?,
+        project_launch: launch_argument(arguments, "project_session_launch")?,
         icon: None,
         console_session_prompt: None,
     };
@@ -202,16 +199,18 @@ pub(super) fn resolve_account(
         .ok_or_else(|| CodedError::unknown_account(wanted))
 }
 
-/// The `launch` argument: each agent's model and effort, either of which may be left out.
+/// The argument named `key` (`launch`, `project_session_launch`): each agent's model and effort,
+/// either of which may be left out.
 pub(super) fn launch_argument(
     arguments: &Map<String, Value>,
+    key: &str,
 ) -> Result<HashMap<Agent, LaunchChange>> {
-    per_agent(arguments, "launch")?
+    per_agent(arguments, key)?
         .into_iter()
         .map(|(agent, value)| {
             let fields = value
                 .as_object()
-                .ok_or_else(|| anyhow!("`launch.{}` must be an object", agent.wire_name()))?;
+                .ok_or_else(|| anyhow!("`{key}.{}` must be an object", agent.wire_name()))?;
             Ok((
                 agent,
                 LaunchChange {
@@ -267,11 +266,16 @@ pub(super) fn describe_console(console: &Console) -> Value {
         "console": console.id,
         "name": console.name,
         "default_agent": console.default_agent,
+        "project_session_agent": console.project_session_agent,
         "accounts": per_agent_object(|agent| {
             json!(console.account(agent).as_deref().unwrap_or("default"))
         }),
         "launch": per_agent_object(|agent| {
             let (model, effort) = console.launch(agent);
+            json!({ "model": model, "effort": effort })
+        }),
+        "project_session_launch": per_agent_object(|agent| {
+            let (model, effort) = console.project_launch(agent);
             json!({ "model": model, "effort": effort })
         }),
         "has_icon": console.icon.is_some(),

@@ -46,10 +46,14 @@ Settings opens from:
   while the window has nothing to show yet (before the daemon's state has first arrived), while Settings is already
   open, and while another dialog or an action menu — a row's or a header's, its submenus included — is open;
 - a session row's **Switch account** submenu, whose last entry, **Manage accounts…**, opens it on the Agent accounts
-  section instead of the first (see "Session rows" in `docs/product/sidebar.md`).
+  section instead of the first (see "Session rows" in `docs/product/sidebar.md`);
+- the **Manage accounts…** button in the console dialog's Agent accounts table, which opens it on the Agent accounts
+  section above the console dialog, left open beneath it (see "Agent config directories" in
+  `docs/product/consoles-and-projects.md`).
 
 Settings closes on `Escape`, on its close button, and on a press on the dimmed area around it. Closing it puts
-keyboard focus back on the selected session's terminal.
+keyboard focus back on the selected session's terminal, or, when it was opened from the console dialog, on the row of
+the console dialog's Agent accounts table it was opened from.
 
 While Settings is open everything under it stays as it was, the terminal included, and its size does not change.
 
@@ -164,8 +168,10 @@ These choices are stored by Octoboard. An explicit reviewer overrides Codex's re
 writing its configuration files or changing its sandbox or approval policy. They remain local; see
 "What is not configuration and never travels" in `docs/product/configuration-export-and-import.md`.
 
-One **Add account** button, above the groups, serves every agent: its form asks for the agent — every agent can be
-picked, one that is not installed included, since an account may be set up before its agent is — then a name and a
+One **Add account** button, above the groups, serves every agent: its form asks for the agent — every agent is listed
+and can be picked, one that is not installed included and labelled as not installed, since an account may be set up
+before its agent is, unlike the agent pickers elsewhere (see "Agents that are not installed" in
+`docs/product/consoles-and-projects.md`) — then a name and a
 directory, which can be typed or picked with the directory browser (see "Browsing directories" in
 `docs/product/consoles-and-projects.md`). Editing an account offers its name and its directory, never its agent: a
 directory belongs to one agent's layout. The directory is checked for being absolute (or starting with `~/`) and for

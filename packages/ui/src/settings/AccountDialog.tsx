@@ -2,7 +2,7 @@ import { Button } from "@heroui/react";
 import React, { useState } from "react";
 
 import { AGENT_DEFAULT_CONFIG_DIR, AGENT_LABEL } from "../agents";
-import { agentIconPickerOptions } from "../components/AgentIcon";
+import { agentIconSetupOptions } from "../components/AgentIcon";
 import { TILDE_PARAMS } from "../components/literalParams";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "../dialogs/Dialog";
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
@@ -72,8 +72,8 @@ export function AccountDialog({
           <OptionSelect
             label={t("settings.accounts.agent")}
             // Availability is shown but deliberately not enforced: an account may be set up before
-            // its agent is installed, so every entry stays selectable.
-            options={agentIconPickerOptions(t, agentAvailability).map(({ isDisabled: _, ...option }) => option)}
+            // its agent is installed, so every agent is listed and selectable.
+            options={agentIconSetupOptions(t, agentAvailability)}
             value={agent}
             onChange={setAgent}
           />

@@ -1,3 +1,4 @@
+import type { Agent, AgentAvailability } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import { SAMPLE, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
@@ -115,6 +116,32 @@ const onDefaultState = snapshotState({
   settings: accountsState.settings,
 });
 
+// Detection has settled: the listed agents are not on the machine, the rest are.
+const detected = (missing: Agent[]) =>
+  new Map<Agent, AgentAvailability>(
+    (["claude", "codex", "grok"] as const).map((agent) => [
+      agent,
+      { agent, availability: missing.includes(agent) ? "unavailable" : "available", default_account_dir: `/Users/dev/.${agent}` },
+    ]),
+  );
+
+// A console that was set up while Codex was installed: its project sessions run on Codex, where its
+// console sessions run on Claude Code, and it still pins a named account for each. Claude Code has
+// a second account to choose between; Grok Build has only its default account.
+const mixedSettings = {
+  ...accountsState.settings!,
+  accounts: [...accountsState.settings!.accounts, { id: "a-codex", agent: "codex" as const, name: "Codex personal", config_dir: "/Users/dev/.codex-personal" }],
+};
+const mixedState = (missing: Agent[]) => ({
+  ...snapshotState({
+    consoles: [{ ...console_, project_session_agent: "codex" as const, claude_account_id: "a-work", codex_account_id: "a-codex", codex_project_session_model: SAMPLE_CODEX_MODELS[0].id }],
+    projects: [web, api],
+    sessions,
+    settings: mixedSettings,
+  }),
+  agentAvailability: detected(missing),
+});
+
 const consoleActions = (ui: Ui) =>
   ui.press(ui.t("sidebar.console.actions", { name: console_.name }));
 const projectActions = (ui: Ui, name: string) =>
@@ -153,7 +180,13 @@ const HOME_LISTING = [
 const dialogState = {
   ...accountsState,
   consoles: new Map([
-    [console_.id, { ...launchSettingsState.consoles!.get(console_.id)!, icon: avatarState.consoles!.get(console_.id)!.icon, claude_account_id: "a-personal" }],
+    [console_.id, {
+      ...launchSettingsState.consoles!.get(console_.id)!,
+      icon: avatarState.consoles!.get(console_.id)!.icon,
+      claude_account_id: "a-personal",
+      claude_project_session_model: "sonnet",
+      claude_project_session_effort: "low",
+    }],
     ["c-plain", consoleOf("c-plain", "Plain console")],
   ]),
   projects: new Map([...accountsState.projects!, ...taggedState.projects!, ...configuredState.projects!, ...onDefaultState.projects!]),
@@ -190,8 +223,9 @@ const SESSION_INSTRUCTIONS = [
   "Keep the summary under ten lines.",
 ].join("\n");
 
-// Session settings initially reflect the selected agent's project defaults. Both agents have
-// usable stored values so changing the agent lets the same view show either model list.
+// Session settings initially reflect the selected agent's project defaults, each value falling back
+// to the console's project session value where its project sets none. Both agents have usable
+// stored values so changing the agent lets the same view show either model list.
 const sessionLaunchState = {
   ...dialogState,
   // The open-session buttons share one label; keep the confirmation target's project alone
@@ -199,7 +233,6 @@ const sessionLaunchState = {
   projects: new Map([[web.id, {
     ...web,
     claude_session_model: "opus",
-    claude_session_effort: "high",
     codex_session_model: SAMPLE_CODEX_MODELS[0].id,
     codex_session_effort: "xhigh",
   }]]),
@@ -347,6 +380,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "New console with accounts",
+    description: "Project sessions start on Same as console sessions, naming Claude Code beside its faded icon. In the accounts table Claude Code, which has named accounts, is a picker; Codex and Grok Build state their default account with a way to Settings.",
     steps: [
       (ui) => ui.press(ui.t("rail.newConsole")),
     ],
@@ -358,10 +392,51 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "New console advanced settings",
-    description: "Without named accounts the agent picker fills the whole field. Advanced exposes the model and reasoning effort settings, and at its foot the empty Console session instructions field with its placeholder and note.",
+    description: "Without named accounts every agent in the accounts table states its default account. Advanced opens on the console sessions' agent among tabs for every agent, each with a Console sessions and a Project sessions group of model and reasoning effort settings, and at its foot the empty Console session instructions field with its placeholder and note.",
     steps: [
       (ui) => ui.press(ui.t("rail.newConsole")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: mixedState(["codex"]),
+    id: "dialog-edit-console-agents",
+    group: "Consoles",
+    category: "normal",
+    title: "Console settings with differing default agents",
+    description: "Console sessions run on Claude Code and project sessions on Codex, which is no longer installed: the row keeps it, marked. The accounts table has a picker for Claude Code, only the default account for Grok Build, and a Codex (not installed) row because the console still pins its account. In Advanced the agent tabs include Codex (not installed), which stays while the console stores a project session model for it.",
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: mixedState(["codex", "grok"]),
+    id: "dialog-edit-console-project-agent-picker",
+    group: "Consoles",
+    category: "normal",
+    title: "Project sessions agent choices",
+    description: "The list offers Same as console sessions, Claude Code, and Codex as the held value, marked not installed; Grok Build, also missing, is left out.",
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.edit")),
+      (ui) => ui.press(ui.t("dialog.console.defaultAgentProject")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: { ...dialogState, agentAvailability: detected(["codex"]) },
+    id: "dialog-new-console-manage-accounts",
+    group: "Consoles",
+    category: "normal",
+    title: "Manage accounts from the console dialog",
+    description: "Settings opens on Agent accounts, reached from Grok Build's row in the new console dialog.",
+    steps: [
+      (ui) => ui.press(ui.t("rail.newConsole")),
+      (ui) => ui.press(ui.t("dialog.console.manageAccounts")),
     ],
   },
   {
@@ -370,8 +445,8 @@ export const dialogScenarios: Scenario[] = [
     id: "dialog-edit-console-launch-settings",
     group: "Consoles",
     category: "normal",
-    title: "Edit console with avatar, stored launch settings and session instructions",
-    description: "The retired model is retained and marked; the avatar and its remove control are visible. At the foot of Advanced, the Console session instructions field holds the console's own multi-line text, longer than the field is tall, so it scrolls inside the field.",
+    title: "Console settings with avatar, stored launch settings and session instructions",
+    description: "The Claude Code tab holds different values for its two groups: the retired console session model is retained and marked, while project sessions have Sonnet at Low. The avatar and its remove control are visible. At the foot of Advanced, the Console session instructions field holds the console's own multi-line text, longer than the field is tall, so it scrolls inside the field.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.edit")),
@@ -434,7 +509,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "New session advanced settings",
-    description: "New conversation is selected with Name below the tabs. Claude Code and its long inherited account name share the joined field; expanded Advanced shows the project's Opus model and high reasoning effort, with Report to still offered above.",
+    description: "New conversation is selected with Name below the tabs. Claude Code and its long inherited account name share the joined field; expanded Advanced shows the project's Opus model with the console's Low project session reasoning effort, with Report to still offered above.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
@@ -607,6 +682,23 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
+    state: {
+      ...dialogState,
+      consoles: new Map([...dialogState.consoles, [console_.id, { ...dialogState.consoles.get(console_.id)!, claude_project_session_effort: null }]]),
+    },
+    id: "dialog-edit-project-inherited-launch-settings",
+    group: "Projects",
+    category: "normal",
+    title: "Project settings inheriting console launch settings",
+    description: "Model inherits the console's project session value, named in its label; Reasoning effort, which the console leaves to the agent, says it inherits the agent's own setting.",
+    steps: [
+      (ui) => projectActions(ui, onDefault.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+    ],
+  },
+  {
+    ...dialogFixture,
     id: "dialog-edit-project-account-choices",
     group: "Projects",
     category: "normal",
@@ -616,6 +708,28 @@ export const dialogScenarios: Scenario[] = [
       (ui) => projectActions(ui, onDefault.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
       (ui) => ui.press(ui.t("dialog.agentSettings.account", { agent: "Claude Code" })),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: {
+      ...snapshotState({
+        consoles: [{ ...console_, project_session_agent: "codex" as const }],
+        projects: [web, api],
+        sessions,
+        settings: accountsState.settings,
+      }),
+      agentAvailability: detected(["grok"]),
+    },
+    id: "dialog-add-project-inherit-project-agent",
+    group: "Projects",
+    category: "normal",
+    title: "Add project in a console with its own project session agent",
+    description: "Inherit from console names Codex, the console's project session agent rather than its Claude Code console sessions, beside a faded Codex icon. Grok Build, missing, is not offered.",
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.press(ui.t("dialog.project.defaultAgent")),
     ],
   },
   {

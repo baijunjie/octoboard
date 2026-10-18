@@ -52,7 +52,11 @@ export interface Console {
   id: string;
   name: string;
   workdir: string;
+  /** The agent a console session of this console is of. */
   default_agent: Agent;
+  /** The agent a project session falls back to when its project names none; absent or `null`
+   * follows `default_agent`. */
+  project_session_agent?: Agent | null;
   /** The account each agent's sessions opened in this console read, by id; absent means that
    * agent's default account — the state of pinning nothing. A session resolves its own: the one
    * chosen for it, else this, else the default. */
@@ -70,6 +74,15 @@ export interface Console {
   codex_console_session_effort?: string | null;
   grok_console_session_model?: string | null;
   grok_console_session_effort?: string | null;
+  /** The model and reasoning effort a project session of this console is launched with when neither
+   * the session nor its project names one; one pair per agent. Absent means the agent's own
+   * default. Read at every launch. */
+  claude_project_session_model?: string | null;
+  claude_project_session_effort?: string | null;
+  codex_project_session_model?: string | null;
+  codex_project_session_effort?: string | null;
+  grok_project_session_model?: string | null;
+  grok_project_session_effort?: string | null;
   /** A custom avatar as an `image/*` `data:` URL of at most 256 KiB; unset shows the default glyph. */
   icon?: string | null;
   /** The user's own text added after the console session's built-in instructions; unset adds
@@ -100,6 +113,17 @@ export type ConsoleEffortField =
   | "claude_console_session_effort"
   | "codex_console_session_effort"
   | "grok_console_session_effort";
+
+/** The pair of fields a console holds for its project sessions, which a project's own unset values
+ * fall back to. */
+export type ConsoleProjectModelField =
+  | "claude_project_session_model"
+  | "codex_project_session_model"
+  | "grok_project_session_model";
+export type ConsoleProjectEffortField =
+  | "claude_project_session_effort"
+  | "codex_project_session_effort"
+  | "grok_project_session_effort";
 
 /** The same pair of fields on a project (its sessions' launch settings). */
 export type ProjectModelField = "claude_session_model" | "codex_session_model" | "grok_session_model";
@@ -394,6 +418,8 @@ export interface DocumentConsole {
   name: string;
   icon?: string | null;
   default_agent: Agent;
+  /** The agent project sessions fall back to; `null` or absent follows `default_agent`. */
+  project_session_agent?: Agent | null;
   /** Each agent's account by name; `null` or absent is that agent's default account. */
   claude_account?: AccountName | null;
   codex_account?: AccountName | null;
@@ -404,6 +430,13 @@ export interface DocumentConsole {
   codex_console_session_effort?: string | null;
   grok_console_session_model?: string | null;
   grok_console_session_effort?: string | null;
+  /** The console's project session model and effort; absent is none. */
+  claude_project_session_model?: string | null;
+  claude_project_session_effort?: string | null;
+  codex_project_session_model?: string | null;
+  codex_project_session_effort?: string | null;
+  grok_project_session_model?: string | null;
+  grok_project_session_effort?: string | null;
   /** The console's own addition to its console session's instructions; absent is none. */
   console_session_prompt?: string | null;
   projects: DocumentProject[];
@@ -687,6 +720,8 @@ export type RequestBody =
     type: "create_console";
     name: string;
     default_agent: Agent;
+    /** Absent means project sessions follow `default_agent`. */
+    project_session_agent?: Agent;
     /** Each agent's account, by id; absent means that agent's default account. */
     claude_account_id?: string;
     codex_account_id?: string;
@@ -699,6 +734,14 @@ export type RequestBody =
     codex_console_session_effort?: string;
     grok_console_session_model?: string;
     grok_console_session_effort?: string;
+    /** Each agent's model and reasoning effort for project sessions whose project and session name
+       * none; absent or blank means the agent's own default. */
+    claude_project_session_model?: string;
+    claude_project_session_effort?: string;
+    codex_project_session_model?: string;
+    codex_project_session_effort?: string;
+    grok_project_session_model?: string;
+    grok_project_session_effort?: string;
     icon?: string;
     /** Absent or blank means no addition to the console session's instructions. */
     console_session_prompt?: string;
@@ -708,6 +751,9 @@ export type RequestBody =
     console: string;
     name?: string;
     default_agent?: Agent;
+    /** Absent leaves it alone; an explicit `null` makes project sessions follow `default_agent`
+       * again. */
+    project_session_agent?: Agent | null;
     /** Each agent's account: absent leaves it alone; an explicit `null` clears it back to that
        * agent's default account. */
     claude_account_id?: string | null;
@@ -721,6 +767,13 @@ export type RequestBody =
     codex_console_session_effort?: string | null;
     grok_console_session_model?: string | null;
     grok_console_session_effort?: string | null;
+    /** Each agent's project session model and effort, with the same rule. */
+    claude_project_session_model?: string | null;
+    claude_project_session_effort?: string | null;
+    codex_project_session_model?: string | null;
+    codex_project_session_effort?: string | null;
+    grok_project_session_model?: string | null;
+    grok_project_session_effort?: string | null;
     /** Absent leaves the avatar alone; an explicit `null` clears it back to the default glyph. */
     icon?: string | null;
     /** Absent leaves the addition alone; an explicit `null` (or a blank string) clears it. */

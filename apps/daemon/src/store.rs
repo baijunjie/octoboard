@@ -86,6 +86,9 @@ impl Store {
                 workdir       TEXT NOT NULL,
                 console_session_agent TEXT NOT NULL,
                 default_agent TEXT NOT NULL,
+                -- The agent a project session here falls back to when its project names none;
+                -- NULL follows `default_agent`.
+                project_session_agent TEXT,
                 -- The account each agent's sessions here read, by id; NULL means that agent's
                 -- default account. No `REFERENCES`: `Store::delete_account` clears these itself,
                 -- in the same locked step as the row's removal, rather than relying on a cascade.
@@ -101,6 +104,14 @@ impl Store {
                 codex_console_session_effort  TEXT,
                 grok_console_session_model    TEXT,
                 grok_console_session_effort   TEXT,
+                -- The model and reasoning effort a project session here is launched with when
+                -- neither it nor its project names one; NULL means the agent's own default.
+                claude_project_session_model TEXT,
+                claude_project_session_effort TEXT,
+                codex_project_session_model TEXT,
+                codex_project_session_effort TEXT,
+                grok_project_session_model TEXT,
+                grok_project_session_effort TEXT,
                 icon          TEXT,
                 -- The user's own addition to the console session's instruction file; NULL means
                 -- none.
@@ -374,6 +385,14 @@ impl Store {
              WHEN OLD.locked = 1 AND NEW.status = 'archived' AND OLD.status != 'archived'
              BEGIN SELECT RAISE(ABORT, 'locked sessions cannot be archived'); END;",
         )?;
+        for column in CONSOLE_PROJECT_SESSION_LAUNCH_COLUMNS {
+            if !column_exists(&conn, "consoles", column)? {
+                conn.execute(
+                    &format!("ALTER TABLE consoles ADD COLUMN {column} TEXT"),
+                    [],
+                )?;
+            }
+        }
         for column in CONSOLE_SESSION_LAUNCH_COLUMNS {
             if !column_exists(&conn, "consoles", column)? {
                 conn.execute(
@@ -381,6 +400,12 @@ impl Store {
                     [],
                 )?;
             }
+        }
+        if !column_exists(&conn, "consoles", "project_session_agent")? {
+            conn.execute(
+                "ALTER TABLE consoles ADD COLUMN project_session_agent TEXT",
+                [],
+            )?;
         }
         if !column_exists(&conn, "consoles", "console_session_prompt")? {
             conn.execute(
@@ -493,8 +518,12 @@ impl Store {
                                    claude_console_session_effort, codex_console_session_model,
                                    codex_console_session_effort, grok_console_session_model,
                                    grok_console_session_effort, icon, console_session_prompt,
-                                   created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+                                   created_at, project_session_agent,
+                                   claude_project_session_model, claude_project_session_effort,
+                                   codex_project_session_model, codex_project_session_effort,
+                                   grok_project_session_model, grok_project_session_effort)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                     ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
             params![
                 console.id,
                 console.name,
@@ -513,6 +542,13 @@ impl Store {
                 console.icon,
                 console.console_session_prompt,
                 console.created_at,
+                console.project_session_agent.as_ref().map(enum_to_text),
+                console.claude_project_session_model,
+                console.claude_project_session_effort,
+                console.codex_project_session_model,
+                console.codex_project_session_effort,
+                console.grok_project_session_model,
+                console.grok_project_session_effort,
             ],
         )?;
         Ok(())
@@ -528,7 +564,13 @@ impl Store {
                                  codex_console_session_effort = ?11,
                                  grok_console_session_model = ?12,
                                  grok_console_session_effort = ?13, icon = ?14,
-                                 console_session_prompt = ?15
+                                 console_session_prompt = ?15, project_session_agent = ?16,
+                                 claude_project_session_model = ?17,
+                                 claude_project_session_effort = ?18,
+                                 codex_project_session_model = ?19,
+                                 codex_project_session_effort = ?20,
+                                 grok_project_session_model = ?21,
+                                 grok_project_session_effort = ?22
              WHERE id = ?1",
             params![
                 console.id,
@@ -546,6 +588,13 @@ impl Store {
                 console.grok_console_session_effort,
                 console.icon,
                 console.console_session_prompt,
+                console.project_session_agent.as_ref().map(enum_to_text),
+                console.claude_project_session_model,
+                console.claude_project_session_effort,
+                console.codex_project_session_model,
+                console.codex_project_session_effort,
+                console.grok_project_session_model,
+                console.grok_project_session_effort,
             ],
         )?;
         Ok(())
@@ -1717,7 +1766,22 @@ const CONSOLE_COLUMNS: &str = "id, name, workdir, console_session_agent, default
                                claude_console_session_model, claude_console_session_effort,
                                codex_console_session_model, codex_console_session_effort,
                                grok_console_session_model, grok_console_session_effort, icon,
-                               console_session_prompt, created_at";
+                               console_session_prompt, created_at, project_session_agent,
+                               claude_project_session_model, claude_project_session_effort,
+                               codex_project_session_model, codex_project_session_effort,
+                               grok_project_session_model, grok_project_session_effort";
+
+/// The consoles columns holding the model and reasoning effort a project session falls back to.
+/// Added in place like [`CONSOLE_SESSION_LAUNCH_COLUMNS`], and absent from
+/// `CURRENT_SHAPE_COLUMNS` for the same reason.
+const CONSOLE_PROJECT_SESSION_LAUNCH_COLUMNS: [&str; 6] = [
+    "claude_project_session_model",
+    "claude_project_session_effort",
+    "codex_project_session_model",
+    "codex_project_session_effort",
+    "grok_project_session_model",
+    "grok_project_session_effort",
+];
 
 /// The consoles columns holding the model and reasoning effort a console session is launched
 /// with. Added in place to a database that predates them, and deliberately absent from
@@ -1825,6 +1889,13 @@ fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
         icon: row.get(14)?,
         console_session_prompt: row.get(15)?,
         created_at: row.get(16)?,
+        project_session_agent: enum_from_row_opt::<Agent>(row, 17)?,
+        claude_project_session_model: row.get(18)?,
+        claude_project_session_effort: row.get(19)?,
+        codex_project_session_model: row.get(20)?,
+        codex_project_session_effort: row.get(21)?,
+        grok_project_session_model: row.get(22)?,
+        grok_project_session_effort: row.get(23)?,
     })
 }
 
@@ -2024,6 +2095,13 @@ mod tests {
             icon: None,
             console_session_prompt: None,
             created_at: 0,
+            project_session_agent: None,
+            claude_project_session_model: None,
+            claude_project_session_effort: None,
+            codex_project_session_model: None,
+            codex_project_session_effort: None,
+            grok_project_session_model: None,
+            grok_project_session_effort: None,
         }
     }
 
@@ -2318,6 +2396,91 @@ mod tests {
         assert_eq!(
             again.codex_console_session_effort.as_deref(),
             Some("codex-effort")
+        );
+    }
+
+    /// A database from before a console could name a project session agent keeps its consoles
+    /// following `default_agent`, and gains the column in place.
+    #[test]
+    fn the_project_session_agent_column_is_added_in_place() {
+        let path = temp_db("project-session-agent-column");
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .insert_console(&console(None, None, None))
+                .expect("console");
+        }
+        {
+            let conn = Connection::open(&path).expect("database");
+            conn.execute("ALTER TABLE consoles DROP COLUMN project_session_agent", [])
+                .expect("the older shape");
+        }
+
+        let store = Store::open(&path).expect("reopened in place");
+        let mut kept = store.get_console("console-1").unwrap().expect("kept");
+        assert_eq!(kept.project_session_agent, None);
+        kept.project_session_agent = Some(Agent::Grok);
+        store.update_console(&kept).expect("writes the new column");
+        let reread = store.get_console("console-1").unwrap().expect("kept");
+        assert_eq!(reread.project_session_agent, Some(Agent::Grok));
+    }
+
+    /// A database from before a console carried a project session model and effort keeps its
+    /// consoles, with none set, and gains the columns in place.
+    #[test]
+    fn the_console_project_session_launch_columns_are_added_in_place() {
+        let path = temp_db("console-project-session-launch-columns");
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .insert_console(&console(None, None, None))
+                .expect("console");
+        }
+        {
+            let conn = Connection::open(&path).expect("database");
+            for column in CONSOLE_PROJECT_SESSION_LAUNCH_COLUMNS {
+                conn.execute(&format!("ALTER TABLE consoles DROP COLUMN {column}"), [])
+                    .expect("the older shape");
+            }
+        }
+
+        let store = Store::open(&path).expect("reopened in place");
+        let mut kept = store.get_console("console-1").unwrap().expect("kept");
+        assert_eq!(kept.claude_project_session_model, None);
+        assert_eq!(kept.grok_project_session_effort, None);
+        // Six distinct values, so a pair of columns swapped between the SELECT list and the
+        // positional reads fails here.
+        kept.claude_project_session_model = Some("claude-model".to_string());
+        kept.claude_project_session_effort = Some("claude-effort".to_string());
+        kept.codex_project_session_model = Some("codex-model".to_string());
+        kept.codex_project_session_effort = Some("codex-effort".to_string());
+        kept.grok_project_session_model = Some("grok-model".to_string());
+        kept.grok_project_session_effort = Some("grok-effort".to_string());
+        store.update_console(&kept).expect("writes the new columns");
+        let reread = store.get_console("console-1").unwrap().expect("kept");
+        assert_eq!(
+            reread.claude_project_session_model.as_deref(),
+            Some("claude-model")
+        );
+        assert_eq!(
+            reread.claude_project_session_effort.as_deref(),
+            Some("claude-effort")
+        );
+        assert_eq!(
+            reread.codex_project_session_model.as_deref(),
+            Some("codex-model")
+        );
+        assert_eq!(
+            reread.codex_project_session_effort.as_deref(),
+            Some("codex-effort")
+        );
+        assert_eq!(
+            reread.grok_project_session_model.as_deref(),
+            Some("grok-model")
+        );
+        assert_eq!(
+            reread.grok_project_session_effort.as_deref(),
+            Some("grok-effort")
         );
     }
 

@@ -217,12 +217,12 @@ describe("a console session's Pin entry", () => {
 });
 
 describe("a console's menu", () => {
-  it("lists Add project, Edit console, the archived console sessions and Delete console", () => {
+  it("lists Add project, Console settings, the archived console sessions and Delete console", () => {
     const handlers = { onOpenDialog: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn() };
     const hub = sessionOf("hub", "c", undefined, "Old hub", "archived", { role: "console" });
     const menu = consoleMenu(t, consoleOf("c", "Main"), handlers, [hub]);
     const labels = menu.map((entry) => (entry === "separator" ? entry : entry.label));
-    expect(labels).toEqual(["Add project", "Edit console", "Archived console sessions", "separator", "Delete console"]);
+    expect(labels).toEqual(["Add project", "Console settings", "Archived console sessions", "separator", "Delete console"]);
     const archive = menu[2] as { items: { label: string; onClick: () => void }[] };
     expect(archive.items.map((item) => item.label)).toEqual(["Old hub", "View all"]);
     archive.items[1].onClick();

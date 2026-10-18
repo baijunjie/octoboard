@@ -188,7 +188,7 @@ export const archiveScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Console menu, archived console sessions",
-    description: "The console's menu (the same one opens from its avatar in the rail) lists Add project, Edit console, Archived console sessions and Delete console below a separator, with no Export configuration. The submenu shows the five newest archived console sessions with their last active task titles, then View all.",
+    description: "The console's menu (the same one opens from its avatar in the rail) lists Add project, Console settings, Archived console sessions and Delete console below a separator, with no Export configuration. The submenu shows the five newest archived console sessions with their last active task titles, then View all.",
     state: archiveState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.console.actions", { name: console_.name })),

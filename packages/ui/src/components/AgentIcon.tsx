@@ -1,6 +1,6 @@
 import React from "react";
 
-import { AGENT_OPTIONS, agentPickerOptions } from "../agents";
+import { agentPickerOptions, agentSetupOptions } from "../agents";
 import type { Translate } from "../i18n/catalog";
 import type { Agent, AgentAvailability } from "../protocol";
 import { AGENT_MARKS } from "./agentMarks";
@@ -25,11 +25,12 @@ export function AgentIcon({ agent, className = "size-4", tooltip }: { agent: Age
   );
 }
 
-/** The agents as `OptionSelect` options, each with its mark. */
-export const AGENT_ICON_OPTIONS = AGENT_OPTIONS.map((option) => ({ ...option, icon: <AgentIcon agent={option.value} /> }));
+/** `agentSetupOptions`, with each agent's mark. */
+export function agentIconSetupOptions(t: Translate, agentAvailability: Map<Agent, AgentAvailability>) {
+  return agentSetupOptions(t, agentAvailability).map((option) => ({ ...option, icon: <AgentIcon agent={option.value} /> }));
+}
 
-/** `agentPickerOptions`, with each agent's mark: an agent the machine does not have is named
- * rather than hidden, and cannot be selected. */
-export function agentIconPickerOptions(t: Translate, agentAvailability: Map<Agent, AgentAvailability>) {
-  return agentPickerOptions(t, agentAvailability).map((option) => ({ ...option, icon: <AgentIcon agent={option.value} /> }));
+/** `agentPickerOptions`, with each agent's mark. */
+export function agentIconPickerOptions(t: Translate, agentAvailability: Map<Agent, AgentAvailability>, held?: Agent | null) {
+  return agentPickerOptions(t, agentAvailability, held).map((option) => ({ ...option, icon: <AgentIcon agent={option.value} /> }));
 }

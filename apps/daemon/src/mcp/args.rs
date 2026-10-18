@@ -114,6 +114,20 @@ pub(super) fn present_text(
     }
 }
 
+/// An agent-or-null argument that keeps absent apart from cleared, like [`present_text`]: `None`
+/// when absent, `Some(None)` for `null`.
+pub(super) fn present_agent(
+    arguments: &Map<String, Value>,
+    key: &str,
+) -> Result<Option<Option<Agent>>> {
+    match arguments.get(key) {
+        None => Ok(None),
+        Some(Value::Null) => Ok(Some(None)),
+        Some(Value::String(text)) => Ok(Some(Some(parse_agent(text)?))),
+        Some(_) => bail!("`{key}` must be an agent or null"),
+    }
+}
+
 pub(super) fn console_projects(state: &Arc<AppState>, console_id: &str) -> Result<Vec<Project>> {
     Ok(state
         .store

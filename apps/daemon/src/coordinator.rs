@@ -84,6 +84,7 @@ async fn handle_inner(
         RequestBody::CreateConsole {
             name,
             default_agent,
+            project_session_agent,
             claude_account_id,
             codex_account_id,
             grok_account_id,
@@ -93,12 +94,19 @@ async fn handle_inner(
             codex_console_session_effort,
             grok_console_session_model,
             grok_console_session_effort,
+            claude_project_session_model,
+            claude_project_session_effort,
+            codex_project_session_model,
+            codex_project_session_effort,
+            grok_project_session_model,
+            grok_project_session_effort,
             icon,
             console_session_prompt,
         } => {
             let new = NewConsole {
                 name,
                 default_agent,
+                project_session_agent,
                 claude_account_id,
                 codex_account_id,
                 grok_account_id,
@@ -108,6 +116,12 @@ async fn handle_inner(
                 codex_console_session_effort,
                 grok_console_session_model,
                 grok_console_session_effort,
+                claude_project_session_model,
+                claude_project_session_effort,
+                codex_project_session_model,
+                codex_project_session_effort,
+                grok_project_session_model,
+                grok_project_session_effort,
                 icon,
                 console_session_prompt,
             };
@@ -123,6 +137,7 @@ async fn handle_inner(
             console: id,
             name,
             default_agent,
+            project_session_agent,
             claude_account_id,
             codex_account_id,
             grok_account_id,
@@ -132,9 +147,32 @@ async fn handle_inner(
             codex_console_session_effort,
             grok_console_session_model,
             grok_console_session_effort,
+            claude_project_session_model,
+            claude_project_session_effort,
+            codex_project_session_model,
+            codex_project_session_effort,
+            grok_project_session_model,
+            grok_project_session_effort,
             icon,
             console_session_prompt,
         } => {
+            let project_launch = launch_settings::changes_of([
+                (
+                    Agent::Claude,
+                    claude_project_session_model,
+                    claude_project_session_effort,
+                ),
+                (
+                    Agent::Codex,
+                    codex_project_session_model,
+                    codex_project_session_effort,
+                ),
+                (
+                    Agent::Grok,
+                    grok_project_session_model,
+                    grok_project_session_effort,
+                ),
+            ]);
             let launch = launch_settings::changes_of([
                 (
                     Agent::Claude,
@@ -158,6 +196,7 @@ async fn handle_inner(
                 ConsoleChanges {
                     name,
                     default_agent,
+                    project_session_agent,
                     accounts: [
                         (Agent::Claude, claude_account_id),
                         (Agent::Codex, codex_account_id),
@@ -167,6 +206,7 @@ async fn handle_inner(
                     .filter_map(|(agent, account)| Some((agent, account?)))
                     .collect(),
                     launch,
+                    project_launch,
                     icon,
                     console_session_prompt,
                 },
@@ -820,6 +860,7 @@ async fn handle_inner(
 pub struct NewConsole {
     pub name: String,
     pub default_agent: Agent,
+    pub project_session_agent: Option<Agent>,
     pub claude_account_id: Option<String>,
     pub codex_account_id: Option<String>,
     pub grok_account_id: Option<String>,
@@ -829,6 +870,12 @@ pub struct NewConsole {
     pub codex_console_session_effort: Option<String>,
     pub grok_console_session_model: Option<String>,
     pub grok_console_session_effort: Option<String>,
+    pub claude_project_session_model: Option<String>,
+    pub claude_project_session_effort: Option<String>,
+    pub codex_project_session_model: Option<String>,
+    pub codex_project_session_effort: Option<String>,
+    pub grok_project_session_model: Option<String>,
+    pub grok_project_session_effort: Option<String>,
     pub icon: Option<String>,
     pub console_session_prompt: Option<String>,
 }
@@ -849,29 +896,48 @@ pub fn check_new_console(state: &Arc<AppState>, new: &NewConsole) -> Result<Opti
 /// `launch_settings`). Separate from [`check_new_console`], which has no wait in it, and left out
 /// for a console a configuration document creates, whose values were chosen on another machine.
 pub async fn check_new_console_launch(state: &Arc<AppState>, new: &NewConsole) -> Result<()> {
-    for (agent, account, model, effort) in [
-        (
-            Agent::Claude,
-            &new.claude_account_id,
-            &new.claude_console_session_model,
-            &new.claude_console_session_effort,
-        ),
-        (
-            Agent::Codex,
-            &new.codex_account_id,
-            &new.codex_console_session_model,
-            &new.codex_console_session_effort,
-        ),
-        (
-            Agent::Grok,
-            &new.grok_account_id,
-            &new.grok_console_session_model,
-            &new.grok_console_session_effort,
-        ),
-    ] {
-        LaunchCheck::given(agent, account.clone(), model.as_deref(), effort.as_deref())
-            .run(state)
-            .await?;
+    let accounts = [
+        &new.claude_account_id,
+        &new.codex_account_id,
+        &new.grok_account_id,
+    ];
+    let pairs = [
+        // Console session pairs, then project session pairs, each by agent.
+        [
+            (
+                &new.claude_console_session_model,
+                &new.claude_console_session_effort,
+            ),
+            (
+                &new.codex_console_session_model,
+                &new.codex_console_session_effort,
+            ),
+            (
+                &new.grok_console_session_model,
+                &new.grok_console_session_effort,
+            ),
+        ],
+        [
+            (
+                &new.claude_project_session_model,
+                &new.claude_project_session_effort,
+            ),
+            (
+                &new.codex_project_session_model,
+                &new.codex_project_session_effort,
+            ),
+            (
+                &new.grok_project_session_model,
+                &new.grok_project_session_effort,
+            ),
+        ],
+    ];
+    for set in pairs {
+        for ((agent, account), (model, effort)) in Agent::ALL.into_iter().zip(accounts).zip(set) {
+            LaunchCheck::given(agent, account.clone(), model.as_deref(), effort.as_deref())
+                .run(state)
+                .await?;
+        }
     }
     Ok(())
 }
@@ -899,6 +965,7 @@ fn store_new_console(
         workdir: workdir.to_string_lossy().into_owned(),
         console_session_agent: new.default_agent,
         default_agent: new.default_agent,
+        project_session_agent: new.project_session_agent,
         claude_account_id: new.claude_account_id,
         codex_account_id: new.codex_account_id,
         grok_account_id: new.grok_account_id,
@@ -920,6 +987,24 @@ fn store_new_console(
         grok_console_session_effort: normalize_launch_setting(
             new.grok_console_session_effort.as_deref(),
         ),
+        claude_project_session_model: normalize_launch_setting(
+            new.claude_project_session_model.as_deref(),
+        ),
+        claude_project_session_effort: normalize_launch_setting(
+            new.claude_project_session_effort.as_deref(),
+        ),
+        codex_project_session_model: normalize_launch_setting(
+            new.codex_project_session_model.as_deref(),
+        ),
+        codex_project_session_effort: normalize_launch_setting(
+            new.codex_project_session_effort.as_deref(),
+        ),
+        grok_project_session_model: normalize_launch_setting(
+            new.grok_project_session_model.as_deref(),
+        ),
+        grok_project_session_effort: normalize_launch_setting(
+            new.grok_project_session_effort.as_deref(),
+        ),
         icon,
         console_session_prompt: trimmed_or_none(new.console_session_prompt.as_deref()),
         created_at: now_millis(),
@@ -939,9 +1024,13 @@ fn store_new_console(
 pub struct ConsoleChanges {
     pub name: Option<String>,
     pub default_agent: Option<Agent>,
+    /// `Some(None)` makes project sessions follow `default_agent` again.
+    pub project_session_agent: Present<Agent>,
     /// Each agent's account by id; `Some(None)` is back to that agent's default account.
     pub accounts: HashMap<Agent, Option<String>>,
     pub launch: HashMap<Agent, LaunchChange>,
+    /// Each agent's project session model and effort.
+    pub project_launch: HashMap<Agent, LaunchChange>,
     /// `Some(None)` clears the avatar.
     pub icon: Present<String>,
     /// `Some(None)` clears the user's addition to the console session's instructions.
@@ -994,6 +1083,9 @@ pub async fn update_console(
         if let Some(default_agent) = changes.default_agent {
             console.default_agent = default_agent;
         }
+        if let Some(project_session_agent) = changes.project_session_agent {
+            console.project_session_agent = project_session_agent;
+        }
         // Set on every save rather than only when the default agent changes, so a console
         // whose stored value somehow diverged is healed by the next one.
         console.console_session_agent = console.default_agent;
@@ -1008,6 +1100,14 @@ pub async fn update_console(
         for (agent, change) in &changes.launch {
             let account_id = console.account(*agent).clone();
             let (model, effort) = console.launch_mut(*agent);
+            let check = launch_settings::apply_change(*agent, account_id, model, effort, change);
+            if !check.is_empty() && !verified.contains(&check) {
+                pending.push(check);
+            }
+        }
+        for (agent, change) in &changes.project_launch {
+            let account_id = console.account(*agent).clone();
+            let (model, effort) = console.project_launch_mut(*agent);
             let check = launch_settings::apply_change(*agent, account_id, model, effort, change);
             if !check.is_empty() && !verified.contains(&check) {
                 pending.push(check);
@@ -1186,6 +1286,7 @@ async fn check_new_project_launch(
             model.as_deref(),
             effort.as_deref(),
         )
+        .behind(console.project_launch(agent).0)
         .run(state)
         .await?;
     }
@@ -1349,7 +1450,8 @@ pub async fn add_project(
 #[derive(Default)]
 pub struct ProjectChanges {
     pub name: Option<String>,
-    /// `Some(None)` is back to inheriting the console's default agent.
+    /// `Some(None)` is back to following the console's project session agent (else its
+    /// `default_agent`).
     pub default_agent: Present<Agent>,
     pub accounts: HashMap<Agent, ProjectAccount>,
     pub launch: HashMap<Agent, LaunchChange>,
@@ -1408,8 +1510,8 @@ pub async fn update_project(
             project.name = name.clone();
         }
         // Absent means "leave it alone", an explicit null means "go back to inheriting the
-        // console's default" — the two have to stay distinguishable, or a project's own
-        // default could be set but never cleared.
+        // console's project session agent" — the two have to stay distinguishable, or a project's
+        // own default could be set but never cleared.
         if let Some(default_agent) = changes.default_agent {
             project.default_agent = default_agent;
         }
@@ -1423,7 +1525,8 @@ pub async fn update_project(
         for (agent, change) in &changes.launch {
             let account_id = console.resolve_project_account(*agent, project.account(*agent));
             let (model, effort) = project.launch_mut(*agent);
-            let check = launch_settings::apply_change(*agent, account_id, model, effort, change);
+            let check = launch_settings::apply_change(*agent, account_id, model, effort, change)
+                .behind(console.project_launch(*agent).0);
             if !check.is_empty() && !verified.contains(&check) {
                 pending.push(check);
             }
@@ -2188,11 +2291,12 @@ async fn check_launch_settings(
         normalize_session_launch_setting(model),
         normalize_session_launch_setting(effort),
     );
-    // A session that chose no model takes the project's, or for a console session the console's.
+    // A session that chose no model takes the project's, else the console's project session one,
+    // or for a console session the console's console session one.
     let effective_model = match &model {
         Some(model) => model.clone(),
         None => match project {
-            Some(project) => project.launch(agent).0.clone(),
+            Some(project) => project_launch_settings(project, console, agent).0,
             None => console.launch(agent).0.clone(),
         },
     };
@@ -2632,28 +2736,27 @@ fn console_session_launch_settings(
     }
 }
 
-/// The model and reasoning effort `project` launches a session of `agent` with: that agent's own
-/// pair, since each has its own model names.
-fn project_launch_settings(project: &Project, agent: Agent) -> (Option<String>, Option<String>) {
-    match agent {
-        Agent::Claude => (
-            project.claude_session_model.clone(),
-            project.claude_session_effort.clone(),
-        ),
-        Agent::Codex => (
-            project.codex_session_model.clone(),
-            project.codex_session_effort.clone(),
-        ),
-        Agent::Grok => (
-            project.grok_session_model.clone(),
-            project.grok_session_effort.clone(),
-        ),
-    }
+/// The model and reasoning effort a session of `project` launches `agent` with when it chose
+/// neither: for each value independently, the project's own, else its console's project session
+/// value, else `None`, the agent's own default. Each agent has its own pair, since each has its own
+/// model names.
+fn project_launch_settings(
+    project: &Project,
+    console: &Console,
+    agent: Agent,
+) -> (Option<String>, Option<String>) {
+    let (model, effort) = project.launch(agent);
+    let (console_model, console_effort) = console.project_launch(agent);
+    (
+        model.clone().or_else(|| console_model.clone()),
+        effort.clone().or_else(|| console_effort.clone()),
+    )
 }
 
 /// The model and reasoning effort `session` is launched with, for its own agent: a console session
-/// reads its console's console session pair, a project session its project's, unless that field
-/// has a session override. Inherited values are read at every launch, while an override (including
+/// reads its console's console session pair, a project session its project's with its console's
+/// project session pair behind it (see [`project_launch_settings`]), unless that field has a
+/// session override. Inherited values are read at every launch, while an override (including
 /// explicitly leaving the choice to the agent) survives resumes and account switches.
 fn launch_settings(
     state: &Arc<AppState>,
@@ -2665,7 +2768,11 @@ fn launch_settings(
                 .store
                 .get_project(project_id)?
                 .ok_or_else(|| CodedError::unknown_project(project_id))?;
-            project_launch_settings(&project, session.agent)
+            let console = state
+                .store
+                .get_console(&session.console_id)?
+                .ok_or_else(|| CodedError::unknown_console(&session.console_id))?;
+            project_launch_settings(&project, &console, session.agent)
         }
         None => {
             let console = state
@@ -3545,15 +3652,19 @@ fn refuse_if_agent_unavailable(state: &Arc<AppState>, agent: Agent) -> Result<()
 }
 
 /// The agent a session is of: an explicit choice wins over the project's default, then the
-/// console's default. A console session has no project, so it falls straight back to the console.
+/// console's project session default. A console session has no project, so it falls straight
+/// back to the console's console session default.
 pub(crate) fn session_agent(
     chosen: Option<Agent>,
     project: Option<&Project>,
     console: &Console,
 ) -> Agent {
-    chosen
-        .or_else(|| project.and_then(|project| project.default_agent))
-        .unwrap_or(console.default_agent)
+    chosen.unwrap_or_else(|| match project {
+        Some(project) => project
+            .default_agent
+            .unwrap_or_else(|| console.project_session_default()),
+        None => console.default_agent,
+    })
 }
 
 /// The account id and the config directory a session of `agent` should launch with, and that
@@ -4091,6 +4202,13 @@ mod tests {
             workdir: workdir.to_string_lossy().into_owned(),
             console_session_agent,
             default_agent: console_session_agent,
+            project_session_agent: None,
+            claude_project_session_model: None,
+            claude_project_session_effort: None,
+            codex_project_session_model: None,
+            codex_project_session_effort: None,
+            grok_project_session_model: None,
+            grok_project_session_effort: None,
             claude_account_id: None,
             codex_account_id: None,
             grok_account_id: None,
@@ -5575,6 +5693,13 @@ mod tests {
             console: console.to_string(),
             name: None,
             default_agent: None,
+            project_session_agent: None,
+            claude_project_session_model: None,
+            claude_project_session_effort: None,
+            codex_project_session_model: None,
+            codex_project_session_effort: None,
+            grok_project_session_model: None,
+            grok_project_session_effort: None,
             claude_account_id: None,
             codex_account_id: None,
             grok_account_id: None,
@@ -5603,6 +5728,13 @@ mod tests {
             RequestBody::CreateConsole {
                 name: "Console".to_string(),
                 default_agent: Agent::Codex,
+                project_session_agent: None,
+                claude_project_session_model: None,
+                claude_project_session_effort: None,
+                codex_project_session_model: None,
+                codex_project_session_effort: None,
+                grok_project_session_model: None,
+                grok_project_session_effort: None,
                 claude_account_id: None,
                 codex_account_id: None,
                 grok_account_id: None,
@@ -5638,6 +5770,13 @@ mod tests {
             RequestBody::CreateConsole {
                 name: "Other".to_string(),
                 default_agent: Agent::Codex,
+                project_session_agent: None,
+                claude_project_session_model: None,
+                claude_project_session_effort: None,
+                codex_project_session_model: None,
+                codex_project_session_effort: None,
+                grok_project_session_model: None,
+                grok_project_session_effort: None,
                 claude_account_id: None,
                 codex_account_id: None,
                 grok_account_id: None,
@@ -5689,6 +5828,99 @@ mod tests {
         let moved = state.store.get_console("console-1").unwrap().unwrap();
         assert_eq!(moved.default_agent, Agent::Codex);
         assert_eq!(moved.console_session_agent, Agent::Codex);
+    }
+
+    /// A project session falls back to the project's own default, then the console's project
+    /// session agent, then (for a console without one, as every console stored before the setting
+    /// was) `default_agent`; a console session always takes `default_agent`.
+    #[test]
+    fn a_session_agent_falls_back_through_the_project_to_the_project_session_default() {
+        let workdir = Path::new("/tmp/console-1");
+        let mut console = console(Agent::Claude, workdir);
+        let mut project = project_of("console-1", "p1");
+        assert_eq!(session_agent(None, Some(&project), &console), Agent::Claude);
+
+        console.project_session_agent = Some(Agent::Codex);
+        assert_eq!(session_agent(None, Some(&project), &console), Agent::Codex);
+        assert_eq!(session_agent(None, None, &console), Agent::Claude);
+
+        project.default_agent = Some(Agent::Grok);
+        assert_eq!(session_agent(None, Some(&project), &console), Agent::Grok);
+        assert_eq!(
+            session_agent(Some(Agent::Claude), Some(&project), &console),
+            Agent::Claude
+        );
+    }
+
+    /// The project session agent is stored at creation, left alone by an absent field, set by a
+    /// value and cleared by `null`.
+    #[tokio::test]
+    async fn the_project_session_agent_is_left_set_or_cleared_by_an_update() {
+        let (state, dir) = crate::test_support::app_state("coordinator-project-session-agent");
+        let workdir = console_workdir(&dir);
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &workdir))
+            .unwrap();
+        let stored = || state.store.get_console("console-1").unwrap().unwrap();
+        let update = |value: Option<Option<Agent>>| {
+            update_console_request("console-1", move |request| {
+                let RequestBody::UpdateConsole {
+                    project_session_agent,
+                    ..
+                } = request
+                else {
+                    unreachable!()
+                };
+                *project_session_agent = value;
+            })
+        };
+
+        handle(&state, None, update(Some(Some(Agent::Codex))))
+            .await
+            .unwrap();
+        assert_eq!(stored().project_session_agent, Some(Agent::Codex));
+        handle(&state, None, update(None)).await.unwrap();
+        assert_eq!(stored().project_session_agent, Some(Agent::Codex));
+        handle(&state, None, update(Some(None))).await.unwrap();
+        assert_eq!(stored().project_session_agent, None);
+
+        handle(
+            &state,
+            None,
+            RequestBody::CreateConsole {
+                name: "Other".to_string(),
+                default_agent: Agent::Claude,
+                project_session_agent: Some(Agent::Grok),
+                claude_project_session_model: None,
+                claude_project_session_effort: None,
+                codex_project_session_model: None,
+                codex_project_session_effort: None,
+                grok_project_session_model: None,
+                grok_project_session_effort: None,
+                claude_account_id: None,
+                codex_account_id: None,
+                grok_account_id: None,
+                claude_console_session_model: None,
+                claude_console_session_effort: None,
+                codex_console_session_model: None,
+                codex_console_session_effort: None,
+                grok_console_session_model: None,
+                grok_console_session_effort: None,
+                icon: None,
+                console_session_prompt: None,
+            },
+        )
+        .await
+        .unwrap();
+        let created = state
+            .store
+            .list_consoles()
+            .unwrap()
+            .into_iter()
+            .find(|console| console.name == "Other")
+            .unwrap();
+        assert_eq!(created.project_session_agent, Some(Agent::Grok));
     }
 
     /// A launch setting is left alone when absent, set (trimmed) by a value, and cleared by `null`
@@ -6092,6 +6324,221 @@ mod tests {
             Some("changed-model")
         );
         assert_eq!(normalize_session_launch_setting(None), None);
+    }
+
+    /// A project session takes each value from its project, else from its console's project
+    /// session pair, else leaves it to the agent, independently per value and per agent; a
+    /// console stored without the pair behaves as before, and a console session never reads it.
+    #[test]
+    fn a_project_session_falls_back_to_the_consoles_project_session_pair_per_value() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-project-session-pair");
+        let mut owner = console(Agent::Claude, Path::new("/tmp/unused"));
+        owner.claude_console_session_model = Some("console-session-model".to_string());
+        state.store.insert_console(&owner).unwrap();
+        let mut project = project_of("console-1", "project-1");
+        state.store.insert_project(&project).unwrap();
+        let mut session = bare_session("s", Role::Project);
+        session.project_id = Some("project-1".to_string());
+
+        // A console stored before the pair existed: nothing to fall back to.
+        assert_eq!(launch_settings(&state, &session).unwrap(), (None, None));
+
+        owner.claude_project_session_model = Some("fallback-model".to_string());
+        owner.claude_project_session_effort = Some("fallback-effort".to_string());
+        owner.codex_project_session_model = Some("codex-fallback".to_string());
+        state.store.update_console(&owner).unwrap();
+        assert_eq!(
+            launch_settings(&state, &session).unwrap(),
+            (
+                Some("fallback-model".to_string()),
+                Some("fallback-effort".to_string())
+            )
+        );
+
+        // The project's own value wins for that value alone.
+        project.claude_session_model = Some("project-model".to_string());
+        state.store.update_project(&project).unwrap();
+        assert_eq!(
+            launch_settings(&state, &session).unwrap(),
+            (
+                Some("project-model".to_string()),
+                Some("fallback-effort".to_string())
+            )
+        );
+
+        // Another agent's pair is its own.
+        session.agent = Agent::Codex;
+        assert_eq!(
+            launch_settings(&state, &session).unwrap(),
+            (Some("codex-fallback".to_string()), None)
+        );
+        session.agent = Agent::Claude;
+
+        // The session's own choice, an explicit null included, wins over both.
+        session.model = normalize_session_launch_setting(Some(None));
+        session.effort = normalize_session_launch_setting(Some(Some(" high ".to_string())));
+        assert_eq!(
+            launch_settings(&state, &session).unwrap(),
+            (None, Some("high".to_string()))
+        );
+
+        // A console session reads only the console session pair.
+        let console_session = bare_session("c", Role::Console);
+        assert_eq!(
+            launch_settings(&state, &console_session).unwrap(),
+            (Some("console-session-model".to_string()), None)
+        );
+    }
+
+    /// The project session pair is stored at creation, left alone by an absent field, set (trimmed)
+    /// by a value and cleared by `null`, each agent and value independently.
+    #[tokio::test]
+    async fn the_project_session_pair_is_left_set_or_cleared_by_an_update() {
+        let (state, dir) = crate::test_support::app_state("coordinator-update-project-pair");
+        crate::test_support::offer_models(&state, Agent::Codex, &[("gpt-5", &["high"])]);
+        crate::test_support::offer_models(&state, Agent::Claude, &[("opus", &["medium"])]);
+        let workdir = console_workdir(&dir);
+        let mut seeded = console(Agent::Claude, &workdir);
+        seeded.claude_project_session_model = Some("opus".to_string());
+        seeded.grok_project_session_effort = Some("low".to_string());
+        state.store.insert_console(&seeded).unwrap();
+        let stored = || state.store.get_console("console-1").unwrap().unwrap();
+
+        handle(&state, None, update_console_request("console-1", |_| {}))
+            .await
+            .unwrap();
+        assert_eq!(
+            stored().claude_project_session_model.as_deref(),
+            Some("opus")
+        );
+
+        handle(
+            &state,
+            None,
+            update_console_request("console-1", |request| {
+                let RequestBody::UpdateConsole {
+                    claude_project_session_model,
+                    claude_project_session_effort,
+                    codex_project_session_model,
+                    ..
+                } = request
+                else {
+                    unreachable!()
+                };
+                *claude_project_session_model = Some(None);
+                *claude_project_session_effort = Some(Some("  medium ".to_string()));
+                *codex_project_session_model = Some(Some("gpt-5".to_string()));
+            }),
+        )
+        .await
+        .unwrap();
+        let updated = stored();
+        assert_eq!(updated.claude_project_session_model, None);
+        assert_eq!(
+            updated.claude_project_session_effort.as_deref(),
+            Some("medium")
+        );
+        assert_eq!(
+            updated.codex_project_session_model.as_deref(),
+            Some("gpt-5")
+        );
+        // The console session pair is a separate setting, and the other agents' values stay.
+        assert_eq!(updated.claude_console_session_model, None);
+        assert_eq!(updated.grok_project_session_effort.as_deref(), Some("low"));
+    }
+
+    /// A project session that sets no model takes the console's project session one, so an effort
+    /// given alone is checked against that model's levels wherever it is given: a project update,
+    /// an opened session, and the console's own project session pair.
+    #[tokio::test]
+    async fn an_effort_given_alone_is_checked_against_the_model_it_inherits_from_the_console() {
+        let (state, dir) = crate::test_support::app_state("coordinator-inherited-model-check");
+        crate::test_support::offer_models(
+            &state,
+            Agent::Claude,
+            &[("fallback", &["low"]), ("other", &["high"])],
+        );
+        let workdir = console_workdir(&dir);
+        let mut owner = console(Agent::Claude, &workdir);
+        owner.claude_project_session_model = Some("fallback".to_string());
+        state.store.insert_console(&owner).unwrap();
+        state
+            .store
+            .insert_project(&project_of("console-1", "project-1"))
+            .unwrap();
+        let refused = |err: anyhow::Error| err.downcast_ref::<CodedError>().expect("coded").code;
+
+        // A project given only an effort the console's model does not take.
+        let effort_only = |effort: &str| LaunchChange {
+            model: None,
+            effort: Some(Some(effort.to_string())),
+        };
+        let mut changes = ProjectChanges::default();
+        changes.launch.insert(Agent::Claude, effort_only("high"));
+        let err = update_project(&state, "project-1", changes)
+            .await
+            .expect_err("effort of another model");
+        assert_eq!(refused(err), error_code::INVALID_LAUNCH_SETTING);
+        let mut changes = ProjectChanges::default();
+        changes.launch.insert(Agent::Claude, effort_only("low"));
+        update_project(&state, "project-1", changes)
+            .await
+            .expect("the inherited model's own effort");
+
+        // A project added with only an effort is checked the same way.
+        let added = |name: &str, effort: &str| {
+            let repo = dir.join(name);
+            std::fs::create_dir(&repo).expect("repo");
+            add_project(
+                &state,
+                AddProjectRequest {
+                    console_id: "console-1".to_string(),
+                    source: ProjectSource::Local,
+                    path: Some(repo.to_string_lossy().into_owned()),
+                    remote_url: None,
+                    name: None,
+                    default_agent: None,
+                    settings: NewProjectSettings {
+                        claude_session_effort: Some(effort.to_string()),
+                        ..NewProjectSettings::default()
+                    },
+                    detect_default_agent: false,
+                    tags: None,
+                    check_launch: true,
+                },
+            )
+        };
+        let err = added("rejected", "high")
+            .await
+            .expect_err("effort of another model");
+        assert_eq!(refused(err), error_code::INVALID_LAUNCH_SETTING);
+        added("accepted", "low").await.expect("accepted");
+
+        // A project session opened with only that effort.
+        let open = |effort: &str| OpenRequest {
+            project_id: Some("project-1".to_string()),
+            effort: Some(Some(effort.to_string())),
+            ..open_request()
+        };
+        let err = check_open(&state, &open("high"))
+            .await
+            .expect_err("effort of another model");
+        assert_eq!(refused(err), error_code::INVALID_LAUNCH_SETTING);
+        check_open(&state, &open("low")).await.expect("accepted");
+
+        // The console's own project session pair is checked like any other setting.
+        let mut changes = ConsoleChanges::default();
+        changes.project_launch.insert(
+            Agent::Claude,
+            LaunchChange {
+                model: Some(Some("unlisted".to_string())),
+                effort: None,
+            },
+        );
+        let err = update_console(&state, "console-1", changes)
+            .await
+            .expect_err("model not offered");
+        assert_eq!(refused(err), error_code::INVALID_LAUNCH_SETTING);
     }
 
     /// An `update_project` request that changes nothing, then `edit` applied to it.

@@ -205,9 +205,9 @@ export function Dialog({
   subtitle?: React.ReactElement;
   onClose: () => void;
   children: BodyChildren;
-  /** `wide` is `lg` with room for a list of rows that each carry a path; `viewer` is a frame for
-   * content rather than a form: it fills the window inside a margin, up to a width that still
-   * reads as a dialog over the app. */
+  /** `wide` is `lg` widened for content laid out across it: a list of rows that each carry a path,
+   * or groups of fields side by side; `viewer` is a frame for content rather than a form: it fills
+   * the window inside a margin, up to a width that still reads as a dialog over the app. */
   size?: "sm" | "md" | "lg" | "wide" | "viewer";
   /** A confirmation that interrupts the user: HeroUI's `AlertDialog`, announced as an alert dialog. */
   alert?: boolean;
@@ -359,6 +359,9 @@ export function Dialog({
               }}
               onSubmit={(e) => {
                 e.preventDefault();
+                // React bubbles a submit through portals, so a form in a dialog opened from inside
+                // this one would otherwise submit this one too.
+                e.stopPropagation();
                 onSubmit();
               }}
             >

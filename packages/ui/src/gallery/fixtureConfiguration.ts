@@ -62,6 +62,7 @@ export function exportedDocument(state: State, consoleId?: string): Configuratio
         name: console.name,
         icon: console.icon,
         default_agent: console.default_agent,
+        project_session_agent: console.project_session_agent ?? null,
         claude_account: accountName("claude", console.claude_account_id),
         codex_account: accountName("codex", console.codex_account_id),
         grok_account: accountName("grok", console.grok_account_id),
@@ -71,6 +72,12 @@ export function exportedDocument(state: State, consoleId?: string): Configuratio
         codex_console_session_effort: console.codex_console_session_effort,
         grok_console_session_model: console.grok_console_session_model,
         grok_console_session_effort: console.grok_console_session_effort,
+        claude_project_session_model: console.claude_project_session_model,
+        claude_project_session_effort: console.claude_project_session_effort,
+        codex_project_session_model: console.codex_project_session_model,
+        codex_project_session_effort: console.codex_project_session_effort,
+        grok_project_session_model: console.grok_project_session_model,
+        grok_project_session_effort: console.grok_project_session_effort,
         console_session_prompt: console.console_session_prompt,
         projects: Array.from(state.projects.values())
           .filter((project) => project.console_id === console.id)

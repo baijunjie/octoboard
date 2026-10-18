@@ -29,7 +29,8 @@ export type Option<T extends string> = {
  * chevron and hover fill are what say there are two controls.
  *
  * With `hideLabel` the field is full width like any other but `label` is its accessible name alone,
- * for a select repeated down a list whose rows already show what each one is about.
+ * for a select repeated down a list whose rows already show what each one is about. With
+ * `labelledBy` as well, those elements name it instead, in the order given.
  *
  * With `placeholder` the choice is optional: `value` may be `null`, which shows the placeholder
  * instead of an option and stands for "nothing chosen", and once something is chosen a clear
@@ -46,6 +47,8 @@ export function OptionSelect<T extends string>({
   hideLabel,
   isDisabled,
   description,
+  describedBy,
+  labelledBy,
 }: {
   label: string;
   options: Option<T>[];
@@ -56,6 +59,10 @@ export function OptionSelect<T extends string>({
   isDisabled?: boolean;
   /** Extra explanation shown under the field. */
   description?: React.ReactNode;
+  /** The id of an element elsewhere on the page that also describes the field. */
+  describedBy?: string;
+  /** With `hideLabel`, the ids of elements elsewhere on the page that name the field. */
+  labelledBy?: string;
 } & (
   | { value: T; onChange: (value: T) => void; placeholder?: undefined }
   | { value: T | null; onChange: (value: T | null) => void; placeholder: string }
@@ -71,10 +78,11 @@ export function OptionSelect<T extends string>({
       // trigger and the later half would otherwise paint over it along the shared edge. The raise
       // is on the flex item, the root, which a trigger's own `z-index` would not be.
       className={inline ? "w-48" : joined ? "min-w-0 flex-1 has-[[data-focus-visible=true]]:z-10" : undefined}
-      aria-label={inline || joined || hideLabel ? label : undefined}
+      aria-label={(inline || joined || hideLabel) && !labelledBy ? label : undefined}
+      aria-labelledby={labelledBy}
       // react-aria drops the slot's id when no note exists on mount and does not restore it when
       // children alone change. Keep the association stable for notes that appear dynamically.
-      aria-describedby={description ? descriptionId : undefined}
+      aria-describedby={[description ? descriptionId : undefined, describedBy].filter(Boolean).join(" ") || undefined}
       isDisabled={isDisabled}
       value={value}
       placeholder={placeholder}

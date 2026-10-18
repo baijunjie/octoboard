@@ -2,7 +2,7 @@ import { Tabs } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
 import { choiceGroups, choiceKey, currentChoice, findEntry, inheritedAccount, initialChoice } from "../accountChoices";
-import { AGENT_CONSOLE_EFFORT_FIELD, AGENT_CONSOLE_MODEL_FIELD, AGENT_LABEL, AGENT_PROJECT_EFFORT_FIELD, AGENT_PROJECT_MODEL_FIELD, noAgentAvailable } from "../agents";
+import { AGENT_CONSOLE_EFFORT_FIELD, AGENT_CONSOLE_MODEL_FIELD, AGENT_LABEL, noAgentAvailable, projectSessionLaunch } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -47,11 +47,11 @@ const NO_OWNER = "none";
 
 /**
  * Opens a console session or a session manually under a project. Joined pickers settle the agent and its account
- * together. They open on the agent per the "Which agent a session uses" section of
- * docs/product/sessions.md (project default, then console default) with the account that agent
- * resolves to when none is chosen (the project's reference, else the console's), and the user can
- * pick another agent or one of its accounts for this session; the choice goes out as `open_session`'s `agent` and
- * `account` fields.
+ * together. They open on the agent per the "Which agent a session uses" section of docs/product/sessions.md (for a
+ * project session: the project's default, then the console's project session default, then its `default_agent`; a
+ * console session uses only `default_agent`) with the account that agent resolves to when none is chosen (the
+ * project's reference, else the console's), and the user can pick another agent or one of its accounts for this
+ * session; the choice goes out as `open_session`'s `agent` and `account` fields.
  *
  * `open_session` answers with `session_opened`, which names the session it started — the broadcast
  * that puts it in the tree carries no request id, so this reply is the only way to tell which of
@@ -115,10 +115,13 @@ export function SessionDialog({
   const choice = currentChoice(picked, initialChoice(parentConsole, project, accounts, agentAvailability), groups);
   const accountEntries = groups.find((group) => group.agent === choice.agent)?.entries ?? [];
   const overrides = launchSettings[choice.agent];
-  const inheritedModel = project ? project[AGENT_PROJECT_MODEL_FIELD[choice.agent]] : parentConsole[AGENT_CONSOLE_MODEL_FIELD[choice.agent]];
-  const inheritedEffort = project ? project[AGENT_PROJECT_EFFORT_FIELD[choice.agent]] : parentConsole[AGENT_CONSOLE_EFFORT_FIELD[choice.agent]];
-  const model = overrides?.model === undefined ? inheritedModel ?? null : overrides.model;
-  const effort = overrides?.effort === undefined ? inheritedEffort ?? null : overrides.effort;
+  // What the session takes when it chooses nothing: a project session's project value, else its
+  // console's project session one; a console session's console session one.
+  const inherited = project
+    ? projectSessionLaunch(parentConsole, project, choice.agent)
+    : { model: parentConsole[AGENT_CONSOLE_MODEL_FIELD[choice.agent]] ?? null, effort: parentConsole[AGENT_CONSOLE_EFFORT_FIELD[choice.agent]] ?? null };
+  const model = overrides?.model === undefined ? inherited.model : overrides.model;
+  const effort = overrides?.effort === undefined ? inherited.effort : overrides.effort;
 
   // The select is shown from the moment there is a console session to offer and stays mounted
   // for the rest of the dialog's life, even if the list later empties, leaving "none" alone: it is
@@ -205,7 +208,7 @@ export function SessionDialog({
       />
       <AgentAccountField
         label={t("dialog.session.agent")}
-        options={agentIconPickerOptions(t, agentAvailability)}
+        options={agentIconPickerOptions(t, agentAvailability, choice.agent)}
         value={choice.agent}
         onChange={setPickedAgent}
         account={accountEntries.length > 1 ? {

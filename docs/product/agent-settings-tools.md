@@ -55,12 +55,12 @@ give every agent, with `null` for an unset value.
 | `path` | Its directory. |
 | `source` | How it was associated: `local`, `parent` or `git`. |
 | `remote_url` | The recorded remote URL (see "The project's remote URL" in `docs/product/consoles-and-projects.md`), or `null`, always without any credential it carries. |
-| `default_agent` | Its own default agent, or `null` when it inherits the console's. |
+| `default_agent` | Its own default agent, or `null` when it follows the console's `project_session_agent`, else its `default_agent`. |
 | `pinned` | Whether it is pinned. |
 | `tags` | Its tags. |
 | `trust_consent` | Whether the user has given the trust permission for it (see "The trust permission" in `docs/product/folder-trust.md`). Read-only. |
 | `accounts` | Its account setting for every agent, as above. |
-| `launch` | Its model and reasoning effort for every agent, as above. |
+| `launch` | Its model and reasoning effort for every agent, as above; for a value it leaves unset, its sessions take its console's `project_session_launch` (see "The console's own settings: `get_console` and `update_console`" below). |
 
 `list_projects` adds the sessions running in each project (see "The console session's tools" in
 `docs/product/hub-orchestration.md`).
@@ -95,7 +95,7 @@ Takes `project` — an id, or a name that names exactly one project of the conso
 | `add_tags` | Adds tags to those the project has. |
 | `remove_tags` | Removes tags, matched ignoring letter case. |
 | `pinned` | Pins or unpins it. |
-| `default_agent` | An agent, or `null` to inherit the console's again. |
+| `default_agent` | An agent, or `null` to follow the console's again (its `project_session_agent`, else its `default_agent`). |
 | `accounts`, `launch` | As above. |
 
 `tags` beside `add_tags` or `remove_tags` is refused. Tags end up normalised as in "Tags" in
@@ -104,13 +104,16 @@ settings as stored.
 
 ## The console's own settings: `get_console` and `update_console`
 
-`get_console` answers with the calling console session's own console: `console` (its id), `name`, `default_agent`,
-`accounts`, `launch` — the model and reasoning effort of the console's console sessions — `has_icon`, whether it has an
-avatar, and `workdir`, its working directory. Neither the avatar itself nor the console's console session
-instructions are ever returned.
+`get_console` answers with the calling console session's own console: `console` (its id), `name`, `default_agent` —
+the default agent for console sessions — `project_session_agent` — the default agent for project sessions, `null` while
+it follows `default_agent` (see "Consoles" in `docs/product/consoles-and-projects.md`) — `accounts`, `launch` — the
+model and reasoning effort of the console's console sessions — `project_session_launch` — in the same shape, the model
+and reasoning effort a project session takes for each value neither it nor its project sets — `has_icon`, whether it
+has an avatar, and `workdir`, its working directory. Neither the avatar itself nor the console's console session instructions are ever returned.
 
 `update_console` takes any of `name` (a blank one is refused), `default_agent` (an agent; it cannot be cleared),
-`accounts` and `launch`, leaves the rest as it is, and answers as `get_console` does.
+`project_session_agent` (an agent, or `null` to follow `default_agent` again), `accounts`, `launch` and
+`project_session_launch`, leaves the rest as it is, and answers as `get_console` does.
 
 ## Application settings: `get_settings` and `update_settings`
 
@@ -135,7 +138,8 @@ As for the same change in the UI: sessions already running keep what they were s
 reaches sessions opened afterwards, and a changed model or effort reaches a session's next launch where the session
 inherits that value (see `docs/product/model-and-reasoning-effort.md`). That holds for the calling console session
 too: its own console's model and effort reach it when it is next launched, and its console's account only console
-sessions opened afterwards.
+sessions opened afterwards. A changed `project_session_launch` reaches a project session at its next launch, unless its
+project or the session sets that value itself.
 
 ## Refusals
 

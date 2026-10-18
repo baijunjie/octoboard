@@ -9,8 +9,10 @@ import {
   AGENT_OPTIONS,
   AGENT_PROJECT_EFFORT_FIELD,
   AGENT_PROJECT_MODEL_FIELD,
+  consoleProjectLaunch,
+  projectSessionAgent,
 } from "../agents";
-import { AGENT_ICON_OPTIONS, AgentIcon } from "../components/AgentIcon";
+import { agentIconPickerOptions, AgentIcon } from "../components/AgentIcon";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { InlineChip } from "../components/InlineChip";
 import type { PlainMessageKey } from "../i18n/catalog";
@@ -67,7 +69,10 @@ export function ProjectDialog({
   const t = useT();
   const { request } = useDaemon();
   const owner = useDaemonStore((s) => s.consoles.get(consoleId));
-  const consoleAgent = owner?.default_agent;
+  // The agent "Inherit from console" resolves to: what a project session of the console is of when
+  // its project names none.
+  const consoleAgent = owner && projectSessionAgent(owner);
+  const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const [source, setSource] = useState<ProjectSource>(editing?.source ?? "local");
   const defaultCloneDir = useDaemonStore((s) => s.settings.default_clone_dir);
@@ -137,9 +142,9 @@ export function ProjectDialog({
   const nameError = editing && !name ? t("dialog.nameRequired") : undefined;
   const { shown, attempt } = useSubmitValidation();
 
-  // The agent the account and the launch settings belong to: the one picked, else the console's for
-  // "Inherit from console", and none for "Detect from files", which stands for a different agent
-  // per repository.
+  // The agent the account and the launch settings belong to: the one picked, else the console's
+  // project session agent for "Inherit from console", and none for "Detect from files", which
+  // stands for a different agent per repository.
   const agent = defaultAgent === "detect" ? undefined : defaultAgent === "" ? consoleAgent : defaultAgent;
   const accountField = agent && AGENT_ACCOUNT_FIELD[agent];
   const modelField = agent && AGENT_PROJECT_MODEL_FIELD[agent];
@@ -193,9 +198,9 @@ export function ProjectDialog({
     });
   };
 
-  // `""` is "Inherit from console": the project sets none and follows its console's default agent
-  // (the "Which agent a session uses" section of docs/product/sessions.md); the option names that
-  // agent, its icon faded, so it says what it resolves to.
+  // `""` is "Inherit from console": the project sets none and follows its console's project session
+  // agent (the "Which agent a session uses" section of docs/product/sessions.md); the option names
+  // that agent, its icon faded, so it says what it resolves to.
   const defaultAgentOptions: { value: Agent | "" | "detect"; label: string; icon?: React.ReactNode }[] = [
     ...(!editing && source === "parent" ? [{ value: "detect" as const, label: t("dialog.project.agentDetect") }] : []),
     {
@@ -203,7 +208,7 @@ export function ProjectDialog({
       label: consoleAgent ? t("dialog.project.agentInherit", { agent: AGENT_LABEL[consoleAgent] }) : t("dialog.project.agentInheritBare"),
       icon: consoleAgent && <AgentIcon agent={consoleAgent} className="size-4 opacity-50" />,
     },
-    ...AGENT_ICON_OPTIONS,
+    ...agentIconPickerOptions(t, agentAvailability, defaultAgent === "" || defaultAgent === "detect" ? undefined : defaultAgent),
   ];
 
   return (
@@ -315,6 +320,7 @@ export function ProjectDialog({
             onModelChange={(value) => setFields({ ...fields, [modelField]: value })}
             onEffortChange={(value) => setFields({ ...fields, [effortField]: value })}
             note={t("dialog.project.launchSettingsNote")}
+            inherit={owner ? consoleProjectLaunch(owner, agent) : undefined}
             isDisabled={locked}
           />
         )}

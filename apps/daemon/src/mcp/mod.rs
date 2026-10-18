@@ -152,11 +152,12 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                                         When omitted, the agent the directory is set up for \
                                         (from its top-level marker files) if exactly one is \
                                         found and not known to be missing from PATH; \
-                                        otherwise the project inherits the console's.",
+                                        otherwise the project follows the console's project \
+                                        session agent (else its `default_agent`).",
                     },
                     "tags": tags_schema("The project's tags."),
                     "accounts": accounts_schema(true),
-                    "launch": launch_schema(),
+                    "launch": launch_schema("the project's sessions"),
                     "pinned": {
                         "type": "boolean",
                         "description": "Pin the project to the top of the console's project list.",
@@ -194,10 +195,11 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                         "type": ["string", "null"],
                         "enum": ["claude", "codex", "grok", null],
                         "description": "The agent sessions in this project use by default; \
-                                        `null` goes back to inheriting the console's.",
+                                        `null` goes back to following the console's project \
+                                        session agent (else its `default_agent`).",
                     },
                     "accounts": accounts_schema(true),
-                    "launch": launch_schema(),
+                    "launch": launch_schema("the project's sessions"),
                 }),
                 &["project"],
             )
@@ -205,10 +207,14 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         name: "get_console",
-        description: "This console's own settings: `name`, `default_agent`, `accounts`, `launch` \
-                      (the model and effort of console sessions like this one), whether it has an \
-                      avatar (`has_icon`), and its working directory (`workdir`, read-only). \
-                      Only the console this session belongs to can be read.",
+        description: "This console's own settings: `name`, `default_agent` (the agent of console \
+                      sessions), `project_session_agent` (the agent a project session without \
+                      its own default uses; `null` follows `default_agent`), `accounts`, \
+                      `launch` (the model and effort of console sessions like this one), \
+                      `project_session_launch` (the model and effort a project session takes \
+                      when neither it nor its project names one), whether it has an avatar \
+                      (`has_icon`), and its working directory (`workdir`, read-only). Only the \
+                      console this session belongs to can be read.",
         schema: || object_schema(json!({}), &[]),
     },
     ToolDef {
@@ -217,7 +223,9 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       Returns them as `get_console` gives them. Sessions already running keep \
                       what they were started with: a new account reaches only console sessions \
                       opened afterwards, and a new model or effort reaches this console \
-                      session on its next launch unless it was given its own. Only this \
+                      session on its next launch unless it was given its own; a new \
+                      `project_session_launch` reaches project sessions at their next launch, \
+                      unless their project or the session sets its own. Only this \
                       console can be changed, and not its avatar. These are the user's \
                       settings: change one only when they asked you to.",
         schema: || {
@@ -227,11 +235,21 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                     "default_agent": {
                         "type": "string",
                         "enum": ["claude", "codex", "grok"],
-                        "description": "The agent sessions use by default, console sessions \
-                                        included.",
+                        "description": "The agent console sessions use by default.",
+                    },
+                    "project_session_agent": {
+                        "type": ["string", "null"],
+                        "enum": ["claude", "codex", "grok", null],
+                        "description": "The agent a project session uses when its project has \
+                                        no default agent of its own. `null` makes it follow \
+                                        `default_agent`.",
                     },
                     "accounts": accounts_schema(false),
-                    "launch": launch_schema(),
+                    "launch": launch_schema("this console's console sessions"),
+                    "project_session_launch": launch_schema(
+                        "this console's project sessions whose project and own choice leave them \
+                         unset",
+                    ),
                 }),
                 &[],
             )
@@ -544,7 +562,8 @@ const GET_PROJECT: ToolDef = ToolDef {
     description:
         "This project's settings in Octoboard, read-only: name, directory, source, remote \
                   URL (credentials removed), pin, tags, `default_agent`, `accounts` and `launch` \
-                  (the model and effort sessions of each agent start with). Only this session's \
+                  (the model and effort sessions of each agent start with; a value left unset \
+                  falls back to the console's `project_session_launch`). Only this session's \
                   own project can be read.",
     schema: || object_schema(json!({}), &[]),
 };
@@ -758,7 +777,8 @@ fn start_session_schema(with_project: bool) -> Value {
         "model": {
             "type": "string",
             "description": "Overrides the model for this one session; blank is the agent's own \
-                            default.",
+                            default. Left out, a project session takes its project's, else the \
+                            console's project session model.",
         },
         "effort": {
             "type": "string",
@@ -811,16 +831,17 @@ fn accounts_schema(project: bool) -> Value {
     })
 }
 
-/// The `launch` argument and result: each agent's model and reasoning effort, `null` or blank for
-/// the agent's own default.
-fn launch_schema() -> Value {
+/// The `launch` argument and result, or another of the same shape: each agent's model and
+/// reasoning effort, `null` or blank for the agent's own default. `whose` says whose sessions the
+/// pair is for.
+fn launch_schema(whose: &str) -> Value {
     json!({
         "type": "object",
         "description": format!(
-            "Each agent's model and reasoning effort, keyed by agent (`claude`, `codex`, `grok`) \
-             as `{{\"model\": ..., \"effort\": ...}}`; a field left out is left as it is, and \
-             `null` or blank is the agent's own default. They must be ones the agent offers; \
-             Claude Code's models are {}.",
+            "Each agent's model and reasoning effort for {whose}, keyed by agent (`claude`, \
+             `codex`, `grok`) as `{{\"model\": ..., \"effort\": ...}}`; a field left out is left \
+             as it is, and `null` or blank is the agent's own default. They must be ones the \
+             agent offers; Claude Code's models are {}.",
             crate::agent_models::claude_model_ids()
                 .iter()
                 .map(|id| format!("`{id}`"))

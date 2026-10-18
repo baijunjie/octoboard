@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DaemonRequestError } from "../daemon-client";
 import { consoleOf, projectOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
-import type { Account, Agent, Event, ModelsUnavailable, Project, ProjectAccount, RequestBody } from "../protocol";
+import type { Account, Agent, AgentAvailability, Console, Event, ModelsUnavailable, Project, ProjectAccount, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ProjectDialog } from "./ProjectDialog";
 
@@ -27,11 +27,19 @@ afterEach(() => {
 const work: Account = { id: "a-work", agent: "claude", name: "Work", config_dir: "/home/dev/.claude-work" };
 const personal: Account = { id: "a-personal", agent: "claude", name: "Personal", config_dir: "/home/dev/.claude-personal" };
 
-function render(editing?: Project, accounts: Account[] = []) {
+function render(
+  editing?: Project,
+  accounts: Account[] = [],
+  consoleOverride: Partial<Console> = {},
+  availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {},
+) {
   const pending: Pending[] = [];
   const daemon: Daemon = {
     store: createStateStore({
-      consoles: new Map([["c-1", consoleOf("c-1", "Main", { claude_account_id: accounts[0]?.id })]]),
+      consoles: new Map([["c-1", consoleOf("c-1", "Main", { claude_account_id: accounts[0]?.id, ...consoleOverride })]]),
+      agentAvailability: new Map(
+        (["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined" }]),
+      ),
       settings: { auto_pull_repositories: false, default_clone_dir: "", accounts },
     }),
     request: (body) => new Promise((resolve, reject) => pending.push({ body, resolve, reject })),
@@ -156,7 +164,7 @@ it.each([
   if (!("default_agent" in sent)) expect(added).not.toHaveProperty("default_agent", expect.anything());
 });
 
-const PLACEHOLDER = "The agent's own setting";
+const PLACEHOLDER = "Inherit from console (the agent's own setting)";
 const buttons = () => Array.from(document.body.querySelectorAll("button"));
 const buttonText = (text: string) => buttons().find((b) => b.textContent === text);
 const choose = (option: string) =>
@@ -374,6 +382,42 @@ it("follows the console's agent for Inherit from console", async () => {
   expect(pending).toEqual([]);
 });
 
+it("names the console's project session agent on Inherit from console, not its console session agent", async () => {
+  render(projectOf("p-2", "c-1", "Site"), [], { default_agent: "claude", project_session_agent: "grok" });
+  expect(buttons().find((b) => b.textContent?.includes("Inherit from console (Grok Build)"))).toBeDefined();
+  expect(buttons().find((b) => b.textContent?.includes("Inherit from console (Claude Code)"))).toBeUndefined();
+});
+
+it("names the console session agent on Inherit from console while the console has no project session agent of its own", () => {
+  render(projectOf("p-2", "c-1", "Site"), [], { default_agent: "codex" });
+  expect(buttons().find((b) => b.textContent?.includes("Inherit from console (Codex)"))).toBeDefined();
+});
+
+it("leaves the agents known to be missing out of the default agent picker", async () => {
+  render(projectOf("p-2", "c-1", "Site"), [], {}, { codex: "unavailable" });
+  await click(buttons().find((b) => b.textContent?.includes("Inherit from console")));
+  expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).toEqual([
+    "Inherit from console (Claude Code)",
+    "Claude Code",
+    "Grok Build",
+  ]);
+});
+
+it("keeps the project's own missing agent in the picker as not installed until another is chosen", async () => {
+  render(projectOf("p-2", "c-1", "Site", { default_agent: "codex" }), [], {}, { codex: "unavailable" });
+  expect(buttons().some((b) => b.textContent?.includes("Codex (not installed)"))).toBe(true);
+  await click(buttons().find((b) => b.textContent?.includes("Codex (not installed)")));
+  expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).toEqual([
+    "Inherit from console (Claude Code)",
+    "Claude Code",
+    "Codex (not installed)",
+    "Grok Build",
+  ]);
+  await choose("Claude Code");
+  await click(buttons().find((b) => b.textContent?.includes("Claude Code")));
+  expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).not.toContain("Codex (not installed)");
+});
+
 it("offers neither the account nor Advanced while the source is a parent directory with Detect from files", async () => {
   const pending = render(undefined, [work, personal]);
   await fillDirectory(pending);
@@ -481,4 +525,23 @@ it("offers the stored model alone and the reason when the agent cannot list its 
   expect(document.body.textContent).toContain(`${isolate("claude")} took too long to list its models.`);
   await click(pickerNamed("Model"));
   expect(optionTexts()).toEqual(["retired (not in the list)"]);
+});
+
+it("names the console's project session value on the unset launch pickers, each value on its own", async () => {
+  render(projectOf("p-2", "c-1", "Site"), [], { claude_project_session_model: "opus" });
+  await click(buttonText("Advanced"));
+  expect(pickerNamed("Model").textContent).toContain("Inherit from console (opus)");
+  expect(pickerNamed("Reasoning effort").textContent).toContain("Inherit from console (the agent's own setting)");
+});
+
+it("lets the project's own value replace the inherited one and names the console's pair for the agent shown", async () => {
+  render(
+    projectOf("p-2", "c-1", "Site", { claude_session_effort: "high" }),
+    [],
+    { claude_project_session_effort: "low", codex_project_session_model: "gpt-x" },
+  );
+  await click(buttonText("Advanced"));
+  expect(pickerNamed("Reasoning effort").textContent).toContain("high");
+  expect(pickerNamed("Reasoning effort").textContent).not.toContain("Inherit");
+  expect(pickerNamed("Model").textContent).toContain("Inherit from console (the agent's own setting)");
 });

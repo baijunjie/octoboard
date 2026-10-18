@@ -4,8 +4,12 @@ import type {
   AccountField,
   Agent,
   AgentAvailability,
+  Console,
+  Project,
   ConsoleEffortField,
   ConsoleModelField,
+  ConsoleProjectEffortField,
+  ConsoleProjectModelField,
   ProjectEffortField,
   ProjectModelField,
 } from "./protocol";
@@ -49,6 +53,19 @@ export const AGENT_CONSOLE_EFFORT_FIELD = {
   grok: "grok_console_session_effort",
 } as const satisfies Record<Agent, ConsoleEffortField>;
 
+/** The console fields holding each agent's model and reasoning effort for project sessions. */
+export const AGENT_CONSOLE_PROJECT_MODEL_FIELD = {
+  claude: "claude_project_session_model",
+  codex: "codex_project_session_model",
+  grok: "grok_project_session_model",
+} as const satisfies Record<Agent, ConsoleProjectModelField>;
+
+export const AGENT_CONSOLE_PROJECT_EFFORT_FIELD = {
+  claude: "claude_project_session_effort",
+  codex: "codex_project_session_effort",
+  grok: "grok_project_session_effort",
+} as const satisfies Record<Agent, ConsoleProjectEffortField>;
+
 /** The project fields holding each agent's model and reasoning effort for the project's sessions. */
 export const AGENT_PROJECT_MODEL_FIELD = {
   claude: "claude_session_model",
@@ -85,17 +102,75 @@ export function noAgentAvailable(agentAvailability: Map<Agent, AgentAvailability
   return AGENT_OPTIONS.every((option) => isAgentUnavailable(agentAvailability, option.value));
 }
 
-/** The options of the agent pickers, each carrying whether it may be picked and, when it
- * may not, a label saying so: an unavailable agent is shown named rather than hidden, so the reason
- * it cannot be picked is on screen, but it cannot be selected either. An agent whose availability
- * is not yet determined is left selectable, since nothing is known to be missing yet. */
+/** Whether `agent` is listed where a choice among agents is made: unless it is known to be
+ * missing, or is missing but still `held` — what the control currently holds stays on screen
+ * rather than silently turning into another value. */
+function isAgentListed(
+  agentAvailability: Map<Agent, AgentAvailability>,
+  agent: Agent,
+  held?: Agent | null,
+): boolean {
+  return !isAgentUnavailable(agentAvailability, agent) || agent === held;
+}
+
+/** The options of the agent pickers: the agents that may be picked, and the one the control `held`
+ * if that one is missing, named as not installed and unselectable, so the value stays selected and
+ * the reason it cannot be chosen again is on screen. An agent known to be missing and not held is
+ * left out. An agent whose availability is not yet determined is listed, since nothing is known to
+ * be missing yet. */
 export function agentPickerOptions(
   t: Translate,
   agentAvailability: Map<Agent, AgentAvailability>,
+  held?: Agent | null,
 ): { value: Agent; label: string; isDisabled?: boolean }[] {
-  return AGENT_OPTIONS.map((option) =>
+  return AGENT_OPTIONS.filter((option) => isAgentListed(agentAvailability, option.value, held)).map((option) =>
     isAgentUnavailable(agentAvailability, option.value)
       ? { value: option.value, label: t("agents.notInstalled", { agent: option.label }), isDisabled: true }
+      : option,
+  );
+}
+
+/** The model and reasoning effort a project session of `agent` takes from its console when
+ * neither it nor its project names one: the console's project session pair, `null` for the agent's
+ * own default. */
+export function consoleProjectLaunch(owner: Console, agent: Agent): { model: string | null; effort: string | null } {
+  return {
+    model: owner[AGENT_CONSOLE_PROJECT_MODEL_FIELD[agent]] ?? null,
+    effort: owner[AGENT_CONSOLE_PROJECT_EFFORT_FIELD[agent]] ?? null,
+  };
+}
+
+/** The model and reasoning effort a project session of `agent` runs with when it chose neither,
+ * each value taken from the project, else from the console's project session pair, else `null`,
+ * the agent's own default. */
+export function projectSessionLaunch(
+  owner: Console,
+  project: Project,
+  agent: Agent,
+): { model: string | null; effort: string | null } {
+  const fallback = consoleProjectLaunch(owner, agent);
+  return {
+    model: project[AGENT_PROJECT_MODEL_FIELD[agent]] ?? fallback.model,
+    effort: project[AGENT_PROJECT_EFFORT_FIELD[agent]] ?? fallback.effort,
+  };
+}
+
+/** The agent a project session of `owner` is of when neither the session nor its project names
+ * one. */
+export function projectSessionAgent(owner: Pick<Console, "default_agent" | "project_session_agent">): Agent {
+  return owner.project_session_agent ?? owner.default_agent;
+}
+
+/** The options of a picker that is not about using an agent but about setting one up (an account
+ * may be added before its agent is installed): every agent, selectable, with those known to be
+ * missing named as not installed. */
+export function agentSetupOptions(
+  t: Translate,
+  agentAvailability: Map<Agent, AgentAvailability>,
+): { value: Agent; label: string }[] {
+  return AGENT_OPTIONS.map((option) =>
+    isAgentUnavailable(agentAvailability, option.value)
+      ? { value: option.value, label: t("agents.notInstalled", { agent: option.label }) }
       : option,
   );
 }

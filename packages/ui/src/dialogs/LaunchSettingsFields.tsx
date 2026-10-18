@@ -19,68 +19,174 @@ function modelName(t: Translate, model: AgentModel): string {
   return model.id === "best" ? t("dialog.agentSettings.modelBest") : model.name;
 }
 
-/** The collapsed Advanced section of a dialog: the model and reasoning effort that `agent`'s
- * sessions are launched with, each empty while unset. `note` says whose sessions they are. Folded
- * away by default, as what is inside is rarely set. `account` is the account id the agent's
- * sessions run under (`null` for its default account), as the list of models belongs to the account.
- * That list is asked of the daemon while the section is open, and again when `agent` or `account`
- * changes, so nothing is asked of a dialog whose Advanced section is never opened. While the answer
- * is out the pickers are locked, showing what is stored; when the daemon has no list the model
- * picker offers the stored value alone and says why, and the effort picker is left to the stored
- * value too, which a failure does not stop the user from clearing. A model that takes no effort
- * leaves the effort picker operable over an empty list, so a stored value stays clearable and
- * focus is never on a control that turns disabled under it. `isDisabled` locks the two
- * pickers, not `children`; the trigger stays operable, as folding the section away changes nothing
- * and disabling a focused trigger would blur it. `children` are further rarely set fields of the
- * same dialog, placed below the two pickers. */
-export function LaunchSettingsFields({
-  agent,
-  account,
-  model,
-  effort,
-  onModelChange,
-  onEffortChange,
-  note,
-  isDisabled,
-  children,
-}: {
-  agent: Agent;
-  account: string | null;
-  model: string | null;
-  effort: string | null;
-  onModelChange: (value: string | null) => void;
-  onEffortChange: (value: string | null) => void;
-  note: string;
-  isDisabled?: boolean;
-  children?: React.ReactNode;
-}): React.ReactElement {
+/** What the launch pickers of one agent and account need to know of the models it offers, asked of
+ * the daemon while `enabled` (see `useAgentModels`). While the answer is out the pickers are locked,
+ * showing what is stored; when the daemon has no list the model picker offers the stored value alone
+ * and says why. */
+export function useLaunchModels(agent: Agent, account: string | null, enabled: boolean) {
   const t = useT();
   const language = useCurrentLanguage();
   const { request } = useDaemon();
-  const [expanded, setExpanded] = useState(false);
-  const { status, models, unavailable, error } = useAgentModels(request, agent, account, expanded);
+  const { status, models, unavailable, error } = useAgentModels(request, agent, account, enabled);
   const loading = status === "loading";
   // Selected as the worded text rather than the records it names, so the field follows a rename
   // without re-rendering on every other change to those records.
   const unavailableText = useDaemonStore((s) =>
     unavailable ? daemonMessage(language, unavailable.code, unavailable.params, unavailable.message, s) : undefined,
   );
-
   const modelText = loading ? t("dialog.agentSettings.modelsLoading") : (unavailableText ?? error);
   // Why there are no models, with what it names set as code where the message has such params.
   const modelDescription = !loading && unavailable ? codedMessageNode(unavailable, unavailableText ?? unavailable.message) : modelText;
-  const { levels, none } = effortLevels(models, model);
+  return { loading, models, modelText, modelDescription };
+}
 
+export type LaunchModels = ReturnType<typeof useLaunchModels>;
+
+/** One pair's model and reasoning effort, each `null` while unset. */
+export type LaunchPair = { model: string | null; effort: string | null };
+
+/** What an unset picker says in place of "unset": the value it resolves to, or that it is the agent's
+ * own setting while that is none. */
+function inherited(t: Translate, value: string | null): string {
+  return t(value ? "dialog.agentSettings.inheritValue" : "dialog.agentSettings.inheritOwn", { value: value ?? "" });
+}
+
+/** The props `ModelPicker` and `EffortPicker` have in common. */
+type PickerProps = {
+  launch: LaunchModels;
+  /** The values an unset picker resolves to (the console's, for a project): an unset picker names
+   * them instead of standing for the agent's own setting. */
+  inherit?: LaunchPair;
+  isDisabled?: boolean;
+  /** The id of an element elsewhere on the page that also describes the picker. */
+  describedBy?: string;
+} & (
+  | { hideLabel?: undefined; labelledBy?: undefined }
+  | {
+    /** Leaves the label off the screen, for a picker that a row or column header already names. */
+    hideLabel: true;
+    /** The ids of those headers, which name the picker in the order given in place of its label. */
+    labelledBy: string;
+  }
+);
+
+/** The Model picker of one pair of settings, empty while unset. It carries the note on the model list
+ * (loading, or why there is none). */
+export function ModelPicker({
+  launch,
+  model,
+  onChange,
+  inherit,
+  isDisabled,
+  hideLabel,
+  labelledBy,
+  describedBy,
+}: PickerProps & { model: string | null; onChange: (value: string | null) => void }): React.ReactElement {
+  const t = useT();
+  const listed = launch.models.find((candidate) => candidate.id === inherit?.model);
+  const placeholder = inherit && inherited(t, listed ? modelName(t, listed) : inherit.model);
   return (
-    <Disclosure isExpanded={expanded} onExpandedChange={setExpanded}>
-      {/* The model field's note changes with no action of the user's, and its picker is locked while
-          the note says "loading", so it cannot be reached to be read: say it from a status region. */}
-      <StatusAnnouncer text={modelText} />
-      {/* The trigger spans the row so the whole row expands the section; HeroUI pushes its
-          indicator to the far end with an auto margin, which `ms-0` cancels so the chevron follows
-          the label. */}
+    <OptionSelect
+      label={t("dialog.agentSettings.model")}
+      hideLabel={hideLabel}
+      labelledBy={labelledBy}
+      options={launchSettingOptions(
+        t,
+        launch.models.map((listed) => ({ value: listed.id, label: modelName(t, listed) })),
+        model,
+      )}
+      value={model}
+      onChange={onChange}
+      placeholder={placeholder ?? t("dialog.agentSettings.placeholder")}
+      isDisabled={isDisabled || launch.loading}
+      description={launch.modelDescription}
+      describedBy={describedBy}
+    />
+  );
+}
+
+/** The Reasoning effort picker of one pair of settings, empty while unset. The levels follow `model`,
+ * the pair's model, or the one it resolves to while none is chosen. A model that takes no effort
+ * leaves the picker operable over an empty list, so a stored value stays clearable and focus is
+ * never on a control that turns disabled under it. */
+export function EffortPicker({
+  launch,
+  model,
+  effort,
+  onChange,
+  inherit,
+  isDisabled,
+  hideLabel,
+  labelledBy,
+  describedBy,
+}: PickerProps & { model: string | null; effort: string | null; onChange: (value: string | null) => void }): React.ReactElement {
+  const t = useT();
+  const { levels, none } = effortLevels(launch.models, model ?? inherit?.model ?? null);
+  const placeholder = inherit && inherited(t, inherit.effort);
+  return (
+    <OptionSelect
+      label={t("dialog.agentSettings.effort")}
+      hideLabel={hideLabel}
+      labelledBy={labelledBy}
+      options={launchSettingOptions(t, levels.map((level) => ({ value: level, label: level })), effort)}
+      value={effort}
+      onChange={onChange}
+      placeholder={placeholder ?? t("dialog.agentSettings.placeholder")}
+      isDisabled={isDisabled || launch.loading}
+      description={none ? t("dialog.agentSettings.noEffort") : undefined}
+      describedBy={describedBy}
+    />
+  );
+}
+
+/** The Model and Reasoning effort pickers of one pair of settings. */
+function LaunchPickers({
+  launch,
+  model,
+  effort,
+  onModelChange,
+  onEffortChange,
+  inherit,
+  isDisabled,
+}: {
+  launch: LaunchModels;
+  model: string | null;
+  effort: string | null;
+  onModelChange: (value: string | null) => void;
+  onEffortChange: (value: string | null) => void;
+  inherit?: LaunchPair;
+  isDisabled?: boolean;
+}): React.ReactElement {
+  return (
+    <>
+      <ModelPicker launch={launch} model={model} onChange={onModelChange} inherit={inherit} isDisabled={isDisabled} />
+      <EffortPicker launch={launch} model={model} effort={effort} onChange={onEffortChange} inherit={inherit} isDisabled={isDisabled} />
+    </>
+  );
+}
+
+/** The collapsed Advanced section of a dialog, folded away by default as what is inside is rarely
+ * set. The trigger spans the row so the whole row expands the section; HeroUI pushes its indicator
+ * to the far end with an auto margin, which `ms-0` cancels so the chevron follows the label. The
+ * label is set like the labels of the fields around it (`Label`'s size, weight and colour). */
+export function AdvancedSection({
+  expanded,
+  onExpandedChange,
+  status,
+  children,
+}: {
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+  /** The model field's note, said from a status region: it changes with no action of the user's,
+   * and its picker is locked while it says "loading", so it cannot be reached to be read. */
+  status?: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  const t = useT();
+  return (
+    <Disclosure isExpanded={expanded} onExpandedChange={onExpandedChange}>
       <Disclosure.Heading>
-        <Disclosure.Trigger className="flex w-full items-center gap-1">
+        <Disclosure.Trigger className="flex w-full items-center gap-1 text-sm font-medium text-foreground">
           {t("dialog.agentSettings.advanced")}
           <Disclosure.Indicator className="ms-0" />
         </Disclosure.Trigger>
@@ -93,32 +199,61 @@ export function LaunchSettingsFields({
           first note and below the last field is HeroUI's own, the same on both sides. */}
       <Disclosure.Content className="-mx-1">
         <Disclosure.Body className="-mx-1 flex flex-col gap-4">
-          <Description>{note}</Description>
-          <OptionSelect
-            label={t("dialog.agentSettings.model")}
-            options={launchSettingOptions(
-              t,
-              models.map((listed) => ({ value: listed.id, label: modelName(t, listed) })),
-              model,
-            )}
-            value={model}
-            onChange={onModelChange}
-            placeholder={t("dialog.agentSettings.placeholder")}
-            isDisabled={isDisabled || loading}
-            description={modelDescription}
-          />
-          <OptionSelect
-            label={t("dialog.agentSettings.effort")}
-            options={launchSettingOptions(t, levels.map((level) => ({ value: level, label: level })), effort)}
-            value={effort}
-            onChange={onEffortChange}
-            placeholder={t("dialog.agentSettings.placeholder")}
-            isDisabled={isDisabled || loading}
-            description={none ? t("dialog.agentSettings.noEffort") : undefined}
-          />
+          <StatusAnnouncer text={status} />
           {children}
         </Disclosure.Body>
       </Disclosure.Content>
     </Disclosure>
+  );
+}
+
+/** The Advanced section of a dialog about one agent's sessions: the model and reasoning effort that
+ * `agent`'s sessions are launched with, each empty while unset. `note` says whose sessions they
+ * are. `account` is the account id the agent's sessions run under (`null` for its default
+ * account), as the list of models belongs to the account. That list is asked of the daemon while
+ * the section is open, and again when `agent` or `account` changes, so nothing is asked of a
+ * dialog whose Advanced section is never opened (see `useLaunchModels`). `isDisabled` locks the two
+ * pickers, not `children`; the trigger stays operable, as folding the section away changes nothing
+ * and disabling a focused trigger would blur it. `children` are further rarely set fields of the
+ * same dialog, placed below the two pickers. */
+export function LaunchSettingsFields({
+  agent,
+  account,
+  model,
+  effort,
+  onModelChange,
+  onEffortChange,
+  note,
+  inherit,
+  isDisabled,
+  children,
+}: {
+  agent: Agent;
+  account: string | null;
+  model: string | null;
+  effort: string | null;
+  onModelChange: (value: string | null) => void;
+  onEffortChange: (value: string | null) => void;
+  note: string;
+  inherit?: LaunchPair;
+  isDisabled?: boolean;
+  children?: React.ReactNode;
+}): React.ReactElement {
+  const [expanded, setExpanded] = useState(false);
+  const launch = useLaunchModels(agent, account, expanded);
+  return (
+    <AdvancedSection expanded={expanded} onExpandedChange={setExpanded} status={launch.modelText}>
+      <Description>{note}</Description>
+      <LaunchPickers
+        launch={launch}
+        model={model}
+        effort={effort}
+        onModelChange={onModelChange}
+        onEffortChange={onEffortChange}
+        inherit={inherit}
+        isDisabled={isDisabled}
+      />
+      {children}
+    </AdvancedSection>
   );
 }

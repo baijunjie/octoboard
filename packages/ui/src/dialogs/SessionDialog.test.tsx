@@ -202,6 +202,34 @@ it("opens on a selectable agent, with the console's account for it, and sends bo
   container.remove();
 });
 
+it("opens a project session on the console's project session agent when the project names none", () => {
+  const { container, root } = renderDialog([], {}, { default_agent: "claude", project_session_agent: "grok" });
+  expect(pickerNamed("Agent").textContent).toContain("Grok Build");
+  act(() => root.unmount());
+  container.remove();
+});
+
+it("opens a console session on the console session agent whatever its project session agent is", () => {
+  const { container, root } = renderDialog([], {}, { default_agent: "codex", project_session_agent: "grok" }, { kind: "unbound" }, null);
+  expect(pickerNamed("Agent").textContent).toContain("Codex");
+  act(() => root.unmount());
+  container.remove();
+});
+
+it("leaves the agents known to be missing out of the agent picker", async () => {
+  const { container, root } = renderDialog([], {
+    agentAvailability: new Map<Agent, AgentAvailability>([
+      ["claude", { agent: "claude", availability: "available" }],
+      ["codex", { agent: "codex", availability: "unavailable" }],
+      ["grok", { agent: "grok", availability: "available" }],
+    ]),
+  });
+  await act(async () => pickerNamed("Agent").click());
+  expect(optionElements().map((o) => o.textContent)).toEqual(["Claude Code", "Grok Build"]);
+  act(() => root.unmount());
+  container.remove();
+});
+
 /** Opens the dialog with two stored Claude Code accounts, the console pinning one and the project
  * `projectPin`, presses Open and returns the `account` sent. */
 async function openedAccount(projectPin: Partial<typeof project>): Promise<unknown> {
@@ -588,4 +616,25 @@ it.each(["Backspace", "Delete"])("clears a launch choice with %s only while its 
   expect(trigger.textContent).toContain("The agent's own setting");
   await act(async () => buttons().find((button) => button.textContent === "Open")!.click());
   expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", model: null }));
+});
+
+it.each([
+  ["the project's own value over the console's project session one", { claude_session_model: "opus" }, { claude_project_session_model: "sonnet" }, "Opus", "The agent's own setting"],
+  ["the console's project session values where the project sets none", {}, { claude_project_session_model: "sonnet", claude_project_session_effort: "low" }, "Sonnet", "low"],
+  ["each value from the project, else from the console", { claude_session_effort: "high" }, { claude_project_session_model: "sonnet", claude_project_session_effort: "low" }, "Sonnet", "high"],
+] as const)("opens a project session on %s", async (_, projectValues, consoleValues, model, effort) => {
+  const { container, root, daemon } = renderDialog([], {}, consoleValues, { kind: "unbound" }, projectValues);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  answerSessionModels(daemon);
+  await act(async () => buttons().find((button) => button.textContent === "Advanced")!.click());
+  expect(pickerNamed("Model").textContent).toContain(model);
+  expect(pickerNamed("Reasoning effort").textContent).toContain(effort);
+});
+
+it("opens a console session on the console session value, not the project session one", async () => {
+  const { container, root, daemon } = renderDialog([], {}, { claude_console_session_model: "opus", claude_project_session_model: "sonnet" }, { kind: "unbound" }, null);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  answerSessionModels(daemon);
+  await act(async () => buttons().find((button) => button.textContent === "Advanced")!.click());
+  expect(pickerNamed("Model").textContent).toContain("Opus");
 });

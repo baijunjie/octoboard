@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { consoleOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
-import type { Account, AgentModel, Console, Event, ModelsUnavailable, RequestBody } from "../protocol";
+import type { Account, Agent, AgentAvailability, AgentModel, Console, Event, ModelsUnavailable, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { imageToAvatar } from "../avatarImage";
 import { ConsoleDialog } from "./ConsoleDialog";
@@ -33,12 +33,25 @@ const listing = (body: RequestBody, models: AgentModel[], unavailable: ModelsUna
   unavailable,
 });
 
+/** The store of the daemon the last `render` set up, for a test that changes the state under it. */
+let lastStore: ReturnType<typeof createStateStore>;
+
 /** Renders the dialog over a daemon that answers every request, with `MODELS` unless `respond` says
  * otherwise, and returns the requests sent. */
-function render(editing?: Console, accounts: Account[] = [], respond?: (body: RequestBody) => Promise<Event>) {
+function render(
+  editing?: Console,
+  accounts: Account[] = [],
+  respond?: (body: RequestBody) => Promise<Event>,
+  availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {},
+) {
   const request = vi.fn((body: RequestBody) => respond?.(body) ?? Promise.resolve(body.type === "list_agent_models" ? listing(body, MODELS) : ({ type: "ack" } as Event)));
   const daemon: Daemon = {
-    store: createStateStore({ settings: { auto_pull_repositories: false, default_clone_dir: "", accounts } }),
+    store: createStateStore({
+      settings: { auto_pull_repositories: false, default_clone_dir: "", accounts },
+      agentAvailability: new Map(
+        (["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined" }]),
+      ),
+    }),
     request,
     toastError: vi.fn(),
     toastNotice: vi.fn(),
@@ -47,6 +60,7 @@ function render(editing?: Console, accounts: Account[] = [], respond?: (body: Re
     reconnect: () => {},
     terminalUrl: () => "",
   };
+  lastStore = daemon.store;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -88,8 +102,24 @@ function type(label: string, value: string) {
 async function openAdvanced() {
   await clickButton("Advanced");
 }
-const pickerNamed = (name: string) =>
-  buttons().find((b) => b.getAttribute("aria-labelledby")?.split(" ").some((id) => document.getElementById(id)?.textContent === name))!;
+/** The agent tab named `name` in the Advanced section. */
+const clickTab = (name: string) => click(Array.from(document.body.querySelectorAll('[role="tab"]')).find((tab) => tab.textContent === name));
+/** The name of `button` that comes from other elements, put together as `aria-labelledby` says (the
+ * value shown in the button is part of the name too, and is left out). */
+const nameOf = (button: Element) =>
+  (button.getAttribute("aria-labelledby") ?? "")
+    .split(" ")
+    .map((id) => document.getElementById(id))
+    .filter((el) => el && !button.contains(el))
+    .map((el) => el!.textContent ?? "");
+/** The Advanced picker of the setting `name` for the sessions of `group`, by the elements that name it. */
+const groupPicker = (group: string, name: string) =>
+  buttons().find((b) => {
+    const [kind, setting] = nameOf(b);
+    return kind === group && setting === name;
+  })!;
+/** The console session picker of the Advanced setting `name`. */
+const pickerNamed = (name: string) => groupPicker("Console sessions", name);
 const clearButton = (name: string) => pickerNamed(name).querySelector<HTMLElement>('[data-slot="select-clear-button"]');
 
 it("creates without launch settings when none is set", async () => {
@@ -291,8 +321,7 @@ it("asks under the account that is settled, and again when the account or the ag
   await openAdvanced();
   await clickButton("Work");
   await choose("Personal");
-  await clickButton((b) => b.textContent?.includes("Claude Code") ?? false);
-  await choose("Codex");
+  await clickTab("Codex");
   expect(asked(request)).toEqual([
     { type: "list_agent_models", agent: "claude", account: "a-work" },
     { type: "list_agent_models", agent: "claude", account: "a-personal" },
@@ -304,8 +333,7 @@ it("ignores a late answer for an agent the form has moved off", async () => {
   const replies: { body: RequestBody; resolve: (event: Event) => void }[] = [];
   render(undefined, [], (body) => new Promise((resolve) => replies.push({ body, resolve })));
   await openAdvanced();
-  await clickButton((b) => b.textContent?.includes("Claude Code") ?? false);
-  await choose("Codex");
+  await clickTab("Codex");
   expect(replies.map((r) => r.body)).toEqual([
     { type: "list_agent_models", agent: "claude" },
     { type: "list_agent_models", agent: "codex" },
@@ -401,4 +429,295 @@ it("says so when the daemon answers the question with something else", async () 
   render(undefined, [], async () => ({ type: "ack" }) as Event);
   await openAdvanced();
   expect(document.body.textContent).toContain("The daemon answered with something unexpected.");
+});
+
+const codexWork: Account = { id: "a-codex", agent: "codex", name: "Codex work", config_dir: "/home/dev/.codex-work" };
+/** The trigger of a picker named by its own label rather than by a visible one. */
+const picker = (name: string) => buttons().find((b) => b.getAttribute("aria-label") === name)!;
+
+it("names the agent project sessions follow on the Same as entry, and keeps it current", async () => {
+  render(consoleOf("c-1", "Main", { default_agent: "codex" }));
+  expect(picker("Project sessions").textContent).toContain("Same as console sessions (Codex)");
+  await click(picker("Console sessions"));
+  await choose("Grok Build");
+  expect(picker("Project sessions").textContent).toContain("Same as console sessions (Grok Build)");
+});
+
+it("starts a new console on Same as console sessions and sends no project session agent", async () => {
+  const request = render();
+  type("Name", "Main");
+  await clickButton("Create");
+  expect(sent(request)).toEqual([{ type: "create_console", name: "Main", default_agent: "claude" }]);
+});
+
+it("creates with the project session agent that was picked", async () => {
+  const request = render();
+  type("Name", "Main");
+  await click(picker("Project sessions"));
+  await choose("Codex");
+  await clickButton("Create");
+  expect(sent(request)).toEqual([{ type: "create_console", name: "Main", default_agent: "claude", project_session_agent: "codex" }]);
+});
+
+it("opens a console stored without a project session agent on Same as and sends nothing for it", async () => {
+  const request = render(consoleOf("c-1", "Main", { default_agent: "codex" }));
+  expect(picker("Project sessions").textContent).toContain("Same as console sessions");
+  type("Name", "Renamed");
+  await clickButton("Save");
+  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Renamed", default_agent: "codex" }]);
+});
+
+it("sends the project session agent only when it changed, and an explicit null when it goes back to Same as", async () => {
+  const request = render(consoleOf("c-1", "Main", { project_session_agent: "grok" }));
+  expect(picker("Project sessions").textContent).toContain("Grok Build");
+  await clickButton("Save");
+  expect(sent(request)[0]).toEqual({ type: "update_console", console: "c-1", name: "Main", default_agent: "claude" });
+  await click(picker("Project sessions"));
+  await choose("Same as console sessions (Claude Code)");
+  await clickButton("Save");
+  expect(sent(request)[1]).toEqual({ type: "update_console", console: "c-1", name: "Main", default_agent: "claude", project_session_agent: null });
+});
+
+it("lets the console session agent change without moving the project session agent", async () => {
+  const request = render(consoleOf("c-1", "Main", { project_session_agent: "grok" }));
+  await click(picker("Console sessions"));
+  await choose("Codex");
+  await clickButton("Save");
+  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Main", default_agent: "codex" }]);
+});
+
+it("follows the console session agent in the Advanced section, not the project session agent", async () => {
+  const request = render(consoleOf("c-1", "Main", { default_agent: "codex", project_session_agent: "grok" }));
+  await openAdvanced();
+  expect(asked(request)).toEqual([{ type: "list_agent_models", agent: "codex" }]);
+});
+
+it("shows one row per agent in the accounts table, each with its own account", async () => {
+  render(consoleOf("c-1", "Main", { codex_account_id: "a-codex" }), [work, codexWork]);
+  expect(picker("Claude Code account").textContent).toContain("Default");
+  expect(picker("Codex account").textContent).toContain("Codex work");
+  // Grok has only its default account: stated, with the way to add another.
+  expect(buttons().filter((b) => b.textContent === "Manage accounts…")).toHaveLength(1);
+  expect(document.body.textContent).toContain("Default account");
+});
+
+it("sends an account chosen for an agent that is not the console session agent", async () => {
+  const request = render(consoleOf("c-1", "Main"), [work, codexWork]);
+  await click(picker("Codex account"));
+  await choose("Codex work");
+  await clickButton("Save");
+  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Main", default_agent: "claude", codex_account_id: "a-codex" }]);
+});
+
+it("opens Settings at the agent accounts from an agent that has only its default account", async () => {
+  // The Settings dialog sizes itself by a breakpoint the stylesheet defines.
+  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: true, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  onTestFinished(() => {
+    vi.unstubAllGlobals();
+    document.documentElement.style.removeProperty("--breakpoint-docked");
+  });
+  render();
+  await clickButton("Manage accounts…");
+  const settings = document.body.querySelector('[aria-label="Settings"]');
+  expect(settings).not.toBeNull();
+  expect(settings?.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Agent accounts");
+});
+
+it("keeps the console dialog open and unsaved while an account is added in the Settings over it", async () => {
+  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: true, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  onTestFinished(() => {
+    vi.unstubAllGlobals();
+    document.documentElement.style.removeProperty("--breakpoint-docked");
+  });
+  const request = render(consoleOf("c-1", "Main"));
+  await clickButton("Manage accounts…");
+  await clickButton("Add account");
+  const fill = (label: string, value: string) => {
+    const input = Array.from(document.body.querySelectorAll<HTMLInputElement>("input")).filter((el) => el.labels?.[0]?.textContent === label).at(-1)!;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  };
+  fill("Name", "Work");
+  fill("Config directory", "/home/dev/.claude-work");
+  await clickButton("Add");
+  expect(sent(request)).toEqual([{ type: "create_account", agent: "claude", name: "Work", config_dir: "/home/dev/.claude-work" }]);
+  expect(document.body.textContent).toContain("Console settings");
+});
+
+it("lists only the agents that may be picked, and the accounts of those", () => {
+  render(undefined, [work, codexWork], undefined, { codex: "unavailable" });
+  expect(picker("Console sessions")).toBeDefined();
+  expect(picker("Claude Code account")).toBeDefined();
+  expect(buttons().some((b) => b.getAttribute("aria-label") === "Codex account")).toBe(false);
+  expect(document.body.textContent).not.toContain("Codex (not installed)");
+});
+
+it("leaves the missing agents out of both default agent pickers", async () => {
+  render(undefined, [], undefined, { codex: "unavailable" });
+  await click(picker("Console sessions"));
+  expect(optionTexts()).toEqual(["Claude Code", "Grok Build"]);
+  await choose("Claude Code");
+  await click(picker("Project sessions"));
+  expect(optionTexts()).toEqual(["Same as console sessions (Claude Code)", "Claude Code", "Grok Build"]);
+});
+
+it("keeps the stored agent in its picker as not installed while it is the value, and drops it once moved off", async () => {
+  render(consoleOf("c-1", "Main", { default_agent: "codex" }), [], undefined, { codex: "unavailable" });
+  expect(picker("Console sessions").textContent).toContain("Codex (not installed)");
+  await click(picker("Console sessions"));
+  const codex = Array.from(document.body.querySelectorAll('[role="option"]')).find((o) => o.textContent === "Codex (not installed)");
+  expect(codex?.getAttribute("aria-selected")).toBe("true");
+  await choose("Claude Code");
+  await click(picker("Console sessions"));
+  expect(optionTexts()).toEqual(["Claude Code", "Grok Build"]);
+});
+
+it("keeps a missing agent's row while the console pins a named account for it, and drops it once moved off", async () => {
+  render(consoleOf("c-1", "Main", { codex_account_id: "a-codex" }), [work, codexWork], undefined, { codex: "unavailable" });
+  expect(picker("Codex account").textContent).toContain("Codex work");
+  expect(document.body.textContent).toContain("Codex (not installed)");
+  await click(picker("Codex account"));
+  await choose("Default");
+  expect(document.body.textContent).not.toContain("Codex (not installed)");
+});
+
+it("lists every agent before availability has been determined", async () => {
+  render();
+  await click(picker("Console sessions"));
+  expect(optionTexts()).toEqual(["Claude Code", "Codex", "Grok Build"]);
+});
+
+const tabNames = () => Array.from(document.body.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent);
+const selectedTab = () => document.body.querySelector('[role="tab"][aria-selected="true"]')?.textContent;
+
+it("opens the Advanced section on the console session agent, with a tab for each installed agent", async () => {
+  render(consoleOf("c-1", "Main", { default_agent: "codex" }));
+  await openAdvanced();
+  expect(tabNames()).toEqual(["Claude Code", "Codex", "Grok Build"]);
+  expect(selectedTab()).toBe("Codex");
+});
+
+it("holds the console session and project session values apart for the agent shown", async () => {
+  render(consoleOf("c-1", "Main", { claude_console_session_model: "alpha", claude_project_session_model: "beta" }));
+  await openAdvanced();
+  expect(groupPicker("Console sessions", "Model").textContent).toContain("Alpha");
+  expect(groupPicker("Project sessions", "Model").textContent).toContain("Beta");
+});
+
+it("keeps the edits of every agent while switching tabs, and saves only what changed", async () => {
+  const request = render(consoleOf("c-1", "Main", { codex_project_session_model: "kept" }));
+  await openAdvanced();
+  await click(groupPicker("Project sessions", "Model"));
+  await choose("Alpha");
+  await clickTab("Codex");
+  expect(groupPicker("Project sessions", "Model").textContent).toContain("kept");
+  await click(groupPicker("Console sessions", "Reasoning effort"));
+  await choose("high");
+  await clickTab("Claude Code");
+  expect(groupPicker("Project sessions", "Model").textContent).toContain("Alpha");
+  await clickButton("Save");
+  expect(sent(request)).toEqual([
+    {
+      type: "update_console",
+      console: "c-1",
+      name: "Main",
+      default_agent: "claude",
+      claude_project_session_model: "alpha",
+      codex_console_session_effort: "high",
+    },
+  ]);
+});
+
+it("creates with the project session pair that was set", async () => {
+  const request = render();
+  type("Name", "Main");
+  await openAdvanced();
+  await click(groupPicker("Project sessions", "Model"));
+  await choose("Beta");
+  await click(groupPicker("Project sessions", "Reasoning effort"));
+  await choose("max");
+  await clickButton("Create");
+  expect(sent(request)).toEqual([
+    { type: "create_console", name: "Main", default_agent: "claude", claude_project_session_model: "beta", claude_project_session_effort: "max" },
+  ]);
+});
+
+it("sends an explicit null when a project session value is cleared", async () => {
+  const request = render(consoleOf("c-1", "Main", { claude_project_session_model: "alpha" }));
+  await openAdvanced();
+  await click(groupPicker("Project sessions", "Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
+  await clickButton("Save");
+  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Main", default_agent: "claude", claude_project_session_model: null }]);
+});
+
+it("leaves a missing agent without a tab unless the console stores a value for it, and drops it once cleared", async () => {
+  render(consoleOf("c-1", "Main", { codex_project_session_model: "kept" }), [], undefined, { codex: "unavailable", grok: "unavailable" });
+  await openAdvanced();
+  expect(tabNames()).toEqual(["Claude Code", "Codex (not installed)"]);
+  await clickTab("Codex (not installed)");
+  await click(groupPicker("Project sessions", "Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
+  expect(tabNames()).toEqual(["Claude Code"]);
+  expect(selectedTab()).toBe("Claude Code");
+});
+
+it("follows the console session agent in the Advanced section until a tab is picked", async () => {
+  render();
+  await click(picker("Console sessions"));
+  await choose("Codex");
+  await openAdvanced();
+  expect(selectedTab()).toBe("Codex");
+  await click(picker("Console sessions"));
+  await choose("Grok Build");
+  expect(selectedTab()).toBe("Grok Build");
+  await clickTab("Claude Code");
+  await click(picker("Console sessions"));
+  await choose("Codex");
+  expect(selectedTab()).toBe("Claude Code");
+});
+
+it("does not take the view back to an agent picked earlier that comes back", async () => {
+  render(consoleOf("c-1", "Main", { codex_project_session_model: "kept" }), [], undefined, { codex: "unavailable" });
+  await openAdvanced();
+  await clickTab("Codex (not installed)");
+  await click(groupPicker("Project sessions", "Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
+  expect(selectedTab()).toBe("Claude Code");
+  await act(async () => lastStore.setState({ agentAvailability: new Map([["claude", { agent: "claude", availability: "available" }], ["codex", { agent: "codex", availability: "available" }], ["grok", { agent: "grok", availability: "available" }]]) }));
+  expect(tabNames()).toEqual(["Claude Code", "Codex", "Grok Build"]);
+  expect(selectedTab()).toBe("Claude Code");
+});
+
+it("names each Advanced picker by its sessions and its setting, and describes it by their note and the model list's state", async () => {
+  render(undefined, [], async (body) => listing(body, [], { code: "models_timed_out", params: { agent: "Claude Code" }, message: "" }));
+  await openAdvanced();
+  const pickers = [["Console sessions", "Model"], ["Console sessions", "Reasoning effort"], ["Project sessions", "Model"], ["Project sessions", "Reasoning effort"]];
+  const names = pickers.map(([group, name]) => nameOf(groupPicker(group, name)).join(" "));
+  expect(names).toEqual(["Console sessions Model", "Console sessions Reasoning effort", "Project sessions Model", "Project sessions Reasoning effort"]);
+  expect(new Set(names).size).toBe(4);
+  // Named only by the headers: an own aria-label beside them would be read as part of the name.
+  for (const [group, name] of pickers) expect(groupPicker(group, name).getAttribute("aria-label")).toBeNull();
+  const describedBy = (group: string, name: string) =>
+    (groupPicker(group, name).getAttribute("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent ?? "");
+  expect(describedBy("Console sessions", "Reasoning effort")).toEqual([expect.stringContaining("Console sessions opened or resumed from now on")]);
+  expect(describedBy("Project sessions", "Reasoning effort")).toEqual([expect.stringContaining("Project sessions opened or resumed from now on")]);
+  // The model list's state stands under both Model pickers, besides the note on their sessions.
+  const notes = Array.from(document.body.querySelectorAll('[data-slot="description"]')).filter((el) => el.textContent?.includes("took too long to list its models"));
+  expect(notes).toHaveLength(2);
+  expect(groupPicker("Console sessions", "Model").getAttribute("aria-describedby")).toContain(notes[0].id);
+  expect(groupPicker("Project sessions", "Model").getAttribute("aria-describedby")).toContain(notes[1].id);
+  expect(describedBy("Console sessions", "Model")).toHaveLength(2);
+  // The headers that name the pickers are hidden from assistive technology, so they are not read a
+  // second time beside the names, and no visible text of the table is outside them.
+  for (const [group, name] of pickers) {
+    for (const id of groupPicker(group, name).getAttribute("aria-labelledby")!.split(" ")) {
+      const el = document.getElementById(id)!;
+      if (el.textContent === group || el.textContent === name) expect(el.closest('[aria-hidden="true"]')).not.toBeNull();
+    }
+  }
+  const headers = Array.from(document.body.querySelectorAll("div, span")).filter((el) => ["Console sessions", "Project sessions", "Reasoning effort"].includes(el.textContent ?? "") && el.children.length === 0 && !el.closest("button, label, [role=tab]"));
+  expect(headers.length).toBeGreaterThan(0);
+  expect(headers.every((el) => el.closest('[aria-hidden="true"]'))).toBe(true);
 });

@@ -1,5 +1,6 @@
 import { DaemonRequestError } from "../daemon-client";
 import { consoleAccount, inheritedAccount } from "../accountChoices";
+import { projectSessionAgent } from "../agents";
 import { daemonMessage } from "../daemonMessage";
 import { errorPresentation, noticeErrorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
@@ -33,6 +34,7 @@ function consoleFields(body: Extract<RequestBody, { type: "create_console" | "up
   const fields: Partial<Console> = {};
   if (body.name !== undefined) fields.name = body.name.trim();
   if (body.default_agent !== undefined) fields.default_agent = body.default_agent;
+  if (body.project_session_agent !== undefined) fields.project_session_agent = body.project_session_agent;
   for (const agent of ["claude", "codex", "grok"] as const) {
     const account = body[`${agent}_account_id`];
     if (account !== undefined) fields[`${agent}_account_id`] = account;
@@ -40,6 +42,10 @@ function consoleFields(body: Extract<RequestBody, { type: "create_console" | "up
     if (model !== undefined) fields[`${agent}_console_session_model`] = trimmedOrNull(model);
     const effort = body[`${agent}_console_session_effort`];
     if (effort !== undefined) fields[`${agent}_console_session_effort`] = trimmedOrNull(effort);
+    const projectModel = body[`${agent}_project_session_model`];
+    if (projectModel !== undefined) fields[`${agent}_project_session_model`] = trimmedOrNull(projectModel);
+    const projectEffort = body[`${agent}_project_session_effort`];
+    if (projectEffort !== undefined) fields[`${agent}_project_session_effort`] = trimmedOrNull(projectEffort);
   }
   if (body.icon !== undefined) fields.icon = body.icon;
   if (body.console_session_prompt !== undefined) fields.console_session_prompt = trimmedOrNull(body.console_session_prompt);
@@ -288,7 +294,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           if (!owner) return fail({ code: "unknown_console", params: { console: body.console_id }, message: `unknown console ${body.console_id}` });
           const project = body.project_id ? current.projects.get(body.project_id) : undefined;
           if (body.project_id && !project) return fail({ code: "unknown_project", params: { project: body.project_id }, message: `unknown project ${body.project_id}` });
-          const agent = body.agent ?? project?.default_agent ?? owner.default_agent;
+          const agent = body.agent ?? (project ? project.default_agent ?? projectSessionAgent(owner) : owner.default_agent);
           const accountId = body.account === undefined
             ? project ? inheritedAccount(owner, project, agent, current.settings.accounts) : consoleAccount(owner, agent, current.settings.accounts)
             : body.account;

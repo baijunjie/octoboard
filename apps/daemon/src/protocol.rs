@@ -185,11 +185,16 @@ pub struct Console {
     pub name: String,
     pub workdir: String,
     /// Legacy copy of `default_agent`, kept equal on every save and reconciled on open for older
-    /// databases. Session agent selection reads `default_agent` instead; nothing reads this field.
+    /// databases. Session agent selection reads `default_agent` and `project_session_agent`
+    /// instead; nothing reads this field.
     /// Daemon-only: not part of the record clients are sent.
     #[serde(skip)]
     pub console_session_agent: Agent,
+    /// The agent a console session of this console is of.
     pub default_agent: Agent,
+    /// The agent a project session falls back to when its project names none; `None` follows
+    /// `default_agent`. Read it through [`Console::project_session_default`].
+    pub project_session_agent: Option<Agent>,
     /// The account each agent's sessions opened in this console read, by id; one setting per
     /// agent, and a session reads only its own agent's. `None` means that agent's default account
     /// — the state of pinning nothing. What a referenced account resolves to at launch is
@@ -215,6 +220,21 @@ pub struct Console {
     pub grok_console_session_model: Option<String>,
     /// Grok's own effort; see `claude_console_session_effort`.
     pub grok_console_session_effort: Option<String>,
+    /// The model and reasoning effort a project session of this console is launched with when
+    /// neither the session nor its project names one, in the agent's own spelling; one pair per
+    /// agent, as for the console session pair. `None` leaves the choice to the agent. Read at every
+    /// launch, so a session already running keeps what it started with.
+    pub claude_project_session_model: Option<String>,
+    /// Claude Code's own effort; see `claude_project_session_model`.
+    pub claude_project_session_effort: Option<String>,
+    /// Codex's own model; see `claude_project_session_model`.
+    pub codex_project_session_model: Option<String>,
+    /// Codex's own effort; see `claude_project_session_model`.
+    pub codex_project_session_effort: Option<String>,
+    /// Grok's own model; see `claude_project_session_model`.
+    pub grok_project_session_model: Option<String>,
+    /// Grok's own effort; see `claude_project_session_model`.
+    pub grok_project_session_effort: Option<String>,
     /// A custom avatar as an `image/*` `data:` URL of at most 256 KiB; unset shows the default
     /// glyph.
     pub icon: Option<String>,
@@ -225,6 +245,12 @@ pub struct Console {
 }
 
 impl Console {
+    /// The agent a project session of this console is of when neither the request nor its
+    /// project names one.
+    pub fn project_session_default(&self) -> Agent {
+        self.project_session_agent.unwrap_or(self.default_agent)
+    }
+
     /// The account this console references for `agent`; `None` is the agent's default account.
     pub fn account(&self, agent: Agent) -> &Option<String> {
         match agent {
@@ -239,6 +265,44 @@ impl Console {
             Agent::Claude => &mut self.claude_account_id,
             Agent::Codex => &mut self.codex_account_id,
             Agent::Grok => &mut self.grok_account_id,
+        }
+    }
+
+    /// `agent`'s project session model and effort.
+    pub fn project_launch(&self, agent: Agent) -> (&Option<String>, &Option<String>) {
+        match agent {
+            Agent::Claude => (
+                &self.claude_project_session_model,
+                &self.claude_project_session_effort,
+            ),
+            Agent::Codex => (
+                &self.codex_project_session_model,
+                &self.codex_project_session_effort,
+            ),
+            Agent::Grok => (
+                &self.grok_project_session_model,
+                &self.grok_project_session_effort,
+            ),
+        }
+    }
+
+    pub fn project_launch_mut(
+        &mut self,
+        agent: Agent,
+    ) -> (&mut Option<String>, &mut Option<String>) {
+        match agent {
+            Agent::Claude => (
+                &mut self.claude_project_session_model,
+                &mut self.claude_project_session_effort,
+            ),
+            Agent::Codex => (
+                &mut self.codex_project_session_model,
+                &mut self.codex_project_session_effort,
+            ),
+            Agent::Grok => (
+                &mut self.grok_project_session_model,
+                &mut self.grok_project_session_effort,
+            ),
         }
     }
 
@@ -1157,6 +1221,9 @@ pub enum RequestBody {
     CreateConsole {
         name: String,
         default_agent: Agent,
+        /// Absent means project sessions follow `default_agent`.
+        #[serde(default)]
+        project_session_agent: Option<Agent>,
         /// Each agent's account, by id; absent means that agent's default account. A reference
         /// that names no account of that agent is refused with `unknown_account`.
         #[serde(default)]
@@ -1179,6 +1246,20 @@ pub enum RequestBody {
         grok_console_session_model: Option<String>,
         #[serde(default)]
         grok_console_session_effort: Option<String>,
+        /// Each agent's model and reasoning effort for the console's project sessions whose
+        /// project and session name none; absent or blank means the agent's own default.
+        #[serde(default)]
+        claude_project_session_model: Option<String>,
+        #[serde(default)]
+        claude_project_session_effort: Option<String>,
+        #[serde(default)]
+        codex_project_session_model: Option<String>,
+        #[serde(default)]
+        codex_project_session_effort: Option<String>,
+        #[serde(default)]
+        grok_project_session_model: Option<String>,
+        #[serde(default)]
+        grok_project_session_effort: Option<String>,
         #[serde(default)]
         icon: Option<String>,
         /// Absent or blank means no addition to the console session's instructions.
@@ -1189,6 +1270,10 @@ pub enum RequestBody {
         console: String,
         name: Option<String>,
         default_agent: Option<Agent>,
+        /// Absent leaves the setting alone; an explicit `null` makes project sessions follow
+        /// `default_agent` again.
+        #[serde(default, deserialize_with = "present_option")]
+        project_session_agent: Option<Option<Agent>>,
         /// Each agent's account: absent leaves the setting alone; an explicit `null` clears it
         /// back to that agent's default account. A reference that names no account of that agent
         /// is refused with `unknown_account`.
@@ -1212,6 +1297,20 @@ pub enum RequestBody {
         grok_console_session_model: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
         grok_console_session_effort: Option<Option<String>>,
+        /// Each agent's project session model and effort, with the same absent / `null` / blank
+        /// rule as the console session ones.
+        #[serde(default, deserialize_with = "present_option")]
+        claude_project_session_model: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        claude_project_session_effort: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        codex_project_session_model: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        codex_project_session_effort: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        grok_project_session_model: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        grok_project_session_effort: Option<Option<String>>,
         /// Absent leaves the avatar alone; an explicit `null` (or a blank string) clears it back
         /// to the default glyph.
         #[serde(default, deserialize_with = "present_option")]
@@ -1266,9 +1365,10 @@ pub enum RequestBody {
         project: String,
         name: Option<String>,
         /// Absent leaves the project's default agent alone; an explicit `null` clears it, which is
-        /// how the project goes back to inheriting the console's default. The attribute is what
-        /// keeps those two apart: serde otherwise reads a present `null` into the outer `Option` as
-        /// `None`, exactly as if the field had not been sent.
+        /// how the project goes back to following the console's project session agent (else its
+        /// `default_agent`). The attribute is what keeps those two apart: serde otherwise reads a
+        /// present `null` into the outer `Option` as `None`, exactly as if the field had not been
+        /// sent.
         #[serde(default, deserialize_with = "present_option")]
         default_agent: Option<Option<Agent>>,
         /// Each agent's account as a [`ProjectAccount`]: absent leaves the setting alone; an
@@ -1375,7 +1475,8 @@ pub enum RequestBody {
     OpenSession {
         console_id: String,
         project_id: Option<String>,
-        /// The session's agent; absent takes the project's default, else the console's.
+        /// The session's agent; absent takes the project's default, else the console's project
+        /// session agent, else its `default_agent`.
         agent: Option<Agent>,
         /// The account this session's agent reads, by id. Absent leaves the choice to the
         /// project's reference for that agent, else the console's, else the default account; an
@@ -2932,7 +3033,8 @@ mod tests {
     }
 
     /// An absent optional field is "leave it alone" and an explicit null is "clear it", which is
-    /// the only way a project can go back to inheriting its console's default agent.
+    /// the only way a project can go back to following its console's project session agent (else
+    /// its `default_agent`).
     #[test]
     fn clearing_a_projects_default_agent_is_distinguishable_from_leaving_it() {
         let absent: Request =
@@ -3230,6 +3332,27 @@ mod tests {
                 r#"{"type":"update_console","console":"c","codex_console_session_model":"gpt-5"}"#
             ),
             (None, Some(Some("gpt-5".to_string())))
+        );
+    }
+
+    /// Absent versus null is how a console's project session agent can be cleared as well as set.
+    #[test]
+    fn clearing_a_consoles_project_session_agent_is_distinguishable_from_leaving_it() {
+        let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::UpdateConsole {
+                project_session_agent,
+                ..
+            } => project_session_agent,
+            _ => panic!("parses as update_console"),
+        };
+        assert_eq!(parse(r#"{"type":"update_console","console":"c"}"#), None);
+        assert_eq!(
+            parse(r#"{"type":"update_console","console":"c","project_session_agent":null}"#),
+            Some(None)
+        );
+        assert_eq!(
+            parse(r#"{"type":"update_console","console":"c","project_session_agent":"grok"}"#),
+            Some(Some(crate::protocol::Agent::Grok))
         );
     }
 

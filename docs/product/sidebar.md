@@ -111,7 +111,7 @@ is a **preview**:
 The top of the sidebar names the console being shown, followed by a **+** button, **New console session**,
 then its action menu. The **+** opens the session dialog before launching anything (see "Opening a session" in
 `docs/product/sessions.md`), or, with the primary modifier held, opens a console session at once without it (see
-"Opening a session with defaults" in `docs/product/sessions.md`). The menu offers **Add project**, **Edit console**, **Archived console sessions** and,
+"Opening a session with defaults" in `docs/product/sessions.md`). The menu offers **Add project**, **Console settings**, **Archived console sessions** and,
 after a separator, **Delete console** (see "Associating a project",
 "Editing a console" and "Deleting a console" in `docs/product/consoles-and-projects.md`; deleting asks for a typed
 confirmation first). **Archived console sessions** is a submenu of the console's newest archived console sessions, each

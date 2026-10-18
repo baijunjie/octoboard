@@ -1,4 +1,4 @@
-import { accountsByAgent, AGENT_ACCOUNT_FIELD, isAgentUnavailable, selectableAgent } from "./agents";
+import { accountsByAgent, AGENT_ACCOUNT_FIELD, isAgentUnavailable, projectSessionAgent, selectableAgent } from "./agents";
 import type { Translate } from "./i18n/catalog";
 import type { Account, Agent, AgentAvailability, Console, Project, ProjectAccount, Session } from "./protocol";
 import { sessionAccountName } from "./sessionLabel";
@@ -58,7 +58,7 @@ export function findEntry(groups: ChoiceGroup[], key: string): (ChoiceEntry & { 
 
 /** The account `id` names for `agent` — `null`, the default account, when it names none or one
  * that is no longer stored. */
-function storedAccount(id: string | null | undefined, agent: Agent, accounts: Account[]): string | null {
+export function storedAccount(id: string | null | undefined, agent: Agent, accounts: Account[]): string | null {
   return id && accounts.some((account) => account.id === id && account.agent === agent) ? id : null;
 }
 
@@ -94,8 +94,9 @@ export function inheritedAccount(owner: Console, project: Project | undefined, a
   return project ? resolveProjectAccount(projectAccount(project, agent, accounts), account) : account;
 }
 
-/** Where the session dialog's control opens: the agent the dialog already resolves — the
- * project's default, else the console's — moved to one that may be picked when that one is known
+/** Where the session dialog's control opens: the agent the dialog already resolves — a project
+ * session's: the project's default, else the console's project session default; a console
+ * session's: the console's default — moved to one that may be picked when that one is known
  * to be missing, with the account that agent resolves to when none is chosen: the project's
  * setting for it, else the console `owner`'s. The choice made in the dialog sits above this, as
  * the daemon's own chain puts a session's choice above both. */
@@ -105,7 +106,7 @@ export function initialChoice(
   accounts: Account[],
   agentAvailability: Map<Agent, AgentAvailability>,
 ): AccountChoice {
-  const agent = selectableAgent(agentAvailability, project?.default_agent ?? owner.default_agent);
+  const agent = selectableAgent(agentAvailability, project ? project.default_agent ?? projectSessionAgent(owner) : owner.default_agent);
   return { agent, account: inheritedAccount(owner, project, agent, accounts) };
 }
 

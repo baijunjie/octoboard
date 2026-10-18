@@ -78,6 +78,9 @@ pub struct DocumentConsole {
     pub name: String,
     pub icon: Option<String>,
     pub default_agent: Agent,
+    /// The agent a project session falls back to; absent or `null` follows `default_agent`, as
+    /// every document written before it was carried does.
+    pub project_session_agent: Option<Agent>,
     /// Each agent's account, by name; `null` is that agent's default account.
     pub claude_account: Option<AccountName>,
     pub codex_account: Option<AccountName>,
@@ -88,6 +91,13 @@ pub struct DocumentConsole {
     pub codex_console_session_effort: Option<String>,
     pub grok_console_session_model: Option<String>,
     pub grok_console_session_effort: Option<String>,
+    /// The model and effort a project session falls back to; absent in an older document is none.
+    pub claude_project_session_model: Option<String>,
+    pub claude_project_session_effort: Option<String>,
+    pub codex_project_session_model: Option<String>,
+    pub codex_project_session_effort: Option<String>,
+    pub grok_project_session_model: Option<String>,
+    pub grok_project_session_effort: Option<String>,
     /// The user's own addition to the console session's instructions; absent is none.
     pub console_session_prompt: Option<String>,
     pub projects: Vec<DocumentProject>,
@@ -173,6 +183,7 @@ fn document_console(
         name: console.name.clone(),
         icon: console.icon.clone(),
         default_agent: console.default_agent,
+        project_session_agent: console.project_session_agent,
         claude_account: reference(Agent::Claude, &console.claude_account_id),
         codex_account: reference(Agent::Codex, &console.codex_account_id),
         grok_account: reference(Agent::Grok, &console.grok_account_id),
@@ -182,6 +193,12 @@ fn document_console(
         codex_console_session_effort: console.codex_console_session_effort.clone(),
         grok_console_session_model: console.grok_console_session_model.clone(),
         grok_console_session_effort: console.grok_console_session_effort.clone(),
+        claude_project_session_model: console.claude_project_session_model.clone(),
+        claude_project_session_effort: console.claude_project_session_effort.clone(),
+        codex_project_session_model: console.codex_project_session_model.clone(),
+        codex_project_session_effort: console.codex_project_session_effort.clone(),
+        grok_project_session_model: console.grok_project_session_model.clone(),
+        grok_project_session_effort: console.grok_project_session_effort.clone(),
         console_session_prompt: console.console_session_prompt.clone(),
         projects: projects
             .into_iter()
@@ -245,6 +262,13 @@ mod tests {
             workdir: format!("/consoles/{id}"),
             console_session_agent: Agent::Codex,
             default_agent: Agent::Codex,
+            project_session_agent: None,
+            claude_project_session_model: None,
+            claude_project_session_effort: None,
+            codex_project_session_model: None,
+            codex_project_session_effort: None,
+            grok_project_session_model: None,
+            grok_project_session_effort: None,
             claude_account_id: None,
             codex_account_id: None,
             grok_account_id: None,

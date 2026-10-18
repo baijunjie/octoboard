@@ -46,9 +46,10 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          - `update_project` — change a project's name, tags, pin, default agent, accounts, or \
            model and effort. `get_settings` lists the accounts to choose from.\n\
          - `get_console` / `update_console` — read or change this console's own name, default \
-           agent, accounts, or model and effort. A change to your own model or effort takes \
-           effect when this session is next launched. `get_settings` / `update_settings` — read \
-           or change the application-wide settings.\n\
+           agents (for console sessions and for project sessions), accounts, or model and \
+           effort (for console sessions and for project sessions). A change to your own model or \
+           effort takes effect when this session is next launched. `get_settings` / \
+           `update_settings` — read or change the application-wide settings.\n\
          - `start_session` — start a session in a project and hand it a `brief`. Fill in `goal`, \
            and `context`, `acceptance` and `constraints` wherever you actually have something to \
            say; an empty field is omitted from the session's opening prompt rather than sent \
@@ -281,6 +282,13 @@ mod tests {
             workdir: workdir.to_string_lossy().into_owned(),
             console_session_agent: agent,
             default_agent: agent,
+            project_session_agent: None,
+            claude_project_session_model: None,
+            claude_project_session_effort: None,
+            codex_project_session_model: None,
+            codex_project_session_effort: None,
+            grok_project_session_model: None,
+            grok_project_session_effort: None,
             claude_account_id: None,
             codex_account_id: None,
             grok_account_id: None,

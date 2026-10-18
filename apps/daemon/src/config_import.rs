@@ -581,6 +581,7 @@ pub async fn apply(
         let new = NewConsole {
             name: document_console.name,
             default_agent: document_console.default_agent,
+            project_session_agent: document_console.project_session_agent,
             claude_account_id: accounts.claude,
             codex_account_id: accounts.codex,
             grok_account_id: accounts.grok,
@@ -590,6 +591,12 @@ pub async fn apply(
             codex_console_session_effort: document_console.codex_console_session_effort,
             grok_console_session_model: document_console.grok_console_session_model,
             grok_console_session_effort: document_console.grok_console_session_effort,
+            claude_project_session_model: document_console.claude_project_session_model,
+            claude_project_session_effort: document_console.claude_project_session_effort,
+            codex_project_session_model: document_console.codex_project_session_model,
+            codex_project_session_effort: document_console.codex_project_session_effort,
+            grok_project_session_model: document_console.grok_project_session_model,
+            grok_project_session_effort: document_console.grok_project_session_effort,
             icon: document_console.icon,
             console_session_prompt: document_console.console_session_prompt,
         };
@@ -814,6 +821,13 @@ mod tests {
             name: name.to_string(),
             icon: None,
             default_agent: Agent::Codex,
+            project_session_agent: None,
+            claude_project_session_model: None,
+            claude_project_session_effort: None,
+            codex_project_session_model: None,
+            codex_project_session_effort: None,
+            grok_project_session_model: None,
+            grok_project_session_effort: None,
             claude_account: None,
             codex_account: None,
             grok_account: None,
@@ -1487,6 +1501,13 @@ mod tests {
             workdir: "/consoles/console-1".to_string(),
             console_session_agent: Agent::Claude,
             default_agent: Agent::Claude,
+            project_session_agent: Some(Agent::Grok),
+            claude_project_session_model: Some("opus".to_string()),
+            claude_project_session_effort: Some("high".to_string()),
+            codex_project_session_model: None,
+            codex_project_session_effort: None,
+            grok_project_session_model: None,
+            grok_project_session_effort: None,
             claude_account_id: None,
             codex_account_id: None,
             grok_account_id: None,
@@ -1549,6 +1570,48 @@ mod tests {
         );
         assert_eq!(created.tags, ["t"]);
         assert!(!created.trust_consent, "trust is not carried over");
+        let console = target.store.list_consoles().unwrap().remove(0);
+        assert_eq!(console.project_session_agent, Some(Agent::Grok));
+        assert_eq!(
+            console.claude_project_session_model.as_deref(),
+            Some("opus")
+        );
+        assert_eq!(
+            console.claude_project_session_effort.as_deref(),
+            Some("high")
+        );
+
+        // A document written before the setting was carried names none, so project sessions
+        // follow `default_agent`.
+        let mut legacy = exported.clone();
+        legacy["consoles"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("project_session_agent")
+            .expect("the export carries the setting");
+        for key in [
+            "claude_project_session_model",
+            "claude_project_session_effort",
+        ] {
+            legacy["consoles"][0]
+                .as_object_mut()
+                .unwrap()
+                .remove(key)
+                .expect("the export carries the setting");
+        }
+        let (older, _older_dir) = app_state("import-roundtrip-legacy");
+        import(
+            &older,
+            &legacy,
+            vec![at(0, 0, DirectoryChoice::ExportedPath)],
+        )
+        .await
+        .unwrap();
+        let console = older.store.list_consoles().unwrap().remove(0);
+        assert_eq!(console.project_session_agent, None);
+        assert_eq!(console.project_session_default(), Agent::Claude);
+        assert_eq!(console.claude_project_session_model, None);
+        assert_eq!(console.claude_project_session_effort, None);
     }
 
     #[tokio::test]

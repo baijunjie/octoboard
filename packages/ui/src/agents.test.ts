@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { accountsByAgent, agentPickerOptions, noAgentAvailable, selectableAgent } from "./agents";
+import { accountsByAgent, agentPickerOptions, noAgentAvailable, projectSessionAgent, selectableAgent } from "./agents";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
 import type { Account, Agent, AgentAvailability } from "./protocol";
@@ -44,11 +44,33 @@ describe("agentPickerOptions", () => {
     expect(options.find((o) => o.value === "codex")?.isDisabled).toBeUndefined();
   });
 
-  it("names an unavailable agent as not installed and marks it unselectable", () => {
+  it("lists every agent before availability has been determined", () => {
+    expect(agentPickerOptions(t, availability({})).map((o) => o.value)).toEqual(["claude", "codex", "grok"]);
+  });
+
+  it("leaves out an agent known to be missing", () => {
     const options = agentPickerOptions(t, availability({ grok: "unavailable" }));
+    expect(options.map((o) => o.value)).toEqual(["claude", "codex"]);
+  });
+
+  it("keeps the held agent when it is missing, named as not installed and unselectable", () => {
+    const options = agentPickerOptions(t, availability({ grok: "unavailable", codex: "unavailable" }), "grok");
+    expect(options.map((o) => o.value)).toEqual(["claude", "grok"]);
     const grok = options.find((o) => o.value === "grok");
     expect(grok?.label).toBe("Grok Build (not installed)");
     expect(grok?.isDisabled).toBe(true);
+  });
+
+  it("stops listing a missing agent once it is no longer held", () => {
+    expect(agentPickerOptions(t, availability({ grok: "unavailable" }), "claude").map((o) => o.value)).toEqual(["claude", "codex"]);
+  });
+});
+
+describe("projectSessionAgent", () => {
+  it("follows the console session agent unless the console names one of its own", () => {
+    expect(projectSessionAgent({ default_agent: "claude" })).toBe("claude");
+    expect(projectSessionAgent({ default_agent: "claude", project_session_agent: null })).toBe("claude");
+    expect(projectSessionAgent({ default_agent: "claude", project_session_agent: "grok" })).toBe("grok");
   });
 });
 

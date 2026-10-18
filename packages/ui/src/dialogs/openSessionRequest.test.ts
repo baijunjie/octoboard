@@ -22,6 +22,12 @@ it("opens untouched on the parent's agent and account, with no name, model, effo
   });
 });
 
+it("opens a project session on the console's project session agent and a console session on its console session agent", () => {
+  const split = consoleOf("c-1", "Main", { default_agent: "codex", project_session_agent: "claude", claude_account_id: "w" });
+  expect(defaultOpenSessionRequest(split, project, { kind: "choose" }, accounts, available())).toMatchObject({ agent: "claude", account: "w" });
+  expect(defaultOpenSessionRequest(split, undefined, { kind: "unbound" }, accounts, available())).toMatchObject({ agent: "codex", account: null });
+});
+
 it("moves to the first selectable agent when the default is missing, with that agent's account", () => {
   const request = defaultOpenSessionRequest(parent, undefined, { kind: "unbound" }, accounts, available("codex"));
   expect(request).toMatchObject({ agent: "claude", account: "w" });

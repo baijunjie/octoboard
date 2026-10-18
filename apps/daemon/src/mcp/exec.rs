@@ -145,7 +145,7 @@ async fn add_project(
     for (agent, account) in project_accounts_argument(state, arguments)? {
         *settings.account_mut(agent) = account;
     }
-    for (agent, change) in launch_argument(arguments)? {
+    for (agent, change) in launch_argument(arguments, "launch")? {
         let (model, effort) = settings.launch_mut(agent);
         *model = change.model.flatten();
         *effort = change.effort.flatten();
@@ -264,8 +264,8 @@ fn session_in(
     );
 
     let agent = optional_agent(arguments, "agent")?;
-    // An account is one agent's, so it is read for the agent the session will be of: the one
-    // named, else the project's default, else the console's, as `open_session` settles it.
+    // An account is one agent's, so it is read for the agent the session will be of, as
+    // `coordinator::session_agent` settles it.
     let account = match optional_string(arguments, "account") {
         None => None,
         Some(wanted) => {
@@ -965,6 +965,13 @@ pub(super) mod tests {
             workdir: "/tmp/console-1".to_string(),
             console_session_agent: Agent::Claude,
             default_agent: Agent::Claude,
+            project_session_agent: None,
+            claude_project_session_model: None,
+            claude_project_session_effort: None,
+            codex_project_session_model: None,
+            codex_project_session_effort: None,
+            grok_project_session_model: None,
+            grok_project_session_effort: None,
             claude_account_id: None,
             codex_account_id: None,
             grok_account_id: None,
@@ -2498,6 +2505,7 @@ pub(super) mod tests {
         assert_eq!(read["console"], "console-1");
         assert_eq!(read["has_icon"], true);
         assert_eq!(read["accounts"]["claude"], "default");
+        assert!(read["project_session_agent"].is_null());
         assert!(!read.to_string().contains("AAAA"));
 
         let updated = call(
@@ -2515,8 +2523,67 @@ pub(super) mod tests {
         .unwrap();
         assert_eq!(updated["name"], "Renamed");
         assert_eq!(updated["default_agent"], "codex");
+        assert!(updated["project_session_agent"].is_null());
         assert_eq!(updated["accounts"]["codex"], "acct-codex");
         assert_eq!(updated["launch"]["claude"]["model"], "sonnet");
+
+        // The project session pair is a setting of its own, read and written beside `launch`.
+        assert!(updated["project_session_launch"]["claude"]["model"].is_null());
+        let pair = call(
+            &state,
+            "a",
+            "update_console",
+            &arguments(json!({ "project_session_launch": { "claude": { "model": "sonnet" } } })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(pair["project_session_launch"]["claude"]["model"], "sonnet");
+        assert_eq!(pair["launch"]["claude"]["model"], "sonnet");
+        let stored = state.store.get_console("console-1").unwrap().unwrap();
+        assert_eq!(
+            stored.claude_project_session_model.as_deref(),
+            Some("sonnet")
+        );
+        let cleared_pair = call(
+            &state,
+            "a",
+            "update_console",
+            &arguments(json!({ "project_session_launch": { "claude": { "model": null } } })),
+        )
+        .await
+        .unwrap();
+        assert!(cleared_pair["project_session_launch"]["claude"]["model"].is_null());
+        assert_eq!(cleared_pair["launch"]["claude"]["model"], "sonnet");
+
+        // Absent leaves the project session agent alone; `null` makes it follow again.
+        let set = call(
+            &state,
+            "a",
+            "update_console",
+            &arguments(json!({ "project_session_agent": "grok" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(set["project_session_agent"], "grok");
+        assert_eq!(set["default_agent"], "codex");
+        let kept = call(
+            &state,
+            "a",
+            "update_console",
+            &arguments(json!({ "name": "Renamed" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(kept["project_session_agent"], "grok");
+        let cleared = call(
+            &state,
+            "a",
+            "update_console",
+            &arguments(json!({ "project_session_agent": null })),
+        )
+        .await
+        .unwrap();
+        assert!(cleared["project_session_agent"].is_null());
         let stored = state.store.get_console("console-1").unwrap().unwrap();
         assert_eq!(stored.icon, with_icon.icon);
         assert_eq!(
@@ -2526,6 +2593,7 @@ pub(super) mod tests {
 
         for (args, expected) in [
             (json!({ "name": " " }), "`name` is required"),
+            (json!({ "project_session_agent": "gemini" }), "gemini"),
             (
                 json!({ "accounts": { "claude": "acct-codex" } }),
                 "unknown account",

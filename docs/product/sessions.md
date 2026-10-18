@@ -97,10 +97,9 @@ Both dialogs offer these fields in this order:
   custom name. The dialog removes surrounding whitespace from an entered name and uses the parent name when nothing
   remains. Renaming a console changes the default for future console sessions; existing sessions keep their created
   names.
-- **Agent** — an agent picker joined to an account picker, as in the console and project dialogs. The agent picker
-  lists all three agents with their icons and names. An agent Octoboard has determined unavailable (its binary does
-  not resolve on the user's login shell `PATH`) is marked as not installed and cannot be selected; before that
-  determination has landed, each agent remains selectable. The field opens on a selectable agent whenever there is
+- **Agent** — an agent picker joined to an account picker, as in the project dialog. The agent picker lists the
+  agents with their icons and names, leaving out those not installed except the one it holds (see "Agents that are not
+  installed" in `docs/product/consoles-and-projects.md`). The field opens on a selectable agent whenever there is
   one, starting from the default resolved in "Which agent a session uses" below.
   The account picker offers only that agent's accounts, with its default account first, and is omitted when the agent
   has no named accounts. It opens on the account resolved from the project and console for that agent (see "Which
@@ -128,8 +127,8 @@ Both dialogs offer these fields in this order:
   session is never bound (see "Resuming a conversation started outside Octoboard" below).
 
 After these fields, the collapsed **Advanced** section offers the model and reasoning effort for this session. It
-initially shows the selected agent's project defaults, or the console's console-session defaults for a console
-session; untouched values follow that parent, and changes apply only to this session, including when resumed.
+initially shows what the session would inherit for the selected agent (see "Which model and reasoning effort a session
+uses" below); untouched values keep following it, and changes apply only to this session, including when resumed.
 The choices, clearing and account-specific lists are described in "The Advanced section" in `docs/product/model-and-reasoning-effort.md`.
 
 A console session has no project or Report to field and is never bound to another session. Opening it with the daemon
@@ -232,12 +231,19 @@ In descending priority:
 
 1. the agent chosen for this session when it was opened;
 2. the project's default agent;
-3. the console's default agent.
+3. the console's default agent for project sessions;
+4. the console's default agent for console sessions.
 
-A console session has no project, so it uses the agent chosen for that session, or the console's default agent when
-none is given. Console sessions of different agents can run alongside each other in the same console, and all
-read the same instruction file, described in "The console session's instruction file" in
-`docs/product/launching-agents.md`.
+A console session has no project, so it uses the agent chosen for that session, or the console's default agent for
+console sessions when none is given; the default for project sessions never applies to it. Both console defaults are
+in "Consoles" in `docs/product/consoles-and-projects.md`. Console sessions of different agents can run alongside each
+other in the same console, and all read the same instruction file, described in "The console session's instruction
+file" in `docs/product/launching-agents.md`.
+
+The same order settles the agent everywhere a session's agent is not given outright: the session dialog's initial
+choice, a session opened with defaults, `start_session` without an `agent`, a session request without one once it is
+approved (see `docs/product/session-requests.md`), and a session of a project associated with "Detect from files" whose
+directory named no agent (see "The project's default agent" in `docs/product/consoles-and-projects.md`).
 
 A session's agent is fixed for its lifetime. Resuming or reopening a session always relaunches the same agent —
 session records belong to a specific agent and cannot be moved across agents.
@@ -269,7 +275,8 @@ account unless the user picks another in the account picker.
 ### Which model and reasoning effort a session uses
 
 A session uses its own model and reasoning effort choices, each independently, or inherits the current defaults for
-its agent from its project (its console for a console session). The inheritance, explicit clearing and persistence
+its agent: a project session from its project, else its console's project session pair; a console session from its
+console's console session pair. The inheritance, explicit clearing and persistence
 rules are in `docs/product/model-and-reasoning-effort.md`. How the resolved values reach the agent is in "The model
 and reasoning effort" in `docs/product/launching-agents.md`.
 

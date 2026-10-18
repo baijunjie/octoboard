@@ -92,6 +92,15 @@ impl LaunchCheck {
         }
     }
 
+    /// The check for a record whose own model, when it has none, is `fallback` — the model its
+    /// sessions take from the record behind it — which then decides what efforts are on offer.
+    pub fn behind(mut self, fallback: &Option<String>) -> Self {
+        if self.effective_model.is_none() {
+            self.effective_model = fallback.clone();
+        }
+        self
+    }
+
     /// Whether there is anything to check.
     pub fn is_empty(&self) -> bool {
         self.model.is_none() && self.effort.is_none()
@@ -196,4 +205,22 @@ pub async fn agent_listing(
             .get_or_load(agent, dir, || crate::agent_models::load(agent, dir))
     })
     .await?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A record that sets no model of its own is checked against the model it takes from the record
+    /// behind it, and one that sets its own keeps it.
+    #[test]
+    fn the_model_behind_a_record_decides_the_efforts_only_while_it_sets_none() {
+        let behind = Some("fallback".to_string());
+        let none = LaunchCheck::given(Agent::Claude, None, None, Some("high")).behind(&behind);
+        assert_eq!(none.effective_model.as_deref(), Some("fallback"));
+        assert_eq!(none.model, None);
+        let own =
+            LaunchCheck::given(Agent::Claude, None, Some("own"), Some("high")).behind(&behind);
+        assert_eq!(own.effective_model.as_deref(), Some("own"));
+    }
 }

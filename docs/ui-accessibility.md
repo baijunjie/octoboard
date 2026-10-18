@@ -21,8 +21,9 @@ as it is, and do not add a new exception without the user's say.
 
 ### Confirmed visual choices
 
-Tabs in Settings, the project pane's Files / Changes switch and the session dialog's New / Resume conversation
-switch keep their labels fully opaque on hover and use the foreground colour instead of dimming. Preserve this shared visual treatment as an explicit product choice, while retaining the component's
+Tabs in Settings, the project pane's Files / Changes switch, the session dialog's New / Resume conversation switch
+and the agent tabs in the console dialog's Advanced section keep their labels fully opaque on hover and use the
+foreground colour instead of dimming. Preserve this shared visual treatment as an explicit product choice, while retaining the component's
 layout, selection and keyboard behaviour.
 
 A notice toast (HeroUI's accent variant) tints its indicator with the title's `--accent-soft-foreground`, as HeroUI
@@ -61,6 +62,10 @@ That is the grid and tree pattern and it meets this rule. The row actions of the
 and the Files tree's folder icons, all rely on it, so do not give such a control a tab stop of its own.
 
 `preventFocusOnPress` only keeps a *mouse* press from taking focus; the control still has to be reachable.
+
+**A table of fields is tabbed down its columns when a column is one unit.** In the console dialog's Advanced table each
+column is one session kind's pair, and its reasoning effort depends on its model, so Tab runs down a column before
+moving to the next, the same order the table takes when it stacks on a narrow window.
 
 **Where a float decides the source order, every control of that row goes in the float.** A group that floats to the
 end of a row has to come first in the source, because a float only shortens the lines that follow it; the text it
@@ -242,6 +247,11 @@ Every control has an accessible name: its visible text, or an `aria-label` when 
   action) is the instance — its visible message, then an `sr-only` span with the action, giving "No projects yet Add
   project". Such a row also sets an empty `aria-describedby` itself, since `TitledControl` only recognizes a tooltip
   that repeats an `aria-label`.
+- **A control in a table of fields is named by its column and row headers.** The headers stay visible but are hidden
+  from assistive technology, and each control is named with `aria-labelledby` over the two header ids, column first;
+  the control then carries no `aria-label` of its own, which react-aria would add to the name and read twice. The
+  console dialog's Advanced table is the instance: "Console sessions Model" over the session-kind column and the
+  setting row (`ConsoleLaunchFields`, with `OptionSelect`'s `hideLabel` and `labelledBy`).
 - **A name drawn as several boxes in a flex row is built as one string of its own**, with the drawn boxes hidden from
   the name (`aria-hidden="true"`): WebKit puts a space around every flex item while composing a name, so the boxes
   would be announced as "Modified , Staged : a.ts". The file viewer's title is the instance — an `sr-only` span holds
