@@ -445,3 +445,35 @@ it("expands only projects with unarchived sessions and keeps interrupted project
   expect(groups.map((row) => row.hasAttribute("data-inactive"))).toEqual([false, false, true, true]);
   expect(groups.map((row) => row.querySelector('[aria-expanded="true"]') !== null)).toEqual([true, true, false, false]);
 });
+
+
+it("shows existing rows immediately when switching consoles and animates additions within the console", () => {
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  const originalAnimate = HTMLElement.prototype.animate;
+  const animate = vi.fn();
+  HTMLElement.prototype.animate = animate;
+  onTestFinished(() => {
+    if (originalAnimate) HTMLElement.prototype.animate = originalAnimate;
+    else Reflect.deleteProperty(HTMLElement.prototype, "animate");
+    vi.unstubAllGlobals();
+  });
+  const other = consoleOf("c-2", "Other");
+  const app = projectOf("p-app", other.id, "App");
+  const otherHub = sessionOf("s-other", other.id, undefined, "Other hub", "idle");
+  const projects = [web, app];
+  const held = [...sessions, otherHub];
+  const { render } = mountSidebar({ projects, sessions: held });
+  const presenceCalls = () => animate.mock.calls.filter(([frames]) => "opacity" in frames[0] && "transform" in frames[0] && frames[0].transform.includes("translateX"));
+  expect(presenceCalls()).toHaveLength(0);
+  render({ shownConsole: other, projects, sessions: held });
+  expect(presenceCalls()).toHaveLength(0);
+  render({ shownConsole: main, projects, sessions: held });
+  expect(presenceCalls()).toHaveLength(0);
+
+  const added = projectOf("p-added", main.id, "Added");
+  const addedHub = sessionOf("s-added", main.id, undefined, "Added hub", "idle");
+  animate.mockClear();
+  render({ projects: [...projects, added], sessions: [...held, addedHub] });
+  expect(presenceCalls()).toHaveLength(2);
+  expect(animate.mock.contexts.map((element) => (element as HTMLElement).dataset.flip)).toEqual(expect.arrayContaining([added.id, addedHub.id]));
+});

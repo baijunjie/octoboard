@@ -304,6 +304,7 @@ export function Sidebar({
         <ConsoleHeader handlers={handlers} current={shownConsole} />
         <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT} className="min-h-0 flex-1 px-(--row-fill-inset) pb-2">
           <ConsoleBody
+            key={shownConsole.id}
             handlers={handlers}
             console={shownConsole}
             projects={consoleProjects}
