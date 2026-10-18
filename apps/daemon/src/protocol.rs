@@ -509,6 +509,9 @@ pub struct Project {
     /// tag registry: the tags in use are the distinct ones across projects. Stored trimmed,
     /// non-empty and without case-insensitive duplicates, in the order the user gave them.
     pub tags: Vec<String>,
+    /// The user's own summary of what the project is for, read by agent sessions. Stored trimmed;
+    /// `None` when blank.
+    pub description: Option<String>,
 }
 
 impl Project {
@@ -1420,6 +1423,10 @@ pub enum RequestBody {
         detect_default_agent: bool,
         /// Absent means no tags.
         tags: Option<Vec<String>>,
+        /// Absent or blank means no description. Ignored when a parent directory adds more than
+        /// one project, as `name` is.
+        #[serde(default)]
+        description: Option<String>,
     },
     UpdateProject {
         project: String,
@@ -1458,6 +1465,9 @@ pub enum RequestBody {
         pinned: Option<bool>,
         /// Absent leaves the project's tags alone; a present array replaces them wholesale.
         tags: Option<Vec<String>>,
+        /// Absent leaves the description alone; an explicit `null` (or a blank string) clears it.
+        #[serde(default, deserialize_with = "present_option")]
+        description: Option<Option<String>>,
     },
     DeleteProject {
         project: String,
@@ -3347,6 +3357,25 @@ mod tests {
         assert_eq!(
             parse(r#"{"type":"update_project","project":"p","tags":["a","b"]}"#),
             Some(vec!["a".to_string(), "b".to_string()])
+        );
+    }
+
+    /// An absent `description` leaves a project's description alone, and an explicit `null` is
+    /// what clears it.
+    #[test]
+    fn updating_a_projects_description_is_distinguishable_from_leaving_it() {
+        let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::UpdateProject { description, .. } => description,
+            _ => panic!("parses as update_project"),
+        };
+        assert_eq!(parse(r#"{"type":"update_project","project":"p"}"#), None);
+        assert_eq!(
+            parse(r#"{"type":"update_project","project":"p","description":null}"#),
+            Some(None)
+        );
+        assert_eq!(
+            parse(r#"{"type":"update_project","project":"p","description":"A tool"}"#),
+            Some(Some("A tool".to_string()))
         );
     }
 

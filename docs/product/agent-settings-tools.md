@@ -51,6 +51,7 @@ give every agent, with `null` for an unset value.
 |---|---|
 | `project` | The project's id. |
 | `name` | Its name. |
+| `description` | What the project is for, as the user or the console session gave it (see "The project's description" in `docs/product/consoles-and-projects.md`), or `null` when it has none. |
 | `host` | The host it is bound to. |
 | `path` | Its directory. |
 | `source` | How it was associated: `local`, `parent` or `git`. |
@@ -73,8 +74,10 @@ the user in `ssh://git@example.com/r.git` names the remote and stays. A URL of a
 
 The console session's `add_project` associates projects from the same three sources as the user's form (see
 "Associating a project" in `docs/product/consoles-and-projects.md`), and besides the location takes the settings the
-form does: `name`, `default_agent`, `tags`, `accounts`, `launch` and `pinned`. Every project one call adds takes the
-same settings. A blank `name` counts as none given. The call answers with each added project's settings.
+form does: `name`, `description`, `default_agent`, `tags`, `accounts`, `launch` and `pinned`. Every project one call
+adds takes the same settings, except that `name` and `description` apply only when a single project is associated (see
+"Project names" in `docs/product/consoles-and-projects.md`). A blank `name` or `description` counts as none given, and
+so does a `description` of `null`. The call answers with each added project's settings.
 
 A `git` association's `remote_url` is held to a stricter rule than the form's:
 
@@ -91,6 +94,7 @@ Takes `project` — an id, or a name that names exactly one project of the conso
 | Argument | Effect |
 |---|---|
 | `name` | The new name. A blank one is refused. |
+| `description` | The new description, stored trimmed; `null` or a blank string removes it. |
 | `tags` | Replaces the whole tag list; an empty list removes every tag. |
 | `add_tags` | Adds tags to those the project has. |
 | `remove_tags` | Removes tags, matched ignoring letter case. |

@@ -425,6 +425,7 @@ fn project(consent: bool) -> Project {
         trust_consent: consent,
         pinned: false,
         tags: Vec::new(),
+        description: None,
     }
 }
 

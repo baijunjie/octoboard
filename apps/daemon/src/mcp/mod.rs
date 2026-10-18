@@ -99,8 +99,9 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "list_projects",
         description: "List this console's projects: name, host, directory, source, remote URL \
-                      (credentials removed), pin, the tags the user gave each, the settings \
-                      (`default_agent`, `accounts`, `launch`; see `update_project`), whether the \
+                      (credentials removed), pin, the tags and the description (what the project \
+                      is for) the user gave each, the settings (`default_agent`, `accounts`, \
+                      `launch`; see `update_project`), whether the \
                       user has `trust_consent`ed to Octoboard pressing the agent's folder-trust \
                       confirmation (read-only), and the sessions currently running in each — \
                       every session of the console, whichever session owns it. Each carries `owner`, the \
@@ -155,6 +156,11 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                                         otherwise the project follows the console's project \
                                         session agent (else its `default_agent`).",
                     },
+                    "description": {
+                        "type": "string",
+                        "description": "What the project is for, in free text. Blank is none. Only applies \
+                                        when a single project is being associated.",
+                    },
                     "tags": tags_schema("The project's tags."),
                     "accounts": accounts_schema(true),
                     "launch": launch_schema("the project's sessions"),
@@ -183,6 +189,11 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                         "description": "The project's id, or its name when that is unambiguous.",
                     },
                     "name": { "type": "string", "description": "The display name. Not blank." },
+                    "description": {
+                        "type": ["string", "null"],
+                        "description": "What the project is for, in free text; `null` or blank \
+                                        clears it.",
+                    },
                     "tags": tags_schema("Replaces the project's whole tag list. Not to be \
                                          combined with `add_tags` or `remove_tags`."),
                     "add_tags": tags_schema("Tags to add to the ones the project has."),
@@ -569,7 +580,8 @@ const GET_PROJECT: ToolDef = ToolDef {
     name: "get_project",
     description:
         "This project's settings in Octoboard, read-only: name, directory, source, remote \
-                  URL (credentials removed), pin, tags, `default_agent`, `accounts` and `launch` \
+                  URL (credentials removed), pin, tags, description, `default_agent`, `accounts` \
+                  and `launch` \
                   (the model and effort sessions of each agent start with; a value left unset \
                   falls back to the console's `project_session_launch`). Only this session's \
                   own project can be read.",

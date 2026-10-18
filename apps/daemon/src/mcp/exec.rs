@@ -164,6 +164,7 @@ async fn add_project(
             detect_default_agent: true,
             check_launch: true,
             tags: optional_string_list(arguments, "tags")?,
+            description: present_text(arguments, "description")?.flatten(),
         },
     )
     .await?;
@@ -1100,6 +1101,7 @@ pub(super) mod tests {
                 trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
+                description: None,
             })
             .unwrap();
         let owner = console_session("owner");
@@ -1488,6 +1490,7 @@ pub(super) mod tests {
                     trust_consent: false,
                     pinned: false,
                     tags: Vec::new(),
+                    description: None,
                 })
                 .unwrap();
         }
@@ -1716,6 +1719,7 @@ pub(super) mod tests {
                 trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
+                description: None,
             })
             .unwrap();
         for session in [
@@ -2344,6 +2348,50 @@ pub(super) mod tests {
             .to_string()
     }
 
+    /// `update_project` sets a description to the trimmed text, leaves it alone when absent, clears
+    /// it with `null` or a blank string, and refuses a value that is not text.
+    #[tokio::test]
+    async fn update_project_sets_leaves_and_clears_the_description() {
+        let (state, _dir) = settings_state("update-project-description");
+        let update = |args: Value| {
+            let state = state.clone();
+            async move { call(&state, "a", "update_project", &arguments(args)).await }
+        };
+
+        let set = update(json!({ "project": "project-1", "description": "  Billing.  " }))
+            .await
+            .unwrap();
+        assert_eq!(set["description"], "Billing.");
+
+        let kept = update(json!({ "project": "project-1", "pinned": true }))
+            .await
+            .unwrap();
+        assert_eq!(kept["description"], "Billing.");
+
+        let message = refused(
+            &state,
+            "a",
+            "update_project",
+            json!({ "project": "project-1", "description": 3 }),
+        )
+        .await;
+        assert!(message.contains("string or null"), "{message}");
+        let stored = state.store.get_project("project-1").unwrap().unwrap();
+        assert_eq!(stored.description.as_deref(), Some("Billing."));
+
+        for cleared in [json!(null), json!("  ")] {
+            update(json!({ "project": "project-1", "description": "Billing." }))
+                .await
+                .unwrap();
+            let answer = update(json!({ "project": "project-1", "description": cleared }))
+                .await
+                .unwrap();
+            assert!(answer["description"].is_null());
+            let stored = state.store.get_project("project-1").unwrap().unwrap();
+            assert_eq!(stored.description, None);
+        }
+    }
+
     /// `update_project` leaves what it is not given alone, adds and removes tags without caring
     /// about case, resolves an account by name within the agent, and refuses what the shared
     /// function refuses (a model the agent does not offer, another agent's account, a blank name)
@@ -2719,6 +2767,16 @@ pub(super) mod tests {
         }
         assert_eq!(state.store.list_projects().unwrap().len(), 2);
 
+        let message = refused(
+            &state,
+            "a",
+            "add_project",
+            json!({ "source": "local", "path": "/tmp", "description": 3 }),
+        )
+        .await;
+        assert!(message.contains("description"), "{message}");
+        assert_eq!(state.store.list_projects().unwrap().len(), 2);
+
         let repo = dir.join("repo");
         std::fs::create_dir(&repo).unwrap();
         let added = call(
@@ -2729,6 +2787,7 @@ pub(super) mod tests {
                 "source": "local",
                 "path": repo.to_string_lossy(),
                 "tags": ["one"],
+                "description": "  A billing service.  ",
                 "pinned": true,
                 "accounts": { "codex": "acct-codex" },
                 "launch": { "claude": { "effort": "low" } },
@@ -2739,8 +2798,25 @@ pub(super) mod tests {
         let project = &added["projects"][0];
         assert_eq!(project["pinned"], true);
         assert_eq!(project["tags"], json!(["one"]));
+        assert_eq!(project["description"], "A billing service.");
         assert_eq!(project["accounts"]["codex"], "acct-codex");
         assert_eq!(project["launch"]["claude"]["effort"], "low");
+
+        let bare = dir.join("bare");
+        std::fs::create_dir(&bare).unwrap();
+        let added = call(
+            &state,
+            "a",
+            "add_project",
+            &arguments(json!({
+                "source": "local",
+                "path": bare.to_string_lossy(),
+                "description": null,
+            })),
+        )
+        .await
+        .unwrap();
+        assert!(added["projects"][0]["description"].is_null());
     }
 
     /// `new_session`'s account must belong to the session's agent, and its model must be one the

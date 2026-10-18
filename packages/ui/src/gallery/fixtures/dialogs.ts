@@ -13,9 +13,26 @@ const { console: console_, web, api, sessions } = SAMPLE;
 const RESUME_ID = "3f2b8c1e-7a4d-4e9b-9c55-0d6a1b2e4f70";
 
 // Two projects carrying tags, so the edited one has some of its own and the field suggests the rest.
+// Each also carries a description: a short one of a few lines, and one longer than the field is tall.
 const tagged = [
-  projectOf("p-docs", console_.id, "Docs Site", { tags: ["x", "frontend", "a-long-tag-for-checking-project-interface-layout"] }),
-  projectOf("p-billing", console_.id, "Billing Service", { tags: ["backend", "payments"] }),
+  projectOf("p-docs", console_.id, "Docs Site", {
+    tags: ["x", "frontend", "a-long-tag-for-checking-project-interface-layout"],
+    description: "The public documentation site, built with Astro.\nGuides live under src/content/guides.",
+  }),
+  projectOf("p-billing", console_.id, "Billing Service", {
+    tags: ["backend", "payments"],
+    description: [
+      "Handles subscriptions, invoices and payment provider webhooks for every Octoboard product.",
+      "",
+      "Layout: the HTTP API is under api/, background jobs (invoice generation, dunning, usage metering) under jobs/, and the provider adapters under providers/. Each adapter implements the same trait, so a new provider only adds a module there.",
+      "",
+      "Conventions: amounts are integer minor units, never floats; every webhook handler is idempotent and keyed by the provider's event id; migrations are forward-only and reviewed by the payments owners.",
+      "",
+      "Testing: run cargo test for unit tests; the integration suite needs the local Postgres from docker compose up and the provider sandbox keys in .env.test.",
+      "",
+      "Deploys go through the staging environment first; production deploys are manual and announced in the payments channel.",
+    ].join("\n"),
+  }),
 ];
 const taggedState = snapshotState({ consoles: [console_], projects: tagged, sessions: [] });
 
@@ -149,6 +166,11 @@ const projectActions = (ui: Ui, name: string) =>
   ui.press(ui.t("sidebar.project.actions", { name }));
 const editTaggedProject = [
   (ui: Ui) => projectActions(ui, tagged[0].name),
+  (ui: Ui) => ui.press(ui.t("sidebar.project.edit")),
+];
+
+const editBillingProject = [
+  (ui: Ui) => projectActions(ui, tagged[1].name),
   (ui: Ui) => ui.press(ui.t("sidebar.project.edit")),
 ];
 
@@ -534,6 +556,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Add project",
+    description: "Description follows Name, empty, with the placeholder No description and a note under it saying what it is for.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
@@ -768,6 +791,24 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
+    id: "dialog-edit-project-description",
+    group: "Projects",
+    category: "normal",
+    title: "Project settings with a description",
+    description: "Description sits right after Name, holding two lines within the field's three rows; the note under it says agent sessions read it.",
+    steps: editTaggedProject,
+  },
+  {
+    ...dialogFixture,
+    id: "dialog-edit-project-long-description",
+    group: "Projects",
+    category: "normal",
+    title: "Project settings with a long description",
+    description: "The description is several paragraphs, taller than the field: the field keeps its three-row height and scrolls inside, with the note and Tags still below it.",
+    steps: editBillingProject,
+  },
+  {
+    ...dialogFixture,
     id: "dialog-edit-project-tag-suggestions",
     group: "Projects",
     category: "normal",
@@ -862,6 +903,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Directory detection pending",
+    description: "While the directory is checked, Name and Description are disabled along with the fields below them.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
@@ -905,7 +947,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Parent directory source",
-    description: "Detect from files explains the recognized instruction files and directories as code; the agent picker is a single field.",
+    description: "Detect from files explains the recognized instruction files and directories as code; the agent picker is a single field. There are no Name and Description fields: both apply to a single project only.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),

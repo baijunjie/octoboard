@@ -40,11 +40,12 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          They are the tools of the `octoboard` MCP server. Your agent may show each one under a \
          prefix of its own: use the name your tool list shows, which ends in the name used here.\n\
          \n\
-         - `list_projects` — the console's projects and what is running in each. Start here when \
-           you do not already know where a request belongs.\n\
+         - `list_projects` — the console's projects, each with the description the user gave it, \
+           and what is running in each. Start here when you do not already know where a request \
+           belongs.\n\
          - `add_project` — associate a directory, or clone a repository and associate it.\n\
-         - `update_project` — change a project's name, tags, pin, default agent, accounts, or \
-           model and effort. `get_settings` lists the accounts to choose from.\n\
+         - `update_project` — change a project's name, description, tags, pin, default agent, \
+           accounts, or model and effort. `get_settings` lists the accounts to choose from.\n\
          - `get_console` / `update_console` — read or change this console's own name, default \
            agents (for console sessions and for project sessions), accounts, or model and \
            effort (for console sessions and for project sessions). A change to your own model or \

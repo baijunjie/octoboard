@@ -288,6 +288,7 @@ async fn handle_inner(
             grok_session_effort,
             detect_default_agent,
             tags,
+            description,
         } => {
             add_project(
                 state,
@@ -312,6 +313,7 @@ async fn handle_inner(
                     },
                     detect_default_agent,
                     tags,
+                    description,
                     check_launch: true,
                 },
             )
@@ -334,6 +336,7 @@ async fn handle_inner(
             grok_session_effort,
             pinned,
             tags,
+            description,
         } => {
             let launch = launch_settings::changes_of([
                 (Agent::Claude, claude_session_model, claude_session_effort),
@@ -357,6 +360,7 @@ async fn handle_inner(
                     launch,
                     pinned,
                     tags,
+                    description,
                     ..ProjectChanges::default()
                 },
             )
@@ -1340,6 +1344,8 @@ pub struct AddProjectRequest {
     /// Whether an absent `default_agent` is detected from each directory; false stores none.
     pub detect_default_agent: bool,
     pub tags: Option<Vec<String>>,
+    /// Stored trimmed; blank is none. Like `name`, it applies only when a single project is added.
+    pub description: Option<String>,
     /// Whether the settings' models and efforts are checked against what the agent offers. Not for
     /// an imported document, whose values were chosen on the machine it came from, and which must
     /// not lose a project because this one's agent no longer lists a model.
@@ -1440,6 +1446,7 @@ pub async fn add_project(
         settings,
         detect_default_agent,
         tags,
+        description,
         check_launch,
     } = request;
     let console = state
@@ -1503,6 +1510,11 @@ pub async fn add_project(
     let explicit_name = if directories.len() == 1 { name } else { None };
 
     let tags = normalise_tags(tags.unwrap_or_default());
+    let description = if directories.len() == 1 {
+        trimmed_or_none(description.as_deref())
+    } else {
+        None
+    };
 
     let remote_urls = directory_remote_urls(
         state,
@@ -1561,6 +1573,7 @@ pub async fn add_project(
             trust_consent: false,
             pinned: settings.pinned,
             tags: tags.clone(),
+            description: description.clone(),
         };
         state.store.insert_project(&project)?;
         crate::git_watch::add(state, &project);
@@ -1594,6 +1607,8 @@ pub struct ProjectChanges {
     pub add_tags: Vec<String>,
     /// Matched ignoring case.
     pub remove_tags: Vec<String>,
+    /// `Some(None)` clears it; blank text clears it too.
+    pub description: Present<String>,
 }
 
 /// Applies `changes` to the project `id`, broadcasts it and returns it as stored. Every reference
@@ -1622,6 +1637,10 @@ pub async fn update_project(
         .as_deref()
         .map(|name| required_text("name", name))
         .transpose()?;
+    let description = changes
+        .description
+        .as_ref()
+        .map(|description| trimmed_or_none(description.as_deref()));
     let mut accounts = HashMap::new();
     for (agent, account) in &changes.accounts {
         accounts.insert(
@@ -1686,6 +1705,9 @@ pub async fn update_project(
             tags.retain(|tag| !removed.contains(&tag.to_lowercase()));
             tags.extend(changes.add_tags.iter().cloned());
             project.tags = normalise_tags(tags);
+        }
+        if let Some(description) = &description {
+            project.description = description.clone();
         }
         state.store.update_project(&project)?;
         // Read back rather than sent as `project`: the stored record carries what this write
@@ -4654,6 +4676,7 @@ mod tests {
                 trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
+                description: None,
             })
             .unwrap();
         let add = |id: &str, console: &str, role: Role, project: Option<&str>, status| {
@@ -4785,6 +4808,7 @@ mod tests {
                 trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
+                description: None,
             })
             .unwrap();
         state
@@ -4890,6 +4914,7 @@ mod tests {
                     trust_consent: false,
                     pinned: false,
                     tags: Vec::new(),
+                    description: None,
                 })
                 .unwrap();
             state
@@ -4992,6 +5017,7 @@ mod tests {
                     settings: NewProjectSettings::default(),
                     detect_default_agent,
                     tags: None,
+                    description: None,
                     check_launch: true,
                 },
             )
@@ -5019,6 +5045,49 @@ mod tests {
             add("missing", None, true).await.unwrap()[0].default_agent,
             None
         );
+    }
+
+    /// A description is the user's words about one project, so a parent directory that adds
+    /// several takes none of it, as it takes none of a name; a single project keeps it trimmed.
+    #[tokio::test]
+    async fn add_project_applies_a_description_to_a_single_project_only() {
+        let (state, dir) = crate::test_support::app_state("coordinator-add-project-description");
+        let workdir = console_workdir(&dir);
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &workdir))
+            .unwrap();
+        let add = |source: ProjectSource, path: &Path| {
+            add_project(
+                &state,
+                AddProjectRequest {
+                    console_id: "console-1".to_string(),
+                    source,
+                    path: Some(path.to_string_lossy().into_owned()),
+                    remote_url: None,
+                    name: None,
+                    default_agent: None,
+                    settings: NewProjectSettings::default(),
+                    detect_default_agent: false,
+                    tags: None,
+                    description: Some("  Billing.  ".to_string()),
+                    check_launch: true,
+                },
+            )
+        };
+
+        let single = dir.join("single");
+        std::fs::create_dir(&single).unwrap();
+        let added = add(ProjectSource::Local, &single).await.unwrap();
+        assert_eq!(added[0].description.as_deref(), Some("Billing."));
+
+        let parent = dir.join("parent");
+        for name in ["one", "two"] {
+            std::fs::create_dir_all(parent.join(name).join(".git")).unwrap();
+        }
+        let added = add(ProjectSource::Parent, &parent).await.unwrap();
+        assert_eq!(added.len(), 2);
+        assert!(added.iter().all(|project| project.description.is_none()));
     }
 
     /// A session whose resolved agent has been determined unavailable is refused before anything
@@ -5224,6 +5293,7 @@ mod tests {
             trust_consent: false,
             pinned: false,
             tags: Vec::new(),
+            description: None,
         }
     }
 
@@ -5519,6 +5589,7 @@ mod tests {
                     trust_consent: false,
                     pinned: false,
                     tags: Vec::new(),
+                    description: None,
                 })
                 .unwrap();
         }
@@ -6659,6 +6730,7 @@ mod tests {
             trust_consent: false,
             pinned: false,
             tags: Vec::new(),
+            description: None,
         };
         state.store.insert_project(&project).unwrap();
         let refused = |err: anyhow::Error| {
@@ -7068,6 +7140,7 @@ mod tests {
                     },
                     detect_default_agent: false,
                     tags: None,
+                    description: None,
                     check_launch: true,
                 },
             )
@@ -7105,6 +7178,60 @@ mod tests {
         assert_eq!(refused(err), error_code::INVALID_LAUNCH_SETTING);
     }
 
+    /// A project's description is left alone by an update that omits it, stored trimmed when
+    /// given, and cleared by `null` or a blank string.
+    #[tokio::test]
+    async fn a_project_description_is_left_set_or_cleared_by_an_update() {
+        let (state, dir) = crate::test_support::app_state("coordinator-update-project-description");
+        let workdir = console_workdir(&dir);
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &workdir))
+            .unwrap();
+        state
+            .store
+            .insert_project(&project_of("console-1", "project-1"))
+            .unwrap();
+        let stored = || {
+            state
+                .store
+                .get_project("project-1")
+                .unwrap()
+                .unwrap()
+                .description
+        };
+        let update = |description: Option<Option<&str>>| {
+            update_project_request("project-1", move |request| {
+                let RequestBody::UpdateProject {
+                    description: slot, ..
+                } = request
+                else {
+                    unreachable!()
+                };
+                *slot = description.map(|text| text.map(str::to_string));
+            })
+        };
+
+        handle(&state, None, update(Some(Some("  Billing.  "))))
+            .await
+            .unwrap();
+        assert_eq!(stored().as_deref(), Some("Billing."));
+
+        handle(&state, None, update(None)).await.unwrap();
+        assert_eq!(stored().as_deref(), Some("Billing."));
+
+        handle(&state, None, update(Some(None))).await.unwrap();
+        assert_eq!(stored(), None);
+
+        handle(&state, None, update(Some(Some("Billing."))))
+            .await
+            .unwrap();
+        handle(&state, None, update(Some(Some(" \n "))))
+            .await
+            .unwrap();
+        assert_eq!(stored(), None);
+    }
+
     /// An `update_project` request that changes nothing, then `edit` applied to it.
     fn update_project_request(project: &str, edit: impl FnOnce(&mut RequestBody)) -> RequestBody {
         let mut request = RequestBody::UpdateProject {
@@ -7122,6 +7249,7 @@ mod tests {
             grok_session_effort: None,
             pinned: None,
             tags: None,
+            description: None,
         };
         edit(&mut request);
         request
@@ -7364,6 +7492,7 @@ mod tests {
             settings,
             detect_default_agent: false,
             tags: None,
+            description: None,
             check_launch: true,
         };
         // What Grok Build offers, so the effort below is checked against this and not against
@@ -7537,6 +7666,7 @@ mod tests {
                 trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
+                description: None,
             })
             .unwrap();
         for (id, agent) in [

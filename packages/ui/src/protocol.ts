@@ -219,6 +219,9 @@ export interface Project {
    * registry: the tags in use are the distinct ones across projects. Stored trimmed, non-empty and
    * without case-insensitive duplicates, in the order the user gave them. */
   tags: string[];
+  /** The user's own summary of what the project is for, read by agent sessions; absent or null is
+   * none. */
+  description?: string | null;
 }
 
 /** The agent's recorded cumulative usage. Cache counts are subsets of input_tokens. */
@@ -443,6 +446,8 @@ export interface DocumentProject {
   default_agent?: Agent | null;
   pinned: boolean;
   tags: string[];
+  /** Absent in an older document: none. */
+  description?: string | null;
   claude_account: DocumentProjectAccount;
   codex_account: DocumentProjectAccount;
   grok_account: DocumentProjectAccount;
@@ -861,6 +866,9 @@ export type RequestBody =
     detect_default_agent?: boolean;
     /** Absent means no tags. */
     tags?: string[];
+    /** Absent or blank means no description. Ignored when a parent directory adds more than one
+       * project. */
+    description?: string;
   }
   | {
     type: "update_project";
@@ -887,6 +895,8 @@ export type RequestBody =
     pinned?: boolean;
     /** Absent leaves the project's tags alone; a present array replaces them wholesale. */
     tags?: string[];
+    /** Absent leaves the description alone; an explicit `null` (or a blank string) clears it. */
+    description?: string | null;
   }
   /** `stop_sessions` ends the project's running sessions first (as `archive_session` does) instead
    * of being refused with `project_has_running_sessions`; default false. `trash_directory` moves

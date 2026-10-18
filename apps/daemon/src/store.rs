@@ -155,7 +155,8 @@ impl Store {
                 grok_session_effort   TEXT,
                 trust_consent INTEGER NOT NULL DEFAULT 0,
                 pinned        INTEGER NOT NULL DEFAULT 0,
-                tags          TEXT NOT NULL DEFAULT '[]'
+                tags          TEXT NOT NULL DEFAULT '[]',
+                description   TEXT
             );
             CREATE TABLE IF NOT EXISTS sessions (
                 id               TEXT PRIMARY KEY,
@@ -423,6 +424,9 @@ impl Store {
                 "ALTER TABLE consoles ADD COLUMN console_session_prompt TEXT",
                 [],
             )?;
+        }
+        if !column_exists(&conn, "projects", "description")? {
+            conn.execute("ALTER TABLE projects ADD COLUMN description TEXT", [])?;
         }
         for column in PROJECT_SETTING_COLUMNS {
             if !column_exists(&conn, "projects", column)? {
@@ -746,9 +750,10 @@ impl Store {
                                    codex_account_default, grok_account_default,
                                    claude_session_model, claude_session_effort,
                                    codex_session_model, codex_session_effort, grok_session_model,
-                                   grok_session_effort, trust_consent, pinned, tags)
+                                   grok_session_effort, trust_consent, pinned, tags,
+                                   description)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-                     ?18, ?19, ?20, ?21, ?22, ?23)",
+                     ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
             params![
                 project.id,
                 project.console_id,
@@ -773,6 +778,7 @@ impl Store {
                 project.trust_consent,
                 project.pinned,
                 tags_to_text(&project.tags),
+                project.description,
             ],
         )?;
         Ok(())
@@ -810,7 +816,7 @@ impl Store {
                                  claude_session_model = ?10, claude_session_effort = ?11,
                                  codex_session_model = ?12, codex_session_effort = ?13,
                                  grok_session_model = ?14, grok_session_effort = ?15,
-                                 pinned = ?16, tags = ?17
+                                 pinned = ?16, tags = ?17, description = ?18
              WHERE id = ?1",
             params![
                 project.id,
@@ -830,6 +836,7 @@ impl Store {
                 project.grok_session_effort,
                 project.pinned,
                 tags_to_text(&project.tags),
+                project.description,
             ],
         )?;
         Ok(())
@@ -1827,7 +1834,7 @@ const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agen
                                claude_account_default, codex_account_default, grok_account_default,
                                claude_session_model, claude_session_effort, codex_session_model,
                                codex_session_effort, grok_session_model, grok_session_effort,
-                               trust_consent, pinned, tags";
+                               trust_consent, pinned, tags, description";
 
 /// The projects columns flagging that a project pins an agent's default account. Added in place
 /// like [`PROJECT_SETTING_COLUMNS`] and absent from `CURRENT_SHAPE_COLUMNS` for the same reason;
@@ -2070,6 +2077,7 @@ fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
         trust_consent: row.get(20)?,
         pinned: row.get(21)?,
         tags,
+        description: row.get(23)?,
     })
 }
 
@@ -2882,6 +2890,7 @@ mod tests {
             trust_consent: consent,
             pinned: false,
             tags: Vec::new(),
+            description: None,
         }
     }
 
@@ -3496,6 +3505,66 @@ mod tests {
             store.get_project("project-1").unwrap().unwrap().tags,
             ["backend", "Rust"]
         );
+    }
+
+    /// A freshly created project has no description, and a description round-trips through an
+    /// update and is cleared by one.
+    #[test]
+    fn a_projects_description_round_trips() {
+        let path = temp_db("project-description");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store.insert_project(&project(false)).expect("project");
+        let mut project = store.get_project("project-1").unwrap().expect("kept");
+        assert_eq!(project.description, None);
+
+        project.description = Some("A billing service.".to_string());
+        store.update_project(&project).unwrap();
+        assert_eq!(
+            store
+                .get_project("project-1")
+                .unwrap()
+                .unwrap()
+                .description
+                .as_deref(),
+            Some("A billing service.")
+        );
+
+        project.description = None;
+        store.update_project(&project).unwrap();
+        assert_eq!(
+            store.get_project("project-1").unwrap().unwrap().description,
+            None
+        );
+    }
+
+    /// A database from before a project could carry a description keeps its projects, and gains
+    /// the column in place.
+    #[test]
+    fn the_project_description_column_is_added_in_place() {
+        let path = temp_db("project-description-column");
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .insert_console(&console(None, None, None))
+                .expect("console");
+            store.insert_project(&project(false)).expect("project");
+        }
+        {
+            let conn = Connection::open(&path).expect("database");
+            conn.execute("ALTER TABLE projects DROP COLUMN description", [])
+                .expect("the older shape");
+        }
+
+        let store = Store::open(&path).expect("reopened in place");
+        let mut kept = store.get_project("project-1").unwrap().expect("kept");
+        assert_eq!(kept.description, None);
+        kept.description = Some("A billing service.".to_string());
+        store.update_project(&kept).expect("writes the new column");
+        let reread = store.get_project("project-1").unwrap().expect("kept");
+        assert_eq!(reread.description.as_deref(), Some("A billing service."));
     }
 
     #[test]

@@ -12,17 +12,21 @@ export function TextAreaInput({
   onChange,
   placeholder,
   description,
+  isDisabled,
+  rows = 6,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   description?: string;
+  isDisabled?: boolean;
+  rows?: number;
 }): React.ReactElement {
   return (
-    <TextField fullWidth variant="secondary" value={value} onChange={onChange}>
+    <TextField fullWidth variant="secondary" value={value} onChange={onChange} isDisabled={isDisabled}>
       <Label>{label}</Label>
-      <TextArea rows={6} placeholder={placeholder} />
+      <TextArea rows={rows} placeholder={placeholder} />
       {description && <Description>{description}</Description>}
     </TextField>
   );

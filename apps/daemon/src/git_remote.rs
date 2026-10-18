@@ -991,6 +991,7 @@ mod tests {
                 trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
+                description: None,
             })
             .expect("project");
         (state, dir)

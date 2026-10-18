@@ -751,6 +751,7 @@ async fn place_project(
                     // The document says what the project's default agent is, including none.
                     detect_default_agent: false,
                     tags: Some(project.tags),
+                    description: project.description,
                     // The document's values were chosen on the machine it came from.
                     check_launch: false,
                 },
@@ -804,6 +805,7 @@ mod tests {
             default_agent: None,
             pinned: false,
             tags: Vec::new(),
+            description: None,
             claude_account: ProjectAccountRef::Inherit,
             codex_account: ProjectAccountRef::Inherit,
             grok_account: ProjectAccountRef::Inherit,
@@ -1146,6 +1148,7 @@ mod tests {
         let p = &mut hub.projects[0];
         p.pinned = true;
         p.tags = vec!["backend".to_string(), "Backend".to_string()];
+        p.description = Some("\n A billing service.\n".to_string());
         p.default_agent = Some(Agent::Grok);
         p.codex_session_model = Some("gpt-y".to_string());
         p.grok_session_effort = Some("high".to_string());
@@ -1193,6 +1196,7 @@ mod tests {
         assert_eq!(created.path, repo.to_string_lossy());
         assert!(created.pinned);
         assert_eq!(created.tags, ["backend"]);
+        assert_eq!(created.description.as_deref(), Some("A billing service."));
         assert_eq!(created.default_agent, Some(Agent::Grok));
         assert_eq!(created.codex_session_model.as_deref(), Some("gpt-y"));
         assert_eq!(created.grok_session_effort.as_deref(), Some("high"));
@@ -1543,6 +1547,7 @@ mod tests {
             trust_consent: true,
             pinned: false,
             tags: vec!["t".to_string()],
+            description: Some("Round trip.".to_string()),
         };
         stored.default_agent = Some(Agent::Codex);
         source.store.insert_project(&stored).unwrap();
@@ -1569,6 +1574,7 @@ mod tests {
             ("repo", Some(Agent::Codex))
         );
         assert_eq!(created.tags, ["t"]);
+        assert_eq!(created.description.as_deref(), Some("Round trip."));
         assert!(!created.trust_consent, "trust is not carried over");
         let console = target.store.list_consoles().unwrap().remove(0);
         assert_eq!(console.project_session_agent, Some(Agent::Grok));
@@ -1673,6 +1679,30 @@ mod tests {
         apply(&state, &older, Vec::new(), false).await.unwrap();
         let stored = state.store.list_consoles().unwrap().remove(0);
         assert_eq!(stored.console_session_prompt, None);
+    }
+
+    #[tokio::test]
+    async fn a_document_without_a_project_description_imports_a_project_with_none() {
+        let area = ScratchDir::new("import-no-description-area");
+        let (state, _dir) = app_state("import-no-description");
+        let repo = directory(&area, "repo");
+        let mut older = document(vec![console(
+            "Hub",
+            vec![project("repo", &repo.to_string_lossy())],
+        )]);
+        older["consoles"][0]["projects"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("description");
+
+        import(
+            &state,
+            &older,
+            vec![at(0, 0, DirectoryChoice::ExportedPath)],
+        )
+        .await
+        .unwrap();
+        assert_eq!(stored_projects(&state).remove(0).description, None);
     }
 
     #[tokio::test]

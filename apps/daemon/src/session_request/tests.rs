@@ -97,6 +97,7 @@ fn project(id: &str, console_id: &str, name: &str) -> Project {
         trust_consent: false,
         pinned: false,
         tags: Vec::new(),
+        description: None,
     }
 }
 

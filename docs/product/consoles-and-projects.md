@@ -252,7 +252,8 @@ Deleting the **last** console leaves the window with none, which it shows as the
 
 ## Projects
 
-A project carries a name, the directory it points at, an optional default agent, how it was associated, the remote
+A project carries a name, an optional description (see "The project's description" below), the directory it points at,
+an optional default agent, how it was associated, the remote
 URL of the repository it points at (see "The project's remote URL" below), whether the user has pinned it (see "Order
 of projects and sessions" in `docs/product/sidebar.md`), any number of tags, and — one set per agent — what it says
 about the account its sessions run under and an optional model and reasoning effort for them (see "The project's
@@ -312,14 +313,15 @@ There are three sources:
 For a single directory, the form asks the daemon about the path as soon as it is entered or picked (after a short pause
 when typed): the path must be an existing directory, and its agent is read and preselected in the Default agent field,
 which stays changeable; see "The project's default agent". While the answer for the current path is outstanding the
-form says it is checking, and the fields below the path (name, tags, default agent) and the submit button are disabled;
+form says it is checking, and the fields below the path (name, description, tags, default agent) and the submit button
+are disabled;
 a refusal such as "not a directory" is shown under the path field and keeps them disabled. Only the latest path's
 answer counts, and a changed path is read again and its result preselected anew.
 
 For a git URL, the form first checks the repository: once the URL stops changing, the daemon fetches the remote's tip
 commit without file contents or history into a scratch directory, which proves the remote can be read with the user's
-credentials and shows its top-level names. Every field below the URL (clone into, name, tags, default agent) and the
-submit button stay disabled until that check has succeeded for the URL as it stands, an empty one included; while it
+credentials and shows its top-level names. Every field below the URL (clone into, name, description, tags, default
+agent) and the submit button stay disabled until that check has succeeded for the URL as it stands, an empty one included; while it
 runs the form says it is checking, and a failure is shown under the URL field with git's own reason and keeps them
 disabled. A success enables them and preselects the detected agent. The check is bounded by a timeout, and its scratch
 directory is removed when it ends.
@@ -357,9 +359,34 @@ directory found is already associated, the request is refused and says so.
 
 ### Project names
 
-A name can be given only when a single project is being associated; it then overrides the derived name. A blank name
-counts as none given. Otherwise, and for every project a parent-directory association produces, the name is the
-directory's own name.
+A name can be given only when a single project is being associated — a single directory, a git URL, or a parent
+directory beneath which exactly one git repository is found; it then overrides the derived name. A blank name counts as
+none given. Otherwise, and for every project a parent-directory association produces when it finds more than one
+repository, the name is the directory's own name.
+
+The project dialog has a Name field when associating a single directory or a git URL, and hides it while the source is
+a parent directory: a parent-directory association made from the dialog gives no name, so every project it creates is
+named after its directory. Only the console session can give a name to a parent-directory association (see "Adding a
+project with its settings" in `docs/product/agent-settings-tools.md`), and it applies under the rule above.
+
+### The project's description
+
+A project may carry a description: free text, over as many lines as the user likes, saying what the project is for. It
+has no length limit, it is stored trimmed, and a blank one means the project has none. A project starts with none
+unless its association gives one.
+
+The project dialog shows it as the **Description** field right after the name, both when associating and when editing a
+project, with a note under it saying what it is for and that agent sessions read it; empty, it shows a placeholder
+saying there is no description. While the dialog keeps the fields below the path or URL disabled (see "Associating a
+project" above), it is disabled too.
+
+A description belongs to one project, so it applies under the same rule as a name (see "Project names" above): the
+dialog hides the field while the source is a parent directory, as it hides the Name field, and a parent-directory
+association that finds more than one repository stores none on any of them, whatever was given.
+
+Agent sessions read it only as data, from the project's settings that the MCP tools return (see "A project's settings"
+in `docs/product/agent-settings-tools.md`): the console session for every project of its console, a project session for
+its own project. Octoboard writes it into no instruction file and into no text a session is launched or messaged with.
 
 ### The project's default agent
 
@@ -471,11 +498,12 @@ a repository with no remote left.
 
 ### Editing a project
 
-Only the name, the default agent, the account, the model and the reasoning effort, and the tags can be changed,
+Only the name, the description, the default agent, the account, the model and the reasoning effort, and the tags can
+be changed,
 besides pinning and unpinning the project. The name is changed from the project's Rename or Project settings,
 everything else from Project settings, which opens the project dialog under that title (see "Project rows" in
-`docs/product/sidebar.md`). The tags field sits between
-the name and the default agent: typing in it offers the tags already in use that the project lacks, in a list that
+`docs/product/sidebar.md`). The description field follows the name, and the tags field sits between
+the description and the default agent: typing in it offers the tags already in use that the project lacks, in a list that
 opens below the field and stays open after a pick
 so several can be added in a row, and Enter adds what was typed as a tag, or the highlighted suggestion if there is one;
 leaving the field adds it too. The tags the project carries show inside the field, ahead of the text input, and wrap
@@ -488,7 +516,8 @@ and the directory — is fixed once the project exists; a project that should po
 associated again. The remote URL is not editable either, and saving an edit never overwrites it: Octoboard keeps that
 value in step with the repository itself (see "The project's remote URL" above).
 
-The name cannot be cleared: saving an empty name is rejected. The default agent can be cleared, which puts the project
+The name cannot be cleared: saving an empty name is rejected. The description can be emptied, which leaves the project
+with none. The default agent can be cleared, which puts the project
 back to following the console's default for project sessions; the account can be put on any of its three states,
 inheriting the console's reference among them, and the model and the effort back to unset.
 

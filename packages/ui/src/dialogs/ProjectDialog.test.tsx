@@ -70,9 +70,9 @@ const input = (label: string) =>
 const agentValue = () =>
   Array.from(document.body.querySelectorAll("select")).find((el) => Array.from(el.options).some((o) => o.value === "codex"))!.value;
 
-function type(el: HTMLInputElement, value: string) {
+function type(el: HTMLInputElement | HTMLTextAreaElement, value: string) {
   act(() => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, value);
+    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value")!.set!.call(el, value);
     el.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
@@ -544,4 +544,64 @@ it("lets the project's own value replace the inherited one and names the console
   expect(pickerNamed("Reasoning effort").textContent).toContain("high");
   expect(pickerNamed("Reasoning effort").textContent).not.toContain("Inherit");
   expect(pickerNamed("Model").textContent).toContain("Inherit from console (the agent's own setting)");
+});
+
+const typeDescription = (value: string) => type(document.body.querySelector<HTMLTextAreaElement>("textarea")!, value);
+
+it("adds with the description that was written, trimmed", async () => {
+  const pending = render(undefined, [work, personal]);
+  await fillDirectory(pending);
+  typeDescription("  The marketing website.  ");
+  await click(buttonText("Add"));
+  expect(sentOf(pending, "add_project")).toMatchObject({ description: "The marketing website." });
+});
+
+it("adds without a description when it is left blank", async () => {
+  const pending = render(undefined, [work, personal]);
+  await fillDirectory(pending);
+  typeDescription("   ");
+  await click(buttonText("Add"));
+  expect(sentOf(pending, "add_project")).not.toHaveProperty("description");
+});
+
+it("hides the name and sends none while the source is a parent directory", async () => {
+  const pending = render(undefined, [work, personal]);
+  await fillDirectory(pending);
+  type(input("Name"), "Site");
+  await chooseSource("A parent directory");
+  expect(input("Name")).toBeUndefined();
+  await click(buttonText("Add"));
+  expect(sentOf(pending, "add_project")).toMatchObject({ name: undefined });
+});
+
+it("hides the description and sends none while the source is a parent directory", async () => {
+  const pending = render(undefined, [work, personal]);
+  await fillDirectory(pending);
+  typeDescription("The marketing website.");
+  await chooseSource("A parent directory");
+  expect(document.body.querySelector("textarea")).toBeNull();
+  await click(buttonText("Add"));
+  expect(sentOf(pending, "add_project")).not.toHaveProperty("description");
+});
+
+const described = projectOf("p-4", "c-1", "Site", { description: "The marketing website." });
+
+it("sends nothing about the description when editing leaves it untouched", async () => {
+  const pending = render(described);
+  await click(buttonText("Save"));
+  expect(sentOf(pending, "update_project")).not.toHaveProperty("description");
+});
+
+it("sends the description when editing changes it", async () => {
+  const pending = render(described);
+  typeDescription(" The public website. ");
+  await click(buttonText("Save"));
+  expect(sentOf(pending, "update_project")).toMatchObject({ description: "The public website." });
+});
+
+it("sends an explicit null when editing clears the description", async () => {
+  const pending = render(described);
+  typeDescription("  ");
+  await click(buttonText("Save"));
+  expect(sentOf(pending, "update_project")).toMatchObject({ description: null });
 });

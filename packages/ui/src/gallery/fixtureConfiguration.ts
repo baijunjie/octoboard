@@ -44,6 +44,7 @@ export function exportedDocument(state: State, consoleId?: string): Configuratio
     default_agent: project.default_agent,
     pinned: project.pinned,
     tags: project.tags,
+    description: project.description,
     claude_account: projectAccount("claude", project.claude_account_id),
     codex_account: projectAccount("codex", project.codex_account_id),
     grok_account: projectAccount("grok", project.grok_account_id),

@@ -115,6 +115,8 @@ pub struct DocumentProject {
     pub default_agent: Option<Agent>,
     pub pinned: bool,
     pub tags: Vec<String>,
+    /// The user's own summary of the project; absent in an older document is none.
+    pub description: Option<String>,
     pub claude_account: ProjectAccountRef,
     pub codex_account: ProjectAccountRef,
     pub grok_account: ProjectAccountRef,
@@ -227,6 +229,7 @@ fn document_project(project: Project, accounts: &HashMap<String, Account>) -> Do
         default_agent: project.default_agent,
         pinned: project.pinned,
         tags: project.tags,
+        description: project.description,
         claude_session_model: project.claude_session_model,
         claude_session_effort: project.claude_session_effort,
         codex_session_model: project.codex_session_model,
@@ -306,6 +309,7 @@ mod tests {
             trust_consent: false,
             pinned: false,
             tags: Vec::new(),
+            description: None,
         }
     }
 
@@ -365,6 +369,7 @@ mod tests {
         cloned.default_agent = Some(Agent::Grok);
         cloned.pinned = true;
         cloned.tags = vec!["backend".to_string(), "Rust".to_string()];
+        cloned.description = Some("Mirrors the team's service.".to_string());
         cloned.claude_account_id = ProjectAccount::Account {
             id: "acct-1".to_string(),
         };
@@ -457,6 +462,10 @@ mod tests {
         assert_eq!(cloned.default_agent, Some(Agent::Grok));
         assert!(cloned.pinned);
         assert_eq!(cloned.tags, ["backend", "Rust"]);
+        assert_eq!(
+            cloned.description.as_deref(),
+            Some("Mirrors the team's service.")
+        );
         assert_eq!(cloned.codex_session_model.as_deref(), Some("gpt-x"));
         assert_eq!(cloned.codex_session_effort.as_deref(), Some("high"));
         let plain = &hub.projects[1];

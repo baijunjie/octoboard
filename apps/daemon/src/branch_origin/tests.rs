@@ -135,6 +135,7 @@ fn project(id: &str, path: &Path) -> Project {
         trust_consent: false,
         pinned: false,
         tags: Vec::new(),
+        description: None,
     }
 }
 

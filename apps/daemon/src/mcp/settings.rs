@@ -45,6 +45,7 @@ pub(super) async fn update_project(
         tags: optional_string_list(arguments, "tags")?,
         add_tags: optional_string_list(arguments, "add_tags")?.unwrap_or_default(),
         remove_tags: optional_string_list(arguments, "remove_tags")?.unwrap_or_default(),
+        description: present_text(arguments, "description")?,
     };
     let updated = coordinator::update_project(state, &project.id, changes).await?;
     Ok(describe_project(&updated))
@@ -239,6 +240,7 @@ pub(super) fn describe_project(project: &Project) -> Value {
     json!({
         "project": project.id,
         "name": project.name,
+        "description": project.description,
         "host": project.host_id,
         "path": project.path,
         "source": project.source,

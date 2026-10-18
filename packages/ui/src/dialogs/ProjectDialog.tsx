@@ -26,6 +26,7 @@ import { DirectoryPicker } from "./DirectoryPicker";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { OptionSelect } from "./OptionSelect";
 import { TagsInput } from "./TagsInput";
+import { TextAreaInput } from "./TextAreaInput";
 import { TextInput } from "./TextInput";
 import { useDetectedAgent } from "./useDetectedAgent";
 
@@ -61,8 +62,8 @@ export function ProjectDialog({
   onClose,
 }: {
   consoleId: string;
-  /** Editing an existing project when set — only name, default agent and tags can change (see
-   * `apps/daemon/PROTOCOL.md`'s `update_project`); association details are immutable once added. */
+  /** Editing an existing project when set; association details (source, directory, remote) are
+   * immutable once added. */
   project?: Project;
   onClose: () => void;
 }): React.ReactElement {
@@ -100,6 +101,7 @@ export function ProjectDialog({
   const [fields, setFields] = useState(initial);
   const [initialAccounts] = useState(() => readProjectAccounts(editing ?? {}));
   const [accountFields, setAccountFields] = useState(initialAccounts);
+  const [description, setDescription] = useState(editing?.description ?? "");
   const [tags, setTags] = useState<string[]>(editing?.tags ?? []);
   // The tags to offer are the ones this console's projects carry now; there is no registry of them.
   const projects = useDaemonStore((s) => s.projects);
@@ -135,6 +137,9 @@ export function ProjectDialog({
   // `path` the daemon defaults when blank and a blank URL keeps the form locked. Checked here so an
   // obviously incomplete request never reaches the daemon only to come back as a raw "`path` is
   // required" field-name error.
+  // A parent directory adds a project per repository it finds, so the name and the description,
+  // which each belong to one project, are neither shown nor sent.
+  const addsParent = !editing && source === "parent";
   const pathError = !editing && source !== "git" && !path ? t("dialog.project.directoryRequired") : undefined;
   // `name: name || undefined` below means "blank leaves it alone" everywhere else this pattern is
   // used (the field is genuinely optional on creation), but here blanking it out and saving would
@@ -163,6 +168,7 @@ export function ProjectDialog({
       // Under "Detect from files" the controls are out of sight, so what was set in them is not sent.
       const sent = defaultAgent === "detect" ? initial : fields;
       const sentAccounts = defaultAgent === "detect" ? initialAccounts : accountFields;
+      const trimmedDescription = addsParent ? "" : description.trim();
       if (editing) {
         await request({
           type: "update_project",
@@ -176,6 +182,8 @@ export function ProjectDialog({
           ...changedProjectAccounts("update", sentAccounts, initialAccounts),
           // Always sent, the whole list: a present array replaces the tags, and the field shows them all.
           tags,
+          // Cleared with an explicit `null`, and sent only when it changed.
+          ...(trimmedDescription !== (editing.description ?? "") && { description: trimmedDescription || null }),
         });
       } else {
         await request({
@@ -184,7 +192,7 @@ export function ProjectDialog({
           source,
           path: path || undefined,
           remote_url: source === "git" ? remoteUrl : undefined,
-          name: name || undefined,
+          name: addsParent ? undefined : name || undefined,
           default_agent: defaultAgent === "" || defaultAgent === "detect" ? undefined : defaultAgent,
           // What the form shows is what is stored: "Inherit from console" is not detected again,
           // whether it was preselected after a pre-read or chosen; only "Detect from files" is.
@@ -192,6 +200,7 @@ export function ProjectDialog({
           ...changedAgentFields("create", sent, initial),
           ...changedProjectAccounts("create", sentAccounts, initialAccounts),
           tags,
+          ...(trimmedDescription && { description: trimmedDescription }),
         });
       }
       onClose();
@@ -202,7 +211,7 @@ export function ProjectDialog({
   // agent (the "Which agent a session uses" section of docs/product/sessions.md); the option names
   // that agent, its icon faded, so it says what it resolves to.
   const defaultAgentOptions: { value: Agent | "" | "detect"; label: string; icon?: React.ReactNode }[] = [
-    ...(!editing && source === "parent" ? [{ value: "detect" as const, label: t("dialog.project.agentDetect") }] : []),
+    ...(addsParent ? [{ value: "detect" as const, label: t("dialog.project.agentDetect") }] : []),
     {
       value: "",
       label: consoleAgent ? t("dialog.project.agentInherit", { agent: AGENT_LABEL[consoleAgent] }) : t("dialog.project.agentInheritBare"),
@@ -253,16 +262,29 @@ export function ProjectDialog({
             }
           />
         )}
-        <TextInput
-          label={t("common.name")}
-          value={name}
-          onChange={setName}
-          autoFocus={!!editing}
-          placeholder={editing ? undefined : t("dialog.project.nameExample")}
-          description={editing ? undefined : t("dialog.project.nameHint")}
-          errorMessage={shown(nameError)}
-          isDisabled={locked}
-        />
+        {!addsParent && (
+          <TextInput
+            label={t("common.name")}
+            value={name}
+            onChange={setName}
+            autoFocus={!!editing}
+            placeholder={editing ? undefined : t("dialog.project.nameExample")}
+            description={editing ? undefined : t("dialog.project.nameHint")}
+            errorMessage={shown(nameError)}
+            isDisabled={locked}
+          />
+        )}
+        {!addsParent && (
+          <TextAreaInput
+            label={t("dialog.project.description")}
+            value={description}
+            onChange={setDescription}
+            placeholder={t("dialog.project.descriptionPlaceholder")}
+            description={t("dialog.project.descriptionNote")}
+            rows={3}
+            isDisabled={locked}
+          />
+        )}
         <TagsInput
           label={t("dialog.project.tags")}
           value={tags}
@@ -277,7 +299,7 @@ export function ProjectDialog({
           value={defaultAgent}
           onChange={setDefaultAgent}
           description={
-            !editing && source === "parent" ? (
+            addsParent ? (
               <Message
                 id="dialog.project.agentDetectHint"
                 params={{

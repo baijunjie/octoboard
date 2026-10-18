@@ -101,9 +101,10 @@ import creates the console, and with it a working directory of its own.
 
 ### What each project carries
 
-Its name, the directory it points at, how it was associated, the remote URL recorded for it, its own default agent if
-it has one, whether it is pinned, its tags, and — one set per agent — the account its sessions run under and the model
-and reasoning effort they launch with (see "Projects" in `docs/product/consoles-and-projects.md`).
+Its name, its description if it has one, the directory it points at, how it was associated, the remote URL recorded
+for it, its own default agent if it has one, whether it is pinned, its tags, and — one set per agent — the account its sessions run under and the model
+and reasoning effort they launch with (see "Projects" in `docs/product/consoles-and-projects.md`). An import stores the
+description trimmed, and a project of a document that carries no description is imported with none.
 
 A project's path is **the one path of the exporting machine anywhere in the document**, which is the thing to look at
 before handing the file to someone else. An import treats it as a starting point and never as a place to write (see
