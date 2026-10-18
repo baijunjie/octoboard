@@ -233,6 +233,83 @@ it("moves the agents' records to the Trash only when the checkbox of deleting ar
   expect(daemon.request).toHaveBeenLastCalledWith({ type: "delete_archived_sessions", console: console_.id, project: project.id, trash_agent_records: true });
 });
 
+/** The confirm button. */
+const confirmButton = () => document.body.querySelector("[data-slot=alert-dialog-footer] button:last-child");
+/** The confirm button's text. */
+const confirmText = () => confirmButton()?.textContent;
+
+const archivedOwner = { ...owner, status: "archived" as const };
+// Each confirmation with a Trash option: its sessions, its confirm label before and after the option
+// is ticked, and the request it sends.
+const TRASH_CONFIRMATIONS: Array<[string, DialogRequest, Session[], string, string, string]> = [
+  ["deleting a session", { kind: "delete-session", session: archivedOwner }, [archivedOwner], "Delete", "Delete all", "delete_session"],
+  ["deleting all archived sessions", { kind: "delete-archived", console: console_, project, count: 2 }, [], "Delete all", "Delete all", "delete_archived_sessions"],
+  ["removing a project", { kind: "delete-project", project }, [], "Remove", "Remove", "delete_project"],
+  ["removing a project that has running sessions", { kind: "delete-project", project }, [{ ...owner, status: "working" }], "End and remove", "End and remove", "delete_project"],
+];
+
+it.each(TRASH_CONFIRMATIONS)("gives confirming %s its label for a ticked Trash option, and keeps it while it runs", async (_, dialog, sessions, plain, ticked, sentType) => {
+  const { daemon } = mount(dialog, sessions, [], {
+    // Inspections settle; the deletion itself never does, so the dialog stays busy.
+    request: async (body) => {
+      if (body.type === "inspect_session_branches") return { type: "session_branches_inspected", items: [] };
+      if (body.type === "inspect_session_records") return { type: "session_records_inspected", presence: "present" };
+      if (body.type === "inspect_project_removal") return { type: "project_removal_inspected", items: [] };
+      return new Promise(() => {});
+    },
+  });
+  await act(async () => {});
+  expect(confirmText()).toBe(plain);
+  checkAll();
+  await act(async () => {});
+  expect(checkbox().checked).toBe(true);
+  expect(confirmText()).toBe(ticked);
+  await submitDialog();
+  expect(sent(daemon, sentType)).toHaveLength(1);
+  expect(confirmText()).toBe(ticked);
+});
+
+it.each<[string, DialogRequest, Session[], string, string]>([
+  ["archiving a session", { kind: "archive-session", session: owner }, [owner], "Archive", "Archive and delete"],
+  ["deleting a session", { kind: "delete-session", session: archivedOwner }, [archivedOwner], "Delete", "Delete all"],
+  ["deleting all archived sessions", { kind: "delete-archived", console: console_, project, count: 1 }, [archivedOwner], "Delete all", "Delete all"],
+])("labels confirming %s for a ticked force option, and back once it is unticked", async (_, dialog, sessions, plain, ticked) => {
+  mount(dialog, sessions, [], {
+    request: async (body) => body.type === "inspect_session_branches"
+      ? { type: "session_branches_inspected", items: [UNCOMMITTED, UNMERGED] }
+      : { type: "session_records_inspected", presence: "absent" },
+  });
+  await act(async () => {});
+  expect(confirmText()).toBe(plain);
+  checkAll();
+  expect(checkbox().checked).toBe(true);
+  expect(confirmText()).toBe(ticked);
+  checkAll();
+  expect(confirmText()).toBe(plain);
+});
+
+it("draws the confirm button of archiving in the danger colour only while a deletion option is ticked", async () => {
+  mount({ kind: "archive-session", session: owner }, [owner], [], {
+    request: async () => ({ type: "session_branches_inspected", items: [UNCOMMITTED, UNMERGED] }),
+  });
+  await act(async () => {});
+  const danger = () => confirmButton()!.className.includes("danger");
+  expect(danger()).toBe(false);
+  checkAll();
+  expect(danger()).toBe(true);
+  checkAll();
+  expect(danger()).toBe(false);
+});
+
+it("labels archiving for deletion when only locked worktrees are ticked", async () => {
+  mount({ kind: "archive-session", session: owner }, [owner], [], {
+    request: async () => ({ type: "session_branches_inspected", items: [LOCKED] }),
+  });
+  await act(async () => {});
+  checkAll();
+  expect(confirmText()).toBe("Archive and delete");
+});
+
 it("switches only the selected session to the default account unless the checkbox is selected", async () => {
   const selected = { ...owner, account_id: account.id };
   const waiting = deferred();

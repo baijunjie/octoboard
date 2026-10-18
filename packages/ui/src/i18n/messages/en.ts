@@ -913,6 +913,7 @@ export const en = {
   "dialog.typeToConfirm.label": "Type {word} to confirm",
   "dialog.typeToConfirm.delete": "DELETE",
   "dialog.archiveSession.confirm": "Archive",
+  "dialog.archiveSession.confirmDelete": "Archive and delete",
   "dialog.deleteConsole.title": "Delete console {name}?",
   "dialog.deleteConsole.message": "You can delete it only while none of its sessions is running or starting.",
   "dialog.removeProject.title": "Remove project {name}?",
@@ -925,7 +926,6 @@ export const en = {
   "dialog.removeProject.messageTrash": "Its sessions are deleted with it, and its folder is moved to the Trash.",
   "dialog.removeProject.trash": "Also move the project folder to the Trash",
   "dialog.removeProject.trashHint": "The whole folder goes, including anything not committed to Git. You can recover it from the Trash.",
-  "dialog.removeProject.confirmTrash": "Remove and move to Trash",
   "dialog.removeProject.alongUnknown": "Worktrees of the repository outside the project folder may be moved to the Trash with it, and its branches deleted permanently.",
   "dialog.removeProject.alongLockedRemove": {
     one: "Also move the locked worktree to the Trash",
@@ -935,8 +935,6 @@ export const en = {
     one: "It goes despite its lock, and you can recover it from the Trash.",
     other: "They go despite their locks, and you can recover them from the Trash.",
   },
-  "dialog.removeProject.confirmRunningTrash": "End, remove and move to Trash",
-  "dialog.removeProject.pendingTrash": "Moving to Trash…",
   "dialog.archiveSession.title": "Archive {title}?",
   "dialog.archiveSession.message": "Its process ends. You can reopen it later.",
   "dialog.archiveSession.boundAndEnded": {
@@ -973,6 +971,7 @@ export const en = {
   },
   "dialog.deleteSession.title": "Delete {title} permanently?",
   "dialog.deleteSession.message": "This deletes the session. The project's files are kept.",
+  "dialog.deleteSession.confirmAll": "Delete all",
   "dialog.deleteSession.trashRecords": "Also move the agent's own session records to the Trash",
   "dialog.deleteSession.trashRecordsNote": "The session can then no longer be resumed in the agent itself. You can recover the records from the Trash.",
   "dialog.deleteSession.trashRecordsNoteBound": "The sessions can then no longer be resumed in the agent itself. You can recover the records from the Trash.",

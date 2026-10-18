@@ -95,15 +95,17 @@ symbolic link can leave the result unknown. Having no conversation does not itse
 
 The confirmation — for one session or all archived sessions at once — hides its cleanup option when the result is
 absent. Otherwise it offers an **unchecked by default** checkbox to also move the agent's own session records to the
-Trash, including while the check is pending or its result is unknown. It is a plain block, not inside a warning, and
-its hint says that the session, or the sessions, can then no longer be resumed in the agent itself and that the
-records can be recovered from the Trash. While it is ticked, the confirmation's one warning, below its options and
-above its buttons, gains a line saying that the agent's own records of the session — and of the sessions deleted with
-it, or of all the sessions deleted at once — are also moved to the Trash; a confirmation that had no warning gets one
-then (see "The confirmation" in `docs/product/branch-and-worktree-cleanup.md` for the warning's other lines). Unticked, used sessions' agent records are kept; for a bulk deletion, every session's agent records
-are kept. Either way the confirmation's message says that the project's files are kept. While a deletion with the
-option ticked runs, the button says it is moving to the Trash,
-and the confirmation stays open until the move has finished; while any deletion runs, the option cannot be changed.
+Trash, including while the check is pending or its result is unknown. It is a plain block, not inside a warning, and its
+hint says that the session, or the sessions, can then no longer be resumed in the agent itself and that the records can
+be recovered from the Trash. While it is ticked, the confirmation's one warning, below its options and above its
+buttons, gains a line saying that the agent's own records of the session — and of the sessions deleted with it, or of
+all the sessions deleted at once — are also moved to the Trash; a confirmation that had no warning gets one then (see
+"The confirmation" in `docs/product/branch-and-worktree-cleanup.md` for the warning's other lines). Unticked, used
+sessions' agent records are kept; for a bulk deletion, every session's agent records are kept. Either way the
+confirmation's message says that the project's files are kept. How ticking the option changes the confirm button's
+label is set in "What a confirmation's confirm button names" in `docs/product/window-layout.md`. While a deletion runs,
+the button shows as pending and the confirmation stays open until it has finished, including moving the records when
+the option is ticked; the option cannot be changed meanwhile.
 
 - **The records are moved to the system Trash, never deleted outright**, after the sessions themselves are deleted.
   For each agent they are:

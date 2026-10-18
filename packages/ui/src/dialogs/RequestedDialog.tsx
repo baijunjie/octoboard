@@ -81,21 +81,12 @@ function DeleteProjectDialog({ project, running, onClose }: { project: Project; 
   const { request } = useDaemon();
   const [trash, setTrash] = useState(false);
   const cleanup = useProjectRemovalCleanup(project.id, trash, setTrash);
-  const confirmKey =
-    running.length > 0
-      ? trash
-        ? "dialog.removeProject.confirmRunningTrash"
-        : "dialog.removeProject.confirmRunning"
-      : trash
-        ? "dialog.removeProject.confirmTrash"
-        : "common.remove";
   return (
     <ConfirmDialog
       title={<Message id="dialog.removeProject.title" params={{ name: <InlineChip dir="auto" wrap size="inherit">{project.name}</InlineChip> }} />}
       message={t(trash ? "dialog.removeProject.messageTrash" : "dialog.removeProject.message")}
       warning={<ConfirmWarning title={running.length > 0 ? t("dialog.removeProject.running", { count: running.length }) : undefined} sessions={running.length > 0 ? running : undefined} lines={cleanup.consequences} />}
-      confirmLabel={t(confirmKey)}
-      pendingLabel={trash ? t("dialog.removeProject.pendingTrash") : undefined}
+      confirmLabel={t(running.length > 0 ? "dialog.removeProject.confirmRunning" : "common.remove")}
       destructive
       waiting={cleanup.pending}
       extraControl={cleanup.extraControl}
@@ -137,7 +128,8 @@ function ArchiveSessionDialog({ session, withIt, branches, onClose }: {
       title={<Message id="dialog.archiveSession.title" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, session)}</InlineChip> }} />}
       message={t("dialog.archiveSession.message")}
       warning={<ConfirmWarning title={withIt.length > 0 ? t("dialog.archiveSession.boundAndEnded", { count: withIt.length }) : undefined} sessions={withIt.length > 0 ? withIt : undefined} lines={cleanup.consequences} />}
-      confirmLabel={t("dialog.archiveSession.confirm")}
+      confirmLabel={t(cleanup.forcing ? "dialog.archiveSession.confirmDelete" : "dialog.archiveSession.confirm")}
+      destructive={cleanup.forcing}
       waiting={cleanup.pending}
       extraControl={cleanup.extraControl}
       onCancel={onClose}
@@ -192,8 +184,7 @@ function DeleteSessionDialog({ session, withIt, onClose }: { session: Session; w
           lines={[...cleanup.consequences, ...(moveRecords ? [{ key: "records", text: t(withIt.length > 0 ? "dialog.deleteSession.trashRecordsLineBound" : "dialog.deleteSession.trashRecordsLine") }] : [])]}
         />
       )}
-      confirmLabel={t("common.delete")}
-      pendingLabel={moveRecords ? t("dialog.removeProject.pendingTrash") : undefined}
+      confirmLabel={t(moveRecords || cleanup.forcing ? "dialog.deleteSession.confirmAll" : "common.delete")}
       destructive
       waiting={cleanup.pending}
       extraControl={(busy) => (
@@ -249,7 +240,6 @@ function DeleteArchivedDialog({
         />
       )}
       confirmLabel={t("dialog.deleteArchived.confirm")}
-      pendingLabel={moveRecords ? t("dialog.removeProject.pendingTrash") : undefined}
       destructive
       waiting={cleanup.pending}
       extraControl={(busy) => (

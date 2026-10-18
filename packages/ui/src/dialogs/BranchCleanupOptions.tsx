@@ -108,10 +108,12 @@ export function useChoiceOver(items: SessionBranchItem[]): [boolean, (selected: 
  * under a checkbox of their own. `extraControl` renders them, `choices` is what the request names
  * (`force_remove`, and in `keep` what was listed and left unticked), `consequences` are the lines
  * the dialog's one warning adds while they are ticked, and `pending` holds Confirm while the
- * scope's inspection is on its way. */
+ * scope's inspection is on its way; `forcing` is whether either checkbox is ticked, for a
+ * confirmation whose label, and for archiving its colour, say it deletes too. */
 export function useBranchCleanup(sessionIds: string[], initial?: SessionBranchItem[]): {
   choices: ReturnType<typeof branchChoices>;
   pending: boolean;
+  forcing: boolean;
   consequences: WarningLine[];
   extraControl: (busy: boolean) => React.ReactNode;
 } {
@@ -131,6 +133,7 @@ export function useBranchCleanup(sessionIds: string[], initial?: SessionBranchIt
   return {
     choices: branchChoices(forced, kept),
     pending,
+    forcing: forced.length > 0,
     consequences: [
       ...(force ? [{ key: "force", text: t("branchCleanup.consequence.force", { count: forcible.length }) }] : []),
       ...(removeLocked ? [{ key: "locked", text: t("branchCleanup.consequence.locked", { count: locked.length }) }] : []),

@@ -97,13 +97,39 @@ Enter confirms at once. Three kinds start elsewhere:
 
 - **A destructive confirmation** — one whose confirm button is drawn in the danger colour, such as quitting with
   sessions running, removing a project, deleting a session or removing an account — opens with focus on the dialog
-  itself, so Enter does nothing until the user moves focus onto a control.
+  itself, so Enter does nothing until the user moves focus onto a control. Archiving a session is destructive only
+  while one of its deletion options is ticked (see "What a confirmation's confirm button names" below); it opens with
+  them unticked, so focus starts on its confirm button, and becoming destructive once one is ticked does not move
+  focus back onto the dialog.
 - **A confirmation that asks for a word to be typed** opens with focus in its text field.
 - **A question the user did not ask for** — a folder trust prompt (see "The trust dialog" in
   `docs/product/folder-trust.md`) or a session request (see "The confirmation dialog" in
   `docs/product/session-requests.md`) — opens with focus on the dialog itself as well, and focus is put
   back on the dialog each time it moves on to the next waiting question, so an Enter held past one answer does not
   answer the next.
+
+**What a confirmation's confirm button names.** A confirmation's confirm button carries one short label for its
+action, never a list of actions. Where the confirmation offers options, the label changes at most once, to say the
+action now deletes more, and changes back when no such option is ticked:
+
+- **Archiving a session** reads **Archive**, and **Archive and delete** while an option that deletes is ticked —
+  force-removing the worktrees and branches Git keeps, or deleting the locked worktrees. While such an option is
+  ticked, the button is also drawn in the danger colour, making it a destructive confirmation; with none ticked it is
+  an ordinary confirm button.
+- **Deleting a session** reads **Delete**, and **Delete all** while any of its extra deletion options is ticked —
+  moving the agent's own session records to the Trash, force-removing the worktrees and branches Git keeps, or
+  deleting the locked worktrees.
+- **Deleting all archived sessions** always reads **Delete all**, which already says all; its options leave it as it
+  is.
+- **Removing a project** always reads **Remove**, or **End and remove** when the project has sessions running; its
+  options leave it as it is — moving the project folder to the Trash, and the locked worktrees with it — since the
+  message then says the folder goes.
+
+What a ticked option adds is said in the confirmation's message and its one warning, not on the button. While the
+action runs, the button either shows as pending under its label or shows one in-progress text naming the single step
+underway — never several actions combined, and never chosen by an option. Archiving a session, deleting a session,
+deleting all archived sessions and removing a project show as pending under their label; restoring a project's file
+changes shows that it is restoring, and switching a session's account that it is switching account.
 
 **Where keyboard focus starts in a form dialog.** A form dialog opens with keyboard focus in its first text field, so
 the user can type at once and Enter submits the form: the Name field of a console, session or account dialog and of
