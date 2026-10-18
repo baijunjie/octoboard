@@ -197,8 +197,8 @@ confirmations, settings and sessions would each need an owner and an authorizati
   session or a project session of its own project with `bind_to_session` (how a session that asked for a console
   session comes to be driven by it). Because the caller's own tool call is what causes the change, the outcome can be
   told to it in the call's result or a message and its fixed role description is left alone. The behaviour of a request
-  is in `docs/product/session-requests.md`, and the rules a binding keeps in "Changing a session's owner" in
-  `docs/product/hub-orchestration.md`.
+  is in `docs/product/session-requests.md`, and the rules a binding keeps in "Who can own a session" in
+  `docs/product/changing-session-owners.md`.
 - **A project session goes to the user directly for permissions and questions, not through the console session.**
   Relaying through the console session only creates confusion when several projects ask at once. "Needs a console
   session decision" (the agent calls `report(status: needs_decision)`) and "needs a user decision" (a permission

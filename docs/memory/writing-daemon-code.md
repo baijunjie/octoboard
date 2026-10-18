@@ -92,7 +92,10 @@ gives the handler no exclusivity. A check made early in a handler (no session ru
 using this path) can therefore be stale by the time the handler acts on it.
 
 Where acting on a stale check would do harm, either take a claim on `AppState` that the competing path checks too —
-`AppState::begin_launch` is the existing one — or redo the check after the long step and deal with what changed. Put
+`AppState::begin_launch` is the existing one — or redo the check after the long step and deal with what changed. A
+claim covers only the checks made once it is held: one made before it — including one the caller made before calling
+the operation that takes the claim, such as an MCP tool checking that the session asked about is the caller's — is
+repeated inside the operation under the claim, with whatever it needs passed in. Put
 blocking filesystem or process work in a handler on `tokio::task::spawn_blocking` and await it; do not use
 `block_in_place`, which panics under the current-thread runtime plain `#[tokio::test]` gives the coordinator tests.
 

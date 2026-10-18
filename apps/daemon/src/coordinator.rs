@@ -686,7 +686,7 @@ async fn handle_inner(
             model,
             effort,
         } => {
-            let receiving = crate::handoff::operation::hand_off(
+            let moved = crate::handoff::operation::hand_off(
                 state,
                 crate::handoff::operation::Handoff {
                     session,
@@ -694,12 +694,14 @@ async fn handle_inner(
                     account,
                     model,
                     effort,
+                    note: None,
+                    asked_by: None,
                 },
             )
             .await?;
             Ok(Some(Event::SessionOpened {
                 id: request_id,
-                session: state.wire_session(receiving),
+                session: state.wire_session(moved.receiving),
             }))
         }
 

@@ -56,9 +56,10 @@ fn console_session_pointer(agent: Agent) -> String {
     )
 }
 
-/// The four ways a session relates to another, in the words every project session's role text
-/// gives them: which tool makes a session one's own, which one makes a session nobody's, and the
-/// two that move a binding, then information, which needs none.
+/// The ways a session relates to another, in the words every project session's role text gives
+/// them: which tool makes a session one's own, the ones that move a session to another agent or
+/// another owner or bind this one to an owner, which one makes a session nobody's, then
+/// information, which needs none.
 fn relationships(agent: Agent, owns: bool) -> String {
     let tool = |name: &str| qualified_tool_name(agent, name);
     let mut lines = Vec::new();
@@ -69,6 +70,12 @@ fn relationships(agent: Agent, owns: bool) -> String {
              another task. No approval is needed.",
             new_session = tool("new_session"),
             reopen_session = tool("reopen_session"),
+        ));
+        lines.push(format!(
+            "- `{handoff_session}` hands a session of yours off to a new session of another agent \
+             — when its account has run out of quota, say. The new session takes its place and \
+             stays yours, and the original is archived. No approval is needed.",
+            handoff_session = tool("handoff_session"),
         ));
         lines.push(format!(
             "- `{transfer_session}` hands a session of yours to another owner — a console session \

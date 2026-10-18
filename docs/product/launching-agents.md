@@ -83,13 +83,14 @@ environment" below):
   owner, that call's result tells it what changes. A lead session, bound to a console session only after it was opened,
   is given that same unbound project session's text on every launch, as at its first (see "Lead sessions" in
   `docs/product/hub-orchestration.md`). Every project session's text also sets out how it relates to other sessions:
-  `new_session` for a session of its own where it has it, `transfer_session` and `bind_to_session` where it has them,
-  `request_session` for a session that is nobody's, and `list_sessions` and `share_info` for information. The text is
-  written from who the session reports to when it launches, and says that what Octoboard tells it of a later change of
-  owner replaces what it says (see "When a binding changes while a session runs" in
-  `docs/product/hub-orchestration.md`). The role and the session's binding as it stands decide which tools the session
-  is offered, so an unbound project session still has `report`, and calling it is refused while it is unbound (see
-  "Reporting" and "The unbound project session's tools" in `docs/product/hub-orchestration.md`).
+  `new_session` for a session of its own where it has it, `handoff_session`, `transfer_session` and `bind_to_session`
+  where it has them, `request_session` for a session that is nobody's, and `list_sessions` and `share_info` for
+  information. The text is written from who the session reports to when it launches, and says that what Octoboard tells
+  it of a later change of owner replaces what it says (see "When a binding changes while a session runs" in
+  `docs/product/changing-session-owners.md`). The role and the session's binding as it stands decide which tools the
+  session is offered, so an unbound project session still has `report`, and calling it is refused while it is unbound (see
+  `docs/product/reporting-to-owners.md` and "The unbound project session's tools" in
+  `docs/product/hub-orchestration.md`).
 
 The injected hooks are built to be invisible. They never steer the agent, print nothing (with the one exception
 below), never fail the turn, and carry a short timeout (3 seconds) so a daemon that is unreachable costs a turn a

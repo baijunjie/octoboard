@@ -92,6 +92,7 @@ checks on every call. The catalogue is shared by both sides of the stdio bridge.
 | `mod.rs` | The tool catalogue, and which tools a session may see by role and binding |
 | `role.rs`, `console_instructions.rs` | The role description injected at launch, and the console session's instruction file written into its working directory |
 | `exec.rs` | Runs one tool call through the same coordinator and reporting functions the control socket uses |
+| `handoff.rs` | `handoff_session`: an owner hands a session of its own off to another agent, through the `hand_off_session` operation, and is not sent the message that tells an owner of it |
 | `bindings.rs` | `transfer_session` and `bind_to_session`, and what they tell the sessions concerned |
 | `args.rs` | Reading a tool call's arguments and finding the records they name |
 | `settings.rs` | The settings tools for a console, its projects and the application, and a project session's read of its own project |

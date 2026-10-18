@@ -7,8 +7,8 @@ use crate::branch_origin::{repo_key, repository_of};
 use crate::mcp::Owner;
 use crate::protocol::{Account, Availability, Role};
 use crate::test_support::{
-    app_state, branch_made_by, console, fake_live_session, insert_project, output_containing,
-    repo_with, running, ScratchDir, StandIn,
+    app_state, branch_made_by, console, heard_after_marker, insert_project, output_containing,
+    repo_with, running, stand_in_launch, Launched, ScratchDir, StandIn,
 };
 
 /// A stored session of console `console-1`: a project session of project `p1` when `project`, else
@@ -26,9 +26,6 @@ fn session(id: &str, project: bool, status: &str, bound_to: Option<&str>, lead: 
     session.lead = lead;
     session
 }
-
-/// What a launch was asked for: the session, its owner and its opening prompt.
-type Launched = (String, Option<Owner>, Option<String>);
 
 /// What a handoff must leave alone when it is refused or fails: each session's status, owner and
 /// lead mark, who is responsible for the test branches, and the packages on disk.
@@ -83,23 +80,7 @@ impl Fixture {
         &self,
         during: impl FnOnce() + Send + 'static,
     ) -> impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static {
-        let (started, launches) = (self.started.clone(), self.launches.clone());
-        move |request| {
-            during();
-            let live = fake_live_session(&request.session_id, request.agent, 80, 24, "sleep 30");
-            crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
-            let process = (*live).clone();
-            started.lock().unwrap().push(live);
-            launches
-                .lock()
-                .unwrap()
-                .push((request.session_id, request.owner, request.task));
-            Ok(term::Launch {
-                session: process,
-                agent_session_id: None,
-                notice: None,
-            })
-        }
+        stand_in_launch(&self.started, &self.launches, during)
     }
 
     async fn hand_off(&self, session: &str) -> Result<Session> {
@@ -124,10 +105,13 @@ impl Fixture {
                 account: None,
                 model: None,
                 effort: None,
+                note: None,
+                asked_by: None,
             },
             launch,
         )
         .await
+        .map(|moved| moved.receiving)
     }
 
     fn stored(&self, id: &str) -> Session {
@@ -457,11 +441,16 @@ async fn a_handoff_that_is_refused_changes_nothing() {
             account: Some(Some("claude-account".to_string())),
             model: None,
             effort: None,
+            note: None,
+            asked_by: None,
         },
         fixture.launch(),
     )
     .await;
-    assert_eq!(refusal(err), error_code::UNKNOWN_ACCOUNT);
+    assert_eq!(
+        refusal(err.map(|moved| moved.receiving)),
+        error_code::UNKNOWN_ACCOUNT
+    );
 
     // A model the receiving agent does not offer.
     crate::test_support::offer_models(&fixture.state, Agent::Codex, &[("gpt-a", &["low"])]);
@@ -474,12 +463,14 @@ async fn a_handoff_that_is_refused_changes_nothing() {
                 account: None,
                 model: Some(Some(model.to_string())),
                 effort: Some(effort.map(str::to_string)),
+                note: None,
+                asked_by: None,
             },
             fixture.launch(),
         )
         .await;
         assert_eq!(
-            refusal(err),
+            refusal(err.map(|moved| moved.receiving)),
             error_code::INVALID_LAUNCH_SETTING,
             "{model} {effort:?}"
         );
@@ -508,6 +499,8 @@ async fn a_start_that_fails_moves_nothing_and_removes_the_package() {
             account: None,
             model: None,
             effort: None,
+            note: None,
+            asked_by: None,
         },
         |_| Err(anyhow!("the agent would not start")),
     )
@@ -517,8 +510,10 @@ async fn a_start_that_fails_moves_nothing_and_removes_the_package() {
     assert!(format!("{err:#}").contains("would not start"), "{err:#}");
     assert_eq!(fixture.snapshot(), before);
     assert!(fixture.state.has_process("original") && fixture.state.has_process("owned"));
-    assert!(original.recent_output(1024).is_empty());
-    assert!(owned.recent_output(1024).is_empty());
+    for live in [&original, &owned] {
+        let heard = heard_after_marker(&fixture.state, live);
+        assert!(!heard.contains("Message from Octoboard"), "{heard}");
+    }
 }
 
 /// Deleting the receiving session removes its package.
@@ -571,6 +566,8 @@ async fn messages_for_the_original_during_a_handoff_are_forwarded_to_the_receivi
     let before = output.find("queued before the handoff").unwrap();
     let during = output.find("sent during the handoff").unwrap();
     assert!(held < before && before < during, "{output}");
+    // The archived original has no process to take a marker; the receiving session's output above
+    // is ordered after everything forwarded, and the original was written nothing before it ended.
     let heard = String::from_utf8_lossy(&original.recent_output(8 * 1024)).into_owned();
     assert!(
         !heard.contains("during the handoff") && !heard.contains("before the handoff"),
@@ -594,6 +591,8 @@ async fn messages_for_the_original_during_a_failed_handoff_reach_the_original() 
             account: None,
             model: None,
             effort: None,
+            note: None,
+            asked_by: None,
         },
         move |_| {
             let delivery = crate::reporting::write_message(
@@ -652,6 +651,37 @@ async fn messages_held_for_the_original_go_to_the_receiving_session_when_the_han
     );
     assert_eq!(fixture.stored("original").status, SessionStatus::Idle);
     fixture.output_of(&receiving, "sent during the handoff");
-    let heard = String::from_utf8_lossy(&original.recent_output(8 * 1024)).into_owned();
+    let heard = heard_after_marker(&fixture.state, &original);
     assert!(!heard.contains("during the handoff"), "{heard}");
+}
+
+/// An owner that asked for a handoff and no longer owns the session by the time the operation
+/// claims it (it was handed to another owner meanwhile) is refused, and nothing changes.
+#[tokio::test]
+async fn a_session_that_is_no_longer_the_askers_is_refused() {
+    let fixture = Fixture::new("asker-lost-it");
+    fixture.run(session("boss", true, "idle", None, false));
+    fixture.run(session("other-boss", true, "idle", None, false));
+    fixture.run(session("owned", true, "idle", Some("other-boss"), false));
+    let before = fixture.snapshot();
+
+    let err = hand_off_with(
+        &fixture.state,
+        Handoff {
+            session: "owned".to_string(),
+            agent: Agent::Codex,
+            account: None,
+            model: None,
+            effort: None,
+            note: None,
+            asked_by: Some("boss".to_string()),
+        },
+        fixture.launch(),
+    )
+    .await
+    .expect_err("not the asker's any more");
+
+    assert!(format!("{err:#}").contains("no longer yours"), "{err:#}");
+    assert!(fixture.launches.lock().unwrap().is_empty());
+    assert_eq!(fixture.snapshot(), before);
 }

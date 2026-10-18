@@ -46,6 +46,7 @@ use super::args::{
     resolve_project, string_list,
 };
 use super::bindings;
+use super::handoff;
 use super::settings::{
     self, describe_project, launch_argument, project_accounts_argument, resolve_account,
 };
@@ -84,6 +85,9 @@ pub async fn call(
         "archive_self" => archive_self(state, &session).await,
         "list_archived" => list_archived(state, &session, arguments),
         "reopen_session" => reopen_session(state, &session, arguments).await,
+        "handoff_session" => {
+            handoff::handoff_session(state, &session, arguments, crate::term::launch).await
+        }
         "show_page" => show_page(state, &session, arguments),
         "report" => report(state, &session, arguments).await,
         "list_sessions" => list_sessions(state, &session),
@@ -1443,7 +1447,11 @@ pub(super) mod tests {
         }
     }
 
-    fn project_session(id: &str, console_id: &str, bound_to: Option<&str>) -> Session {
+    pub(in crate::mcp) fn project_session(
+        id: &str,
+        console_id: &str,
+        bound_to: Option<&str>,
+    ) -> Session {
         Session {
             role: Role::Project,
             console_id: console_id.to_string(),
@@ -1456,7 +1464,7 @@ pub(super) mod tests {
 
     /// Two console sessions of one console, one project, and a session each: bound to `a`, bound to
     /// `b`, unbound, one archived under each owner, and one in another console.
-    fn shared_console_state(name: &str) -> (Arc<AppState>, ScratchDir) {
+    pub(in crate::mcp) fn shared_console_state(name: &str) -> (Arc<AppState>, ScratchDir) {
         let (state, dir) = crate::test_support::app_state(&format!("mcp-exec-{name}"));
         state.store.insert_console(&console()).unwrap();
         state
@@ -1750,6 +1758,7 @@ pub(super) mod tests {
             ("starter", "show_page"),
             ("a", "report"),
             ("mine", "transfer_session"),
+            ("mine", "handoff_session"),
             ("mine", "bind_to_session"),
             ("a", "bind_to_session"),
         ] {

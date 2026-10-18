@@ -79,8 +79,8 @@ dropped with it (see "How a request ends" in `docs/product/session-requests.md`)
   session being launched, resumed or switched to another account at that moment.
 - An unused session can stop existing while a session is being bound to it. Opening a session bound to an owner that
   was deleted meanwhile is refused, with nothing launched; binding or handing a session to an owner that was deleted
-  meanwhile is refused, and changes nothing (see "Changing a session's owner" in
-  `docs/product/hub-orchestration.md`).
+  meanwhile is refused, and changes nothing (see
+  `docs/product/changing-session-owners.md`).
 
 ## Moving the agent's own records to the Trash
 

@@ -54,7 +54,8 @@ session it starts carries no binding badge and cannot start sessions of its own.
 it is bound to: a console session or a project session (an unbound session's own owner is the user). An owner can hand
 a session of its own to another owner, and an unbound project session can bind itself to one; bound to a console
 session while keeping the sessions it started, it is a **lead session**. Neither asks the user, and orchestration stays
-at most two levels deep (see "Lead sessions" and "Changing a session's owner" in `docs/product/hub-orchestration.md`).
+at most two levels deep (see "Lead sessions" in `docs/product/hub-orchestration.md` and
+`docs/product/changing-session-owners.md`).
 Every session, of whatever kind, can also list the other running sessions, in every console and project, and share
 information with any of them; it takes work only from its owner, and what comes from another session is information to
 weigh (see `docs/product/information-between-sessions.md`). Every session can also ask the user
@@ -429,7 +430,7 @@ limitations of what the agents expose rather than of this one:
   from the transcript instead — see "Declining a Claude Code prompt or question" below.
 - Grok Build's bash mode (`!`) fires no tool or turn events, so work done through it never shows in the status; Grok's
   turn-end backstop was seen to follow about a minute later in one run (see "When a session does not report" in
-  `docs/product/hub-orchestration.md`), but it finds the session already awaiting instructions.
+  `docs/product/reporting-to-owners.md`), but it finds the session already awaiting instructions.
 - A question the agent asks through **its own ask-the-user tool** is reported by Claude Code and Grok
   Build but not by Codex, which has no such event; a Codex session asking that way reads as *working* unless its
   terminal title signals `Action Required`.
@@ -528,7 +529,7 @@ hand and notifies afresh, as any other does.
 - The agent prints that the turn was interrupted, but its process is still running, so the session is
   *awaiting instructions* and not *interrupted*.
 - No turn end was reported, so no report is synthesised for the session's owner for that turn either (see "When a
-  session does not report" in `docs/product/hub-orchestration.md`).
+  session does not report" in `docs/product/reporting-to-owners.md`).
 - **Claude Code sessions only.** Codex and Grok Build report a decline through their own hook events,
   and the transcript read here is Claude Code's own format; neither is watched this way.
 - Only a hand that is currently up is recovered. A cancelled in-flight turn in a session that reads
@@ -567,7 +568,7 @@ its prompt. Every turn of a session is covered, its first included.
   *interrupted*.
 - The turn is reported on: a session bound to an owner has a report synthesised for it with status
   *failed*, carrying Codex's own error text and the usual line saying the session stopped without
-  reporting (see "When a session does not report" in `docs/product/hub-orchestration.md`).
+  reporting (see "When a session does not report" in `docs/product/reporting-to-owners.md`).
 - **Codex sessions only.** Claude Code and Grok Build report a failed turn through their own hook
   events, and the file read here is Codex's own format; neither is watched this way.
 - A turn Codex ends normally, and one the user cancels, are reported by Codex's own hook events, and
@@ -595,7 +596,7 @@ and changes nothing. This covers the session itself, an owner's sessions at both
 in bulk, removing a project, and deleting a console. A locked descendant blocks archiving or deleting its owner,
 even when the descendant is already archived. A bulk operation is refused as a whole rather than skipping locks.
 Unlock the protected session before retrying. A completion report still reaches its owner but does not archive
-a protected session or owner (see "Automatic archiving" in `docs/product/hub-orchestration.md`).
+a protected session or owner (see "Automatic archiving" in `docs/product/reporting-to-owners.md`).
 
 While an archive or deletion is in progress, changing any session's lock is refused with `session_lock_busy`;
 retry after that operation finishes. A failed lock change leaves the stored lock unchanged.
@@ -617,7 +618,7 @@ as it comes up.
 An archived session keeps its pin, if it had one (see "Order of projects and sessions" in `docs/product/sidebar.md`).
 
 Besides the user, four things archive a session: its owner, explicitly; a project session's own report saying the
-work is finished with nothing left open (see "Automatic archiving" in `docs/product/hub-orchestration.md`); a
+work is finished with nothing left open (see "Automatic archiving" in `docs/product/reporting-to-owners.md`); a
 console session or unbound project session archiving itself, which it can do only once every session under it is
 archived (see "A session archiving itself" in `docs/product/hub-orchestration.md`); and a handoff to another agent,
 which archives the original once its place has moved (see `docs/product/handing-off-sessions.md`). Each archives that
@@ -688,7 +689,8 @@ carried along; how, and what is carried, is in `docs/product/switching-session-a
 
 A session's work can be moved to a new session of another agent, which takes its place — its owner, its branches and
 the sessions it owns — and reads a package built from its conversation, while the original is archived. The user
-starts one from the session's **Hand off** menu item; see `docs/product/handing-off-sessions.md`.
+starts one from the session's **Hand off** menu item, and an owner with the `handoff_session` tool for a session of its
+own; see `docs/product/handing-off-sessions.md`.
 
 ### Archived sessions
 

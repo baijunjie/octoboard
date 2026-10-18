@@ -72,7 +72,7 @@ Octoboard's records, and only Octoboard can move them.
 1. 01 Handoff package (closed)
 2. 02 Handoff operation (closed)
 3. 03 Hand off entry in the UI (closed)
-4. [Handoff tool for owners](04-handoff-tool.md)
+4. 04 Handoff tool for owners (closed)
 5. [Account switch tool for owners](05-account-switch-tool.md)
 
 ## Open

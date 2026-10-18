@@ -44,8 +44,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   agent: the confirmation and the console-wide switch, what is copied per agent (Claude Code sidecars and rewind
   checkpoints, Codex rollouts compressed or not, subagent rollouts left behind), the all-or-nothing copy, and when a
   switch fails.
-- [Handing a session off to another agent](product/handing-off-sessions.md) — the session row's
-  Hand off entry and its dialog, and the daemon's `hand_off_session`: when a session can be handed off, the handoff package built from its records, how the receiving session takes over
+- [Handing a session off to another agent](product/handing-off-sessions.md) — the session row's Hand off entry and its
+  dialog, an owner's `handoff_session` tool (its arguments, result and refusals), and the daemon's `hand_off_session`:
+  when a session can be handed off, the handoff package built from its records, how the receiving session takes over
   its owner, branches and owned sessions, who is told, messages held during the handoff, and when it fails.
 - [Deleting sessions](product/deleting-sessions.md) — deleting archived sessions one at a time or all at once (an
   archived owner takes its bound archived sessions along), deleting a never-used session without confirmation, and
@@ -92,12 +93,14 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   terminal at the project's directory on the machine the daemon runs on, Terminal.app on macOS and the first installed
   emulator on Linux, when the request finishes, and when it is refused.
 - [Orchestration](product/hub-orchestration.md) — how an owner (a console session, or an unbound project session in
-  its own project) starts and drives sessions: each one's tools and a bound session's `report`, lead sessions (a
-  project session bound to a console session that keeps its own sessions, two levels deep), changing a session's owner
-  (who can own a session, handing a session to another owner, an unbound session binding itself, and what a session is
-  told when its binding changes while it runs), the brief a task is handed over as, the reporting loop and what
-  happens when a session stops without reporting, automatic archiving, which sessions an owner drives, and a session
-  that reports to nobody archiving itself once everything under it is archived.
+  its own project) starts and drives sessions: each one's tools, lead sessions (a project session bound to a console
+  session that keeps its own sessions, two levels deep), the brief a task is handed over as, which sessions an owner
+  drives, and a session that reports to nobody archiving itself once everything under it is archived.
+- [Changing a session's owner](product/changing-session-owners.md) — how a binding changes while sessions run: who can
+  own a session, handing a session to another owner with `transfer_session`, an unbound session binding itself with
+  `bind_to_session`, and what a running session is told when its binding changes and how its tools follow.
+- [Reporting to an owner](product/reporting-to-owners.md) — how a bound session reports to its owner with `report`, the
+  report synthesised when a session stops without reporting, and automatic archiving on a `done` report.
 - [Information between sessions](product/information-between-sessions.md) — listing the running sessions of every
   console with `list_sessions` and writing information into any of them with `share_info`: why it reaches a session as
   information rather than an instruction, and the copy its owner is sent.

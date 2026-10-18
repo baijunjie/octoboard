@@ -238,6 +238,23 @@ pub(crate) fn output_containing(live: &LiveSession, needle: &str) -> String {
     }
 }
 
+/// What a stand-in session has heard once a marker written to it now has arrived, so that an
+/// absence asserted in it is one of a reader that has caught up (its reader thread fills the output
+/// some time after a write). The session must have a process that takes messages.
+pub(crate) fn heard_after_marker(state: &Arc<AppState>, live: &LiveSession) -> String {
+    const MARKER: &str = "marker-after-the-call";
+    crate::reporting::write_message(
+        state,
+        &live.id,
+        MARKER,
+        crate::reporting::WhenBlocked::Queue,
+    )
+    .unwrap();
+    let heard = output_containing(live, MARKER);
+    assert!(heard.contains(MARKER), "{heard}");
+    heard
+}
+
 /// A stand-in live session on a real PTY, with `/bin/bash` running `script` behind it instead of a
 /// real agent: enough for whatever a test needs a `LiveSession` to write into, read from, or just
 /// stay alive on. `LiveSession` has no `Drop` that ends its process, so this guard does: the
@@ -282,6 +299,38 @@ pub(crate) fn fake_live_session(
     // into it rather than held.
     live.trust.end_watch();
     live
+}
+
+/// What a stand-in launch was asked for: the session, its owner and its opening prompt.
+pub(crate) type Launched = (String, Option<crate::mcp::Owner>, Option<String>);
+
+/// A launch that starts a stand-in process for the session asked for, for the operations that
+/// start an agent (`term::launch` cannot in a test). The process is kept in `started` and the
+/// request recorded in `launches`, for the test to read; `during` runs first, as what happens
+/// while the agent is being started.
+pub(crate) fn stand_in_launch(
+    started: &Arc<std::sync::Mutex<Vec<StandIn>>>,
+    launches: &Arc<std::sync::Mutex<Vec<Launched>>>,
+    during: impl FnOnce() + Send + 'static,
+) -> impl FnOnce(crate::term::LaunchRequest) -> anyhow::Result<crate::term::Launch> + Send + 'static
+{
+    let (started, launches) = (started.clone(), launches.clone());
+    move |request| {
+        during();
+        let live = fake_live_session(&request.session_id, request.agent, 80, 24, "sleep 30");
+        crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
+        let process = (*live).clone();
+        started.lock().unwrap().push(live);
+        launches
+            .lock()
+            .unwrap()
+            .push((request.session_id, request.owner, request.task));
+        Ok(crate::term::Launch {
+            session: process,
+            agent_session_id: None,
+            notice: None,
+        })
+    }
 }
 
 /// [`fake_live_session`] with its trust watch still looking for the agent's screen, as a freshly

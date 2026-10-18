@@ -491,8 +491,8 @@ so its own `bound_to` names a console session while other project sessions' `bou
 sent to clients marks a lead session (the daemon keeps it apart), and a session becomes one by calling `bind_to_session`
 with a console session, or by taking a lead session's place in a `hand_off_session`; a `transfer_session` to another console session keeps it one, and one to a project session,
 possible only while it owns no session, ends it. A session bound to a lead session owns none. `report` and the
-synthesised report both deliver to this session; see "Reporting", "Lead sessions" and "Changing a session's owner" in
-`docs/product/hub-orchestration.md`.
+synthesised report both deliver to this session; see `docs/product/reporting-to-owners.md`, "Lead sessions" in
+`docs/product/hub-orchestration.md`, and `docs/product/changing-session-owners.md`.
 `Session.colour` is a console session's badge colour, one entry of a fixed palette of sixteen, each written as its family
 name: `red`, `orange`, `amber`, `yellow`, `lime`, `green`, `teal`, `cyan`, `sky`, `blue`, `indigo`, `violet`,
 `fuchsia`, `pink`, `brown` and `gray`. The ids are never shown to the user; what each one looks like is the client's.
@@ -1666,7 +1666,7 @@ the one waiting request a session may have, are described in `docs/product/sessi
 | `new_session`, `send_message`, `get_session`, `archive_session`, `reopen_session`, `rename_session`, `set_session_pinned` | yes | yes | — |
 | `list_sessions`, `share_info` | yes | yes | yes |
 | `archive_self` | yes | yes (refused once bound, a lead session included, which wraps up with `report`) | — |
-| `transfer_session` | yes | yes | — |
+| `handoff_session`, `transfer_session` | yes | yes | — |
 | `bind_to_session` | — | yes (refused once bound, a lead session included) | — |
 | `request_session` | yes | yes | yes |
 | `report`, `get_project` | — | yes (`report` is refused until bound) | yes |
@@ -1742,8 +1742,16 @@ console, changes a project's path, source, host, remote or `trust_consent`, or w
 - `transfer_session` takes `session` (one of the caller's), `to` (the new owner) and `note`, and needs no approval:
   `Session.bound_to` changes, the session and the new owner are told in messages, and the note reaches the new owner.
   `bind_to_session` takes `owner` and `summary`, which reaches the owner as the caller's first report. Both refuse, in
-  prose and changing nothing, an owner that breaks the rules a binding keeps; see "Changing a session's owner" in
-  `docs/product/hub-orchestration.md`.
+  prose and changing nothing, an owner that breaks the rules a binding keeps; see "Who can own a session" in
+  `docs/product/changing-session-owners.md`.
+- `handoff_session` takes `session` (one of the caller's), `agent`, and optionally `account`, `model`, `effort` and
+  `note`, and needs no approval: it runs `hand_off_session` on the session, with `note` quoted in the receiving
+  session's opening prompt. The receiving session takes the original's place, so it reports to the caller as the
+  original did, and the caller is not sent the message that tells an owner of a handoff. The result carries
+  `session` (the receiving session), `agent`, `archived` (the original), `branches` and `owned_sessions` (what
+  moved; `branches` is `[]`, with the reason in `note`, when the branches could not be moved), and a `note`. A
+  session that is not the caller's, and anything `hand_off_session` refuses, is refused in prose and changes
+  nothing.
 - `list_sessions` answers every running session but the caller's, in every console and project, console sessions
   included, with `owner`, `owner_kind`, `yours` and `your_owner`; `get_session` and `share_info` reach any session,
   whichever console or project it is in, while the tools that act on a session (`send_message`, `rename_session` and so

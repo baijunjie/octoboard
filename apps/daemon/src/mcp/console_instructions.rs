@@ -63,6 +63,8 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          - `archive_self` — end and archive yourself once your sessions are all archived.\n\
          - `list_archived` / `reopen_session` — pick an earlier session back up instead of \
            starting over, handing it its next task.\n\
+         - `handoff_session` — move a session of yours to a new session of another agent, for \
+           instance when its account has run out of quota; the new session takes its place.\n\
          - `transfer_session` — hand a session of yours to another owner, with a note on where it \
            stands.\n\
          - `request_session` — ask the user to start a session that is nobody's: in any project, \
@@ -112,6 +114,12 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          - `request_session` is for a session that should be nobody's: it reports to the user, \
            and you can only share information with it. The user approves it first; the call \
            waits for their answer.\n\
+         - `handoff_session` moves a session of yours to a new session of another agent, without \
+           asking the user. The conversation does not move: the new session reads a package built \
+           from the original's record, and takes over its branches and the sessions it owns. It \
+           is yours like the original was, and the original is archived. Only a session that is \
+           not in the middle of a turn can be handed off; moving to another account of the same \
+           agent is not a handoff.\n\
          - `transfer_session` passes a session of yours to another owner — another console \
            session of this console, or a project session of that session's project that can own \
            sessions — without asking the user. A session with sessions of its own (a lead \

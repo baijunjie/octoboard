@@ -22,14 +22,14 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use uuid::Uuid;
 
 use crate::coordinator::{self, OpenRequest};
 use crate::mcp::qualified_tool_name;
 use crate::protocol::{error_code, notice_code, Agent, CodedError, Notice, Session, SessionStatus};
 use crate::reporting::{self, WhenBlocked};
-use crate::sharing::{named_session, one_line, place_of};
+use crate::sharing::{named_session, one_line, place_of, quote};
 use crate::state::{AppState, OutboxHold};
 use crate::term;
 
@@ -41,14 +41,20 @@ pub struct Handoff {
     pub account: Option<Option<String>>,
     pub model: Option<Option<String>>,
     pub effort: Option<Option<String>>,
+    /// What the owner asking says to the receiving session, put in its opening prompt.
+    pub note: Option<String>,
+    /// The owner that made the call, when one did: it is not sent the message that tells an owner
+    /// of the handoff, since it knows, and the result of its call says what moved.
+    pub asked_by: Option<String>,
 }
 
-/// Hands `request.session` off and returns the receiving session, running, with the original's
-/// place and the original archived. Refused, with nothing changed, for a session that is missing,
-/// archived, locked or not at rest, a receiving agent that is the session's own, and what opening
-/// the receiving session would refuse (an agent that is not available, an account of another
-/// agent, a model or effort the agent does not offer, an owner that can no longer be reported to).
-pub async fn hand_off(state: &Arc<AppState>, request: Handoff) -> Result<Session> {
+/// Hands `request.session` off and returns what moved: the receiving session, running in the
+/// original's place, with the original archived, and what it took over. Refused, with nothing
+/// changed, for a session that is missing, archived, locked or not at rest, a receiving agent that
+/// is the session's own, and what opening the receiving session would refuse (an agent that is not
+/// available, an account of another agent, a model or effort the agent does not offer, an owner
+/// that can no longer be reported to).
+pub async fn hand_off(state: &Arc<AppState>, request: Handoff) -> Result<Moved> {
     hand_off_with(state, request, term::launch).await
 }
 
@@ -56,13 +62,23 @@ pub(crate) async fn hand_off_with(
     state: &Arc<AppState>,
     request: Handoff,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
-) -> Result<Session> {
+) -> Result<Moved> {
     // Claimed before the record is read, so the status checked is the one the handoff goes on
     // with. Held to the end, so that nothing resumes, switches or deletes the original meanwhile.
     let _claim = state.begin_switch(&request.session)?;
     // Held from the claim on, before anything is read: a refusal just drops it.
     let hold = state.hold_outbox(&request.session);
     let original = state.session_record(&request.session)?;
+    // The asker checked ownership before the claim; it may have changed since.
+    if let Some(asker) = request.asked_by.as_deref() {
+        if original.bound_to.as_deref() != Some(asker) {
+            bail!(
+                "`{}` (\"{}\") is no longer yours: it was handed to another owner meanwhile",
+                original.id,
+                one_line(&original.title)
+            );
+        }
+    }
     refuse_unless_it_can_be_handed_off(&original, request.agent)?;
 
     let key = Uuid::new_v4().to_string();
@@ -97,7 +113,7 @@ pub(crate) async fn hand_off_with(
         tokio::task::spawn_blocking(move || super::prepare(&state, &original, None, &key)).await??
     };
     let open = OpenRequest {
-        task: Some(brief(&original, &path)),
+        task: Some(brief(&original, &path, request.note.as_deref())),
         ..open
     };
     let receiving = match coordinator::open_session_with(state, open, launch).await {
@@ -111,7 +127,7 @@ pub(crate) async fn hand_off_with(
     };
 
     let moved = move_place(state, &original, &receiving, &hold).await?;
-    tell(state, &original, &moved).await;
+    tell(state, &original, &moved, request.asked_by.as_deref()).await;
     forward_queued(state, &original.id, &moved.receiving.id).await;
     // No branch cleanup follows the archive: the branches the original was responsible for have
     // moved to the receiving session, and any that could not move are not the archive's to remove.
@@ -124,7 +140,7 @@ pub(crate) async fn hand_off_with(
     // Dropping the hold forwards a message queued after the forward above to the receiving session,
     // as it does on every path out of here once the place has moved.
     drop(hold);
-    Ok(moved.receiving)
+    Ok(moved)
 }
 
 fn refuse_unless_it_can_be_handed_off(original: &Session, agent: Agent) -> Result<()> {
@@ -173,8 +189,15 @@ fn refuse_unless_it_can_be_handed_off(original: &Session, agent: Agent) -> Resul
     Ok(())
 }
 
-/// The receiving session's opening prompt: where the package is, to be read before anything else.
-fn brief(original: &Session, package: &Path) -> String {
+/// The receiving session's opening prompt: where the package is, to be read before anything else,
+/// and the note of the owner that asked for the handoff, when it left one.
+fn brief(original: &Session, package: &Path, note: Option<&str>) -> String {
+    let note = note.map_or_else(String::new, |note| {
+        format!(
+            "\n\nThe owner that handed the work off left you this note:\n\n{}",
+            quote(note)
+        )
+    });
     format!(
         "You are taking over the work of the {kind} session `{id}` (\"{title}\"), a {agent} \
          session. Octoboard is handing it off to you because the work moves to another agent. Its \
@@ -186,7 +209,7 @@ fn brief(original: &Session, package: &Path) -> String {
          what comes next from it, and carry on where the original stopped; do not start over.\n\n\
          Once you are running, Octoboard moves the original's place to you: its owner, its \
          branches and its sessions. It sends you a message saying what you now hold, and archives \
-         the original; do not message the original.",
+         the original; do not message the original.{note}",
         kind = original.role.kind(),
         id = original.id,
         title = one_line(&original.title),
@@ -196,14 +219,15 @@ fn brief(original: &Session, package: &Path) -> String {
 }
 
 /// What moved to the receiving session.
-struct Moved {
+#[derive(Debug)]
+pub struct Moved {
     /// The receiving session as it stands after the move.
-    receiving: Session,
+    pub receiving: Session,
     /// The sessions the original owned, now bound to the receiving session, archived ones included.
-    owned: Vec<Session>,
+    pub owned: Vec<Session>,
     /// The branches now named after the receiving session, as wire paths, or why they could not be
     /// moved.
-    branches: std::result::Result<Vec<String>, String>,
+    pub branches: std::result::Result<Vec<String>, String>,
 }
 
 /// Moves the binding, the owned sessions and the branches to `receiving`, and tells every client.
@@ -277,10 +301,10 @@ async fn move_place_inner(
 }
 
 /// Tells the receiving session what it took over, each moved session that its owner changed, and
-/// the owner that its session was handed off. A session without a process (an archived one, or an
-/// interrupted owner) cannot be told: a relaunch tells it who its owner is, and the owner learns
-/// of the new session from its list.
-async fn tell(state: &Arc<AppState>, original: &Session, moved: &Moved) {
+/// the owner that its session was handed off, unless that owner is `asked_by`, which made the call.
+/// A session without a process (an archived one, or an interrupted owner) cannot be told: a
+/// relaunch tells it who its owner is, and the owner learns of the new session from its list.
+async fn tell(state: &Arc<AppState>, original: &Session, moved: &Moved, asked_by: Option<&str>) {
     let receiving = &moved.receiving;
     let tool = |agent: Agent, name: &str| qualified_tool_name(agent, name);
     let owner = receiving
@@ -303,7 +327,10 @@ async fn tell(state: &Arc<AppState>, original: &Session, moved: &Moved) {
         send(state, &session.id, text).await;
     }
 
-    if let Some(owner) = owner.as_ref().filter(|owner| !owner.status.is_dormant()) {
+    let to_tell = owner
+        .as_ref()
+        .filter(|owner| !owner.status.is_dormant() && asked_by != Some(owner.id.as_str()));
+    if let Some(owner) = to_tell {
         let text = format!(
             "Message from Octoboard: {from}, which reported to you, was handed off to a session \
              of {agent}, because its work moves to another agent. {to}{place} took its place and \

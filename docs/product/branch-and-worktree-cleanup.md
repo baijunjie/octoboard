@@ -143,7 +143,8 @@ shown when nothing is left.
 ## Archives made by an agent
 
 `archive_session`, `archive_self`, and the archive a `done` report with no open items brings (see "The console
-session's tools", "Automatic archiving" and "A session archiving itself" in `docs/product/hub-orchestration.md`)
+session's tools" and "A session archiving itself" in `docs/product/hub-orchestration.md`, and "Automatic archiving" in
+`docs/product/reporting-to-owners.md`)
 remove what is bound to the sessions archived the same way, and **never force anything**: an agent's archive removes
 no worktree with changes or submodules, no unmerged branch and no locked worktree. No error alert is shown for what
 an agent's archive leaves; the agent is told instead:

@@ -8,7 +8,9 @@ switching its account instead (see `docs/product/switching-session-accounts.md`)
 
 A handoff is made with the daemon client protocol's `hand_off_session` request, which names the session, the receiving
 agent, and optionally the receiving session's account, model and reasoning effort. In the window it is made from a
-session's **Hand off** menu item (see "Handing off from the window" below). There is no orchestration tool for it yet.
+session's **Hand off** menu item (see "Handing off from the window" below). An owner hands off a session of its own
+with the `handoff_session` tool (see "Handing off from an owner's tool" below). All of them run the same handoff,
+described in the rest of this document.
 
 ## What can be handed off
 
@@ -74,6 +76,47 @@ open for another try. A session in the middle of a turn or still starting (`sess
 its current turn or operation to finish; a receiving agent that is the session's own (`handoff_to_same_agent`), which
 the dialog cannot send, is shown as an unexpected failure.
 
+## Handing off from an owner's tool
+
+`handoff_session` is offered to every session that can own sessions — a console session, an unbound project session and
+a lead session — and not to a session with the role of a bound one (see "The console session's tools" and "The unbound
+project session's tools" in `docs/product/hub-orchestration.md`). It needs no approval: an owner hands off a session of
+its own without the user.
+
+| Argument | Required | Contents |
+|---|---|---|
+| `session` | yes | The session to hand off: one of the caller's (`yours: true`). |
+| `agent` | yes | The receiving agent, `claude`, `codex` or `grok`; not the session's own. |
+| `account` | no | The receiving session's account: an account's id or name, or `default` for the agent's default account. It must belong to `agent`. Left out or blank, it comes from the project or console, as for any handoff (see "What can be handed off" above). |
+| `model`, `effort` | no | The receiving session's model and reasoning effort. Left out, each comes from the project or console, as for any handoff; blank, it is the agent's own default; any other must be one the agent offers. |
+| `note` | no | What the caller tells the receiving session beyond the package, such as where the work stands and what to do first. It is added at the end of the receiving session's opening prompt, introduced as a note from the owner that handed the work off, every line quoted. Blank is the same as left out. |
+
+The receiving session takes the original's place, so it is the caller's, as the original was, and reports to it. The
+caller is not sent the message that tells an owner of a handoff (see "Who is told" below), since it made the call; the
+receiving session and the sessions that moved are told as for any handoff.
+
+The call returns:
+
+| Field | Contents |
+|---|---|
+| `session` | The receiving session's id. |
+| `agent` | The receiving session's agent. |
+| `archived` | The original's id; it is archived. |
+| `branches` | The names of the branches that now name the receiving session as their responsible session. `[]` when the branches could not be moved, the reason then being in `note`. |
+| `owned_sessions` | The ids of the sessions now bound to the receiving session, archived ones included. |
+| `note` | Prose saying the original was archived and the work moved to the receiving session, of which agent, which reports to the caller as the original did and is driven with the usual tools; when the branches could not be moved, also that, why, and that they still name the original. |
+
+Refused, with the reason in prose (as a tool error) and nothing changed:
+
+- a session that is not the caller's — an unbound one, one bound to another session, a console session, or the caller
+  itself — with a reason naming who owns it, as for the other tools that act on a session of the caller's;
+- a session that stopped being the caller's after the call was checked and before the handoff took hold of it, handed
+  to another owner meanwhile;
+- an `agent` other than the three, or an `account` that is not one of `agent`'s;
+- everything a handoff refuses (see "What can be handed off" above).
+
+What fails after that is answered as in "When a handoff fails" below.
+
 ## The handoff package
 
 The package is a Markdown file built by program alone — no model is called — from the original's records, for the
@@ -135,7 +178,7 @@ until a session can take them" in `docs/product/message-delivery.md`):
   what it was told of its owner when it was started, and that the original is archived;
 - **the owner, when there is one and it has a process,** is told that its session was handed off to a session of
   another agent, which now reports to it and which it drives like any session of its own, and that the original is
-  archived;
+  archived — unless the owner made the handoff itself with `handoff_session`, whose result tells it instead;
 - **the receiving session** is told what it now holds: its owner and how to report to it — for a lead session, also
   that this replaces what its role description says about being unbound, and how its reports archive it — or that it
   has no owner and reports to the user; the branches it is now responsible for, or that they could not be moved and
@@ -180,4 +223,5 @@ Every refusal comes before anything is written or started. After that:
 - **Branches that cannot be moved** do not fail the handoff: they stay with the original, and the receiving session is
   told so.
 
-A handoff that succeeds is answered with the receiving session.
+A handoff that succeeds is answered with the receiving session; `handoff_session`'s answer is in "Handing off from an
+owner's tool" above.

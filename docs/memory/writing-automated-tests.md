@@ -74,6 +74,18 @@ To recognise it: failures only under a parallel run, a run far slower than usual
 suite stalling for seconds in the same windows. That is the machine, not the code under test: do
 not raise production timeouts or serialize the suite over it.
 
+## Assert that a stand-in session was sent nothing only behind a marker sent after the call
+
+Applies to daemon tests asserting that a message did not reach a stand-in session: an owner not told, a session not
+written to. A stand-in's output is filled in by its reader thread some time after the write, so reading
+`recent_output` straight after the call under test and asserting the text is absent passes whether or not the message
+was sent, and on a stand-in with no reader thread (`idle_stand_in`) it is always empty.
+
+So use a stand-in started with `test_support::running`, and after the call send it a marker through
+`reporting::write_message`, which queues every message so none overtakes one sent before it. Wait for the marker with
+`output_containing`, assert the marker is in what that returns (once `PATIENCE` runs out it returns the output as it
+stands, marker or not), and only then assert that the unwanted text is absent.
+
 ## Seed the agent's model list before a daemon test gives anything a model or an effort
 
 Applies to any daemon test — coordinator, control socket or console session tool — that creates or edits a console

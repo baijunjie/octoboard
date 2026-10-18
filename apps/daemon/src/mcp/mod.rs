@@ -25,6 +25,7 @@ mod args;
 mod bindings;
 pub mod console_instructions;
 pub mod exec;
+mod handoff;
 pub mod role;
 mod settings;
 pub mod stdio;
@@ -356,6 +357,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         },
     },
     REOPEN_SESSION,
+    HANDOFF_SESSION,
     TRANSFER_SESSION,
     REQUEST_SESSION,
     LIST_SESSIONS,
@@ -495,6 +497,64 @@ const REOPEN_SESSION: ToolDef = ToolDef {
                 },
             }),
             &["session"],
+        )
+    },
+};
+
+/// How an owner moves a session of its own to another agent, without the user: the receiving
+/// session takes the original's whole place and stays the owner's, and the original is archived.
+const HANDOFF_SESSION: ToolDef = ToolDef {
+    name: "handoff_session",
+    description: "Hand one of your sessions (`yours: true`) off to a new session of another \
+                  agent, to carry its work on, for instance when its account has run out of \
+                  quota. The conversation does not move, because the agents' records cannot \
+                  resume one another: the new session reads a package built from the original's \
+                  conversation (every user message and reply, without tool output), its latest \
+                  todo list and the files it changed. What moves is what only Octoboard holds: \
+                  the branches the original is responsible for and the sessions it owns now \
+                  belong to the new session, which reports to you like the original did, and the \
+                  original is archived. Needs no approval. Refused, changing nothing, while the \
+                  session is in the middle of a turn, and for the agent the session already runs \
+                  on (switching it to another account of that agent keeps the conversation). \
+                  Returns the new session's id, the branches that moved and the sessions it now \
+                  owns.",
+    schema: || {
+        object_schema(
+            json!({
+                "session": {
+                    "type": "string",
+                    "description": "The id of the session of yours to hand off.",
+                },
+                "agent": {
+                    "type": "string",
+                    "enum": ["claude", "codex", "grok"],
+                    "description": "The agent the new session runs on; not the session's own.",
+                },
+                "account": {
+                    "type": "string",
+                    "description": "The new session's account: an account's id or name, or \
+                                    `default` for the agent's default account. It must belong \
+                                    to `agent`.",
+                },
+                "model": {
+                    "type": "string",
+                    "description": "The new session's model; blank is the agent's own default. \
+                                    Left out, it takes the model its project (else its console) \
+                                    sets for sessions.",
+                },
+                "effort": {
+                    "type": "string",
+                    "description": "The new session's reasoning effort; blank is the agent's \
+                                    own default. Left out, it takes the effort its project \
+                                    (else its console) sets for sessions.",
+                },
+                "note": {
+                    "type": "string",
+                    "description": "What to tell the new session beyond the package, in natural \
+                                    language: where the work stands and what to do first.",
+                },
+            }),
+            &["session", "agent"],
         )
     },
 };
@@ -721,6 +781,7 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     REOPEN_SESSION,
     RENAME_SESSION,
     SET_SESSION_PINNED,
+    HANDOFF_SESSION,
     TRANSFER_SESSION,
     BIND_TO_SESSION,
     REQUEST_SESSION,
@@ -925,6 +986,7 @@ mod tests {
                 "reopen_session",
                 "rename_session",
                 "set_session_pinned",
+                "handoff_session",
                 "transfer_session",
                 "bind_to_session",
                 "request_session",
@@ -953,6 +1015,7 @@ mod tests {
                 "archive_self",
                 "list_archived",
                 "reopen_session",
+                "handoff_session",
                 "transfer_session",
                 "request_session",
                 "list_sessions",
