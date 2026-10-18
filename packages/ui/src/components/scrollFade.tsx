@@ -212,8 +212,9 @@ function StickyFadeFrame({ children, visibility, gutter, topOffset, bottomGutter
     <div className="relative isolate flex min-h-0 flex-1 flex-col">
       {children}
       {(visibility === "top" || visibility === "both") && (
-        <div aria-hidden="true" className={`pointer-events-none absolute start-0 z-2 bg-linear-to-b ${FADE_FROM[surface]} to-transparent`}
-          style={{ top: topOffset, height: FADE_SIZE, insetInlineEnd: gutter }} />
+        // Cover the heading's side gutters too: shadows can extend beyond its inset background.
+        <div aria-hidden="true" className={`pointer-events-none absolute top-0 start-0 z-2 bg-linear-to-b ${FADE_FROM[surface]} from-[length:var(--sticky-fade-offset)] to-transparent`}
+          style={{ "--sticky-fade-offset": `${topOffset}px`, height: topOffset + FADE_SIZE, insetInlineEnd: gutter } as CSSProperties} />
       )}
       {(visibility === "bottom" || visibility === "both") && (
         <div aria-hidden="true" className={`pointer-events-none absolute bottom-0 start-0 z-2 bg-linear-to-t ${FADE_FROM[surface]} to-transparent`}
