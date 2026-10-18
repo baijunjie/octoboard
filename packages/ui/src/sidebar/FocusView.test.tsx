@@ -220,6 +220,50 @@ it("a console session's focus mode offers neither a project's own focus mode nor
   unmount();
 });
 
+it("a console session's focus mode holds its own card above the list, with no lock or actions in the header", () => {
+  const { container, handlers, unmount } = mount((h) => (
+    <ConsoleSessionFocusView handlers={h} console={main} consoleSession={{ ...hub1, locked: true }} projects={[web, api]} sessions={sessions} />
+  ), sessions);
+  const header = container.querySelector<HTMLElement>("[data-focus-exit]")!.closest<HTMLElement>(".groove-b")!;
+  expect(header.querySelector('[aria-label^="Actions for session"]')).toBeNull();
+  expect(header.querySelector('[aria-label^="Unlock"]')).toBeNull();
+  expect(header.querySelector('div[role="button"]')).toBeNull();
+  expect(header.textContent).toBe("Main");
+  expect(header.querySelector("h2")?.textContent).toBe("Main");
+
+  const card = Array.from(container.querySelectorAll<HTMLElement>("div[role=button]")).find((row) => row.getAttribute("aria-label")?.startsWith(isolate("Hub")))!;
+  expect(card.getAttribute("aria-label")).not.toContain("Bound to");
+  expect(card.querySelector('[aria-label^="Unlock"]')).not.toBeNull();
+  expect(card.querySelector(".session-colour-dot")).not.toBeNull();
+  act(() => card.click());
+  expect(handlers.onSelectSession).toHaveBeenCalledWith(expect.objectContaining({ id: hub1.id }));
+  unmount();
+});
+
+it("a project's focus mode names the project as its heading, with the console's name over it", () => {
+  const { container, unmount } = mount((h) => (
+    <ProjectFocusView handlers={h} console={main} project={web} sessions={[]} owners={owners} />
+  ));
+  const header = container.querySelector<HTMLElement>("[data-focus-exit]")!.closest<HTMLElement>(".groove-b")!;
+  const heading = header.querySelector("h2")!;
+  expect(heading.textContent).toBe("Website");
+  expect(header.textContent).toContain("Main");
+  expect(heading.textContent).not.toContain("Main");
+  unmount();
+});
+
+it("the console session's card menu offers neither Pin nor Focus mode, and no pin button", () => {
+  const { container, unmount } = mount((h) => (
+    <ConsoleSessionFocusView handlers={h} console={main} consoleSession={{ ...hub1, pinned: true }} projects={[web, api]} sessions={sessions} />
+  ), sessions);
+  expect(container.querySelector('[aria-label^="Unpin"]')).toBeNull();
+  act(() => container.querySelector<HTMLElement>(`button[aria-label="Actions for session ${isolate("Hub")}"]`)?.click());
+  const items = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).map((el) => el.textContent);
+  expect(items).toContain("Rename");
+  expect(items.some((label) => /^(Pin|Unpin)/.test(label ?? "") || label === "Focus mode")).toBe(false);
+  unmount();
+});
+
 const chips = (container: HTMLElement) =>
   Array.from(container.querySelectorAll<HTMLElement>('[role=group][aria-label="Switch console session"] button'));
 
@@ -305,6 +349,7 @@ it("a console session's focus mode nests a lead session's own sessions under it"
     card.className.includes("flex-col"),
   );
   expect(cards.map((card) => [card.getAttribute("aria-label")?.split(" session,")[0], card.parentElement!.className.includes("ms-[17px]")])).toEqual([
+    [isolate("Hub"), false],
     [isolate("Rework the gallery"), false],
     [isolate("Chase the flaky test"), true],
     [isolate("Fix the layout"), false],
@@ -330,7 +375,7 @@ it.each([false, true])("console focus keeps its empty nested list compact (proje
   const { container, handlers, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={hasProjects ? [web] : []} sessions={[hub1]} />
   ), [hub1]);
-  expect(Array.from(container.querySelectorAll("h2,h3")).map((heading) => heading.textContent)).toEqual(["Hub", "Sessions (0)"]);
+  expect(Array.from(container.querySelectorAll("h2,h3")).map((heading) => heading.textContent)).toEqual(["Main", "Sessions (0)"]);
   if (!hasProjects) {
     const row = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("No projects yet"));
     expect(row).toBeDefined();

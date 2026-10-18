@@ -99,7 +99,7 @@ const emptyProject = projectOf("p-empty", console_.id, "Archived only");
 const freshProject = projectOf("p-fresh", console_.id, "No sessions yet");
 const longProject = projectOf("p-long", console_.id, "A project whose name is far too long for one row");
 const state = snapshotState({
-  consoles: [{ ...console_, name: "A console with a rather long name indeed" }, loneConsole, projectlessConsole, crowdedConsole, fittingConsole],
+  consoles: [console_, loneConsole, projectlessConsole, crowdedConsole, fittingConsole],
   projects: [project, other, third, searchProject, longProject, emptyProject, freshProject, projectOf("p-lone", loneConsole.id, "No bound sessions"), projectOf("p-fitting", fittingConsole.id, "Short strip")],
   sessions: [
     ...sessions, longHub, redesignHub,
@@ -116,6 +116,12 @@ const state = snapshotState({
   ],
   settings,
 });
+
+// The same workspace under a console whose name no header fits, for the long-names scenario alone.
+const longNameState = {
+  ...state,
+  consoles: new Map([...state.consoles!].map(([id, item]) => [id, id === console_.id ? { ...item, name: "A console with a rather long name indeed" } : item] as const)),
+};
 
 // The existing focus views share enough cards to scroll even with the console-bound cards
 // hidden. Keep the hierarchy and empty-state scenarios on their smaller original workspace.
@@ -241,10 +247,19 @@ const unusedBoundSessions = [
   sessionOf("s-bound-unused-agent", console_.id, project.id, "Start the benchmark run", "idle", { bound_to: hub1.id, origin: "console", has_conversation: false, started_at: minutesAgo(4) }),
 ];
 
-const lockedFocusState = {
+// No native records exist for the unused bound sessions.
+const unusedBoundRecords = Object.fromEntries(unusedBoundSessions.map((session) => [session.id, "absent" as const]));
+
+// `hub1`'s own card in its focus mode: locked, with a token total beside its agent. `s-1` is locked too.
+const consoleFocusState = {
   ...scrollingFocusState,
   sessions: new Map([
-    ...[...scrollingFocusState.sessions].map(([id, session]) => [id, id === hub1.id || id === "s-1" ? { ...session, locked: true } : session] as const),
+    ...[...scrollingFocusState.sessions].map(([id, session]) => [
+      id,
+      id === hub1.id ? { ...session, locked: true, usage: { input_tokens: 1_240_000, output_tokens: 48_000, cached_input_tokens: 980_000, total_tokens: 1_288_000 } }
+        : id === "s-1" ? { ...session, locked: true }
+          : session,
+    ] as const),
     ...unusedBoundSessions.map((session) => [session.id, session] as const),
   ]),
 };
@@ -300,12 +315,53 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Console session focus",
-    state: lockedFocusState,
-    sessionRecords: Object.fromEntries(unusedBoundSessions.map((session) => [session.id, "absent" as const])),
+    state: consoleFocusState,
+    sessionRecords: unusedBoundRecords,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "The focused Hub header and the pinned Add idempotency keys card have persistent Unlock controls before their actions, without lock borders; unlocking keeps their order. Draft the changelog and Start the benchmark run are both bound to Hub and were never used; the first was opened by the user, so its shortcut and menu offer Delete, while the second was started by an agent and keeps Archive. The switch strip includes waiting, working and inactive sessions; hover markers for details. Set Modifier to Held to see the header plus menu and each project group's new-session button as the bolt; choosing a project from the menu then creates with defaults.",
+    description: "The header holds only the back button, the console name Main as a single-line heading and the plus menu; Hub's title is on the card below, not in the header. Below the switch strip, fixed above the scrolling list, Hub's own card is not selected: its status, a colour dot, its agent, creation time and 1.3M token count, and its persistent Unlock control before the actions menu, whose items have no Pin or Focus mode. The pinned Add idempotency keys card has a persistent Unlock control too, without lock borders; unlocking either keeps their order. Draft the changelog and Start the benchmark run are both bound to Hub and were never used; the first was opened by the user, so its shortcut and menu offer Delete, while the second was started by an agent and keeps Archive. The switch strip includes waiting, working and inactive sessions; hover markers for details. Set Modifier to Held to see the header plus menu and each project group's new-session button as the bolt; choosing a project from the menu then creates with defaults.",
     steps: [
       (ui) => ui.press(addIdempotencyKeys(ui)),
+    ],
+  },
+  {
+    id: "focus-console-session-selected",
+    group: GROUP,
+    category: "normal",
+    title: "Console session card selected",
+    state: consoleFocusState,
+    sessionRecords: unusedBoundRecords,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
+    description: "Pressing Hub's card in the sidebar selects the console session: the card takes the selected highlight, the breadcrumb and the terminal switch to Hub, and no card in the list is selected. Compare it with the unselected card of Console session focus.",
+    steps: [
+      (ui) => ui.press(ui.session("Hub")),
+    ],
+  },
+  {
+    id: "focus-console-session-drawer",
+    group: GROUP,
+    category: "normal",
+    title: "Console session focus in the mobile sidebar card",
+    width: 390,
+    state: consoleFocusState,
+    sessionRecords: unusedBoundRecords,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
+    description: "Below the docked breakpoint the sidebar is a floating card whose header is 40px tall instead of 48px. The back button, the single-line console name Main and the plus menu fit without clipping, and the switch strip and Hub's own card follow it.",
+    steps: [
+      (ui) => ui.press(ui.t("titleBar.sidebar.show")),
+    ],
+  },
+  {
+    id: "focus-project-drawer",
+    group: GROUP,
+    category: "normal",
+    title: "Project focus in the mobile sidebar card",
+    width: 390,
+    state: scrollingFocusState,
+    sessionRecords: { "s-scroll-unused": "absent" },
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
+    description: "Below the docked breakpoint the sidebar is a floating card whose header is 40px tall instead of 48px. The project header keeps both lines inside it, the console name Main over Search API with the gap between them no larger than the margins above and below, beside the back button, the + button and the actions menu without clipping.",
+    steps: [
+      (ui) => ui.press(ui.t("titleBar.sidebar.show")),
     ],
   },
   {
@@ -343,9 +399,18 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Long console session and project names",
-    state: state,
+    state: longNameState,
     preferences: { sidebarWidth: 280, sidebarConsole: console_.id, sidebarFocus: `consoleSession:${longHub.id}` },
-    description: "Long English agent task titles with original session names in the header and cards, alongside long session names and project headings. Hover the clipped console subtitle or a session heading to run only that text's marquee: after a 600-millisecond initial pause it rests three seconds at the far end, returns in about 200 milliseconds, waits three seconds and runs again, resetting as soon as the pointer leaves. Hovering header controls leaves both still.",
+    description: "A long console name fills the single-line header, while the console session's own card above the list clips its long agent task title and original name; long session names and project headings follow in the list. Hover the clipped console name, the card's title or a session heading to run only that text's marquee: after a 600-millisecond initial pause it rests three seconds at the far end, returns in about 200 milliseconds, waits three seconds and runs again, resetting as soon as the pointer leaves. Hovering header controls leaves the console name still.",
+  },
+  {
+    id: "focus-project-long",
+    group: GROUP,
+    category: "normal",
+    title: "Project focus with long console and project names",
+    state: longNameState,
+    preferences: { sidebarWidth: 280, sidebarConsole: console_.id, sidebarFocus: `project:${longProject.id}`, projectFocusIncludeConsoleSessions: true },
+    description: "The two-line header clips both the long console name above and the long project name below, each fading at its end. Hover either line to run only that line's marquee and see its tooltip; hovering header controls leaves both still.",
   },
   {
     id: "focus-project-no-sessions",
@@ -411,7 +476,7 @@ export const focusScenarios: Scenario[] = [
     title: "No bound sessions or switch strip",
     state: state,
     preferences: { sidebarConsole: loneConsole.id, sidebarFocus: "consoleSession:s-lone" },
-    description: "No bound sessions appears as a quiet row. The header's plus button opens a project chooser to create a bound session. The main area asks for selection; the focused console session remains selectable in the header.",
+    description: "No bound sessions appears as a quiet row. The header's plus button opens a project chooser to create a bound session. The main area asks for selection; the focused console session's own card, fixed above the list, is how to select it, with no switch strip above it. Only hub, idle with nothing bound under it, shows an Archive shortcut before its actions menu, as its row in the main sidebar list does.",
   },
   {
     id: "focus-console-session-no-projects",
@@ -420,7 +485,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console session with no projects",
     state: state,
     preferences: { sidebarConsole: projectlessConsole.id, sidebarFocus: "consoleSession:s-projectless" },
-    description: "The sidebar offers Add project as a compact row and keeps New session disabled. The main area asks for selection; the focused console session remains selectable in the header.",
+    description: "The sidebar offers Add project as a compact row and keeps New session disabled. The main area asks for selection; the focused console session's own card remains selectable above the list.",
   },
   {
     id: "focus-console-session-overflow",

@@ -183,14 +183,17 @@ a branch's name in its branch selector, a picked tag's label (see "Picked tags" 
 the project filter's strip of conditions in the sidebar's Projects heading, which counts as one label (see "Filtering
 the project list" in `docs/product/sidebar.md`) — fades out where it is cut off rather than ending in an ellipsis. The
 same holds for action-menu items and submenu names, a select's current choice or placeholder and its listed options,
-directory-picker rows, the console name above a focus view's title, the archive view's heading and count, the model line
-on a focus mode card and the agent name on a full archive row. A fixed session-owner label and a diff's collapsed-line
-label follow the same fade and marquee rules.
+directory-picker rows, each line of a focus mode's header — the console's name and the project's name in a project's
+focus mode, the console's name alone in a console session's — the archive view's heading and count, the model line on a
+focus mode card and the agent name on a full archive row. A fixed session-owner label and a diff's collapsed-line label
+follow the same fade and marquee rules.
 
 Except for the report timestamp, clipped text then has its full text as its tooltip — for the project filter's strip,
-its conditions drawn as the same tags the strip shows (see "Filtering the project list" in `docs/product/sidebar.md`)
-— shown while the pointer is on the label and not on keyboard focus; the label's whole text is in the document whether or not it is cut, so assistive
-technology is given it either way. The diff separator's tooltip follows the operating system's rules instead.
+its conditions drawn as the same tags the strip shows (see "Filtering the project list" in `docs/product/sidebar.md`),
+and for the archive view's heading, the longer title that also names the project, console session or console the
+archive is for — shown while the pointer is on the label and not on keyboard focus; the label's whole text is in the
+document whether or not it is cut, so assistive technology is given it either way. The diff separator's tooltip
+follows the operating system's rules instead.
 
 **A path is cut at its start instead**, so that its last folder stays in view (see "Right-to-left layout" in
 `docs/product/window-layout.md`); every other label is cut at its end. Everything this section says holds for a label

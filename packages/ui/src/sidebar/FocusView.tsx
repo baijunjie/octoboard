@@ -7,6 +7,7 @@ import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { PaneTitle } from "../components/PaneTitle";
 import { RowControls, RowIconGroup, RowIconLine, RowIconSlot } from "../components/RowControls";
 import { hasVisibleUsage, SessionUsageLabel } from "../components/SessionMetadata";
 import { StatusIcon } from "../components/StatusIcon";
@@ -28,11 +29,11 @@ import { useDaemon, useDaemonStore, useDaemonStoreEqual } from "../store";
 import { useNow } from "../useNow";
 import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
-import { projectMenu, sessionMenu } from "./menus";
+import { projectMenu } from "./menus";
 import { NewSessionButton } from "./NewSessionButton";
 import { NewSessionMenu } from "./NewSessionMenu";
 import { SessionActions } from "./SessionActions";
-import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroupRows, focusGroups, hasBoundSessions, liveSessionRows, type NestedSession, notUnderConsoleSession, switchStrip, type SwitchStripEntry } from "./order";
+import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroupRows, focusGroups, liveSessionRows, type NestedSession, notUnderConsoleSession, switchStrip, type SwitchStripEntry } from "./order";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
 import { NESTED_INSET_CLASS, LockButton, PinButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
 import type { SidebarHandlers } from "./types";
@@ -75,22 +76,16 @@ function FocusHeader({
   );
 }
 
-/** What a focus view's header names, under the console's name. The name is the view's own heading,
- * so what the view holds reads as sections of it: the sections below are a level under it, and the
- * project groups inside those a level under them again. */
-function FocusTitle({ consoleName, title }: { consoleName: string; title: string }): React.ReactElement {
-  return (
-    <>
-      <FadeOverflow className="text-xs text-app-muted" dir="auto" titleWhenClipped={consoleName}>
-        {consoleName}
-      </FadeOverflow>
-      <h2 className="min-w-0">
-        <RowLabel title={title} className="block min-w-0">
-          <span className="text-sm font-semibold">{title}</span>
-        </RowLabel>
-      </h2>
-    </>
-  );
+/** What a focus view's header names, as its flexing item. A project's header gives the console's
+ * name over the project's, the project's name being the view's own heading; a console session's
+ * gives the console's name alone as the heading, the session's title being on the card below. What
+ * the view holds reads as sections of that heading: the sections below are a level under it, and
+ * the project groups inside those a level under them again.
+ * `min-w-16` is the floor itself: this is the flex item (`flex-1`'s basis is 0%, so a floor on the
+ * label inside `PaneTitle` would clamp nothing), leaving, in a project's header,
+ * `GitBadge`'s own `min-w-0` as the one that keeps giving way once this is reached. */
+function FocusTitle({ heading, overline }: { heading: string; overline?: string }): React.ReactElement {
+  return <PaneTitle className="min-w-16 flex-1 px-1" heading={heading} overline={overline} />;
 }
 
 /** A project's focus mode: the sidebar given over to one project, its sessions not bound to a
@@ -134,12 +129,7 @@ export function ProjectFocusView({
   return (
     <>
       <FocusHeader handlers={handlers} ref={headerRef}>
-        {/* `min-w-16` is the floor itself: this is the flex item (`flex-1`'s basis is 0%, so a
-            floor on the `RowLabel` child below would clamp nothing), leaving `GitBadge`'s own
-            `min-w-0` as the one that keeps giving way once this is reached. */}
-        <div className="min-w-16 flex-1 px-1">
-          <FocusTitle consoleName={parentConsole.name} title={project.name} />
-        </div>
+        <FocusTitle heading={project.name} overline={parentConsole.name} />
         <GitBadge status={gitStatus} />
         <RowIconGroup>
           <NewSessionButton label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
@@ -200,12 +190,12 @@ export function ProjectFocusView({
   );
 }
 
-/** A console session's focus mode: the sidebar given over to the projects that have a session
- * bound to it and, within each, only those sessions as cards — a lead session among them carrying
- * its own sessions under it — with its archived bound sessions below. A session opened from here
- * is bound to it, with no choice offered. What has no meaning here is left out: a project's own
- * focus mode (`projectMenu`'s `nested` placement on the project headings here) and the project
- * list's filter. */
+/** A console session's focus mode: the sidebar given over to the console session's own card, fixed
+ * above the list, and to the projects that have a session bound to it and, within each, only those
+ * sessions as cards — a lead session among them carrying its own sessions under it — with its
+ * archived bound sessions below. A session opened from here is bound to it, with no choice offered.
+ * What has no meaning here is left out: a project's own focus mode (`projectMenu`'s `nested`
+ * placement on the project headings here) and the project list's filter. */
 export function ConsoleSessionFocusView({
   handlers,
   console: parentConsole,
@@ -224,10 +214,8 @@ export function ConsoleSessionFocusView({
   selectedSessionId?: string;
 }): React.ReactElement {
   const t = useT();
-  const language = useCurrentLanguage();
   // The groups are ordered by how urgent their sessions are, which changes while the view is open.
   const groupsRef = useFlip<HTMLDivElement>();
-  const accounts = useDaemonStore((s) => s.settings.accounts);
   // Only the group holding the selected session is told which one it is, so a selection moving
   // between two sessions renders those groups alone.
   const selectedProjectId = useSessionProjectId(selectedSessionId);
@@ -237,27 +225,12 @@ export function ConsoleSessionFocusView({
   const newSession = (project: Project): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "bound", to: consoleSession } });
   const viewAll = () => handlers.onOpenArchive({ console: parentConsole.id, consoleSession: consoleSession.id });
   const strip = switchStrip(sessions, parentConsole.id);
-  const headerRef = useRef<HTMLDivElement>(null);
 
   return (
     <>
-      <FocusHeader handlers={handlers} ref={headerRef}>
-        {/* The name selects the console session, whose terminal and report panel this view has no
-            other way to reach. */}
-        <TreeRow
-          ariaLabel={sessionAriaLabel(t, language, consoleSession, accounts)}
-          selected={consoleSession.id === selectedSessionId}
-          locked={consoleSession.locked}
-          onActivate={() => handlers.onSelectSession(consoleSession)}
-          className="min-h-10 min-w-16 flex-1 items-center gap-2 px-(--row-content-inset)"
-        >
-          <BindingBadge owner={consoleSession} decorative />
-          <div className="min-w-0 flex-1">
-            <FocusTitle consoleName={parentConsole.name} title={sessionDisplayTitle(t, consoleSession)} />
-          </div>
-        </TreeRow>
+      <FocusHeader handlers={handlers}>
+        <FocusTitle heading={parentConsole.name} />
         <RowIconGroup>
-          {consoleSession.locked && <LockButton name={sessionDisplayTitle(t, consoleSession)} onUnlock={() => handlers.onSetLocked(consoleSession, false)} returnFocusTo={headerRef} />}
           {/* A session needs a project, and a console session with nothing bound yet has no group
               to open one from, so the header offers every project. */}
           <NewSessionMenu
@@ -268,14 +241,17 @@ export function ConsoleSessionFocusView({
             onOpen={handlers.onOpenDialog}
             onQuickCreate={handlers.onQuickCreateSession}
           />
-          <ActionMenu
-            label={t("sidebar.session.actions", { title: isolate(sessionDisplayTitle(t, consoleSession)) })}
-            items={sessionMenu(t, handlers, consoleSession, accounts, { placement: "focused", hasBoundSessions: hasBoundSessions(sessions, consoleSession.id) })}
-            contextTargetRef={headerRef}
-          />
         </RowIconGroup>
       </FocusHeader>
       {strip.length > 1 && <SwitchStrip handlers={handlers} entries={strip} currentId={consoleSession.id} />}
+      {/* The console session's own card, fixed above the list: selecting it is the only way to reach
+          its terminal and report panel from this view, and its lock, actions and usage live on the
+          card. The strip above supplies the top gap when it is drawn. */}
+      <div className={`shrink-0 px-(--row-fill-inset) pb-2 ${strip.length > 1 ? "" : "pt-2"}`}>
+        <div className="relative rounded-lg bg-panel">
+          <SessionCard handlers={handlers} session={consoleSession} selected={consoleSession.id === selectedSessionId} own />
+        </div>
+      </div>
       <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT} className="min-h-0 flex-1 px-(--row-fill-inset) pb-2">
         <section>
           <StickySectionHeading>{t("sidebar.focus.sessions", { count: liveCount })}</StickySectionHeading>
@@ -579,19 +555,23 @@ function ArchivedList({
  * reasoning effort it runs with beside its agent's mark (the agent and account are in the mark's
  * tooltip), and when it started. The combined project view also names and marks its console owner.
  * `under`, the project session this one is bound to and is inset below, goes into its accessible name,
- * which is what carries that nesting to assistive technology. */
+ * which is what carries that nesting to assistive technology. `own` is the console session's own
+ * card in its focus mode: it shows its own colour as a plain mark, has no pin button, and its menu
+ * follows `sessionMenu`'s `focused` placement (no Pin / Unpin, no Focus mode). */
 const SessionCard = memo(function SessionCard({
   handlers,
   session,
   under,
   selected,
   consoleOwner,
+  own,
 }: {
   handlers: SidebarHandlers;
   session: Session;
   under?: Session;
   selected: boolean;
   consoleOwner?: Session;
+  own?: boolean;
 }): React.ReactElement {
   const metadataId = useId();
   const t = useT();
@@ -606,6 +586,9 @@ const SessionCard = memo(function SessionCard({
   // only through the row's name, where it comes last.
   const name = [sessionAriaLabel(t, language, session, accounts, under ?? consoleOwner)];
   if (under && consoleOwner) name.push(t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, consoleOwner)) }));
+  const showPin = session.pinned && !own;
+  // A console session's card shows its own colour; a project session's shows its console owner's.
+  const badgeOwner = own ? session : consoleOwner;
   return (
     <TreeRow
       ref={rowRef}
@@ -619,12 +602,12 @@ const SessionCard = memo(function SessionCard({
       <RowIconLine icon={<StatusIcon status={session.status} decorative />}>
         <span className="text-xs font-medium text-app-muted">{statusLabel(t, session.status)}</span>
         <span className="flex-1" />
-        <RowControls always fixed={session.locked || session.pinned ? <>{session.locked && <LockButton name={sessionDisplayTitle(t, session)} onUnlock={() => handlers.onSetLocked(session, false)} returnFocusTo={rowRef} />}{session.pinned && <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}</> : undefined}>
-          <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={hasBound} rowRef={rowRef} />
+        <RowControls always fixed={session.locked || showPin ? <>{session.locked && <LockButton name={sessionDisplayTitle(t, session)} onUnlock={() => handlers.onSetLocked(session, false)} returnFocusTo={rowRef} />}{showPin && <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}</> : undefined}>
+          <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={hasBound} rowRef={rowRef} placement={own ? "focused" : undefined} />
         </RowControls>
       </RowIconLine>
       <div className="flex min-w-0 items-center gap-(--row-leading-icon-gap)">
-        {consoleOwner?.colour && <RowIconSlot placement="leading"><BindingBadge owner={consoleOwner} /></RowIconSlot>}
+        {badgeOwner?.colour && <RowIconSlot placement="leading"><BindingBadge owner={badgeOwner} decorative={own} /></RowIconSlot>}
         <FadeOverflow as="span" titleWhenClipped={sessionDisplayTitle(t, session)} className="min-w-0 flex-1 text-sm font-medium">
           <bdi>{sessionDisplayTitle(t, session)}</bdi>
         </FadeOverflow>

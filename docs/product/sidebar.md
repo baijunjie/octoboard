@@ -452,8 +452,8 @@ pointer hover only. The row's own accessible name carries the same fact in words
 to …"), in the same wording for a project session's owner as for a console session's, which is the only place the
 nesting is put into words. The badge itself still carries no information its tooltip does not, so colour alone never
 distinguishes two owners for a user who cannot tell the colours apart. A console session's own row shows the same
-colour, decoratively, since the row's own label already names it, as do its focus mode's header, its chip in a
-project's focus mode and its chip in the switch strip. Cards in a project's combined focus view carry the dot for
+colour, decoratively, since the row's own label already names it, as do its own card in its focus mode, its chip in
+a project's focus mode and its chip in the switch strip. Cards in a project's combined focus view carry the dot for
 the console session above them, including cards inset under a lead session; the tooltip and accessible name identify
 that console session. The other focus views carry no binding badge on their cards. See "A project's focus mode" in
 `docs/product/focus-mode.md` for the switch and the card labels.
@@ -475,25 +475,25 @@ green, azure to sky and rose to pink, while teal and violet stay as they are —
 the same colour. Each colour has its own light and dark value (see "What follows the choice" in
 `docs/product/appearance.md`).
 
-**Choosing the colour.** **Colour** in a console session's action menu — wherever that menu is offered, its sidebar
-row and its focus mode's header among them, after **Rename** and the optional **Copy session ID** — is a submenu entry,
-marked with the same chevron as **Switch account**. Its submenu holds the palette as swatches in two rows of eight, in the order above. The
-console session's current colour is selected, marked with a check mark and a ring in its own colour. Pointing at
-**Colour** opens the submenu without moving keyboard focus; `ArrowRight` (`ArrowLeft` under a right-to-left language)
-or `Enter` on the entry opens it, or moves into it when it is already open, with focus on the current swatch, or the
-first one when the current colour is not in the palette. Inside it the arrow keys move focus between swatches;
-`ArrowLeft` from a swatch in the first column (`ArrowRight` under a right-to-left language), or `Escape`, closes the
-submenu and puts focus back on **Colour** in the menu, which stays open. Clicking a swatch, or pressing `Enter` or
-`Space` on the focused one, gives the console session that colour at once and closes the whole menu; choosing the
-current colour just closes it. A click outside closes the menu without a change. When the menu closes, keyboard
-focus goes where closing it always puts it (see "Rows, names and keyboard focus" below). For assistive technology
-the swatches are a list named by the **Colour** entry, and each swatch is announced by the colour description
-generated in the interface language; the palette keeps those descriptions distinct in every offered language and
-both appearances, except that in Arabic violet and fuchsia share one, and in Korean teal shares one with cyan in the
-light appearance and with sky in the dark one. The colour is stored by the daemon with the console session, so every
-window and every client sees it and it survives a restart. A change that fails is shown as an error alert, as a
-failed **Pin** is (see "Error alerts" in `docs/product/error-alerts.md`). An archived console session's menu has no **Colour** entry, and a
-project session has no colour to choose.
+**Choosing the colour.** **Colour** in a console session's action menu — wherever that menu is offered, its sidebar row
+and its own card in its focus mode among them, after **Rename** and the optional **Copy session ID** — is a submenu
+entry, marked with the same chevron as **Switch account**. Its submenu holds the palette as swatches in two rows of
+eight, in the order above. The console session's current colour is selected, marked with a check mark and a ring in its
+own colour. Pointing at **Colour** opens the submenu without moving keyboard focus; `ArrowRight` (`ArrowLeft` under a
+right-to-left language) or `Enter` on the entry opens it, or moves into it when it is already open, with focus on the
+current swatch, or the first one when the current colour is not in the palette. Inside it the arrow keys move focus
+between swatches; `ArrowLeft` from a swatch in the first column (`ArrowRight` under a right-to-left language), or
+`Escape`, closes the submenu and puts focus back on **Colour** in the menu, which stays open. Clicking a swatch, or
+pressing `Enter` or `Space` on the focused one, gives the console session that colour at once and closes the whole menu;
+choosing the current colour just closes it. A click outside closes the menu without a change. When the menu closes,
+keyboard focus goes where closing it always puts it (see "Rows, names and keyboard focus" below). For assistive
+technology the swatches are a list named by the **Colour** entry, and each swatch is announced by the colour description
+generated in the interface language; the palette keeps those descriptions distinct in every offered language and both
+appearances, except that in Arabic violet and fuchsia share one, and in Korean teal shares one with cyan in the light
+appearance and with sky in the dark one. The colour is stored by the daemon with the console session, so every window
+and every client sees it and it survives a restart. A change that fails is shown as an error alert, as a failed **Pin**
+is (see "Error alerts" in `docs/product/error-alerts.md`). An archived console session's menu has no **Colour** entry,
+and a project session has no colour to choose.
 
 ## Rows, names and keyboard focus
 
@@ -508,10 +508,11 @@ project session has no colour to choose.
   motion.
 - **Right-clicking** (or Control-clicking on macOS) a row that has an action menu opens that menu at the pointer, with
   the same entries as its action-menu button. This holds for a project row, a session row (a console session's
-  included), the sidebar's header, a console's avatar on the rail (see "The console switcher" above), a focus mode's
-  header, a project's heading in a console session's focus mode, a session card and a focus mode's archived rows. The
-  right-click neither selects nor activates the row, nor takes keyboard focus; right-clicking another such row while
-  a menu is open closes it and opens that row's. It works the
+  included), the sidebar's header, a console's avatar on the rail (see "The console switcher" above), a project's focus
+  mode header, a project's heading in a console session's focus mode, a session card (a console session's own card in
+  its focus mode included) and a focus mode's archived rows; a console session's focus mode header has no menu to
+  open. The right-click neither selects nor activates the row, nor takes keyboard focus; right-clicking another such
+  row while a menu is open closes it and opens that row's. It works the
   same in the desktop app and in a browser, where the browser's own menu is not shown over these rows; what a
   right-click shows anywhere else is in "Right-click menus" in `docs/product/window-layout.md`.
 - Closing an action menu that was opened with the pointer, by its button or by a right-click, gives keyboard focus back
@@ -570,14 +571,14 @@ The order follows status changes as they happen. Row movement follows "Items mov
 **Unpin**, and cleared by its pin button too; nothing is pinned to begin with. Its only effect is the order above. The
 pin is stored by the daemon with the project or the session, so every window and every client sees the same pins, and
 they survive a restart. A pinned session stays pinned when it is archived and when it is resumed; an archived
-session's menu offers no Pin or Unpin. The header of a focus mode offers no Pin or Unpin for what is in focus (see
-"What both views show" in `docs/product/focus-mode.md`).
+session's menu offers no Pin or Unpin. A focus mode offers no Pin or Unpin for what is in focus, neither in a
+project's focus mode header nor on a console session's own card in its focus mode (see `docs/product/focus-mode.md`).
 
 **The pin button.** A pinned project or session shows a pin button: on its row in the sidebar, after the row's markers
 (a project's branch badge and activity marker, a session's binding badge) and before the buttons that show only on
 hover, so that while those are hidden the pin buttons of project and session rows line up in one column at the rows'
 end; after the name on a project's heading in a console session's focus mode; and on the status line of its card in a
-focus mode. It is always
+focus mode, except a console session's own card in its focus mode, which never shows one. It is always
 shown while the item is pinned, and is reached with Tab like the row's other buttons. While the pointer is over it or it
 holds keyboard focus, its pin glyph turns into the unpin glyph. Its tooltip is "Unpin", while the name assistive
 technology announces for it also names the item ("Unpin …"). Pressing it unpins the item, as the menu's Unpin does; a
@@ -587,16 +588,16 @@ heading in a console session's focus mode, to that heading's **+** button.
 
 ## Session lock controls
 
-Lock controls are offered only for sessions that are not archived. Their action menus start with **Lock** or
-**Unlock**, including nested sessions and a console session's focus header. Protection and persistence follow
-"Locking a session" in `docs/product/sessions.md`.
+Lock controls are offered only for sessions that are not archived. Their action menus start with **Lock** or **Unlock**,
+including nested sessions and a console session's own card in its focus mode. Protection and persistence follow "Locking
+a session" in `docs/product/sessions.md`.
 
 A locked session has a persistent yellow lock button before its other action controls, ahead of its pin
-button when there is one. It remains visible without hover on sidebar rows, focus cards and a console session's
-focus header. Pointer hover or visible keyboard focus changes the closed lock
+button when there is one. It remains visible without hover on sidebar rows and focus cards, a console session's own
+card in its focus mode included. Pointer hover or visible keyboard focus changes the closed lock
 to an open lock. Its tooltip offers unlocking, and its accessible name also identifies the session. Pressing it
 unlocks that session; a mouse press neither selects the session nor moves keyboard focus. When the disappearing
-button holds keyboard focus, focus goes to its row, card or focus header with a visible focus ring.
+button holds keyboard focus, focus goes to its row or card with a visible focus ring.
 
 Archived sessions have no Lock or Unlock action or lock button, in either the full archive or
 focus mode's compact preview. A stored lock remains effective: Delete is disabled for a locked archived session,

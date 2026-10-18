@@ -9,7 +9,7 @@ import type { Account, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useDaemonStore } from "../store";
-import { offersDelete, sessionMenu } from "./menus";
+import { type MenuPlacement, offersDelete, sessionMenu } from "./menus";
 import { archiveNeedsConfirmation, isUnusedSession } from "./order";
 import { RowIconButton } from "./rows";
 import type { SidebarHandlers } from "./types";
@@ -25,12 +25,15 @@ export function SessionActions({
   accounts,
   hasBoundSessions,
   rowRef,
+  placement,
 }: {
   handlers: SidebarHandlers;
   session: Session;
   accounts: Account[];
   hasBoundSessions: boolean;
   rowRef: RefObject<HTMLElement | null>;
+  /** Where the menu is opened from; `focused` is a console session's own focus mode. */
+  placement?: MenuPlacement;
 }): React.ReactElement {
   const t = useT();
   // Only what is bound to the session can ask for more than its status does, and that is all in its
@@ -58,7 +61,7 @@ export function SessionActions({
           />
         </div>
       )}
-      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={sessionMenu(t, handlers, session, accounts, { hasBoundSessions })} contextTargetRef={rowRef} />
+      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={sessionMenu(t, handlers, session, accounts, { placement, hasBoundSessions })} contextTargetRef={rowRef} />
     </>
   );
 }

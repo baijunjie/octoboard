@@ -70,10 +70,10 @@ export function consoleMenu(
 }
 
 /** Where a menu is shown, which decides what it leaves out: `list` is the item's row in the
- * sidebar's lists, with everything; `focused` is the header of the item's own focus mode, which
- * has no "Focus mode" to enter and no Pin / Unpin (the item in focus is not pinned from there);
- * `nested` is a project's heading inside a console session's focus mode, which has no project
- * focus mode to enter from there. */
+ * sidebar's lists, with everything; `focused` is the item's own focus mode: the project's header,
+ * the console session's own card. It has no "Focus mode" to enter and no Pin / Unpin (the item in
+ * focus is not pinned from there); `nested` is a project's heading inside a console session's focus
+ * mode, which has no project focus mode to enter from there. */
 export type MenuPlacement = "list" | "focused" | "nested";
 
 /** The project's actions, in the project row and in a focus mode (the project's own header, and a
@@ -219,8 +219,8 @@ function colourSubmenu(t: Translate, handlers: SidebarHandlers, session: Session
  * project session's row and a console session's row (`ConsoleSessionsSection` in `Sidebar.tsx`) —
  * this is the user's only way to archive a console session (see "A session archiving itself" in
  * `docs/product/hub-orchestration.md`), and the only place to switch its account. Focus mode is
- * offered for a console session alone; its own focus mode's header (`placement` `focused`) leaves
- * out Focus mode and Pin / Unpin. */
+ * offered for a console session alone; its own card in its focus mode (`placement` `focused`)
+ * leaves out Focus mode and Pin / Unpin. */
 export function sessionMenu(
   t: Translate,
   handlers: SidebarHandlers,
@@ -230,7 +230,7 @@ export function sessionMenu(
 ): ActionMenuEntry[] {
   const focused = placement === "focused";
   const archived = session.status === "archived";
-  // The daemon refuses to switch the account of a session that is still starting (see `offersDelete`).
+  // The daemon refuses to switch the account of a session that is still starting.
   const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts);
   const focusable = session.role === "console" && !archived && !focused;
   return [

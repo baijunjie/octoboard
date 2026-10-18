@@ -9,12 +9,15 @@ what they list.
 
 Session titles throughout either view follow "Displayed names" in `docs/product/session-titles.md`.
 
-**The header**, in both: a back button, **Leave focus mode**, which returns to the full sidebar; the console's name
-above the name of what is in focus; a **+** button for a new session; and that thing's action menu, without its **Focus
-mode** and **Pin** / **Unpin** items. The header shows no pin button either. A project's header also carries its branch
-badge (see "The branch badge" in `docs/product/project-git-status.md`). A console session's header shows its colour
-beside its name, and pressing the name selects the console session, whose terminal and report panel the view has no
-other row for.
+**The header**, in both: a back button, **Leave focus mode**, which returns to the full sidebar; the view's heading;
+and a **+** button for a new session. A project's header shows the console's name on a smaller first line above the
+project's name, which is the heading. A console session's header shows the console's name alone, on one line, as the
+heading; the console session's title is on its own card below. The heading is a heading only: pressing it selects
+nothing. The header shows no pin button. A project's header also carries its branch badge (see "The branch badge" in
+`docs/product/project-git-status.md`) and, after the **+**, the project's action menu without its **Focus mode** and
+**Pin** / **Unpin** items. A console session's header carries nothing else — no colour, lock button or action menu,
+and no menu on a right-click: those are on the console session's own card below it (see "A console session's focus
+mode" below).
 
 **The list's section headings**, in both: **Sessions (n)** stays at the top of the scrolling list while its
 cards move underneath; as **Archived (n)** approaches the top, it pushes the Sessions heading upward out of view
@@ -23,7 +26,7 @@ opaque background and stay clear of the edge fade, which begins below the headin
 view stays below both the heading and the fade. The other scrolling rules are in "The edge that hides content
 fades" and "Scrolling a surface from the keyboard" in `docs/product/scrolling-surfaces.md`.
 
-The session lock button on live cards and the console session header follows
+The session lock button on live cards, a console session's own card included, follows
 "Session lock controls" in `docs/product/sidebar.md`.
 
 **Session cards**, in both: the status glyph with the status in words, the pin button when pinned (see "Pinning" in
@@ -132,6 +135,14 @@ without the dialog, unbound as well (see "Opening a session with defaults" in `d
 
 - **The switch strip**, right under the header, while the console has more than one console session that is not
   archived: see "The switch strip" below.
+- **The console session's own card**, below the switch strip, or right under the header without one. It stays where it
+  is while the list below scrolls. It is a session card as in "What both views show" above — status, title, agent,
+  creation time and token usage — with these differences: its title is preceded by the console session's own colour,
+  decoratively, since the title names it; it never shows a pin button, even while the console session is pinned; and
+  its action menu is the console session's row's (see "Session rows" in `docs/product/sidebar.md`) without **Pin** /
+  **Unpin** and **Focus mode**. Its lock button while locked, and its Delete or Archive shortcut, are as on any card.
+  Pressing it selects the console session, showing its terminal and report panel, which the view has no other row
+  for; right-clicking it opens its action menu. It is not counted in **Sessions (n)**.
 - **Sessions (n)**: the projects of the console that have a session bound to this console session which is not archived,
   in the order of the project list, and under each project's name the sessions bound to this console session as cards,
   each **lead session** among them carrying the sessions bound to it inset under it — they run in the lead session's own

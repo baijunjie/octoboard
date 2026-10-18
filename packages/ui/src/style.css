@@ -241,12 +241,12 @@ html {
      `--top-chrome-height` and the card's starting `--peek-gap` lower differ by the gap alone.
      The floating value is not a cycle although `floatingFrame` overrides `--pane-header-height`
      with it: a custom property is substituted where it is declared, so this one is already
-     `calc(56px - 8px)` when it is inherited, and the override cannot reach back into it. Declared
+     `calc(48px - 8px)` when it is inherited, and the override cannot reach back into it. Declared
      on the card too it would be a real cycle, and both properties would be invalid at
      computed-value time, so the headers fall back to their content height and their bottom line no
      longer lines up. It therefore belongs on an element that does not itself override
      `--pane-header-height`. */
-  --pane-header-height: 56px;
+  --pane-header-height: 48px;
   --pane-header-height-floating: calc(var(--pane-header-height) - var(--peek-gap));
 
   /* The left rail under the top bar (`Rail.tsx`): the window chrome's second half, at the reading

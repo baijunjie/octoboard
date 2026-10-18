@@ -157,4 +157,19 @@ export const layoutScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("titleBar.report.show")),
     ],
   },
+  {
+    id: "layout-browser-drawer",
+    group: GROUP,
+    category: "normal",
+    title: "Mobile project browser card",
+    width: 390,
+    state: railState,
+    preferences: { sidebarConsole: main.id },
+    description: "The project browser floats in the mobile card with a 40px header: the Files and Changes tabs, the refresh and filter buttons fit without clipping, and the tab indicator stays inside the header.",
+    steps: [
+      (ui) => ui.press(ui.t("titleBar.sidebar.show")),
+      (ui) => ui.press(ui.session("Fix the summary layout")),
+      (ui) => ui.press(ui.t("titleBar.projectPane.show")),
+    ],
+  },
 ];

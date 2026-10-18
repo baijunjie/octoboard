@@ -6,6 +6,7 @@ import { AGENT_LABEL } from "../agents";
 import { AgentIcon } from "../components/AgentIcon";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { PaneTitle } from "../components/PaneTitle";
 import { ArchivedSessionMetadata, hasVisibleUsage, SessionUsageLabel } from "../components/SessionMetadata";
 import { TitledControl } from "../components/TitledControl";
 import { FadedScroller } from "../components/scrollFade";
@@ -161,18 +162,15 @@ export function ArchiveView({
         }
       }}
     >
-      {/* Built like the sidebar's focus-mode header (a small line over a title) and given the same
-          height (`--pane-header-height`), so their bottom lines run on as one line. Where it is
-          lives in the top bar's breadcrumb. */}
+      {/* The title is the same `PaneTitle` (a small line over a heading) as the sidebar's focus-mode
+          header, which has the same height (`--pane-header-height`), so their bottom lines run on as
+          one line. Where it is lives in the top bar's breadcrumb. */}
       <header className="flex h-(--pane-header-height) shrink-0 items-center gap-1 groove-b px-2 ps-4">
-        <div className="min-w-0 flex-1">
-          <FadeOverflow className="text-xs text-app-muted" titleWhenClipped={t("archive.count", { count: archived.length })}>{t("archive.count", { count: archived.length })}</FadeOverflow>
-          <h2 className="min-w-0 text-sm font-semibold">
-            <FadeOverflow titleWhenClipped={heading}>
-              {t(project ? "archive.heading.project" : boundTo ? "archive.heading.boundSessions" : "archive.heading.consoleSessions")}
-            </FadeOverflow>
-          </h2>
-        </div>
+        <PaneTitle
+          heading={t(project ? "archive.heading.project" : boundTo ? "archive.heading.boundSessions" : "archive.heading.consoleSessions")}
+          headingTitle={heading}
+          overline={t("archive.count", { count: archived.length })}
+        />
         {archived.length > 0 && (
           <Button size="sm" variant="danger-soft" preventFocusOnPress onPress={deleteAll} isDisabled={archived.some(({ session }) => session.locked)}>
             <Trash2 aria-hidden="true" className="size-4" />

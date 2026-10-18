@@ -51,12 +51,12 @@ in the light appearance, a touch lighter in the dark one — whether docked, flo
 keeps its own light surface inside the right pane (see "A report page stays on a light surface in both appearances" in
 `docs/product/appearance.md`).
 
-**Every docked pane's header inside the content panel is 56 px high** — the sidebar's console header and a focus mode's
+**Every docked pane's header inside the content panel is 48 px high** — the sidebar's console header and a focus mode's
 header (see `docs/product/sidebar.md` and `docs/product/focus-mode.md`), the archive view's header (see "The archive
 view" in `docs/product/sidebar.md`), the project pane's header and the report panel's bar — so the lines under them
 run on as one line across the panel. The top bar's 40 px is a tier of its own and no part of this. A floating pane or
 an overlay drawer is a card inset from the panel's edges (see "A hidden pane floats in on hover" and "Below 1168 px:
-the sidebar and the right pane become drawers" below), and its headers are **48 px** — shorter by that 8 px inset,
+the sidebar and the right pane become drawers" below), and its headers are **40 px** — shorter by that 8 px inset,
 the card's edge taking no space — so the line under a card's header stays level with the line under the headers docked
 beside it; the text in a card's header therefore sits 4 px lower than theirs.
 
@@ -497,7 +497,7 @@ default**:
   from the top bar and from the window's bottom (or the connection banner when it is shown). The sidebar drawer
   slides in from behind the rail and out behind it, never drawn over the rail, and keeps an 8 px gap from it when
   open. The right pane's drawer slides in from the window's right edge and keeps an 8 px gap from that edge.
-  Their headers are 48 px high (see "The window chrome and the content panel" above).
+  Their headers are 40 px high (see "The window chrome and the content panel" above).
 - The sidebar drawer is 280 px wide; the right pane's drawer is 420 px wide, capped at 92% of the viewport. Both are
   also capped to the space after the rail minus two 8 px gaps, so neither touches the opposite edge of the content
   panel on a narrow screen. The dimmed area behind an open drawer covers the content panel, including the gaps,

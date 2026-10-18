@@ -12,8 +12,8 @@ bar with no spaces. With no title, or one equal to the created name after surrou
 shows the created name alone. The task title's surrounding whitespace is removed before display. Each part
 keeps its own reading direction when the names contain different writing systems.
 
-This displayed name is used in sidebar rows, archived-session menus, focus-mode headers, cards, archive rows and
-switch chips, the archive view and the selected session's breadcrumb. Session-owner labels, session action labels,
+This displayed name is used in sidebar rows, archived-session menus, focus-mode cards, archive rows and switch
+chips, the archive view and the selected session's breadcrumb. Session-owner labels, session action labels,
 the archive, account-switch and delete confirmations, and the confirmation of another session's request to start a
 session (see "The confirmation dialog" in `docs/product/session-requests.md`) identify the session by the same name.
 Names in these surfaces' accessible labels and full-name tooltips follow the visible name.

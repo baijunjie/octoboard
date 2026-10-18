@@ -47,8 +47,8 @@ Removing a project or deleting a console also deletes its archived sessions alon
 ## Deleting an unused session
 
 A session that has **never been used** is deleted rather than archived: its action menu offers **Delete** in place of
-**Archive** — on its sidebar row, on its card in a focus mode and, for a console session, in its focus mode's
-header. Delete is disabled while locked.
+**Archive** — on its sidebar row and on its card in a focus mode, a console session's own card in its focus mode
+included. Delete is disabled while locked.
 Its row and card offer a Delete shortcut under the same conditions (see "Session rows" in
 `docs/product/sidebar.md`); this also applies to archived preview rows in focus mode.
 A session is unused, whatever its status, while all of these hold:
