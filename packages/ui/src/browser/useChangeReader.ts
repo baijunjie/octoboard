@@ -1,3 +1,4 @@
+import type React from "react";
 import { createElement, useEffect, useRef, useState } from "react";
 
 import { InlineChip } from "../components/InlineChip";
@@ -29,7 +30,8 @@ import {
 } from "../viewer/content";
 import { displayWirePath } from "../wirePath";
 import { browseFailure } from "./browseError";
-import { CONFLICT_LABELS, SECTION_LABELS, type ChangeItem, type ShownChange } from "./changes";
+import { CONFLICT_LABELS, SECTION_LABELS, type ChangeItem, type CommitRef, type ShownChange } from "./changes";
+import { shortCommit } from "./shortCommit";
 
 /** How many times a read is asked again when what it read changed while it was read. */
 const CHANGED_RETRIES = 2;
@@ -45,21 +47,25 @@ const READ_SLOT = "viewer";
 const BODIES_SLOT = "viewer-bodies";
 
 /** Where a change is read from: a worktree's uncommitted changes (`worktree` none for the one
- * holding the project's directory), or a comparison of two branches at the commits it resolved:
- * the old side from `base`, their merge base, the new side from `right`'s commit. */
+ * holding the project's directory), a comparison of two branches at the commits it resolved — the
+ * old side from `base`, their merge base, the new side from `right`'s commit — or one commit, its
+ * old side from its first parent (the empty tree for none) and its new side from the commit. */
 export type ChangeOrigin =
   | { kind: "worktree"; worktree: string | undefined }
-  | { kind: "comparison"; left: ComparisonEndpoint; right: ComparisonEndpoint; base: string };
+  | { kind: "comparison"; left: ComparisonEndpoint; right: ComparisonEndpoint; base: string }
+  | ({ kind: "commit" } & CommitRef);
 
 function sameOrigin(a: ChangeOrigin, b: ChangeOrigin): boolean {
-  if (a.kind === "worktree") return b.kind === "worktree" && a.worktree === b.worktree;
-  const same = (x: ComparisonEndpoint, y: ComparisonEndpoint) => x.branch === y.branch && x.commit === y.commit;
-  return b.kind === "comparison" && same(a.left, b.left) && same(a.right, b.right) && a.base === b.base;
-}
-
-/** A commit as the UI names it: the first seven characters of its id, as `git` abbreviates one. */
-export function shortCommit(commit: string): string {
-  return commit.slice(0, 7);
+  switch (a.kind) {
+    case "worktree":
+      return b.kind === "worktree" && a.worktree === b.worktree;
+    case "commit":
+      return b.kind === "commit" && a.commit === b.commit && a.parent === b.parent;
+    case "comparison": {
+      const same = (x: ComparisonEndpoint, y: ComparisonEndpoint) => x.branch === y.branch && x.commit === y.commit;
+      return b.kind === "comparison" && same(a.left, b.left) && same(a.right, b.right) && a.base === b.base;
+    }
+  }
 }
 
 export interface ChangeReader {
@@ -138,8 +144,8 @@ type Shown = { key: string; content: ViewerContent; failed?: { changing: boolean
 type Opened = { item: ChangeItem; origin: ChangeOrigin };
 
 /**
- * The change a project's viewer shows in the Git mode, read on demand from its worktree or from the
- * two commits of a branch comparison: one read out at a time, in the viewer's slot, so moving
+ * The change a project's viewer shows in the Git mode, read on demand from its worktree, from the
+ * two commits of a branch comparison or from one commit and its parent: one read out at a time, in the viewer's slot, so moving
  * through changes quickly cancels the reads left behind in the daemon as well; a reply is taken
  * only for the latest read of the change shown, and only for the worktree or the two commits it was
  * asked of. A change in conflict is no two-sided change, and is shown as its file on disk with its
@@ -164,10 +170,16 @@ export function useChangeReader(project: string): ChangeReader {
   const [shown, setShown] = useState<Shown>();
   const live = useRef({ alive: true, sequence: 0, opened: undefined as Opened | undefined });
 
-  const subjectKey = (item: ChangeItem, origin: ChangeOrigin) =>
-    origin.kind === "worktree"
-      ? `${project}\0git\0${origin.worktree ?? ""}\0${item.key}`
-      : `${project}\0compare\0${origin.base}\0${origin.right.commit}\0${item.key}`;
+  const subjectKey = (item: ChangeItem, origin: ChangeOrigin) => {
+    switch (origin.kind) {
+      case "worktree":
+        return `${project}\0git\0${origin.worktree ?? ""}\0${item.key}`;
+      case "comparison":
+        return `${project}\0compare\0${origin.base}\0${origin.right.commit}\0${item.key}`;
+      case "commit":
+        return `${project}\0commit\0${origin.parent ?? ""}\0${origin.commit}\0${item.key}`;
+    }
+  };
 
   const send = (item: ChangeItem, origin: ChangeOrigin): Promise<Event> => {
     const { entry } = item;
@@ -177,7 +189,11 @@ export function useChangeReader(project: string): ChangeReader {
     if (entry.group !== "committed") {
       return request({ type: "read_project_change", project, ...where, change: { group: entry.group, ...sides }, slot: READ_SLOT });
     }
-    if (origin.kind !== "comparison") return Promise.reject(new Error("a comparison's change is read from its two commits"));
+    if (origin.kind === "commit") {
+      const { commit, parent } = origin;
+      return request({ type: "read_project_commit_change", project, commit, parent, change: sides, slot: READ_SLOT });
+    }
+    if (origin.kind !== "comparison") return Promise.reject(new Error("a committed change is read from its commits"));
     const { left, right, base } = origin;
     return request({ type: "read_project_comparison_change", project, left, right, base, change: sides, slot: READ_SLOT });
   };
@@ -193,6 +209,9 @@ export function useChangeReader(project: string): ChangeReader {
         sameOrigin({ kind: "comparison", left: reply.left, right: reply.right, base: reply.base }, origin)
       );
     }
+    if (origin.kind === "commit") {
+      return reply.type === "project_commit_change" && reply.project === project && reply.commit === origin.commit && reply.parent === origin.parent;
+    }
     return reply.type === "project_change" && reply.project === project && reply.group === entry.group;
   };
 
@@ -206,7 +225,7 @@ export function useChangeReader(project: string): ChangeReader {
   const bodiesLoader = (
     item: ChangeItem,
     origin: ChangeOrigin,
-    reply: Extract<Event, { type: "project_change" | "project_comparison_change" }>,
+    reply: Extract<Event, { type: "project_change" | "project_comparison_change" | "project_commit_change" }>,
   ): (() => Promise<ChangeBodies>) | undefined => {
     const { entry } = item;
     const old = fileSideVersion(reply.old);
@@ -231,10 +250,15 @@ export function useChangeReader(project: string): ChangeReader {
         } else if (origin.kind === "comparison") {
           const { left, right, base } = origin;
           bodies = await request({ type: "read_project_comparison_change_bodies", project, left, right, base, change: sides, ...versions, slot: BODIES_SLOT });
+        } else if (origin.kind === "commit") {
+          const { commit, parent } = origin;
+          bodies = await request({ type: "read_project_commit_change_bodies", project, commit, parent, change: sides, ...versions, slot: BODIES_SLOT });
         } else {
           throw new ChangeBodiesError("unavailable");
         }
-        if (bodies.type !== "project_change_bodies" && bodies.type !== "project_comparison_change_bodies") throw new ChangeBodiesError("unavailable");
+        if (bodies.type !== "project_change_bodies" && bodies.type !== "project_comparison_change_bodies" && bodies.type !== "project_commit_change_bodies") {
+          throw new ChangeBodiesError("unavailable");
+        }
         const oldText = text(bodies.old);
         const newText = text(bodies.new);
         if (oldText === undefined || newText === undefined) throw new ChangeBodiesError("unavailable");
@@ -275,7 +299,7 @@ export function useChangeReader(project: string): ChangeReader {
         if (entry.group === "conflicted" && reply.type === "project_file") {
           const conflict = conflictText(t, entry.conflict);
           setShown({ key, content: { state: "conflict", conflict, body: bodyFromFileContent(entry.path, reply.file) } });
-        } else if (entry.group !== "conflicted" && (reply.type === "project_change" || reply.type === "project_comparison_change")) {
+        } else if (entry.group !== "conflicted" && (reply.type === "project_change" || reply.type === "project_comparison_change" || reply.type === "project_commit_change")) {
           const change = {
             old: readSide(reply.old, entry.old),
             new: readSide(reply.new, entry.new),
@@ -350,34 +374,39 @@ export function useChangeReader(project: string): ChangeReader {
   const isolatedWirePath = (name: string) => isolate(displayWirePath(name));
   // A worktree's change says where it is from in two ways: the stage of a staged or unstaged one, as
   // a tag of its own; and nothing for the rest, which their status chip already says (untracked,
-  // in conflict). Only a comparison has a source to word.
+  // in conflict). Only a committed change has a source to word.
   const { section } = opened.item;
   const stage = section === "staged" || section === "unstaged" ? t(SECTION_LABELS[section]) : undefined;
+  const commitChip = (commit: string) => createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "default", children: shortCommit(commit) });
+  const branchChip = (branch: string) => createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "primary", children: displayWirePath(branch) });
   // A comparison's change says which branch it is of, at which commit, and the branch it forked
-  // from, at the commit of the fork.
-  const source =
-    origin.kind === "comparison"
-      ? createElement(Message<"git.compare.source">, {
-        id: "git.compare.source",
-        params: {
-          from: createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "primary", children: displayWirePath(origin.left.branch) }),
-          fromCommit: createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "default", children: shortCommit(origin.base) }),
-          to: createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "primary", children: displayWirePath(origin.right.branch) }),
-          toCommit: createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "default", children: shortCommit(origin.right.commit) }),
-        },
-      })
-      : undefined;
-  // The same wording as `source`, as plain text for its tooltip, each branch name and commit
-  // isolated by U+2068/U+2069 where `source` sets them as code, which reads left to right.
-  const sourceText =
-    origin.kind === "comparison"
-      ? t("git.compare.source", {
-        from: isolatedWirePath(origin.left.branch),
-        fromCommit: isolate(shortCommit(origin.base)),
-        to: isolatedWirePath(origin.right.branch),
-        toCommit: isolate(shortCommit(origin.right.commit)),
-      })
-      : undefined;
+  // from, at the commit of the fork; one commit's change says which commit it is of, and the parent
+  // it is compared with. The plain-text form is the line's tooltip, each branch name and commit
+  // isolated by U+2068/U+2069 where the line sets them as code, which reads left to right.
+  let source: React.ReactNode;
+  let sourceText: string | undefined;
+  if (origin.kind === "comparison") {
+    source = createElement(Message<"git.compare.source">, {
+      id: "git.compare.source",
+      params: { from: branchChip(origin.left.branch), fromCommit: commitChip(origin.base), to: branchChip(origin.right.branch), toCommit: commitChip(origin.right.commit) },
+    });
+    sourceText = t("git.compare.source", {
+      from: isolatedWirePath(origin.left.branch),
+      fromCommit: isolate(shortCommit(origin.base)),
+      to: isolatedWirePath(origin.right.branch),
+      toCommit: isolate(shortCommit(origin.right.commit)),
+    });
+  } else if (origin.kind === "commit") {
+    const { commit, parent } = origin;
+    source =
+      parent === null
+        ? createElement(Message<"git.commit.sourceRoot">, { id: "git.commit.sourceRoot", params: { commit: commitChip(commit) } })
+        : createElement(Message<"git.commit.source">, { id: "git.commit.source", params: { commit: commitChip(commit), parent: commitChip(parent) } });
+    sourceText =
+      parent === null
+        ? t("git.commit.sourceRoot", { commit: isolate(shortCommit(commit)) })
+        : t("git.commit.source", { commit: isolate(shortCommit(commit)), parent: isolate(shortCommit(parent)) });
+  }
   return {
     subject: { key, path: opened.item.path, source, sourceText, stage, status: opened.item.status, content },
     item: opened.item,

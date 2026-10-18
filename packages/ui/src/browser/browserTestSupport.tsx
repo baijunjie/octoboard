@@ -18,6 +18,13 @@ export const change = (group: "staged" | "unstaged", path: string): ChangeEntry 
   new: { state: "present", path, kind: "file", source: { kind: "live", root_id: "r", version: "v" } },
 });
 
+/** A file a commit changed, in the committed section. */
+export const committedChange = (path: string): ChangeEntry => ({
+  group: "committed",
+  old: { state: "present", path, kind: "file", source: { kind: "commit", commit: "p", branch: null, blob: "b" } },
+  new: { state: "present", path, kind: "file", source: { kind: "commit", commit: "c", branch: null, blob: "b2" } },
+});
+
 /** A `ChangeViewState` for a list that does nothing of its own, with `view` over it. The toggle the
  * filter field hands keyboard focus to as it goes lives outside the list, so a stand-in for it is
  * put in the document and taken out again when the test ends. */

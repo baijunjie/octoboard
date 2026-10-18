@@ -32,7 +32,7 @@ export function BranchOriginBadge({ origin, selectedSessionId }: { origin: Branc
   const selected = origin.responsible_session === selectedSessionId;
   // Read as a string, not as the session or the map: either has a new identity after any daemon event.
   const liveTitle = useDaemonStore((s) => s.sessions.get(origin.responsible_session)?.title);
-  const message = gone ? "git.compare.branchResponsibleGone" : selected ? "git.compare.branchResponsibleSelected" : "git.compare.branchResponsible";
+  const message = gone ? "git.branch.responsibleGone" : selected ? "git.branch.responsibleSelected" : "git.branch.responsible";
   const label = t(message, {
     title: isolate(liveTitle ?? origin.responsible_title),
   });

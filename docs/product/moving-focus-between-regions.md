@@ -48,7 +48,7 @@ Where focus lands in each region:
 | Archive view | its first control |
 | Terminal | the terminal, so typing reaches the agent; instead the button its area offers in the terminal's place while there is one — its cover's Reconnect, or its empty state's Add project, New session or New console session (see "Reconnecting" and "A console with nothing in it" in `docs/product/session-terminal.md`) |
 | Right pane, showing a report panel | the pager's first enabled button, else the report page itself |
-| Right pane, showing a project pane | its header's first tab (Files); the arrow keys move among Files, Uncommitted and Compare, and Tab goes through the view's filter and grouping controls, then Refresh and the content below; Try again while the pane failed to load |
+| Right pane, showing a project pane | its header's first tab (Files); the arrow keys move between Files and Changes, and Tab goes through the tab's controls (the filter toggle, and in Changes Group by folder and Group by commit), then Refresh and the content below; Try again while the pane failed to load |
 | Connection banner | its Retry button; it has none while the banner only says it is reconnecting, and F6 then skips it |
 | Toasts | the newest toast |
 

@@ -17,7 +17,7 @@ export function prepareStorage(scenario: Scenario, language: Language, theme: "l
     localStorage.setItem("heroui-theme", theme);
     localStorage.setItem(PREFERENCE_KEYS.language, language);
     for (const [name, value] of Object.entries(scenario.preferences ?? {})) {
-      if (value !== undefined) localStorage.setItem(PREFERENCE_KEYS[name as keyof Preferences], String(value));
+      if (value !== undefined) localStorage.setItem(PREFERENCE_KEYS[name as keyof Preferences], typeof value === "object" ? JSON.stringify(value) : String(value));
     }
   } catch {
     // Without storage the app starts from its defaults, in the system's language.

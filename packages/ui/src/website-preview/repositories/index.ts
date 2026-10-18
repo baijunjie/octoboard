@@ -68,7 +68,12 @@ function repository(
 ): PreviewRepository {
   const project = `preview-${example.id}`;
   const root = `/demo/bistro/${example.id}`;
-  const worktree = `${project}-main`;
+  // The project's folder is a linked worktree on the feature branch; the main working copy, on
+  // `main`, is beside it, so the Changes view compares the branch with `main` and lists both what
+  // is uncommitted and what the branch has committed.
+  const worktree = `${project}-feature`;
+  const mainWorktree = `${project}-main`;
+  const mainHead = `a${number.toString(16)}`.padEnd(40, "0");
   const head = `c${number.toString(16)}`.padEnd(40, "0");
   const blobs = new Map<string, string>();
   // Opaque fixture identities, shared by identical bodies; no real Git or filesystem is involved.
@@ -112,6 +117,18 @@ function repository(
       ),
     ),
   ];
+  // What the feature branch committed since it forked from `main`: one source file added, which
+  // the staged changes above leave alone.
+  const committedPath = Object.keys(example.files)
+    .sort()
+    .find((path) => /^src\/.*\.tsx?$/.test(path) && !(path in example.edited) && !example.added.includes(path));
+  if (committedPath === undefined) throw new Error(`${example.id} has no source file for the branch to commit`);
+  const branchChange = addition(
+    "committed",
+    committedPath,
+    { kind: "commit", commit: head, branch: null, blob: blob(example.files[committedPath]) },
+    example.files[committedPath],
+  );
   return {
     project,
     root,
@@ -126,17 +143,38 @@ function repository(
         {
           id: worktree,
           root,
-          main: true,
+          main: false,
           head,
           branch: example.branch,
           scope_present: true,
         },
+        {
+          id: mainWorktree,
+          root: `${root}-main`,
+          main: true,
+          head: mainHead,
+          branch: "main",
+          scope_present: true,
+        },
       ],
-      changes: { [worktree]: staged },
+      changes: { [worktree]: staged, [mainWorktree]: [] },
       branches: [
-        { name: "main", commit: head },
+        { name: "main", commit: mainHead },
         { name: example.branch, commit: head },
       ],
+      comparisons: { [`main..${example.branch}`]: [branchChange] },
+      commits: {
+        [`main..${example.branch}`]: {
+          commits: [
+            {
+              commit: head,
+              parent: mainHead,
+              subject: `Add ${committedPath}`,
+              changes: [branchChange],
+            },
+          ],
+        },
+      },
     },
   };
 }

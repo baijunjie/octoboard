@@ -15,7 +15,7 @@ import { errorText } from "../errorText";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { BrowseEntry } from "../protocol";
-import { displayWirePath, wireBaseName } from "../wirePath";
+import { wireBaseName } from "../wirePath";
 import { RowActions } from "./RowActions";
 import { FileIcon } from "./FileIcon";
 import type { TreeNode } from "./tree";
@@ -88,9 +88,7 @@ export function FileTree({
   onOpenFile,
   onRetry,
   treeRef,
-  showPaths = false,
 }: {
-  showPaths?: boolean;
   nodes: TreeNode[];
   /** Row keys of the expanded directories. */
   expanded: ReadonlySet<string>;
@@ -149,8 +147,8 @@ export function FileTree({
   const renderNode = (node: TreeNode): React.ReactElement => {
     if (node.type === "status") return <StatusItem node={node} />;
     return (
-      <FileNodeRow node={node} showPaths={showPaths}>
-        {node.type === "directory" && <Collection items={childrenOf(node)} dependencies={[language, showPaths]}>{renderNode}</Collection>}
+      <FileNodeRow node={node}>
+        {node.type === "directory" && <Collection items={childrenOf(node)} dependencies={[language]}>{renderNode}</Collection>}
       </FileNodeRow>
     );
   };
@@ -164,7 +162,7 @@ export function FileTree({
         expandedKeys={expanded}
         onExpandedChange={onExpandedChange}
         onAction={onAction}
-        dependencies={[language, showPaths]}
+        dependencies={[language]}
       >
         {renderNode}
       </Tree>
@@ -172,14 +170,13 @@ export function FileTree({
   );
 }
 
-function FileNodeRow({ node, showPaths, children }: {
+function FileNodeRow({ node, children }: {
   node: Exclude<TreeNode, { type: "status" }>;
-  showPaths: boolean;
   children?: React.ReactNode;
 }): React.ReactElement {
   const t = useT();
   const rowRef = useRef<HTMLDivElement>(null);
-  const name = showPaths ? displayWirePath(node.path) : wireBaseName(node.path);
+  const name = wireBaseName(node.path);
   if (node.type === "directory") {
     const link = node.entry.kind === "symlink";
     return (

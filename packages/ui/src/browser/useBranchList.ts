@@ -22,8 +22,8 @@ export type BranchList =
 /**
  * The local branches of a project's repository, asked of the daemon while `active`: once at first,
  * every `AUTO_REFRESH_MS` while the window is in front, on coming back to it after a while, on
- * `refresh`, and after a reconnect — so a branch created, moved or deleted shows in the selectors,
- * and a comparison can tell that a branch it compared has moved since. A reply is taken only for
+ * `refresh`, and after a reconnect — so a branch created, moved or deleted shows in the selector,
+ * and a comparison made from a branch that has moved since is made again. A reply is taken only for
  * the latest request, and only while the hook is mounted. `refresh` settles once the request has
  * been answered or has failed, or when a newer request has taken its place.
  */

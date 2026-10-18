@@ -24,23 +24,25 @@ export type Comparison =
   | { state: "error"; message: ErrorPresentation };
 
 /**
- * The comparison of branch `right` (To) with branch `left` (From) of a project: what `right` has
+ * The comparison of branch `right` with branch `left`, its base, of a project: what `right` has
  * changed since it forked from `left`, from their merge base to `right`'s tip. It is asked of the
- * daemon once both are chosen and the comparison is `active`, and again only on `refresh`. The
- * branches are resolved to their commits, and those to their merge base, when it is asked for, and
- * the commits it answers with stay until it is asked for again: a branch that moves meanwhile never
- * repoints it. Choosing other branches is another comparison, whose state starts afresh; a reply is
- * taken only for the latest request and the branches it was asked for. A request lost with the
- * connection is sent again once the connection is back; a comparison already held is kept as it
- * is. `refresh` settles once the comparison has been answered or has failed, or when a newer
- * request has taken its place.
+ * daemon once both are known and the comparison is `active`, and again on `refresh` and `update`.
+ * The branches are resolved to their commits, and those to their merge base, when it is asked for,
+ * and the commits it answers with stay until it is asked for again: a branch that moves meanwhile
+ * never repoints it, and the caller asks for it again (`update`) once it knows one has. Other
+ * branches are another comparison, whose state starts afresh; a reply is taken only for the latest
+ * request and the branches it was asked for. A request lost with the connection is sent again once
+ * the connection is back; a comparison already held is kept as it is. `refresh` and `update` both
+ * keep a comparison on screen until the new one is in, and `update`, being no request of the
+ * user's, keeps a failure on screen too; either settles once the comparison has been answered or
+ * has failed, or when a newer request has taken its place.
  */
 export function useBranchComparison(
   project: string,
   left: string | undefined,
   right: string | undefined,
   active: boolean,
-): { comparison: Comparison; refresh: () => Promise<void> } {
+): { comparison: Comparison; refresh: () => Promise<void>; update: () => Promise<void> } {
   const t = useT();
   const language = useCurrentLanguage();
   const { request, store } = useDaemon();
@@ -110,5 +112,6 @@ export function useBranchComparison(
   return {
     comparison,
     refresh: () => (pair !== undefined ? send(false) : Promise.resolve()),
+    update: () => (pair !== undefined ? send(true) : Promise.resolve()),
   };
 }

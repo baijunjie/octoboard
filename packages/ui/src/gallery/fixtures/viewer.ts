@@ -566,7 +566,7 @@ function binary(path: string, image: { mediaType: string | null; data: string })
   return bodyFromFileContent(path, { size, kind: "binary", media_type: image.mediaType, text: null, data: image.data });
 }
 
-// A file from the tree has no source: only a change opened from the Compare view says where it is from.
+// A file from the tree has no source: only a committed change opened from the Changes view says where it is from.
 function file(path: string, body: ViewerBody): ViewerSubject {
   return { key: `live:${path}`, path, content: { state: "file", body } };
 }
@@ -710,7 +710,7 @@ async function failedFiles(): Promise<ViewerSubject[]> {
   return [subjects.find(({ path }) => path === "src/gone.ts")!, ...subjects.filter(({ path }) => path !== "src/gone.ts")];
 }
 
-// The comparison wording of a change opened from the Compare view, in the window's language.
+// The comparison wording of a committed change opened from the Changes view, in the window's language.
 // The branches and commits are set as code, as the app sets them, with the same wording as plain text
 // for the tooltip.
 const comparisonWording = ({ Message, InlineChip }: LiveParts, t: Translate, from: string, fromCommit: string, to: string, toCommit: string) => {
@@ -769,7 +769,7 @@ function untrackedNotFile(path: string, kind: "symlink" | "submodule"): ViewerSu
   return { key: `Untracked:${path}`, path, status: "untracked", content: { state: "change", change: { old: { state: "absent" }, new: present(path, undefined, kind) } } };
 }
 
-/** A change opened from the Compare view: the comparison is the subtitle under the title. */
+/** A committed change opened from the Changes view: the comparison is the subtitle under the title. */
 function compared(parts: LiveParts, t: Translate): ViewerSubject {
   const wording = comparisonWording(parts, t, "main", "1234567", "feature", "fedcba0");
   return {
@@ -829,7 +829,7 @@ async function allChanges(language: Language): Promise<ViewerSubject[]> {
       },
     },
     compared(parts, t),
-    // A long comparison under the title, and a Markdown file shown alone from the Compare view, which
+    // A long comparison under the title, and a Markdown file shown alone from the Changes view, which
     // has the source / document choice and the wrap choice in source (a Markdown diff has the layout
     // and wrap choices and no document, so all three never show together).
     {
@@ -1129,7 +1129,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Header on a platform with no clipboard",
-    description: "A Markdown file, an image and a change from the Compare view on a platform with no clipboard: Previous / Next remain to the left of the title, and the metadata controls start at the view choices with no copy button (switch the Markdown file to source for the wrap choice beside the view choice). The image has no metadata controls.",
+    description: "A Markdown file, an image and a committed change from the Changes view on a platform with no clipboard: Previous / Next remain to the left of the title, and the metadata controls start at the view choices with no copy button (switch the Markdown file to source for the wrap choice beside the view choice). The image has no metadata controls.",
     clipboard: "unavailable",
     viewer: { subjects: withoutClipboard },
   },

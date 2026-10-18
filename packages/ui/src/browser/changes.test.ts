@@ -8,10 +8,14 @@ import {
   changeItems,
   changeNeighbours,
   changeTree,
+  commitItems,
+  commitKey,
+  commitScope,
   directoryKey,
   filterChanges,
   rereadChange,
   sectionKey,
+  sections,
   visibleChanges,
   visibleNodes,
   type ChangeEvidence,
@@ -39,6 +43,49 @@ it("puts the paths in conflict first, then the other sections, and paths within 
     "unstaged src/a.ts modified",
     "untracked new.txt untracked",
   ]);
+});
+
+it("lists the committed section by commit, newest first, with a row of each for a file both changed", () => {
+  const commit = (path: string, id: string): ChangeEntry => ({ group: "committed", old: at(path, "o"), new: at(path, id) });
+  const items = [
+    ...changeItems([entries[1]]),
+    ...commitItems([
+      { commit: "c3", parent: "c2", subject: "second", changes: [commit("src/a.ts", "c3")] },
+      { commit: "c2", parent: "c1", subject: "first", changes: [commit("z.ts", "c2"), commit("src/a.ts", "c2")] },
+    ]),
+  ];
+  expect(sections(items).map((group) => [group.section, group.items.map((item) => item.path)])).toEqual([
+    ["unstaged", ["src/a.ts"]],
+    ["committed", ["src/a.ts", "src/a.ts", "z.ts"]],
+  ]);
+  expect(new Set(items.map((item) => item.key)).size).toBe(items.length);
+  expect(changeNeighbours(items, items[1])).toMatchObject({ previous: { section: "unstaged" }, next: { commit: { commit: "c2" } } });
+
+  // One row per commit under the section, each holding its own changes in the layout's form.
+  const [, committed] = changeGroups(items, "tree");
+  expect(committed.nodes.map((node) => [node.type, node.key, node.type === "commit" ? node.count : undefined])).toEqual([
+    ["commit", commitKey("c3"), 1],
+    ["commit", commitKey("c2"), 2],
+  ]);
+  expect(outline(committed.nodes)).toEqual(["c3", "  src/", "    src/a.ts", "c2", "  src/", "    src/a.ts", "  z.ts"]);
+  expect(outline(changeGroups(items, "flat")[1].nodes)).toEqual(["c3", "  src/a.ts", "c2", "  src/a.ts", "  z.ts"]);
+  // The same directory of two commits is two rows with keys of their own.
+  const [first, second] = committed.nodes.map((node) => (node as Extract<ChangeNode, { type: "commit" }>).children[0]);
+  expect([first.key, second.key]).toEqual([directoryKey(commitScope("c3"), "src"), directoryKey(commitScope("c2"), "src")]);
+});
+
+it("leaves the changes under a folded commit or directory off the viewer's walk", () => {
+  const commit = (path: string, id: string): ChangeEntry => ({ group: "committed", old: at(path, "o"), new: at(path, id) });
+  const items = commitItems([
+    { commit: "c3", parent: "c2", subject: "second", changes: [commit("src/a.ts", "c3")] },
+    { commit: "c2", parent: "c1", subject: "first", changes: [commit("z.ts", "c2"), commit("src/b.ts", "c2")] },
+  ]);
+  const paths = (layout: "flat" | "tree", folded: string[]) => visibleChanges(items, layout, new Set(folded)).map((item) => item.path);
+  expect(paths("flat", [])).toEqual(["src/a.ts", "src/b.ts", "z.ts"]);
+  expect(paths("flat", [commitKey("c3")])).toEqual(["src/b.ts", "z.ts"]);
+  expect(paths("tree", [commitKey("c2")])).toEqual(["src/a.ts"]);
+  expect(paths("tree", [directoryKey(commitScope("c2"), "src")])).toEqual(["src/a.ts", "z.ts"]);
+  expect(paths("tree", [sectionKey("committed")])).toEqual([]);
 });
 
 it("calls a staged change with an absent old side added, and only the untracked group untracked", () => {
@@ -88,10 +135,14 @@ it("finds a change in a list, gone from a complete one, unknown in a cut or refr
 const unstaged = (path: string): ChangeEntry => ({ group: "unstaged", old: at(path), new: at(path, "live") });
 const treeEntries = ["README.md", "src/a.ts", "src/b.ts", "src/utils/kickback/x.ts", "src/utils/kickback/y.ts", "tools/release/notes.md", "z.ts"].map(unstaged);
 
-/** A tree's rows as indented text: directories by their name, changes by their path. */
+/** A tree's rows as indented text: directories by their name, commits by their id, changes by their path. */
 const outline = (nodes: readonly ChangeNode[], depth = 0): string[] =>
   nodes.flatMap((node) =>
-    node.type === "directory" ? [`${"  ".repeat(depth)}${node.name}/`, ...outline(node.children, depth + 1)] : [`${"  ".repeat(depth)}${node.item.path}`],
+    node.type === "directory"
+      ? [`${"  ".repeat(depth)}${node.name}/`, ...outline(node.children, depth + 1)]
+      : node.type === "commit"
+        ? [`${"  ".repeat(depth)}${node.commit.commit}`, ...outline(node.children, depth + 1)]
+        : [`${"  ".repeat(depth)}${node.item.path}`],
   );
 
 it("groups a section's changes under directories, directories first, and compacts a chain of single-child directories", () => {

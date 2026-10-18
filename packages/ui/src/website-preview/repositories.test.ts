@@ -216,7 +216,7 @@ describe("the website's eight independent repository fixtures", () => {
       });
       expect(index).toMatchObject({
         type: "project_file",
-        source: { kind: "index", worktree: `${id}-main` },
+        source: { kind: "index", worktree: repository.git.worktrees[0].id },
       });
       const committed = await api.request({
         type: "read_project_file",
@@ -298,6 +298,47 @@ describe("the website's eight independent repository fixtures", () => {
           ).toBe(true);
         }
       }
+    },
+  );
+
+  it.each([...previewRepositories])(
+    "shows %s's feature branch as uncommitted changes plus what it committed since it forked from the main working copy's branch",
+    async (id, repository) => {
+      const api = daemon();
+      const source = await api.request({ type: "get_project_source", project: id });
+      if (source.type !== "project_source" || !source.source.git)
+        throw new Error("Missing source");
+      const { worktree, worktrees } = source.source.git;
+      expect(worktrees.find((w) => w.id === worktree)).toMatchObject({
+        main: false,
+        branch: repository.branch,
+      });
+      expect(worktrees.find((w) => w.main)).toMatchObject({ branch: "main" });
+      const compared = await api.request({
+        type: "compare_project_branches",
+        project: id,
+        left: "main",
+        right: repository.branch,
+      });
+      if (compared.type !== "project_comparison")
+        throw new Error("Missing comparison");
+      expect(compared.changes).toHaveLength(1);
+      expect(compared.base).not.toBe(compared.right.commit);
+      const commits = await api.request({
+        type: "list_project_commits",
+        project: id,
+        base: compared.base,
+        tip: compared.right.commit,
+      });
+      if (commits.type !== "project_commits")
+        throw new Error("Missing commits");
+      expect(commits.commits.map((commit) => commit.changes)).toEqual([
+        compared.changes,
+      ]);
+      const main = worktrees.find((w) => w.main)!;
+      await expect(
+        api.request({ type: "list_project_changes", project: id, worktree: main.id }),
+      ).resolves.toMatchObject({ type: "project_changes", changes: [] });
     },
   );
 

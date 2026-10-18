@@ -8,17 +8,14 @@ import { gitMoment } from "./gitRequests";
 /** What a project's browser shows: its files on disk, or Git review. */
 export type BrowserMode = "files" | "git";
 
-/** What the Git mode shows: a worktree's uncommitted changes, or the changes between two
- * branches. */
-export type GitView = "worktree" | "compare";
-export type BrowserTab = "files" | GitView;
-
-/** The part of a project's browser state that outlives the window: its mode, per-tab layouts and
- * directories expanded in its tree (wire paths). File bodies and listings are never stored. */
+/** The part of a project's browser state that outlives the window: its mode, the Git mode's change
+ * layout, whether the Git mode's committed changes are grouped by commit, and directories expanded in its
+ * tree (wire paths). File bodies and listings are never stored. */
 interface StoredBrowser {
   mode: BrowserMode;
   expanded: string[];
-  layouts?: Partial<Record<BrowserTab, ChangeLayout>>;
+  layouts?: { changes?: ChangeLayout };
+  byCommit?: boolean;
   /** When the project's browser was last shown, for dropping the least recently used ones. */
   used: number;
 }
@@ -28,7 +25,7 @@ interface StoredBrowser {
 const MAX_PROJECTS = 50;
 const MAX_EXPANDED = 200;
 
-function parseStored(raw: string | null): Record<string, StoredBrowser> {
+export function parseStored(raw: string | null): Record<string, StoredBrowser> {
   try {
     const value = raw ? (JSON.parse(raw) as unknown) : undefined;
     if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -37,12 +34,18 @@ function parseStored(raw: string | null): Record<string, StoredBrowser> {
       if (!entry || typeof entry !== "object") continue;
       const expanded = Array.isArray(entry.expanded) ? entry.expanded.filter((p): p is string => typeof p === "string" && p !== "") : [];
       const mode = entry.mode === "git" ? "git" : "files";
-      const layouts: Partial<Record<BrowserTab, ChangeLayout>> = {};
-      for (const tab of ["files", "worktree", "compare"] as const) {
-        const layout = entry.layouts?.[tab];
-        if (layout === "flat" || layout === "tree") layouts[tab] = layout;
-      }
-      result[project] = { mode, layouts, expanded: expanded.slice(-MAX_EXPANDED), used: typeof entry.used === "number" ? entry.used : 0 };
+      // Earlier versions kept a layout per tab: the Files tab's is no longer a choice, and a stored
+      // one is ignored. `worktree` is the key they kept the Git mode's under, which stands for the
+      // Changes tab until that has one of its own.
+      const saved = entry.layouts as Partial<Record<"changes" | "worktree", unknown>> | undefined;
+      const layout = saved?.changes ?? saved?.worktree;
+      result[project] = {
+        mode,
+        layouts: layout === "flat" || layout === "tree" ? { changes: layout } : {},
+        ...(entry.byCommit === true ? { byCommit: true } : {}),
+        expanded: expanded.slice(-MAX_EXPANDED),
+        used: typeof entry.used === "number" ? entry.used : 0,
+      };
     }
     return result;
   } catch {
@@ -56,26 +59,24 @@ const stored = createPersistedPreference<Record<string, StoredBrowser>>(PREFEREN
 
 /** What each project's browser has selected, kept for the window's lifetime only: a selection is
  * about what the user is looking at now, and what an earlier run named may well be gone — a file,
- * a worktree, a branch, a change. `file` is the tree's selected file (the one last opened in the
- * viewer), `worktree` the worktree whose changes the Git mode shows (none for the one holding the
- * project's directory), `change` the key of the change last opened from them (`changeKey`);
- * `gitView` which of its views the Git mode shows, `left` and `right` the branches compared (wire
- * paths) and `comparedChange` the key of the change last opened from their comparison. */
-type Selection = "file" | "worktree" | "change" | "gitView" | "left" | "right" | "comparedChange";
-const SELECTIONS: readonly Selection[] = ["file", "worktree", "change", "gitView", "left", "right", "comparedChange"];
+ * a branch, a change. `file` is the tree's selected file (the one last opened in the viewer),
+ * `branch` the branch whose changes the Git mode shows (a wire path; none for the one checked out
+ * where the project's directory is), and `change` the key of the change last opened from them
+ * (`ChangeItem.key`). */
+type Selection = "file" | "branch" | "change";
+const SELECTIONS: readonly Selection[] = ["file", "branch", "change"];
 const selections = Object.fromEntries(SELECTIONS.map((kind) => [kind, new Map<string, string>()])) as Record<Selection, Map<string, string>>;
 const selectionListeners = new Set<() => void>();
 let selectionVersion = 0;
 
 /** The rows of the Git mode's change list that the user folded away — a section's heading
- * (`sectionKey`) or, in the tree, a directory (`directoryKey`) — per project and for the window's
- * lifetime, like the selections: the rows of the two views never share a key, so one set serves
- * both. Everything starts unfolded. */
+ * (`sectionKey`), a commit (`commitKey`) or, in the tree, a directory (`directoryKey`) — per project and for the window's
+ * lifetime, like the selections. Everything starts unfolded. */
 const NONE_COLLAPSED: ReadonlySet<string> = new Set();
 const collapsedRows = new Map<string, ReadonlySet<string>>();
 
-/** What a session set in a project's Git mode selectors, kept for the window's lifetime so a pane
- * mounted again under the same selection does not set them again over the user's choices. */
+/** What a session set in a project's Git mode branch selector, kept for the window's lifetime so a
+ * pane mounted again under the same selection does not set it again over the user's choice. */
 export interface SessionFollow {
   session: string;
   /** The selection (`noteSessionSwitch`) this record is of: a later one makes it a new switch. */
@@ -84,20 +85,20 @@ export interface SessionFollow {
    * weighed. */
   since: number;
   /** The same for the worktree list, moved forward when it is asked again for the worktree the
-   * session's branch should be in. */
+   * session's branch should be checked out in. */
   sourceSince: number;
   /** Whether the pane has asked again for what was read before the switch. */
   asked: boolean;
   /** Whether the worktree list has been asked again for a worktree no listed one is. */
   retried: boolean;
-  /** Set once nothing is left to set, or the user has chosen a selector. */
+  /** Set once nothing is left to set, or the user has chosen a branch. */
   settled: boolean;
 }
 const follows = new Map<string, SessionFollow>();
 let switchCount = 0;
 let lastSwitchAt = 0;
 
-/** Records that the selected session changed, so each project's selectors follow it afresh. */
+/** Records that the selected session changed, so each project's selector follows it afresh. */
 export function noteSessionSwitch(): void {
   switchCount += 1;
   lastSwitchAt = gitMoment();
@@ -149,33 +150,28 @@ const NO_EXPANDED: ReadonlySet<string> = new Set();
 const expandedSets = new WeakMap<string[], ReadonlySet<string>>();
 
 export interface ProjectBrowserState {
-  layouts: Record<BrowserTab, ChangeLayout>;
-  setLayout: (tab: BrowserTab, layout: ChangeLayout) => void;
+  /** How the Git mode's changes are laid out. */
+  layout: ChangeLayout;
+  setLayout: (layout: ChangeLayout) => void;
+  /** Whether the Git mode's committed changes are grouped by commit within the Committed section. */
+  byCommit: boolean;
+  setByCommit: (byCommit: boolean) => void;
   mode: BrowserMode;
   expanded: ReadonlySet<string>;
   selected?: string;
-  /** The worktree the Git mode shows the changes of, by its id; none for the one holding the
-   * project's directory. */
-  worktree?: string;
-  /** The key of the change the Git mode's viewer showed last from the worktree's changes. */
+  /** The branch the Git mode shows the changes of, as a wire path; none for the one checked out in
+   * the worktree holding the project's directory. */
+  branch?: string;
+  /** The key of the change the Git mode's viewer showed last. */
   selectedChange?: string;
-  gitView: GitView;
-  /** The branches compared, old side and new side, as wire paths; none until chosen. */
-  left?: string;
-  right?: string;
-  /** The key of the change the Git mode's viewer showed last from the comparison. */
-  selectedComparedChange?: string;
   /** The rows of the Git mode's change list that are folded away, as row keys: a section's
-   * heading, or a directory of the tree. */
+   * heading, a commit or a directory of the tree. */
   collapsedChangeRows: ReadonlySet<string>;
   setMode: (mode: BrowserMode) => void;
   setExpanded: (expanded: ReadonlySet<string>) => void;
   setSelected: (path: string | undefined) => void;
-  setWorktree: (worktree: string | undefined) => void;
+  setBranch: (branch: string | undefined) => void;
   setSelectedChange: (key: string | undefined) => void;
-  setGitView: (view: GitView) => void;
-  setBranches: (left: string | undefined, right: string | undefined) => void;
-  setSelectedComparedChange: (key: string | undefined) => void;
   setCollapsedChangeRows: (collapsed: ReadonlySet<string>) => void;
   /** Records the project's browser as just shown, which keeps it from being the first dropped. */
   touch: () => void;
@@ -202,29 +198,21 @@ export function useProjectBrowserState(project: string): ProjectBrowserState {
     expandedSets.set(entry.expanded, expanded);
   }
   return {
-    layouts: { files: entry?.layouts?.files ?? "tree", worktree: entry?.layouts?.worktree ?? changeLayout.get(), compare: entry?.layouts?.compare ?? changeLayout.get() },
-    setLayout: (tab, layout) => update(project, (e) => ({ ...e, layouts: { ...e.layouts, [tab]: layout } })),
+    layout: entry?.layouts?.changes ?? changeLayout.get(),
+    setLayout: (layout) => update(project, (e) => ({ ...e, layouts: { changes: layout } })),
+    byCommit: entry?.byCommit === true,
+    setByCommit: (byCommit) => update(project, (e) => ({ ...e, byCommit })),
     mode: entry?.mode ?? "files",
     expanded,
     selected: selections.file.get(project),
-    worktree: selections.worktree.get(project),
+    branch: selections.branch.get(project),
     selectedChange: selections.change.get(project),
-    gitView: selections.gitView.get(project) === "compare" ? "compare" : "worktree",
-    left: selections.left.get(project),
-    right: selections.right.get(project),
-    selectedComparedChange: selections.comparedChange.get(project),
     collapsedChangeRows: collapsedRows.get(project) ?? NONE_COLLAPSED,
     setMode: (mode) => setProjectBrowserMode(project, mode),
     setExpanded: (next) => update(project, (e) => ({ ...e, expanded: [...next].slice(-MAX_EXPANDED) })),
     setSelected: (path) => setSelection("file", project, path),
-    setWorktree: (worktree) => setSelection("worktree", project, worktree),
+    setBranch: (branch) => setSelection("branch", project, branch),
     setSelectedChange: (key) => setSelection("change", project, key),
-    setGitView: (view) => setSelection("gitView", project, view),
-    setBranches: (left, right) => {
-      setSelection("left", project, left);
-      setSelection("right", project, right);
-    },
-    setSelectedComparedChange: (key) => setSelection("comparedChange", project, key),
     setCollapsedChangeRows: (collapsed) => setCollapsed(project, collapsed),
     touch: () => update(project, (e) => ({ ...e, used: Date.now() })),
   };

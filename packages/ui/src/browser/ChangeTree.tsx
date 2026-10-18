@@ -1,30 +1,43 @@
 import React, { useMemo, useRef } from "react";
 import { Collection, Tree, TreeHeader, TreeItem, TreeItemContent, TreeSection, Virtualizer, type Key } from "react-aria-components";
 
+import { FadeOverflow } from "../components/FadeOverflow";
+import { InlineChip } from "../components/InlineChip";
 import { useStickyScrollFade } from "../components/scrollFade";
+import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
+import type { ChangeLayout } from "./changeLayout";
 import { ChangeRowBody, changeRowText } from "./changeRow";
-import { changeGroups, sectionKey, type ChangeItem, type ChangeNode } from "./changes";
+import { changeGroups, sectionKey, type ChangeItem, type ChangeNode, type CommitRef } from "./changes";
 import { ChangeSectionHeading, ChangeSectionHeadingStops, ChangeListLayout, CHANGE_SCROLL_CLASS, HEADING_CLASS, HEADING_HEIGHT } from "./changeSectionHeading";
+import { shortCommit } from "./shortCommit";
 import { useBrowserListMotion } from "./useBrowserListMotion";
-import { DirectoryRow, ROW_CLASS, ROW_HEIGHT, RowContent } from "./treeRow";
+import { DirectoryRow, ExpandChevron, ROW_CLASS, ROW_HEIGHT, RowContent } from "./treeRow";
 
-/** The directories of `nodes` and everything under them. */
-function directoryKeys(nodes: readonly ChangeNode[]): string[] {
-  return nodes.flatMap((node) => (node.type === "directory" ? [node.key, ...directoryKeys(node.children)] : []));
+/** The rows of `nodes` that open and close — the directories and the commits — and everything
+ * under them. */
+function foldableKeys(nodes: readonly ChangeNode[]): string[] {
+  return nodes.flatMap((node) => (node.type !== "change" ? [node.key, ...foldableKeys(node.children)] : []));
 }
 
 /**
- * The change list's tree form: the same sections, each headed with its count, with a section's changes grouped
- * under their directories. HeroUI 3 has no tree, so this is built on the react-aria-components `Tree` HeroUI
- * itself builds on, virtualized, as the Files mode's tree is (`FileTree`), so it has the same keyboard model:
- * arrows, Home / End, type-ahead, Left / Right to collapse and expand a directory. A directory opens or closes
- * and a change opens in the viewer. Directories start open; the ones the user folded away are `collapsed`, and
- * a change under one has no row, so the viewer's navigation skips it.
+ * A branch's changes as a list in sections — in conflict, staged, unstaged, untracked, then what it
+ * has committed, as one flat run of changes or, when it is listed by commit, a row per commit
+ * (newest first) holding that commit's changes — each section headed with its count. HeroUI 3 has
+ * no tree, so this is built on the react-aria-components `Tree` HeroUI itself builds on,
+ * virtualized, as the Files mode's tree is (`FileTree`), so it has the same keyboard model: arrows,
+ * Home / End, type-ahead, Left / Right to collapse and expand a row that has rows under it. In the
+ * `tree` layout a section's changes (or a commit's) are grouped under their directories, in the
+ * `flat` one they are one row each. A directory or a commit opens or closes and a change opens in
+ * the viewer. A row's action is to open its change, and a button at its end opens a menu of the
+ * others (`RowActions`); nothing is selectable in the list's sense. The change the viewer showed
+ * last is tinted and named as selected in its row's label instead, as the file tree marks its file.
  *
- * `collapsed` holds the sections the user folded away too (`sectionKey`), which each section's heading does
- * (`ChangeSectionHeading`, shared with the flat list). A folded section renders none of its rows, so a directory
- * inside one keeps the state it had, this tree deciding only the directories it shows.
+ * `collapsed` holds the sections the user folded away (`sectionKey`), which each section's heading
+ * does (`ChangeSectionHeading`), and the commits and directories folded away (`commitKey`,
+ * `directoryKey`). A folded section renders none of its rows, so a commit or a directory inside one
+ * keeps the state it had, this tree deciding only the rows it shows; a change under a folded row
+ * has no row, so the viewer's navigation skips it (`visibleChanges`). Everything starts unfolded.
  */
 export function ChangeTree({
   items,
@@ -32,6 +45,7 @@ export function ChangeTree({
   label,
   onOpen,
   listRef,
+  layout,
   collapsed,
   onCollapsedChange,
 }: {
@@ -41,57 +55,65 @@ export function ChangeTree({
   label: string;
   onOpen: (item: ChangeItem) => void;
   listRef: React.Ref<HTMLDivElement>;
-  /** Row keys of the sections and the directories folded away. */
+  layout: ChangeLayout;
+  /** Row keys of the sections, the commits and the directories folded away. */
   collapsed: ReadonlySet<string>;
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
 }): React.ReactElement {
   const language = useCurrentLanguage();
   const motionRef = useBrowserListMotion(listRef);
   const { props: fade, wrap } = useStickyScrollFade({ ref: motionRef, className: "min-h-0 flex-1 overflow-auto pb-1 outline-none " + CHANGE_SCROLL_CLASS, stickyHeadingHeight: HEADING_HEIGHT });
-  const groups = useMemo(() => changeGroups(items, "tree").map((group) => ({ id: group.section, ...group })), [items]);
-  // Only the directories of the sections on screen: a folded section renders none of its rows, so
-  // whether a directory inside one is folded is not this list's to decide. react-aria hands an
-  // expanded key it knows nothing of back unchanged, so those keys would survive either way;
+  const groups = useMemo(() => changeGroups(items, layout).map((group) => ({ id: group.section, ...group })), [items, layout]);
+  // Only the commits and directories of the sections on screen: a folded section renders none of
+  // its rows, so whether a row inside one is folded is not this list's to decide. react-aria hands
+  // an expanded key it knows nothing of back unchanged, so those keys would survive either way;
   // leaving them out of what is decided here is what makes that beside the point.
   const shown = useMemo(() => groups.filter((group) => !collapsed.has(sectionKey(group.section))), [groups, collapsed]);
-  const directories = useMemo(() => shown.flatMap((group) => directoryKeys(group.nodes)), [shown]);
+  const foldable = useMemo(() => shown.flatMap((group) => foldableKeys(group.nodes)), [shown]);
   const byKey = useMemo(() => {
     const map = new Map<Key, ChangeNode>();
     const walk = (nodes: readonly ChangeNode[]) =>
       nodes.forEach((node) => {
         map.set(node.key, node);
-        if (node.type === "directory") walk(node.children);
+        if (node.type !== "change") walk(node.children);
       });
     shown.forEach((group) => walk(group.nodes));
     return map;
   }, [shown]);
-  const expanded = useMemo(() => new Set<Key>(directories.filter((key) => !collapsed.has(key))), [directories, collapsed]);
+  const expanded = useMemo(() => new Set<Key>(foldable.filter((key) => !collapsed.has(key))), [foldable, collapsed]);
 
-  // Only the directories this list shows are decided here: the sections' own keys, the directories
-  // inside a folded section and the other view's folded rows all stay as they are.
+  // Only the commits and directories this list shows are decided here: the sections' own keys and
+  // the rows inside a folded section all stay as they are.
   const onExpandedChange = (keys: Set<Key>) => {
-    const next = new Set([...collapsed].filter((key) => !directories.includes(key)));
-    for (const key of directories) if (!keys.has(key)) next.add(key);
+    const next = new Set([...collapsed].filter((key) => !foldable.includes(key)));
+    for (const key of foldable) if (!keys.has(key)) next.add(key);
     onCollapsedChange(next);
   };
   const onAction = (key: Key) => {
     const node = byKey.get(key);
     if (node?.type === "change") onOpen(node.item);
-    else if (node?.type === "directory") onExpandedChange(expanded.has(key) ? new Set([...expanded].filter((k) => k !== key)) : new Set([...expanded, key]));
+    else if (node) onExpandedChange(expanded.has(key) ? new Set([...expanded].filter((k) => k !== key)) : new Set([...expanded, key]));
   };
 
   const renderNode = (node: ChangeNode): React.ReactElement => {
-    if (node.type === "directory") {
-      return (
-        <TreeItem data-list-motion={node.key} id={node.key} textValue={node.name} hasChildItems className={ROW_CLASS}>
-          <TreeItemContent>{({ isExpanded }) => <DirectoryRow name={node.name} isExpanded={isExpanded} />}</TreeItemContent>
-          <Collection items={node.children} dependencies={[language, selected]}>
-            {renderNode}
-          </Collection>
-        </TreeItem>
-      );
-    }
-    return <ChangeTreeRow item={node.item} isSelected={node.item.key === selected} />;
+    if (node.type === "change") return <ChangeTreeRow item={node.item} isSelected={node.item.key === selected} layout={layout} />;
+    return (
+      <TreeItem
+        data-list-motion={node.key}
+        id={node.key}
+        textValue={node.type === "commit" ? commitText(node.commit) : node.name}
+        aria-label={node.type === "commit" ? commitLabel(node.commit, node.count, language) : undefined}
+        hasChildItems
+        className={ROW_CLASS}
+      >
+        <TreeItemContent>
+          {({ isExpanded }) => (node.type === "commit" ? <CommitRow commit={node.commit} count={node.count} isExpanded={isExpanded} /> : <DirectoryRow name={node.name} isExpanded={isExpanded} />)}
+        </TreeItemContent>
+        <Collection items={node.children} dependencies={[language, selected, layout]}>
+          {renderNode}
+        </Collection>
+      </TreeItem>
+    );
   };
 
   return (
@@ -106,7 +128,7 @@ export function ChangeTree({
           onAction={onAction}
           // `collapsed` among the dependencies, or the collection keeps the rows of a section that
           // has just been folded: nothing else about it changed.
-          dependencies={[language, selected, collapsed]}
+          dependencies={[language, selected, collapsed, layout]}
         >
           {(group) => (
             <TreeSection className="h-full" id={group.section}>
@@ -114,7 +136,7 @@ export function ChangeTree({
                 <ChangeSectionHeading section={group.section} count={group.items.length} collapsed={collapsed} onCollapsedChange={onCollapsedChange} />
               </TreeHeader>
               {/* A folded section is its heading and nothing else, still counting what it holds. */}
-              <Collection items={collapsed.has(sectionKey(group.section)) ? [] : group.nodes} dependencies={[language, selected]}>
+              <Collection items={collapsed.has(sectionKey(group.section)) ? [] : group.nodes} dependencies={[language, selected, layout]}>
                 {renderNode}
               </Collection>
             </TreeSection>
@@ -125,16 +147,52 @@ export function ChangeTree({
   );
 }
 
-function ChangeTreeRow({ item, isSelected }: { item: ChangeItem; isSelected: boolean }): React.ReactElement {
+/** What a commit's row is searched by, for type-ahead: its short id and its subject. */
+const commitText = (commit: CommitRef): string => `${shortCommit(commit.commit)} ${commit.subject}`.trim();
+
+/** What a commit's row is named, for assistive technology, in the order it is drawn: its short id,
+ * its subject (isolated, as free text) and its count of changes, which the visible row shows too. */
+const commitLabel = (commit: CommitRef, count: number, language: string): string =>
+  [shortCommit(commit.commit), commit.subject !== "" ? isolate(commit.subject) : "", new Intl.NumberFormat(language).format(count)].filter(Boolean).join(" ");
+
+/**
+ * A commit's row inside the committed section, subordinate to the section's band (no fill, and the
+ * band's own smaller type) yet the parent of the folders and changes beneath it, which it must not
+ * read as lighter than: the rows' text size, a chevron like a directory's, and the commit's short
+ * id in a muted monospace chip, then its subject in the normal foreground at medium weight, which
+ * fades out where it is too long with its whole text as its tooltip, and the muted count of its
+ * changes, which stays in view after it. It sits in the flow
+ * rather than pinned under the band, as a directory's row does; its row is named by `commitLabel`,
+ * the same three in the same order.
+ */
+function CommitRow({ commit, count, isExpanded }: { commit: CommitRef; count: number; isExpanded: boolean }): React.ReactElement {
+  const language = useCurrentLanguage();
+  return (
+    <RowContent chevron={<ExpandChevron isExpanded={isExpanded} />}>
+      <InlineChip monospace size="xs" className="shrink-0">{shortCommit(commit.commit)}</InlineChip>
+      {commit.subject !== "" ? (
+        <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1 font-medium" titleWhenClipped={commit.subject}>
+          {commit.subject}
+        </FadeOverflow>
+      ) : (
+        <span className="flex-1" />
+      )}
+      <span className="shrink-0 text-app-muted">{new Intl.NumberFormat(language).format(count)}</span>
+    </RowContent>
+  );
+}
+
+function ChangeTreeRow({ item, isSelected, layout }: { item: ChangeItem; isSelected: boolean; layout: ChangeLayout }): React.ReactElement {
   const t = useT();
   const rowRef = useRef<HTMLDivElement>(null);
-  const { name, detail, ariaLabel } = changeRowText(t, item, isSelected, true);
+  const flat = layout === "flat";
+  const { name, detail, ariaLabel } = changeRowText(t, item, isSelected, !flat);
   // Marked `data-current`, not `data-selected`: react-aria-components writes the row's
   // `data-selected` itself, from a selection the tree does not have.
   return (
     <TreeItem data-list-motion={item.key} id={item.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS} ref={rowRef}>
       <TreeItemContent>
-        <RowContent>
+        <RowContent flat={flat}>
           <ChangeRowBody contextTargetRef={rowRef} item={item} name={name} detail={detail} />
         </RowContent>
       </TreeItemContent>

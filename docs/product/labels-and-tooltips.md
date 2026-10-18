@@ -28,7 +28,7 @@ Two places show the operating system's own tooltip instead, which follows the sy
 inside a Markdown document in the file viewer, where — for a web or mail address, or a path in the project — the
 address it leads to is also what assistive technology is given as the link's description (see "A Markdown file as a
 document" in `docs/product/project-pane.md`), and the separators standing for the lines a diff leaves out (see
-"Expanding the collapsed lines" in `docs/product/project-pane-git-mode.md`).
+"Expanding the collapsed lines" in `docs/product/project-pane-git-change-viewer.md`).
 
 ## Tooltips on icon-only controls
 
@@ -61,12 +61,11 @@ buttons, the pin buttons and the session Delete or Archive shortcuts below. Thes
 - the three options of Settings' Appearance row — Light, Dark and System (see "Appearance" in
   `docs/product/settings.md`);
 - the report panel's previous-page and next-page buttons;
-- the project pane's Refresh button, a folder's arrow button in its file tree and in the Git mode's change tree ("Expand" /
-  "Collapse"), the file viewer's Copy path button and its Previous file and Next file buttons (see
-  `docs/product/project-pane.md`), and the Git mode's Swap branches (see "The branch selectors" in
-  `docs/product/project-pane-git-mode.md`);
-- the file viewer's three view controls and the Git mode's two view toggles — the one that shows and hides the change
-  filter field, and Group by folder — whose tooltip is the name they announce and alternates with their state (see
+- the project pane's Refresh button, a folder's arrow button in its file tree and in the Git mode's change list, and a
+  commit row's arrow button there ("Expand" / "Collapse"), the file viewer's Copy path button and its Previous file
+  and Next file buttons (see `docs/product/project-pane.md`);
+- the file viewer's three view controls and the Git mode's three view toggles — the one that shows and hides the
+  change filter field, Group by folder and Group by commit — whose tooltip is the name they announce and alternates with their state (see
   "Two-state icon toggles" below);
 - the two controls of the console dialog's Avatar field (see "Avatar" in
   `docs/product/consoles-and-projects.md`) — the round control itself, named for choosing an image while it is empty
@@ -83,10 +82,10 @@ card lists, each with its own status glyph and that glyph's tooltip (see "Toolti
 
 A control that switches a view between two states is **one icon button**, not a set of choices side by side. These are
 the two pane toggles (see "The two pane toggles" in `docs/product/window-layout.md`), the file viewer's three view
-controls (see "The file viewer" in `docs/product/project-pane.md`), the Files mode's file-name filter and folder-grouping toggles
-(see "Filtering by file name" and "Flat or grouped by folder" in that doc), and the Git mode's two — the toggle of its change
-filter field (see "Filtering by file name" in `docs/product/project-pane-git-mode.md`) and Group by folder (see "Flat
-or grouped by folder" in the same doc). For all of them:
+controls (see "The file viewer" in `docs/product/project-pane.md`), the Files mode's file-name filter toggle
+(see "Filtering by file name" in that doc), and the Git mode's three — the toggle of its change
+filter field (see "Filtering by file name" in `docs/product/project-pane-git-mode.md`), Group by folder (see "Flat
+or grouped by folder" in the same doc) and Group by commit (see "Grouped by commit" in the same doc). For all of them:
 
 - Pressing the button switches the state, and its icon becomes the other state's.
 - **The icon shows the state the view is in; the name says what pressing will do**, so the name alternates with the
@@ -151,8 +150,8 @@ These are:
 
 A single-line name or label too long for its space — a sidebar row's name, a focus mode session card's title, the top
 bar's breadcrumb, a session listed in a confirmation, the report panel's page timestamp, a name in a project pane's
-file tree or its header, a name or what follows it in the Git mode's change list, a worktree's name or path in its
-worktree selector, a branch's name in its branch selectors, a picked tag's label (see "Picked tags" in
+file tree or its header, a name or what follows it in the Git mode's change list, a commit's subject on its commit row
+there, a branch's name in its branch selector, a picked tag's label (see "Picked tags" in
 `docs/product/consoles-and-projects.md`) and the project filter's strip of conditions in the sidebar's Projects
 heading, which counts as one label (see "Filtering the project list" in `docs/product/sidebar.md`) — fades out where
 it is cut off rather than ending in an ellipsis. The same holds for action-menu items and submenu names, a select's current choice or placeholder and

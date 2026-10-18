@@ -1325,6 +1325,17 @@ fn no_browse_request_writes_to_the_repository() {
     fixture
         .compared_bodies(&project, &compared, "d.txt", versions)
         .unwrap();
+    let listed = fixture
+        .commits(&project, &compared.base, &compared.right.commit)
+        .unwrap();
+    let commit = &listed.commits[0];
+    let read = fixture
+        .commit_change(&project, commit, SideRef::Absent, present("d.txt"))
+        .unwrap();
+    let versions = (version(&read.old), version(&read.new));
+    fixture
+        .commit_bodies(&project, commit, "d.txt", versions)
+        .unwrap();
 
     let after = snapshot(&repo.join(".git"));
     let changed: Vec<_> = before

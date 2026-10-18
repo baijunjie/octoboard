@@ -21,9 +21,8 @@ as it is, and do not add a new exception without the user's say.
 
 ### Confirmed visual choices
 
-Tabs in Settings, the project's Files / Git switch, the Git view's Uncommitted / Compare switch and the session
-dialog's New / Resume conversation switch keep their labels fully opaque on hover and use the foreground colour instead
-of dimming. Preserve this shared visual treatment as an explicit product choice, while retaining the component's
+Tabs in Settings, the project pane's Files / Changes switch and the session dialog's New / Resume conversation
+switch keep their labels fully opaque on hover and use the foreground colour instead of dimming. Preserve this shared visual treatment as an explicit product choice, while retaining the component's
 layout, selection and keyboard behaviour.
 
 A notice toast (HeroUI's accent variant) tints its indicator with the title's `--accent-soft-foreground`, as HeroUI
@@ -81,8 +80,8 @@ move between rows alone. Such a control takes no tab stop of its own and must no
 (`preventFocusOnPress`), or a mouse press on it sends focus to the list's first row.
 
 The band is react-aria's `rowheader` inside a `role="row"`, not an `<h1>`-`<h6>`, so the rule under "A visual heading
-is a heading element" does not reach it: it is a row of a grid, where that markup is what the grid pattern asks for,
-and a heading element inside the collection would be a second structure over the same text.
+is a heading element" does not reach it: it is a row of the change list's treegrid, where that markup is what the
+treegrid pattern asks for, and a heading element inside the collection would be a second structure over the same text.
 
 ### Buttons
 
@@ -826,7 +825,7 @@ Two cases take no isolate, and putting one there breaks something:
   content, so only a value going into a *string* needs `isolate`. A string wholly wrapped in an isolate also has no
   strong character left for `dir="auto"` to read, which can lay the element out left to right.
 
-`packages/ui/src/browser/BranchComparison.tsx` shows the split: the branch name is plain for `textValue`, for the
+`packages/ui/src/browser/BranchSelect.tsx` shows the split: the branch name is plain for `textValue`, for the
 children, and for the `title` that is the name alone, and isolated only where it enters a sentence — the `title` that
 says the branch is gone.
 

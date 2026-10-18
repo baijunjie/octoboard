@@ -1,7 +1,7 @@
 // What the fixture daemon answers a project pane's Git mode with, over a fixture repository
 // (`fixtures/changeFixtures.ts`): the source, the change lists, a change's patch and the whole
-// bodies behind it, the branch list and a comparison of one branch with another (what it has changed
-// since it forked from it).
+// bodies behind it, the branch list, a comparison of one branch with another (what it has changed
+// since it forked from it) and the commits it made since.
 //
 // These are the replies that have to track the real daemon's own
 // (`apps/daemon/src/browse/changes.rs`), condition for condition, and they are kept apart from the
@@ -11,7 +11,7 @@
 import type { ChangeSide, ContentSource, Event, FileContent, RequestBody, SideRead, SideRef, SideVersion } from "../protocol";
 import { refuseUnfillable } from "./banner";
 import { text } from "./fixtures/builders";
-import type { FixtureGit } from "./fixtures/changeFixtures";
+import { listedCommits, type FixtureGit } from "./fixtures/changeFixtures";
 import type { FixtureError } from "./fixtures/projectFiles";
 
 /** How many lines a text holds: its newlines, and one more when the last line is unterminated. It
@@ -101,25 +101,57 @@ const sameSide = (listed: ChangeSide, asked: SideRef) =>
  * one of them.
  */
 export function createGitReplies(git: FixtureGit | null | undefined, fail: (error: FixtureError) => never) {
-  /** Whether a comparison has been made, after which the branch list tells of the branches moved or gone. */
+  /** Whether a comparison has been made, after which the branch list tells of the branches gone. */
   let compared = false;
   /** The daemon's refusal of a change whose patch has no lines to expand. */
   const noBodies = (): never => fail({ code: "invalid_change", params: {}, message: "no patch to expand" });
   /** The worktree a request is answered from: the one it names, else the project's own, as the
    * daemon resolves an omitted one. */
   const worktreeOf = (named: string | undefined) => named ?? git?.worktrees[0]?.id ?? "";
+  const shortId = (commit: string) => commit.slice(0, 7);
+  /** The commit a request names, which the daemon reads between it and the parent the request
+   * names, whatever that is; the fixture holds only the parent the commit list gave. */
+  const commitOf = (commit: string, parent: string | null | undefined) =>
+    Object.values(git?.commits ?? {})
+      .flatMap(listedCommits)
+      .find((listed) => listed.commit === commit && listed.parent === (parent ?? null));
+  /** The commit two branches fork at: their own, if they are at one commit, else the one `forks`
+   * names, else `left`'s tip, as a branch made from it forks. `null` for two with no commit in common. */
+  const forkOf = (key: string, left: string, right: string): string | null =>
+    left === right ? left : git?.forks?.[key] === undefined ? left : git.forks[key];
+  /** The pair `<left>..<right>` whose fork is `base` and whose right branch is at `tip`, the commits
+   * a commit list request names a comparison by. */
+  const pairAt = (base: string, tip: string): string | undefined =>
+    [...Object.keys(git?.comparisons ?? {}), ...Object.keys(git?.commits ?? {})].find((pair) => {
+      const [left, right] = pair.split("..").map((name) => git?.branches?.find((b) => b.name === name)?.commit);
+      return left !== undefined && right === tip && forkOf(pair, left, right) === base;
+    });
   /** The whole bodies behind a change's patch, for expanding the lines it collapsed. */
-  const readBodies = async (body: Extract<RequestBody, { type: "read_project_change_bodies" | "read_project_comparison_change_bodies" }>): Promise<Event> => {
-    const asked = body.type === "read_project_change_bodies";
-    const at = asked ? `${worktreeOf(body.worktree)} ${body.change.group} bodies` : `${body.left.branch}..${body.right.branch} bodies`;
-    const changes = asked
-      ? git?.changes[worktreeOf(body.worktree)]
-      : git?.comparisons?.[`${body.left.branch}..${body.right.branch}`];
+  const readBodies = async (
+    body: Extract<RequestBody, { type: "read_project_change_bodies" | "read_project_comparison_change_bodies" | "read_project_commit_change_bodies" }>,
+  ): Promise<Event> => {
+    /** Where the request reads: what a refusal names it by, the changes it can name, and, for a
+     * worktree's, the section the change must be in (a comparison's and a commit's are all committed). */
+    const target = (() => {
+      switch (body.type) {
+        case "read_project_change_bodies": {
+          const worktree = worktreeOf(body.worktree);
+          return { at: `${worktree} ${body.change.group} bodies`, changes: git?.changes[worktree], group: body.change.group };
+        }
+        case "read_project_comparison_change_bodies": {
+          const pair = `${body.left.branch}..${body.right.branch}`;
+          return { at: `${pair} bodies`, changes: git?.comparisons?.[pair], group: undefined };
+        }
+        case "read_project_commit_change_bodies":
+          return { at: `commit ${shortId(body.commit)} bodies`, changes: commitOf(body.commit, body.parent)?.changes, group: undefined };
+      }
+    })();
+    const { at, changes, group } = target;
     const found = Array.isArray(changes)
       ? changes.find(
         ({ entry }) =>
           entry.group !== "conflicted" &&
-            (!asked || entry.group === body.change.group) &&
+            (group === undefined || entry.group === group) &&
             sameSide(entry.old, body.change.old) &&
             sameSide(entry.new, body.change.new),
       )
@@ -164,26 +196,35 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
       return readSide(at, side, file);
     };
     const sides = { old: readWhole(found.entry.old, wholeBody("old")), new: readWhole(found.entry.new, wholeBody("new")) };
-    return asked
-      ? { type: "project_change_bodies", project: body.project, worktree: body.worktree ?? null, group: body.change.group, ...sides }
-      : { type: "project_comparison_change_bodies", project: body.project, left: body.left, right: body.right, base: body.base, ...sides };
+    switch (body.type) {
+      case "read_project_change_bodies":
+        return { type: "project_change_bodies", project: body.project, worktree: body.worktree ?? null, group: body.change.group, ...sides };
+      case "read_project_comparison_change_bodies":
+        return { type: "project_comparison_change_bodies", project: body.project, left: body.left, right: body.right, base: body.base, ...sides };
+      case "read_project_commit_change_bodies":
+        return { type: "project_commit_change_bodies", project: body.project, commit: body.commit, parent: body.parent, ...sides };
+    }
   };
 
   /** The reply to a Git-mode request, or `undefined` where the request is not one of them. */
   return (body: RequestBody): Event | Promise<Event> | undefined => {
     switch (body.type) {
       case "get_project_source": {
+        // The project's folder is the worktree holding it, as the daemon names it; a project in no
+        // repository is the sample's own folder.
         const own = git?.worktrees[0];
+        const root = own?.root ?? "/Users/dev/code/search-api";
+        const main = git?.worktrees.find((worktree) => worktree.main) ?? own;
         return {
           type: "project_source",
           source: {
             project: body.project,
-            root: "/Users/dev/code/search-api",
-            resolved_root: "/Users/dev/code/search-api",
+            root,
+            resolved_root: root,
             root_id: "fixture",
             git:
-              git && !git.gitError && own
-                ? { repository: "repo", common_dir: "/Users/dev/code/search-api/.git", worktree: own.id, scope: "", worktrees: git.worktrees }
+              git && !git.gitError && own && main
+                ? { repository: "repo", common_dir: `${main.root}/.git`, worktree: own.id, scope: "", worktrees: git.worktrees }
                 : null,
             git_error: git?.gitError ?? null,
           },
@@ -204,11 +245,8 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
         };
       }
       case "list_project_branches": {
-        const moved = compared ? (git?.moved ?? {}) : {};
         const gone = compared ? (git?.gone ?? []) : [];
-        const branches = (git?.branches ?? [])
-          .filter((branch) => !gone.includes(branch.name))
-          .map((branch) => ({ ...branch, commit: moved[branch.name] ?? branch.commit }));
+        const branches = (git?.branches ?? []).filter((branch) => !gone.includes(branch.name));
         return { type: "project_branches", project: body.project, branches, complete: true };
       }
       case "compare_project_branches": {
@@ -217,11 +255,12 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
           if (!branch || git?.missing?.includes(name) || (compared && git?.gone?.includes(name))) return fail({ code: "unknown_branch", params: { branch: name }, message: `there is no local branch ${name}` });
           return { branch: name, commit: branch.commit };
         };
+        if (git?.comparing === "pending") return new Promise<Event>(() => {});
         const left = resolve(body.left);
         const right = resolve(body.right);
         compared = true;
         const key = `${body.left}..${body.right}`;
-        const fork = left.commit === right.commit ? left.commit : git?.forks?.[key] === undefined ? left.commit : git.forks[key];
+        const fork = forkOf(key, left.commit, right.commit);
         if (fork === null) {
           const params = { left: body.left, right: body.right };
           return git?.shallow
@@ -276,8 +315,49 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
           patch: found.patch === undefined ? null : { size: found.patch.length, kind: "text", media_type: null, text: found.patch, data: null },
         };
       }
+      case "list_project_commits": {
+        const pair = pairAt(body.base, body.tip);
+        const listed = pair === undefined ? undefined : git?.commits?.[pair];
+        if (listed && "pending" in listed) return new Promise<Event>(() => {});
+        if (!listed) {
+          // A pair the fixture lists changes for has commits they are made of, which it must carry.
+          if (pair !== undefined && (git?.comparisons?.[pair]?.length ?? 0) > 0) {
+            refuseUnfillable(`${pair} commits: the comparison lists changes, and the fixture carries no commits to make them of`);
+          }
+          return { type: "project_commits", project: body.project, base: body.base, tip: body.tip, commits: [], complete: true, commits_complete: true };
+        }
+        if ("error" in listed) return fail(listed.error);
+        return {
+          type: "project_commits",
+          project: body.project,
+          base: body.base,
+          tip: body.tip,
+          commits: listed.commits.map(({ commit, parent, subject, changes }) => ({ commit, parent, subject, changes: changes.map(({ entry }) => entry) })),
+          complete: !git?.cutShort,
+          commits_complete: !listed.cut,
+        };
+      }
+      case "read_project_commit_change": {
+        const found = commitOf(body.commit, body.parent)?.changes.find(
+          ({ entry }) => entry.group === "committed" && sameSide(entry.old, body.change.old) && sameSide(entry.new, body.change.new),
+        );
+        if (!found || found.entry.group === "conflicted") return fail({ code: "file_not_found", params: { path: "" }, message: "no such change" });
+        if (found.error) return fail(found.error);
+        const whole = found.whole ?? {};
+        const at = `commit ${shortId(body.commit)}`;
+        return {
+          type: "project_commit_change",
+          project: body.project,
+          commit: body.commit,
+          parent: body.parent,
+          old: readSide(at, found.entry.old, found.bodies?.old, whole.old, hasHunk(found)),
+          new: readSide(at, found.entry.new, found.bodies?.new, whole.new, hasHunk(found)),
+          patch: found.patch === undefined ? null : { size: found.patch.length, kind: "text", media_type: null, text: found.patch, data: null },
+        };
+      }
       case "read_project_change_bodies":
       case "read_project_comparison_change_bodies":
+      case "read_project_commit_change_bodies":
         return readBodies(body);
       default:
         return undefined;

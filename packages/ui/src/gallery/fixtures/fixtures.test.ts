@@ -8,6 +8,7 @@ import { en } from "../../i18n/messages/en";
 import { createUi, type Matcher, type Ui } from "../interact";
 import { changeRowText } from "../../browser/changeRow";
 import { changeItems } from "../../browser/changes";
+import { listedCommits } from "./changeFixtures";
 import { SAMPLE_GIT } from "./projectGit";
 import { viewerScenarios } from "./viewer";
 import { DEFAULT_WIDTH, MIN_HEIGHT } from "../scenario";
@@ -156,19 +157,19 @@ describe("gallery scenarios", () => {
     const sessionLabels = [
       t("sidebar.session.ariaLabel", { title: "Fix the summary layout", agent: "Claude Code", status: t("session.status.working") }),
       t("sidebar.session.ariaLabel", { title: "Tune the ranking weights", agent: "Claude Code", status: t("session.status.idle") }),
+      t("sidebar.session.ariaLabel", { title: "Update the dependencies", agent: "Claude Code", status: t("session.status.idle") }),
     ];
     for (const { matcher } of sessionMatchers) {
       expect(typeof matcher === "function" && sessionLabels.some(matcher)).toBe(true);
     }
-    const changes = [...Object.values(SAMPLE_GIT.changes), ...Object.values(SAMPLE_GIT.comparisons ?? {})].flatMap((list) => Array.isArray(list) ? list.map(({ entry }) => entry) : []);
+    const commits = Object.values(SAMPLE_GIT.commits ?? {}).flatMap((list) => listedCommits(list).map(({ changes: made }) => made));
+    const changes = [...Object.values(SAMPLE_GIT.changes), ...Object.values(SAMPLE_GIT.comparisons ?? {}), ...commits].flatMap((list) => Array.isArray(list) ? list.map(({ entry }) => entry) : []);
     const labels = changeItems(changes).flatMap((item) => [false, true].map((selected) => changeRowText(t, item, selected, false).ariaLabel.replace(/[\u2066-\u2069]/g, "")));
     const rowMatchers = recorded.filter(({ matcher }) => String(matcher).startsWith("changeRow("));
     expect(rowMatchers.length).toBeGreaterThan(0);
     for (const { id, matcher } of rowMatchers) {
       expect(typeof matcher === "function" && labels.some(matcher), `${id}: ${String(matcher)}`).toBe(true);
     }
-    const selector = recorded.filter(({ id }) => id === "git-compare-moved").find(({ matcher }) => String(matcher) === "branchOption(main)")!.matcher;
-    expect(typeof selector === "function" && selector("main4f2a9c1")).toBe(true);
   });
 
   it.each(["en", "zh-Hans", "ar"] as const)("viewer change stages follow the window language in %s", async (language) => {

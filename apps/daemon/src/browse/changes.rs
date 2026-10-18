@@ -671,6 +671,23 @@ fn read_between_with(
     reader.between(commits, (old, new), old_path, new_path, out_of_scope)
 }
 
+/// The id of the empty tree in this repository's object format, which a change is compared
+/// against before the first commit, or a commit with no parent against; `git` knows it without its
+/// being stored.
+pub(super) fn empty_tree(env: &GitEnv, at: &Located, cancel: &AtomicBool) -> Result<String> {
+    let args: &[&[u8]] = &[b"-t", b"tree", b"--no-filters", b"/dev/null"];
+    let stdout = env
+        .run(
+            &at.root,
+            "hash-object",
+            args,
+            budget::GIT_METADATA_STDOUT,
+            cancel,
+        )
+        .map_err(git_error)?;
+    Ok(String::from_utf8_lossy(&stdout).trim().to_string())
+}
+
 /// The project-relative path a side names, when it names one.
 fn side_path(side: &SideRef) -> Result<Option<RelPath>> {
     let SideRef::Present { path } = side else {
@@ -800,23 +817,6 @@ impl Reader<'_> {
             Ok(_) | Err(GitError::Failed(_)) => Err(unresolved()),
             Err(err) => Err(git_error(err)),
         }
-    }
-
-    /// The id of the empty tree in this repository's object format, which a change is compared
-    /// against before the first commit; `git` knows it without its being stored.
-    fn empty_tree(&self) -> Result<String> {
-        let args: &[&[u8]] = &[b"-t", b"tree", b"--no-filters", b"/dev/null"];
-        let stdout = self
-            .env
-            .run(
-                &self.at.root,
-                "hash-object",
-                args,
-                budget::GIT_METADATA_STDOUT,
-                self.cancel,
-            )
-            .map_err(git_error)?;
-        Ok(String::from_utf8_lossy(&stdout).trim().to_string())
     }
 
     /// The scope directory on disk in this worktree, when it is there as exactly that directory.
@@ -1023,7 +1023,7 @@ impl Reader<'_> {
         }
         let base = match &commit {
             Some(commit) => commit.clone(),
-            None => self.empty_tree()?,
+            None => empty_tree(self.env, self.at, self.cancel)?,
         };
         let paths: Vec<&RelPath> = old_path.iter().chain(new_path.iter()).collect();
         let pair = self.pair_operands(

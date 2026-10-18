@@ -5,10 +5,10 @@ import { LayoutInfo, ListLayout, Rect } from "react-aria-components";
 
 import { isolate } from "../i18n/isolate";
 import { ChangeList, changeRowOffset } from "./ChangeList";
-import { change, changeViewFixture, mountRows } from "./browserTestSupport";
+import { change, changeViewFixture, committedChange, mountRows } from "./browserTestSupport";
 import type { ChangeLayout } from "./changeLayout";
 import type { ChangeViewState } from "./changeView";
-import { changeItems, sectionKey } from "./changes";
+import { changeItems, commitItems, commitKey, sectionKey } from "./changes";
 import { ChangeListLayout, HEADING_HEIGHT } from "./changeSectionHeading";
 import { ROW_HEIGHT } from "./treeRow";
 
@@ -106,8 +106,8 @@ function renderFolding(layout: ChangeLayout) {
   return mountRows(<Harness />, { clipboard: { writeText: async () => {} } });
 }
 
-// A heading is the same control in both layouts, while the rows under it are not (a grid list and a
-// tree), so what it does runs on both.
+// A heading is the same control in both layouts, while the rows under it are not (changes alone, and
+// under directories), so what it does runs on both.
 it.each([
   ["flat", [`${isolate("alpha.md")}, modified, ${isolate("docs")}`, `${isolate("beta.ts")}, modified, ${isolate("src")}`]],
   ["tree", ["docs", `${isolate("alpha.md")}, modified`, "src", `${isolate("beta.ts")}, modified`]],
@@ -199,4 +199,32 @@ it("pins render copies within sections without changing the geometry used for ro
   } finally {
     visible.mockRestore();
   }
+});
+
+const byCommit = [
+  ...items,
+  ...commitItems([
+    { commit: "3333333333", parent: "2222222222", subject: "Rework the parser", changes: [committedChange("src/parse.ts")] },
+    { commit: "2222222222", parent: "1111111111", subject: "Add the lexer", changes: [committedChange("src/lex.ts"), committedChange("docs/lex.md")] },
+  ]),
+];
+
+it("narrows the commits too: one with no match has no row, and every count follows what is left", () => {
+  const container = mountRows(
+    <ChangeList items={byCommit} selected={undefined} label="Changes" onOpen={() => {}} listRef={() => {}} changeView={changeViewFixture({ filter: "lex" })} />,
+    { clipboard: { writeText: async () => {} } },
+  );
+  const commits = [...container.querySelectorAll("[role=row]")].filter((row) => row.getAttribute("data-key")?.startsWith("row:commit:")).map((row) => row.textContent);
+  expect(commits).toEqual(["2222222Add the lexer2"]);
+  expect(container.textContent).toContain("Committed2");
+});
+
+it("places a row below the commit rows before it, a folded commit contributing its own row alone", () => {
+  const lex = byCommit.find((item) => item.path === "src/lex.ts")!;
+  // Under three headings and the four uncommitted rows come the newer commit's row and its change,
+  // the older commit's row and its two changes, `src/lex.ts` the second.
+  const above = 3 * HEADING_HEIGHT + 4 * ROW_HEIGHT;
+  expect(changeRowOffset(byCommit, lex.key, "flat", new Set())).toBe(above + 4 * ROW_HEIGHT);
+  expect(changeRowOffset(byCommit, lex.key, "flat", new Set([commitKey("3333333333")]))).toBe(above + 3 * ROW_HEIGHT);
+  expect(changeRowOffset(byCommit, lex.key, "flat", new Set([commitKey("2222222222")]))).toBeUndefined();
 });

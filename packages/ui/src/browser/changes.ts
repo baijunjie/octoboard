@@ -2,23 +2,29 @@
 // and how the viewer moves through them. Pure, so the list's rendering and the viewer's navigation
 // are two readings of one order and can never disagree, as the tree's are (`tree.ts`).
 import type { PlainMessageKey } from "../i18n/catalog";
-import type { ChangeEntry, ChangeGroup, ChangeSide, ConflictKind } from "../protocol";
+import type { ChangeEntry, ChangeGroup, ChangeSide, CommitChanges, ConflictKind } from "../protocol";
 import { changeStatus } from "../viewer/content";
 import type { StatusKey } from "../viewer/statusMarks";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import type { ChangeLayout } from "./changeLayout";
 import { compareFilePaths } from "./tree";
 
-/** A part of the change list: one of a worktree's change groups, the paths in conflict, or the one
- * section of a branch comparison, which never shares a list with the others. */
+/** A section of the change list: one of a worktree's change groups, the paths in conflict, or what a
+ * branch has committed since it forked. */
 export type ChangeSection = ChangeGroup | "conflicted" | "committed";
 
+/** The scope of one commit's changes (`commit` is a full id) inside the committed section, which
+ * keys the commit's own row and what is under it. */
+export type CommitScope = `commit:${string}`;
+export const commitScope = (commit: string): CommitScope => `commit:${commit}`;
+
 /** The sections top to bottom: a path in conflict first, since it is the most important thing to
- * deal with and stops a commit, then what a commit would take, then the rest. */
+ * deal with and stops a commit, then what a commit would take, then the rest, and then what has
+ * been committed already. */
 export const SECTION_ORDER: readonly ChangeSection[] = ["conflicted", "staged", "unstaged", "untracked", "committed"];
 
-/** Each section's name, which is what the list heads it with and, for a staged or unstaged change,
- * what the viewer tags it with. */
+/** Each section's name, which is what the list heads it with and, for a staged or unstaged
+ * change, what the viewer tags it with. */
 export const SECTION_LABELS: Record<ChangeSection, PlainMessageKey> = {
   staged: "git.group.staged",
   unstaged: "git.group.unstaged",
@@ -38,11 +44,26 @@ export const CONFLICT_LABELS: Record<ConflictKind, PlainMessageKey> = {
   deleted_by_them: "git.conflict.deletedByThem",
 };
 
+/** A commit whose changes the committed section lists, as the commit list named it. */
+export interface CommitRef {
+  commit: string;
+  /** Its first parent, which its changes are against; null for a commit with no parent. */
+  parent: string | null;
+  subject: string;
+}
+
 /** One row of the change list. */
 export interface ChangeItem {
-  /** The change's identity: its group and both of its sides (`changeKey`). */
+  /** The change's identity: its section and both of its sides (`changeKey`, and the commit for one
+   * commit's change, so the same file changed by two commits is two rows). */
   key: string;
   section: ChangeSection;
+  /** Where the change stands in list order, top to bottom: its section's place, and within the
+   * committed section, when it is listed by commit, its commit's. */
+  rank: number;
+  /** The commit a change listed by commit is of, which the committed section groups under; none
+   * elsewhere. */
+  commit?: CommitRef;
   entry: ChangeEntry;
   /** The wire path the change is named and ordered by: its new side's, or its old side's when the
    * new one is absent or outside the project. */
@@ -88,22 +109,36 @@ function entryPath(entry: ChangeEntry): string {
 export function changeItem(entry: ChangeEntry): ChangeItem {
   const section: ChangeSection = entry.group;
   const versions = entry.group === "conflicted" ? entry.conflict : JSON.stringify([entry.old, entry.new]);
-  return { key: changeKey(entry), section, entry, path: entryPath(entry), status: entryStatus(entry), versions };
+  return { key: changeKey(entry), section, rank: SECTION_ORDER.indexOf(section), entry, path: entryPath(entry), status: entryStatus(entry), versions };
 }
 
 /** Two changes in list order: by section, then by path as the file tree orders paths, then by key,
  * so the order is total. */
 export function compareChanges(a: ChangeItem, b: ChangeItem): number {
-  return (
-    SECTION_ORDER.indexOf(a.section) - SECTION_ORDER.indexOf(b.section) ||
-    compareFilePaths(a.path, b.path) ||
-    (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)
-  );
+  return a.rank - b.rank || compareFilePaths(a.path, b.path) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
 }
 
 /** A listing's changes as the list shows them, top to bottom. */
 export function changeItems(entries: readonly ChangeEntry[]): ChangeItem[] {
   return entries.map(changeItem).sort(compareChanges);
+}
+
+/** A commit list's changes as the list shows them: the committed section's changes by commit, in
+ * the list's order (newest first), and within each commit the changes as `changeItems` orders
+ * them. A change's key carries its commit, so a file every commit changed is a row of each. */
+export function commitItems(commits: readonly CommitChanges[]): ChangeItem[] {
+  return commits.flatMap(({ commit, parent, subject, changes }, index) => {
+    const section: ChangeSection = "committed";
+    const rank = SECTION_ORDER.length + index;
+    const ref: CommitRef = { commit, parent, subject };
+    return changes
+      .map((entry): ChangeItem => {
+        const item = changeItem(entry);
+        const sides = entry.group === "conflicted" ? [entry.path] : [sideKey(entry.old), sideKey(entry.new)];
+        return { ...item, key: JSON.stringify([commitScope(commit), ...sides]), section, rank, commit: ref };
+      })
+      .sort(compareChanges);
+  });
 }
 
 /** The changes whose file name contains `text`, ignoring case and the whitespace around it; all of
@@ -127,33 +162,51 @@ export function changeNeighbours(items: readonly ChangeItem[], current: ChangeIt
   return { previous: items[insertAt - 1], next: items[insertAt] };
 }
 
+/** One section of the list as it is shown: its changes. */
+export interface SectionGroup {
+  section: ChangeSection;
+  items: ChangeItem[];
+}
+
 /** The listed changes split into their sections, in order, leaving out empty ones. */
-export function sections(items: readonly ChangeItem[]): { section: ChangeSection; items: ChangeItem[] }[] {
-  return SECTION_ORDER.map((section) => ({ section, items: items.filter((item) => item.section === section) })).filter(
-    (group) => group.items.length > 0,
-  );
+export function sections(items: readonly ChangeItem[]): SectionGroup[] {
+  const groups = new Map<ChangeSection, SectionGroup>();
+  for (const item of items) {
+    const group = groups.get(item.section);
+    if (group) group.items.push(item);
+    else groups.set(item.section, { section: item.section, items: [item] });
+  }
+  const rank = (group: SectionGroup) => group.items[0].rank;
+  return [...groups.values()].sort((a, b) => rank(a) - rank(b));
 }
 
 /** One row of a section in its tree form: a directory, with what is under it, or a change. A chain
- * of directories that each hold nothing but the next is one row, named by the whole chain. */
+ * of directories that each hold nothing but the next is one row, named by the whole chain. In the
+ * committed section listed by commit, a commit is a row too, holding its changes (`count` of them)
+ * as the layout shows them. */
 export type ChangeNode =
   | { type: "directory"; key: string; path: string; name: string; children: ChangeNode[] }
+  | { type: "commit"; key: string; commit: CommitRef; count: number; children: ChangeNode[] }
   | { type: "change"; key: string; item: ChangeItem };
 
-/** The row key of the directory at `path` in `section`. A change's key (`changeKey`) is JSON, so
- * the two never collide. */
-export const directoryKey = (section: ChangeSection, path: string): string => `dir:${section}:${path}`;
+/** The row key of the directory at `path` in `scope`: a section, or one commit of the committed
+ * section, whose directories are its own. A change's key (`changeKey`) is JSON, so the two never
+ * collide. */
+export const directoryKey = (scope: ChangeSection | CommitScope, path: string): string => `dir:${scope}:${path}`;
 
 /** The row key of `section`'s own heading, which the same set of folded-away rows holds beside the
- * directories'. A change's key is JSON and a directory's starts with `dir:`, so no two of the three
- * can collide; and the worktree view's sections share no key with the comparison's (`committed` is
- * only ever the comparison's), so one set serves both views. */
+ * directories' and the commits'. A change's key is JSON and a directory's starts with `dir:`, so
+ * no two of the four can collide. */
 export const sectionKey = (section: ChangeSection): string => `section:${section}`;
 
-/** The changes of one section (already in list order) grouped under their directories, directories
+/** The row key of the commit's own row, folded away like a section is, and so kept by the commit
+ * whatever else the branch commits meanwhile. */
+export const commitKey = (commit: string): string => `row:${commitScope(commit)}`;
+
+/** The changes of one scope (already in list order) grouped under their directories, directories
  * before changes at every level as the file tree orders paths, and single-child directory chains
  * compacted into one row. */
-export function changeTree(section: ChangeSection, items: readonly ChangeItem[]): ChangeNode[] {
+export function changeTree(scope: ChangeSection | CommitScope, items: readonly ChangeItem[]): ChangeNode[] {
   interface Draft {
     path: string;
     name: string;
@@ -184,32 +237,49 @@ export function changeTree(section: ChangeSection, items: readonly ChangeItem[])
       directory = directory.children[0];
       name += `/${directory.name}`;
     }
-    return { type: "directory", key: directoryKey(section, directory.path), path: directory.path, name: displayWirePath(name), children: directory.children.map(toNode) };
+    return { type: "directory", key: directoryKey(scope, directory.path), path: directory.path, name: displayWirePath(name), children: directory.children.map(toNode) };
   };
   return root.children.map(toNode);
 }
 
-/** The rows of `nodes` on screen, top to bottom: a collapsed directory keeps its own row and loses
- * everything under it. */
+/** The rows of `nodes` on screen, top to bottom: a collapsed directory or commit keeps its own row
+ * and loses everything under it. */
 export function visibleNodes(nodes: readonly ChangeNode[], collapsed: ReadonlySet<string>): ChangeNode[] {
-  return nodes.flatMap((node) => (node.type === "directory" && !collapsed.has(node.key) ? [node, ...visibleNodes(node.children, collapsed)] : [node]));
+  return nodes.flatMap((node) => (node.type !== "change" && !collapsed.has(node.key) ? [node, ...visibleNodes(node.children, collapsed)] : [node]));
 }
 
-/** The sections of the list, each with its changes and, in the layout's form, its rows: one per
- * change when flat, the directory tree when `tree`. */
-export function changeGroups(
-  items: readonly ChangeItem[],
-  layout: ChangeLayout,
-): { section: ChangeSection; items: ChangeItem[]; nodes: ChangeNode[] }[] {
-  return sections(items).map((group) => ({
-    ...group,
-    nodes: layout === "tree" ? changeTree(group.section, group.items) : group.items.map((item) => ({ type: "change", key: item.key, item })),
-  }));
+/** One scope's changes as rows in `layout`: one per change when flat, the directory tree when `tree`. */
+function layoutNodes(scope: ChangeSection | CommitScope, items: readonly ChangeItem[], layout: ChangeLayout): ChangeNode[] {
+  return layout === "tree" ? changeTree(scope, items) : items.map((item) => ({ type: "change", key: item.key, item }));
+}
+
+/** The sections of the list, each with its changes and its rows in the layout's form. A section's
+ * changes that are listed by commit (the committed one) are rows under their commits, newest first,
+ * each holding its changes in the layout's form. */
+export function changeGroups(items: readonly ChangeItem[], layout: ChangeLayout): (SectionGroup & { nodes: ChangeNode[] })[] {
+  return sections(items).map((group) => {
+    if (!group.items.some((item) => item.commit)) return { ...group, nodes: layoutNodes(group.section, group.items, layout) };
+    // The changes are in list order, so a commit's are together.
+    const commits = new Map<string, { commit: CommitRef; items: ChangeItem[] }>();
+    for (const item of group.items) {
+      const held = commits.get(item.commit!.commit);
+      if (held) held.items.push(item);
+      else commits.set(item.commit!.commit, { commit: item.commit!, items: [item] });
+    }
+    const nodes = [...commits.values()].map(({ commit, items: own }): ChangeNode => ({
+      type: "commit",
+      key: commitKey(commit.commit),
+      commit,
+      count: own.length,
+      children: layoutNodes(commitScope(commit.commit), own, layout),
+    }));
+    return { ...group, nodes };
+  });
 }
 
 /** The changes with a row on screen, in the order the rows are: what the viewer moves through. A
  * folded-away section keeps its heading alone, so none of its changes are among them, in either
- * layout; in the tree those under a folded directory are left out as well. */
+ * layout; those under a folded commit or, in the tree, a folded directory are left out as well. */
 export function visibleChanges(items: readonly ChangeItem[], layout: ChangeLayout, collapsed: ReadonlySet<string>): ChangeItem[] {
   return changeGroups(items, layout).flatMap((group) =>
     collapsed.has(sectionKey(group.section))

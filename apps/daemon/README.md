@@ -97,9 +97,10 @@ checks on every call. The catalogue is shared by both sides of the stdio bridge.
 
 Serves the project-browsing control-socket requests (`get_project_source`, `list_project_dir`, `search_project_files`,
 `read_project_file`, `list_project_changes`, `read_project_change`, `list_project_branches`,
-`compare_project_branches`, `read_project_comparison_change` and the `…_change_bodies` requests): bounded reads from
-the disk, the index, a branch or a commit, a worktree's uncommitted changes, and the changes one branch has made since
-it forked from another. The wire contract and budgets are in "Browsing a project" in [`PROTOCOL.md`](PROTOCOL.md).
+`compare_project_branches`, `read_project_comparison_change`, `list_project_commits`, `read_project_commit_change` and
+the `…_change_bodies` requests): bounded reads from the disk, the index, a branch or a commit, a worktree's uncommitted
+changes, the changes one branch has made since it forked from another, and the commits it made since, each with its
+changes. The wire contract and budgets are in "Browsing a project" in [`PROTOCOL.md`](PROTOCOL.md).
 `mod.rs`'s `serve` is the entry point, called from `server.rs`.
 
 | File | Role |
@@ -112,8 +113,10 @@ it forked from another. The wire contract and budgets are in "Browsing a project
 | `git.rs` | The one way browse runs `git`: isolated, bounded, never writing to the repository |
 | `changes.rs` | A worktree's uncommitted changes: `list`, `read`, `read_between` and the bodies reads |
 | `compare.rs` | Local branches and the comparison of two of them: `branches`, `list`, `read`, `read_bodies` |
+| `commits.rs` | The commits a branch made since it forked from another: `list`, `read`, `read_bodies` |
+| `tree_diff.rs` | Reading `git`'s raw tree-diff output, and the stdout budget it is read under, shared by `compare.rs` and `commits.rs` |
 | `budget.rs`, `lane.rs` | The limits every read is held to, and the per-connection lane (outstanding-request bound, superseding, retained-bytes reservation) |
-| `tests.rs`, `change_tests.rs`, `compare_tests.rs`, `nested_tests.rs`, `body_tests.rs` | Test-only end-to-end tests over real repositories |
+| `tests.rs`, `change_tests.rs`, `compare_tests.rs`, `commits_tests.rs`, `nested_tests.rs`, `body_tests.rs` | Test-only end-to-end tests over real repositories |
 
 ### `src/adapter/`
 

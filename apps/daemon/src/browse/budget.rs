@@ -65,13 +65,30 @@ pub const CHANGE_ENTRY_BYTES: usize = 768;
 /// changes. Past it the listing is refused rather than built from part of the output.
 pub const CHANGE_STATUS_STDOUT: usize = 8 * 1024 * 1024;
 
-/// The most stdout the `git diff-tree` behind a branch comparison may print. Like a change
-/// listing's `git status`, it covers the whole tree, so that a rename into or out of the project's
-/// directory is found against the rest of the repository; a record is about 100 bytes plus its
-/// paths, so this holds tens of thousands of changed files. Past it a project below the
-/// repository's root is compared within its own directory instead, and a comparison still past it
-/// is refused rather than built from part of the output.
-pub const COMPARISON_STDOUT: usize = 8 * 1024 * 1024;
+/// The most stdout the `git diff-tree` behind a branch comparison, and the `git log --raw` behind
+/// a commit listing, may print. Like a change listing's `git status`, each covers the whole tree,
+/// so that a rename into or out of the project's directory is found against the rest of the
+/// repository; a record is about 100 bytes plus its paths, so this holds tens of thousands of
+/// changed files (for a commit listing, across all its commits). Past it a project below the
+/// repository's root is read within its own directory instead, and a read still past it is
+/// refused rather than built from part of the output.
+pub const TREE_DIFF_STDOUT: usize = 8 * 1024 * 1024;
+
+/// The most commits one commit listing carries, newest first, before it is cut and marked
+/// incomplete. A branch under review usually holds a handful to a few tens of commits since it
+/// forked; each one listed is a section of the change list, so past this the list stops being a
+/// way to read a branch commit by commit.
+pub const MAX_COMMITS: usize = 100;
+
+/// The most characters of a commit's subject line a commit listing carries; a longer one is cut
+/// to this. A subject is the commit message's first paragraph joined into one line, which nothing
+/// bounds.
+pub const MAX_COMMIT_SUBJECT_CHARS: usize = 200;
+
+/// What one listed commit takes beyond its changes, counted generously as JSON writes it: two
+/// commit ids (64 hex digits each in a SHA-256 repository), the subject at six bytes a character if
+/// every one needed a `\u00XX` escape, and the JSON around them.
+pub const COMMIT_ENTRY_BYTES: usize = 1536;
 
 /// The most local branches one branch listing carries before it is cut and marked incomplete. A
 /// repository usually has a handful to tens of local branches, and one kept for years with every
@@ -152,7 +169,15 @@ pub const CHANGE_LIST_RESERVATION: usize =
 /// entries as a change listing's are held. Its two endpoints, each a branch name and a commit id,
 /// fit in the room each entry is given generously.
 pub const COMPARISON_RESERVATION: usize =
-    COMPARISON_STDOUT + 2 * (MAX_CHANGE_PATH_BYTES + MAX_CHANGE_ENTRIES * CHANGE_ENTRY_BYTES);
+    TREE_DIFF_STDOUT + 2 * (MAX_CHANGE_PATH_BYTES + MAX_CHANGE_ENTRIES * CHANGE_ENTRY_BYTES);
+
+/// What a commit listing reserves: the `git log` output while it is parsed — held to the same
+/// budget as a comparison's `git diff-tree` — and its commits and their entries, held as built and
+/// as serialized, the entries across every commit within one change listing's budgets.
+pub const COMMITS_RESERVATION: usize = TREE_DIFF_STDOUT
+    + 2 * (MAX_CHANGE_PATH_BYTES
+        + MAX_CHANGE_ENTRIES * CHANGE_ENTRY_BYTES
+        + MAX_COMMITS * COMMIT_ENTRY_BYTES);
 
 /// What a branch listing reserves: the `git for-each-ref` output while it is parsed, and its
 /// entries, at [`MAX_BRANCHES`] with [`MAX_BRANCH_NAME_BYTES`] of names and [`MAX_BRANCH_ORIGINS`]
@@ -185,6 +210,7 @@ const _: () = assert!(READ_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
 const _: () = assert!(CHANGE_LIST_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
 const _: () = assert!(DIFF_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
 const _: () = assert!(COMPARISON_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
+const _: () = assert!(COMMITS_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
 const _: () = assert!(BRANCH_LIST_RESERVATION <= READ_RESERVATION);
 const _: () = assert!(MAX_PATCH_BYTES <= MAX_FILE_BYTES);
 const _: () = assert!(MAX_RETAINED_PER_CONNECTION <= MAX_RETAINED_BYTES);

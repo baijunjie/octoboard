@@ -2,7 +2,7 @@
 
 The **project pane** shows a project's files and its repository's changes, in two **modes**: **Files**, a tree of the
 project's directory, read live from disk with whatever an agent has written and not committed, and **Git**, the
-uncommitted changes of a worktree of the project's repository and the changes between two of its local branches (see
+changes of one local branch of the project's repository, uncommitted and committed since it forked (see
 `docs/product/project-pane-git-mode.md`). Either one opens what it lists in a read-only **file viewer**. It is shown in
 the window's right pane, in the place a console session's report panel takes (see "What the right pane shows" in
 `docs/product/window-layout.md`, which also says what puts it there and what takes it away), and it needs no session:
@@ -24,9 +24,9 @@ nothing is staged, committed or checked out. A row can open its live file or fol
 - **Selecting a project session** shows its project's project pane.
 
 Moving between sessions of one project leaves its pane as it was: its mode, its expanded folders and selected file, and
-in Git its view and its selected changes — except that the Git mode's chosen worktree and branches are set from the
-session moved to, which clears the selected change of a view whose selector moves (see "Following the selected
-session" in `docs/product/project-pane-git-mode.md`). Another project's session, or
+in Git its selected change — except that the Git mode's branch is set from the session moved to, which clears the
+selected change when the branch moves (see "Following the selected session" in
+`docs/product/project-pane-git-mode.md`). Another project's session, or
 another project's Browse files, shows that project's own pane.
 
 When a project's pane first appears or replaces another project's pane, its header and content fade in with a
@@ -34,33 +34,32 @@ small slide from the right, or from the left in a right-to-left language. The pa
 throughout. Moving between sessions of the same project, changing views or refreshing does not replay this entry.
 The system's Reduce motion setting disables it.
 
-The pane has **one header row**: a folder icon and the visible project name, three peer tabs — **Files**,
-**Uncommitted** and **Compare** — the controls for the chosen view, then **Refresh**. The project name fades when
-space is tight, and the tabs can shrink into a horizontally scrolling strip. The tabs are compact, with a pill behind
-the selected tab and muted labels on the others; the strip itself has no filled track. Every tab offers file-name
-filter and folder-grouping controls. The tabs sit immediately before these controls and Refresh, forming one group
-aligned to the header's trailing edge; spare width stays between the project name and this group. That alignment holds
-in loading, empty and error states too (see "Filtering by file name" and "Flat or grouped by folder" below). Pressing Refresh with
-the mouse leaves keyboard focus where it was.
+The pane has **one header row**. At its leading side are a folder icon, the visible project name and, right after the
+name, two peer tabs — **Files** and **Changes**; at its trailing side are icon buttons alone: the controls for the
+chosen tab, then **Refresh**. Spare width stays between the tabs and those buttons. The tabs are compact, with a pill
+behind the selected tab and muted labels on the others, and no filled track behind them. **The tabs never shrink,
+scroll or clip**: when space is tight the project name gives way instead, fading out and shrinking as far as it has
+to, with the full name as its tooltip while it is cut (see "Names too long for their space" in
+`docs/product/labels-and-tooltips.md`). Files offers one control, the file-name filter toggle (see "Filtering by file
+name" below); Changes offers its filter toggle, Group by folder and Group by commit (see "The Changes view" in
+`docs/product/project-pane-git-mode.md`). The buttons keep that place in loading, empty and error states too. Pressing
+Refresh with the mouse leaves keyboard focus where it was.
 
 ## Files and Git
 
-The **Files**, **Uncommitted** and **Compare** tabs in the header switch directly between the project's directory and
-its two Git review views (see "Uncommitted and Compare" in `docs/product/project-pane-git-mode.md`). The tabs occupy
-one level, with no separate Git tab. A project's pane first opens in Files. The mode is remembered per project
+The **Files** and **Changes** tabs in the header switch directly between the project's directory and its Git review
+(see "The Changes view" in `docs/product/project-pane-git-mode.md`): Changes is the Git mode. A project's pane first opens in Files. The mode is remembered per project
 (see "What is remembered" below), so selecting a session shows a project in the mode it was last left in. Browse files
-explicitly chooses Files. All three tabs remain available while content is loading, has failed, or has no repository.
-The tab strip scrolls horizontally when it does not fit (see "The edge that hides content fades" in
-`docs/product/scrolling-surfaces.md`).
+explicitly chooses Files. Both tabs remain available while content is loading, has failed, or has no repository.
 
 Only the mode on screen is kept up to date on its own: the Files tree as "Keeping the tree up to date" below says,
-a file-name search as "Filtering by file name" below says, and the Git mode as "Uncommitted and Compare" in `docs/product/project-pane-git-mode.md` says. Switching to a mode counts as
-showing it again, so the tree or Git view is refreshed when its last refresh is more than 5 seconds old; an active
-recursive listing is repeated whenever its filter or flat layout is shown again. The
+a file-name search as "Filtering by file name" below says, and the Git mode as "Keeping the list up to date" in `docs/product/project-pane-git-mode.md` says. Switching to a mode counts as
+showing it again, so the tree or the Git mode's changes are refreshed when their last refresh is more than 5 seconds old; an active
+file-name search is repeated whenever its filter is shown again. The
 header's **Refresh** refreshes the mode on screen: in Files every visible folder of the unfiltered tree is listed
-again, or the recursive listing used by a filter or flat layout is repeated; in Git the worktrees
-and the branches are read again, and so are the changes of the Uncommitted view, or the comparison in the Compare view,
-whichever is on screen. While a refresh the button started is out, its icon turns, slowly, and it keeps turning
+again, or an active file-name search is repeated; in Git the worktrees,
+the branches and the uncommitted changes are read again, the comparison is made again and, grouped by commit, the
+commits are listed again. While a refresh the button started is out, its icon turns, slowly, and it keeps turning
 for at least a moment, so a refresh that finishes at once still shows it happened. It spins until the reads the press
 sent have been answered or have failed, or the connection drops; a folder that does not answer keeps it spinning,
 because a read from disk has no deadline. The periodic refreshes do not turn it, and the icon stays still under the
@@ -97,7 +96,7 @@ that read the same are always kept in the same order. The file viewer moves thro
 
 File rows use muted icons suited to their names and extensions: code, scripts, configuration, JSON, documents,
 images, audio, video, archives, spreadsheets, databases, fonts, keys and certificates, Git metadata, and licenses.
-Unrecognized file names use a generic file icon. These name-based icons apply in the folder tree, flat list and
+Unrecognized file names use a generic file icon. These name-based icons apply in the folder tree and
 filtered results. In the unfiltered folder tree, symbolic links and unavailable or special entries have their own
 icons instead.
 
@@ -127,36 +126,34 @@ error naming the reason (with the folder shown as its path, `~` standing for the
 place of the tree. Try again pressed from the keyboard hands keyboard focus to the header's Refresh, which stays while
 the error and its button go.
 
-### Flat or grouped by folder
+### Always a folder tree
 
-The header's second toggle switches **Files** between a folder tree and a flat file list. Files starts grouped by
-folder. With no filter, the tree lists folders lazily as they are expanded (see "What is listed" above); the flat list
-instead scans all project subdirectories and shows each file's full relative path. A nonempty filter also scans the
-whole project in either layout: grouped results contain only folders leading to a match and start expanded, except
-for folders the user folded away. The scan's scope, limits and refreshes are in "Filtering by file name" below and
-apply to the unfiltered flat list too.
+**Files is always a folder tree**; it has no flat layout and no control to choose one, and a flat layout an earlier
+version of Octoboard saved for the Files tab is ignored. With no filter, the tree lists folders lazily as they are
+expanded (see "What is listed" above). A nonempty filter scans the whole project and shows its results as a tree too:
+only the folders leading to a match, each match under its folder, starting expanded except for folders the user
+folded away (see "Filtering by file name" below).
 
-Each project's **Files, Uncommitted and Compare tabs remember their own layout and folded folders independently**.
-Switching tabs or switching between flat and grouped layout leaves the other tabs' state alone. The unfiltered Files
-tree retains its ordinary expansion state; its recursive search results retain which folders were folded separately
-while that project's pane stays mounted. Folding a folder in the ordinary tree also marks it folded for search
-results, and expanding it clears that mark. Clearing a filter returns to the ordinary tree when grouped, or to all
-files when flat. The viewer navigates only through the displayed file rows, skipping folded folders.
+Each project's **Files and Changes tabs remember their own folded folders independently**, and switching tabs leaves
+the other tab's state alone. The unfiltered Files tree retains its ordinary expansion state; its filter results retain
+which folders were folded separately while that project's pane stays mounted. Folding a folder in the ordinary tree
+also marks it folded for filter results, and expanding it clears that mark. Clearing a filter returns to the ordinary
+tree. The viewer navigates only through the displayed file rows, skipping folded folders.
 
 ## Filtering by file name
 
-In Files, the **filter toggle** between the tabs and Refresh shows and hides a field directly below the
+In Files, the **filter toggle**, the one control before Refresh, shows and hides a field directly below the
 header. It starts hidden. Opening it puts keyboard focus in the field; closing it clears its text and returns focus
 to the toggle if the field held it. An empty field closes when focus leaves it, with whitespace alone counting as
 empty; the window itself losing focus leaves it in place. A field with text stays visible. The toggle follows the
 convention in "Two-state icon toggles" in `docs/product/labels-and-tooltips.md`.
 
 A nonempty filter **searches the entire project directory**, including folders never expanded in the tree, and
-shows the matching files in the tab's chosen layout (see "Flat or grouped by folder" above). Flat rows show each file's
-full relative path; grouped rows show names under their folders. Clearing the text restores the unfiltered layout.
+shows the matching files as a tree, each name under its folders (see "Always a folder tree" above). Clearing the text
+restores the unfiltered tree.
 
 - Only the **file name**, the last part of its path, is matched, by containment, ignoring case and whitespace around
-  the query. Folder names and file contents are not searched. An empty query shows all files in the chosen layout.
+  the query. Folder names and file contents are not searched. An empty query is no filter: the ordinary tree is shown.
 - Dot files and ignored files are included. Entries named `.git` are excluded at every depth. Symbolic links to files
   inside the project can match under the link's own name; symbolic links to directories are not traversed, and links
   outside the project are excluded.
@@ -172,17 +169,15 @@ full relative path; grouped rows show names under their folders. Clearing the te
   Incomplete results carry a notice that not every matching file may be shown, even when no matches were found;
   an unreadable project root instead fails the search.
 - Searches repeat when the query changes, Files becomes active again, the daemon reconnects, Refresh is pressed,
-  or the project's reported branch or detached state changes. **A nonempty filter has no periodic refresh**. The
-  unfiltered flat list rescans **every 10 seconds** while Files is active and the window is visible, skipping while
-  a scan is pending; returning focus to the window or making it visible again also rescans once the last request
-  is at least **5 seconds** old, unless one is pending. While a filter or flat layout is active, the tree's folder
-  listings pause except for the folder containing an open file and its ancestors through the project root: these continue to be listed to keep the viewer's content current, without repeating the search.
+  or the project's reported branch or detached state changes. **A nonempty filter has no periodic refresh**, and
+  neither the window coming back to the front nor its becoming visible again repeats it. While a filter is active,
+  the tree's folder listings pause except for the folder containing an open file and its ancestors through the project root: these continue to be listed to keep the viewer's content current, without repeating the search.
 
 The field's clear button and **Escape** clear its text while leaving focus in the field. In a floating pane or a
 drawer, Escape with text clears it; Escape once empty can close the pane. Input-method composition owns its keys,
 including Escape, so those keys do not clear the field. Typing in the field does not trigger the list's name navigation.
 
-Each of **Files, Uncommitted and Compare has its own keyword and filter-field open state**. Switching tabs restores
+Each of **Files and Changes has its own keyword and filter-field open state**. Switching tabs restores
 that tab's choices without taking keyboard focus into a restored field. Clearing or closing the field affects only
 the current tab; closing it drops its keyword. These choices last while the project's pane stays in the right pane,
 including tab switches and hiding the pane; replacing it with another owner, reloading the window or restarting the
@@ -203,7 +198,7 @@ still be there.
 
 The tree is read from the project's directory as it is on disk; nothing tells Octoboard when files change, so it lists
 the folders on screen — the project's own directory and every expanded folder whose parents are expanded — again,
-while grouped by folder with no nonempty file-name filter active (see "Filtering by file name" above):
+while no nonempty file-name filter is active (see "Filtering by file name" above):
 
 - the first time the Files mode is shown after the project pane is put in the right pane, which lists it afresh;
 - when a folder is expanded, if it had been listed before;
@@ -223,17 +218,17 @@ afresh.
 ## A row's actions
 
 Every file and folder row in Files ends with an icon button that opens a **menu of what can be done with that
-entry**, whether the folder is collapsed or expanded. Every file's row in the Git mode's change list has the same
-button in both its views. This applies to flat and grouped layouts and filtered results. **Right-clicking a row
-opens the same menu at the pointer** (Control-click also works in the desktop app).
+entry**, whether the folder is collapsed or expanded, filtered or not. Every file's row in the Git mode's change list
+has the same button, uncommitted and committed alike, flat or grouped by folder. **Right-clicking a row opens the same
+menu at the pointer** (Control-click also works in the desktop app).
 
 - The menu's order is **Copy path**, **Show in file manager**, then **Open**, omitting unavailable actions.
 - **Show in file manager** opens the containing folder and selects that entry, including when the entry is a folder.
   **Open** opens the live file or folder with the operating system's default application.
   Both act on the machine running the daemon, including when the client is a browser on another machine. Files uses
-  the project directory; Uncommitted uses the selected worktree and the project's directory within it. They act on
-  what is on disk now, including for a staged change. **Compare offers neither action**, since its changes name
-  committed versions rather than a live worktree.
+  the project directory; an uncommitted change uses the worktree the branch is checked out in and the project's
+  directory within it. They act on what is on disk now, including for a staged change. **A committed change offers
+  neither action**, since it names versions in commits rather than in a live worktree: its only action is Copy path.
 - **Copy path** puts the file or folder's path on the clipboard, slash separated, as a path within the project. For a
   change it is the path the row names, which for a rename is its new path — the old one only where the new side is
   absent (a deletion) or outside the project (see "What is listed" in `docs/product/project-pane-git-mode.md`). The path
@@ -241,7 +236,7 @@ opens the same menu at the pointer** (Control-click also works in the desktop ap
   replacement character U+FFFD, the character the name is displayed with. A **toast** then confirms that the path was
   copied; where the clipboard refuses it, an error toast says it could not be copied (see `docs/product/toasts.md`). The
   file viewer's header offers the same action (see "The file viewer" below).
-- **The Git mode's grouping folders have no button**, and neither does a row that says something about a folder instead
+- **The Git mode's grouping folders and commit rows have no button**, and neither does a row that says something about a folder instead
   of listing an entry (loading, empty, unreadable, cut short; see "Rows and the keyboard" above).
 - **The button shows while its row is hovered, holds keyboard focus, is the selected file or change, or has its menu
   open**, fading and opening out as it appears, as the sidebar's row controls do (see "Rows, names and keyboard focus"
@@ -260,12 +255,12 @@ opens the same menu at the pointer** (Control-click also works in the desktop ap
   row's button is told apart, while its tooltip is the short one every such button has (see "Tooltips on icon-only
   controls" in `docs/product/labels-and-tooltips.md`).
 - **Where the platform has no clipboard, Copy path is omitted**. Open and Show in file manager remain available in
-  Files and Uncommitted. Compare then has no row button or action menu. A plain browser whose page is not a secure
+  Files and on uncommitted changes. A committed change then has no row button or action menu. A plain browser whose page is not a secure
   context — served over `http` from anywhere but `localhost` — has no clipboard; the packaged desktop app always does.
 
 Open and Show in file manager raise no success toast; failures raise an error toast with the reason. A missing
 live entry, such as a deleted file that is still absent on disk, is refused with `file_not_found`; an entry or
-symbolic-link target outside the project's directory in the chosen worktree is refused with `outside_scope`. A
+symbolic-link target outside the project's directory in the worktree acted on is refused with `outside_scope`. A
 worktree that no longer exists is refused with `worktree_unavailable`. Revealing a symbolic link selects the
 link itself.
 
@@ -282,31 +277,32 @@ unavailable launchers or desktop services, and launcher failures are reported as
 ## What is remembered
 
 **Per project, per client**, in that client's own browser storage (as the right pane's width is, see "Resizing the
-sidebar and the right pane" in `docs/product/window-layout.md`): the mode, Files or Git, each of the three tabs' flat-or-grouped layout, and which folders are expanded in the ordinary Files tree, so the pane comes back as it was after a reload or a restart. At most 200 expanded folders are kept per
+sidebar and the right pane" in `docs/product/window-layout.md`): the mode, Files or Git, whether the Changes tab's list is flat or grouped by folder and whether it groups its committed
+changes by commit, and which folders are expanded in the ordinary Files tree, so the pane comes back as it was after a reload or a restart. At most 200 expanded folders are kept per
 project, the earliest expanded dropped first, and the state of at most 50 projects, the one shown least recently
 dropped first. A removed project's state is dropped.
 
 The selected file is kept only while the window is open: reloading it, or restarting the application, starts every
-project with no file selected. So are the Git mode's view, chosen worktree, chosen branches, selected changes and the
-sections and folders it has folded away (see "What is remembered" in `docs/product/project-pane-git-mode.md`).
-Listings, search results, change lists and file contents are never stored. Each tab's filter text and visibility, and the Files recursive results' folded folders,
+project with no file selected. So are the Git mode's chosen branch, its selected change and the sections and folders it has
+folded away (see "What is remembered" in `docs/product/project-pane-git-mode.md`).
+Listings, search results, change lists and file contents are never stored. Each tab's filter text and visibility, and the Files filter results' folded folders,
 last only while the project's pane stays in the right pane (see "Filtering by file name" above).
 
 ## The file viewer
 
 Opening a file shows it in the **file viewer**, a dialog nearly as large as the window (at most 1440 px wide). The Git
 mode opens a change in the same viewer; what it shows of a change is in "Opening a change" in
-`docs/product/project-pane-git-mode.md`.
+`docs/product/project-pane-git-change-viewer.md`.
 
 The header has three parts, one under the other:
 
 - **The title** — the file's name, and after it the tags saying what the subject is, which only a change carries
-  (see "Opening a change" in `docs/product/project-pane-git-mode.md`). The name comes first and the tags follow it,
+  (see "Opening a change" in `docs/product/project-pane-git-change-viewer.md`). The name comes first and the tags follow it,
   on screen and in what assistive technology is given alike — "server.ts: Modified, Unstaged". The tags never
   shrink, so the name is what the fade cuts.
-- **A subtitle**, a line of its own directly under the title, which carries one thing only: the comparison a change
-  from the Compare view is read from. It belongs to the title as a tag does, but is far too long to sit among them.
-  A subject with no comparison has no such row at all, and the row costs the content below it that one line and no
+- **A subtitle**, a line of its own directly under the title, which carries one thing only: the commits a committed
+  change is read from. It belongs to the title as a tag does, but is far too long to sit among them.
+  A subject with no such commits has no such row at all, and the row costs the content below it that one line and no
   more. It is a single line that fades out where it is cut off and carries its full wording as its tooltip.
 - **The details** — the file's path within the project, its size and the path a rename came from — laid out beside
   the **controls**, which hold the end of the row in a fixed order: **Copy path**, then the document-or-source
@@ -389,7 +385,7 @@ to assistive technology, each one once: the fall back to plain text where the gr
 Markdown file's source, to a plain patch where the diff could not be drawn, and to an image's own text; a diagram, a
 formula or a project image in a rendered document that cannot be shown after the document has been drawn (see "A
 Markdown file as a document" below); and what a diff says about its collapsed lines (see "Expanding the collapsed
-lines" in `docs/product/project-pane-git-mode.md`). A notice that arrives with the content it describes is not
+lines" in `docs/product/project-pane-git-change-viewer.md`). A notice that arrives with the content it describes is not
 announced on its own; it is read with the rest of the dialog. Inside a rendered document, a notice for an image or for
 a formula inside a paragraph sits in the paragraph rather than as the block above; it uses the same tones.
 
@@ -402,7 +398,7 @@ what the viewer shows for
   size before and after — and a change with no diff at all, which take the same glyph;
 - a change with no differences to show — its two sides holding the same content, or a rename with no change to its
   content — but only where that content could not be read; where it was read, the change shows the file whole under a
-  neutral notice instead (see "What it shows" in `docs/product/project-pane-git-mode.md`);
+  neutral notice instead (see "What it shows" in `docs/product/project-pane-git-change-viewer.md`);
 - a side that is not a file: a symbolic link, or a repository of its own;
 - a subject nothing has been read of yet while the connection to the daemon is lost, which is deliberately this same
   neutral stand-in rather than an error, the read resuming on its own (see "When the open file changes" below). This one
@@ -569,7 +565,7 @@ The budget is per document:
 
 **Where the document is offered.** A Markdown file opened for itself, and a whole Markdown file body the Git mode
 shows — an untracked file, one added with no patch, or a change with no lines to draw whose content was read (see
-"What it shows" in `docs/product/project-pane-git-mode.md`). A diff and the file behind a path in conflict keep the
+"What it shows" in `docs/product/project-pane-git-change-viewer.md`). A diff and the file behind a path in conflict keep the
 source view alone and show no document-or-source control; the conflict's markers are what it is looked at for. So does
 a Markdown file past the budget for highlighting (see "What it shows" above): it is shown as plain source, with
 no control either. Where the document cannot be drawn at all, the source is shown under a failure notice saying so.
@@ -598,7 +594,7 @@ and the next change, and after the application restarts.
 The **code region** — a file's code, highlighted or plain, or a change's diff or plain patch — takes keyboard focus,
 with Tab or a click, so it can be scrolled from the keyboard; reached with Tab it shows a focus ring. Tab again leaves
 the region, unless it holds a diff whose collapsed lines can be expanded, whose controls it enters first (see
-"Expanding the collapsed lines" in `docs/product/project-pane-git-mode.md`).
+"Expanding the collapsed lines" in `docs/product/project-pane-git-change-viewer.md`).
 
 With keyboard focus on the code region, **⌘A** (Ctrl+A off macOS) selects that region's code and nothing else: not
 its line numbers, not a diff's markers, and not the viewer's title, path and size, so copying takes the code alone.
@@ -622,8 +618,8 @@ another file (see "Moving between files" below).
 and **Right** arrow keys move to the file before and after the one shown, without closing the viewer. They move through
 the file rows the tree shows, top
 to bottom: folders are skipped, and so is everything inside a collapsed folder. They stop at either end rather than
-going round, Previous file disabled on the first file and Next file on the last. With a file-name filter or flat layout active,
-they instead follow the recursive results' visible file rows in their displayed order (see "Filtering by file name" above). A file
+going round, Previous file disabled on the first file and Next file on the last. With a file-name filter active,
+they instead follow the filter results' visible file rows in their displayed order (see "Filtering by file name" above). A file
 shown as removed moves on to the files that were beside it.
 
 - Under a right-to-left language the keys are mirrored: Right moves to the previous file and Left to the next.

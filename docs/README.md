@@ -123,25 +123,30 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   regions, which ones are skipped, and where focus lands in each, the right pane included.
 - [Window size and position](product/window-size-and-position.md) — how the macOS window's size, position and maximized
   state are remembered and restored across launches.
-- [Project pane](product/project-pane.md) — a project's files and Git review (uncommitted changes and branch
-  comparison) in the right pane: its Files and Git modes and what is remembered of the mode, opening it with
-  Browse files or by selecting a project session without starting or resuming anything, the file tree (what is
-  listed, its order, rows and the keyboard, the selected file and a removed one), recursive file-name filtering
-  with relative-path results, the button and right-click menus of file and change rows (opening live paths with
-  the system, revealing them in the file manager and copying paths), when the tree is listed again, what is
-  remembered per project, the read-only file viewer (what it shows, including a Markdown document's diagrams,
-  formulas, project images and links to other project files, wrapping long lines, Previous/Next and the arrow
+- [Project pane](product/project-pane.md) — a project's files and Git review (one branch's uncommitted and committed
+  changes) in the right pane: its Files and Changes tabs and what is remembered of the mode, opening it with Browse
+  files or by selecting a project session without starting or resuming anything, the file tree, always by folder (what
+  is listed, its order, rows and the keyboard, the selected file and a removed one), recursive file-name filtering with
+  results shown as a tree, the button and right-click menus of file and change rows (opening live paths with the system,
+  revealing them in the file manager and copying paths; committed changes offer only Copy path), when the tree is listed
+  again, what is remembered per project, the read-only file viewer (what it shows, including a Markdown document's
+  diagrams, formulas, project images and links to other project files, wrapping long lines, Previous/Next and the arrow
   keys, closing it, a file that changes while open), its errors, and a pane that fails to load.
-- [Project pane: Git mode](product/project-pane-git-mode.md) — the project pane's read-only review of a repository in
-  two views — Uncommitted (a worktree's uncommitted changes: the worktree selector and a worktree that goes away, the
-  Conflicted, Staged, Unstaged and Untracked list, a subdirectory project and renames across its boundary, states and
-  refreshes) and Compare (what one local branch has changed since it forked from another (from their merge base): the
-  From and To selectors, Swap, fixed commits, when a comparison is made, a branch that moves or goes away) — that it
-  never writes to the repository and how it differs from the branch badge, folding a section of the list away and
-  unfolding it, opening a change in the file viewer and expanding the lines its diff collapses, errors, and what is kept
-  for the window's lifetime.
+- [Project pane: Git mode](product/project-pane-git-mode.md) — the project pane's read-only review of one local branch
+  in the Changes tab: the branch selector (the default branch from the worktree holding the project's folder, a choice
+  that stands, a branch that goes away), its uncommitted changes (Conflicted, Staged, Unstaged, Untracked) from the
+  worktree that has it checked out, what it has committed since forking from the main working copy's branch (one
+  Committed section, its changes together or under a foldable row per commit with Group by commit, at most 100 commits),
+  a subdirectory project and renames across its boundary, the lines saying what the list is made of and what failed,
+  folding sections and commits, grouping by folder, filtering, refreshes and the comparison following the branches,
+  following the selected session, that it never writes to the repository and how it differs from the branch badge, and
+  what is remembered.
+- [Project pane: Git change viewer](product/project-pane-git-change-viewer.md) — opening a Git change in the file
+  viewer: its tags and the subtitle naming the commits a committed change is read from, what a change shows (diffs,
+  images, renames, type changes, conflicts, no differences), expanding the lines a diff collapses, moving between
+  changes, closing it, when the open change is read again, and its errors.
 - [Which session is working on a branch](product/branch-responsible-session.md) — the responsible-session badge on a
-  branch's row in the Git mode's From and To lists: the title it names the session by (the session's own while it
+  branch's row in the Git mode's branch selector list: the title it names the session by (the session's own while it
   exists, the recorded one once it is gone) and the filled ring a branch of the selected session takes; the
   responsible session, which starts as the session whose own git reported creating the branch through git's
   reference-transaction hook and moves only by an approved handover, a branch no session's git reported staying

@@ -103,9 +103,6 @@ const fileTypeFiles: FixtureFiles = {
   "schema.sql": { text: "CREATE TABLE documents (id INTEGER PRIMARY KEY);\n" },
   src: { dir: true },
   "src/server.ts": SAMPLE_FILES["src/server.ts"]!,
-  "src/services": { dir: true },
-  "src/services/search": { dir: true },
-  "src/services/search/server.ts": filterFiles["src/services/search/server.ts"]!,
   "unknown.custom": { text: "A file with an unrecognized extension.\n" },
   "walkthrough.mp4": { text: "" },
 };
@@ -143,7 +140,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Matching files throughout the project",
-    description: "The filter sits above matching files grouped by folder: both server.ts files match the trimmed, case-insensitive filename query without opening any folders first. The project title, compact pill tabs and right-aligned filter, layout and Refresh controls share one header row. Each tab keeps its own query, layout and folded folders.",
+    description: "The filter sits above the matching files, which stay in the folder tree: both server.ts files match the trimmed, case-insensitive filename query without opening any folders first, each under its folders, which start open and can be folded. The header reads the project title, then the Files and Changes tabs, then the filter and Refresh buttons at the end; Files has no layout choice. Each tab keeps its own query and folded folders.",
     state,
     files: filterFiles,
     steps: [
@@ -154,18 +151,14 @@ export const projectFilesScenarios: Scenario[] = [
     ],
   },
   {
-    id: "files-flat",
+    id: "files-file-icons",
     group: GROUP,
     category: "normal",
-    title: "All project files as a flat list",
-    description: "The flat layout lists files throughout the project without opening folders or entering a query, with muted icons distinguishing source code, configuration, JSON, documents, images, audio, video, archives, spreadsheets, databases, certificates, fonts, Git files and licenses; an unknown extension keeps the plain file icon. Relative paths distinguish the two server.ts files.",
+    title: "Icons for each kind of file",
+    description: "Muted icons distinguish source code, configuration, JSON, documents, images, audio, video, archives, spreadsheets, databases, certificates, fonts, Git files and licenses; an unknown extension keeps the plain file icon.",
     state,
     files: fileTypeFiles,
-    steps: [
-      ...openFiles,
-      (ui) => ui.press(ui.t("git.layout.flat")),
-      (ui) => ui.wait(400),
-    ],
+    steps: [...openFiles, (ui) => ui.wait(400)],
   },
   {
     id: "files-filter-empty",

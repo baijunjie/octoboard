@@ -12,7 +12,8 @@ import type { DirListing } from "./tree";
 import { useChangeList, type ChangeList } from "./useChangeList";
 import { useBranchComparison } from "./useBranchComparison";
 import { useBranchList } from "./useBranchList";
-import { shortCommit, useChangeReader, type ChangeOrigin, type ChangeReader } from "./useChangeReader";
+import { shortCommit } from "./shortCommit";
+import { useChangeReader, type ChangeOrigin, type ChangeReader } from "./useChangeReader";
 import { useDirectoryListings, type DirectoryListings } from "./useDirectoryListings";
 import { useFileReader, type FileReader } from "./useFileReader";
 
@@ -357,6 +358,39 @@ it("reads a compared change from the comparison's two commits, and never takes a
   await act(async () => second.resolve(reply("c3", "-from c3\n")));
   expect(hook.current().subject).toMatchObject({ content: { state: "change", change: { patch: "-from c3\n" } } });
   expect(hook.current().subject?.key).toContain("c3");
+});
+
+it("reads a commit's change between it and its parent, never takes another commit's reply, and asks its bodies the same way", async () => {
+  const { daemon, pending } = controlledDaemon();
+  const hook = mount<ChangeReader>(daemon, () => useChangeReader("p"));
+  const commitSide = (commit: string, blob: string) => ({ state: "present", path: "a.ts", kind: "file", source: { kind: "commit", commit, branch: null, blob } }) as const;
+  const entry = changeItem({ group: "committed", old: commitSide("c1", "o"), new: commitSide("c2", "n") });
+  const origin = (commit: string, parent: string | null): ChangeOrigin => ({ kind: "commit", commit, parent, subject: "s" });
+  act(() => hook.current().open(entry, origin("c2", "c1")));
+  act(() => hook.current().open(entry, origin("c3", "c2")));
+  const [first, second] = pending.splice(0);
+  expect(second.body).toMatchObject({ type: "read_project_commit_change", slot: "viewer", commit: "c3", parent: "c2", change: { old: { path: "a.ts" } } });
+  const reply = (commit: string, parent: string, patch: string): Event => ({
+    type: "project_commit_change",
+    project: "p",
+    commit,
+    parent,
+    old: { ...commitSide(parent, "o"), file: null, lines: 1 },
+    new: { ...commitSide(commit, "n"), file: null, lines: 1 },
+    patch: { size: patch.length, kind: "text", media_type: null, text: patch, data: null },
+  });
+  await act(async () => first.resolve(reply("c2", "c1", "-from c2\n")));
+  expect(hook.current().subject?.content).toEqual({ state: "loading" });
+  await act(async () => second.resolve(reply("c3", "c2", "-from c3\n")));
+  expect(hook.current().subject).toMatchObject({ content: { state: "change", change: { patch: "-from c3\n" } } });
+  expect(hook.current().subject?.sourceText).toBe(`Commit ${isolate("c3")}, compared with its parent ${isolate("c2")}`);
+
+  const content = hook.current().subject?.content;
+  if (content?.state !== "change" || !content.change.loadBodies) throw new Error("no bodies to load");
+  const bodies = content.change.loadBodies();
+  expect(pending[0].body).toMatchObject({ type: "read_project_commit_change_bodies", slot: "viewer-bodies", commit: "c3", parent: "c2" });
+  await act(async () => pending.splice(0)[0].resolve({ type: "project_commit_change_bodies", project: "p", commit: "c3", parent: "c2", old: { ...commitSide("c2", "o"), file: { size: 1, kind: "text", media_type: null, text: "o", data: null }, lines: 1 }, new: { ...commitSide("c3", "n"), file: { size: 1, kind: "text", media_type: null, text: "n", data: null }, lines: 1 } }));
+  await expect(bodies).resolves.toEqual({ old: "o", new: "n" });
 });
 
 const indexSide = (blob: string) => ({ state: "present", path: "a.ts", kind: "file", source: { kind: "index", worktree: "w", blob }, lines: null }) as const;

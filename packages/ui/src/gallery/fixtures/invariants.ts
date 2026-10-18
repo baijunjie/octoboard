@@ -1,12 +1,13 @@
 // Rules a fixture repository as a whole has to keep, which neither a factory's signature nor a
 // single reply can state: a test holds them over the fixtures (`projectGit.test.ts`), so that one
 // added later cannot break one unnoticed.
-import type { FixtureChange, FixtureGit } from "./changeFixtures";
+import { listedCommits, type FixtureChange, type FixtureGit } from "./changeFixtures";
 
-/** Every change of a repository, its worktrees' and its comparisons' alike: one repository's object
- * ids are one set, whichever list a change is listed in. */
+/** Every change of a repository, its worktrees', its comparisons' and its commits' alike: one
+ * repository's object ids are one set, whichever list a change is listed in. */
 function changesOf(git: FixtureGit): FixtureChange[] {
-  return [...Object.values(git.changes), ...Object.values(git.comparisons ?? {})].flatMap((list) => (Array.isArray(list) ? list : []));
+  const commits = Object.values(git.commits ?? {}).flatMap((list) => listedCommits(list).map(({ changes }) => changes));
+  return [...Object.values(git.changes), ...Object.values(git.comparisons ?? {}), ...commits].flatMap((list) => (Array.isArray(list) ? list : []));
 }
 
 /** The content a change carries for one of its sides: the whole text, or the body its reply carries

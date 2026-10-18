@@ -4,7 +4,6 @@ import type { ErrorPresentation } from "../errorPresentation";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { useDaemon, useDaemonStore } from "../store";
 import { browseFailure } from "./browseError";
-import { AUTO_REFRESH_MS } from "./useDirectoryListings";
 import { sendBrowseListRequest } from "./browseListRequests";
 
 export type FileSearch =
@@ -14,13 +13,13 @@ export type FileSearch =
 
 /** A debounced project-wide file-name search. A reply only belongs to the query that requested
  * it, even during the debounce before the next request supersedes it in the daemon. */
-export function useFileSearch(project: string, query: string, active: boolean, autoRefresh = false): { result: FileSearch; refresh: () => Promise<void> } {
+export function useFileSearch(project: string, query: string, active: boolean): { result: FileSearch; refresh: () => Promise<void> } {
   const t = useT();
   const language = useCurrentLanguage();
   const { request, store } = useDaemon();
   const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
   const [held, setHeld] = useState<{ query: string; result: FileSearch }>();
-  const live = useRef({ alive: true, query, sequence: 0, pending: 0, lastSent: 0 });
+  const live = useRef({ alive: true, query, sequence: 0, pending: 0 });
   useLayoutEffect(() => {
     live.current.query = query;
   });
@@ -30,7 +29,6 @@ export function useFileSearch(project: string, query: string, active: boolean, a
     const s = live.current;
     const sequence = ++s.sequence;
     s.pending += 1;
-    s.lastSent = Date.now();
     const current = () => s.alive && s.query === query && s.sequence === sequence;
     const slot = `file-search:${project}`;
     setHeld((now) => now?.query === query && now.result.state === "loaded" ? now : { query, result: { state: "loading" } });
@@ -55,21 +53,6 @@ export function useFileSearch(project: string, query: string, active: boolean, a
     const timer = setTimeout(() => void send(), 250);
     return () => clearTimeout(timer);
   }, [query, active, snapshotEpoch]);
-
-  useEffect(() => {
-    if (!active || !autoRefresh) return;
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible" && live.current.pending === 0 && Date.now() - live.current.lastSent >= AUTO_REFRESH_MS / 2) void send();
-    };
-    const timer = setInterval(refreshWhenVisible, AUTO_REFRESH_MS);
-    window.addEventListener("focus", refreshWhenVisible);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener("focus", refreshWhenVisible);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
-    };
-  }, [active, autoRefresh, query]);
 
   useEffect(() => {
     const s = live.current;

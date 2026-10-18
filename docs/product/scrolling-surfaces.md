@@ -43,16 +43,15 @@ Once it holds more than it can show, each of these fades at its edge:
 - the **welcome screen's** content (see "What the welcome screen shows" in `docs/product/welcome-screen.md`);
 - **every dialog's body**, and in Settings the panel holding the section on screen (see `docs/product/settings.md`);
 - the **project pane's** file tree (see "The file tree" in `docs/product/project-pane.md`), and the Git mode's change
-  list and change tree (see "The change list" in `docs/product/project-pane-git-mode.md`);
+  list (see "The change list" in `docs/product/project-pane-git-mode.md`);
 - the **file viewer's** reading surfaces — a file shown as plain text, a highlighted file, a diff and a rendered
   Markdown document (see "The file viewer" in `docs/product/project-pane.md`);
-- the **lists inside a popover**: the list of branches of each branch selector of the Compare view (see "The branch
-  selectors" in `docs/product/project-pane-git-mode.md`), and the tags offered by the project filter (see "Filtering
+- the **lists inside a popover**: the list of branches of the Git mode's branch selector (see "The branch
+  selector" in `docs/product/project-pane-git-mode.md`), and the tags offered by the project filter (see "Filtering
   the project list" in `docs/product/sidebar.md`);
 - the **directory browser's** list of directories (see "Browsing directories" in
   `docs/product/consoles-and-projects.md`);
-- a **strip of tabs** whose tabs do not fit, which scrolls sideways: the project pane's Files, Uncommitted and
-  Compare row (see "Files and Git" in `docs/product/project-pane.md`), and the row Settings' list of sections becomes
+- a **strip of tabs** whose tabs do not fit, which scrolls sideways: the row Settings' list of sections becomes
   in a narrow window (see "In a narrow window" in `docs/product/settings.md`). **A tab strip fades over 64 px,
   not 24**, and is the one surface where the fade can cover what the keyboard moved to: a tab reached with the arrow
   keys is scrolled only as far as the strip's edge, which is where its fade sits. The fade's size and the chevrons'
@@ -70,9 +69,9 @@ Two kinds of scrolling show no fade:
 - **What scrolls as a document of its own**: the terminal's scrollback (see "Output, scrollback and size" in
   `docs/product/session-terminal.md`) and a report page, which the console session's model wrote (see
   `docs/product/report-panel.md`).
-- **A menu's or a selector's own list of choices** — an action menu, the worktree selector, the account and option
-  selects — which scrolls with its scrollbar alone. The Compare view's branch selectors are the exception: the list
-  of branches inside each one fades, as above.
+- **A menu's or a selector's own list of choices** — an action menu, the account and option selects — which scrolls
+  with its scrollbar alone. The Git mode's branch selector is the exception: the list of branches inside it fades, as
+  above.
 
 ## Scrolling a surface from the keyboard
 

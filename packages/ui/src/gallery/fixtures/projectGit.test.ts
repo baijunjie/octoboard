@@ -2,13 +2,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DaemonRequestError } from "../../daemon-client";
-import type { ChangeSide, Event, SideRead, SideVersion } from "../../protocol";
+import type { ChangeEntry, ChangeSide, Event, SideRead, SideVersion } from "../../protocol";
 import { hasHunks, joinedPatch, linesAfterLastHunk } from "../../viewer/patch";
 import { FixtureUnfillableError } from "../banner";
 import { createFixtureDaemon } from "../fixtureDaemon";
-import type { FixtureGit } from "./changeFixtures";
+import { listedCommits, type FixtureGit } from "./changeFixtures";
 import { objectIdCheck } from "./invariants";
-import { SAMPLE_GIT } from "./projectGit";
+import { LONG_HISTORY_GIT, SAMPLE_GIT } from "./projectGit";
 
 describe("the sample repository's changes", () => {
   const fileSide = (side: ChangeSide) => side.state === "present" && side.kind === "file";
@@ -37,6 +37,10 @@ describe("the sample repository's changes", () => {
     const seen = new Set<unknown>();
     return Object.entries(SAMPLE_GIT.comparisons ?? {}).filter(([, changes]) => !seen.has(changes) && seen.add(changes));
   };
+  /** Every commit of the sample repository's commit lists, with its changes: the commits that have
+   * none are listed all the same, and have nothing to read. */
+  const commitsOf = () => Object.entries(SAMPLE_GIT.commits ?? {}).flatMap(([pair, list]) => listedCommits(list).map((commit) => ({ pair, ...commit })));
+  const short = (commit: string) => commit.slice(0, 7);
   /** Swallows the daemon errors a fixture answers on purpose, but never a refusal: that is a gap in
    * the gallery's own data, and the check below exists to name it. */
   const rethrowUnfillable = (error: unknown): undefined => {
@@ -69,6 +73,62 @@ describe("the sample repository's changes", () => {
     }
   });
 
+  // A commit's changes are against its first parent, so every committed side names the commit's
+  // parent (old) or the commit itself (new), and a commit with no parent has no old side.
+  it("list a commit's changes between its parent and the commit", () => {
+    for (const { pair, commit, parent, changes } of commitsOf()) {
+      for (const { entry } of changes) {
+        if (entry.group !== "committed") throw new Error(`${pair} ${short(commit)} lists a ${entry.group} change`);
+        const at = `${pair} ${short(commit)}`;
+        if (entry.old.state === "present") expect([at, entry.old.source]).toEqual([at, expect.objectContaining({ kind: "commit", commit: parent })]);
+        if (parent === null) expect([at, entry.old.state]).not.toEqual([at, "present"]);
+        if (entry.new.state === "present") expect([at, entry.new.source]).toEqual([at, expect.objectContaining({ kind: "commit", commit })]);
+      }
+    }
+  });
+
+  // The comparison's changes are the commits' put together, so a path the comparison lists was
+  // changed by some commit. Not the other way round, which Git does not hold either: a commit may
+  // change a path another undoes, or the same path again.
+  it("list commits that between them change every path the comparison lists", () => {
+    const pathsOf = (list: { entry: ChangeEntry }[]) => list.flatMap(({ entry }) => (entry.group === "conflicted" ? [] : [pathOf(entry.new) || pathOf(entry.old)]));
+    for (const [pair, changes] of Object.entries(SAMPLE_GIT.comparisons ?? {})) {
+      const changed = new Set(pathsOf(listedCommits(SAMPLE_GIT.commits?.[pair] ?? { commits: [] }).flatMap(({ changes: made }) => made)));
+      expect([pair, pathsOf(changes).filter((path) => !changed.has(path))]).toEqual([pair, []]);
+    }
+  });
+
+  // The commits are what `git log <fork>..<tip>` gives: each is reachable from the tip, through
+  // first parents and the other parents of merges, and the first-parent line from the tip ends at
+  // the fork, or, where the list was cut, at a commit the list leaves out. A commit with no parent
+  // is only ever met as a merge's other parent.
+  it("list commits that form a history the tip reaches", () => {
+    for (const [pair, list] of Object.entries(SAMPLE_GIT.commits ?? {})) {
+      const commits = listedCommits(list);
+      if (commits.length === 0) continue;
+      const byId = new Map(commits.map((listed) => [listed.commit, listed]));
+      const tip = SAMPLE_GIT.branches?.find((b) => b.name === pair.split("..")[1])?.commit ?? "";
+      const reached = new Set<string>();
+      const visit = (id: string | null | undefined) => {
+        const listed = id ? byId.get(id) : undefined;
+        if (!listed || reached.has(listed.commit)) return;
+        reached.add(listed.commit);
+        visit(listed.parent);
+        visit(listed.merged);
+      };
+      visit(tip);
+      expect([pair, commits.filter((listed) => !reached.has(listed.commit)).map(({ subject }) => subject)]).toEqual([pair, []]);
+
+      let end = tip;
+      for (let listed = byId.get(end); listed?.parent; listed = byId.get(end)) end = listed.parent;
+      const cut = "cut" in list && list.cut === true;
+      expect([pair, cut ? !byId.has(end) && end !== endsOf(pair).base : end === endsOf(pair).base]).toEqual([pair, true]);
+
+      const taken = new Set(commits.flatMap(({ merged }) => (merged ? [merged] : [])));
+      expect([pair, commits.filter(({ parent, commit }) => parent === null && !taken.has(commit)).map(({ subject }) => subject)]).toEqual([pair, []]);
+    }
+  });
+
   it("answer a comparison with the commit the branches forked at", async () => {
     const compare = (git: FixtureGit, left: string, right: string) =>
       sampleDaemon(git).request({ type: "compare_project_branches", project: "p-1", left, right });
@@ -77,8 +137,8 @@ describe("the sample repository's changes", () => {
     const base = (reply: Event) => (reply.type === "project_comparison" ? [reply.base, reply.changes.length] : reply.type);
 
     // A branch made from main forks at main's tip; a branch with commits of its own forks before them.
-    expect(base(await compare(SAMPLE_GIT, "main", "feature/ranking-experiments"))).toEqual([main, 8]);
-    expect(base(await compare(SAMPLE_GIT, "chore/update-dependencies", "feature/ranking-experiments"))).toEqual([main, 8]);
+    expect(base(await compare(SAMPLE_GIT, "main", "feature/ranking-experiments"))).toEqual([main, 9]);
+    expect(base(await compare(SAMPLE_GIT, "main", "chore/update-dependencies"))).toEqual([SAMPLE_GIT.forks?.["main..chore/update-dependencies"], 2]);
     // The same commit, and a right branch that is an ancestor of the left one, change nothing.
     expect(base(await compare(SAMPLE_GIT, "main", "release/2.4"))).toEqual([main, 0]);
     expect(base(await compare(SAMPLE_GIT, "feature/ranking-experiments", "main"))).toEqual([feature, 0]);
@@ -86,6 +146,50 @@ describe("the sample repository's changes", () => {
     const orphaned: FixtureGit = { ...SAMPLE_GIT, branches: [...(SAMPLE_GIT.branches ?? []), { name: "gh-pages", commit: "3a2b1c0" }], forks: { "main..gh-pages": null } };
     await expect(compare(orphaned, "main", "gh-pages")).rejects.toMatchObject({ code: "no_merge_base", params: { left: "main", right: "gh-pages" } });
     await expect(compare({ ...orphaned, shallow: true }, "main", "gh-pages")).rejects.toMatchObject({ code: "no_merge_base_shallow", params: { left: "main", right: "gh-pages" } });
+  });
+
+  it("list the commits a branch made since the fork, the newest first", async () => {
+    const tipOf = (branch: string) => SAMPLE_GIT.branches?.find((b) => b.name === branch)?.commit ?? "";
+    const list = async (git: FixtureGit, base: string, tip: string) => {
+      const reply = await sampleDaemon(git).request({ type: "list_project_commits", project: "p-1", base, tip });
+      if (reply.type !== "project_commits") throw new Error(reply.type);
+      return reply;
+    };
+    const ranking = await list(SAMPLE_GIT, tipOf("main"), tipOf("feature/ranking-experiments"));
+    // A short history is listed whole, so the pane says nothing of a limit.
+    expect([ranking.commits.length, ranking.commits_complete, ranking.complete]).toEqual([5, true, true]);
+    expect(ranking.commits.map(({ subject }) => subject)).toEqual([
+      "Merge the ranking notes from the archived repository",
+      "Apply boosts after deduplication",
+      "Import the ranking notes from the archived repository",
+      "Cache query results",
+      "Move the loader to config.ts and clear out the old files",
+    ]);
+    const chore = await list(SAMPLE_GIT, SAMPLE_GIT.forks?.["main..chore/update-dependencies"] ?? "", tipOf("chore/update-dependencies"));
+    expect([chore.commits.map(({ subject }) => subject), chore.commits_complete]).toEqual([["Bump the test runner", "Raise the TypeScript target"], true]);
+    // A comparison that lists changes has commits they are made of; a fixture without them is refused.
+    const bare: FixtureGit = { ...SAMPLE_GIT, commits: {} };
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(list(bare, tipOf("main"), tipOf("feature/ranking-experiments"))).rejects.toThrow(FixtureUnfillableError);
+  });
+
+  // A note that only the newest commits are listed has to look true: the list is the daemon's
+  // hundred, each changing something in the folder (a commit that changed nothing has no row), cut
+  // at a commit it does not hold, and the comparison is made of the same changes.
+  it("list a hundred commits that each change something when a long history is cut", async () => {
+    const tipOf = (branch: string) => LONG_HISTORY_GIT.branches?.find((b) => b.name === branch)?.commit ?? "";
+    const reply = await sampleDaemon(LONG_HISTORY_GIT).request({ type: "list_project_commits", project: "p-1", base: tipOf("main"), tip: tipOf("feature/ranking-experiments") });
+    if (reply.type !== "project_commits") throw new Error(reply.type);
+    expect([reply.commits.length, reply.commits_complete]).toEqual([100, false]);
+    expect(reply.commits.filter(({ changes }) => changes.length === 0)).toEqual([]);
+    expect(new Set(reply.commits.map(({ subject }) => subject)).size).toBe(100);
+    const listed = new Set(reply.commits.map(({ commit }) => commit));
+    // Every parent is listed but the oldest commit's, which the cut left out.
+    expect(reply.commits.filter(({ parent }) => parent !== null && !listed.has(parent))).toHaveLength(1);
+    expect(reply.commits[0].commit).toBe(tipOf("feature/ranking-experiments"));
+    expect(objectIdCheck(LONG_HISTORY_GIT).conflicts).toEqual([]);
+    const comparison = LONG_HISTORY_GIT.comparisons?.["main..feature/ranking-experiments"] ?? [];
+    expect(comparison.length).toBe(reply.commits.reduce((sum, { changes }) => sum + changes.length, 0));
   });
 
   it("find a gone branch only until a comparison has been made", async () => {
@@ -98,8 +202,8 @@ describe("the sample repository's changes", () => {
   });
 
   // A side with no line count leaves an expandable diff ending in a bar promising unmodified lines
-  // it may have none of, which a count takes away (`docs/product/project-pane-git-mode.md`, "The
-  // run beyond the last hunk"). The daemon counts every side it reads, so a sample change whose
+  // it may have none of, which a count takes away (`docs/product/project-pane-git-change-viewer.md`,
+  // "Expanding the collapsed lines"). The daemon counts every side it reads, so a sample change whose
   // whole text the fixture leaves out shows a bar no real change of its shape has. Every change the
   // check covers is named, so a reply the fixture stops giving is a failure rather than a silent
   // skip. Every change is read, the ones with no such bar included, so that a fixture the daemon
@@ -140,6 +244,15 @@ describe("the sample repository's changes", () => {
       }
     }
 
+    for (const { commit, parent, changes } of commitsOf()) {
+      for (const { entry } of changes) {
+        if (entry.group === "conflicted") continue;
+        const reply = await daemon.request({ type: "read_project_commit_change", project: "p-1", commit, parent, change: entry }).catch(rethrowUnfillable);
+        if (reply?.type !== "project_commit_change" || !fileSide(entry.old) || !fileSide(entry.new)) continue;
+        check(`commit ${short(commit)}: ${pathOf(entry.new)}`, reply.patch?.text ?? null, reply.old, reply.new);
+      }
+    }
+
     expect(unsettled).toEqual([]);
     expect(checked).toEqual([
       "wt-main staged: src/server.ts",
@@ -158,6 +271,13 @@ describe("the sample repository's changes", () => {
       "main..feature/ranking-experiments: src/ranking.ts",
       "main..feature/ranking-experiments: src/config.ts",
       "main..feature/ranking-experiments: src/pipeline.ts",
+      "main..chore/update-dependencies: package.json",
+      "main..chore/update-dependencies: tsconfig.json",
+      "commit a7b6c5d: src/ranking.ts",
+      "commit a7b6c5d: src/pipeline.ts",
+      "commit 6f5e4d3: src/config.ts",
+      "commit 6d5c4b3: package.json",
+      "commit 3e2d1c0: tsconfig.json",
     ]);
   });
 
@@ -189,7 +309,7 @@ describe("the sample repository's changes", () => {
       if (reply instanceof DaemonRequestError) {
         return `${at}: ${reply.code}${reply.params.limit ? ` (${reply.params.limit})` : ""}`;
       }
-      if (reply.type !== "project_change_bodies" && reply.type !== "project_comparison_change_bodies") throw new Error(`${at}: ${reply.type}`);
+      if (reply.type !== "project_change_bodies" && reply.type !== "project_comparison_change_bodies" && reply.type !== "project_commit_change_bodies") throw new Error(`${at}: ${reply.type}`);
       return `${at}: old ${side(reply.old)}, new ${side(reply.new)}`;
     };
 
@@ -210,6 +330,15 @@ describe("the sample repository's changes", () => {
         if (entry.group === "conflicted") continue;
         const at = `${comparison} ${pathOf(entry.new) || pathOf(entry.old)}`;
         const request = { type: "read_project_comparison_change_bodies" as const, project: "p-1", ...ends, change: entry, ...versionsOf(entry) };
+        asked.push(answer(at, daemon.request(request)));
+      }
+    }
+
+    for (const { commit, parent, changes } of commitsOf()) {
+      for (const { entry } of changes) {
+        if (entry.group === "conflicted") continue;
+        const at = `commit ${short(commit)} ${pathOf(entry.new) || pathOf(entry.old)}`;
+        const request = { type: "read_project_commit_change_bodies" as const, project: "p-1", commit, parent, change: entry, ...versionsOf(entry) };
         asked.push(answer(at, daemon.request(request)));
       }
     }
@@ -259,9 +388,25 @@ describe("the sample repository's changes", () => {
       "main..feature/ranking-experiments src/index.ts: invalid_change",
       "main..feature/ranking-experiments src/pipeline.ts: old text 5304/120, new text 5349/120",
       "main..feature/ranking-experiments src/cache.ts: old absent, new text 49/1",
+      "main..feature/ranking-experiments docs/ranking-notes.md: old absent, new text 55/2",
       "main..feature/ranking-experiments docs/old-notes.md: old text 53/2, new absent",
       "main..feature/ranking-experiments docs/logo.png: old image/png 507/7, new image/png 516/8",
       "main..feature/ranking-experiments current: unsupported_file_type",
+      "main..chore/update-dependencies package.json: old text 78/6, new text 78/6",
+      "main..chore/update-dependencies tsconfig.json: old text 74/6, new text 74/6",
+      "commit 9e8d7c6 docs/ranking-notes.md: old absent, new text 55/2",
+      "commit a7b6c5d src/ranking.ts: old text 114/3, new text 180/4",
+      "commit a7b6c5d src/pipeline.ts: old text 5304/120, new text 5349/120",
+      "commit 5e4d3c2 docs/ranking-notes.md: old absent, new text 55/2",
+      "commit 8d7c6b5 src/cache.ts: old absent, new text 49/1",
+      // As a comparison's, a change with a side outside the project has no patch to expand.
+      "commit 8d7c6b5 src/index.ts: invalid_change",
+      "commit 6f5e4d3 src/config.ts: old text 92/3, new text 100/3",
+      "commit 6f5e4d3 docs/old-notes.md: old text 53/2, new absent",
+      "commit 6f5e4d3 docs/logo.png: old image/png 507/7, new image/png 516/8",
+      "commit 6f5e4d3 current: unsupported_file_type",
+      "commit 6d5c4b3 package.json: old text 78/6, new text 78/6",
+      "commit 3e2d1c0 tsconfig.json: old text 74/6, new text 74/6",
     ]);
   });
 

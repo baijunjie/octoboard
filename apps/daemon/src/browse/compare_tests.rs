@@ -159,7 +159,7 @@ pub(super) fn commit_on(
     commit
 }
 
-fn rev_parse(repo: &Path, revision: &str) -> String {
+pub(super) fn rev_parse(repo: &Path, revision: &str) -> String {
     String::from_utf8(git(repo, &["rev-parse", revision]))
         .unwrap()
         .trim()
@@ -780,7 +780,7 @@ fn a_comparison_is_cut_at_its_entry_budget_and_a_patch_past_its_budget_is_refuse
         (changes.len(), complete),
         (budget::MAX_CHANGE_ENTRIES, false)
     );
-    assert!(serialized < budget::COMPARISON_RESERVATION - budget::COMPARISON_STDOUT);
+    assert!(serialized < budget::COMPARISON_RESERVATION - budget::TREE_DIFF_STDOUT);
 
     let compared = Compared {
         left,
@@ -829,13 +829,13 @@ fn a_comparison_past_its_budget_is_made_within_a_subdirectory_project_alone() {
         ]
     );
     // Well under the whole tree's output, well over the subdirectory's.
-    super::compare::COMPARISON_STDOUT_OVERRIDE.with(|limit| limit.set(Some(1024)));
+    super::tree_diff::TREE_DIFF_STDOUT_OVERRIDE.with(|limit| limit.set(Some(1024)));
     let scoped = fixture.compare(&sub, "main", "topic");
     let at_root = fixture.compare(&whole, "main", "topic");
     // Under even the subdirectory's own output: refused, as a whole tree past it is.
-    super::compare::COMPARISON_STDOUT_OVERRIDE.with(|limit| limit.set(Some(16)));
+    super::tree_diff::TREE_DIFF_STDOUT_OVERRIDE.with(|limit| limit.set(Some(16)));
     let still_over = fixture.compare(&sub, "main", "topic");
-    super::compare::COMPARISON_STDOUT_OVERRIDE.with(|limit| limit.set(None));
+    super::tree_diff::TREE_DIFF_STDOUT_OVERRIDE.with(|limit| limit.set(None));
     assert_eq!(
         summary(&scoped.unwrap().changes),
         ["committed - moved.txt", "committed a.txt a.txt"],

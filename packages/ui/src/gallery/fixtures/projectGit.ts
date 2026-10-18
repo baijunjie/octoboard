@@ -1,11 +1,11 @@
 // The sample repository the fixture daemon answers a project's Git mode with (`fixtureGit.ts`),
-// and the gallery's "Project Git" scenarios over it: the worktree selector, the change list in its
-// sections, a diff of each kind opened from it, and the states a source or a list can end in. Every
-// change here is built by the factory for its kind (`changeFixtures.ts`).
+// and the gallery's "Project pane: Git" scenarios over it: the branch selector, the change list in
+// its sections, whole or by commit, a diff of each kind opened from it, and the states a source or a
+// list can end in. Every change here is built by the factory for its kind (`changeFixtures.ts`).
 import type { BranchInfo, ContentSource, FileContent, WorktreeInfo } from "../../protocol";
-import { describing, type Matcher, type Ui } from "../interact";
-import type { Scenario } from "../scenario";
-import type { FixtureChange, FixtureGit, Versions } from "./changeFixtures";
+import { describing, type Ui } from "../interact";
+import type { Preferences, Scenario } from "../scenario";
+import type { FixtureChange, FixtureCommit, FixtureGit, Versions } from "./changeFixtures";
 import type { FixtureError } from "./projectFiles";
 import { SAMPLE, sessionOf, snapshotState } from "./builders";
 import {
@@ -33,9 +33,12 @@ import { IMAGES } from "./viewerImages";
 
 const GROUP = "Project pane: Git";
 
+/** Long enough for the branch list, which the app reads again every ten seconds, to be read again. */
+const BRANCH_LIST_REREAD_MS = 10_500;
+
 const image = (data: string): FileContent => ({ size: Math.floor((data.length * 3) / 4), kind: "binary", media_type: "image/png", text: null, data });
 const commit = (blob: string) => ({ kind: "commit", commit: "4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39", branch: null, blob }) as const;
-const index = (blob: string) => ({ kind: "index", worktree: "wt-main", blob }) as const;
+const index = (blob: string, worktree = "wt-main") => ({ kind: "index", worktree, blob }) as const;
 const live = (version: string): ContentSource => ({ kind: "live", root_id: "fixture", version });
 
 /** The lines of the long file the expansion scenarios change: a run of unmodified lines before the
@@ -210,18 +213,25 @@ const MAIN_CHANGES: FixtureChange[] = [
   untrackedNotFile("search-client", "submodule", live("v9")),
 ];
 
-const SIDE_CHANGES: FixtureChange[] = [textChange("unstaged", "README.md", index("aa11bb2"), live("v6"), README_EDIT)];
+const SIDE_CHANGES: FixtureChange[] = [textChange("unstaged", "README.md", index("aa11bb2", "wt-side"), live("v6"), README_EDIT)];
 
-/** A repository `git init` just made: no commit, so no branch and nothing to compare, and nothing
- * changed in its worktree. */
+/** A repository `git init` just made, a file staged and another not yet added: its worktree is on
+ * `main`, which has no commit yet, so the branch list is empty and the staged file is compared with
+ * the empty tree. */
 const FRESH_GIT: FixtureGit = {
-  worktrees: [{ id: "wt-fresh", root: "/Users/dev/code/search-api", main: true, head: null, branch: null, scope_present: true }],
-  changes: { "wt-fresh": [] },
+  worktrees: [{ id: "wt-fresh", root: "/Users/dev/code/search-api", main: true, head: null, branch: "main", scope_present: true }],
+  changes: {
+    "wt-fresh": [
+      addition("staged", "README.md", index("e5f6a7b", "wt-fresh"), "# Search API\n"),
+      untracked("src/index.ts", live("v1"), "export const buildIndex = () => new Map();\n"),
+    ],
+  },
   branches: [],
 };
 
 const MAIN_TIP = "4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39";
 const FEATURE_TIP = "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807";
+const CHORE_TIP = "6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c";
 /** The tip of a branch that shares no commit with the others, as a `gh-pages` branch made from an empty tree. */
 const ORPHAN_TIP = "3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b";
 const LONG_BRANCH = "feature/rework-the-ranking-pipeline-so-that-boosts-are-applied-after-deduplication";
@@ -242,9 +252,10 @@ const BRANCHES: BranchInfo[] = [
   },
   {
     name: "chore/update-dependencies",
-    commit: "7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807e8d9",
-    // A live session that is not the selected one: the plain ring. The title recorded when it became
-    // responsible has been superseded by the session's own, which is the one the badge shows.
+    commit: CHORE_TIP,
+    // A live session that is not the selected one in most scenarios: the plain ring. The title
+    // recorded when it became responsible has been superseded by the session's own, which is the
+    // one the badge shows. No worktree has the branch checked out.
     origin: { responsible_session: "s-web-2", responsible_title: "Bump the packages", responsible_since: 1_758_000_000_000 },
   },
   { name: "main", commit: MAIN_TIP },
@@ -252,24 +263,157 @@ const BRANCHES: BranchInfo[] = [
 ];
 
 const at = (commit: string) => (blob: string) => ({ kind: "commit", commit, branch: null, blob }) as const;
+
+/** The commits of `feature/ranking-experiments` since it forked from `main`, newest first. The tip
+ * is a merge: its first parent is `boost`, and it took in `root`, the commit of an unrelated
+ * history the ranking notes were imported from, which has no parent of its own. */
+const RANKING = {
+  merge: FEATURE_TIP,
+  boost: "a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8",
+  root: "5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a817060",
+  cache: "8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a29180706",
+  cleanup: "6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8170",
+};
+const NOTES_BODY = "# Ranking notes\nImported from the archived repository.\n";
+
 const onMain = at(MAIN_TIP);
 const onFeature = at(FEATURE_TIP);
 
-/** What `feature/ranking-experiments` changed since it forked from `main` (at `main`'s tip, the
- * fork `forks` falls back to): the comparison a session's branch fills the Compare view with. */
+/** What `feature/ranking-experiments` changed since it forked from `main`, the commits' changes
+ * together: the Committed section of its Changes view. */
 const FEATURE_COMPARISON: FixtureChange[] = [
   textChange("committed", "src/ranking.ts", onMain("3c4d5e6"), onFeature("7f8a9b0"), RANKING_EDIT),
   renamedTo("committed", "src/conf.ts", "src/config.ts", onMain("0f1e2d3"), onFeature("4c5b6a7"), CONF_RENAME),
   fromOutsideTheProject("committed", "shared/search-index.ts", "src/index.ts", onFeature("2e3d4c5"), INDEX_BODY),
   expandable("committed", "src/pipeline.ts", onMain(PIPELINE_IDS.old), onFeature(PIPELINE_IDS.new), PIPELINE),
   addition("committed", "src/cache.ts", onFeature("5a6b7c8"), CACHE_BODY),
+  addition("committed", "docs/ranking-notes.md", onFeature("9c0d1e2"), NOTES_BODY),
   deletion("committed", "docs/old-notes.md", onMain("7c6b5a4"), DELETED_NOTES),
   binaryChange("committed", "docs/logo.png", onMain("6a5b4c3"), onFeature("8b7c6d5"), LOGO_BODIES),
   typeChange("committed", "current", onMain("0d1c2b3"), onFeature("8d2f1a0"), CURRENT_AS_FILE, "releases/2.4"),
 ];
 
+const rankingCommits = (): FixtureCommit[] => {
+  const merge = at(RANKING.merge);
+  const boost = at(RANKING.boost);
+  const cache = at(RANKING.cache);
+  const root = at(RANKING.root);
+  const cleanup = at(RANKING.cleanup);
+  // The oldest commit's parent is the fork itself, the tip of `main`.
+  const before = MAIN_TIP;
+  return [
+    {
+      commit: RANKING.merge,
+      parent: RANKING.boost,
+      merged: RANKING.root,
+      subject: "Merge the ranking notes from the archived repository",
+      changes: [addition("committed", "docs/ranking-notes.md", merge("9c0d1e2"), NOTES_BODY)],
+    },
+    {
+      commit: RANKING.boost,
+      parent: RANKING.cache,
+      subject: "Apply boosts after deduplication",
+      changes: [
+        textChange("committed", "src/ranking.ts", cache("3c4d5e6"), boost("7f8a9b0"), RANKING_EDIT),
+        expandable("committed", "src/pipeline.ts", cache(PIPELINE_IDS.old), boost(PIPELINE_IDS.new), PIPELINE),
+      ],
+    },
+    {
+      commit: RANKING.root,
+      parent: null,
+      subject: "Import the ranking notes from the archived repository",
+      changes: [addition("committed", "docs/ranking-notes.md", root("9c0d1e2"), NOTES_BODY)],
+    },
+    {
+      commit: RANKING.cache,
+      parent: RANKING.cleanup,
+      subject: "Cache query results",
+      changes: [
+        addition("committed", "src/cache.ts", cache("5a6b7c8"), CACHE_BODY),
+        fromOutsideTheProject("committed", "shared/search-index.ts", "src/index.ts", cache("2e3d4c5"), INDEX_BODY),
+      ],
+    },
+    {
+      commit: RANKING.cleanup,
+      parent: before,
+      subject: "Move the loader to config.ts and clear out the old files",
+      changes: [
+        renamedTo("committed", "src/conf.ts", "src/config.ts", at(before)("0f1e2d3"), cleanup("4c5b6a7"), CONF_RENAME),
+        deletion("committed", "docs/old-notes.md", at(before)("7c6b5a4"), DELETED_NOTES),
+        binaryChange("committed", "docs/logo.png", at(before)("6a5b4c3"), cleanup("8b7c6d5"), LOGO_BODIES),
+        typeChange("committed", "current", at(before)("0d1c2b3"), cleanup("8d2f1a0"), CURRENT_AS_FILE, "releases/2.4"),
+      ],
+    },
+  ];
+};
+
+/** What `chore/update-dependencies` changed since it forked from `main`, which has moved on since
+ * (`CHORE_FORK` is older than main's tip): two commits of its own. */
+const CHORE_FORK = "2d1c0b9a8f7e6d5c4b3a291807e8d9f0a1b2c3d4";
+const CHORE_FIRST = "3e2d1c0b9a8f7e6d5c4b3a291807e8d9f0a1b2c3";
+
+const PACKAGE_BUMP: Versions = {
+  old: '{\n  "name": "search-api",\n  "devDependencies": {\n    "vitest": "^2.0.0"\n  }\n}\n',
+  new: '{\n  "name": "search-api",\n  "devDependencies": {\n    "vitest": "^3.1.0"\n  }\n}\n',
+  patch: [
+    "diff --git a/package.json b/package.json",
+    "index 1d3f5a7..2e4a6b8 100644",
+    "--- a/package.json",
+    "+++ b/package.json",
+    "@@ -1,6 +1,6 @@",
+    " {",
+    '   "name": "search-api",',
+    '   "devDependencies": {',
+    '-    "vitest": "^2.0.0"',
+    '+    "vitest": "^3.1.0"',
+    "   }",
+    " }",
+    "",
+  ].join("\n"),
+};
+
+const TSCONFIG_TARGET: Versions = {
+  old: '{\n  "compilerOptions": {\n    "target": "ES2020",\n    "strict": true\n  }\n}\n',
+  new: '{\n  "compilerOptions": {\n    "target": "ES2022",\n    "strict": true\n  }\n}\n',
+  patch: [
+    "diff --git a/tsconfig.json b/tsconfig.json",
+    "index 3f5b7c9..4a6c8d0 100644",
+    "--- a/tsconfig.json",
+    "+++ b/tsconfig.json",
+    "@@ -1,6 +1,6 @@",
+    " {",
+    '   "compilerOptions": {',
+    '-    "target": "ES2020",',
+    '+    "target": "ES2022",',
+    '     "strict": true',
+    "   }",
+    " }",
+    "",
+  ].join("\n"),
+};
+
+const CHORE_COMPARISON: FixtureChange[] = [
+  textChange("committed", "package.json", at(CHORE_FORK)("1d3f5a7"), at(CHORE_TIP)("2e4a6b8"), PACKAGE_BUMP),
+  textChange("committed", "tsconfig.json", at(CHORE_FORK)("3f5b7c9"), at(CHORE_TIP)("4a6c8d0"), TSCONFIG_TARGET),
+];
+
+const CHORE_COMMITS: FixtureCommit[] = [
+  {
+    commit: CHORE_TIP,
+    parent: CHORE_FIRST,
+    subject: "Bump the test runner",
+    changes: [textChange("committed", "package.json", at(CHORE_FIRST)("1d3f5a7"), at(CHORE_TIP)("2e4a6b8"), PACKAGE_BUMP)],
+  },
+  {
+    commit: CHORE_FIRST,
+    parent: CHORE_FORK,
+    subject: "Raise the TypeScript target",
+    changes: [textChange("committed", "tsconfig.json", at(CHORE_FORK)("3f5b7c9"), at(CHORE_FIRST)("4a6c8d0"), TSCONFIG_TARGET)],
+  },
+];
+
 /** The sample repository's branches and a dozen more, past what a selector's list shows without
- * scrolling (ten rows of its height). None starts with `main`, which `branchOption` finds by prefix. */
+ * scrolling (ten rows of its height). */
 const CROWDED_BRANCHES: BranchInfo[] = [
   ...BRANCHES,
   ...[
@@ -294,62 +438,121 @@ const WORKTREES: WorktreeInfo[] = [
   { id: "wt-detached", root: "/Users/dev/.worktrees/search-api/review", main: false, head: "0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d", branch: null, scope_present: false },
 ];
 
-/** The repository every gallery project's Git mode shows unless its scenario gives another. */
+/** The repository every gallery project's Git mode shows unless its scenario gives another: the
+ * project's folder is the main working copy, on `main`; `feature/ranking-experiments` is checked
+ * out in a side worktree, and `chore/update-dependencies` in none. */
 export const SAMPLE_GIT: FixtureGit = {
   worktrees: WORKTREES,
   changes: { "wt-main": MAIN_CHANGES, "wt-side": SIDE_CHANGES, "wt-detached": [] },
   branches: BRANCHES,
   comparisons: {
     "main..feature/ranking-experiments": FEATURE_COMPARISON,
-    // Two branches at different commits whose difference lies wholly outside the project's folder.
-    "release/2.4..feature/ranking-experiments": [],
-    // `chore/update-dependencies` has commits of its own past the fork, which are not in the list.
-    "chore/update-dependencies..feature/ranking-experiments": FEATURE_COMPARISON,
+    "main..chore/update-dependencies": CHORE_COMPARISON,
   },
-  forks: { "chore/update-dependencies..feature/ranking-experiments": MAIN_TIP },
+  commits: {
+    "main..feature/ranking-experiments": { commits: rankingCommits() },
+    "main..chore/update-dependencies": { commits: CHORE_COMMITS },
+  },
+  forks: { "main..chore/update-dependencies": CHORE_FORK },
 };
 
-const { console: console_, web, api, sessions } = SAMPLE;
-/** The session responsible for `feature/ranking-experiments`, checked out in the
- * side worktree. The other Git scenarios select `sessions[1]`, which is responsible for no branch,
- * so that the selectors start at their defaults. */
+/** How many commits the daemon lists for a branch at most. */
+const COMMIT_LIST_LIMIT = 100;
+
+/** `feature/ranking-experiments` as a long-lived branch: a hundred commits, each changing something
+ * in this folder, listed newest first and cut there, so the commit before the oldest one listed (its
+ * parent, left out) is where the list ends and the fork lies further back still. */
+function longHistory(): { commits: FixtureCommit[]; comparison: FixtureChange[] } {
+  const verbs = ["Tune", "Split", "Trim", "Rename", "Document", "Harden", "Simplify", "Batch", "Cache", "Log"];
+  const nouns = ["scoring", "tokenizer", "stemmer", "synonyms", "paging", "snippets", "filters", "facets", "boosts", "ranking"];
+  const hex = (n: number) => (Math.imul(n + 7, 2_654_435_761) >>> 0).toString(16).padStart(8, "0");
+  const id = (n: number) => [0, 101, 202, 303, 404].map((offset) => hex(n + offset)).join("");
+  const blob = (n: number) => (0x1000000 + n * 2_654_435).toString(16).slice(-7).padStart(7, "0");
+  const comparison: FixtureChange[] = [];
+  const commits = Array.from({ length: COMMIT_LIST_LIMIT }, (_, n): FixtureCommit => {
+    const commit = n === 0 ? FEATURE_TIP : id(n);
+    const files = [`src/rules/rule-${n}.ts`, ...(n % 4 === 0 ? [`docs/rules/rule-${n}.md`] : [])];
+    const made = (side: ReturnType<typeof at>) => files.map((path, i) => {
+      const body = path.endsWith(".ts") ? `export const rule${n} = ${n};\n` : `# Rule ${n}\n`;
+      return addition("committed", path, side(blob(n * 2 + i)), body);
+    });
+    comparison.push(...made(onFeature));
+    return {
+      commit,
+      parent: n === COMMIT_LIST_LIMIT - 1 ? CUT_PARENT : id(n + 1),
+      // A hundred different subjects: the verb follows the commit's last digit, the noun both digits.
+      subject: `${verbs[n % 10]} the ${nouns[(Math.floor(n / 10) + 3 * (n % 10)) % 10]}`,
+      changes: made(at(commit)),
+    };
+  });
+  return { commits, comparison };
+}
+/** The commit before the oldest one `longHistory` lists, which the list leaves out. */
+const CUT_PARENT = "7c1e".padEnd(40, "5");
+
+/** The side worktree's branch has made more commits since it forked than the daemon lists, so the
+ * newest hundred are and the list says the others are not. */
+export const LONG_HISTORY_GIT: FixtureGit = (() => {
+  const { commits, comparison } = longHistory();
+  return {
+    ...SAMPLE_GIT,
+    comparisons: { ...SAMPLE_GIT.comparisons, "main..feature/ranking-experiments": comparison },
+    commits: { ...SAMPLE_GIT.commits, "main..feature/ranking-experiments": { commits, cut: true } },
+  };
+})();
+
+/** The project's folder is a linked worktree on a branch while the main working copy is detached,
+ * so the branch has nothing to be compared with. */
+const NO_BASE_GIT: FixtureGit = { ...SAMPLE_GIT, worktrees: [WORKTREES[1], { ...WORKTREES[0], branch: null }, WORKTREES[2]] };
+
+/** The project's own worktree is detached, so no branch is chosen. */
+const DETACHED_GIT: FixtureGit = { ...SAMPLE_GIT, worktrees: [{ ...WORKTREES[0], branch: null }, WORKTREES[1], WORKTREES[2]] };
+
+/** Every branch of the repository deleted while its only worktree is detached: nothing is checked
+ * out and there is no branch to choose. */
+const BRANCHLESS_GIT: FixtureGit = { worktrees: [{ ...WORKTREES[0], branch: null }], changes: { "wt-main": [] }, branches: [] };
+
+/** The side worktree has no copy of the project's folder, as a sparse checkout leaves it. */
+const SPARSE_GIT: FixtureGit = {
+  ...SAMPLE_GIT,
+  worktrees: [WORKTREES[0], { ...WORKTREES[1], scope_present: false }, WORKTREES[2]],
+  changes: { ...SAMPLE_GIT.changes, "wt-side": [] },
+};
+
+/** The side worktree has `gh-pages` checked out, which shares no commit with `main`. */
+const orphaned = (shallow: boolean): FixtureGit => ({
+  ...SAMPLE_GIT,
+  worktrees: [WORKTREES[0], { ...WORKTREES[1], head: ORPHAN_TIP, branch: "gh-pages" }, WORKTREES[2]],
+  branches: BRANCHES.map((branch) => (branch.name === "feature/ranking-experiments" ? { ...branch, name: "gh-pages", commit: ORPHAN_TIP } : branch)),
+  comparisons: {},
+  commits: {},
+  forks: { "main..gh-pages": null },
+  shallow,
+});
+
+const { console: console_, web, sessions } = SAMPLE;
+/** The session responsible for `feature/ranking-experiments`, checked out in the side worktree. The
+ * other Git scenarios select `sessions[1]`, which is responsible for no branch, so that the selector
+ * starts at the branch the project's folder has checked out. */
 const rankingSession = sessionOf("s-ranking", console_.id, web.id, "Tune the ranking weights", "idle");
-const state = snapshotState({ consoles: [console_], projects: [web, api], sessions: [...sessions, rankingSession] });
-const openGitFor = (session: { title: string }, view: "worktree" | "compare" = "worktree") => [
+/** The session responsible for `chore/update-dependencies`, which no worktree has checked out. */
+const dependenciesSession = sessions[2];
+const state = snapshotState({ consoles: [console_], projects: [web, SAMPLE.api], sessions: [...sessions, rankingSession] });
+
+/** The Git mode is where the project's browser opens, optionally with what is committed grouped by
+ * commit, as a user's own choice would leave it. */
+const gitMode = (options: { byCommit?: boolean; layout?: "tree" } = {}): Preferences => ({
+  projectBrowsers: { [web.id]: { mode: "git", ...(options.byCommit && { byCommit: true }) } },
+  ...(options.layout && { changeLayout: options.layout }),
+});
+const preferences = gitMode();
+
+/** Selects a session of the project, whose browser then shows the Changes tab. */
+const selecting = (session: { title: string }) => [
   (ui: Ui) => ui.press(ui.session(session.title)),
-  (ui: Ui) => ui.wait(400),
-  (ui: Ui) => ui.press(ui.t(view === "compare" ? "git.view.compare" : "git.view.worktree")),
-  (ui: Ui) => ui.wait(400),
-];
-const openGit = openGitFor(sessions[1]);
-const openCompare = openGitFor(sessions[1], "compare");
-/** Matches a branch's option in a selector: its name followed by the 7 characters of its short
- * commit id. */
-const branchOption = (name: string): Matcher => describing(`branchOption(${name})`, (n) => n.startsWith(name) && n.length === name.length + 7);
-
-/** Opens the Compare view with `main` as From and the To selector open. */
-const openToSelector = [
-  ...openCompare,
-  (ui: Ui) => ui.wait(300),
-  (ui: Ui) => ui.press(ui.t("git.compare.choose")),
-  (ui: Ui) => ui.press(branchOption("main")),
-  (ui: Ui) => ui.wait(300),
-  (ui: Ui) => ui.press(ui.t("git.compare.choose")),
-  (ui: Ui) => ui.wait(400),
-];
-
-/** Shows the comparison of branch `left` with branch `right`, choosing each in its selector: From
- * is the first one still to choose, then To. */
-const compare = (left: string, right: string) => [
-  ...openCompare,
-  (ui: Ui) => ui.wait(300),
-  (ui: Ui) => ui.press(ui.t("git.compare.choose")),
-  (ui: Ui) => ui.press(branchOption(left)),
-  (ui: Ui) => ui.wait(300),
-  (ui: Ui) => ui.press(ui.t("git.compare.choose")),
-  (ui: Ui) => ui.press(branchOption(right)),
   (ui: Ui) => ui.wait(600),
 ];
+const openGit = selecting(sessions[1]);
 
 /** Successful review targets do not carry hidden conflicts or mocked failures in their navigation. */
 function normalRepository(repository: FixtureGit): FixtureGit {
@@ -358,221 +561,167 @@ function normalRepository(repository: FixtureGit): FixtureGit {
     ...repository,
     changes: Object.fromEntries(Object.entries(repository.changes).map(([id, changes]) => [id, Array.isArray(changes) ? normal(changes) : changes])),
     comparisons: repository.comparisons && Object.fromEntries(Object.entries(repository.comparisons).map(([id, changes]) => [id, normal(changes)])),
+    commits: repository.commits && Object.fromEntries(Object.entries(repository.commits).map(([id, list]) => [id, "commits" in list ? { ...list, commits: list.commits.map((commit) => ({ ...commit, changes: normal(commit.changes) })) } : list])),
   };
 }
 
+/** The row of the commit whose subject is `subject` in the Git mode's change list. */
+const commitRow = (subject: string) => describing(`commitRow(${subject})`, (name) => name.includes(subject));
+
+const failedRead: FixtureError = { code: "git_failed", params: { detail: "fatal: unable to read the index" }, message: "git failed: fatal: unable to read the index" };
+
 const reviewScenarios: Scenario[] = [
-  {
-    id: "git-changes-conflicts", group: GROUP, category: "exceptional",
-    title: "Conflicted changes and read failures",
-    description: "Conflicted, staged, unstaged and untracked changes share the list. package.json is selected in Conflicted; open it for conflict markers. This repository deliberately includes read and expansion failures.",
-    state, git: SAMPLE_GIT,
-    steps: [...openGit, (ui) => ui.press(ui.changeRow("package.json", "conflicted")), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
-  },
   {
     id: "git-changes",
     group: GROUP,
     category: "normal",
-    title: "A worktree's uncommitted changes",
-    description: "Staged, unstaged and untracked changes share the list, with server.ts selected and its rounded highlight spaced like Files rows. Collapse a section to watch the following rows slide into place, and right-click a row for Open, Show in file manager and Copy path in the selected worktree. Choose Docked above the preview to inspect the 320px project pane at the 1168px minimum window width: tabs scroll horizontally when needed.",
+    title: "The project folder's branch",
+    description: "The branch selector starts on main, the branch checked out where the project's folder is, and the line above the list says it is the main working copy's own, so only its uncommitted changes are listed. Staged, unstaged and untracked changes share the list, with server.ts selected and its rounded highlight spaced like Files rows. Collapse a section to watch the following rows slide into place, and right-click a row for Open, Show in file manager and Copy path. The header reads the project name, the Files and Changes tabs, then the icon buttons. Choose Docked above the preview to inspect the 320px project pane at the 1168px minimum window width: the name shrinks to a faded stub of about 27px so that the tabs stay whole and the icon buttons stay in view.",
     state,
+    preferences,
     steps: [...openGit, (ui) => ui.press(ui.changeRow("server.ts", "modified")), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
+  },
+  {
+    id: "git-changes-conflicts",
+    group: GROUP,
+    category: "exceptional",
+    title: "Conflicted changes and read failures",
+    description: "Conflicted, staged, unstaged and untracked changes share the list. package.json is selected in Conflicted; open it for conflict markers. This repository deliberately includes read and expansion failures.",
+    state,
+    preferences,
+    git: SAMPLE_GIT,
+    steps: [...openGit, (ui) => ui.press(ui.changeRow("package.json", "conflicted")), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
+  },
+  {
+    id: "git-session-branch",
+    group: GROUP,
+    category: "normal",
+    title: "The selected session's branch",
+    description:
+      "The selected session is responsible for feature/ranking-experiments, which the side worktree has checked out, so the selector starts on it. Above the list: the worktree its uncommitted change (README.md) is read from, and the branch it forked from with both commits. Committed lists everything it changed since the fork. Right-clicking a committed row offers Copy path only, because that version has no live file to open or reveal.",
+    state,
+    preferences,
+    steps: selecting(rankingSession),
+  },
+  {
+    id: "git-changes-by-commit",
+    group: GROUP,
+    category: "normal",
+    title: "A branch's commits listed one by one",
+    description:
+      "Group by commit is on (the header toggle reads Show commits together): the Committed band holds one row per commit, newest first, each with its chevron, short hash, subject and change count, and its changes one level in, their content starting a chevron's width past the hash. The whole history is listed, so nothing is said under the list. Open a change to see it against its commit's parent.",
+    state,
+    preferences: gitMode({ byCommit: true }),
+    steps: selecting(rankingSession),
+  },
+  {
+    id: "git-changes-by-commit-tree",
+    group: GROUP,
+    category: "normal",
+    title: "Commits grouped by folder",
+    description:
+      "Group by commit and Group by folder are both on: each commit holds its own folders, which start open. Cache query results is folded to its row, which still counts its two changes.",
+    state,
+    preferences: gitMode({ byCommit: true, layout: "tree" }),
+    steps: [...selecting(rankingSession), (ui) => ui.press(commitRow("Cache query results")), (ui) => ui.wait(300)],
+  },
+  {
+    id: "git-changes-by-commit-filter",
+    group: GROUP,
+    category: "normal",
+    title: "Commits narrowed by the filter",
+    description:
+      "The filter keeps the changes whose file name contains ranking. A commit with none left has no row, and the Committed count and each commit's count follow what is shown.",
+    state,
+    preferences: gitMode({ byCommit: true }),
+    steps: [...selecting(rankingSession), (ui) => ui.press(ui.t("git.filter.show")), (ui) => ui.type("ranking")],
+  },
+  {
+    id: "git-changes-commits-capped",
+    group: GROUP,
+    category: "normal",
+    title: "A branch with more commits than are listed",
+    description:
+      "Group by commit is on over a long history: the newest hundred commits each have a row, and a note under the list says only that many are listed.",
+    state,
+    preferences: gitMode({ byCommit: true }),
+    git: LONG_HISTORY_GIT,
+    steps: selecting(rankingSession),
+  },
+  {
+    id: "git-session-unchecked",
+    group: GROUP,
+    category: "normal",
+    title: "A branch checked out nowhere",
+    description:
+      "The selected session is responsible for chore/update-dependencies, which no worktree has checked out: the line above the list says so, and only its committed changes are listed. Main has moved on since the fork, so the fork commit is not main's tip.",
+    state,
+    preferences,
+    steps: selecting(dependenciesSession),
+  },
+  {
+    id: "git-changes-scope-missing",
+    group: GROUP,
+    category: "normal",
+    title: "A branch whose worktree lacks the project's folder",
+    description: "The side worktree has feature/ranking-experiments checked out without the project's folder: a line above the list says so, after the worktree it would be read from, and the committed changes are still listed.",
+    state,
+    preferences,
+    git: SPARSE_GIT,
+    steps: selecting(rankingSession),
+  },
+  {
+    id: "git-changes-listing-commits",
+    group: GROUP,
+    category: "normal",
+    title: "Listing a branch's commits",
+    description: "With Group by commit on, the commits are still being listed: a line above the list says so beneath the line naming the fork, while the uncommitted change is already listed.",
+    state,
+    preferences: gitMode({ byCommit: true }),
+    git: { ...SAMPLE_GIT, commits: { ...SAMPLE_GIT.commits, "main..feature/ranking-experiments": { pending: true } } },
+    steps: selecting(rankingSession),
+  },
+  {
+    id: "git-changes-comparing",
+    group: GROUP,
+    category: "normal",
+    title: "Comparing with the base branch",
+    description: "The comparison is still being made: the line above the list says what it is being compared with, while the uncommitted change from the side worktree is already listed.",
+    state,
+    preferences,
+    git: { ...SAMPLE_GIT, comparing: "pending" },
+    steps: selecting(rankingSession),
   },
   {
     id: "git-changes-sticky",
     group: GROUP,
     category: "normal",
     title: "A section heading pinned above flat changes",
-    description: "The list starts partway through Staged: its heading stays against the worktree selector's bottom border while rows scroll beneath it. The top fade begins below the pinned band; scrolling farther lets the next section replace it.",
+    description: "The list starts partway through Staged: its heading stays against the top of the list while rows scroll beneath it. The top fade begins below the pinned band; scrolling farther lets the next section replace it.",
     state,
-    steps: [...openGit, (ui) => ui.scrollCollection(ui.t("git.list.label"), 180)],
+    preferences,
+    steps: [...openGit, (ui) => ui.scrollCollection(ui.t("git.changes.list.label"), 180)],
   },
   {
     id: "git-changes-tree-sticky",
     group: GROUP,
     category: "normal",
     title: "A section heading pinned above grouped changes",
-    description: "As in the flat list, the folder-grouped list starts partway through Staged and its heading stays against the worktree selector's bottom border while directories and files scroll beneath it; scrolling farther lets the next section replace it.",
+    description: "As in the flat list, the folder-grouped list starts partway through Staged and its heading stays against the top of the list while directories and files scroll beneath it; scrolling farther lets the next section replace it.",
     state,
-    preferences: { changeLayout: "tree" },
-    steps: [...openGit, (ui) => ui.scrollCollection(ui.t("git.list.label"), 180)],
+    preferences: gitMode({ layout: "tree" }),
+    steps: [...openGit, (ui) => ui.scrollCollection(ui.t("git.changes.list.label"), 180)],
   },
   {
     id: "git-changes-cut-short",
     group: GROUP,
     category: "exceptional",
     title: "A change list with notes above and below it",
-    description: "The worktree has no folder for the project, which a note says under the Worktree selector, and the daemon stopped listing early, which a note says under the list.",
+    description: "The side worktree has no folder for the project, which a note says above the list, and the daemon stopped listing early, which a note says under it.",
     state,
-    git: normalRepository({ ...SAMPLE_GIT, worktrees: [{ ...WORKTREES[0]!, scope_present: false }, ...WORKTREES.slice(1)], cutShort: true }),
-    steps: openGit,
-  },
-  {
-    id: "git-worktree-gone",
-    group: GROUP,
-    category: "exceptional",
-    title: "A worktree that has gone",
-    state,
-    git: {
-      ...SAMPLE_GIT,
-      changes: {
-        ...SAMPLE_GIT.changes,
-        "wt-main": { code: "worktree_unavailable", params: { worktree: "wt-main" }, message: "worktree wt-main is not a worktree of this repository any more" },
-      },
-    },
-    steps: openGit,
-  },
-  {
-    id: "git-clean",
-    group: GROUP,
-    category: "normal",
-    title: "A worktree with no uncommitted changes",
-    state,
-    git: { ...SAMPLE_GIT, changes: { ...SAMPLE_GIT.changes, "wt-main": [] } },
-    steps: openGit,
-  },
-  {
-    id: "git-not-a-repository",
-    group: GROUP,
-    category: "normal",
-    title: "A project in no repository",
-    state,
-    git: null,
-    steps: openGit,
-  },
-  {
-    id: "git-unreadable",
-    group: GROUP,
-    category: "exceptional",
-    title: "A repository Git cannot read",
-    description: "The standalone failure has a danger alert with a heading and Git's own diagnostic as selectable code. Narrow shows the same failure after opening the project pane drawer.",
-    state,
-    git: { worktrees: [], changes: {}, gitError: "fatal: detected dubious ownership in repository at '/Users/dev/code/search-api'" },
-    steps: openGit,
-  },
-  {
-    id: "git-compare-many-branches",
-    group: GROUP,
-    category: "normal",
-    title: "More branches than the selector shows",
-    description:
-      "The To selector open over a repository with more branches than its list holds: the list scrolls and its rows fade at the bottom edge, where more are waiting, while the popover around it keeps its edges. The Compare tab opens branch selectors that show every branch with no fade.",
-    state,
-    git: { ...SAMPLE_GIT, branches: CROWDED_BRANCHES },
-    steps: openToSelector,
-  },
-  {
-    id: "git-compare-no-branches",
-    group: GROUP,
-    category: "normal",
-    title: "Comparing in a repository with no branches",
-    description: "A repository with no commit yet has no branch to choose, so the Compare view says so instead of asking for two.",
-    state,
-    git: FRESH_GIT,
-    steps: [
-      ...openCompare,
-      (ui: Ui) => ui.wait(400),
-    ],
-  },
-  {
-    id: "git-compare-moved",
-    group: GROUP,
-    category: "normal",
-    title: "A compared branch that has moved since",
-    description: "The branch list read after the comparison says feature/ranking-experiments is at another commit now; the comparison stays on the commits it was made at until Refresh.",
-    state,
-    git: { ...SAMPLE_GIT, moved: { "feature/ranking-experiments": "1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e" } },
-    steps: [
-      ...compare("main", "feature/ranking-experiments"),
-      (ui) => ui.wait(10_500),
-    ],
-  },
-  {
-    id: "git-compare-moved-and-deleted",
-    group: GROUP,
-    category: "normal",
-    title: "One compared branch moved and the other deleted",
-    description: "Two notices under the commits line: main has moved, and feature/ranking-experiments no longer exists. The moved notice does not advise Refresh, which could not compare the deleted branch. The list is also cut short, which a note under it says.",
-    state,
-    git: { ...SAMPLE_GIT, moved: { main: FEATURE_TIP }, gone: ["feature/ranking-experiments"], cutShort: true },
-    steps: [
-      ...compare("main", "feature/ranking-experiments"),
-      (ui) => ui.wait(10_500),
-    ],
-  },
-  {
-    id: "git-compare-gone",
-    group: GROUP,
-    category: "exceptional",
-    title: "A compared branch that no longer exists",
-    description: "The comparison failure has a danger alert with a heading and a separate Try again control. Open the project pane drawer when using Narrow.",
-    state,
-    git: { ...SAMPLE_GIT, missing: ["release/2.4"] },
-    steps: compare("main", "release/2.4"),
-  },
-  {
-    id: "git-compare-forked",
-    group: GROUP,
-    category: "normal",
-    title: "A comparison from a fork",
-    description: "From has commits of its own after the fork. The header names the fork commit, not From's tip, and the list holds only what To changed since the fork.",
-    state: state,
-    steps: compare("chore/update-dependencies", "feature/ranking-experiments"),
-  },
-  {
-    id: "git-compare-no-common-commit",
-    group: GROUP,
-    category: "exceptional",
-    title: "Branches with no commit in common",
-    description: "The comparison failure names both branches and says there is nothing to compare from.",
-    state,
-    git: { ...SAMPLE_GIT, branches: [...BRANCHES, { name: "gh-pages", commit: ORPHAN_TIP }], forks: { "main..gh-pages": null } },
-    steps: compare("main", "gh-pages"),
-  },
-  {
-    id: "git-compare-no-common-commit-shallow",
-    group: GROUP,
-    category: "exceptional",
-    title: "No common commit found in a shallow clone",
-    description: "The comparison failure words it as missing history of a shallow clone rather than unrelated branches.",
-    state,
-    git: { ...SAMPLE_GIT, branches: [...BRANCHES, { name: "gh-pages", commit: ORPHAN_TIP }], forks: { "main..gh-pages": null }, shallow: true },
-    steps: compare("main", "gh-pages"),
-  },
-  {
-    id: "git-compare-origins",
-    group: GROUP,
-    category: "normal",
-    title: "Responsible-session badges on branches",
-    state: state,
-    description: "Each branch row's ring names the session working on it: filled in the accent colour for the selected session, plain for another session, and named as no longer existing for a removed one. Hover a ring for its tooltip.",
-    steps: [
-      ...openGitFor(rankingSession, "compare"),
-      (ui: Ui) => ui.wait(300),
-      (ui: Ui) => ui.press("main"),
-      (ui: Ui) => ui.wait(400),
-    ],
-  },
-  {
-    id: "git-session-worktree",
-    group: GROUP,
-    category: "normal",
-    title: "The selected session's worktree",
-    state: state,
-    description: "The selected session is responsible for feature/ranking-experiments, which the side worktree has checked out: the Worktree selector is on that worktree and lists its changes, not the project folder's.",
-    steps: openGitFor(rankingSession),
-  },
-  {
-    id: "git-session-compare",
-    group: GROUP,
-    category: "normal",
-    title: "The selected session's branch compared from main",
-    state: state,
-    description: "From is the branch the main worktree has checked out and To the branch the selected session is responsible for: the list is what that branch changed since it forked from main. Right-clicking a comparison row offers Copy path only, because this historical view has no live file to open or reveal.",
-    steps: [
-      ...openGitFor(rankingSession, "compare"),
-      (ui: Ui) => ui.wait(600),
-    ],
+    preferences,
+    git: normalRepository({ ...SPARSE_GIT, cutShort: true }),
+    steps: selecting(rankingSession),
   },
   {
     id: "git-changes-tree",
@@ -580,8 +729,8 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "Changes grouped by folder",
     description: "Directories start expanded and config.ts is selected inside src, its highlight spaced like the flat list's while file labels follow the folder indentation.",
-    state: state,
-    preferences: { changeLayout: "tree" },
+    state,
+    preferences: gitMode({ layout: "tree" }),
     steps: [
       ...openGit,
       (ui) => ui.press(ui.changeRow("config.ts", "renamed")),
@@ -590,11 +739,187 @@ const reviewScenarios: Scenario[] = [
     ],
   },
   {
+    id: "git-clean",
+    group: GROUP,
+    category: "normal",
+    title: "A branch with no changes to show",
+    state,
+    preferences,
+    git: { ...SAMPLE_GIT, changes: { ...SAMPLE_GIT.changes, "wt-main": [] } },
+    steps: openGit,
+  },
+  {
+    id: "git-changes-no-base",
+    group: GROUP,
+    category: "normal",
+    title: "A main working copy on no branch",
+    description: "The project's folder is a linked worktree on feature/ranking-experiments, and the main working copy is detached: the line above the list says the branch's commits cannot be compared, and only its uncommitted change is listed.",
+    state,
+    preferences,
+    git: NO_BASE_GIT,
+    steps: openGit,
+  },
+  {
+    id: "git-changes-detached",
+    group: GROUP,
+    category: "normal",
+    title: "No branch chosen",
+    description: "The worktree holding the project's folder is detached, so no branch is chosen by default: the panel asks for one.",
+    state,
+    preferences,
+    git: DETACHED_GIT,
+    steps: openGit,
+  },
+  {
+    id: "git-not-a-repository",
+    group: GROUP,
+    category: "normal",
+    title: "A project in no repository",
+    state,
+    preferences,
+    git: null,
+    steps: openGit,
+  },
+  {
+    id: "git-compare-no-branches",
+    group: GROUP,
+    category: "normal",
+    title: "A repository with no branches",
+    description: "With no branch to choose, the selector is disabled and the panel says so.",
+    state,
+    preferences,
+    git: BRANCHLESS_GIT,
+    steps: openGit,
+  },
+  {
+    id: "git-changes-unborn",
+    group: GROUP,
+    category: "normal",
+    title: "A branch with no commit yet",
+    description:
+      "main is checked out where the project's folder is, but has no commit yet, so the branch list is empty: the first line above the list says there are no commits, the next that main is the main working copy's own branch, and the staged and untracked files are listed.",
+    state,
+    preferences,
+    git: FRESH_GIT,
+    steps: openGit,
+  },
+  {
+    id: "git-compare-many-branches",
+    group: GROUP,
+    category: "normal",
+    title: "More branches than the selector shows",
+    description:
+      "The Branch selector open over a repository with more branches than its list holds: the list scrolls and its rows fade at the bottom edge, where more are waiting, while the popover around it keeps its edges.",
+    state,
+    preferences,
+    git: { ...SAMPLE_GIT, branches: CROWDED_BRANCHES },
+    steps: [...openGit, (ui) => ui.press("main"), (ui) => ui.wait(400)],
+  },
+  {
+    id: "git-compare-origins",
+    group: GROUP,
+    category: "normal",
+    title: "Responsible-session badges on branches",
+    description: "Each branch row's ring names the session working on it: filled in the accent colour for the selected session, plain for another session, and named as no longer existing for a removed one. Hover a ring for its tooltip.",
+    state,
+    preferences,
+    steps: [...selecting(rankingSession), (ui) => ui.press("feature/ranking-experiments"), (ui) => ui.wait(400)],
+  },
+  {
+    id: "git-compare-deleted",
+    group: GROUP,
+    category: "normal",
+    title: "A branch deleted after it was compared",
+    description: "The selector names chore/update-dependencies as no longer existing and a notice under the lines says the comparison still uses the commits it was made at; its committed changes stay listed. The list is also cut short, which a note under it says.",
+    state,
+    preferences,
+    git: { ...SAMPLE_GIT, gone: ["chore/update-dependencies"], cutShort: true },
+    steps: [...selecting(dependenciesSession), (ui) => ui.wait(BRANCH_LIST_REREAD_MS)],
+  },
+  {
+    id: "git-compare-gone",
+    group: GROUP,
+    category: "exceptional",
+    title: "A chosen branch that no longer exists",
+    description: "The comparison failure takes the list's place, with a heading, the reason and a separate Try again control. Open the project pane drawer when using Narrow.",
+    state,
+    preferences,
+    git: { ...SAMPLE_GIT, missing: ["chore/update-dependencies"] },
+    steps: selecting(dependenciesSession),
+  },
+  {
+    id: "git-compare-no-common-commit",
+    group: GROUP,
+    category: "exceptional",
+    title: "A branch with no commit in common with main",
+    description: "gh-pages is checked out in the side worktree: its uncommitted change is listed, and a line above the list says the branches have no commit in common.",
+    state,
+    preferences,
+    git: orphaned(false),
+    steps: selecting(rankingSession),
+  },
+  {
+    id: "git-compare-no-common-commit-shallow",
+    group: GROUP,
+    category: "exceptional",
+    title: "No common commit found in a shallow clone",
+    description: "The line above the list words it as missing history of a shallow clone rather than unrelated branches.",
+    state,
+    preferences,
+    git: orphaned(true),
+    steps: selecting(rankingSession),
+  },
+  {
+    id: "git-changes-listing-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "The uncommitted changes could not be read",
+    description: "The side worktree's listing fails: a line above the list says why, and the committed changes are still listed.",
+    state,
+    preferences,
+    git: { ...SAMPLE_GIT, changes: { ...SAMPLE_GIT.changes, "wt-side": failedRead } },
+    steps: selecting(rankingSession),
+  },
+  {
+    id: "git-changes-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "No changes could be listed",
+    description: "The project folder's own worktree fails to list, with nothing else to show: the failure takes the list's place, with a heading, the reason and a separate Try again control.",
+    state,
+    preferences,
+    git: { ...SAMPLE_GIT, changes: { ...SAMPLE_GIT.changes, "wt-main": failedRead } },
+    steps: openGit,
+  },
+  {
+    id: "git-commits-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "The commits could not be listed",
+    description: "With Group by commit on, the commit listing fails: a line above the list says why, and the uncommitted change is still listed.",
+    state,
+    preferences: gitMode({ byCommit: true }),
+    git: { ...SAMPLE_GIT, commits: { ...SAMPLE_GIT.commits, "main..feature/ranking-experiments": { error: failedRead } } },
+    steps: selecting(rankingSession),
+  },
+  {
+    id: "git-unreadable",
+    group: GROUP,
+    category: "exceptional",
+    title: "A repository Git cannot read",
+    description: "The standalone failure has a danger alert with a heading and Git's own diagnostic as selectable code. Narrow shows the same failure after opening the project pane drawer.",
+    state,
+    preferences,
+    git: { worktrees: [], changes: {}, gitError: "fatal: detected dubious ownership in repository at '/Users/dev/code/search-api'" },
+    steps: openGit,
+  },
+  {
     id: "git-change-viewer",
     group: "File viewer",
     category: "normal",
     title: "Change viewer with collapsed lines",
-    state: state,
+    state,
+    preferences,
     description: "The staged tag and long expansion gaps accompany the diff; other change subjects remain available through navigation.",
     steps: [
       ...openGit,
@@ -603,23 +928,17 @@ const reviewScenarios: Scenario[] = [
     ],
   },
   {
-    id: "git-compare-same",
-    group: GROUP,
+    id: "git-commit-change-viewer",
+    group: "File viewer",
     category: "normal",
-    title: "Branches at the same commit",
-    state: state,
+    title: "A commit's change in the viewer",
+    description: "The subtitle names the commit and the parent the change is compared with. Next moves to the Import the ranking notes commit, which has no parent: its subtitle says so.",
+    state,
+    preferences: gitMode({ byCommit: true }),
     steps: [
-      ...compare("main", "release/2.4"),
-    ],
-  },
-  {
-    id: "git-compare-empty",
-    group: GROUP,
-    category: "normal",
-    title: "No changes inside the project",
-    state: state,
-    steps: [
-      ...compare("release/2.4", "feature/ranking-experiments"),
+      ...selecting(rankingSession),
+      (ui) => ui.press(ui.changeRow("ranking.ts", "modified")),
+      (ui) => ui.wait(800),
     ],
   },
   {
@@ -627,7 +946,8 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Filtered changes",
-    state: state,
+    state,
+    preferences,
     steps: [
       ...openGit,
       (ui) => ui.press(ui.t("git.filter.show")),
@@ -641,6 +961,7 @@ const reviewScenarios: Scenario[] = [
     title: "Changes with an empty filter field",
     description: "The focused, empty filter shows its placeholder above the unchanged list; moving focus away closes the empty field.",
     state,
+    preferences,
     steps: [
       ...openGit,
       (ui) => ui.press(ui.t("git.filter.show")),
@@ -651,7 +972,8 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "No matching changes",
-    state: state,
+    state,
+    preferences,
     steps: [
       ...openGit,
       (ui) => ui.press(ui.t("git.filter.show")),

@@ -2,7 +2,7 @@
 
 Octoboard records, for a local branch of a project's repository, its **responsible session**: the session working on
 it now (see "The responsible session" below). The project pane's Git mode marks the branches that have one, and
-follows in its selectors the branch the selected session most recently became responsible for (see "Following the
+follows in its branch selector the branch the selected session most recently became responsible for (see "Following the
 selected session" in `docs/product/project-pane-git-mode.md`). A branch gets a responsible session only when **a
 session's own git reported creating it**, and it moves only by an explicit handover; every other branch is unmarked.
 Nothing is inferred from timing, from which session was busy or from where a session works, so a responsible session
@@ -10,8 +10,8 @@ is never a guess, and a branch with none — most branches — is no failure.
 
 ## The responsible-session badge
 
-In the **Compare** view of the project pane's Git mode, each branch's row in the From and To lists carries a small
-ring when the branch has a responsible session — the **responsible-session badge** (see "The branch selectors" in
+In the project pane's Git mode, each branch's row in the branch selector's list carries a small ring when the branch
+has a responsible session — the **responsible-session badge** (see "The branch selector" in
 `docs/product/project-pane-git-mode.md`).
 
 - The name assistive technology announces for the badge, and its tooltip, are the same words: they say that session
@@ -34,7 +34,7 @@ ring when the branch has a responsible session — the **responsible-session bad
 - **A branch handed over** carries the badge of the session it was handed to from the move on.
 - Beyond that the badge carries nothing its name does not: its presence says a session is working on the branch, the
   name says which.
-- **A chosen branch carries no badge**: the mark is on the rows of the two lists only, never on a selector once a
+- **A chosen branch carries no badge**: the mark is on the rows of the list only, never on the selector once a
   branch is chosen.
 - A branch with no responsible session carries no mark of any kind, and nothing says why.
 
@@ -158,7 +158,7 @@ tree.
   a merged-and-deleted branch can no longer be traced. A branch deleted and created again under the same name is a new
   branch and does not inherit the old record.
 - **When records change.** A record is written when a session's report is taken. Whenever the Git mode lists the
-  branches, in either of its views, the records of the repository are brought up to date: the record of a branch that
+  branches, the records of the repository are brought up to date: the record of a branch that
   is gone is removed, one whose branch was deleted and made again is dropped, and a renamed branch's record moves to
   its new name. Nothing runs on a periodic timer.
 - **Records from an earlier version.** A database from an earlier version of Octoboard keeps only the records that

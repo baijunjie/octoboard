@@ -6,29 +6,33 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { TitledControl } from "../components/TitledControl";
 import { useT } from "../i18n/react";
 
-/** Every row, of the Files tree and of the Git mode's change list and tree, is one line of this
+/** Every row, of the Files tree and of the Git mode's changes tree, is one line of this
  * height, which is what lets the tree be virtualized and a row be scrolled into view from its
  * position alone. It includes `RowContent`'s `h-7` and the row's `my-0.5` margins. */
 export const ROW_HEIGHT = 32;
 
-/** A directory row keeps its expand control separate from its folder icon; a symlinked folder
- * retains its link marker in either expanded state. */
-export function DirectoryRow({ name, isExpanded, link = false, children }: { name: string; isExpanded: boolean; link?: boolean; children?: React.ReactNode }): React.ReactElement {
+/** The control that opens or closes a row's children, kept separate from the row's icon. */
+export function ExpandChevron({ isExpanded }: { isExpanded: boolean }): React.ReactElement {
   const t = useT();
   const toggleTitle = isExpanded ? t("browser.tree.collapse") : t("browser.tree.expand");
+  return (
+    <TitledControl title={toggleTitle}>
+      {/* React Aria appends the row's name through aria-labelledby. Its default translation
+          of Expand differs from the tooltip, so both use the app's catalog. */}
+      <Button slot="chevron" aria-label={toggleTitle} className="flex size-4 shrink-0 items-center justify-center text-app-muted outline-none">
+        {isExpanded
+          ? <ChevronDown aria-hidden="true" className="size-3.5" />
+          : <ChevronRight aria-hidden="true" className="size-3.5 rtl:-scale-x-100" />}
+      </Button>
+    </TitledControl>
+  );
+}
+
+/** A directory row; a symlinked folder retains its link marker in either expanded state. */
+export function DirectoryRow({ name, isExpanded, link = false, children }: { name: string; isExpanded: boolean; link?: boolean; children?: React.ReactNode }): React.ReactElement {
   const Icon = link ? FolderSymlink : isExpanded ? FolderOpen : Folder;
   return (
-    <RowContent chevron={
-      <TitledControl title={toggleTitle}>
-        {/* React Aria appends the row's name through aria-labelledby. Its default translation
-            of Expand differs from the tooltip, so both use the app's catalog. */}
-        <Button slot="chevron" aria-label={toggleTitle} className="flex size-4 shrink-0 items-center justify-center text-app-muted outline-none">
-          {isExpanded
-            ? <ChevronDown aria-hidden="true" className="size-3.5" />
-            : <ChevronRight aria-hidden="true" className="size-3.5 rtl:-scale-x-100" />}
-        </Button>
-      </TitledControl>
-    }>
+    <RowContent chevron={<ExpandChevron isExpanded={isExpanded} />}>
       <Icon aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
       <RowName name={name} />
       {children}
@@ -44,12 +48,18 @@ export const ROW_CLASS = [
   "data-[focus-visible]:ring-2 data-[focus-visible]:ring-app-focus data-[focus-visible]:ring-inset",
 ].join(" ");
 
-/** What a row lays out: indented by its level inside a `TreeItem`, or,
- * for a row of a flat list (`flat`), which has no level to read, inset by a fixed padding. A flat
- * row also sits a little looser, having no indent to carry part of the separation. */
+// A flat row below the first level adds a chevron slot and its gap (1.375rem) once, whatever its depth.
+const NESTED = "ps-[calc((var(--tree-item-level)-1)*0.875rem+var(--row-content-inset))]";
+const FLAT_NESTED = "ps-[calc((var(--tree-item-level)-1)*0.875rem+min(1,var(--tree-item-level)-1)*1.375rem+var(--row-content-inset))]";
+
+/** What a row lays out, inside a `TreeItem`: indented by its level, with the room of a chevron
+ * before its content, or, for a row of a flat list (`flat`), without that room: a flat row has no
+ * chevron to carry part of the separation, so it sits a little looser, and below the first level
+ * (under a commit) is indented by a chevron's width more, so its content starts clear of the
+ * parent's label, which the parent's own chevron pushes in. */
 export function RowContent({ children, flat = false, chevron }: { children: React.ReactNode; flat?: boolean; chevron?: React.ReactNode }): React.ReactElement {
   return (
-    <div className={`flex h-7 min-w-0 items-center ${flat ? "gap-2 px-(--row-content-inset)" : "gap-1.5 pe-(--row-content-inset) ps-[calc((var(--tree-item-level)-1)*0.875rem+var(--row-content-inset))]"}`}>
+    <div className={`flex h-7 min-w-0 items-center ${flat ? `gap-2 ${FLAT_NESTED}` : `gap-1.5 ${NESTED}`} pe-(--row-content-inset)`}>
       {!flat && <span className="flex size-4 shrink-0 items-center justify-center">{chevron}</span>}
       {children}
     </div>

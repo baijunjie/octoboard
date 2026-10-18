@@ -186,7 +186,7 @@ it("keeps spinning after two quick presses until the last refresh settles", asyn
   expect(spinning(icon())).toBe(false);
 });
 
-it("keeps each Git view's filter field independently open or closed", async () => {
+it("keeps the Changes tab's filter field open or closed apart from the Files tab's", async () => {
   await mount("git-filter", "git");
   await answer("get_project_source", source("git-filter"));
   await answer("list_project_changes", changes("git-filter"));
@@ -198,14 +198,24 @@ it("keeps each Git view's filter field independently open or closed", async () =
   expect(fields()).toHaveLength(1);
   expect(toggle("Hide the filter").getAttribute("aria-expanded")).toBe("true");
 
-  await act(async () => document.querySelector<HTMLElement>('[role="tab"][data-key="compare"]')!.click());
+  await act(async () => document.querySelector<HTMLElement>('[role="tab"][data-key="files"]')!.click());
   expect(fields()).toHaveLength(0);
-  await act(async () => toggle("Filter by file name").click());
-  expect(fields()).toHaveLength(1);
-  await act(async () => document.querySelector<HTMLElement>('[role="tab"][data-key="worktree"]')!.click());
+  await act(async () => document.querySelector<HTMLElement>('[role="tab"][data-key="changes"]')!.click());
   expect(fields()).toHaveLength(1);
   await act(async () => toggle("Hide the filter").click());
   expect(fields()).toHaveLength(0);
+});
+
+it("offers grouping by commit on the Changes tab alone, its name saying what pressing does", async () => {
+  await mount("git-by-commit", "git");
+  await answer("get_project_source", source("git-by-commit"));
+  const toggle = (label: string) => document.querySelector<HTMLElement>(`button[aria-label='${label}']`);
+  expect(toggle("Group by commit")?.getAttribute("aria-pressed")).toBe("false");
+  await act(async () => toggle("Group by commit")!.click());
+  expect(toggle("Show commits together")?.getAttribute("aria-pressed")).toBe("true");
+  await act(async () => document.querySelector<HTMLElement>('[role="tab"][data-key="files"]')!.click());
+  expect(toggle("Show commits together")).toBeNull();
+  expect(toggle("Group by commit")).toBeNull();
 });
 
 // A live region inserted already holding its text is not announced (WebKit, VoiceOver), so each
@@ -276,7 +286,6 @@ it("opens the Files filter, narrows rows, and clears it when hidden", async () =
     entries: ["alpha.md", "beta.ts"].map((name) => ({ name, kind: "file", size: 1, version: "v1", target: null })),
   } as Event);
   const button = (label: string) => document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
-  await act(async () => button("Show as flat list").click());
   await act(async () => button("Filter by file name").click());
   const input = document.querySelector<HTMLInputElement>('input[aria-label="File name contains"]')!;
   expect(document.activeElement).toBe(input);
@@ -288,13 +297,11 @@ it("opens the Files filter, narrows rows, and clears it when hidden", async () =
   expect(pending.find((request) => request.body.type === "search_project_files")?.body).toMatchObject({ query: "ALPHA", project: "files-filter" });
   await answer("search_project_files", { type: "project_file_matches", project: "files-filter", query: "ALPHA", paths: ["alpha.md", "nested/alpha.md"], complete: true });
   expect(document.querySelector('[data-key="path:nested/alpha.md"]')).not.toBeNull();
-  expect(document.querySelector('[data-key="path:nested/alpha.md"]')?.textContent).toContain("nested/alpha.md");
+  // Results are in their folders, as the tree is without a filter.
   expect(document.querySelector('[data-key="path:beta.ts"]')).toBeNull();
-  expect([...document.querySelectorAll('[role="row"][data-key]')].map((row) => row.getAttribute("data-key"))).toEqual(["path:nested/alpha.md", "path:alpha.md"]);
+  expect([...document.querySelectorAll('[role="row"][data-key]')].map((row) => row.getAttribute("data-key"))).toEqual(["path:nested", "path:nested/alpha.md", "path:alpha.md"]);
   await act(async () => button("Hide the filter").click());
   expect(document.querySelector('input[aria-label="File name contains"]')).toBeNull();
-  await wait(250);
-  await answer("search_project_files", { type: "project_file_matches", project: "files-filter", query: "", paths: ["alpha.md", "beta.ts"], complete: true });
   expect(document.querySelector('[data-key="path:beta.ts"]')).not.toBeNull();
   expect(document.activeElement).toBe(button("Filter by file name"));
 });
@@ -346,7 +353,7 @@ it("lists every ancestor of an unopened search match so its viewer can notice fi
   expect(pending.some((request) => request.body.type === "read_project_file")).toBe(true);
 });
 
-it("remembers independent keywords, open states and layouts for all three tabs", async () => {
+it("remembers independent keywords and open states for both tabs, and the Changes tab's layout", async () => {
   await mount("independent-filter", "files");
   await answer("list_project_dir", dir("independent-filter"));
   const toggle = (label: string) => document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
@@ -362,34 +369,29 @@ it("remembers independent keywords, open states and layouts for all three tabs",
   });
   await act(async () => toggle("Filter by file name").click());
   await type("server");
-  await act(async () => toggle("Show as flat list").click());
-  await tab("worktree");
+  // The Files tree is always by folder: there is no layout to choose.
+  expect(toggle("Show as flat list")).toBeNull();
+  expect(toggle("Group by folder")).toBeNull();
+  await tab("changes");
   await answer("get_project_source", source("independent-filter"));
   await answer("list_project_changes", changes("independent-filter"));
   expect(field()).toBeNull();
   await act(async () => toggle("Filter by file name").click());
   await type("alpha");
   await act(async () => toggle("Group by folder").click());
-  await tab("compare");
-  expect(field()).toBeNull();
-  await act(async () => toggle("Filter by file name").click());
-  await type("beta");
-  expect(toggle("Group by folder").getAttribute("aria-pressed")).toBe("false");
   await tab("files");
   expect(field().value).toBe("server");
   expect(document.activeElement).toBe(document.querySelector('[role="tab"][data-key="files"]'));
-  expect(toggle("Group by folder").getAttribute("aria-pressed")).toBe("false");
-  await tab("worktree");
+  expect(toggle("Group by folder")).toBeNull();
+  await tab("changes");
   expect(field().value).toBe("alpha");
   expect(toggle("Show as flat list").getAttribute("aria-pressed")).toBe("true");
   await act(async () => toggle("Hide the filter").click());
-  await tab("compare");
-  expect(field().value).toBe("beta");
   await tab("files");
   expect(field().value).toBe("server");
 });
 
-it("keeps Files result folders collapsed through tab and flat/tree switches", async () => {
+it("keeps Files result folders collapsed through tab switches", async () => {
   await mount("files-folds", "files");
   await answer("list_project_dir", dir("files-folds"));
   const button = (label: string) => document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
@@ -403,21 +405,22 @@ it("keeps Files result folders collapsed through tab and flat/tree switches", as
   await answer("search_project_files", { type: "project_file_matches", project: "files-folds", query: "target", paths: ["src/nested/target.txt"], complete: true });
   await act(async () => document.querySelector<HTMLElement>('[data-key="path:src"]')!.click());
   expect(document.querySelector('[data-key="path:src/nested/target.txt"]')).toBeNull();
-  await act(async () => document.querySelector<HTMLElement>('[role="tab"][data-key="worktree"]')!.click());
+  await act(async () => document.querySelector<HTMLElement>('[role="tab"][data-key="changes"]')!.click());
   await act(async () => document.querySelector<HTMLElement>('[role="tab"][data-key="files"]')!.click());
-  expect(document.querySelector('[data-key="path:src/nested/target.txt"]')).toBeNull();
-  await act(async () => button("Show as flat list").click());
-  expect(document.querySelector('[data-key="path:src/nested/target.txt"]')).not.toBeNull();
-  await act(async () => button("Group by folder").click());
   expect(document.querySelector('[data-key="path:src/nested/target.txt"]')).toBeNull();
 });
 
-it("keeps focus in the header when a mouse layout switch removes the focused Files directory", async () => {
-  await mount("files-layout-focus", "files");
-  await answer("list_project_dir", { ...dir("files-layout-focus"), entries: [{ name: "src", kind: "directory", size: null, version: null, target: null }] } as Event);
-  const directory = document.querySelector<HTMLElement>('[data-key="path:src"]')!;
-  await act(async () => directory.focus());
-  expect(document.activeElement).toBe(directory);
-  await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Show as flat list"]')!.click());
-  expect(document.activeElement).toBe(document.querySelector('button[aria-label="Refresh"]'));
+it("puts the Files / Changes switch right after the project name, and only icon buttons at the end of the header", async () => {
+  await mount("header-order", "files");
+  await answer("list_project_dir", dir("header-order"));
+  const header = document.querySelector<HTMLElement>("h2")!.parentElement!;
+  const follows = (a: Element, b: Element) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+  const tabs = header.querySelector('[role="tablist"]')!;
+  const refresh = header.querySelector('button[aria-label="Refresh"]')!;
+  expect(follows(header.querySelector("h2")!, tabs)).toBe(true);
+  expect(follows(tabs, refresh)).toBe(true);
+  // The group pushed to the end holds the icon buttons alone.
+  const end = [...header.children].find((child) => child.contains(refresh))!;
+  expect(end.contains(tabs)).toBe(false);
+  expect(end.querySelector('[role="tab"]')).toBeNull();
 });

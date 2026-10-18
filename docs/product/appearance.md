@@ -42,7 +42,7 @@ Everything the window shows follows the chosen appearance, including:
   light and lighter than the reading area in dark. It fills the whole code area, including space beyond the text,
   and a file shown as plain text sits on it too;
   a file shown as an image sits on a checkerboard drawn in the appearance's colours (see "The file viewer" in
-  `docs/product/project-pane.md`). A diff there (see "Opening a change" in `docs/product/project-pane-git-mode.md`) is
+  `docs/product/project-pane.md`). A diff there (see "Opening a change" in `docs/product/project-pane-git-change-viewer.md`) is
   highlighted in the same scheme, with added and removed lines tinted and marked `+` and `-`, and a changed word within
   a line underlined rather than tinted, so that every colour still meets 4.5:1 on the tinted lines. A rendered
   Markdown document (see "A Markdown file as a document" in `docs/product/project-pane.md`) sits on that background

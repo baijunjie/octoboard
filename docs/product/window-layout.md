@@ -508,8 +508,7 @@ parts of the window:
   layout: an image change's Before and After images, side by side, have Before on the right.
 - A name or breadcrumb too long for its space fades out where it ends in its own direction: a name the user typed
   is laid out in the direction of its own text, so a Latin name in an Arabic window still fades at its right edge.
-- Paths always read left to right, in the fields that take one, in the settings list and in a project pane's
-  worktree selector, where a path too long for its space fades at its start, so its last folder stays readable.
+- Paths always read left to right, in the fields that take one and in the settings list.
   Settings' Default clone directory field reads left to right as one control: its folder mark stays beside the path at
   the field's left edge, rather than sitting at the field's leading edge with the path pushed away from it (see
   "Default clone directory" in `docs/product/settings.md`). The Browse button beside the field keeps to the reading
@@ -552,12 +551,12 @@ Not mirrored:
 - **A file's content in the file viewer**: code, a diff — whose split layout keeps the old side on the left — the
   file's name and path, and the paths a change names, read left to right, and a binary change's sizes run from before
   to after left to right; only the viewer around them is mirrored. A file or folder name in the file tree, a name
-  and what follows it in the Git mode's change list, a worktree's or a branch's name in the Git mode — in the viewer's
-  subtitle too, where a compared change names the branches it is read from (see "Opening a change" in
-  `docs/product/project-pane-git-mode.md`) — and the text of the separator a diff shows where it collapsed unchanged
+  and what follows it in the Git mode's change list, a branch's name in the Git mode — in the viewer's
+  subtitle too, where a committed change names the branches it is read from (see "Opening a change" in
+  `docs/product/project-pane-git-change-viewer.md`) — and the text of the separator a diff shows where it collapsed unchanged
   lines (see "Expanding the collapsed lines" in
-  `docs/product/project-pane-git-mode.md`), are laid out in the direction of their own text, as a name the user typed
-  is; a commit's id reads left to right.
+  `docs/product/project-pane-git-change-viewer.md`), are laid out in the direction of their own text, as a name the user typed
+  is, and so is a commit's subject on its commit row; a commit's id reads left to right.
 - **A rendered Markdown document in the file viewer** (see "A Markdown file as a document" in
   `docs/product/project-pane.md`), which is laid out in the direction of its own text, block by block: each paragraph,
   heading, list, quote and table takes the direction of its own first strong character, so a right-to-left passage in

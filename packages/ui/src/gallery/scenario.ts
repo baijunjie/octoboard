@@ -28,6 +28,9 @@ export interface Preferences {
   projectFocusIncludeConsoleSessions?: boolean;
   /** How the Git mode's change lists show their changes. */
   changeLayout?: "flat" | "tree";
+  /** What each project's browser is left at, by project id: the mode it opens in and whether the Git
+   * mode lists what is committed by commit. */
+  projectBrowsers?: Record<string, { mode: "files" | "git"; byCommit?: boolean }>;
   /** How a rendered Markdown document is styled; Tailwind, the original look, when unset. */
   markdownStyle?: MarkdownStyle;
   /** Closing the window keeps the app running in the background; off by default. */

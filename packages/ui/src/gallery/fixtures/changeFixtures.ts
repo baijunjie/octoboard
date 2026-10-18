@@ -29,32 +29,57 @@ export interface FixtureChange {
   expand?: Expansion;
 }
 
+/** One commit of a branch since it forked, as the commit list answers it: its full id, its first
+ * parent's (null for a commit with no parent, whose changes are against the empty tree), its
+ * subject and its changes against that parent, each read between the two. A commit that changed
+ * nothing in the project has no changes, and is listed all the same. `merged` is the other parent
+ * of a merge commit: the reply does not carry it, but a commit listed with no parent is reachable
+ * only through one, which a test over the sample history holds. */
+export interface FixtureCommit {
+  commit: string;
+  parent: string | null;
+  merged?: string;
+  subject: string;
+  changes: FixtureChange[];
+}
+
+/** What `list_project_commits` answers for a pair of branches: the commits the branch made since it
+ * forked, newest first, `cut` when there were more than the daemon lists (the oldest one listed
+ * then has a parent the list does not hold); the `error` listing them fails with; or `pending`,
+ * never answered. */
+export type FixtureCommitList = { commits: FixtureCommit[]; cut?: boolean } | { error: FixtureError } | { pending: true };
+
+/** The commits a commit list holds: none for a list that fails or is never answered. */
+export const listedCommits = (list: FixtureCommitList): FixtureCommit[] => ("commits" in list ? list.commits : []);
+
 /** A fixture project's repository: its worktrees, the first holding the project, and each one's
  * changes by its id; a worktree with an `error` in place of changes fails to list. With `gitError`,
  * the repository cannot be read at all. `branches` are its local branches; `comparisons` the
  * changes `<right>` made since it forked from `<left>`, keyed `<left>..<right>` (none for a pair not
- * given), whose old sides are read from the fork's commit; `forks` names that commit for a pair
+ * given), whose old sides are read from the fork's commit; `commits` the same pair's commits, which
+ * the cumulative changes are made of, the old side of each read from the commit's parent and the new
+ * side from the commit; `forks` names the fork's commit for a pair
  * (`null` for two branches with no commit in common, which a comparison refuses, as a shallow
  * clone's refusal when `shallow` is set), and a pair it does
  * not name forks at `<left>`'s own tip, as a branch made from it does. `missing` are branches the
- * list has that a comparison no longer finds. `moved` is what the branch list says of a branch once
- * a comparison has been made: a branch moved to another commit since. `gone` are branches deleted
- * once a comparison has been made: from then on neither the list nor a new comparison finds them,
- * where `missing` ones are refused from the start. */
+ * list has that a comparison no longer finds. `gone` are branches deleted once a comparison has
+ * been made: from then on neither the list nor a new comparison finds them, where `missing` ones
+ * are refused from the start. With `comparing: "pending"` a comparison is never answered. */
 export interface FixtureGit {
   worktrees: WorktreeInfo[];
   changes: Record<string, FixtureChange[] | FixtureError>;
   gitError?: string;
   branches?: BranchInfo[];
   comparisons?: Record<string, FixtureChange[]>;
+  commits?: Record<string, FixtureCommitList>;
   forks?: Record<string, string | null>;
   shallow?: boolean;
   missing?: string[];
-  moved?: Record<string, string>;
   gone?: string[];
-  /** The daemon stopped listing before it reached the end, so every change list and comparison
-   * is answered `complete: false` and the pane says under the list that it is not whole. */
+  /** The daemon stopped listing before it reached the end, so every change list, comparison and
+   * commit list is answered `complete: false` and the pane says under the list that it is not whole. */
   cutShort?: boolean;
+  comparing?: "pending";
 }
 
 /** Which section of a change list a change with two sides belongs to; `committed` is a branch

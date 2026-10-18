@@ -6,7 +6,7 @@ import { enter, leave, openTooltip } from "../components/tooltipTestSupport";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { BranchInfo } from "../protocol";
-import { BranchSelect } from "./BranchComparison";
+import { BranchSelect } from "./BranchSelect";
 import { mountRows } from "./browserTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

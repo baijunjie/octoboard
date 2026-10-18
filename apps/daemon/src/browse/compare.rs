@@ -23,11 +23,11 @@ use anyhow::Result;
 
 use crate::browse::changes::{self, ChangeRead};
 use crate::browse::git::{GitEnv, GitError};
+use crate::browse::tree_diff;
 use crate::browse::wire_path;
 use crate::browse::{blob, budget, git_error, git_failed, json_escaped_len, Located};
 use crate::protocol::{
-    error_code, BranchInfo, ChangeEntry, ChangeSide, CodedError, ComparedChangeRef,
-    ComparisonEndpoint,
+    error_code, BranchInfo, ChangeEntry, CodedError, ComparedChangeRef, ComparisonEndpoint,
 };
 use crate::subprocess::BoundedFailure;
 
@@ -170,7 +170,7 @@ pub fn list(
         comparison.base.as_bytes(),
         comparison.right.commit.as_bytes(),
     ];
-    let limit = comparison_stdout();
+    let limit = tree_diff::tree_diff_stdout();
     let scope = &at.repository.scope;
     let stdout = match env.run(&at.root, "diff-tree", &args, limit, cancel) {
         Err(GitError::Stopped(BoundedFailure::StdoutExceeded(_))) if !scope.is_root() => {
@@ -186,7 +186,8 @@ pub fn list(
     let mut path_bytes = 0;
     let mut fields = stdout.split(|&b| b == 0).filter(|f| !f.is_empty());
     while let Some(meta) = fields.next() {
-        let Some(entry) = record(meta, &mut fields, at, commits)? else {
+        let Some(entry) = tree_diff::committed_record("diff-tree", meta, &mut fields, at, commits)?
+        else {
             continue;
         };
         let bytes = changes::entry_path_bytes(&entry);
@@ -278,56 +279,6 @@ fn is_shallow(env: &GitEnv, at: &Located, cancel: &AtomicBool) -> bool {
     .is_ok_and(|stdout| stdout.trim_ascii() == b"true")
 }
 
-/// One `git diff-tree --raw -z` record, `:<old mode> <new mode> <old id> <new id> <status>`
-/// followed by its path — or, for a rename (`R<score>`), the path it came from and the one it went
-/// to — as the change it is to the project, or `None` when neither side is inside it.
-fn record<'a>(
-    meta: &[u8],
-    fields: &mut impl Iterator<Item = &'a [u8]>,
-    at: &Located,
-    (old_commit, new_commit): (&str, &str),
-) -> Result<Option<ChangeEntry>> {
-    let malformed = || {
-        let shown = String::from_utf8_lossy(meta);
-        git_failed(&format!(
-            "git diff-tree printed `{shown}`, which is not a record it writes"
-        ))
-    };
-    let parts: Vec<&[u8]> = meta
-        .strip_prefix(b":")
-        .ok_or_else(malformed)?
-        .split(|&b| b == b' ')
-        .collect();
-    let [old_mode, new_mode, old_oid, new_oid, status] = parts[..] else {
-        return Err(malformed());
-    };
-    let path = fields.next().ok_or_else(malformed)?;
-    // Only `-C` would add copies, which name two paths as well; renames are all there are.
-    let to = match status.first() {
-        Some(b'R') => Some(fields.next().ok_or_else(malformed)?),
-        _ => None,
-    };
-    let scope = &at.repository.scope;
-    let side = |commit: &str, mode: &[u8], oid: &[u8], path: &[u8]| {
-        let rel = changes::in_scope(scope, path);
-        match rel {
-            Some(rel) => changes::head_side(Some(commit), mode, oid, &rel),
-            None => ChangeSide::OutOfScope {
-                repository_path: wire_path::encode(path),
-            },
-        }
-    };
-    // A rename's record names the path it came from first and the one it went to second.
-    let (old, new) = (
-        side(old_commit, old_mode, old_oid, path),
-        side(new_commit, new_mode, new_oid, to.unwrap_or(path)),
-    );
-    // Kept when a side is inside the project; one of an addition or a deletion outside it is
-    // named outside on its other side too, so it is never kept.
-    let inside = |side: &ChangeSide| matches!(side, ChangeSide::Present { .. });
-    Ok((inside(&old) || inside(&new)).then_some(ChangeEntry::Committed { old, new }))
-}
-
 /// The two endpoints of a comparison and the commit it was made from, as a read names them.
 type Compared<'a> = (&'a ComparisonEndpoint, &'a ComparisonEndpoint, &'a str);
 
@@ -388,20 +339,4 @@ pub fn read_bodies(
         expected,
         cancel,
     )
-}
-
-/// The budget of the `git diff-tree` behind a comparison; a test can lower it, as nothing short of
-/// tens of thousands of changed files reaches the real one.
-fn comparison_stdout() -> usize {
-    #[cfg(test)]
-    if let Some(limit) = COMPARISON_STDOUT_OVERRIDE.with(std::cell::Cell::get) {
-        return limit;
-    }
-    budget::COMPARISON_STDOUT
-}
-
-#[cfg(test)]
-thread_local! {
-    pub(super) static COMPARISON_STDOUT_OVERRIDE: std::cell::Cell<Option<usize>> =
-        const { std::cell::Cell::new(None) };
 }

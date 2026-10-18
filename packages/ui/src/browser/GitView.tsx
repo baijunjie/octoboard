@@ -1,74 +1,72 @@
-import { Label, ListBox, Select } from "@heroui/react";
 import { FileCheck, GitBranch, GitFork, TriangleAlert } from "lucide-react";
-import React, { useRef } from "react";
+import React from "react";
 
+import { failureParam } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { CodeBlock } from "../components/CodeBlock";
-import { FadeOverflow } from "../components/FadeOverflow";
-import { PathText } from "../components/PathText";
+import { InlineChip } from "../components/InlineChip";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusHandoff } from "../components/useFocusHandoff";
-import { MotionListBox } from "../components/MotionListBox";
+import { useListMotion } from "../components/useListMotion";
 import type { Translate } from "../i18n/catalog";
-import { isolate } from "../i18n/isolate";
-import { useT } from "../i18n/react";
-import { abbreviateHome } from "../pathDisplay";
-import type { WorktreeInfo } from "../protocol";
+import { Message, useT } from "../i18n/react";
 import { useDaemonStore } from "../store";
 import { displayWirePath } from "../wirePath";
-import { BranchComparisonView } from "./BranchComparison";
-import type { GitView as GitViewKind } from "./browserState";
+import { BranchSelect } from "./BranchSelect";
 import { ChangeList } from "./ChangeList";
 import type { ChangeViewState } from "./changeView";
 import type { ChangeItem } from "./changes";
+import { branchGone, changesStatus, partsLoading, type ChangesNotice } from "./changesStatus";
 import { GitFailure, GitLoading } from "./gitStates";
 import { PaneNote } from "./paneNote";
-import type { ChangeList as ChangeListState } from "./useChangeList";
+import type { BranchList } from "./useBranchList";
+import type { CommittedState, UncommittedState } from "./useGitReview";
 import type { SourceState } from "./useProjectSource";
 
-/** How a worktree is named: by its branch, or by the commit a detached `HEAD` is at. Not isolated
- * here: the name is the item's `textValue` and the children of a `dir="auto"` element, neither of
- * which wants it. The detached wording is prose that isolates its own commit. */
-function worktreeName(t: Translate, worktree: WorktreeInfo): string {
-  if (worktree.branch !== null) return displayWirePath(worktree.branch);
-  return worktree.head === null ? t("git.worktree.unborn") : t("git.worktree.detached", { commit: isolate(worktree.head.slice(0, 7)) });
-}
-
-/** What the worktree view shows and does: the chosen worktree's change list. */
-export interface WorktreeViewProps {
-  list: ChangeListState;
-  /** The worktree whose changes are shown, by id; none for the one holding the project's
-   * directory. */
-  worktree: string | undefined;
-  onWorktreeChange: (worktree: string | undefined) => void;
+/** What the Changes view shows and does: one branch's changes, uncommitted and committed, as one
+ * list. */
+export interface ChangesViewProps {
+  branches: BranchList;
+  /** The branch shown, as a wire path; none when no branch is chosen and the worktree holding the
+   * project's directory has none checked out. */
+  branch: string | undefined;
+  onBranchChange: (branch: string) => void;
+  uncommitted: UncommittedState;
+  committed: CommittedState;
+  /** Every change listed, uncommitted and committed, in list order. */
+  items: ChangeItem[];
   selectedChange: string | undefined;
   onOpen: (item: ChangeItem) => void;
   listRef: React.Ref<HTMLDivElement>;
+  /** The branch selector's strip, which takes keyboard focus when what held it below goes. */
+  selectorsRef: React.RefObject<HTMLDivElement | null>;
+  changeView: ChangeViewState;
+  /** The session selected in the sidebar, whose branches the selector's list marks. */
+  selectedSessionId: string | undefined;
+  /**
+   * Asks again for whatever failed. `from` is the control pressed, which goes away with the
+   * failure.
+   */
+  onRetry: (from: Element | null) => void;
 }
 
 /**
- * The project pane's Git mode, in two views: a worktree's uncommitted changes, from the worktree
- * the selector chooses, and the changes between two local branches (`BranchComparisonView`). The
- * worktree only chooses where the uncommitted changes are read from: it checks nothing out, moves
- * no session, leaves the Files mode on the project's own directory and plays no part in a branch
- * comparison. A worktree that has gone is said to be unavailable, never replaced by another one;
- * the user chooses another.
+ * The project pane's Git mode: the changes of one branch, chosen in the selector at the top. What
+ * is uncommitted is read from the worktree that has the branch checked out, in the worktree's
+ * sections — Conflicted, Staged, Unstaged, Untracked — and what the branch has committed since it
+ * forked from the branch the repository's main working copy has checked out follows them, as one
+ * Committed section, grouped by commit or not. The lines above the list say what it is made of and
+ * what could not be read; a part that failed says why while the rest is shown. Nothing here checks
+ * anything out.
  */
-export function GitView(props: React.ComponentProps<typeof GitContent>): React.ReactElement {
+export function GitView(props: { source: SourceState } & ChangesViewProps): React.ReactElement {
   const t = useT();
-  const { source, view, worktree, compare } = props;
+  const { source } = props;
   // One region for every loading the mode shows, outside `GitContent`, which swaps its whole tree
-  // as the source loads. The source's loading and the worktree list's say the same words, so the
-  // handoff between them leaves the text as it is and it is said once, not again for the list.
-  let loading: string | undefined;
-  if (source.state === "loading") loading = t("git.loading");
-  else if (source.state === "loaded" && source.source.git) {
-    if (view === "worktree") {
-      const git = source.source.git;
-      if (worktree.list.state === "loading" && !worktreeGone(git.worktrees, git.worktree, worktree.worktree, worktree.list)) loading = t("git.loading");
-    } else if (compare.comparison.state === "loading") loading = t("git.compare.loading");
-  }
+  // as the source loads. The source's loading and the list's say the same words, so the handoff
+  // between them leaves the text as it is and it is said once.
+  const loading = source.state === "loading" ? t("git.loading") : source.state === "loaded" && source.source.git ? loadingText(t, props) : undefined;
   return (
     <>
       <StatusAnnouncer text={loading} />
@@ -77,37 +75,20 @@ export function GitView(props: React.ComponentProps<typeof GitContent>): React.R
   );
 }
 
-/** Whether the worktree the view shows has gone: no longer listed, or reported unavailable by the
- * list read from it. */
-function worktreeGone(worktrees: WorktreeInfo[], own: string, worktree: string | undefined, list: ChangeListState): boolean {
-  const shown = worktrees.find((w) => w.id === (worktree ?? own));
-  return !shown || (list.state === "error" && list.unavailable);
+/** What the view is reading, as it is announced: the list as a whole while it has nothing to show,
+ * and otherwise the part of it still being read. */
+function loadingText(t: Translate, props: ChangesViewProps): string | undefined {
+  const { committed, items, branch } = props;
+  if (branch === undefined) return undefined;
+  const parts = partsLoading(props);
+  if (items.length === 0) return parts.uncommitted || parts.committed ? t("git.loading") : undefined;
+  if (committed.state !== "compare" || !parts.committed) return undefined;
+  return committed.comparison.state === "loading" ? t("git.changes.comparing", { base: displayWirePath(committed.base) }) : t("git.changes.listingCommits");
 }
 
-function GitContent({
-  source,
-  view,
-  worktree,
-  compare,
-  changeView,
-  selectedSessionId,
-  onRetry,
-}: {
-  source: SourceState;
-  view: GitViewKind;
-  worktree: WorktreeViewProps;
-  compare: Omit<React.ComponentProps<typeof BranchComparisonView>, "onRetry" | "changeView" | "selectedSessionId">;
-  /** How both views' change lists show their changes. */
-  changeView: ChangeViewState;
-  /** The session selected in the sidebar, whose branches the Compare view marks. */
-  selectedSessionId: string | undefined;
-  /**
-   * Asks again for whatever failed. `from` is the control pressed, which goes away with the
-   * failure.
-   */
-  onRetry: (from: Element | null) => void;
-}): React.ReactElement {
+function GitContent(props: { source: SourceState } & ChangesViewProps): React.ReactElement {
   const t = useT();
+  const { source, onRetry } = props;
   if (source.state === "loading") return <GitLoading label={t("git.loading")} />;
   if (source.state === "error") return <GitFailure title={t("git.error.source")} message={source.message} onRetry={onRetry} />;
   const git = source.source.git;
@@ -122,130 +103,152 @@ function GitContent({
       <CenteredEmptyPanel icon={GitFork} message={t("git.notARepository")} />
     );
   }
-  return view === "worktree"
-    ? <WorktreeChanges worktrees={git.worktrees} own={git.worktree} {...worktree} changeView={changeView} onRetry={onRetry} />
-    : <BranchComparisonView {...compare} changeView={changeView} selectedSessionId={selectedSessionId} onRetry={onRetry} />;
+  return <ChangesView {...props} />;
 }
 
-function WorktreeChanges({
-  worktrees,
-  own,
-  list,
-  worktree,
-  onWorktreeChange,
+const code = (text: string) => (
+  <InlineChip monospace wrap size="inherit">
+    {text}
+  </InlineChip>
+);
+
+/** A line above the list, said in the words of the message it is. */
+function Notice({ notice }: { notice: ChangesNotice }): React.ReactElement {
+  const t = useT();
+  switch (notice.id) {
+    case "notCheckedOut":
+      return <Message id="git.changes.notCheckedOut" params={{ branch: code(notice.branch) }} />;
+    case "unborn":
+      return <>{t("git.changes.unborn")}</>;
+    case "worktree":
+      return <Message id="git.changes.worktree" params={{ path: code(notice.path) }} />;
+    case "scopeMissing":
+      return <>{t("git.changes.scopeMissing")}</>;
+    case "isBase":
+      return <Message id="git.changes.isBase" params={{ branch: code(notice.branch) }} />;
+    case "noBase":
+      return <>{t("git.changes.noBase")}</>;
+    case "comparing":
+      return <>{t("git.changes.comparing", { base: notice.base })}</>;
+    case "base":
+      return <Message id="git.changes.base" params={{ base: code(notice.base), baseCommit: code(notice.baseCommit), tip: code(notice.tip) }} />;
+    case "listingCommits":
+      return <>{t("git.changes.listingCommits")}</>;
+  }
+}
+
+function ChangesView({
+  branches,
+  branch,
+  onBranchChange,
+  uncommitted,
+  committed,
+  items,
   selectedChange,
   onOpen,
   onRetry,
   listRef,
+  selectorsRef,
   changeView,
-}: WorktreeViewProps & {
-  worktrees: WorktreeInfo[];
-  own: string;
-  changeView: ChangeViewState;
-  onRetry: (from: Element | null) => void;
-}): React.ReactElement {
+  selectedSessionId,
+}: ChangesViewProps): React.ReactElement {
   const t = useT();
-  // When what holds focus below the selector goes — the list replaced by its empty state, a failure
-  // or the worktree found gone — focus goes to the selector rather than falling to `<body>`.
-  const selectRef = useRef<HTMLDivElement>(null);
-  const handoff = useFocusHandoff(() => selectRef.current?.querySelector<HTMLElement>("button")?.focus());
-  const shownId = worktree ?? own;
-  const shown = worktrees.find((w) => w.id === shownId);
-  const gone = worktreeGone(worktrees, own, worktree, list);
+  const homeDir = useDaemonStore((s) => s.homeDir);
+  const noticesRef = useListMotion<HTMLDivElement>();
+  // When what holds focus below the selector goes — the list replaced by a failure or an empty
+  // state — focus goes to the selector rather than falling to `<body>`; with nothing chosen in a
+  // repository that has no branches the selector is disabled, and focus leaves for the top bar as
+  // it does from any pane with nothing to hold it.
+  const handoff = useFocusHandoff(() => selectorsRef.current?.querySelector<HTMLElement>("button:not([disabled])")?.focus());
+  const listed = branches.state === "loaded" ? branches.branches : [];
+  // Nothing chosen in a repository that has no branches: the selector has nothing to offer, and the
+  // panel below says so.
+  const noBranches = branch === undefined && branches.state === "loaded" && listed.length === 0;
+  const gone = branchGone(branch, branches, uncommitted);
+  // A list that failed to refresh stays, and says why; one that never came says so in its place.
+  const branchesError = branches.state === "error" ? branches.message : branches.state === "loaded" ? branches.error : undefined;
+
+  const { notices, failures, goneBranches, partial, commitsCut } = changesStatus({ branches, uncommitted, committed, homeDir });
+  const loading = partsLoading({ uncommitted, committed });
+  const nothingYet = items.length === 0;
+  // With nothing to list, the first failure takes the list's place, with Try again; every other one
+  // is a line above it.
+  const panelFailure = nothingYet && !loading.uncommitted && !loading.committed ? failures[0] : undefined;
+  const lineFailures = failures.filter((failure) => failure !== panelFailure);
+  const shownComparison = committed.state === "compare" && committed.comparison.state === "loaded";
+
   return (
     <>
-      <WorktreeSelect
-        ref={selectRef}
-        worktrees={worktrees}
-        own={own}
-        value={shownId}
-        missing={!shown}
-        onChange={(id) => onWorktreeChange(id === own ? undefined : id)}
-      />
+      <div ref={selectorsRef} className="shrink-0 border-b border-separator py-2 px-(--pane-inset)">
+        <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3">
+          <BranchSelect
+            label={t("git.changes.branch")}
+            branches={listed}
+            value={branch}
+            gone={gone}
+            isDisabled={noBranches}
+            selectedSessionId={selectedSessionId}
+            onChange={onBranchChange}
+          />
+        </div>
+      </div>
+      {branchesError !== undefined && !(branch === undefined && branches.state === "error") && (
+        <PaneNote role="alert">
+          <Message id="git.branch.branchesError" params={{ message: failureParam(branchesError) }} />
+        </PaneNote>
+      )}
       <div className="flex min-h-0 flex-1 flex-col" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
-        {shown && !gone && !shown.scope_present && <PaneNote>{t("git.worktree.scopeMissing")}</PaneNote>}
-        {gone ? (
-          <CenteredEmptyPanel icon={TriangleAlert} message={t("git.worktree.gone")} description={t("git.worktree.gone.description")} />
-        ) : list.state === "loading" ? (
-          <GitLoading label={t("git.loading")} />
-        ) : list.state === "error" ? (
-          <GitFailure title={t("git.error.list")} message={list.message} onRetry={onRetry} />
-        ) : list.items.length === 0 && list.complete ? (
-          <CenteredEmptyPanel icon={FileCheck} message={t("git.empty")} />
+        {branch === undefined ? (
+          branches.state === "error" ? (
+            <GitFailure title={t("git.branch.branchesFailed")} message={branches.message} onRetry={onRetry} />
+          ) : noBranches ? (
+            <CenteredEmptyPanel icon={GitFork} message={t("git.branch.noBranches")} />
+          ) : (
+            <CenteredEmptyPanel icon={GitBranch} message={t("git.changes.prompt")} description={t("git.changes.prompt.description")} />
+          )
         ) : (
           <>
-            <ChangeList items={list.items} selected={selectedChange} label={t("git.list.label")} onOpen={onOpen} listRef={listRef} changeView={changeView} />
-            {!list.complete && <PaneNote divided>{t("git.partial")}</PaneNote>}
+            <div className="flex shrink-0 flex-col gap-1 px-(--pane-inset) py-2 text-xs text-app-muted empty:hidden">
+              {notices.map((notice) => (
+                <p key={notice.id}>
+                  <Notice notice={notice} />
+                </p>
+              ))}
+              {lineFailures.map((failure) => (
+                <p key={failure.key} role="alert">
+                  <Message id={failure.line} params={{ message: failureParam(failure.message) }} />
+                </p>
+              ))}
+            </div>
+            {/* Mounted for as long as the comparison is, so a notice appearing in it is announced. */}
+            {shownComparison && (
+              <div ref={noticesRef} role="status" className="relative flex shrink-0 flex-col gap-1 px-(--pane-inset) text-xs text-app-muted not-empty:pb-2">
+                {goneBranches.map((name) => (
+                  <p key={name} data-list-motion={name} className="flex items-start gap-1.5">
+                    <TriangleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0" />
+                    <span>
+                      <Message id="git.branch.deleted" params={{ branch: code(name) }} />
+                    </span>
+                  </p>
+                ))}
+              </div>
+            )}
+            {nothingYet && (loading.uncommitted || loading.committed) ? (
+              <GitLoading label={t("git.loading")} />
+            ) : panelFailure ? (
+              <GitFailure title={t(panelFailure.title)} message={panelFailure.message} onRetry={onRetry} />
+            ) : nothingYet && !partial ? (
+              <CenteredEmptyPanel icon={FileCheck} message={t("git.changes.empty")} />
+            ) : (
+              <>
+                <ChangeList items={items} selected={selectedChange} label={t("git.changes.list.label")} onOpen={onOpen} listRef={listRef} changeView={changeView} />
+                {partial && <PaneNote divided>{t("git.partial")}</PaneNote>}
+                {commitsCut !== undefined && <PaneNote divided>{t("git.changes.commitsPartial", { count: commitsCut })}</PaneNote>}
+              </>
+            )}
           </>
         )}
       </div>
     </>
-  );
-}
-
-/** The worktree whose changes are shown. A worktree that is no longer listed stays the value, named
- * as gone, until the user picks another. Its field is the secondary variant, which draws from the
- * pane's `--default` fills like the filter field below it (`.control-fills`). */
-function WorktreeSelect({
-  ref,
-  worktrees,
-  own,
-  value,
-  missing,
-  onChange,
-}: {
-  worktrees: WorktreeInfo[];
-  own: string;
-  value: string;
-  missing: boolean;
-  onChange: (worktree: string) => void;
-  ref: React.Ref<HTMLDivElement>;
-}): React.ReactElement {
-  const t = useT();
-  const homeDir = useDaemonStore((s) => s.homeDir);
-  const current = worktrees.find((w) => w.id === value);
-  const currentName = current ? worktreeName(t, current) : missing ? t("git.worktree.goneName") : "";
-  return (
-    <div ref={ref} className="shrink-0 border-b border-separator px-(--pane-inset) py-2">
-      <Select fullWidth variant="secondary" value={value} onChange={(key) => key !== null && onChange(String(key))}>
-        <Label className="sr-only">{t("git.worktree.label")}</Label>
-        <Select.Trigger>
-          <Select.Value className="flex min-w-0 items-center gap-2">
-            {() => (
-              <>
-                <GitBranch aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
-                <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={currentName}>
-                  {currentName}
-                </FadeOverflow>
-              </>
-            )}
-          </Select.Value>
-          <Select.Indicator />
-        </Select.Trigger>
-        <Select.Popover>
-          <MotionListBox className="relative">
-            {worktrees.map((worktree) => {
-              const name = worktreeName(t, worktree);
-              const shownName = worktree.id === own ? t("git.worktree.own", { name: worktree.branch === null ? name : isolate(name) }) : name;
-              const path = abbreviateHome(displayWirePath(worktree.root), homeDir);
-              // `pe-7` restores the room HeroUI reserves for the check mark, which its Select styles
-              // override with a narrower padding, so a long name would run under the mark.
-              return (
-                <ListBox.Item data-list-motion={worktree.id} key={worktree.id} id={worktree.id} textValue={name} className="pe-7">
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <FadeOverflow as="span" dir="auto" titleWhenClipped={shownName}>
-                      {shownName}
-                    </FadeOverflow>
-                    <PathText as="span" path={path} className="text-xs text-app-muted" />
-                    {!worktree.scope_present && <span className="text-xs text-app-muted">{t("git.worktree.scopeMissing")}</span>}
-                  </span>
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              );
-            })}
-          </MotionListBox>
-        </Select.Popover>
-      </Select>
-    </div>
   );
 }

@@ -15,6 +15,9 @@ const browseRequests = new Set([
   "compare_project_branches",
   "read_project_comparison_change",
   "read_project_comparison_change_bodies",
+  "list_project_commits",
+  "read_project_commit_change",
+  "read_project_commit_change_bodies",
 ]);
 
 /** The gallery's single repository fixtures are reused behind a project router; app state and
@@ -53,7 +56,7 @@ export function createPreviewDaemon(scenario: Scenario): Daemon {
       if (
         "worktree" in body &&
         body.worktree !== undefined &&
-        body.worktree !== worktree
+        !repository.git.worktrees.some((w) => w.id === body.worktree)
       )
         throw new DaemonRequestError(
           "Worktree belongs to another preview project",

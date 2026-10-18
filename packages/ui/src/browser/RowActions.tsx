@@ -8,7 +8,8 @@ import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { useDaemon } from "../store";
 
-/** The live directory behind the displayed rows. A branch comparison has no live directory. */
+/** The live directory behind the displayed rows: the project's, or the worktree a branch is checked
+ * out in. A committed change has none. */
 export const RowPathScope = createContext<{ project: string; worktree?: string } | undefined>(undefined);
 
 /** The row's button and right-click share the same actions and focus handling. */

@@ -40,7 +40,7 @@ const press = (element: HTMLElement, key: string) =>
   });
 const flush = () => act(async () => {});
 
-// The rows differ between the two layouts (a grid list and a tree), so these run on both.
+// The rows differ between the two layouts (changes alone, and under directories), so these run on both.
 it.each(["flat", "tree"] as const)("%s: gives each change row an actions button, named for its change, that the row's arrow keys reach", (layout) => {
   const { container } = render(layout, { writeText: async () => {} });
   const row = rowOf(container, "alpha.ts");

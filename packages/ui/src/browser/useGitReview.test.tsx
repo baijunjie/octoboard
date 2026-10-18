@@ -3,10 +3,11 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 
-import type { ChangeEntry, Event, RequestBody } from "../protocol";
+import { DaemonRequestError } from "../daemon-client";
+import type { ChangeEntry, CommitChanges, Event, RequestBody, WorktreeInfo } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { noteSessionSwitch, useProjectBrowserState } from "./browserState";
-import { directoryKey, sectionKey } from "./changes";
+import { directoryKey, sectionKey, type ChangeItem } from "./changes";
 import { useFileFilterState } from "./FileFilterField";
 import { useGitReview } from "./useGitReview";
 
@@ -41,302 +42,97 @@ async function answer(type: RequestBody["type"], reply: (body: RequestBody) => E
   return request.body;
 }
 
+const asked = (type: RequestBody["type"]) => pending.filter((request) => request.body.type === type).map((request) => request.body);
+
+type Tree = { id: string; branch: string | null; main?: boolean };
+/** `responsible` is the session working on the branch; none when the daemon names no one. */
+type Made = { name: string; commit?: string; responsible?: string };
+type Replies = Partial<Record<RequestBody["type"], (body: RequestBody) => Event>>;
+
+const worktreeInfo = (w: Tree): WorktreeInfo => ({ id: w.id, root: `/${w.id}`, main: w.main ?? false, head: "c1", branch: w.branch, scope_present: true });
+const source = (id: string, worktrees: Tree[], own = "m"): Replies => ({
+  get_project_source: () => ({
+    type: "project_source",
+    source: {
+      project: id,
+      root: "/r",
+      resolved_root: "/r",
+      root_id: "r",
+      git_error: null,
+      git: { repository: "repo", common_dir: "/r/.git", worktree: own, scope: "", worktrees: worktrees.map(worktreeInfo) },
+    },
+  }),
+});
+const branchList = (id: string, branches: Made[]): Replies => ({
+  list_project_branches: () => ({
+    type: "project_branches",
+    project: id,
+    branches: branches.map((b) => ({
+      name: b.name,
+      commit: b.commit ?? "c",
+      origin: b.responsible ? { responsible_session: b.responsible, responsible_title: "t", responsible_since: 1 } : undefined,
+    })),
+    complete: true,
+  }),
+});
+const live = (path: string, version = "1"): ChangeEntry => ({
+  group: "unstaged",
+  old: { state: "present", path, kind: "file", source: { kind: "index", worktree: "w", blob: "b" } },
+  new: { state: "present", path, kind: "file", source: { kind: "live", root_id: "r", version } },
+});
+const changeList = (id: string, changes: ChangeEntry[] = []): Replies => ({
+  list_project_changes: (body) => ({
+    type: "project_changes",
+    project: id,
+    worktree: body.type === "list_project_changes" ? (body.worktree ?? null) : null,
+    head: "c1",
+    changes,
+    complete: true,
+  }),
+});
 const committed = (path: string, commit: string): ChangeEntry => ({
   group: "committed",
   old: { state: "absent" },
   new: { state: "present", path, kind: "file", source: { kind: "commit", commit, branch: null, blob: "b" } },
 });
-const comparison = (right: string, paths: string[]) => () =>
-  ({
-    type: "project_comparison",
-    project: "p",
-    left: { branch: "main", commit: "c1" },
-    right: { branch: "topic", commit: right },
-    base: "c1",
-    changes: paths.map((path) => committed(path, right)),
-    complete: true,
-  }) satisfies Event;
-const read = (body: RequestBody): Event => {
-  if (body.type !== "read_project_comparison_change") throw new Error(body.type);
-  return { type: "project_comparison_change", project: "p", left: body.left, right: body.right, base: body.base, old: { state: "absent" }, new: { state: "absent" }, patch: null };
+/** A comparison of whatever was asked, `base` the fork and `tip` the right branch's commit. */
+const comparison = (id: string, tip: string, paths: string[], base = "c1"): Replies => ({
+  compare_project_branches: (body) => {
+    if (body.type !== "compare_project_branches") throw new Error(body.type);
+    return {
+      type: "project_comparison",
+      project: id,
+      left: { branch: body.left, commit: base },
+      right: { branch: body.right, commit: tip },
+      base,
+      changes: paths.map((path) => committed(path, tip)),
+      complete: true,
+    };
+  },
+});
+const commitList = (id: string, commits: CommitChanges[]): Replies => ({
+  list_project_commits: (body) => {
+    if (body.type !== "list_project_commits") throw new Error(body.type);
+    return { type: "project_commits", project: id, base: body.base, tip: body.tip, commits, complete: true, commits_complete: true };
+  },
+});
+const absent = { state: "absent" } as const;
+const readBack: Replies = {
+  read_project_change: (body) => {
+    if (body.type !== "read_project_change") throw new Error(body.type);
+    return { type: "project_change", project: body.project, worktree: body.worktree ?? null, group: body.change.group, head: null, old: absent, new: absent, patch: null };
+  },
 };
 
-it("follows a comparison made again with the change still in it, and closes on one without it", async () => {
-  let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
-  const Probe = () => {
-    const browser = useProjectBrowserState("p");
-    latest = { browser, git: useGitReview("p", browser, true, undefined, { worktree: useFileFilterState(), compare: useFileFilterState() }) };
-    return null;
-  };
-  const root = createRoot(document.body.appendChild(document.createElement("div")));
-  roots.push(root);
-  act(() =>
-    root.render(
-      <DaemonProvider value={daemon}>
-        <Probe />
-      </DaemonProvider>,
-    ),
-  );
-  act(() => {
-    latest.browser.setGitView("compare");
-    latest.browser.setBranches("main", "topic");
-  });
-  const worktree = { id: "w", root: "/r", main: true, head: "c1", branch: "main", scope_present: true };
-  // The source and the branches, asked for first and again on every refresh; the comparison waits
-  // for them within the window's bound of two.
-  const sourceAndBranches = async () => {
-    await answer("get_project_source", () => ({
-      type: "project_source",
-      source: { project: "p", root: "/r", resolved_root: "/r", root_id: "r", git_error: null, git: { repository: "repo", common_dir: "/r/.git", worktree: "w", scope: "", worktrees: [worktree] } },
-    }));
-    await answer("list_project_branches", () => ({ type: "project_branches", project: "p", branches: [], complete: true }));
-  };
-  await sourceAndBranches();
-  await answer("compare_project_branches", comparison("c2", ["a.txt", "b.txt"]));
-  const loaded = latest.git.view.compare.comparison;
-  if (loaded.state !== "loaded") throw new Error(loaded.state);
-  act(() => latest.git.view.compare.onOpen(loaded.items[0]));
-  expect((await answer("read_project_comparison_change", read)) as object).toMatchObject({ right: { commit: "c2" } });
-
-  // Made again at another commit, with the change still in it: read again from the new pair.
-  act(() => void latest.git.refresh());
-  await sourceAndBranches();
-  await answer("compare_project_branches", comparison("c3", ["a.txt"]));
-  expect((await answer("read_project_comparison_change", read)) as object).toMatchObject({ right: { commit: "c3" } });
-  expect(latest.git.viewer?.subject.key).toContain("c3");
-
-  // Made again without it: no such change between those commits, so the viewer closes.
-  act(() => void latest.git.refresh());
-  await sourceAndBranches();
-  await answer("compare_project_branches", comparison("c4", ["b.txt"]));
-  expect(latest.git.viewer).toBeUndefined();
-  expect(latest.browser.selectedComparedChange).toBeUndefined();
-  expect(pending.some((request) => request.body.type === "read_project_comparison_change")).toBe(false);
-});
-
-it("follows the list's status for an open worktree change whose key did not change", async () => {
-  let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
-  const Probe = () => {
-    const browser = useProjectBrowserState("p");
-    latest = { browser, git: useGitReview("p", browser, true, undefined, { worktree: useFileFilterState(), compare: useFileFilterState() }) };
-    return null;
-  };
-  const root = createRoot(document.body.appendChild(document.createElement("div")));
-  roots.push(root);
-  act(() =>
-    root.render(
-      <DaemonProvider value={daemon}>
-        <Probe />
-      </DaemonProvider>,
-    ),
-  );
-  act(() => latest.browser.setGitView("worktree"));
-  const worktree = { id: "w", root: "/r", main: true, head: "c1", branch: "main", scope_present: true };
-  await answer("get_project_source", () => ({
-    type: "project_source",
-    source: { project: "p", root: "/r", resolved_root: "/r", root_id: "r", git_error: null, git: { repository: "repo", common_dir: "/r/.git", worktree: "w", scope: "", worktrees: [worktree] } },
-  }));
-  // A key names a present side by its path alone, so a file turning into a link keeps its key.
-  const source = { kind: "index", worktree: "w", blob: "b" } as const;
-  const listed = (kind: "file" | "symlink", version: string) => () =>
-    ({
-      type: "project_changes",
-      project: "p",
-      worktree: null,
-      head: "c1",
-      changes: [
-        {
-          group: "unstaged",
-          old: { state: "present", path: "a.txt", kind: "file", source },
-          new: { state: "present", path: "a.txt", kind, source: { kind: "live", root_id: "r", version } },
-        },
-      ],
-      complete: true,
-    }) satisfies Event;
-  await answer("list_project_branches", () => ({ type: "project_branches", project: "p", branches: [], complete: true }));
-  await answer("list_project_changes", listed("file", "1"));
-  const items = latest.git.view.worktree.list;
-  if (items.state !== "loaded") throw new Error(items.state);
-  act(() => latest.git.view.worktree.onOpen(items.items[0]));
-  const side = { state: "absent" } as const;
-  const readBack = (): Event => ({ type: "project_change", project: "p", worktree: null, group: "unstaged", head: null, old: side, new: side, patch: null });
-  await answer("read_project_change", readBack);
-  expect(latest.git.viewer?.subject.status).toBe("modified");
-
-  act(() => void latest.git.refresh());
-  await answer("get_project_source", () => ({
-    type: "project_source",
-    source: { project: "p", root: "/r", resolved_root: "/r", root_id: "r", git_error: null, git: { repository: "repo", common_dir: "/r/.git", worktree: "w", scope: "", worktrees: [worktree] } },
-  }));
-  await answer("list_project_changes", listed("symlink", "2"));
-  await answer("read_project_change", readBack);
-  expect(latest.git.viewer?.subject.status).toBe("typeChanged");
-});
-
-it("moves the viewer through the change tree's rows on screen, skipping a collapsed directory", async () => {
-  let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
-  const Probe = () => {
-    const browser = useProjectBrowserState("p");
-    latest = { browser, git: useGitReview("p", browser, true, undefined, { worktree: useFileFilterState(), compare: useFileFilterState() }) };
-    return null;
-  };
-  const root = createRoot(document.body.appendChild(document.createElement("div")));
-  roots.push(root);
-  act(() =>
-    root.render(
-      <DaemonProvider value={daemon}>
-        <Probe />
-      </DaemonProvider>,
-    ),
-  );
-  act(() => {
-    latest.browser.setGitView("worktree");
-    latest.browser.setLayout("worktree", "tree");
-  });
-  try {
-    const worktree = { id: "w", root: "/r", main: true, head: "c1", branch: "main", scope_present: true };
-    await answer("get_project_source", () => ({
-      type: "project_source",
-      source: { project: "p", root: "/r", resolved_root: "/r", root_id: "r", git_error: null, git: { repository: "repo", common_dir: "/r/.git", worktree: "w", scope: "", worktrees: [worktree] } },
-    }));
-    const source = { kind: "index", worktree: "w", blob: "b" } as const;
-    const unstaged = (path: string): ChangeEntry => ({
-      group: "unstaged",
-      old: { state: "present", path, kind: "file", source },
-      new: { state: "present", path, kind: "file", source: { kind: "live", root_id: "r", version: "1" } },
-    });
-    await answer("list_project_changes", () => ({
-      type: "project_changes",
-      project: "p",
-      worktree: null,
-      head: "c1",
-      changes: ["a/x.ts", "a/y.ts", "z.ts"].map(unstaged),
-      complete: true,
-    }));
-    const list = latest.git.view.worktree.list;
-    if (list.state !== "loaded") throw new Error(list.state);
-    const side = { state: "absent" } as const;
-    const readBack = (): Event => ({ type: "project_change", project: "p", worktree: null, group: "unstaged", head: null, old: side, new: side, patch: null });
-    const z = list.items[2];
-
-    act(() => latest.git.view.worktree.onOpen(z));
-    await answer("read_project_change", readBack);
-    expect(latest.git.viewer?.navigation?.onPrevious).toBeDefined();
-
-    // Folding `a` takes its changes off the screen, so there is nothing before `z.ts` to move to.
-    act(() => latest.browser.setCollapsedChangeRows(new Set([directoryKey("unstaged", "a")])));
-    expect(latest.git.viewer?.navigation?.onPrevious).toBeUndefined();
-    expect(latest.git.viewer?.navigation?.onNext).toBeUndefined();
-
-    // The flat list has every change on screen whatever was folded in the tree.
-    act(() => latest.browser.setLayout("worktree", "flat"));
-    expect(latest.git.viewer?.navigation?.onPrevious).toBeDefined();
-
-    // A folded section takes its changes off the screen in either layout, this list holding only
-    // unstaged ones.
-    act(() => latest.browser.setCollapsedChangeRows(new Set([sectionKey("unstaged")])));
-    expect(latest.git.viewer?.navigation?.onPrevious).toBeUndefined();
-    expect(latest.git.viewer?.navigation?.onNext).toBeUndefined();
-  } finally {
-    act(() => {
-      latest.browser.setLayout("worktree", "flat");
-      latest.browser.setCollapsedChangeRows(new Set());
-    });
-  }
-});
-
-it("moves the viewer through the rows a file name filter leaves", async () => {
-  let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
-  const Probe = () => {
-    const browser = useProjectBrowserState("p");
-    latest = { browser, git: useGitReview("p", browser, true, undefined, { worktree: useFileFilterState(), compare: useFileFilterState() }) };
-    return null;
-  };
-  const root = createRoot(document.body.appendChild(document.createElement("div")));
-  roots.push(root);
-  act(() =>
-    root.render(
-      <DaemonProvider value={daemon}>
-        <Probe />
-      </DaemonProvider>,
-    ),
-  );
-  act(() => latest.browser.setGitView("worktree"));
-  const worktree = { id: "w", root: "/r", main: true, head: "c1", branch: "main", scope_present: true };
-  await answer("get_project_source", () => ({
-    type: "project_source",
-    source: { project: "p", root: "/r", resolved_root: "/r", root_id: "r", git_error: null, git: { repository: "repo", common_dir: "/r/.git", worktree: "w", scope: "", worktrees: [worktree] } },
-  }));
-  const source = { kind: "index", worktree: "w", blob: "b" } as const;
-  const unstaged = (path: string): ChangeEntry => ({
-    group: "unstaged",
-    old: { state: "present", path, kind: "file", source },
-    new: { state: "present", path, kind: "file", source: { kind: "live", root_id: "r", version: "1" } },
-  });
-  await answer("list_project_changes", () => ({ type: "project_changes", project: "p", worktree: null, head: "c1", changes: ["a/one.ts", "b/two.md", "c/three.ts"].map(unstaged), complete: true }));
-  const list = latest.git.view.worktree.list;
-  if (list.state !== "loaded") throw new Error(list.state);
-  const side = { state: "absent" } as const;
-  const readBack = (): Event => ({ type: "project_change", project: "p", worktree: null, group: "unstaged", head: null, old: side, new: side, patch: null });
-
-  act(() => latest.git.view.worktree.onOpen(list.items[0]));
-  await answer("read_project_change", readBack);
-  expect(latest.git.viewer?.navigation?.onNext).toBeDefined();
-
-  // `two.md` is filtered out, so Next from `one.ts` reaches `three.ts`; the directories are not
-  // matched.
-  act(() => latest.git.view.changeView.onFilterChange(".ts"));
-  act(() => latest.git.viewer?.navigation?.onNext?.());
-  await answer("read_project_change", readBack);
-  expect(latest.browser.selectedChange).toBe(list.items[2].key);
-
-  // Only the open change itself is left: nothing on either side.
-  act(() => latest.git.view.changeView.onFilterChange("three"));
-  expect(latest.git.viewer?.navigation?.onPrevious).toBeUndefined();
-  expect(latest.git.viewer?.navigation?.onNext).toBeUndefined();
-
-  // Cleared, the whole list is walked again.
-  act(() => latest.git.view.changeView.onFilterChange(""));
-  expect(latest.git.viewer?.navigation?.onPrevious).toBeDefined();
-});
-
-it("drops the filter text with the field, so no filter out of sight narrows a list", () => {
-  let latest!: ReturnType<typeof useGitReview>;
-  const Probe = () => {
-    latest = useGitReview("p", useProjectBrowserState("p"), true, undefined, { worktree: useFileFilterState(), compare: useFileFilterState() });
-    return null;
-  };
-  const root = createRoot(document.body.appendChild(document.createElement("div")));
-  roots.push(root);
-  act(() =>
-    root.render(
-      <DaemonProvider value={daemon}>
-        <Probe />
-      </DaemonProvider>,
-    ),
-  );
-  expect(latest.view.changeView.filterOpen).toBe(false);
-  act(() => latest.view.changeView.onFilterOpenChange(true));
-  act(() => latest.view.changeView.onFilterChange("alpha"));
-  act(() => latest.view.changeView.onFilterOpenChange(false));
-  expect(latest.view.changeView.filter).toBe("");
-  act(() => latest.view.changeView.onFilterOpenChange(true));
-  expect(latest.view.changeView.filter).toBe("");
-});
-
-type Tree = { id: string; branch: string | null; main?: boolean };
-/** `responsible` is the session working on the branch; none when the daemon names no one. */
-type Made = { name: string; responsible?: string };
-
-/** The Git mode of project `id` with a selected session, as the app drives it: every change of the
- * session is noted (`noteSessionSwitch`), a pane mounted again keeps the project's state. */
-function followHarness(id: string) {
+/** The Git mode of project `id`, as the app drives it: every change of the selected session is
+ * noted (`noteSessionSwitch`), and a pane mounted again keeps the project's state. */
+function harness(id: string) {
   let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
   let root!: Root;
   let selected: string | undefined;
   const Probe = ({ session, active }: { session: string | undefined; active: boolean }) => {
     const browser = useProjectBrowserState(id);
-    latest = { browser, git: useGitReview(id, browser, active, session, { worktree: useFileFilterState(), compare: useFileFilterState() }) };
+    latest = { browser, git: useGitReview(id, browser, active, session, useFileFilterState()) };
     return null;
   };
   const render = (session: string | undefined, active: boolean) =>
@@ -347,7 +143,7 @@ function followHarness(id: string) {
         </DaemonProvider>,
       ),
     );
-  const mount = (session: string | undefined, active = true) => {
+  const mount = (session: string | undefined = undefined, active = true) => {
     root = createRoot(document.body.appendChild(document.createElement("div")));
     roots.push(root);
     render(session, active);
@@ -360,159 +156,473 @@ function followHarness(id: string) {
     select(session);
     render(session, active);
   };
-  // Answers whatever the Git mode has asked for; the window's bound of two holds some requests
-  // back until others are answered, hence the second pass.
-  const settle = async (worktrees: Tree[], branches: Made[]) => {
-    const replies: Partial<Record<RequestBody["type"], () => Event>> = {
-      get_project_source: () => ({
-        type: "project_source",
-        source: {
-          project: id,
-          root: "/r",
-          resolved_root: "/r",
-          root_id: "r",
-          git_error: null,
-          git: {
-            repository: "repo",
-            common_dir: "/r/.git",
-            worktree: "m",
-            scope: "",
-            worktrees: worktrees.map((w) => ({ id: w.id, root: `/${w.id}`, main: w.main ?? false, head: "c1", branch: w.branch, scope_present: true })),
-          },
-        },
-      }),
-      list_project_changes: () => ({ type: "project_changes", project: id, worktree: null, head: "c1", changes: [], complete: true }),
-      list_project_branches: () => ({
-        type: "project_branches",
-        project: id,
-        branches: branches.map((b) => ({
-          name: b.name,
-          commit: "c",
-          origin: b.responsible ? { responsible_session: b.responsible, responsible_title: "t", responsible_since: 1 } : undefined,
-        })),
-        complete: true,
-      }),
-    };
-    for (let pass = 0; pass < 2; pass++) {
+  // Answers whatever the Git mode has asked for among `replies`; the window's bound of two holds
+  // some requests back until others are answered, hence the passes.
+  const settle = async (...parts: Replies[]) => {
+    const replies: Replies = Object.assign({}, ...parts);
+    for (let pass = 0; pass < 4; pass++) {
       for (const [type, reply] of Object.entries(replies)) {
-        if (pending.some((request) => request.body.type === type)) await answer(type as RequestBody["type"], reply);
+        while (pending.some((request) => request.body.type === type)) await answer(type as RequestBody["type"], reply);
       }
     }
   };
-  const selectors = () => ({ worktree: latest.browser.worktree, left: latest.browser.left, right: latest.browser.right });
-  return { mount, select, show, settle, selectors, get latest() { return latest; }, unmount: () => act(() => root.unmount()) };
+  const items = () => latest.git.view.items;
+  const item = (predicate: (item: ChangeItem) => boolean) => {
+    const found = items().find(predicate);
+    if (!found) throw new Error(`no such item among ${items().map((i) => i.key).join(", ")}`);
+    return found;
+  };
+  const selection = () => ({ branch: latest.git.view.branch, worktree: latest.git.worktree });
+  return { mount, select, show, settle, items, item, selection, get latest() { return latest; }, unmount: () => act(() => root.unmount()) };
 }
 const MAIN: Tree = { id: "m", branch: "main", main: true };
 const TOPIC: Tree = { id: "w", branch: "topic" };
-const NONE = { worktree: undefined, left: undefined, right: undefined };
 
-it("sets the selectors from the selected session's branch once it is known, unless the user chose first", async () => {
-  const h = followHarness("f1");
-  h.mount(undefined);
-  h.show("s1");
-  await h.settle([MAIN, TOPIC], [{ name: "main" }]);
-  expect(h.selectors()).toEqual(NONE);
+it("lists the default branch's uncommitted changes from its worktree, then what it committed since the main working copy's branch", async () => {
+  const h = harness("p1");
+  // The project's directory is in the worktree that has `topic` checked out.
+  h.mount();
+  await h.settle(source("p1", [MAIN, TOPIC], "w"), branchList("p1", [{ name: "main" }, { name: "topic" }]), changeList("p1", [live("a.txt")]), comparison("p1", "c3", ["b.txt"]));
+  expect(h.selection()).toEqual({ branch: "topic", worktree: undefined });
+  expect(h.items().map((i) => `${i.section} ${i.path}`)).toEqual(["unstaged a.txt", "committed b.txt"]);
+  expect(h.latest.git.view.committed).toMatchObject({ state: "compare", base: "main" });
 
-  // The attribution arrives in a later list: set.
-  act(() => void h.latest.git.refresh());
-  await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", responsible: "s1" }]);
-  expect(h.selectors()).toEqual({ worktree: "w", left: "main", right: "topic" });
+  // Chosen: the branch the main working copy has checked out has nothing to compare, and its
+  // uncommitted changes come from that worktree.
+  act(() => h.latest.git.view.onBranchChange("main"));
+  await h.settle(changeList("p1", [live("m.txt")]));
+  expect(h.selection()).toEqual({ branch: "main", worktree: "m" });
+  expect(asked("compare_project_branches")).toHaveLength(0);
+  expect(h.latest.git.view.committed.state).toBe("isBase");
+  expect(h.items().map((i) => i.path)).toEqual(["m.txt"]);
 
-  // Another session with no branch restores the defaults; a choice made since settles it.
-  h.show("s2");
-  await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", responsible: "s1" }]);
-  expect(h.selectors()).toEqual(NONE);
-  act(() => h.latest.git.view.compare.onBranchesChange("main", undefined));
-  act(() => void h.latest.git.refresh());
-  await h.settle([MAIN, TOPIC], [{ name: "topic", responsible: "s2" }]);
-  expect(h.selectors()).toMatchObject({ left: "main", right: undefined });
+  // A branch checked out nowhere has no uncommitted part: only what it committed.
+  act(() => h.latest.git.view.onBranchChange("loose"));
+  await h.settle(comparison("p1", "c5", ["l.txt"]));
+  expect(asked("list_project_changes")).toHaveLength(0);
+  expect(h.latest.git.view.uncommitted.state).toBe("notCheckedOut");
+  expect(h.items().map((i) => i.section)).toEqual(["committed"]);
 });
 
-it("sets the selectors again on switching between two sessions that are each responsible for a branch", async () => {
-  const h = followHarness("f2");
+it("chooses no branch while the project's worktree is detached, and compares nothing while the main working copy is", async () => {
+  const h = harness("p2");
+  h.mount();
+  await h.settle(source("p2", [{ id: "m", branch: null, main: true }, TOPIC]), branchList("p2", [{ name: "topic" }]));
+  expect(h.latest.git.view.branch).toBeUndefined();
+  expect(asked("list_project_changes")).toHaveLength(0);
+  act(() => h.latest.git.view.onBranchChange("topic"));
+  await h.settle(changeList("p2", [live("a.txt")]));
+  expect(asked("compare_project_branches")).toHaveLength(0);
+  expect(h.latest.git.view.committed.state).toBe("noBase");
+  expect(h.items().map((i) => i.path)).toEqual(["a.txt"]);
+});
+
+it("compares again once a branch list shows either branch at another commit", async () => {
+  const h = harness("p3");
+  h.mount();
+  act(() => h.latest.browser.setBranch("topic"));
+  await h.settle(source("p3", [MAIN, TOPIC]), branchList("p3", [{ name: "main", commit: "c1" }, { name: "topic", commit: "c3" }]), changeList("p3", [live("a.txt")]), comparison("p3", "c3", ["b.txt"]));
+  expect(asked("compare_project_branches")).toHaveLength(0);
+
+  // A list at the commits compared says nothing new; one with the branch moved makes it again.
+  act(() => void h.latest.git.refresh());
+  await h.settle(source("p3", [MAIN, TOPIC]), branchList("p3", [{ name: "main", commit: "c1" }, { name: "topic", commit: "c3" }]), changeList("p3", [live("a.txt")]), comparison("p3", "c3", ["b.txt"]));
+  const later = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 60_000);
+  act(() => void window.dispatchEvent(new Event("focus")));
+  later.mockRestore();
+  await h.settle(branchList("p3", [{ name: "main", commit: "c1" }, { name: "topic", commit: "c4" }]), changeList("p3", []));
+  expect(asked("compare_project_branches")).toHaveLength(1);
+  // The comparison on screen stays until the new one is in, which has what was uncommitted.
+  expect(h.items().map((i) => i.path)).toEqual(["b.txt"]);
+  await h.settle(comparison("p3", "c4", ["a.txt", "b.txt"]));
+  expect(h.items().map((i) => `${i.section} ${i.path}`)).toEqual(["committed a.txt", "committed b.txt"]);
+});
+
+it("lists the committed changes by commit, newest first, and reads a commit's change against its parent", async () => {
+  const h = harness("p4");
+  h.mount();
+  act(() => {
+    h.latest.browser.setBranch("topic");
+    h.latest.browser.setByCommit(true);
+  });
+  const commits: CommitChanges[] = [
+    { commit: "c3", parent: "c2", subject: "second", changes: [committed("a.txt", "c3")] },
+    { commit: "c2", parent: "c1", subject: "first", changes: [committed("a.txt", "c2"), committed("b.txt", "c2")] },
+  ];
+  try {
+    await h.settle(source("p4", [MAIN, TOPIC]), branchList("p4", [{ name: "main" }, { name: "topic" }]), changeList("p4"), comparison("p4", "c3", ["a.txt", "b.txt"]));
+    expect(asked("list_project_commits")).toMatchObject([{ base: "c1", tip: "c3" }]);
+    await h.settle(commitList("p4", commits));
+    expect(h.items().map((i) => `${i.commit?.commit} ${i.path}`)).toEqual(["c3 a.txt", "c2 a.txt", "c2 b.txt"]);
+    // The same file changed by two commits is two rows, and two stops of the viewer.
+    const [newer, older] = h.items();
+    expect(newer.key).not.toBe(older.key);
+
+    act(() => h.latest.git.view.onOpen(older));
+    const read = asked("read_project_commit_change")[0];
+    expect(read).toMatchObject({ commit: "c2", parent: "c1", change: { new: { state: "present", path: "a.txt" } } });
+    await h.settle({
+      read_project_commit_change: () => ({ type: "project_commit_change", project: "p4", commit: "c2", parent: "c1", old: absent, new: absent, patch: null }),
+    });
+    expect(h.latest.git.viewer?.subject.sourceText).toContain("c2");
+    expect(h.latest.git.viewer?.navigation?.onPrevious).toBeDefined();
+
+    // Commits listed again without it: the viewer closes. Grouped back together, the cumulative
+    // section is shown, and nothing is asked again.
+    act(() => void h.latest.git.refresh());
+    await h.settle(source("p4", [MAIN, TOPIC]), branchList("p4", [{ name: "main" }, { name: "topic" }]), changeList("p4"), comparison("p4", "c3", ["a.txt"]), commitList("p4", [commits[0]]));
+    expect(h.latest.git.viewer).toBeUndefined();
+    act(() => h.latest.browser.setByCommit(false));
+    expect(pending).toHaveLength(0);
+    expect(h.items().map((i) => `${i.section} ${i.path}`)).toEqual(["committed a.txt"]);
+  } finally {
+    act(() => h.latest.browser.setByCommit(false));
+  }
+});
+
+it("does not ask for a comparison again while one is in flight, whatever the branch lists read meanwhile", async () => {
+  const h = harness("p3b");
+  h.mount();
+  act(() => h.latest.browser.setBranch("topic"));
+  const listing = (topic: string) => [branchList("p3b", [{ name: "main", commit: "c1" }, { name: "topic", commit: topic }]), changeList("p3b")];
+  await h.settle(source("p3b", [MAIN, TOPIC]), ...listing("c3"), comparison("p3b", "c3", ["b.txt"]));
+  const focusLater = (ahead: number) => {
+    const later = vi.spyOn(Date, "now").mockReturnValue(Date.now() + ahead);
+    act(() => void window.dispatchEvent(new Event("focus")));
+    later.mockRestore();
+  };
+  // The branch moved: the comparison is asked for again, and takes its time.
+  focusLater(100_000);
+  await h.settle(...listing("c4"));
+  expect(asked("compare_project_branches")).toHaveLength(1);
+  const inFlight = asked("compare_project_branches")[0];
+
+  // Lists read while it is out still show the branch at the commit it was asked for: it is not
+  // asked for again, and the request out is not replaced.
+  focusLater(200_000);
+  await h.settle(...listing("c4"));
+  focusLater(300_000);
+  await h.settle(...listing("c4"));
+  expect(asked("compare_project_branches")).toEqual([inFlight]);
+
+  // The branch moving on again is news of its own.
+  focusLater(400_000);
+  await h.settle(...listing("c5"));
+  expect(asked("compare_project_branches")).toHaveLength(2);
+  await h.settle(comparison("p3b", "c5", ["a.txt"]));
+  expect(h.items().map((i) => i.path)).toEqual(["a.txt"]);
+});
+
+it("asks for a comparison that failed in the background again only once a later list has the branches elsewhere", async () => {
+  const h = harness("p3c");
+  h.mount();
+  act(() => h.latest.browser.setBranch("topic"));
+  const listing = (topic: string) => [branchList("p3c", [{ name: "main", commit: "c1" }, { name: "topic", commit: topic }]), changeList("p3c")];
+  await h.settle(source("p3c", [MAIN, TOPIC]), ...listing("c3"), comparison("p3c", "c3", ["b.txt"]));
+  const focusLater = (ahead: number) => {
+    const later = vi.spyOn(Date, "now").mockReturnValue(Date.now() + ahead);
+    act(() => void window.dispatchEvent(new Event("focus")));
+    later.mockRestore();
+  };
+  const failOne = async () => {
+    const index = pending.findIndex((request) => request.body.type === "compare_project_branches");
+    expect(index).not.toBe(-1);
+    const [request] = pending.splice(index, 1);
+    await act(async () => request.reject(new DaemonRequestError("broken", "git_failed", {})));
+  };
+
+  // The branch moved and the comparison made again fails.
+  focusLater(100_000);
+  await h.settle(...listing("c4"));
+  expect(asked("compare_project_branches")).toHaveLength(1);
+  await failOne();
+  expect(h.latest.git.view.committed).toMatchObject({ state: "compare", comparison: { state: "error" } });
+
+  // Lists with the branch where it was asked for do not ask again.
+  focusLater(200_000);
+  await h.settle(...listing("c4"));
+  expect(asked("compare_project_branches")).toHaveLength(0);
+
+  // The branch at another commit does.
+  focusLater(300_000);
+  await h.settle(...listing("c5"));
+  expect(asked("compare_project_branches")).toHaveLength(1);
+  await h.settle(comparison("p3c", "c5", ["a.txt"]));
+  expect(h.items().map((i) => i.path)).toEqual(["a.txt"]);
+});
+
+it("shows no commit section of the previous branch while the new branch's commits are listed", async () => {
+  const h = harness("p4b");
+  h.mount();
+  act(() => {
+    h.latest.browser.setBranch("topic");
+    h.latest.browser.setByCommit(true);
+  });
+  const commitsOf = (tip: string, path: string): CommitChanges[] => [{ commit: tip, parent: "c1", subject: `on ${tip}`, changes: [committed(path, tip)] }];
+  const base = [source("p4b", [MAIN, TOPIC]), branchList("p4b", [{ name: "main" }, { name: "topic" }, { name: "other" }]), changeList("p4b")];
+  try {
+    await h.settle(...base, comparison("p4b", "c3", ["a.txt"]), commitList("p4b", commitsOf("c3", "a.txt")));
+    expect(h.items().map((i) => i.commit?.commit)).toEqual(["c3"]);
+
+    // Another branch: the commits are asked for, and while they are not in, nothing of the
+    // previous branch's stands, and no footer of its list does either.
+    act(() => h.latest.git.view.onBranchChange("other"));
+    await h.settle(comparison("p4b", "c6", ["z.txt"]));
+    expect(asked("list_project_commits")).toMatchObject([{ tip: "c6" }]);
+    expect(h.items()).toEqual([]);
+    expect(h.latest.git.view.committed).toMatchObject({ state: "compare", commits: { state: "loading" } });
+    await h.settle(commitList("p4b", commitsOf("c6", "z.txt")));
+    expect(h.items().map((i) => i.commit?.commit)).toEqual(["c6"]);
+
+    // The same branch at another commit keeps its sections until the new list is in.
+    act(() => void h.latest.git.refresh());
+    await h.settle(source("p4b", [MAIN, TOPIC]), branchList("p4b", [{ name: "main" }, { name: "topic" }, { name: "other" }]), changeList("p4b"), comparison("p4b", "c7", ["z.txt"]));
+    expect(h.items().map((i) => i.commit?.commit)).toEqual(["c6"]);
+    await h.settle(commitList("p4b", commitsOf("c7", "z.txt")));
+    expect(h.items().map((i) => i.commit?.commit)).toEqual(["c7"]);
+  } finally {
+    act(() => h.latest.browser.setByCommit(false));
+  }
+});
+
+it("shows no commit section of the previous base branch while the commits against the new one are listed", async () => {
+  const h = harness("p4c");
+  h.mount();
+  act(() => {
+    h.latest.browser.setBranch("topic");
+    h.latest.browser.setByCommit(true);
+  });
+  const commitsOf = (path: string): CommitChanges[] => [{ commit: "c3", parent: "c1", subject: path, changes: [committed(path, "c3")] }];
+  const listing = (base: Tree) => [source("p4c", [base, TOPIC]), branchList("p4c", [{ name: "main" }, { name: "dev" }, { name: "topic" }]), changeList("p4c")];
+  try {
+    await h.settle(...listing(MAIN), comparison("p4c", "c3", ["a.txt"]), commitList("p4c", commitsOf("a.txt")));
+    expect(h.items().map((i) => i.path)).toEqual(["a.txt"]);
+
+    // The main working copy moved to another branch: the same branch is compared with it from
+    // another fork, and the sections of the commits against the old base are not shown meanwhile.
+    act(() => void h.latest.git.refresh());
+    await h.settle(...listing({ id: "m", branch: "dev", main: true }), comparison("p4c", "c3", ["a.txt"], "c0"));
+    expect(asked("list_project_commits")).toMatchObject([{ base: "c0", tip: "c3" }]);
+    expect(h.items()).toEqual([]);
+    expect(h.latest.git.view.committed).toMatchObject({ state: "compare", base: "dev", commits: { state: "loading" } });
+    await h.settle(commitList("p4c", commitsOf("b.txt")));
+    expect(h.items().map((i) => i.path)).toEqual(["b.txt"]);
+  } finally {
+    act(() => h.latest.browser.setByCommit(false));
+  }
+});
+
+it("follows a comparison made again with the change still in it, and closes on one without it", async () => {
+  const h = harness("p5");
+  h.mount();
+  act(() => h.latest.browser.setBranch("topic"));
+  const replies = (tip: string, paths: string[]) => [source("p5", [MAIN]), branchList("p5", []), comparison("p5", tip, paths)];
+  await h.settle(...replies("c2", ["a.txt", "b.txt"]));
+  act(() => h.latest.git.view.onOpen(h.items()[0]));
+  const read: Replies = {
+    read_project_comparison_change: (body) => {
+      if (body.type !== "read_project_comparison_change") throw new Error(body.type);
+      return { type: "project_comparison_change", project: "p5", left: body.left, right: body.right, base: body.base, old: absent, new: absent, patch: null };
+    },
+  };
+  expect(asked("read_project_comparison_change")).toMatchObject([{ right: { commit: "c2" } }]);
+  await h.settle(read);
+
+  // Made again at another commit, with the change still in it: read again from the new pair.
+  act(() => void h.latest.git.refresh());
+  await h.settle(...replies("c3", ["a.txt"]));
+  expect(asked("read_project_comparison_change")).toMatchObject([{ right: { commit: "c3" } }]);
+  await h.settle(read);
+  expect(h.latest.git.viewer?.subject.key).toContain("c3");
+
+  // Made again without it: no such change between those commits, so the viewer closes.
+  act(() => void h.latest.git.refresh());
+  await h.settle(...replies("c4", ["b.txt"]));
+  expect(h.latest.git.viewer).toBeUndefined();
+  expect(h.latest.browser.selectedChange).toBeUndefined();
+  expect(asked("read_project_comparison_change")).toHaveLength(0);
+});
+
+it("follows the list's status for an open uncommitted change whose key did not change", async () => {
+  const h = harness("p6");
+  h.mount();
+  // A key names a present side by its path alone, so a file turning into a link keeps its key.
+  const listed = (kind: "file" | "symlink", version: string): ChangeEntry => {
+    const entry = live("a.txt", version);
+    return entry.group === "unstaged" && entry.new.state === "present" ? { ...entry, new: { ...entry.new, kind } } : entry;
+  };
+  await h.settle(source("p6", [MAIN]), branchList("p6", []), changeList("p6", [listed("file", "1")]));
+  act(() => h.latest.git.view.onOpen(h.items()[0]));
+  await h.settle(readBack);
+  expect(h.latest.git.viewer?.subject.status).toBe("modified");
+
+  act(() => void h.latest.git.refresh());
+  await h.settle(source("p6", [MAIN]), branchList("p6", []), changeList("p6", [listed("symlink", "2")]));
+  await h.settle(readBack);
+  expect(h.latest.git.viewer?.subject.status).toBe("typeChanged");
+});
+
+it("moves the viewer through the rows on screen, skipping a collapsed directory, a folded section and what the filter hides", async () => {
+  const h = harness("p7");
+  h.mount();
+  act(() => h.latest.browser.setLayout("tree"));
+  try {
+    await h.settle(source("p7", [MAIN]), branchList("p7", []), changeList("p7", ["a/x.ts", "a/y.ts", "z.ts"].map((path) => live(path))));
+    act(() => h.latest.git.view.onOpen(h.item((i) => i.path === "z.ts")));
+    await h.settle(readBack);
+    expect(h.latest.git.viewer?.navigation?.onPrevious).toBeDefined();
+
+    // Folding `a` takes its changes off the screen, so there is nothing before `z.ts` to move to.
+    act(() => h.latest.browser.setCollapsedChangeRows(new Set([directoryKey("unstaged", "a")])));
+    expect(h.latest.git.viewer?.navigation?.onPrevious).toBeUndefined();
+    // The flat list has every change on screen whatever was folded in the tree.
+    act(() => h.latest.browser.setLayout("flat"));
+    expect(h.latest.git.viewer?.navigation?.onPrevious).toBeDefined();
+    // A folded section takes its changes off the screen in either layout.
+    act(() => h.latest.browser.setCollapsedChangeRows(new Set([sectionKey("unstaged")])));
+    expect(h.latest.git.viewer?.navigation?.onPrevious).toBeUndefined();
+    act(() => h.latest.browser.setCollapsedChangeRows(new Set()));
+
+    // Only the open change matches: nothing on either side. The directories are not matched.
+    act(() => h.latest.git.view.changeView.onFilterChange("z"));
+    expect(h.latest.git.viewer?.navigation?.onPrevious).toBeUndefined();
+    act(() => h.latest.git.view.changeView.onFilterChange("a"));
+    expect(h.latest.git.viewer?.navigation?.onPrevious).toBeUndefined();
+    act(() => h.latest.git.view.changeView.onFilterChange(""));
+    expect(h.latest.git.viewer?.navigation?.onPrevious).toBeDefined();
+  } finally {
+    act(() => {
+      h.latest.browser.setLayout("flat");
+      h.latest.browser.setCollapsedChangeRows(new Set());
+    });
+  }
+});
+
+it("drops the filter text with the field, so no filter out of sight narrows a list", () => {
+  const h = harness("p8");
+  h.mount();
+  const view = () => h.latest.git.view.changeView;
+  expect(view().filterOpen).toBe(false);
+  act(() => view().onFilterOpenChange(true));
+  act(() => view().onFilterChange("alpha"));
+  act(() => view().onFilterOpenChange(false));
+  expect(view().filter).toBe("");
+  act(() => view().onFilterOpenChange(true));
+  expect(view().filter).toBe("");
+});
+
+/** Everything a followed session's Git mode asks for, answered for `worktrees` and `branches`. */
+const around = (id: string, worktrees: Tree[], branches: Made[]) => [source(id, worktrees), branchList(id, branches), changeList(id), comparison(id, "c2", [])];
+const DEFAULT = { branch: "main", worktree: undefined };
+
+it("sets the branch from the selected session's once it is known, unless the user chose first", async () => {
+  const h = harness("f1");
+  h.mount(undefined);
+  h.show("s1");
+  await h.settle(...around("f1", [MAIN, TOPIC], [{ name: "main" }]));
+  expect(h.selection()).toEqual(DEFAULT);
+
+  // The attribution arrives in a later list: set, and its worktree followed.
+  act(() => void h.latest.git.refresh());
+  await h.settle(...around("f1", [MAIN, TOPIC], [{ name: "main" }, { name: "topic", responsible: "s1" }]));
+  expect(h.selection()).toEqual({ branch: "topic", worktree: "w" });
+
+  // Another session with no branch goes back to the default; a choice made since settles it.
+  h.show("s2");
+  await h.settle(...around("f1", [MAIN, TOPIC], [{ name: "main" }, { name: "topic", responsible: "s1" }]));
+  expect(h.selection()).toEqual(DEFAULT);
+  act(() => h.latest.git.view.onBranchChange("loose"));
+  act(() => void h.latest.git.refresh());
+  await h.settle(...around("f1", [MAIN, TOPIC], [{ name: "topic", responsible: "s2" }]));
+  expect(h.selection().branch).toBe("loose");
+});
+
+it("sets the branch again on switching between two sessions that are each responsible for one", async () => {
+  const h = harness("f2");
   const branches = [{ name: "main" }, { name: "topic", responsible: "s1" }, { name: "other", responsible: "s2" }];
   h.mount(undefined);
   h.show("s1");
-  await h.settle([MAIN, TOPIC], branches);
-  expect(h.selectors()).toEqual({ worktree: "w", left: "main", right: "topic" });
+  await h.settle(...around("f2", [MAIN, TOPIC], branches));
+  expect(h.selection()).toEqual({ branch: "topic", worktree: "w" });
   h.show("s2");
-  await h.settle([MAIN, TOPIC], branches);
-  expect(h.selectors()).toEqual({ worktree: undefined, left: "main", right: "other" });
+  await h.settle(...around("f2", [MAIN, TOPIC], branches));
+  expect(h.selection()).toEqual({ branch: "other", worktree: undefined });
 });
 
-it("asks again for a worktree no listed one is, and sets it from the list that answers", async () => {
-  const h = followHarness("f3");
+it("asks again for a worktree no listed one is, and reads the branch's changes from the one that answers", async () => {
+  const h = harness("f3");
   h.mount(undefined);
   h.show("s1");
   const branches = [{ name: "main" }, { name: "topic", responsible: "s1" }];
-  await h.settle([MAIN], branches);
-  // The list read so far has no worktree for the branch: the comparison is set, the worktree waits
-  // for the list asked for again.
-  expect(h.selectors()).toEqual({ worktree: undefined, left: "main", right: "topic" });
-  expect(pending.some((request) => request.body.type === "get_project_source")).toBe(true);
-  await h.settle([MAIN, TOPIC], branches);
-  expect(h.selectors()).toEqual({ worktree: "w", left: "main", right: "topic" });
+  // The worktrees are read once from before the selection, which is asked for again, and once
+  // since, and neither has the branch checked out: they are asked for once more, and the worktree
+  // made in the meantime is in that answer.
+  let sources = 0;
+  const growing: Replies = { get_project_source: (body) => source("f3", sources++ < 2 ? [MAIN] : [MAIN, TOPIC]).get_project_source!(body) };
+  await h.settle(growing, branchList("f3", branches), changeList("f3"), comparison("f3", "c2", []));
+  expect(sources).toBe(3);
+  expect(h.selection()).toEqual({ branch: "topic", worktree: "w" });
 });
 
 it("weighs only what was read after the selection, asking again for what a pane held", async () => {
-  const h = followHarness("f4");
+  const h = harness("f4");
   const branches = [{ name: "main" }, { name: "topic", responsible: "s1" }, { name: "other", responsible: "s2" }];
   h.mount(undefined);
   h.show("s1");
-  await h.settle([MAIN, TOPIC], branches);
-  expect(h.selectors().right).toBe("topic");
+  await h.settle(...around("f4", [MAIN, TOPIC], branches));
+  expect(h.selection().branch).toBe("topic");
   // Selected while the Git mode is off screen: the lists held name a branch for s2, but are from
   // before the selection and are not weighed.
   h.show("s2", false);
-  expect(h.selectors().right).toBe("topic");
+  expect(h.selection().branch).toBe("topic");
   expect(pending).toHaveLength(0);
   h.show("s2", true);
-  expect(h.selectors().right).toBe("topic");
+  expect(h.selection().branch).toBe("topic");
   expect(pending.map((request) => request.body.type)).toEqual(expect.arrayContaining(["get_project_source", "list_project_branches"]));
-  await h.settle([MAIN, TOPIC], branches);
-  expect(h.selectors().right).toBe("other");
+  await h.settle(...around("f4", [MAIN, TOPIC], branches));
+  expect(h.selection().branch).toBe("other");
 });
 
-it("sets the selectors again on a new selection of the session, but not on a pane mounted under the same one", async () => {
-  const h = followHarness("f5");
+it("sets the branch again on a new selection of the session, but not on a pane mounted under the same one", async () => {
+  const h = harness("f5");
   const branches = [{ name: "main" }, { name: "topic", responsible: "s1" }];
   h.mount(undefined);
   h.show("s1");
-  await h.settle([MAIN, TOPIC], branches);
-  act(() => h.latest.git.view.compare.onBranchesChange("topic", "main"));
+  await h.settle(...around("f5", [MAIN, TOPIC], branches));
+  act(() => h.latest.git.view.onBranchChange("main"));
 
   // The pane goes and comes back with the selection unchanged: the choice stands.
   h.unmount();
   h.mount("s1");
-  await h.settle([MAIN, TOPIC], branches);
-  expect(h.selectors()).toMatchObject({ left: "topic", right: "main" });
+  await h.settle(...around("f5", [MAIN, TOPIC], branches));
+  expect(h.selection().branch).toBe("main");
 
   // Another selection in between, the pane away: the session is a new switch.
   h.unmount();
   h.select("other");
   h.select("s1");
   h.mount("s1");
-  await h.settle([MAIN, TOPIC], branches);
-  expect(h.selectors()).toEqual({ worktree: "w", left: "main", right: "topic" });
+  await h.settle(...around("f5", [MAIN, TOPIC], branches));
+  expect(h.selection()).toEqual({ branch: "topic", worktree: "w" });
 });
 
-it("leaves the selectors as they are for a session that is not the project's", async () => {
-  const h = followHarness("f6");
+it("leaves the branch as it is for a session that is not the project's", async () => {
+  const h = harness("f6");
   h.mount(undefined);
   h.show("s1");
-  await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", responsible: "s1" }]);
-  const before = h.selectors();
+  await h.settle(...around("f6", [MAIN, TOPIC], [{ name: "main" }, { name: "topic", responsible: "s1" }]));
+  const before = h.selection();
   h.show(undefined);
   expect(pending).toHaveLength(0);
-  expect(h.selectors()).toEqual(before);
+  expect(h.selection()).toEqual(before);
 });
 
-it("sets the worktree of a branch that shows up later in a worktree made since, on a clock that stands still", async () => {
-  const h = followHarness("f7");
+it("follows a branch that shows up later in a worktree made since, on a clock that stands still", async () => {
+  const h = harness("f7");
   h.mount(undefined);
   h.show("s1");
-  await h.settle([MAIN], [{ name: "main" }]);
-  expect(h.selectors()).toEqual(NONE);
+  await h.settle(...around("f7", [MAIN], [{ name: "main" }]));
+  expect(h.selection()).toEqual(DEFAULT);
 
   // WebKit rounds `performance.now()` to the millisecond: what one handler does reads one time.
   const clock = vi.spyOn(performance, "now").mockReturnValue(performance.now() + 1000);
@@ -522,18 +632,10 @@ it("sets the worktree of a branch that shows up later in a worktree made since, 
     const later = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 60_000);
     act(() => void window.dispatchEvent(new Event("focus")));
     later.mockRestore();
-    await answer("list_project_branches", () => ({
-      type: "project_branches",
-      project: "f7",
-      branches: [
-        { name: "main", commit: "c" },
-        { name: "topic", commit: "c", origin: { responsible_session: "s1", responsible_title: "t", responsible_since: 1 } },
-      ],
-      complete: true,
-    }));
-    expect(h.selectors()).toEqual({ worktree: undefined, left: "main", right: "topic" });
-    await h.settle([MAIN, TOPIC], [{ name: "main" }, { name: "topic", responsible: "s1" }]);
-    expect(h.selectors()).toEqual({ worktree: "w", left: "main", right: "topic" });
+    await h.settle(branchList("f7", [{ name: "main" }, { name: "topic", responsible: "s1" }]));
+    expect(h.selection()).toEqual({ branch: "topic", worktree: undefined });
+    await h.settle(...around("f7", [MAIN, TOPIC], [{ name: "main" }, { name: "topic", responsible: "s1" }]));
+    expect(h.selection()).toEqual({ branch: "topic", worktree: "w" });
   } finally {
     clock.mockRestore();
   }

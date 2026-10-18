@@ -1,18 +1,18 @@
-// What both layouts of the Git mode's change list put above a section's changes: the band itself,
-// the control that folds the section away and unfolds it, and the key handling that reaches that
-// control, which the collections the lists are built on do not reach themselves.
+// What the Git mode's change list puts above a section's changes: the band itself, the control that
+// folds the section away and unfolds it, and the key handling that reaches that control, which the
+// collection the list is built on does not reach itself.
 import { ChevronDown, ChevronRight } from "lucide-react";
 import React, { useRef } from "react";
-import { Button, ListLayout } from "react-aria-components";
+import { Button, ListLayout, Rect } from "react-aria-components";
 
 import { handFocusOff } from "../components/handFocusOff";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { SECTION_LABELS, sectionKey, type ChangeSection } from "./changes";
 
 /** Every section heading is one line of this height, which, with the rows' (`ROW_HEIGHT`), is what
- * lets the list be virtualized, flat or as a tree. */
+ * lets the list be virtualized. */
 export const HEADING_HEIGHT = 30;
-/** A section's heading, in both layouts, uses the pane's control fill so it stays a step off the
+/** A section's heading uses the pane's control fill so it stays a step off the
  * panel: 1.15:1 from it in light and 1.23:1 in dark, with muted text above 4.5:1 on both fills.
  * `h-[30px]` is `HEADING_HEIGHT`.
  * What the band holds is one control filling it (`ChangeSectionHeading`), so the line's own layout and
@@ -22,6 +22,24 @@ export const HEADING_CLASS = "flex h-[30px] bg-default text-xs font-medium text-
 /** The virtualizer's sticky wrapper must stay within its own section, whose overflow is visible.
  * Render copies leave the layout's original positions intact for keyboard navigation and row offsets. */
 export class ChangeListLayout extends ListLayout<unknown> {
+  /**
+   * Lays out every row and heading at once, which their fixed heights make exact and cheap, where
+   * `ListLayout` (react-stately 3.50) lays out only what lies around the visible rectangle and
+   * estimates a section's rest. Inside a `Tree` that estimate counts the content node of every
+   * expanded row still to come (a commit, a directory) as one more row, and the virtualizer sizes the
+   * scroller from it, keeping that size while scrolling lays the rest out; scrolled into the excess,
+   * the section has already ended, and its heading, which sticks only within it, is gone with its
+   * rows. And a section laid out again after the scroller resizes skips every child above the
+   * visible rectangle, its own heading among them, so a section scrolled past its top loses its
+   * heading. Starting from the top of the list every time leaves nothing to estimate or skip.
+   */
+  protected override buildCollection(offset?: number): ReturnType<ListLayout<unknown>["buildCollection"]> {
+    this.requestedRect = new Rect(0, 0, Infinity, Infinity);
+    const nodes = super.buildCollection(offset);
+    this.requestedRect = new Rect(0, 0, this.contentSize.width, this.contentSize.height);
+    return nodes;
+  }
+
   override getVisibleLayoutInfos(rect: Parameters<ListLayout<unknown>["getVisibleLayoutInfos"]>[0]): ReturnType<ListLayout<unknown>["getVisibleLayoutInfos"]> {
     return super.getVisibleLayoutInfos(rect).map((info) => {
       if (info.type !== "section" && info.type !== "header") return info;
@@ -49,7 +67,7 @@ function SectionHeadingText({ section, count }: { section: ChangeSection; count:
   return (
     <>
       {t(SECTION_LABELS[section])}
-      <span>{new Intl.NumberFormat(language).format(count)}</span>
+      <span className="shrink-0">{new Intl.NumberFormat(language).format(count)}</span>
     </>
   );
 }
@@ -66,7 +84,7 @@ function SectionHeadingText({ section, count }: { section: ChangeSection; count:
  * `focusRow` keeps the place the user went to.
  */
 function keepHeadingFocus(band: HTMLButtonElement | null): void {
-  const list = band?.closest<HTMLElement>("[role=grid], [role=treegrid]");
+  const list = band?.closest<HTMLElement>("[role=treegrid]");
   if (!band || !list || document.activeElement !== band) return;
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
@@ -76,7 +94,7 @@ function keepHeadingFocus(band: HTMLButtonElement | null): void {
 }
 
 /**
- * What a section's heading holds, in both layouts: one button filling the band, which folds the
+ * What a section's heading holds: one button filling the band, which folds the
  * section's rows away and unfolds them again (its key in `collapsed` is `sectionKey`), showing a
  * chevron, the section's name and its count.
  *

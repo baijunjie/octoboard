@@ -14,16 +14,11 @@ export function resultDirectories(paths: readonly string[]): string[] {
 export function buildFileResults(
   paths: readonly string[],
   selected: string | undefined,
-  layout: "flat" | "tree",
   collapsed: ReadonlySet<string>,
 ): { tree: TreeModel; expanded: Set<string> } {
   const sorted = [...new Set(paths)].sort(compareFilePaths);
   const entry = (name: string, kind: "file" | "directory"): BrowseEntry => ({ name, kind, size: null, version: null, target: null });
   const file = (path: string, name: string): TreeNode => ({ type: "file", key: rowKey(path), path, selected: path === selected, entry: entry(name, "file") });
-  if (layout === "flat") {
-    return { tree: { nodes: sorted.map((path) => file(path, path)), files: sorted, rows: sorted.map(rowKey), wanted: [] }, expanded: new Set() };
-  }
-
   const directories = resultDirectories(sorted);
   const directorySet = new Set(directories);
   const expanded = new Set(directories.filter((path) => !collapsed.has(path)).map(rowKey));

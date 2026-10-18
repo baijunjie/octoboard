@@ -952,7 +952,20 @@ pub struct ComparisonEndpoint {
     pub commit: String,
 }
 
-/// The change a `read_project_comparison_change` reads: its two sides, as the comparison gave them.
+/// One commit a branch made since it forked, as `list_project_commits` lists it: its full id, its
+/// first parent's (`None` for a commit with no parent, whose changes are against the empty tree),
+/// its subject line, and its changes against that parent that touch the project, each in the
+/// `committed` group.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CommitChanges {
+    pub commit: String,
+    pub parent: Option<String>,
+    pub subject: String,
+    pub changes: Vec<ChangeEntry>,
+}
+
+/// The change a `read_project_comparison_change` or a `read_project_commit_change` reads: its two
+/// sides, as the listing gave them.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct ComparedChangeRef {
     pub old: SideRef,
@@ -1016,6 +1029,9 @@ pub const BROWSE_REQUEST_TYPES: &[&str] = &[
     "read_project_comparison_change",
     "read_project_change_bodies",
     "read_project_comparison_change_bodies",
+    "list_project_commits",
+    "read_project_commit_change",
+    "read_project_commit_change_bodies",
 ];
 
 #[derive(Debug, Deserialize)]
@@ -1087,6 +1103,32 @@ pub enum BrowseBody {
         left: ComparisonEndpoint,
         right: ComparisonEndpoint,
         base: String,
+        change: ComparedChangeRef,
+        old: SideVersion,
+        new: SideVersion,
+    },
+    /// The commits reachable from `tip` and not from `base`, both full commit ids — a comparison's
+    /// right commit and its merge base — newest first, each with its own changes.
+    ListProjectCommits {
+        project: String,
+        base: String,
+        tip: String,
+    },
+    /// One change of a commit, against its first parent as the commit list gave it: `parent` is
+    /// `None` for a commit with no parent.
+    ReadProjectCommitChange {
+        project: String,
+        commit: String,
+        #[serde(default)]
+        parent: Option<String>,
+        change: ComparedChangeRef,
+    },
+    /// As `ReadProjectChangeBodies`, for a change of a commit.
+    ReadProjectCommitChangeBodies {
+        project: String,
+        commit: String,
+        #[serde(default)]
+        parent: Option<String>,
         change: ComparedChangeRef,
         old: SideVersion,
         new: SideVersion,
@@ -1895,6 +1937,39 @@ pub enum Event {
         left: ComparisonEndpoint,
         right: ComparisonEndpoint,
         base: String,
+        old: Box<SideRead>,
+        new: Box<SideRead>,
+    },
+    /// The reply to `list_project_commits`: `base` and `tip` echo the request; `commits` are newest
+    /// first. `complete` is false when the changes were cut at a budget, and `commits_complete`
+    /// when there were more commits than are listed.
+    ProjectCommits {
+        id: Option<String>,
+        project: String,
+        base: String,
+        tip: String,
+        commits: Vec<CommitChanges>,
+        complete: bool,
+        commits_complete: bool,
+    },
+    /// The reply to `read_project_commit_change`: `commit` and `parent` echo the request, and both
+    /// sides and the patch were read from exactly the parent (the empty tree for none) and the
+    /// commit.
+    ProjectCommitChange {
+        id: Option<String>,
+        project: String,
+        commit: String,
+        parent: Option<String>,
+        old: Box<SideRead>,
+        new: Box<SideRead>,
+        patch: Option<FileContent>,
+    },
+    /// The reply to `read_project_commit_change_bodies`: `commit` and `parent` echo the request.
+    ProjectCommitChangeBodies {
+        id: Option<String>,
+        project: String,
+        commit: String,
+        parent: Option<String>,
         old: Box<SideRead>,
         new: Box<SideRead>,
     },

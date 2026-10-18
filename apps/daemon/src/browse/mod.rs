@@ -2,9 +2,10 @@
 //! `apps/daemon/PROTOCOL.md`'s "Browsing a project": where a project's files are (`source`), the
 //! files on disk (`live`), the files in Git (`blob`, through the isolated invocation in `git`), a
 //! worktree's uncommitted changes and one change's diff (`changes`), the repository's local
-//! branches and the changes between two of their tips (`compare`), how a path travels on the wire
-//! (`wire_path`), the limits all of it is held to (`budget`), and the per-connection lane its
-//! replies take back to the client (`lane`).
+//! branches and the changes between two of their tips (`compare`), the commits a branch made since
+//! it forked and the changes of each (`commits`), the tree-diff output both read their changes from
+//! (`tree_diff`), how a path travels on the wire (`wire_path`), the limits all of it is held to
+//! (`budget`), and the per-connection lane its replies take back to the client (`lane`).
 //!
 //! Every request re-resolves its project from the store and its worktree from the repository; a
 //! reply is never built from a directory a client named.
@@ -12,17 +13,21 @@
 pub mod blob;
 pub mod budget;
 pub mod changes;
+pub mod commits;
 pub mod compare;
 pub mod git;
 pub mod lane;
 pub mod live;
 pub mod source;
+pub mod tree_diff;
 pub mod wire_path;
 
 #[cfg(test)]
 mod body_tests;
 #[cfg(test)]
 mod change_tests;
+#[cfg(test)]
+mod commits_tests;
 #[cfg(test)]
 mod compare_tests;
 #[cfg(test)]
@@ -347,6 +352,78 @@ pub fn serve(
                 left,
                 right,
                 base,
+                old: Box::new(read.old),
+                new: Box::new(read.new),
+            })
+        }
+        // As a comparison, a commit's changes concern the repository's history rather than any
+        // one worktree, and are read in the worktree holding the project's directory.
+        BrowseBody::ListProjectCommits { project, base, tip } => {
+            let record = stored_project(state, &project)?;
+            let at = locate(&record, None, &git, cancel)?;
+            let list = commits::list(git.env()?, &at, (&base, &tip), cancel)?;
+            Ok(Event::ProjectCommits {
+                id,
+                project,
+                base,
+                tip,
+                commits: list.commits,
+                complete: list.complete,
+                commits_complete: list.commits_complete,
+            })
+        }
+        BrowseBody::ReadProjectCommitChange {
+            project,
+            commit,
+            parent,
+            change,
+        } => {
+            let record = stored_project(state, &project)?;
+            let at = locate(&record, None, &git, cancel)?;
+            let read = commits::read(
+                git.env()?,
+                &at,
+                (&commit, parent.as_deref()),
+                &change,
+                cancel,
+            )?;
+            Ok(Event::ProjectCommitChange {
+                id,
+                project,
+                commit,
+                parent,
+                old: Box::new(read.old),
+                new: Box::new(read.new),
+                patch: read.patch.map(file_content),
+            })
+        }
+        BrowseBody::ReadProjectCommitChangeBodies {
+            project,
+            commit,
+            parent,
+            change,
+            old,
+            new,
+        } => {
+            let record = stored_project(state, &project)?;
+            let at = locate(&record, None, &git, cancel)?;
+            let expected = changes::Expected {
+                old: &old,
+                new: &new,
+            };
+            let read = commits::read_bodies(
+                git.env()?,
+                &at,
+                (&commit, parent.as_deref()),
+                &change,
+                &expected,
+                cancel,
+            )?;
+            Ok(Event::ProjectCommitChangeBodies {
+                id,
+                project,
+                commit,
+                parent,
                 old: Box::new(read.old),
                 new: Box::new(read.new),
             })
