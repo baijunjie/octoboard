@@ -8,9 +8,12 @@ use super::change_tests::{present, read_body, read_kind, read_lines, read_source
 use super::tests::{code, Fixture};
 use super::*;
 use crate::protocol::{
-    BranchInfo, ChangeEntry, ComparedChangeRef, ComparisonEndpoint, SideKind, SideRead, SideRef,
+    BranchInfo, ChangeEntry, ChangeSide, ComparedChangeRef, ComparisonEndpoint, SideKind, SideRead,
+    SideRef, UpstreamInfo,
 };
-use crate::test_support::{git, git_stdin, repo_with, ScratchDir};
+use crate::test_support::{
+    fixture_git, git, git_stdin, isolated_git_env, repo_with, ScratchDir, SYSTEM_GIT,
+};
 
 /// A comparison as `compare_project_branches` answered it.
 #[derive(Debug)]
@@ -50,9 +53,39 @@ impl Fixture {
         left: &str,
         right: &str,
     ) -> anyhow::Result<Compared> {
+        self.compare_from(project, (left, false), right)
+    }
+
+    /// As [`Fixture::compare`], with `left` a remote-tracking branch when its flag is set.
+    pub(super) fn compare_from(
+        &self,
+        project: &str,
+        (left, left_remote): (&str, bool),
+        right: &str,
+    ) -> anyhow::Result<Compared> {
+        self.compare_with(project, (left, left_remote, false), right)
+    }
+
+    /// As [`Fixture::compare`], against the empty tree.
+    pub(super) fn compare_from_nothing(
+        &self,
+        project: &str,
+        right: &str,
+    ) -> anyhow::Result<Compared> {
+        self.compare_with(project, ("", false, true), right)
+    }
+
+    fn compare_with(
+        &self,
+        project: &str,
+        (left, left_remote, left_empty): (&str, bool, bool),
+        right: &str,
+    ) -> anyhow::Result<Compared> {
         match self.serve(BrowseBody::CompareProjectBranches {
             project: project.to_string(),
             left: left.to_string(),
+            left_remote,
+            left_empty,
             right: right.to_string(),
         })? {
             Event::ProjectComparison {
@@ -186,6 +219,7 @@ fn local_branches_are_listed_with_their_tips_and_cut_at_their_budget() {
     let feature = commit_on(&repo, "feature/x", "main", &[("a.txt", Some(b"x\n"))]);
     git(&repo, &["tag", "v1", "main"]);
     git(&repo, &["update-ref", "refs/remotes/origin/main", &main]);
+    git(&repo, &["config", "remote.origin.url", "/nowhere"]);
     let project = fixture.project("p", &repo);
     let (branches, complete) = fixture.branches(&project).unwrap();
     assert_eq!(
@@ -194,15 +228,20 @@ fn local_branches_are_listed_with_their_tips_and_cut_at_their_budget() {
             BranchInfo {
                 name: "feature/x".to_string(),
                 commit: feature,
+                upstream: None,
                 origin: None
             },
             BranchInfo {
                 name: "main".to_string(),
                 commit: main.clone(),
+                upstream: Some(UpstreamInfo {
+                    name: "origin/main".to_string(),
+                    commit: main.clone()
+                }),
                 origin: None
             }
         ],
-        "local branches only, whether checked out or not"
+        "local branches only, whether checked out or not; main has a configured remote's branch of its name"
     );
     assert!(complete);
 
@@ -246,6 +285,400 @@ fn local_branches_are_listed_with_their_tips_and_cut_at_their_budget() {
     git_stdin(&repo, &["update-ref", "--stdin"], refs.as_bytes());
     let (branches, complete) = fixture.branches(&project).unwrap();
     assert_eq!((branches.len(), complete), (budget::MAX_BRANCHES, false));
+}
+
+/// What the branch list says of the main working copy's branch (`main`) after `setup` has
+/// arranged the repository, given the commit `main` is at: its upstream, and whether the list
+/// says the lookup was complete.
+fn main_upstream(label: &str, setup: impl FnOnce(&Path, &str)) -> (Option<UpstreamInfo>, bool) {
+    let repo = repo_with(label, &[(b"a.txt", b"a\n")]);
+    main_upstream_in(&repo, setup)
+}
+
+/// [`main_upstream`] in the repository `repo` as it is.
+fn main_upstream_in(repo: &Path, setup: impl FnOnce(&Path, &str)) -> (Option<UpstreamInfo>, bool) {
+    let fixture = Fixture::new();
+    let main = rev_parse(repo, "main");
+    setup(repo, &main);
+    let project = fixture.project("p", repo);
+    match fixture
+        .serve(BrowseBody::ListProjectBranches { project })
+        .unwrap()
+    {
+        Event::ProjectBranches {
+            branches,
+            upstreams_complete,
+            ..
+        } => {
+            let main = branches.iter().find(|b| b.name == "main").unwrap();
+            (main.upstream.clone(), upstreams_complete)
+        }
+        other => panic!("not a branch list: {other:?}"),
+    }
+}
+
+fn remote(repo: &Path, name: &str) {
+    git(repo, &["config", &format!("remote.{name}.url"), "/nowhere"]);
+    git(
+        repo,
+        &[
+            "config",
+            &format!("remote.{name}.fetch"),
+            &format!("+refs/heads/*:refs/remotes/{name}/*"),
+        ],
+    );
+}
+
+fn tracks(repo: &Path, branch: &str, remote: &str, merge: &str) {
+    git(
+        repo,
+        &["config", &format!("branch.{branch}.remote"), remote],
+    );
+    git(repo, &["config", &format!("branch.{branch}.merge"), merge]);
+}
+
+fn upstream(name: &str, commit: &str) -> Option<UpstreamInfo> {
+    Some(UpstreamInfo {
+        name: name.to_string(),
+        commit: commit.to_string(),
+    })
+}
+
+#[test]
+fn the_main_working_copys_branch_has_the_remote_branch_it_tracks_as_its_upstream() {
+    let (found, complete) = main_upstream("upstream-tracked", |repo, main| {
+        remote(repo, "origin");
+        tracks(repo, "main", "origin", "refs/heads/main");
+        git(repo, &["update-ref", "refs/remotes/origin/main", main]);
+        // The same name on another remote does not matter: the upstream is the one it tracks.
+        remote(repo, "alpha");
+        git(repo, &["update-ref", "refs/remotes/alpha/main", main]);
+    });
+    assert_eq!(
+        found,
+        upstream("origin/main", &found.clone().unwrap().commit)
+    );
+    assert!(complete);
+}
+
+#[test]
+fn a_branch_without_a_remote_upstream_has_the_branch_of_its_name_on_a_configured_remote() {
+    // Tracking nothing, `origin`'s is preferred to another remote's that sorts first.
+    let (found, complete) = main_upstream("upstream-origin", |repo, main| {
+        remote(repo, "origin");
+        remote(repo, "alpha");
+        git(repo, &["update-ref", "refs/remotes/origin/main", main]);
+        git(repo, &["update-ref", "refs/remotes/alpha/main", main]);
+    });
+    assert_eq!(found.map(|u| u.name).as_deref(), Some("origin/main"));
+    assert!(complete);
+
+    // Else the first in byte order, a name with a slash in it included.
+    let (found, _) = main_upstream("upstream-first", |repo, main| {
+        remote(repo, "zeta");
+        remote(repo, "alpha/b");
+        git(repo, &["update-ref", "refs/remotes/zeta/main", main]);
+        git(repo, &["update-ref", "refs/remotes/alpha/b/main", main]);
+    });
+    assert_eq!(found.map(|u| u.name).as_deref(), Some("alpha/b/main"));
+
+    // An upstream whose reference is gone, or that is a local branch, is none.
+    let (found, _) = main_upstream("upstream-gone", |repo, main| {
+        remote(repo, "origin");
+        tracks(repo, "main", "origin", "refs/heads/gone");
+        git(repo, &["update-ref", "refs/remotes/origin/main", main]);
+    });
+    assert_eq!(found.map(|u| u.name).as_deref(), Some("origin/main"));
+    let (found, _) = main_upstream("upstream-local", |repo, main| {
+        remote(repo, "origin");
+        tracks(repo, "main", ".", "refs/heads/other");
+        git(repo, &["branch", "other"]);
+        git(repo, &["update-ref", "refs/remotes/origin/main", main]);
+    });
+    assert_eq!(found.map(|u| u.name).as_deref(), Some("origin/main"));
+    let (found, complete) = main_upstream("upstream-local-only", |repo, _| {
+        remote(repo, "origin");
+        tracks(repo, "main", ".", "refs/heads/other");
+        git(repo, &["branch", "other"]);
+    });
+    assert_eq!((found, complete), (None, true));
+
+    // A remote-tracking reference below a name is not on a remote that was never added.
+    let (found, complete) = main_upstream("upstream-backup", |repo, main| {
+        remote(repo, "origin");
+        git(
+            repo,
+            &["update-ref", "refs/remotes/origin/backup/main", main],
+        );
+    });
+    assert_eq!((found, complete), (None, true));
+}
+
+#[test]
+fn only_the_main_working_copys_branch_has_an_upstream() {
+    let fixture = Fixture::new();
+    let repo = repo_with("upstream-only-main", &[(b"a.txt", b"a\n")]);
+    let main = rev_parse(&repo, "main");
+    remote(&repo, "origin");
+    commit_on(&repo, "linked", "main", &[("a.txt", Some(b"l\n"))]);
+    commit_on(&repo, "elsewhere", "main", &[("a.txt", Some(b"e\n"))]);
+    for branch in ["main", "linked", "elsewhere"] {
+        git(
+            &repo,
+            &[
+                "update-ref",
+                &format!("refs/remotes/origin/{branch}"),
+                &main,
+            ],
+        );
+        tracks(&repo, branch, "origin", &format!("refs/heads/{branch}"));
+    }
+    // `linked` is checked out in a worktree of its own, `elsewhere` nowhere.
+    let trees = ScratchDir::new("upstream-only-main-trees");
+    let path = trees.join("linked");
+    git(
+        &repo,
+        &["worktree", "add", "-q", path.to_str().unwrap(), "linked"],
+    );
+    let project = fixture.project("p", &repo);
+    let (branches, _) = fixture.branches(&project).unwrap();
+    let upstreams: Vec<_> = branches
+        .iter()
+        .map(|b| (b.name.as_str(), b.upstream.is_some()))
+        .collect();
+    assert_eq!(
+        upstreams,
+        [("elsewhere", false), ("linked", false), ("main", true)]
+    );
+
+    // With a detached `HEAD` the main working copy has no branch, and none has an upstream.
+    git(&repo, &["checkout", "-q", "--detach"]);
+    let (branches, _) = fixture.branches(&project).unwrap();
+    assert!(branches.iter().all(|b| b.upstream.is_none()));
+}
+
+#[test]
+fn the_main_working_copys_branch_is_found_in_either_reference_format() {
+    // A repository in reftable format keeps a placeholder in its `HEAD` file. Skipped where
+    // `git` does not know the format.
+    let repo = ScratchDir::new("upstream-reftable");
+    let init = fixture_git(&repo)
+        .args(["init", "-q", "--ref-format=reftable"])
+        .output()
+        .expect("git runs");
+    if !init.status.success() {
+        return;
+    }
+    std::fs::write(repo.join("a.txt"), b"a\n").unwrap();
+    git(&repo, &["add", "-A"]);
+    git(&repo, &["commit", "-q", "-m", "fixture"]);
+    let (found, complete) = main_upstream_in(&repo, |repo, main| {
+        remote(repo, "origin");
+        git(repo, &["update-ref", "refs/remotes/origin/main", main]);
+    });
+    assert_eq!(found.map(|u| u.name).as_deref(), Some("origin/main"));
+    assert!(complete);
+}
+
+#[test]
+fn a_head_git_cannot_read_leaves_the_upstream_unknown_and_says_so() {
+    let repo = repo_with("upstream-bad-head", &[(b"a.txt", b"a\n")]);
+    // A common directory `git` finds no repository in fails with something other than the status
+    // of a detached `HEAD`.
+    let elsewhere = ScratchDir::new("upstream-bad-head-dir");
+    let env = GitEnv::new(SYSTEM_GIT.to_string(), isolated_git_env());
+    let list = compare::branches_in(&env, &repo, &elsewhere, &AtomicBool::new(false)).unwrap();
+    assert!(!list.upstreams_complete);
+    assert!(list.branches.iter().all(|b| b.upstream.is_none()));
+}
+
+/// Appends `count` remotes named `prefix` and a number to the repository's configuration.
+fn many_remotes(repo: &Path, prefix: &str, count: usize) {
+    let mut config = std::fs::read_to_string(repo.join(".git/config")).unwrap();
+    for n in 0..count {
+        config.push_str(&format!("[remote \"{prefix}{n:05}\"]\n\turl = /nowhere\n"));
+    }
+    std::fs::write(repo.join(".git/config"), config).unwrap();
+}
+
+#[test]
+fn a_lookup_past_one_of_its_budgets_says_so_and_keeps_what_it_found() {
+    // The remotes' names passing the output of `git remote` (32 KiB), the names asked for
+    // staying within theirs.
+    let (found, complete) = main_upstream("upstream-many-names", |repo, main| {
+        many_remotes(repo, "remote-with-a-rather-long-name-", 1_000);
+        git(
+            repo,
+            &[
+                "update-ref",
+                "refs/remotes/remote-with-a-rather-long-name-00001/main",
+                main,
+            ],
+        );
+    });
+    assert_eq!((found, complete), (None, false));
+
+    // The names asked for (64 KiB) passing theirs, `git remote` printing less than its budget.
+    let (found, complete) = main_upstream("upstream-many-asked", |repo, main| {
+        many_remotes(repo, "r", 4_000);
+        git(repo, &["update-ref", "refs/remotes/r00001/main", main]);
+    });
+    assert_eq!((found, complete), (None, false));
+
+    // The lookup's output (128 KiB) passing its own, with what lies below the name asked for.
+    let (found, complete) = main_upstream("upstream-much-output", |repo, main| {
+        remote(repo, "origin");
+        let refs: String = (0..3_000)
+            .map(|n| format!("create refs/remotes/origin/main/sub{n:06} {main}\n"))
+            .collect();
+        git_stdin(repo, &["update-ref", "--stdin"], refs.as_bytes());
+    });
+    assert_eq!((found, complete), (None, false));
+
+    // The upstream it tracks is found before any of that is asked, and kept when the fallback
+    // would have passed a budget.
+    let (found, complete) = main_upstream("upstream-kept", |repo, main| {
+        remote(repo, "origin");
+        tracks(repo, "main", "origin", "refs/heads/main");
+        git(repo, &["update-ref", "refs/remotes/origin/main", main]);
+        many_remotes(repo, "remote-with-a-rather-long-name-", 1_000);
+    });
+    assert_eq!(found.map(|u| u.name).as_deref(), Some("origin/main"));
+    assert!(complete);
+}
+
+#[test]
+fn a_comparison_from_nothing_lists_every_file_of_the_tip_and_its_commits_all_of_them() {
+    let fixture = Fixture::new();
+    let repo = repo_with("compare-nothing", &[(b"a.txt", b"a\n")]);
+    let tip = commit_on(&repo, "topic", "main", &[("b.txt", Some(b"b\n"))]);
+    git(&repo, &["checkout", "-q", "main"]);
+    git(&repo, &["merge", "-q", "--ff-only", "topic"]);
+    let project = fixture.project("p", &repo);
+
+    let compared = fixture.compare_from_nothing(&project, "main").unwrap();
+    assert_eq!(
+        (
+            compared.left.empty,
+            compared.left.branch.as_str(),
+            &compared.left.commit
+        ),
+        (true, "", &compared.base)
+    );
+    assert_eq!(compared.right.commit, tip);
+    assert_eq!(compared.changes.len(), 2, "both files are additions");
+    for change in &compared.changes {
+        let ChangeEntry::Committed { old, .. } = change else {
+            panic!("not a committed change: {change:?}");
+        };
+        assert!(matches!(old, ChangeSide::Absent), "{old:?}");
+    }
+    let read = fixture
+        .compared_change(&project, &compared, SideRef::Absent, present("b.txt"))
+        .unwrap();
+    assert!(read.patch.unwrap().contains("+b"));
+
+    // The commits listed from the same base are the whole history, the first one included.
+    let listed = fixture.commits(&project, &compared.base, &tip).unwrap();
+    assert_eq!(listed.commits.len(), 2);
+    assert_eq!(listed.commits[1].parent, None);
+    assert!(listed.complete && listed.commits_complete);
+
+    // A right side that claims to be nothing, or a remote branch, is no local branch: refused
+    // rather than read from whatever commit it names.
+    for right in [
+        ComparisonEndpoint {
+            branch: String::new(),
+            commit: "HEAD".to_string(),
+            remote: false,
+            empty: true,
+        },
+        ComparisonEndpoint {
+            remote: true,
+            ..compared.right.clone()
+        },
+    ] {
+        let read = fixture.compared_change_at(
+            &project,
+            (&compared.left, &right, &compared.base),
+            SideRef::Absent,
+            present("b.txt"),
+        );
+        assert_eq!(code(read), error_code::INVALID_BRANCH_NAME);
+    }
+
+    // Only the empty tree stands for nothing.
+    let mut elsewhere = compared.left.clone();
+    elsewhere.commit = tip.clone();
+    let read = fixture.compared_change_at(
+        &project,
+        (&elsewhere, &compared.right, &tip),
+        SideRef::Absent,
+        present("b.txt"),
+    );
+    assert_eq!(code(read), error_code::INVALID_COMMIT);
+}
+
+#[test]
+fn a_remote_tracking_branch_is_compared_and_read_as_the_base() {
+    let fixture = Fixture::new();
+    let repo = repo_with(
+        "compare-remote",
+        &[(b"a.txt", b"base\n"), (b"b.txt", b"b\n")],
+    );
+    let fork = rev_parse(&repo, "main");
+    git(&repo, &["update-ref", "refs/remotes/origin/main", &fork]);
+    let ahead = commit_on(&repo, "ahead", "main", &[("a.txt", Some(b"ahead\n"))]);
+    // The remote has moved on from the fork too; what only it has done is not in the comparison.
+    let remote = commit_on(&repo, "elsewhere", "main", &[("b.txt", Some(b"remote\n"))]);
+    git(&repo, &["update-ref", "refs/remotes/origin/main", &remote]);
+    let project = fixture.project("p", &repo);
+
+    let compared = fixture
+        .compare_from(&project, ("origin/main", true), "ahead")
+        .unwrap();
+    assert_eq!(
+        (
+            &compared.left.commit,
+            compared.left.remote,
+            &compared.right.commit,
+            &compared.base
+        ),
+        (&remote, true, &ahead, &fork)
+    );
+    assert_eq!(compared.changes.len(), 1);
+    let read = fixture
+        .compared_change(&project, &compared, present("a.txt"), present("a.txt"))
+        .unwrap();
+    assert!(read.patch.unwrap().contains("+ahead"));
+
+    // The same name is no local branch, and a remote-tracking one has to exist.
+    assert_eq!(
+        code(fixture.compare(&project, "origin/main", "ahead")),
+        error_code::UNKNOWN_BRANCH
+    );
+    for (name, expected) in [
+        ("origin/missing", error_code::UNKNOWN_BRANCH),
+        ("origin/main^", error_code::INVALID_BRANCH_NAME),
+        ("-x", error_code::INVALID_BRANCH_NAME),
+    ] {
+        assert_eq!(
+            code(fixture.compare_from(&project, (name, true), "ahead")),
+            expected,
+            "{name}"
+        );
+    }
+    let renamed = ComparisonEndpoint {
+        branch: "origin/main^".to_string(),
+        ..compared.left.clone()
+    };
+    let read = fixture.compared_change_at(
+        &project,
+        (&renamed, &compared.right, &compared.base),
+        present("a.txt"),
+        present("a.txt"),
+    );
+    assert_eq!(code(read), error_code::INVALID_BRANCH_NAME);
 }
 
 #[test]
@@ -703,6 +1136,8 @@ fn an_endpoint_is_a_branch_name_or_a_full_commit_id_and_nothing_else() {
         let endpoint = ComparisonEndpoint {
             branch: "main".to_string(),
             commit,
+            remote: false,
+            empty: false,
         };
         let read = fixture.compared_change_at(
             &project,
@@ -761,6 +1196,8 @@ fn a_comparison_is_cut_at_its_entry_budget_and_a_patch_past_its_budget_is_refuse
         .serve(BrowseBody::CompareProjectBranches {
             project: project.clone(),
             left: "main".to_string(),
+            left_remote: false,
+            left_empty: false,
             right: "many".to_string(),
         })
         .unwrap();

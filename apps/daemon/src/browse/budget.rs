@@ -95,18 +95,41 @@ pub const COMMIT_ENTRY_BYTES: usize = 1536;
 /// branch left behind a few thousand; this matches the other listings' entry budgets.
 pub const MAX_BRANCHES: usize = 10_000;
 
-/// The most name bytes, as sent on the wire, one branch listing carries before it is cut and
-/// marked incomplete — the bound that holds when the branches are few but their names are long.
+/// The most name bytes, as sent on the wire, one branch listing carries — each branch's name and
+/// the name of its upstream, when it has one — before it is cut and marked incomplete: the bound
+/// that holds when the branches are few but their names are long.
 pub const MAX_BRANCH_NAME_BYTES: usize = 2 * 1024 * 1024;
 
 /// The most stdout the `git for-each-ref` behind a branch listing may print. It is asked for one
 /// branch past [`MAX_BRANCHES`], each a line of about 90 bytes beside its name, so this is room for
-/// names averaging some 300 bytes; past it the listing is refused rather than read further.
-pub const BRANCH_LIST_STDOUT: usize = 4 * 1024 * 1024;
+/// names averaging some 270 bytes; past it the listing is refused rather than read further.
+pub const BRANCH_LIST_STDOUT: usize = 3584 * 1024;
 
 /// What one branch listing entry takes beyond its name, counted generously as JSON writes it: a
 /// commit id (64 hex digits in a SHA-256 repository) and the JSON around the two.
 pub const BRANCH_ENTRY_BYTES: usize = 128;
+
+/// The most bytes of reference names one upstream lookup asks `git for-each-ref` for: the same
+/// branch's name on each of the repository's remotes, so room for some two thousand of them. The
+/// output is about these names again with an object id on each line, plus what lies below a name
+/// asked for (`refs/remotes/origin/a` also names `refs/remotes/origin/a/b`), which is not bounded
+/// here.
+pub const UPSTREAM_PATTERN_BYTES: usize = 64 * 1024;
+
+/// The most stdout the `git remote` of an upstream lookup may print.
+pub const UPSTREAM_REMOTES_STDOUT: usize = 32 * 1024;
+
+/// The most stdout the `git for-each-ref` of an upstream lookup may print.
+pub const UPSTREAM_LOOKUP_STDOUT: usize = 128 * 1024;
+
+/// What an upstream lookup holds at once beyond the listing's own entries: the names asked for
+/// held as built, as arguments and as the process takes them, with their per-name overhead (twice
+/// again), the output of `git remote` and that of the lookup, each at its largest, and the entry
+/// the upstream is attached to.
+pub const UPSTREAM_LOOKUP_RESERVATION: usize = 4 * UPSTREAM_PATTERN_BYTES
+    + UPSTREAM_REMOTES_STDOUT
+    + UPSTREAM_LOOKUP_STDOUT
+    + 2 * BRANCH_ENTRY_BYTES;
 
 /// The most branches of one repository the daemon keeps an origin for (`store::BranchOrigin`), and
 /// so the most one branch listing attaches. A repository with more branches than this has the ones
@@ -172,8 +195,8 @@ pub const COMPARISON_RESERVATION: usize =
     TREE_DIFF_STDOUT + 2 * (MAX_CHANGE_PATH_BYTES + MAX_CHANGE_ENTRIES * CHANGE_ENTRY_BYTES);
 
 /// What a commit listing reserves: the `git log` output while it is parsed — held to the same
-/// budget as a comparison's `git diff-tree` — and its commits and their entries, held as built and
-/// as serialized, the entries across every commit within one change listing's budgets.
+/// budget as a comparison's `git diff-tree` — and its commits and their entries, held as built
+/// and as serialized, the entries across every commit within one change listing's budgets.
 pub const COMMITS_RESERVATION: usize = TREE_DIFF_STDOUT
     + 2 * (MAX_CHANGE_PATH_BYTES
         + MAX_CHANGE_ENTRIES * CHANGE_ENTRY_BYTES
@@ -181,8 +204,10 @@ pub const COMMITS_RESERVATION: usize = TREE_DIFF_STDOUT
 
 /// What a branch listing reserves: the `git for-each-ref` output while it is parsed, and its
 /// entries, at [`MAX_BRANCHES`] with [`MAX_BRANCH_NAME_BYTES`] of names and [`MAX_BRANCH_ORIGINS`]
-/// origins, held as built and as serialized.
+/// origins, held as built and as serialized, and what the upstream lookup holds
+/// ([`UPSTREAM_LOOKUP_RESERVATION`]).
 pub const BRANCH_LIST_RESERVATION: usize = BRANCH_LIST_STDOUT
+    + UPSTREAM_LOOKUP_RESERVATION
     + 2 * (MAX_BRANCH_NAME_BYTES
         + MAX_BRANCHES * BRANCH_ENTRY_BYTES
         + MAX_BRANCH_ORIGINS * BRANCH_ORIGIN_BYTES);

@@ -259,16 +259,24 @@ pub fn serve(
                 project,
                 branches: list.branches,
                 complete: list.complete,
+                upstreams_complete: list.upstreams_complete,
             })
         }
         BrowseBody::CompareProjectBranches {
             project,
             left,
+            left_remote,
+            left_empty,
             right,
         } => {
             let record = stored_project(state, &project)?;
             let at = locate(&record, None, &git, cancel)?;
-            let comparison = compare::list(git.env()?, &at, &left, &right, cancel)?;
+            let base = match (left_empty, left_remote) {
+                (true, _) => compare::Base::Empty,
+                (false, true) => compare::Base::Remote(&left),
+                (false, false) => compare::Base::Local(&left),
+            };
+            let comparison = compare::list(git.env()?, &at, base, &right, cancel)?;
             Ok(Event::ProjectComparison {
                 id,
                 project,

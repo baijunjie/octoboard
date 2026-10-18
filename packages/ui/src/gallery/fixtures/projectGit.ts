@@ -258,7 +258,8 @@ const BRANCHES: BranchInfo[] = [
     // one the badge shows. No worktree has the branch checked out.
     origin: { responsible_session: "s-web-2", responsible_title: "Bump the packages", responsible_since: 1_758_000_000_000 },
   },
-  { name: "main", commit: MAIN_TIP },
+  // Pushed up to its tip, as far as the last fetch knows.
+  { name: "main", commit: MAIN_TIP, upstream: { name: "origin/main", commit: MAIN_TIP } },
   { name: "release/2.4", commit: MAIN_TIP },
 ];
 
@@ -412,6 +413,77 @@ const CHORE_COMMITS: FixtureCommit[] = [
   },
 ];
 
+/** `main` has two commits `origin/main` does not: `UPSTREAM_TIP` is where the remote-tracking branch
+ * is, the commit they forked at. Where `main` has never been pushed, `UPSTREAM_TIP` is the first
+ * commit of its history. */
+const UPSTREAM_TIP = "7b6a5f4e3d2c1b0a9f8e7d6c5b4a39281706f5e4";
+const UNPUSHED_FIRST = "1c0b9a8f7e6d5c4b3a291807f6e5d4c3b2a19087";
+
+const PAGE_SIZE: Versions = {
+  old: "export const PAGE_SIZE = 10;\n",
+  new: "export const PAGE_SIZE = 25;\n",
+  patch: [
+    "diff --git a/src/search.ts b/src/search.ts",
+    "index c1d2e3f..d2e3f4a 100644",
+    "--- a/src/search.ts",
+    "+++ b/src/search.ts",
+    "@@ -1 +1 @@",
+    "-export const PAGE_SIZE = 10;",
+    "+export const PAGE_SIZE = 25;",
+    "",
+  ].join("\n"),
+};
+const OVERVIEW_BODY = "# Search API overview\n";
+const CHANGELOG_BODY = "# Changelog\n\n- Results are listed 25 to a page.\n";
+
+/** What `main` has committed since `origin/main`: the Committed section of its Changes view. */
+const UNPUSHED_COMPARISON: FixtureChange[] = [
+  textChange("committed", "src/search.ts", at(UPSTREAM_TIP)("c1d2e3f"), onMain("d2e3f4a"), PAGE_SIZE),
+  addition("committed", "CHANGELOG.md", onMain("e3f4a5b"), CHANGELOG_BODY),
+];
+
+const UNPUSHED_COMMITS: FixtureCommit[] = [
+  {
+    commit: MAIN_TIP,
+    parent: UNPUSHED_FIRST,
+    subject: "Add a changelog",
+    changes: [addition("committed", "CHANGELOG.md", onMain("e3f4a5b"), CHANGELOG_BODY)],
+  },
+  {
+    commit: UNPUSHED_FIRST,
+    parent: UPSTREAM_TIP,
+    subject: "Show 25 results to a page",
+    changes: [textChange("committed", "src/search.ts", at(UPSTREAM_TIP)("c1d2e3f"), at(UNPUSHED_FIRST)("d2e3f4a"), PAGE_SIZE)],
+  },
+];
+
+/** One uncommitted change in the main working copy, so that a Committed section starts within sight. */
+const MAIN_FEW_CHANGES: FixtureChange[] = [textChange("unstaged", "src/server.ts", index("5d6e7f8"), live("v2"), SERVER_ON_DISK)];
+
+/** What `main` has committed in all, from nothing: every file at its tip is an addition. */
+const WHOLE_COMPARISON: FixtureChange[] = [
+  // The file `MAIN_FEW_CHANGES` edits is tracked at the tip, so it is among the additions.
+  addition("committed", "src/server.ts", onMain("5d6e7f8"), SERVER_ON_DISK.old),
+  addition("committed", "src/search.ts", onMain("d2e3f4a"), PAGE_SIZE.new),
+  addition("committed", "docs/overview.md", onMain("f4a5b6c"), OVERVIEW_BODY),
+  addition("committed", "CHANGELOG.md", onMain("e3f4a5b"), CHANGELOG_BODY),
+];
+
+/** The two commits above and the first one, which has no parent. */
+const WHOLE_COMMITS: FixtureCommit[] = [
+  ...UNPUSHED_COMMITS,
+  {
+    commit: UPSTREAM_TIP,
+    parent: null,
+    subject: "Start the search API",
+    changes: [
+      addition("committed", "src/server.ts", at(UPSTREAM_TIP)("5d6e7f8"), SERVER_ON_DISK.old),
+      addition("committed", "src/search.ts", at(UPSTREAM_TIP)("c1d2e3f"), PAGE_SIZE.old),
+      addition("committed", "docs/overview.md", at(UPSTREAM_TIP)("f4a5b6c"), OVERVIEW_BODY),
+    ],
+  },
+];
+
 /** The sample repository's branches and a dozen more, past what a selector's list shows without
  * scrolling (ten rows of its height). */
 const CROWDED_BRANCHES: BranchInfo[] = [
@@ -454,6 +526,26 @@ export const SAMPLE_GIT: FixtureGit = {
     "main..chore/update-dependencies": { commits: CHORE_COMMITS },
   },
   forks: { "main..chore/update-dependencies": CHORE_FORK },
+};
+
+/** `main`, checked out where the project's folder is, is two commits ahead of `origin/main`, which
+ * the last fetch left at `UPSTREAM_TIP`: its Committed section lists what is not pushed. */
+export const UNPUSHED_GIT: FixtureGit = {
+  ...SAMPLE_GIT,
+  changes: { ...SAMPLE_GIT.changes, "wt-main": MAIN_FEW_CHANGES },
+  branches: BRANCHES.map((branch) => (branch.name === "main" ? { ...branch, upstream: { name: "origin/main", commit: UPSTREAM_TIP } } : branch)),
+  comparisons: { ...SAMPLE_GIT.comparisons, "origin/main..main": UNPUSHED_COMPARISON },
+  commits: { ...SAMPLE_GIT.commits, "origin/main..main": { commits: UNPUSHED_COMMITS } },
+};
+
+/** `main` has never been pushed: no upstream, and no branch of its name on a remote, so its Committed
+ * section is its whole history, compared with the empty tree. */
+export const NEVER_PUSHED_GIT: FixtureGit = {
+  ...SAMPLE_GIT,
+  changes: { ...SAMPLE_GIT.changes, "wt-main": MAIN_FEW_CHANGES },
+  branches: BRANCHES.map((branch) => (branch.name === "main" ? { name: branch.name, commit: branch.commit } : branch)),
+  comparisons: { ...SAMPLE_GIT.comparisons, "..main": WHOLE_COMPARISON },
+  commits: { ...SAMPLE_GIT.commits, "..main": { commits: WHOLE_COMMITS } },
 };
 
 /** How many commits the daemon lists for a branch at most. */
@@ -501,12 +593,20 @@ export const LONG_HISTORY_GIT: FixtureGit = (() => {
   };
 })();
 
+/** `git` with `worktrees`, in which only the branch the main working copy has checked out carries
+ * an upstream: the daemon looks one up for that branch alone. */
+const withWorktrees = (git: FixtureGit, worktrees: WorktreeInfo[]): FixtureGit => ({
+  ...git,
+  worktrees,
+  branches: git.branches?.map(({ upstream, ...branch }) => (upstream && worktrees.some((w) => w.main && w.branch === branch.name) ? { ...branch, upstream } : branch)),
+});
+
 /** The project's folder is a linked worktree on a branch while the main working copy is detached,
  * so the branch has nothing to be compared with. */
-const NO_BASE_GIT: FixtureGit = { ...SAMPLE_GIT, worktrees: [WORKTREES[1], { ...WORKTREES[0], branch: null }, WORKTREES[2]] };
+const NO_BASE_GIT = withWorktrees(SAMPLE_GIT, [WORKTREES[1], { ...WORKTREES[0], branch: null }, WORKTREES[2]]);
 
 /** The project's own worktree is detached, so no branch is chosen. */
-const DETACHED_GIT: FixtureGit = { ...SAMPLE_GIT, worktrees: [{ ...WORKTREES[0], branch: null }, WORKTREES[1], WORKTREES[2]] };
+const DETACHED_GIT = withWorktrees(SAMPLE_GIT, [{ ...WORKTREES[0], branch: null }, WORKTREES[1], WORKTREES[2]]);
 
 /** Every branch of the repository deleted while its only worktree is detached: nothing is checked
  * out and there is no branch to choose. */
@@ -576,7 +676,7 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "The project folder's branch",
-    description: "The branch selector starts on main, the branch checked out where the project's folder is, and the line above the list says it is the main working copy's own, so only its uncommitted changes are listed. Staged, unstaged and untracked changes share the list, with server.ts selected and its rounded highlight spaced like Files rows. Collapse a section to watch the following rows slide into place, and right-click a row for Copy path and the Open in submenu, which groups File manager and Default application. The header reads the project name, the Files and Changes tabs, then the icon buttons. Choose Docked above the preview to inspect the 320px project pane at the 1168px minimum window width: the name shrinks to a faded stub of about 27px so that the tabs stay whole and the icon buttons stay in view.",
+    description: "The branch selector starts on main, the branch checked out where the project's folder is, and the line above the list says it forked from origin/main at the very commit it is at, so nothing is unpushed and Committed has no rows. Staged, unstaged and untracked changes share the list, with server.ts selected and its rounded highlight spaced like Files rows. Collapse a section to watch the following rows slide into place, and right-click a row for Copy path and the Open in submenu, which groups File manager and Default application. The header reads the project name, the Files and Changes tabs, then the icon buttons. Choose Docked above the preview to inspect the 320px project pane at the 1168px minimum window width: the name shrinks to a faded stub of about 27px so that the tabs stay whole and the icon buttons stay in view.",
     state,
     preferences,
     steps: [...openGit, (ui) => ui.press(ui.changeRow("server.ts", "modified")), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
@@ -602,6 +702,41 @@ const reviewScenarios: Scenario[] = [
     state,
     preferences,
     steps: selecting(rankingSession),
+  },
+  {
+    id: "git-changes-unpushed",
+    group: GROUP,
+    category: "normal",
+    title: "The project folder's branch with unpushed commits",
+    description:
+      "main is two commits ahead of origin/main: the line above the list says it forked from origin/main at the commit that remote-tracking branch is at, and Committed lists what main changed since, which is what has not been pushed. Uncommitted changes are listed above it.",
+    state,
+    preferences,
+    git: UNPUSHED_GIT,
+    steps: openGit,
+  },
+  {
+    id: "git-changes-never-pushed",
+    group: GROUP,
+    category: "normal",
+    title: "A branch that has never been pushed",
+    description:
+      "main is checked out where the project's folder is, and neither it nor a remote has a branch to compare it with: the line above the list says it has no remote branch, so all of its commits are listed, with no fork named. Committed lists every file at its tip as added.",
+    state,
+    preferences,
+    git: NEVER_PUSHED_GIT,
+    steps: openGit,
+  },
+  {
+    id: "git-changes-never-pushed-by-commit",
+    group: GROUP,
+    category: "normal",
+    title: "All the commits of a branch never pushed",
+    description: "With Group by commit on, the Committed band holds a row for every commit main has, newest first, down to the first one, which is listed like the others and adds the files it started with.",
+    state,
+    preferences: gitMode({ byCommit: true }),
+    git: NEVER_PUSHED_GIT,
+    steps: openGit,
   },
   {
     id: "git-changes-by-commit",
@@ -797,7 +932,7 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "A branch with no commit yet",
     description:
-      "main is checked out where the project's folder is, but has no commit yet, so the branch list is empty: the first line above the list says there are no commits, the next that main is the main working copy's own branch, and the staged and untracked files are listed.",
+      "main is checked out where the project's folder is, but has no commit yet, so the branch list is empty: the line above the list says there are no commits, and the staged and untracked files are listed.",
     state,
     preferences,
     git: FRESH_GIT,
@@ -926,6 +1061,17 @@ const reviewScenarios: Scenario[] = [
       (ui) => ui.press(ui.changeRow("pipeline.ts", "modified")),
       (ui) => ui.wait(800),
     ],
+  },
+  {
+    id: "git-whole-history-change-viewer",
+    group: "File viewer",
+    category: "normal",
+    title: "A change from a branch's whole history in the viewer",
+    description: "The subtitle names the branch and the commit it is at, with all of its history, because the branch has no remote branch to say where it forked from.",
+    state,
+    preferences,
+    git: NEVER_PUSHED_GIT,
+    steps: [...openGit, (ui) => ui.press(ui.changeRow("overview.md", "added")), (ui) => ui.wait(800)],
   },
   {
     id: "git-commit-change-viewer",

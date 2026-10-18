@@ -9,7 +9,7 @@ import { createUi, type Matcher, type Ui } from "../interact";
 import { changeRowText } from "../../browser/changeRow";
 import { changeItems } from "../../browser/changes";
 import { listedCommits } from "./changeFixtures";
-import { SAMPLE_GIT } from "./projectGit";
+import { NEVER_PUSHED_GIT, SAMPLE_GIT, UNPUSHED_GIT } from "./projectGit";
 import { viewerScenarios } from "./viewer";
 import { DEFAULT_WIDTH, MIN_HEIGHT } from "../scenario";
 
@@ -162,8 +162,9 @@ describe("gallery scenarios", () => {
     for (const { matcher } of sessionMatchers) {
       expect(typeof matcher === "function" && sessionLabels.some(matcher)).toBe(true);
     }
-    const commits = Object.values(SAMPLE_GIT.commits ?? {}).flatMap((list) => listedCommits(list).map(({ changes: made }) => made));
-    const changes = [...Object.values(SAMPLE_GIT.changes), ...Object.values(SAMPLE_GIT.comparisons ?? {}), ...commits].flatMap((list) => Array.isArray(list) ? list.map(({ entry }) => entry) : []);
+    const repositories = [SAMPLE_GIT, UNPUSHED_GIT, NEVER_PUSHED_GIT];
+    const commits = repositories.flatMap((git) => Object.values(git.commits ?? {}).flatMap((list) => listedCommits(list).map(({ changes: made }) => made)));
+    const changes = [...Object.values(SAMPLE_GIT.changes), ...repositories.flatMap((git) => Object.values(git.comparisons ?? {})), ...commits].flatMap((list) => Array.isArray(list) ? list.map(({ entry }) => entry) : []);
     const labels = changeItems(changes).flatMap((item) => [false, true].map((selected) => changeRowText(t, item, selected, false).ariaLabel.replace(/[\u2066-\u2069]/g, "")));
     const rowMatchers = recorded.filter(({ matcher }) => String(matcher).startsWith("changeRow("));
     expect(rowMatchers.length).toBeGreaterThan(0);

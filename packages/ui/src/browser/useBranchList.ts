@@ -10,13 +10,15 @@ import { gitMoment } from "./gitRequests";
 import { sendBrowseListRequest } from "./browseListRequests";
 import { AUTO_REFRESH_MS } from "./useDirectoryListings";
 
-/** A repository's local branches as the client holds them. `sentAt` is when the request this list
+/** A repository's local branches as the client holds them. `upstreamsComplete` is false when the
+ * daemon could not list the remote-tracking branches, so that no branch carries an upstream though it
+ * may have one. `sentAt` is when the request this list
  * answers was sent (`gitMoment`), so a list can be told to be newer than something received
  * before it. A list or a failure stays on screen while a refresh is out, and a list stays through
  * a refresh that fails, with that failure beside it (`error`) until a refresh succeeds. */
 export type BranchList =
   | { state: "loading" }
-  | { state: "loaded"; branches: BranchInfo[]; complete: boolean; sentAt: number; error?: ErrorPresentation }
+  | { state: "loaded"; branches: BranchInfo[]; complete: boolean; upstreamsComplete?: boolean; sentAt: number; error?: ErrorPresentation }
   | { state: "error"; message: ErrorPresentation };
 
 /**
@@ -54,7 +56,7 @@ export function useBranchList(project: string, active: boolean): { branches: Bra
     })
       .then((reply) => {
         if (!reply || !current() || reply.type !== "project_branches" || reply.project !== project) return;
-        setBranches({ state: "loaded", branches: reply.branches, complete: reply.complete, sentAt });
+        setBranches({ state: "loaded", branches: reply.branches, complete: reply.complete, upstreamsComplete: reply.upstreams_complete, sentAt });
       })
       .catch((err: unknown) => {
         if (!current()) return;

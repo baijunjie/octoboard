@@ -5,9 +5,9 @@
 //! Like a comparison, a commit list is named by commits rather than branches, so a branch that
 //! moves while the list is shown never repoints it, and every read of one of its changes names the
 //! commit and the parent it is read between: both are immutable, so nothing read from them is
-//! checked again. A commit with no parent — met only where the branch merged in an unrelated
-//! history — is compared with the empty tree, as every change is before a repository's first
-//! commit.
+//! checked again. A commit with no parent — a branch's first commit, or one met where it merged
+//! in an unrelated history — is compared with the empty tree, as every change is before a
+//! repository's first commit.
 //!
 //! Each commit's changes are found as a comparison's are: the whole trees are compared, with
 //! rename detection on, so a rename across the project's boundary is found against the rest of the
@@ -64,10 +64,11 @@ const LOG_OPTIONS: &[&[u8]] = &[
 ];
 
 /// Lists the commits reachable from `tip` and not from `base`, both full ids of commits in the
-/// repository, newest first as `git log` orders them, each with its changes against its first
-/// parent that touch the project's scope. At most [`budget::MAX_COMMITS`] are listed, and their
-/// changes together within one change listing's budgets. A `tip` equal to `base` has none, and
-/// `git log` is not asked.
+/// repository (`base` may be the empty tree's id instead, as a comparison from nothing reports
+/// it: every commit of `tip`'s history is then listed), newest first as `git log` orders them,
+/// each with its changes against its first parent that touch the project's scope. At most
+/// [`budget::MAX_COMMITS`] are listed, and their changes together within one change listing's
+/// budgets. A `tip` equal to `base` has none, and `git log` is not asked.
 ///
 /// As a comparison is, the listing is made over the whole tree, and within a subdirectory
 /// project's own directory when that output is past its budget; `git log` then lists only the
@@ -79,7 +80,10 @@ pub fn list(
     (base, tip): (&str, &str),
     cancel: &AtomicBool,
 ) -> Result<CommitList> {
-    blob::verify_commit(env, &at.root, base, cancel)?;
+    let from_nothing = changes::is_empty_tree(base);
+    if !from_nothing {
+        blob::verify_commit(env, &at.root, base, cancel)?;
+    }
     blob::verify_commit(env, &at.root, tip, cancel)?;
     let mut list = CommitList {
         commits: Vec::new(),
@@ -91,7 +95,11 @@ pub fn list(
     }
     // One past the budget, so a cut list is told from one that just fits.
     let count = format!("--max-count={}", budget::MAX_COMMITS + 1);
-    let range = format!("{base}..{tip}");
+    let range = if from_nothing {
+        tip.to_string()
+    } else {
+        format!("{base}..{tip}")
+    };
     let run = |within_scope: bool| {
         let mut args: Vec<&[u8]> = LOG_OPTIONS.to_vec();
         args.push(count.as_bytes());

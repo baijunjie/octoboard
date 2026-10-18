@@ -25,7 +25,8 @@ export type Comparison =
 
 /**
  * The comparison of branch `right` with branch `left`, its base, of a project: what `right` has
- * changed since it forked from `left`, from their merge base to `right`'s tip. It is asked of the
+ * changed since it forked from `left`, from their merge base to `right`'s tip. `left` is a
+ * remote-tracking branch when `leftKind` says `remote`, and nothing, the empty tree, when `empty`. It is asked of the
  * daemon once both are known and the comparison is `active`, and again on `refresh` and `update`.
  * The branches are resolved to their commits, and those to their merge base, when it is asked for,
  * and the commits it answers with stay until it is asked for again: a branch that moves meanwhile
@@ -40,6 +41,7 @@ export type Comparison =
 export function useBranchComparison(
   project: string,
   left: string | undefined,
+  leftKind: "local" | "remote" | "empty",
   right: string | undefined,
   active: boolean,
 ): { comparison: Comparison; refresh: () => Promise<void>; update: () => Promise<void> } {
@@ -47,7 +49,7 @@ export function useBranchComparison(
   const language = useCurrentLanguage();
   const { request, store } = useDaemon();
   const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
-  const pair = left === undefined || right === undefined ? undefined : `${left}\0${right}`;
+  const pair = left === undefined || right === undefined ? undefined : `${left}\0${leftKind}\0${right}`;
   // What is held, with the branches it is of: a comparison of other branches is not this one's.
   const [held, setHeld] = useState<{ pair: string | undefined; comparison: Comparison }>({ pair, comparison: { state: "loading" } });
   const live = useRef({ alive: true, sequence: 0, pair, lost: false, sent: undefined as string | undefined });
@@ -67,7 +69,7 @@ export function useBranchComparison(
       setHeld((now) => ({ pair: asked, comparison: change(now.pair === asked ? now.comparison : { state: "loading" }) }));
     setComparison((comparison) => (comparison.state === "loaded" || (comparison.state === "error" && background) ? comparison : { state: "loading" }));
     const slot = `comparison:${project}`;
-    return sendBrowseListRequest(slot, () => (current() ? request({ type: "compare_project_branches", project, left, right, slot }) : undefined))
+    return sendBrowseListRequest(slot, () => (current() ? request({ type: "compare_project_branches", project, left, left_remote: leftKind === "remote" || undefined, left_empty: leftKind === "empty" || undefined, right, slot }) : undefined))
       .then((reply) => {
         if (!reply || !current() || reply.type !== "project_comparison" || reply.project !== project) return;
         if (reply.left.branch !== left || reply.right.branch !== right) return;

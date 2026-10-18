@@ -65,12 +65,12 @@ the request id as if it were a record id.
 | `read_project_file` | `project`, `path`, `worktree?`, `from?`, `slot?` | Reads one file of the project, `path` being a wire path relative to the project's directory. `from` picks the content: `{"kind":"live"}` (the default) the file on disk, `{"kind":"index"}` the blob staged for it, `{"kind":"branch","branch":…}` the blob at a local branch's tip, `{"kind":"commit","commit":…}` the blob in a commit given by its full id. With `worktree`, the disk and the index read are that worktree's. Answered with `project_file`. A browse request |
 | `list_project_changes` | `project`, `worktree?`, `slot?` | Lists the uncommitted changes of the worktree holding the project's directory — or, with `worktree`, of that worktree of its repository — that touch the project: staged, unstaged, untracked and in conflict. Answered with `project_changes`. A browse request |
 | `read_project_change` | `project`, `worktree?`, `change`, `slot?` | Reads one of those changes for its diff: `change` is `{group, old, new}`, `group` being `staged`, `unstaged` or `untracked` and each side `{"state":"present","path":…}`, `{"state":"absent"}` or `{"state":"out_of_scope"}` as the listing gave it. Answered with `project_change`. A browse request |
-| `list_project_branches` | `project`, `slot?` | Lists the local branches of the project's repository, each with the object id its reference names: the commit at its tip. Answered with `project_branches`. A browse request |
-| `compare_project_branches` | `project`, `left`, `right`, `slot?` | Resolves local branches `left` (the base) and `right`, each a branch name as a wire path, to the commits at their tips, finds the commit they forked at (their merge base), and lists the changes from that commit to `right`'s tip that touch the project, as `git diff left...right` does. Two branches with no commit in common are refused with `no_merge_base` (`no_merge_base_shallow` in a shallow clone). Answered with `project_comparison`. A browse request |
+| `list_project_branches` | `project`, `slot?` | Lists the local branches of the project's repository, each with the object id its reference names: the commit at its tip, and the remote-tracking branch to compare it with when the repository has one. Answered with `project_branches`. A browse request |
+| `compare_project_branches` | `project`, `left`, `left_remote?`, `left_empty?`, `right`, `slot?` | Resolves local branches `left` (the base) and `right`, each a branch name as a wire path, to the commits at their tips (`left` is a remote-tracking branch, named below `refs/remotes/` such as `origin/main`, when `left_remote` is true; with `left_empty`, `left` is ignored and the comparison is against the empty tree), finds the commit they forked at (their merge base), and lists the changes from that commit to `right`'s tip that touch the project, as `git diff left...right` does. Two branches with no commit in common are refused with `no_merge_base` (`no_merge_base_shallow` in a shallow clone). Answered with `project_comparison`. A browse request |
 | `read_project_comparison_change` | `project`, `left`, `right`, `base`, `change`, `slot?` | Reads one change of a comparison for its diff: `left` and `right` are the comparison's `{branch, commit}` and `base` its merge base commit, as its reply gave them, and `change` is `{old, new}`, each side as in `read_project_change`. Answered with `project_comparison_change`. A browse request |
 | `read_project_change_bodies` | `project`, `worktree?`, `change`, `old`, `new`, `slot?` | Reads the whole bodies of the two sides of a change `read_project_change` made a patch of, so a client can show the lines the patch left out. `change` is as in `read_project_change`; `old` and `new` are the versions that reply reported for its sides, `{"state":"present","source":…}` with the side's `source` as the reply gave it, or `{"state":"absent"}`. Answered with `project_change_bodies`. A browse request |
 | `read_project_comparison_change_bodies` | `project`, `left`, `right`, `base`, `change`, `old`, `new`, `slot?` | The same for a change of a comparison: `left`, `right`, `base` and `change` are as in `read_project_comparison_change`, `old` and `new` as above. Answered with `project_comparison_change_bodies`. A browse request |
-| `list_project_commits` | `project`, `base`, `tip`, `slot?` | Lists the commits reachable from `tip` and not from `base`, both full commit ids — a comparison's right commit and its merge base — newest first, each with its changes against its first parent that touch the project. Answered with `project_commits`. A browse request |
+| `list_project_commits` | `project`, `base`, `tip`, `slot?` | Lists the commits reachable from `tip` and not from `base`, both full commit ids — a comparison's right commit and its merge base, or, for a comparison from the empty tree, the empty tree's id, which lists every commit reachable from `tip` — newest first, each with its changes against its first parent that touch the project. Answered with `project_commits`. A browse request |
 | `read_project_commit_change` | `project`, `commit`, `parent?`, `change`, `slot?` | Reads one change of a commit for its diff: `commit` and `parent` are as the commit list gave them (`parent` null or left out for a commit with no parent), and `change` is `{old, new}`, each side as in `read_project_change`. Answered with `project_commit_change`. A browse request |
 | `read_project_commit_change_bodies` | `project`, `commit`, `parent?`, `change`, `old`, `new`, `slot?` | The same as `read_project_change_bodies` for a change of a commit: `commit`, `parent` and `change` are as in `read_project_commit_change`. Answered with `project_commit_change_bodies`. A browse request |
 | `preview_console_session_title` | `console` | Answers with `console_session_title`: the current console name, used as the default title for new console sessions. Reads without consuming an ordinal; renaming the console can change the default before the caller submits. Refused with `unknown_console` for a console that does not exist |
@@ -135,8 +135,8 @@ the request id as if it were a record id.
 | `project_file` | `id`, `project`, `worktree`, `path`, `source`, `file` — the reply to `read_project_file`. `project`, `worktree` and `path` echo the request; `source` is the `ContentSource` the body was read from and `file` the `FileContent` |
 | `project_changes` | `id`, `project`, `worktree`, `head`, `changes`, `complete` — the reply to `list_project_changes`. `project` and `worktree` echo the request; `head` is the commit the staged changes are against, null before the first commit; `changes` are `ChangeEntry` records in the order `git status` gives them; `complete` is false when the list was cut at a budget |
 | `project_change` | `id`, `project`, `worktree`, `group`, `head`, `old`, `new`, `patch` — the reply to `read_project_change`. `project`, `worktree` and `group` echo the request; `head` is the commit a staged change was read against (null before the first commit, and for the other groups); `old` and `new` are `SideRead` records; `patch` is a `FileContent` holding the change's unified patch as `git` writes it, null when none is made |
-| `project_branches` | `id`, `project`, `branches`, `complete` — the reply to `list_project_branches`. `branches` are `BranchInfo` records in byte order of their names; `complete` is false when the list was cut at a budget |
-| `project_comparison` | `id`, `project`, `left`, `right`, `base`, `changes`, `complete` — the reply to `compare_project_branches`. `left` and `right` are `ComparisonEndpoint` records: each branch as the request named it and the commit it was resolved to; `base` is the full id of the two commits' merge base (the commit itself when both are at one); `changes` are `ChangeEntry` records of the `committed` group, in the order `git` gives them; `complete` is false when the list was cut at a budget |
+| `project_branches` | `id`, `project`, `branches`, `complete` — the reply to `list_project_branches`. `branches` are `BranchInfo` records in byte order of their names; `complete` is false when the list was cut at a budget; `upstreams_complete` is false, and otherwise absent, when the upstream lookup was past a budget and the main working copy's branch may lack its `upstream` as a result |
+| `project_comparison` | `id`, `project`, `left`, `right`, `base`, `changes`, `complete` — the reply to `compare_project_branches`. `left` and `right` are `ComparisonEndpoint` records: each branch as the request named it (with `remote: true` for a remote-tracking `left`, and `empty: true` for a `left` that is the empty tree) and the commit it was resolved to; `base` is the full id of the two commits' merge base (the commit itself when both are at one); `changes` are `ChangeEntry` records of the `committed` group, in the order `git` gives them; `complete` is false when the list was cut at a budget |
 | `project_comparison_change` | `id`, `project`, `left`, `right`, `base`, `old`, `new`, `patch` — the reply to `read_project_comparison_change`. `left`, `right` and `base` echo the request; the old side was read from `base` and the new side from `right`'s commit; `old`, `new` and `patch` are as in `project_change` |
 | `project_change_bodies` | `id`, `project`, `worktree`, `group`, `old`, `new` — the reply to `read_project_change_bodies`. `project`, `worktree` and `group` echo the request; `old` and `new` are `SideRead` records, each `present` with its whole body in `file` or `absent`, never `out_of_scope` |
 | `project_comparison_change_bodies` | `id`, `project`, `left`, `right`, `base`, `old`, `new` — the reply to `read_project_comparison_change_bodies`. `left`, `right` and `base` echo the request; `old` and `new` are as in `project_change_bodies` |
@@ -954,9 +954,10 @@ ChangeSide        = { state: "present", path, kind: "file"|"symlink"|"submodule"
 SideRead          = { state: "present", path, kind, source: ContentSource, file: FileContent? }
                   | { state: "absent" }
                   | { state: "out_of_scope" }
-BranchInfo        { name, commit, origin? }
+BranchInfo        { name, commit, upstream?, origin? }
+UpstreamInfo      { name, commit }
 BranchOriginInfo  { responsible_session, responsible_title, responsible_since }
-ComparisonEndpoint { branch, commit }
+ComparisonEndpoint { branch, commit, remote?, empty? }
 CommitChanges     { commit, parent?, subject, changes: ChangeEntry[] }
 ```
 
@@ -1244,7 +1245,26 @@ worktree has one checked out, or none — each with the full object id its refer
 tip. A broken branch, whose reference names an object the repository does not have or one that is not a commit, is
 listed as it is rather than looked into, since asking `git` what a missing object is would fail the whole list; a
 comparison of it is refused with `unknown_branch`, as a branch read is. At most 10,000 branches, or 2 MiB of names as
-sent, are listed, the first in byte order; a list cut there carries `complete: false`.
+sent (each branch's name and its upstream's), are listed, the first in byte order; a list cut there carries
+`complete: false`.
+
+The branch the main working copy has checked out — the one `git symbolic-ref HEAD` names in the repository's common
+directory, whatever format the references are kept in; none when it is detached — carries `upstream`, an
+`UpstreamInfo`, when the repository has a remote-tracking branch to compare it with; no other branch carries one. (In a
+bare repository `HEAD` names the default branch, which is listed as checked out all the same.) Its `name` is that branch
+below `refs/remotes/` as a wire path (such as `origin/main`) and `commit` the object id the reference names, as of the
+last fetch — nothing here contacts the remote. It is the remote branch the local one is set to track; when it is set to
+track none, or that is not a remote branch (its upstream is another local branch), or the reference it names is gone, it
+is the branch of the same name on a configured remote (`refs/remotes/<remote>/<branch>` for a `<remote>` in the
+repository's configuration, so `refs/remotes/origin/backup/main` is not `main` unless a remote `origin/backup` exists),
+`origin`'s when there is one, otherwise the first remote's in byte order of the names. The lookup asks `git` for those
+references by their exact names, whatever the number of remote-tracking references. Besides the listing it runs
+`git symbolic-ref` when some branch is checked out in a worktree (none otherwise), then one `git for-each-ref` when the
+branch tracks a remote branch and, when that finds nothing, `git remote` and one more `git for-each-ref` for the name on
+each remote: one to four runs in all, and usually two. A lookup that is past one of its budgets (see "Browse budgets")
+gives up with what it has found, which is nothing unless the branch's upstream was found first, and `HEAD` that `git`
+cannot answer for is such a failure; the reply says `upstreams_complete: false` (absent otherwise), so that a client does
+not take the branch for one that has none.
 
 A branch the daemon can name a responsible session for carries `origin`, a `BranchOriginInfo`: `responsible_session` is
 the session working on the branch now (it may be gone), `responsible_title` is the title it had when it became
@@ -1277,13 +1297,22 @@ at, as the old side — their merge base, as `git diff left...right` takes it �
 changed since, and whatever only the left branch has done is not in it. Swapping the two compares the other branch's
 changes. Each branch is checked and resolved to its commit as a branch read is (see "Reading": `invalid_branch_name`,
 `unknown_branch`), and the reply reports both — `left: { branch, commit }`, `right: { branch, commit }` — and the merge
-base's full id as `base`. Where there are several best common ancestors, the one `git merge-base` prints is used.
-Two branches with no commit in common have no merge base, and are refused with `no_merge_base`
-(`no_merge_base_shallow` in a shallow clone) rather than compared tip to tip, which would present the whole of one branch as a change of the other. Every change in the reply is between
-`base` and the right commit, in the `committed` group, its present sides' `source` naming the commit and the blob (with
-no `branch`, which the endpoints carry). Two branches at the same commit have no changes, and the reply says so by its
-two equal commits and a `base` equal to them; a right branch that is an ancestor of the left one forks at its own tip
-and has none either.
+base's full id as `base`. Where there are several best common ancestors, the one `git merge-base` prints is used. Two
+branches with no commit in common have no merge base, and are refused with `no_merge_base` (`no_merge_base_shallow` in a
+shallow clone) rather than compared tip to tip, which would present the whole of one branch as a change of the other.
+Every change in the reply is between `base` and the right commit, in the `committed` group, its present sides' `source`
+naming the commit and the blob (with no `branch`, which the endpoints carry). Two branches at the same commit have no
+changes, and the reply says so by its two equal commits and a `base` equal to them; a right branch that is an ancestor
+of the left one forks at its own tip and has none either.
+
+Only the left side can be something other than a local branch. With `left_remote` it is a remote-tracking branch,
+checked and looked up as exactly `refs/remotes/<left>` in the same way, and the reply's `left` carries `remote: true`; a
+local branch of the same name is not the one compared. With `left_empty` it is the empty tree: `left` is ignored, the
+reply's `left` is `{ branch: "", commit, empty: true }` with `commit` the empty tree's id in the repository's object
+format, `base` is that id too, and no merge base is looked for, so every file of the right branch's tip is an addition.
+A read of one of the comparison's changes names the endpoints back as the reply reported them; an endpoint's `remote`
+makes its name checked as a remote-tracking one, and `empty` requires `base` to be the empty tree's id (`invalid_commit`
+otherwise). A `right` that says `remote` or `empty` is refused with `invalid_branch_name`.
 
 The listing compares the two commits' whole trees, with rename detection on, so a rename into or out of the project's
 scope is found against the rest of the repository; an entry is kept when either side is inside the scope, and a side
@@ -1319,21 +1348,23 @@ like a `read_project_file` of a commit, a read is held only to the project's sco
 `list_project_commits` lists, one by one, the commits a comparison's right branch has made since the fork: those
 reachable from `tip` and not from `base`, as `git log base..tip` gives them, newest first in its order. Each of `base`
 and `tip` must be the full id of a commit in the repository (`invalid_commit`, `unknown_commit`); no branch is looked
-up, so like a comparison's changes, a commit list never moves with a branch. A `tip` equal to `base` has no commits.
-Each `CommitChanges` names the commit, its first parent (`null` for a commit with no parent, which a branch has only
-where it merged in an unrelated history), its subject line — read as UTF-8 with replacement characters and cut to 200
-characters — and its changes against that parent that touch the project, in the `committed` group, its present sides'
-`source` naming the parent's or the commit's blob. A merge commit's changes are those against its first parent, what
-it took in; a commit with no parent is compared with the empty tree. A commit that changed nothing in the project is
-listed with no changes. The changes are found as a comparison's are (see "Comparing two branches" above): the whole
-trees are compared with rename detection on, a side outside the scope is `out_of_scope`, and when that output is past
-its 8 MiB budget, a project below the repository's root is listed within its own directory instead — and then only the
-commits that touch it are listed — while a project at the root is refused (`git_output`). At most 100 commits are
-listed, the newest, and `commits_complete` is false when there were more; their changes together are held to one change
-list's budgets, at most 10,000 entries or 2 MiB of paths, and past that the last commit listed holds only the changes
-read before the budget ran out, the older commits are left out (as is the commit the budget ran out in when none of its
-changes fit, so no commit is listed as having changed nothing that did), and `complete` is false. Nothing is read from any
-worktree's disk or index.
+up, so like a comparison's changes, a commit list never moves with a branch. A `tip` equal to `base` has no commits. A
+`base` that is the empty tree's id (what a comparison from the empty tree reports) is accepted in place of a commit, and
+lists every commit reachable from `tip`, the root commits included; the commit budget applies as ever.
+Each `CommitChanges` names the commit, its first parent (`null` for a commit with no parent: the first commit of a
+history, which a branch has when it is listed from the empty tree or has merged in an unrelated history), its subject
+line — read as UTF-8 with replacement characters and cut to 200 characters — and its changes against that parent that
+touch the project, in the `committed` group, its present sides' `source` naming the parent's or the commit's blob. A
+merge commit's changes are those against its first parent, what it took in; a commit with no parent is compared with the
+empty tree. A commit that changed nothing in the project is listed with no changes. The changes are found as a
+comparison's are (see "Comparing two branches" above): the whole trees are compared with rename detection on, a side
+outside the scope is `out_of_scope`, and when that output is past its 8 MiB budget, a project below the repository's
+root is listed within its own directory instead — and then only the commits that touch it are listed — while a project
+at the root is refused (`git_output`). At most 100 commits are listed, the newest, and `commits_complete` is false when
+there were more; their changes together are held to one change list's budgets, at most 10,000 entries or 2 MiB of paths,
+and past that the last commit listed holds only the changes read before the budget ran out, the older commits are left
+out (as is the commit the budget ran out in when none of its changes fit, so no commit is listed as having changed
+nothing that did), and `complete` is false. Nothing is read from any worktree's disk or index.
 
 `read_project_commit_change` and `read_project_commit_change_bodies` read one change of a commit as
 `read_project_comparison_change` and its bodies read one of a comparison, with `parent` (or the empty tree, for none) in
@@ -1384,10 +1415,13 @@ born yet, and its staged changes are compared with the empty tree.
 | Change entries | 10,000 | The largest measured commit changed 704 files and 99 % changed under 170; a worktree's pending changes are smaller still. A change list past it is cut |
 | Change paths | 2 MiB, as sent | Bounds a change list whose entries are few but whose paths are long, counted as JSON writes them, the repository paths of sides outside the project included. A change list past it is cut |
 | Branches | 10,000 | A repository usually has a handful to tens of local branches, and one kept for years with every branch left behind a few thousand. A branch list past it is cut |
-| Branch names | 2 MiB, as sent | Bounds a branch list whose branches are few but whose names are long, counted as JSON writes them. A branch list past it is cut |
+| Branch names | 2 MiB, as sent | Bounds a branch list whose branches are few but whose names are long, counted as JSON writes them, the name of an upstream with its branch's. A branch list past it is cut |
 | Branch origins, per repository | 1,000 | Which session is working on a branch, kept in the daemon's database (see "Comparing two branches"). In a repository with more branches than this the ones a listing reaches first keep theirs and the rest carry none; a record past the cap is dropped oldest first, by the time its branch was created. A branch list reserves 768 bytes for each one it attaches, as JSON writes it |
 | Origin title | 80 characters | The responsible session's title as the record snapshots it when the session becomes responsible, so the badge can name it once it is gone; a longer title is cut to this |
-| `git for-each-ref` output for a branch list | 4 MiB | One branch past the budget is asked for, each a line of about 90 bytes beside its name, so this is room for names averaging some 300 bytes. Past it the branch list is refused (`git_output`) |
+| `git for-each-ref` output for a branch list | 3.5 MiB | One branch past the budget is asked for, each a line of about 90 bytes beside its name, so this is room for names averaging some 270 bytes. Past it the branch list is refused (`git_output`) |
+| Upstream lookup, reference names | 64 KiB | The exact names one `git for-each-ref` is asked for: the main working copy's branch on each remote, so room for some two thousand remotes. Past it the lookup is not made, and the list says `upstreams_complete: false` |
+| Upstream lookup, `git remote` output | 32 KiB | The names of the repository's remotes. Past it the same-named branch is not looked up, and the list says so |
+| Upstream lookup, `git for-each-ref` output | 128 KiB | A line for each name asked for that exists, and for whatever lies below one (`refs/remotes/origin/a/b` below `refs/remotes/origin/a`). Past it the list says so |
 | Commits, per commit list | 100 | A branch under review holds a handful to a few tens of commits since it forked; each one listed is a section of a client's change list, so past this a list stops being a way to read a branch commit by commit. The newest are listed |
 | Commit subject | 200 characters | A subject is the commit message's first paragraph joined into one line, which nothing bounds; a longer one is cut to this |
 | `git log` output for a commit list | 8 MiB | As a comparison's `git diff-tree`, and for the same reason; past it a project below the repository's root is listed within its own directory, and a project at the root is refused (`git_output`). That second run can double a commit list's worst-case time: two runs of up to the 30 s `git` deadline each |
@@ -1398,7 +1432,7 @@ born yet, and its staged changes are compared with the empty tree.
 | `git` deadline | 30 s | Browse reads are local, so this only catches a wedged repository (a dead network volume, a held lock) |
 | Reads at once, daemon-wide | 4 | A viewer, its neighbour and a couple of directory expansions in parallel; more waits its turn. A read from disk has no deadline, so a volume that stops answering can hold these |
 | Outstanding requests, per connection | 16 | Waiting, being read, or queued until their reply is written. One more is refused with `limit_exceeded` at once, so a flooding client cannot grow the daemon's backlog |
-| Reserved per request | about 12 MiB for a file or a project source, about 7.8 MiB for a listing, about 11.9 MiB for a branch list, about 26.6 MiB for a change list or a comparison, about 26.9 MiB for a commit list, about 24.3 MiB for a change of either, or for the bodies of one | Each request reserves its worst case before it starts. For a file that is three times the file body (a text body held as read and serialized, JSON escaping at most doubling it; a binary body held base64-encoded and serialized again) and room for the rest of the frame; for a listing, its names and the rest of its entries, each held as read and serialized; for a branch list, the `git for-each-ref` output while it is read, its branches at 128 bytes each beside their names and the origins attached to at most 1,000 of them at 768 bytes each, held as built and serialized; for a change list, the `git status` output while it is read and its entries, at 768 bytes each beside their paths, held as built and serialized, and for a comparison the same with its `git diff-tree` output, and for a commit list the same with its `git log` output and its commits at 1,536 bytes each beside their changes; for a change of either kind, two bodies as a file reserves them beside a patch of at most 64 KiB, a body coming with a patch only when the patch carries no content (a text patch alone, at most 4 MiB, needs no more than one body). The reservation shrinks to the serialized reply and is given back once the reply is written to the socket. A reply that would be larger than its reservation is refused (`reply_bytes`) |
+| Reserved per request | about 12 MiB for a file or a project source, about 7.8 MiB for a listing, about 11.8 MiB for a branch list, about 26.6 MiB for a change list or a comparison, about 26.9 MiB for a commit list, about 24.3 MiB for a change of either, or for the bodies of one | Each request reserves its worst case before it starts. For a file that is three times the file body (a text body held as read and serialized, JSON escaping at most doubling it; a binary body held base64-encoded and serialized again) and room for the rest of the frame; for a listing, its names and the rest of its entries, each held as read and serialized; for a branch list, the `git for-each-ref` output while it is read, its branches at 128 bytes each beside their names and the origins attached to at most 1,000 of them at 768 bytes each, held as built and serialized, and the upstream lookup's names and output; for a change list, the `git status` output while it is read and its entries, at 768 bytes each beside their paths, held as built and serialized, and for a comparison the same with its `git diff-tree` output, and for a commit list the same with its `git log` output and its commits at 1,536 bytes each beside their changes; for a change of either kind, two bodies as a file reserves them beside a patch of at most 64 KiB, a body coming with a patch only when the patch carries no content (a text patch alone, at most 4 MiB, needs no more than one body). The reservation shrinks to the serialized reply and is given back once the reply is written to the socket. A reply that would be larger than its reservation is refused (`reply_bytes`) |
 | Bytes held for replies, per connection | about 48 MiB | Four file reads at their worst, so one window gets every read the daemon runs at a time |
 | Bytes held for replies, daemon-wide | about 96 MiB | Twice one connection's share, so a client that stops reading cannot hold every other connection's reads up |
 | Writing one frame | 30 s | Any frame on the control socket, not only a browse reply. On a loopback connection a client that takes no bytes for this long has stopped reading; its connection is closed, giving back what its queued replies held, and it reconnects to a fresh `snapshot` and asks again |

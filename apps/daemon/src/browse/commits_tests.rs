@@ -18,8 +18,8 @@ use crate::test_support::{fixture_git, git, git_stdin, repo_with};
 #[derive(Debug)]
 pub(super) struct Listed {
     pub(super) commits: Vec<CommitChanges>,
-    complete: bool,
-    commits_complete: bool,
+    pub(super) complete: bool,
+    pub(super) commits_complete: bool,
 }
 
 /// One change of a commit as `read_project_commit_change` answered it.

@@ -273,7 +273,13 @@ impl Fixture {
     }
 
     fn list(&self) -> BranchList {
-        compare::branches_in(&self.env(), &self.common_dir, &AtomicBool::new(false)).unwrap()
+        compare::branches_in(
+            &self.env(),
+            &self.common_dir,
+            &self.common_dir,
+            &AtomicBool::new(false),
+        )
+        .unwrap()
     }
 
     fn rows(&self) -> Vec<BranchOrigin> {

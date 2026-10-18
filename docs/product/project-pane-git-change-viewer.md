@@ -23,8 +23,12 @@ room for it.
 A committed change carries the commits it is read from in the header's **subtitle**, the line directly under the
 title, each commit by its first seven characters:
 
-- **From the Committed section listed together**: the branch and the commit it was at, then the base branch and the commit the two
-  forked at — "feature at 9e8d7c6, since it forked from main at 4f2a9c1", say.
+- **From the Committed section listed together**: the branch, the base branch and the commit the two forked at, then
+  the commit the branch is at — "feature forked from main at 4f2a9c1, now at 9e8d7c6", say, or, with a remote branch as
+  the base, "main forked from origin/main at 4f2a9c1, now at 9e8d7c6", in the same words as the list's own line about
+  the fork. For a branch listed with its whole history (see
+  "Committed changes" in `docs/product/project-pane-git-mode.md`), the branch and the commit it was at, with all of its
+  history.
 - **From under a commit's row**, grouped by commit (see "Grouped by commit" in
   `docs/product/project-pane-git-mode.md`): the commit and
   the parent it is compared with — "Commit 9e8d7c6, compared with its parent 4f2a9c1" — or, for a commit with no
@@ -38,8 +42,9 @@ Under that are the change's details, laid out as the viewer lays out any subject
 `docs/product/project-pane.md`): the path within the project and, for a rename, the path it was renamed from.
 
 A committed change is read from two commits, and is shown as a staged change is below; it is never untracked or in
-conflict. Listed together, its old side is read from the commit the branch and its base forked at and its
-new side from the branch's tip, both as the comparison on screen has them; from under a commit's row, its old side from
+conflict. Listed together, its old side is read from the commit the branch and its base forked at — the empty tree
+for a branch listed with its whole history, every change of which is an addition — and its new side from the branch's
+tip, both as the comparison on screen has them; from under a commit's row, its old side from
 the commit's first parent — the empty tree for a commit with none — and its new side from the commit.
 
 ## What it shows

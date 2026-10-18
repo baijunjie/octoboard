@@ -11,7 +11,7 @@ import { changeRowOffset } from "./ChangeList";
 import { changesScope } from "./changesScope";
 import { HEADING_HEIGHT } from "./changeSectionHeading";
 import { changeEvidence, changeNeighbours, filterChanges, rereadChange, visibleChanges, type ChangeEvidence, type ChangeItem } from "./changes";
-import { comparisonNews } from "./comparisonNews";
+import { branchTip, comparisonNews } from "./comparisonNews";
 import type { FileFilterState } from "./FileFilterField";
 import { focusFirst, focusRow } from "./focusRow";
 import type { GitView } from "./GitView";
@@ -48,9 +48,12 @@ export interface GitReview {
  * list. The branch is the one chosen, or by default the one checked out in the worktree holding the
  * project's directory; its uncommitted changes are read from the worktree that has it checked out,
  * when one has, and what it has committed is its comparison with the branch the repository's main
- * working copy has checked out — from the commit the two forked at to the branch's tip — listed
- * either together or, grouped by commit, under a row per commit since the fork, in one Committed
- * section. `active` is whether the Git mode is on screen; only then is anything asked for.
+ * working copy has checked out — from the commit the two forked at to the branch's tip. For that
+ * very branch it is the comparison with the remote branch the branch list gives it (its upstream,
+ * or the one of its name on a remote), so its unpushed commits, or with nothing when there is none,
+ * so its whole history. The commits are listed either together or, grouped by commit, under a row
+ * per commit since the fork, in one Committed section. `active` is whether the Git mode is on
+ * screen; only then is anything asked for.
  *
  * The comparison is of the commits the branches were at when it was made; once a branch list read
  * since shows either branch at another commit, it is made again, so the Committed section follows
@@ -74,10 +77,10 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
   const source = useProjectSource(project, active);
   const git = source.source.state === "loaded" ? source.source.source.git : null;
   const branches = useBranchList(project, active && git !== null);
-  const { ownBranch, branch, holder, holderId, committed } = changesScope(git, browser.branch);
+  const { ownBranch, branch, holder, holderId, committed } = changesScope(git, browser.branch, branches.branches);
   const comparing = committed.state === "compare";
   const changes = useChangeList(project, holderId, active && holder !== undefined);
-  const comparisonHook = useBranchComparison(project, comparing ? committed.base : undefined, comparing ? committed.branch : undefined, active && git !== null);
+  const comparisonHook = useBranchComparison(project, comparing ? committed.base : undefined, comparing ? committed.baseKind : "local", comparing ? committed.branch : undefined, active && git !== null);
   const comparison = comparisonHook.comparison;
   const shownComparison = comparison.state === "loaded" ? comparison : undefined;
   const byCommit = browser.byCommit;
@@ -117,16 +120,17 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     let tips: string[];
     if (shownComparison) {
       const news = comparisonNews(branchList, shownComparison);
-      pair = JSON.stringify([shownComparison.left.branch, shownComparison.right.branch]);
+      pair = JSON.stringify([shownComparison.left.branch, shownComparison.left.remote === true, shownComparison.right.branch]);
       if (!news.moved) {
         if (news.tips.length > 0) askedFor.current = { pair, tips: JSON.stringify(news.tips) };
         return;
       }
       tips = news.tips;
     } else if (comparing && comparison.state === "error" && branchList.state === "loaded") {
-      pair = JSON.stringify([committed.base, committed.branch]);
+      pair = JSON.stringify([committed.base, committed.baseKind === "remote", committed.branch]);
       if (askedFor.current?.pair !== pair) return;
-      tips = [committed.base, committed.branch].map((name) => branchList.branches.find((b) => b.name === name)?.commit ?? "");
+      tips = [branchTip(branchList.branches, committed.branch, false) ?? ""];
+      if (committed.baseKind !== "empty") tips.unshift(branchTip(branchList.branches, committed.base, committed.baseKind === "remote") ?? "");
       if (tips.includes("")) return;
     } else {
       return;
@@ -301,7 +305,7 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
         : { state: "listed", list: changes.list, worktree: holder, own: holderId === undefined };
   const committedState: CommittedState =
     committed.state === "compare"
-      ? { state: "compare", base: committed.base, comparison, commits: byCommit && forked ? commits : undefined }
+      ? { state: "compare", branch: committed.branch, base: committed.base, baseKind: committed.baseKind, comparison, commits: byCommit && forked ? commits : undefined }
       : committed;
 
   return {
@@ -335,14 +339,16 @@ export type UncommittedState =
   | { state: "listed"; list: ReturnType<typeof useChangeList>["list"]; worktree: WorktreeInfo; own: boolean };
 
 /** Where the committed part of the list stands: no branch, or one of the two with no commit yet, a main working copy on no branch to
- * compare with (`noBase`), the branch being the main working copy's own (`isBase`), or the
- * comparison with `base`, the main working copy's branch, and — grouped by commit — its commits. */
+ * compare with (`noBase`), or the comparison with `base`, the main working copy's branch or, for
+ * that branch itself, a remote-tracking branch (`baseKind`) or none, all its commits (an empty
+ * `base`), and — grouped by commit — its commits. */
 export type CommittedState =
   | { state: "none" | "noBase" }
-  | { state: "isBase"; branch: string }
   | {
     state: "compare";
+    branch: string;
     base: string;
+    baseKind: "local" | "remote" | "empty";
     comparison: ReturnType<typeof useBranchComparison>["comparison"];
     commits: ReturnType<typeof useCommitList>["commits"] | undefined;
   };

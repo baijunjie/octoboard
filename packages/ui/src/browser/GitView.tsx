@@ -126,8 +126,8 @@ function Notice({ notice }: { notice: ChangesNotice }): React.ReactElement {
       return <Message id="git.changes.worktree" params={{ path: code(notice.path) }} />;
     case "scopeMissing":
       return <>{t("git.changes.scopeMissing")}</>;
-    case "isBase":
-      return <Message id="git.changes.isBase" params={{ branch: code(notice.branch) }} />;
+    case "noRemote":
+      return <Message id="git.changes.noRemote" params={{ branch: code(notice.branch) }} />;
     case "noBase":
       return <>{t("git.changes.noBase")}</>;
     case "comparing":

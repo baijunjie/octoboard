@@ -380,12 +380,16 @@ export function useChangeReader(project: string): ChangeReader {
   const commitChip = (commit: string) => createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "default", children: shortCommit(commit) });
   const branchChip = (branch: string) => createElement(InlineChip, { monospace: true, wrap: true, size: "inherit", color: "primary", children: displayWirePath(branch) });
   // A comparison's change says which branch it is of, at which commit, and the branch it forked
-  // from, at the commit of the fork; one commit's change says which commit it is of, and the parent
-  // it is compared with. The plain-text form is the line's tooltip, each branch name and commit
-  // isolated by U+2068/U+2069 where the line sets them as code, which reads left to right.
+  // from, at the commit of the fork, or that it is of the whole history when it has no base; one
+  // commit's change says which commit it is of, and the parent it is compared with. The plain-text
+  // form is the line's tooltip, each branch name and commit isolated by U+2068/U+2069 where the
+  // line sets them as code, which reads left to right.
   let source: React.ReactNode;
   let sourceText: string | undefined;
-  if (origin.kind === "comparison") {
+  if (origin.kind === "comparison" && origin.left.empty) {
+    source = createElement(Message<"git.compare.sourceRoot">, { id: "git.compare.sourceRoot", params: { to: branchChip(origin.right.branch), toCommit: commitChip(origin.right.commit) } });
+    sourceText = t("git.compare.sourceRoot", { to: isolatedWirePath(origin.right.branch), toCommit: isolate(shortCommit(origin.right.commit)) });
+  } else if (origin.kind === "comparison") {
     source = createElement(Message<"git.compare.source">, {
       id: "git.compare.source",
       params: { from: branchChip(origin.left.branch), fromCommit: commitChip(origin.base), to: branchChip(origin.right.branch), toCommit: commitChip(origin.right.commit) },

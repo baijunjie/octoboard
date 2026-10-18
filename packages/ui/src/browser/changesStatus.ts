@@ -15,7 +15,7 @@ export type ChangesNotice =
   | { id: "unborn" }
   | { id: "worktree"; path: string }
   | { id: "scopeMissing" }
-  | { id: "isBase"; branch: string }
+  | { id: "noRemote"; branch: string }
   | { id: "noBase" }
   | { id: "comparing"; base: string }
   | { id: "base"; base: string; baseCommit: string; tip: string }
@@ -81,23 +81,26 @@ export function changesStatus({
     if (!worktree.scope_present) notices.push({ id: "scopeMissing" });
     if (list.state === "error") failures.push({ key: "uncommitted", title: "git.error.list", line: "git.changes.listError", message: list.message });
   }
-  if (committed.state === "isBase") {
-    notices.push({ id: "isBase", branch: displayWirePath(committed.branch) });
-  } else if (committed.state === "noBase") {
+  if (committed.state === "noBase") {
     notices.push({ id: "noBase" });
   } else if (committed.state === "compare") {
-    const { comparison, commits, base } = committed;
+    const { comparison, commits, base, baseKind, branch } = committed;
+    // Compared with nothing there is no fork to name: the line says so from the start, whatever
+    // the comparison is doing.
+    if (baseKind === "empty") notices.push({ id: "noRemote", branch: displayWirePath(branch) });
     if (comparison.state === "loading") {
-      notices.push({ id: "comparing", base: displayWirePath(base) });
+      if (baseKind !== "empty") notices.push({ id: "comparing", base: displayWirePath(base) });
     } else if (comparison.state === "error") {
       failures.push({ key: "committed", title: "git.changes.compareFailed", line: "git.changes.compareError", message: comparison.message });
     } else if (comparison.state === "loaded") {
-      notices.push({
-        id: "base",
-        base: displayWirePath(comparison.left.branch),
-        baseCommit: shortCommit(comparison.base),
-        tip: shortCommit(comparison.right.commit),
-      });
+      if (baseKind !== "empty") {
+        notices.push({
+          id: "base",
+          base: displayWirePath(comparison.left.branch),
+          baseCommit: shortCommit(comparison.base),
+          tip: shortCommit(comparison.right.commit),
+        });
+      }
       if (commits?.state === "loading") notices.push({ id: "listingCommits" });
       else if (commits?.state === "error") failures.push({ key: "commits", title: "git.changes.commitsFailed", line: "git.changes.commitsError", message: commits.message });
     }

@@ -112,8 +112,8 @@ changes. The wire contract and budgets are in "Browsing a project" in [`PROTOCOL
 | `blob.rs` | Reading blobs from the index or a commit, and resolving branches and commits |
 | `git.rs` | The one way browse runs `git`: isolated, bounded, never writing to the repository |
 | `changes.rs` | A worktree's uncommitted changes: `list`, `read`, `read_between` and the bodies reads |
-| `compare.rs` | Local branches and the comparison of two of them: `branches`, `list`, `read`, `read_bodies` |
-| `commits.rs` | The commits a branch made since it forked from another: `list`, `read`, `read_bodies` |
+| `compare.rs` | Local branches, each with the remote branch to compare it with when it is the main working copy's, and the comparison of a branch with a local branch, a remote-tracking branch or the empty tree: `branches`, `list`, `read`, `read_bodies` |
+| `commits.rs` | The commits a branch made since it forked from another, or its whole history from the empty tree: `list`, `read`, `read_bodies` |
 | `tree_diff.rs` | Reading `git`'s raw tree-diff output, and the stdout budget it is read under, shared by `compare.rs` and `commits.rs` |
 | `budget.rs`, `lane.rs` | The limits every read is held to, and the per-connection lane (outstanding-request bound, superseding, retained-bytes reservation) |
 | `tests.rs`, `change_tests.rs`, `compare_tests.rs`, `commits_tests.rs`, `nested_tests.rs`, `body_tests.rs` | Test-only end-to-end tests over real repositories |

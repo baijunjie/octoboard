@@ -52,19 +52,25 @@ export type FixtureCommitList = { commits: FixtureCommit[]; cut?: boolean } | { 
 /** The commits a commit list holds: none for a list that fails or is never answered. */
 export const listedCommits = (list: FixtureCommitList): FixtureCommit[] => ("commits" in list ? list.commits : []);
 
+/** The id of the empty tree, which a comparison from nothing reports as its base. */
+export const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
 /** A fixture project's repository: its worktrees, the first holding the project, and each one's
  * changes by its id; a worktree with an `error` in place of changes fails to list. With `gitError`,
- * the repository cannot be read at all. `branches` are its local branches; `comparisons` the
- * changes `<right>` made since it forked from `<left>`, keyed `<left>..<right>` (none for a pair not
- * given), whose old sides are read from the fork's commit; `commits` the same pair's commits, which
- * the cumulative changes are made of, the old side of each read from the commit's parent and the new
- * side from the commit; `forks` names the fork's commit for a pair
- * (`null` for two branches with no commit in common, which a comparison refuses, as a shallow
- * clone's refusal when `shallow` is set), and a pair it does
- * not name forks at `<left>`'s own tip, as a branch made from it does. `missing` are branches the
- * list has that a comparison no longer finds. `gone` are branches deleted once a comparison has
- * been made: from then on neither the list nor a new comparison finds them, where `missing` ones
- * are refused from the start. With `comparing: "pending"` a comparison is never answered. */
+ * the repository cannot be read at all. `branches` are its local branches, of which only the one
+ * the main working copy has checked out carries an upstream; `comparisons` the changes `<right>`
+ * made since it forked from `<left>`, keyed `<left>..<right>` (`<left>` the name of a
+ * remote-tracking branch for a comparison with a branch's upstream, and empty for one from the
+ * empty tree; none for a pair not given), whose old sides are read from the fork's commit;
+ * `commits` the same pair's commits, which the cumulative changes are made of, the old side of each
+ * read from the commit's parent and the new side from the commit; `forks` names the fork's commit
+ * for a pair (`null` for two branches with no commit in common, which a comparison refuses, as a
+ * shallow clone's refusal when `shallow` is set), and a pair it does not name forks at `<left>`'s
+ * own tip, as a branch made from it does. `missing` are branches the list has that a comparison no
+ * longer finds. `gone` are branches deleted once a comparison has been made: from then on neither
+ * the list nor a new comparison finds them, where `missing` ones are refused from the start. With
+ * `comparing: "pending"` a comparison is never answered. With `upstreamsCut` the branch list leaves
+ * the main working copy's branch without an upstream and says the lookup was past a budget. */
 export interface FixtureGit {
   worktrees: WorktreeInfo[];
   changes: Record<string, FixtureChange[] | FixtureError>;
@@ -80,6 +86,7 @@ export interface FixtureGit {
    * commit list is answered `complete: false` and the pane says under the list that it is not whole. */
   cutShort?: boolean;
   comparing?: "pending";
+  upstreamsCut?: boolean;
 }
 
 /** Which section of a change list a change with two sides belongs to; `committed` is a branch

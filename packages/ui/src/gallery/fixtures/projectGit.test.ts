@@ -6,9 +6,9 @@ import type { ChangeEntry, ChangeSide, Event, SideRead, SideVersion } from "../.
 import { hasHunks, joinedPatch, linesAfterLastHunk } from "../../viewer/patch";
 import { FixtureUnfillableError } from "../banner";
 import { createFixtureDaemon } from "../fixtureDaemon";
-import { listedCommits, type FixtureGit } from "./changeFixtures";
+import { EMPTY_TREE, listedCommits, type FixtureGit } from "./changeFixtures";
 import { objectIdCheck } from "./invariants";
-import { LONG_HISTORY_GIT, SAMPLE_GIT } from "./projectGit";
+import { LONG_HISTORY_GIT, NEVER_PUSHED_GIT, projectGitScenarios, SAMPLE_GIT, UNPUSHED_GIT } from "./projectGit";
 
 describe("the sample repository's changes", () => {
   const fileSide = (side: ChangeSide) => side.state === "present" && side.kind === "file";
@@ -20,15 +20,20 @@ describe("the sample repository's changes", () => {
    * before it reads any body: the one the diff reply reported, as the window names it back. */
   const versionOf = (side: ChangeSide): SideVersion => (side.state === "present" ? { state: "present", source: side.source } : { state: "absent" });
   const versionsOf = (change: { old: ChangeSide; new: ChangeSide }) => ({ old: versionOf(change.old), new: versionOf(change.new) });
+  /** The repositories whose comparisons and commit lists the checks below hold: the sample, and the
+   * one with a branch ahead of its upstream, and the one with a branch never pushed. */
+  const REPOSITORIES = [SAMPLE_GIT, UNPUSHED_GIT, NEVER_PUSHED_GIT];
   /** The two ends a comparison keyed `<left>..<right>` is read from, at the commits the branch list
-   * names, and the fork it is made from, as the window names them back. */
-  const endsOf = (comparison: string) => {
-    const commitOf = (branch: string) => SAMPLE_GIT.branches?.find((b) => b.name === branch)?.commit ?? "";
+   * names (a remote-tracking branch at the one its branch's upstream names), and the fork it is made
+   * from, as the window names them back. */
+  const endsOf = (git: FixtureGit, comparison: string) => {
+    const commitOf = (branch: string) =>
+      branch === "" ? EMPTY_TREE : git.branches?.find((b) => b.name === branch)?.commit ?? git.branches?.find((b) => b.upstream?.name === branch)?.upstream?.commit ?? "";
     const [left, right] = comparison.split("..");
     return {
       left: { branch: left, commit: commitOf(left) },
       right: { branch: right, commit: commitOf(right) },
-      base: SAMPLE_GIT.forks?.[comparison] ?? commitOf(left),
+      base: git.forks?.[comparison] ?? commitOf(left),
     };
   };
   /** The comparisons of the sample repository, each list once: two pairs may be answered with the
@@ -39,7 +44,7 @@ describe("the sample repository's changes", () => {
   };
   /** Every commit of the sample repository's commit lists, with its changes: the commits that have
    * none are listed all the same, and have nothing to read. */
-  const commitsOf = () => Object.entries(SAMPLE_GIT.commits ?? {}).flatMap(([pair, list]) => listedCommits(list).map((commit) => ({ pair, ...commit })));
+  const commitsOf = (git: FixtureGit) => Object.entries(git.commits ?? {}).flatMap(([pair, list]) => listedCommits(list).map((commit) => ({ pair, ...commit })));
   const short = (commit: string) => commit.slice(0, 7);
   /** Swallows the daemon errors a fixture answers on purpose, but never a refusal: that is a gap in
    * the gallery's own data, and the check below exists to name it. */
@@ -57,18 +62,24 @@ describe("the sample repository's changes", () => {
   // cannot be read, and the change whose patch is past the daemon's limit.
   it("name an object by its content", () => {
     expect(objectIdCheck(SAMPLE_GIT)).toEqual({ conflicts: [], unchecked: ["1b2c3d4", "1f2e3d4", "8d2f1a0"] });
+    expect(objectIdCheck(UNPUSHED_GIT).conflicts).toEqual([]);
+    expect(objectIdCheck(NEVER_PUSHED_GIT).conflicts).toEqual([]);
   });
 
   // A comparison is made from the fork of the two branches, so every committed side the sample
   // lists names the commit the fork is at (old) or the right branch's tip (new), and a side is
   // never read from the left branch's own tip.
   it("list a comparison's changes between its fork and its right branch's tip", () => {
-    for (const [comparison, changes] of Object.entries(SAMPLE_GIT.comparisons ?? {})) {
-      const { base, right } = endsOf(comparison);
-      for (const { entry } of changes) {
-        if (entry.group !== "committed") throw new Error(`${comparison} lists a ${entry.group} change`);
-        if (entry.old.state === "present") expect([comparison, entry.old.source]).toEqual([comparison, expect.objectContaining({ kind: "commit", commit: base })]);
-        if (entry.new.state === "present") expect([comparison, entry.new.source]).toEqual([comparison, expect.objectContaining({ kind: "commit", commit: right.commit })]);
+    for (const git of REPOSITORIES) {
+      for (const [comparison, changes] of Object.entries(git.comparisons ?? {})) {
+        const { base, right } = endsOf(git, comparison);
+        for (const { entry } of changes) {
+          if (entry.group !== "committed") throw new Error(`${comparison} lists a ${entry.group} change`);
+          // From the empty tree nothing is there to be the old side.
+          if (entry.old.state === "present") expect([comparison, entry.old.source]).toEqual([comparison, expect.objectContaining({ kind: "commit", commit: base })]);
+          if (base === EMPTY_TREE) expect([comparison, entry.old.state]).not.toEqual([comparison, "present"]);
+          if (entry.new.state === "present") expect([comparison, entry.new.source]).toEqual([comparison, expect.objectContaining({ kind: "commit", commit: right.commit })]);
+        }
       }
     }
   });
@@ -76,7 +87,7 @@ describe("the sample repository's changes", () => {
   // A commit's changes are against its first parent, so every committed side names the commit's
   // parent (old) or the commit itself (new), and a commit with no parent has no old side.
   it("list a commit's changes between its parent and the commit", () => {
-    for (const { pair, commit, parent, changes } of commitsOf()) {
+    for (const { pair, commit, parent, changes } of REPOSITORIES.flatMap(commitsOf)) {
       for (const { entry } of changes) {
         if (entry.group !== "committed") throw new Error(`${pair} ${short(commit)} lists a ${entry.group} change`);
         const at = `${pair} ${short(commit)}`;
@@ -92,9 +103,11 @@ describe("the sample repository's changes", () => {
   // change a path another undoes, or the same path again.
   it("list commits that between them change every path the comparison lists", () => {
     const pathsOf = (list: { entry: ChangeEntry }[]) => list.flatMap(({ entry }) => (entry.group === "conflicted" ? [] : [pathOf(entry.new) || pathOf(entry.old)]));
-    for (const [pair, changes] of Object.entries(SAMPLE_GIT.comparisons ?? {})) {
-      const changed = new Set(pathsOf(listedCommits(SAMPLE_GIT.commits?.[pair] ?? { commits: [] }).flatMap(({ changes: made }) => made)));
-      expect([pair, pathsOf(changes).filter((path) => !changed.has(path))]).toEqual([pair, []]);
+    for (const git of REPOSITORIES) {
+      for (const [pair, changes] of Object.entries(git.comparisons ?? {})) {
+        const changed = new Set(pathsOf(listedCommits(git.commits?.[pair] ?? { commits: [] }).flatMap(({ changes: made }) => made)));
+        expect([pair, pathsOf(changes).filter((path) => !changed.has(path))]).toEqual([pair, []]);
+      }
     }
   });
 
@@ -103,30 +116,84 @@ describe("the sample repository's changes", () => {
   // the fork, or, where the list was cut, at a commit the list leaves out. A commit with no parent
   // is only ever met as a merge's other parent.
   it("list commits that form a history the tip reaches", () => {
-    for (const [pair, list] of Object.entries(SAMPLE_GIT.commits ?? {})) {
-      const commits = listedCommits(list);
-      if (commits.length === 0) continue;
-      const byId = new Map(commits.map((listed) => [listed.commit, listed]));
-      const tip = SAMPLE_GIT.branches?.find((b) => b.name === pair.split("..")[1])?.commit ?? "";
-      const reached = new Set<string>();
-      const visit = (id: string | null | undefined) => {
-        const listed = id ? byId.get(id) : undefined;
-        if (!listed || reached.has(listed.commit)) return;
-        reached.add(listed.commit);
-        visit(listed.parent);
-        visit(listed.merged);
-      };
-      visit(tip);
-      expect([pair, commits.filter((listed) => !reached.has(listed.commit)).map(({ subject }) => subject)]).toEqual([pair, []]);
+    for (const git of REPOSITORIES) {
+      for (const [pair, list] of Object.entries(git.commits ?? {})) {
+        const commits = listedCommits(list);
+        if (commits.length === 0) continue;
+        const byId = new Map(commits.map((listed) => [listed.commit, listed]));
+        const tip = git.branches?.find((b) => b.name === pair.split("..")[1])?.commit ?? "";
+        const reached = new Set<string>();
+        const visit = (id: string | null | undefined) => {
+          const listed = id ? byId.get(id) : undefined;
+          if (!listed || reached.has(listed.commit)) return;
+          reached.add(listed.commit);
+          visit(listed.parent);
+          visit(listed.merged);
+        };
+        visit(tip);
+        expect([pair, commits.filter((listed) => !reached.has(listed.commit)).map(({ subject }) => subject)]).toEqual([pair, []]);
 
-      let end = tip;
-      for (let listed = byId.get(end); listed?.parent; listed = byId.get(end)) end = listed.parent;
-      const cut = "cut" in list && list.cut === true;
-      expect([pair, cut ? !byId.has(end) && end !== endsOf(pair).base : end === endsOf(pair).base]).toEqual([pair, true]);
+        let end = tip;
+        for (let listed = byId.get(end); listed?.parent; listed = byId.get(end)) end = listed.parent;
+        const cut = "cut" in list && list.cut === true;
+        // A history from the empty tree ends at the root commit, which has no parent.
+        const whole = endsOf(git, pair).base === EMPTY_TREE;
+        expect([pair, whole ? byId.get(end)?.parent === null : cut ? !byId.has(end) && end !== endsOf(git, pair).base : end === endsOf(git, pair).base]).toEqual([pair, true]);
 
-      const taken = new Set(commits.flatMap(({ merged }) => (merged ? [merged] : [])));
-      expect([pair, commits.filter(({ parent, commit }) => parent === null && !taken.has(commit)).map(({ subject }) => subject)]).toEqual([pair, []]);
+        const taken = new Set(commits.flatMap(({ merged }) => (merged ? [merged] : [])));
+        expect([pair, commits.filter(({ parent, commit }) => parent === null && !taken.has(commit) && !(whole && commit === end)).map(({ subject }) => subject)]).toEqual([pair, []]);
+      }
     }
+  });
+
+  // The daemon looks an upstream up only for the branch the main working copy has checked out.
+  it("give an upstream only to the main working copy's branch", () => {
+    const repositories = [...REPOSITORIES, ...projectGitScenarios.flatMap(({ git }) => (git ? [git] : []))];
+    for (const git of repositories) {
+      for (const branch of git.branches ?? []) {
+        if (branch.upstream) expect([branch.name, git.worktrees.some((worktree) => worktree.main && worktree.branch === branch.name)]).toEqual([branch.name, true]);
+      }
+    }
+  });
+
+  it("answer a comparison of a branch with its upstream or with nothing", async () => {
+    const daemon = sampleDaemon(UNPUSHED_GIT);
+    const upstream = UNPUSHED_GIT.branches?.find((b) => b.name === "main")?.upstream;
+    const compared = await daemon.request({ type: "compare_project_branches", project: "p-1", left: "origin/main", left_remote: true, right: "main" });
+    expect(compared).toMatchObject({
+      type: "project_comparison",
+      left: { branch: "origin/main", commit: upstream?.commit, remote: true },
+      right: { branch: "main" },
+      base: upstream?.commit,
+    });
+    expect(compared.type === "project_comparison" ? compared.changes.length : 0).toBe(2);
+    // A remote-tracking branch no branch has as its upstream is unknown.
+    await expect(daemon.request({ type: "compare_project_branches", project: "p-1", left: "origin/gone", left_remote: true, right: "main" })).rejects.toMatchObject({ code: "unknown_branch" });
+    const tip = UNPUSHED_GIT.branches?.find((b) => b.name === "main")?.commit ?? "";
+    const listed = await daemon.request({ type: "list_project_commits", project: "p-1", base: upstream?.commit ?? "", tip });
+    expect(listed.type === "project_commits" ? listed.commits.map(({ subject }) => subject) : listed.type).toEqual(["Add a changelog", "Show 25 results to a page"]);
+
+    // Only the left side can be a remote-tracking branch or the empty tree.
+    const change = { old: { state: "absent" }, new: { state: "absent" } } as const;
+    const endpoint = { branch: "main", commit: tip };
+    await expect(
+      daemon.request({ type: "read_project_comparison_change", project: "p-1", left: { branch: "origin/main", commit: upstream?.commit ?? "", remote: true }, right: { ...endpoint, remote: true }, base: upstream?.commit ?? "", change }),
+    ).rejects.toMatchObject({ code: "invalid_branch_name", params: { branch: "main" } });
+    await expect(
+      daemon.request({ type: "read_project_comparison_change_bodies", project: "p-1", left: { branch: "", commit: EMPTY_TREE, empty: true }, right: { ...endpoint, empty: true }, base: EMPTY_TREE, change, old: { state: "absent" }, new: { state: "absent" } }),
+    ).rejects.toMatchObject({ code: "invalid_branch_name" });
+
+    // An upstream lookup past its budgets leaves the main branch without one, and the list says so.
+    const cut = await sampleDaemon({ ...UNPUSHED_GIT, upstreamsCut: true }).request({ type: "list_project_branches", project: "p-1" });
+    expect(cut).toMatchObject({ type: "project_branches", upstreams_complete: false });
+    expect(cut.type === "project_branches" ? cut.branches.some((branch) => branch.upstream) : undefined).toBe(false);
+
+    const whole = sampleDaemon(NEVER_PUSHED_GIT);
+    const all = await whole.request({ type: "compare_project_branches", project: "p-1", left: "", left_empty: true, right: "main" });
+    expect(all).toMatchObject({ type: "project_comparison", left: { branch: "", commit: EMPTY_TREE, empty: true }, base: EMPTY_TREE });
+    expect(all.type === "project_comparison" ? all.changes.map((entry) => (entry.group !== "conflicted" && entry.new.state === "present" ? entry.new.path : "")) : []).toEqual(["src/server.ts", "src/search.ts", "docs/overview.md", "CHANGELOG.md"]);
+    const history = await whole.request({ type: "list_project_commits", project: "p-1", base: EMPTY_TREE, tip });
+    expect(history.type === "project_commits" ? history.commits.map(({ subject }) => subject) : history.type).toEqual(["Add a changelog", "Show 25 results to a page", "Start the search API"]);
   });
 
   it("answer a comparison with the commit the branches forked at", async () => {
@@ -233,7 +300,7 @@ describe("the sample repository's changes", () => {
     }
 
     for (const [comparison, changes] of comparisonsOnce()) {
-      const ends = endsOf(comparison);
+      const ends = endsOf(SAMPLE_GIT, comparison);
       for (const { entry } of changes) {
         if (entry.group === "conflicted") continue;
         const reply = await daemon
@@ -244,7 +311,7 @@ describe("the sample repository's changes", () => {
       }
     }
 
-    for (const { commit, parent, changes } of commitsOf()) {
+    for (const { commit, parent, changes } of commitsOf(SAMPLE_GIT)) {
       for (const { entry } of changes) {
         if (entry.group === "conflicted") continue;
         const reply = await daemon.request({ type: "read_project_commit_change", project: "p-1", commit, parent, change: entry }).catch(rethrowUnfillable);
@@ -325,7 +392,7 @@ describe("the sample repository's changes", () => {
       }
     }
     for (const [comparison, changes] of comparisonsOnce()) {
-      const ends = endsOf(comparison);
+      const ends = endsOf(SAMPLE_GIT, comparison);
       for (const { entry } of changes) {
         if (entry.group === "conflicted") continue;
         const at = `${comparison} ${pathOf(entry.new) || pathOf(entry.old)}`;
@@ -334,7 +401,7 @@ describe("the sample repository's changes", () => {
       }
     }
 
-    for (const { commit, parent, changes } of commitsOf()) {
+    for (const { commit, parent, changes } of commitsOf(SAMPLE_GIT)) {
       for (const { entry } of changes) {
         if (entry.group === "conflicted") continue;
         const at = `commit ${short(commit)} ${pathOf(entry.new) || pathOf(entry.old)}`;

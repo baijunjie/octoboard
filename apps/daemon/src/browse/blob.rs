@@ -369,15 +369,47 @@ pub fn resolve_branch(
     cancel: &AtomicBool,
 ) -> Result<String> {
     let refname = branch_refname(env, root, branch, cancel)?;
+    resolve_refname(env, root, &refname, branch, "local branch", cancel)
+}
+
+/// As [`resolve_branch`], for remote-tracking branch `branch` (a wire path: the name below
+/// `refs/remotes/`, such as `origin/main`).
+pub fn resolve_remote_branch(
+    env: &GitEnv,
+    root: &Path,
+    branch: &str,
+    cancel: &AtomicBool,
+) -> Result<String> {
+    let refname = remote_branch_refname(env, root, branch, cancel)?;
+    resolve_refname(
+        env,
+        root,
+        &refname,
+        branch,
+        "remote-tracking branch",
+        cancel,
+    )
+}
+
+/// The commit the checked reference `refname` points at; `branch` is the name it was given as and
+/// `kind` what it is called in the refusal (`unknown_branch`).
+fn resolve_refname(
+    env: &GitEnv,
+    root: &Path,
+    refname: &[u8],
+    branch: &str,
+    kind: &str,
+    cancel: &AtomicBool,
+) -> Result<String> {
     let limit = budget::GIT_METADATA_STDOUT;
     let unknown = || {
         CodedError::raised(
             error_code::UNKNOWN_BRANCH,
-            format!("there is no local branch {branch} with a commit at its tip"),
+            format!("there is no {kind} {branch} with a commit at its tip"),
             &[("branch", branch)],
         )
     };
-    let args: &[&[u8]] = &[b"--verify", b"--hash", &refname];
+    let args: &[&[u8]] = &[b"--verify", b"--hash", refname];
     let target = match env.run(root, "show-ref", args, limit, cancel) {
         Ok(stdout) => String::from_utf8_lossy(&stdout).trim().to_string(),
         Err(GitError::Failed(_)) => return Err(unknown()),
@@ -397,6 +429,26 @@ pub fn branch_refname(
     branch: &str,
     cancel: &AtomicBool,
 ) -> Result<Vec<u8>> {
+    checked_refname(env, root, b"refs/heads/", branch, cancel)
+}
+
+/// As [`branch_refname`], for remote-tracking branch `branch` below `refs/remotes/`.
+pub fn remote_branch_refname(
+    env: &GitEnv,
+    root: &Path,
+    branch: &str,
+    cancel: &AtomicBool,
+) -> Result<Vec<u8>> {
+    checked_refname(env, root, b"refs/remotes/", branch, cancel)
+}
+
+fn checked_refname(
+    env: &GitEnv,
+    root: &Path,
+    prefix: &[u8],
+    branch: &str,
+    cancel: &AtomicBool,
+) -> Result<Vec<u8>> {
     let invalid = || {
         CodedError::raised(
             error_code::INVALID_BRANCH_NAME,
@@ -410,7 +462,7 @@ pub fn branch_refname(
     if name.is_empty() || name.starts_with(b"-") || name.contains(&0) {
         return Err(invalid());
     }
-    let mut refname = b"refs/heads/".to_vec();
+    let mut refname = prefix.to_vec();
     refname.extend_from_slice(&name);
     let limit = budget::GIT_METADATA_STDOUT;
     match env.run(root, "check-ref-format", &[&refname], limit, cancel) {

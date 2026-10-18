@@ -31,9 +31,11 @@ const loadedComparison = (complete = true): Comparison => ({
   complete,
   receivedAt: 10,
 });
-const compare = (comparison: Extract<CommittedState, { state: "compare" }>["comparison"], commits?: Extract<CommittedState, { state: "compare" }>["commits"]): CommittedState => ({
+const compare = (comparison: Extract<CommittedState, { state: "compare" }>["comparison"], commits?: Extract<CommittedState, { state: "compare" }>["commits"], baseKind: "local" | "remote" | "empty" = "local"): CommittedState => ({
   state: "compare",
-  base: "main",
+  branch: "topic",
+  base: baseKind === "empty" ? "" : "main",
+  baseKind,
   comparison,
   commits,
 });
@@ -53,7 +55,14 @@ it("names the worktree another branch's changes are read from, with the home fol
 });
 
 it("says a worktree with no commit yet has none", () => {
-  expect(status(listed("loaded", { worktree: tree(null) }), { state: "isBase", branch: "topic" }).notices).toEqual([{ id: "unborn" }, { id: "isBase", branch: "topic" }]);
+  expect(status(listed("loaded", { worktree: tree(null) }), { state: "none" }).notices).toEqual([{ id: "unborn" }]);
+});
+
+it("says a branch with no remote branch lists all its commits, instead of naming a fork", () => {
+  const empty = { ...loadedComparison(), left: { branch: "", commit: "t0", empty: true }, base: "t0" };
+  expect(status(listed(), compare({ state: "loading" }, undefined, "empty")).notices).toEqual([{ id: "noRemote", branch: "topic" }]);
+  expect(status(listed(), compare(empty, undefined, "empty")).notices).toEqual([{ id: "noRemote", branch: "topic" }]);
+  expect(status(listed(), compare({ state: "loading" }, undefined, "remote")).notices).toEqual([{ id: "comparing", base: "main" }]);
 });
 
 it("says what the committed part is while it is read, and what it is made of once it is", () => {

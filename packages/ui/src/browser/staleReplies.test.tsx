@@ -239,7 +239,7 @@ it("words a comparison's source as plain text too, each branch and commit isolat
       base: "0123456789abcdef",
     }),
   );
-  expect(hook.current().subject?.sourceText).toBe(`${isolate("feature")} at ${isolate(shortCommit("fedcba0987654321"))}, since it forked from ${isolate("main")} at ${isolate(shortCommit("0123456789abcdef"))}`);
+  expect(hook.current().subject?.sourceText).toBe(`${isolate("feature")} forked from ${isolate("main")} at ${isolate(shortCommit("0123456789abcdef"))}, now at ${isolate(shortCommit("fedcba0987654321"))}`);
 });
 
 it("tags a staged or unstaged change with its stage, and marks the rest by their status", () => {
@@ -309,7 +309,7 @@ const compared = (state: ReturnType<typeof useBranchComparison>["comparison"]) =
 
 it("shows the comparison of the branches chosen last, whichever comparison answers last", async () => {
   const { daemon, pending } = controlledDaemon();
-  const hook = mountWith(daemon, "a" as string, (right) => useBranchComparison("p", "main", right, true));
+  const hook = mountWith(daemon, "a" as string, (right) => useBranchComparison("p", "main", "local", right, true));
   hook.set("b");
   const [a, b] = pending.splice(0);
   expect(b.body).toMatchObject({ type: "compare_project_branches", left: "main", right: "b", slot: "comparison:p" });
@@ -320,7 +320,7 @@ it("shows the comparison of the branches chosen last, whichever comparison answe
 
 it("keeps a comparison's commits through a reconnect, and asks again only for one lost with the connection", async () => {
   const { daemon, pending } = controlledDaemon();
-  const hook = mountWith(daemon, "a" as string, (right) => useBranchComparison("p", "main", right, true));
+  const hook = mountWith(daemon, "a" as string, (right) => useBranchComparison("p", "main", "local", right, true));
   await act(async () => pending.splice(0)[0].resolve(comparison("main", "a", "c-a", "a.txt")));
   act(() => daemon.store.setState((state) => ({ snapshotEpoch: state.snapshotEpoch + 1 })));
   expect(pending).toEqual([]);
@@ -458,7 +458,7 @@ it.each([
 it("counts branch lists and comparisons in the window's bound of two Git list requests", async () => {
   const { daemon, pending } = controlledDaemon();
   mount(daemon, () => useBranchList("a", true));
-  mount(daemon, () => useBranchComparison("b", "main", "topic", true));
+  mount(daemon, () => useBranchComparison("b", "main", "local", "topic", true));
   mount(daemon, () => useChangeList("c", undefined, true));
   expect(pending.map((p) => p.body.type)).toEqual(["list_project_branches", "compare_project_branches"]);
   await act(async () => pending.splice(0, 1)[0].resolve({ type: "project_branches", project: "a", branches: [], complete: true }));

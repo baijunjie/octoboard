@@ -671,6 +671,17 @@ fn read_between_with(
     reader.between(commits, (old, new), old_path, new_path, out_of_scope)
 }
 
+/// The ids of the empty tree in the two object formats, SHA-1 and SHA-256.
+const EMPTY_TREE_IDS: [&str; 2] = [
+    "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+    "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321",
+];
+
+/// Whether `id` is the id of the empty tree, in either object format.
+pub(super) fn is_empty_tree(id: &str) -> bool {
+    EMPTY_TREE_IDS.contains(&id)
+}
+
 /// The id of the empty tree in this repository's object format, which a change is compared
 /// against before the first commit, or a commit with no parent against; `git` knows it without its
 /// being stored.

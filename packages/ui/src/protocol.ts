@@ -660,6 +660,11 @@ export type ChangeEntry =
 export interface BranchInfo {
   name: string;
   commit: string;
+  /** For the branch the main working copy has checked out, and no other, the remote-tracking branch
+   * to compare it with, with the commit that reference names as of the last fetch: the one it
+   * tracks or, failing that, the branch of its name on a configured remote; absent for a branch
+   * with neither. */
+  upstream?: { name: string; commit: string };
   /** The session working on the branch; absent when the daemon cannot name one: no session's own
    * git reported creating it. */
   origin?: BranchOrigin;
@@ -675,12 +680,15 @@ export interface BranchOrigin {
   responsible_since: number;
 }
 
-/** One end of a branch comparison: the branch (a wire path) and the full id of the commit it was
- * resolved to. A read of one of the comparison's changes names both back, with the comparison's
+/** One end of a branch comparison: the branch (a wire path; below `refs/remotes/` when `remote`)
+ * and the full id of the commit it was resolved to. A read of one of the comparison's changes names both back, with the comparison's
  * `base`; the commits alone decide what is read. */
 export interface ComparisonEndpoint {
   branch: string;
   commit: string;
+  remote?: boolean;
+  /** The comparison starts from the empty tree: `branch` is empty and `commit` is that tree's id. */
+  empty?: boolean;
 }
 
 /** One commit a branch made since it forked, as `project_commits` lists it: its full id, its first
@@ -1017,9 +1025,11 @@ export type RequestBody =
   }
   | { type: "list_project_branches"; project: string; slot?: string }
   /** Each a branch name as a wire path: the changes are what `right` has changed since it forked
-   * from `left` (`git diff left...right`). Two branches with no commit in common are refused
-   * (`no_merge_base`, or `no_merge_base_shallow` in a shallow clone). */
-  | { type: "compare_project_branches"; project: string; left: string; right: string; slot?: string }
+   * from `left` (`git diff left...right`); `left` is a remote-tracking branch with `left_remote`, and ignored with `left_empty`, which
+   * compares with the empty tree.
+   * Two branches with no commit in common are refused (`no_merge_base`, or
+   * `no_merge_base_shallow` in a shallow clone). */
+  | { type: "compare_project_branches"; project: string; left: string; left_remote?: boolean; left_empty?: boolean; right: string; slot?: string }
   | {
     type: "read_project_comparison_change";
     project: string;
@@ -1273,7 +1283,7 @@ export type Event =
     patch: FileContent | null;
   }
   /** In byte order of the names; `complete` is false when the list was cut at a budget. */
-  | { type: "project_branches"; id?: string; project: string; branches: BranchInfo[]; complete: boolean }
+  | { type: "project_branches"; id?: string; project: string; branches: BranchInfo[]; complete: boolean; upstreams_complete?: boolean }
   /** `left` and `right` are the branches as asked for and the commits they were resolved to, and
    * `base` the commit they forked at (their merge base); every change in `changes` (all
    * `committed`) is between exactly `base` and `right`'s commit. */

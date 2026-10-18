@@ -46,7 +46,7 @@ const asked = (type: RequestBody["type"]) => pending.filter((request) => request
 
 type Tree = { id: string; branch: string | null; main?: boolean };
 /** `responsible` is the session working on the branch; none when the daemon names no one. */
-type Made = { name: string; commit?: string; responsible?: string };
+type Made = { name: string; commit?: string; responsible?: string; upstream?: { name: string; commit: string } };
 type Replies = Partial<Record<RequestBody["type"], (body: RequestBody) => Event>>;
 
 const worktreeInfo = (w: Tree): WorktreeInfo => ({ id: w.id, root: `/${w.id}`, main: w.main ?? false, head: "c1", branch: w.branch, scope_present: true });
@@ -70,6 +70,7 @@ const branchList = (id: string, branches: Made[]): Replies => ({
     branches: branches.map((b) => ({
       name: b.name,
       commit: b.commit ?? "c",
+      upstream: b.upstream,
       origin: b.responsible ? { responsible_session: b.responsible, responsible_title: "t", responsible_since: 1 } : undefined,
     })),
     complete: true,
@@ -102,7 +103,7 @@ const comparison = (id: string, tip: string, paths: string[], base = "c1"): Repl
     return {
       type: "project_comparison",
       project: id,
-      left: { branch: body.left, commit: base },
+      left: body.left_empty ? { branch: "", commit: base, empty: true } : { branch: body.left, commit: base, ...(body.left_remote ? { remote: true } : {}) },
       right: { branch: body.right, commit: tip },
       base,
       changes: paths.map((path) => committed(path, tip)),
@@ -187,13 +188,13 @@ it("lists the default branch's uncommitted changes from its worktree, then what 
   expect(h.items().map((i) => `${i.section} ${i.path}`)).toEqual(["unstaged a.txt", "committed b.txt"]);
   expect(h.latest.git.view.committed).toMatchObject({ state: "compare", base: "main" });
 
-  // Chosen: the branch the main working copy has checked out has nothing to compare, and its
-  // uncommitted changes come from that worktree.
+  // Chosen: the branch the main working copy has checked out is compared with no other branch of
+  // the repository, and its uncommitted changes come from that worktree.
   act(() => h.latest.git.view.onBranchChange("main"));
   await h.settle(changeList("p1", [live("m.txt")]));
   expect(h.selection()).toEqual({ branch: "main", worktree: "m" });
-  expect(asked("compare_project_branches")).toHaveLength(0);
-  expect(h.latest.git.view.committed.state).toBe("isBase");
+  expect(asked("compare_project_branches")).toMatchObject([{ left_empty: true, right: "main" }]);
+  expect(h.latest.git.view.committed).toMatchObject({ state: "compare", baseKind: "empty" });
   expect(h.items().map((i) => i.path)).toEqual(["m.txt"]);
 
   // A branch checked out nowhere has no uncommitted part: only what it committed.
@@ -202,6 +203,40 @@ it("lists the default branch's uncommitted changes from its worktree, then what 
   expect(asked("list_project_changes")).toHaveLength(0);
   expect(h.latest.git.view.uncommitted.state).toBe("notCheckedOut");
   expect(h.items().map((i) => i.section)).toEqual(["committed"]);
+});
+
+it("compares the main working copy's own branch with its upstream, and again once the upstream has moved", async () => {
+  const h = harness("p5");
+  h.mount();
+  act(() => h.latest.browser.setBranch("main"));
+  const listing = (upstream: string) => [branchList("p5", [{ name: "main", commit: "c3", upstream: { name: "origin/main", commit: upstream } }, { name: "topic" }]), changeList("p5")];
+  await h.settle(source("p5", [MAIN, TOPIC]), ...listing("c1"), comparison("p5", "c3", ["u.txt"]));
+  expect(h.latest.git.view.committed).toMatchObject({ state: "compare", base: "origin/main" });
+  expect(h.items().map((i) => `${i.section} ${i.path}`)).toEqual(["committed u.txt"]);
+
+  // A fetch moved the remote-tracking branch: the comparison is made again against its new tip.
+  const later = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 60_000);
+  act(() => void window.dispatchEvent(new Event("focus")));
+  later.mockRestore();
+  await h.settle(...listing("c2"));
+  expect(asked("compare_project_branches")).toMatchObject([{ left: "origin/main", left_remote: true, right: "main" }]);
+});
+
+it("compares the main working copy's own branch with nothing until a remote branch appears, then with that", async () => {
+  const h = harness("p5b");
+  h.mount();
+  act(() => h.latest.browser.setBranch("main"));
+  await h.settle(source("p5b", [MAIN, TOPIC]), branchList("p5b", [{ name: "main", commit: "c3" }, { name: "topic" }]), changeList("p5b"), comparison("p5b", "c3", ["a.txt", "b.txt"]));
+  expect(h.latest.git.view.committed).toMatchObject({ state: "compare", base: "", baseKind: "empty" });
+  expect(h.items().map((i) => `${i.section} ${i.path}`)).toEqual(["committed a.txt", "committed b.txt"]);
+
+  // The branch has been pushed, and a fetch brought its remote branch: it is compared with that.
+  const later = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 60_000);
+  act(() => void window.dispatchEvent(new Event("focus")));
+  later.mockRestore();
+  await h.settle(branchList("p5b", [{ name: "main", commit: "c3", upstream: { name: "origin/main", commit: "c2" } }, { name: "topic" }]), changeList("p5b"));
+  expect(h.latest.git.view.committed).toMatchObject({ state: "compare", base: "origin/main", baseKind: "remote" });
+  expect(asked("compare_project_branches")).toMatchObject([{ left: "origin/main", left_remote: true, right: "main" }]);
 });
 
 it("chooses no branch while the project's worktree is detached, and compares nothing while the main working copy is", async () => {

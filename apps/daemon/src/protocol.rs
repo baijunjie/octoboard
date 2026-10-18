@@ -988,9 +988,24 @@ pub struct ChangeRef {
 pub struct BranchInfo {
     pub name: String,
     pub commit: String,
+    /// For the branch the main working copy has checked out, and no other, the remote-tracking
+    /// branch to compare it with: the remote branch it is set to track, else the branch of the
+    /// same name on a configured remote (`origin`'s preferred), when the repository has that
+    /// reference. A branch whose upstream is another local branch, or whose upstream reference is
+    /// gone, is treated as having no upstream; absent when neither exists.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upstream: Option<UpstreamInfo>,
     /// The session responsible for the branch, when the daemon can name one; absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<BranchOriginInfo>,
+}
+
+/// A branch's upstream: the remote-tracking branch, as a wire path below `refs/remotes/` (such as
+/// `origin/main`), and the object id its reference names.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct UpstreamInfo {
+    pub name: String,
+    pub commit: String,
 }
 
 /// The session working on a branch now, with the title that session had when it became
@@ -1009,11 +1024,26 @@ pub struct BranchOriginInfo {
 
 /// One end of a branch comparison: the branch, as a wire path, and the full id of the commit it was
 /// resolved to. A comparison reply reports both; a read of one of its changes names both back, with
-/// the comparison's `base`, and the commits alone decide what is read.
+/// the comparison's `base`, and the commits alone decide what is read. `remote` says the branch is
+/// a remote-tracking one, named below `refs/remotes/`, rather than a local one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComparisonEndpoint {
     pub branch: String,
     pub commit: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub remote: bool,
+    /// The comparison starts from the empty tree: `branch` is empty and `commit` is the empty
+    /// tree's id, which is the comparison's `base` too.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub empty: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
 }
 
 /// One commit a branch made since it forked, as `list_project_commits` lists it: its full id, its
@@ -1137,10 +1167,16 @@ pub enum BrowseBody {
         project: String,
     },
     /// `left` and `right` are branch names below `refs/heads/`, as wire paths; the changes are
-    /// those the right branch has made since it forked from the left one.
+    /// those the right branch has made since it forked from the left one. With `left_remote`, `left`
+    /// is a name below `refs/remotes/` instead; with `left_empty`, `left` is ignored and the changes
+    /// are against the empty tree.
     CompareProjectBranches {
         project: String,
         left: String,
+        #[serde(default)]
+        left_remote: bool,
+        #[serde(default)]
+        left_empty: bool,
         right: String,
     },
     ReadProjectComparisonChange {
@@ -1994,6 +2030,10 @@ pub enum Event {
         project: String,
         branches: Vec<BranchInfo>,
         complete: bool,
+        /// Absent when true; false when the upstream lookup was past a budget, so that the main
+        /// working copy's branch may lack its `upstream` though it has one.
+        #[serde(skip_serializing_if = "is_true")]
+        upstreams_complete: bool,
     },
     /// The reply to `compare_project_branches`: the two branches with the commits they were
     /// resolved to, the commit they forked at (`base`, their merge base), and the changes from

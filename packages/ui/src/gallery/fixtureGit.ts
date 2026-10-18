@@ -11,7 +11,7 @@
 import type { ChangeSide, ContentSource, Event, FileContent, RequestBody, SideRead, SideRef, SideVersion } from "../protocol";
 import { refuseUnfillable } from "./banner";
 import { text } from "./fixtures/builders";
-import { listedCommits, type FixtureGit } from "./fixtures/changeFixtures";
+import { EMPTY_TREE, listedCommits, type FixtureGit } from "./fixtures/changeFixtures";
 import type { FixtureError } from "./fixtures/projectFiles";
 
 /** How many lines a text holds: its newlines, and one more when the last line is unterminated. It
@@ -115,6 +115,11 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
     Object.values(git?.commits ?? {})
       .flatMap(listedCommits)
       .find((listed) => listed.commit === commit && listed.parent === (parent ?? null));
+  /** The commit a name is at in the branch list: a local branch, else the remote-tracking branch
+   * some branch has as its upstream. A pair's key spells a remote-tracking left side by its name
+   * alone, as no local branch of the fixtures is named like one, and the empty tree by no name at all. */
+  const tipOf = (name: string): string | undefined =>
+    name === "" ? EMPTY_TREE : git?.branches?.find((b) => b.name === name)?.commit ?? git?.branches?.find((b) => b.upstream?.name === name)?.upstream?.commit;
   /** The commit two branches fork at: their own, if they are at one commit, else the one `forks`
    * names, else `left`'s tip, as a branch made from it forks. `null` for two with no commit in common. */
   const forkOf = (key: string, left: string, right: string): string | null =>
@@ -123,7 +128,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
    * a commit list request names a comparison by. */
   const pairAt = (base: string, tip: string): string | undefined =>
     [...Object.keys(git?.comparisons ?? {}), ...Object.keys(git?.commits ?? {})].find((pair) => {
-      const [left, right] = pair.split("..").map((name) => git?.branches?.find((b) => b.name === name)?.commit);
+      const [left, right] = pair.split("..").map(tipOf);
       return left !== undefined && right === tip && forkOf(pair, left, right) === base;
     });
   /** The whole bodies behind a change's patch, for expanding the lines it collapsed. */
@@ -246,20 +251,30 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
       }
       case "list_project_branches": {
         const gone = compared ? (git?.gone ?? []) : [];
-        const branches = (git?.branches ?? []).filter((branch) => !gone.includes(branch.name));
-        return { type: "project_branches", project: body.project, branches, complete: true };
+        const listed = (git?.branches ?? []).filter((branch) => !gone.includes(branch.name));
+        // A lookup past its budgets leaves the main branch without an upstream, and the list says so.
+        if (git?.upstreamsCut) {
+          return { type: "project_branches", project: body.project, branches: listed.map(({ upstream: _upstream, ...branch }) => branch), complete: true, upstreams_complete: false };
+        }
+        return { type: "project_branches", project: body.project, branches: listed, complete: true };
       }
       case "compare_project_branches": {
-        const resolve = (name: string) => {
+        const resolve = (name: string, remote: boolean) => {
+          if (remote) {
+            const upstream = git?.branches?.find((b) => b.upstream?.name === name)?.upstream;
+            if (!upstream) return fail({ code: "unknown_branch", params: { branch: name }, message: `there is no remote-tracking branch ${name}` });
+            return { branch: name, commit: upstream.commit, remote: true };
+          }
           const branch = git?.branches?.find((b) => b.name === name);
           if (!branch || git?.missing?.includes(name) || (compared && git?.gone?.includes(name))) return fail({ code: "unknown_branch", params: { branch: name }, message: `there is no local branch ${name}` });
           return { branch: name, commit: branch.commit };
         };
         if (git?.comparing === "pending") return new Promise<Event>(() => {});
-        const left = resolve(body.left);
-        const right = resolve(body.right);
+        // Compared with the empty tree, `left` is ignored and the pair is keyed by an empty name.
+        const left = body.left_empty ? { branch: "", commit: EMPTY_TREE, empty: true } : resolve(body.left, body.left_remote === true);
+        const right = resolve(body.right, false);
         compared = true;
-        const key = `${body.left}..${body.right}`;
+        const key = `${body.left_empty ? "" : body.left}..${body.right}`;
         const fork = forkOf(key, left.commit, right.commit);
         if (fork === null) {
           const params = { left: body.left, right: body.right };
@@ -272,6 +287,8 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
         return { type: "project_comparison", project: body.project, left, right, base: fork, changes: changes.map((change) => change.entry), complete: !git?.cutShort };
       }
       case "read_project_comparison_change": {
+        // Only the left side can be a remote-tracking branch or the empty tree.
+        if (body.right.remote || body.right.empty) return fail({ code: "invalid_branch_name", params: { branch: body.right.branch }, message: `${body.right.branch} is not a valid branch name` });
         const changes = git?.comparisons?.[`${body.left.branch}..${body.right.branch}`] ?? [];
         const found = changes.find(({ entry }) => entry.group === "committed" && sameSide(entry.old, body.change.old) && sameSide(entry.new, body.change.new));
         if (!found || found.entry.group === "conflicted") return fail({ code: "file_not_found", params: { path: "" }, message: "no such change" });
@@ -355,8 +372,10 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
           patch: found.patch === undefined ? null : { size: found.patch.length, kind: "text", media_type: null, text: found.patch, data: null },
         };
       }
-      case "read_project_change_bodies":
       case "read_project_comparison_change_bodies":
+        if (body.right.remote || body.right.empty) return fail({ code: "invalid_branch_name", params: { branch: body.right.branch }, message: `${body.right.branch} is not a valid branch name` });
+        return readBodies(body);
+      case "read_project_change_bodies":
       case "read_project_commit_change_bodies":
         return readBodies(body);
       default:

@@ -3,8 +3,8 @@
 The project pane's **Git mode** reviews one local branch of the project's repository in a single view, **Changes**:
 what the branch has not committed yet — what is staged, what is in conflict, what is changed on disk and what Git does
 not track, in the worktree that has the branch checked out — and what it has committed since it forked from the branch
-the repository's main working copy has checked out, in one Committed section, either all together or under its
-commits. Each change opens in the project pane's read-only file viewer (see
+the repository's main working copy has checked out (for that branch itself, what it has not pushed to its remote
+branch), in one Committed section, either all together or under its commits. Each change opens in the project pane's read-only file viewer (see
 `docs/product/project-pane-git-change-viewer.md`). Git is one of the project pane's two modes: opening the pane, its
 header, switching modes and the file viewer in general are in `docs/product/project-pane.md` (see "Files and Git" and
 "The file viewer" there).
@@ -16,8 +16,9 @@ pane retains its failure explanation and recovery controls afterwards (see "Erro
 ## Reading only
 
 The Git mode reads the repository and never writes to it. It stages, unstages, commits and checks out nothing —
-comparing a branch with the main working copy's branch checks neither out — takes no lock, never refreshes the index
-(not even for a file whose timestamps moved while its content did not), and fetches nothing from a remote. The one
+comparing a branch with its base checks neither out — takes no lock, never refreshes the index
+(not even for a file whose timestamps moved while its content did not), and fetches nothing from a remote: a remote
+branch it compares with is as the repository last fetched it (see "Committed changes" below). The one
 exception is Git itself before version 2.45: reading an object that a partial clone does not have yet can make such a
 Git fetch it.
 
@@ -174,14 +175,35 @@ The uncommitted sections are read from the worktree that has the branch checked 
 
 ### Committed changes
 
-What the branch has committed is compared with the branch the repository's **main working copy** has checked out,
-its **base**:
+What the branch has committed is compared with its **base**:
 
-- **Since the fork.** The old side is the commit the two branches forked at — their merge base, as
+- **Any branch but the main working copy's** — the one the repository's **main working copy** has checked out — has
+  that branch as its base.
+- **The main working copy's branch itself** has its **remote branch** as its base, so what is listed is what it has
+  committed and not pushed. Its remote branch is, in this order:
+  1. the remote-tracking branch it is set to track, when what it tracks is a remote branch the repository has;
+  2. otherwise the branch of the same name on one of the repository's configured remotes — `origin`'s when that has
+     one, else the first such remote's in byte order of the remotes' names;
+  3. otherwise none — a branch never pushed — and **its whole history** is listed (see below).
+
+  The remote branch is as the repository last fetched it — the branch badge's check fetches, for one (see "When a
+  project is checked" in `docs/product/project-git-status.md`); the Git mode never does. A branch list read later that shows the
+  remote branch at another commit, or gives the branch a remote branch where it had none or another one, has it
+  compared again (see "Keeping the list up to date" below). Until a branch list that has the branch is in, and when
+  the repository could not be asked which remote branch it has — the lookup past the daemon's limits, or Git unable
+  to say which branch the main working copy has checked out — the branch has no Committed section, and nothing says so.
+
+The comparison:
+
+- **Since the fork.** The old side is the commit the branch and its base forked at — their merge base, as
   `git diff base...branch` takes it — and the new side is the commit at the branch's tip, so the list shows only what
-  the branch has changed since it forked; what only the base has done since is not in it. Where the two have more than
-  one best common ancestor, the one `git merge-base` gives is the fork. A branch at the fork itself — at the base's
-  commit, or one the base already contains — has nothing committed to list.
+  the branch has changed since it forked; what only the base has done since is not in it, so a remote branch that has
+  moved on is not shown as changes undone. Where the two have more than one best common ancestor, the one
+  `git merge-base` gives is the fork. A branch at the fork itself — at the base's commit, or one the base already
+  contains — has nothing committed to list.
+- **With its whole history**, for the main working copy's branch with no remote branch: it is compared with the empty
+  tree, so every file at its tip is listed as added and, grouped by commit, its commits are listed back to its first
+  (see "Grouped by commit" below).
 - **At the commits the branches were at when it was made.** The fork is found once, together with the two tips, and the
   committed changes listed, and every one opened from them, are between those commits until the comparison is made
   again (see "Keeping the list up to date" below).
@@ -196,9 +218,10 @@ its **base**:
 A line above the list says what the committed part is:
 
 - **Forked from** the base **at** the fork's commit, **now at** the branch's tip, each commit by its first seven
-  characters, once the comparison is in; **Comparing with** the base while it is made with none on screen.
-- **The branch is the base itself** — the one the main working copy has checked out: it has no commits of its own to
-  compare, so only its uncommitted changes are listed.
+  characters, once the comparison is in; **Comparing with** the base while it is made with none on screen. A remote
+  branch is named with its remote — `origin/main`, say.
+- **No remote branch** — the main working copy's branch listed with its whole history: the line says the branch has
+  no remote branch, so all of its commits are listed, in place of the two above, while the comparison is made too.
 - **The main working copy is on no branch** — its `HEAD` detached: the branch's commits cannot be compared, and only
   its uncommitted changes are listed.
 - Where the branch has no commit yet (see "Uncommitted changes" above), or the main working copy's branch has none,
@@ -234,11 +257,12 @@ project keeps its own choice across reloads and restarts (see "What is remembere
   folds are (see "What is remembered" below). Folding the Committed section hides its commit rows too, which keep the
   state they were in.
 - **Each commit's changes are against its first parent**: a merge commit's are what it took in, and a commit with no
-  parent — met only where the branch merged in an unrelated history — is compared with the empty tree. A file several
+  parent — the first commit of a branch listed with its whole history, or one where the branch merged in an unrelated
+  history — is compared with the empty tree. A file several
   commits changed is a row under each of them.
 - **A commit that changed nothing in the project's folder** has no row.
-- **At most the 100 newest commits** are read. Only when the branch really has more than 100 commits since the fork does
-  a line under the list say that only that many newest commits are listed (see "What the list says instead" below).
+- **At most the 100 newest commits** are read. Only when the branch really has more than 100 commits since the fork — or,
+  listed with its whole history, in all — does a line under the list say that only that many newest commits are listed (see "What the list says instead" below).
   The commits' changes together are held to one change list's limit — 10,000 changes or 2 MiB of paths: past it, the
   last commit listed holds only the changes read before the limit, older commits are left out, a commit none of whose
   changes fit is not listed at all, and the line saying not every change is shown appears.
@@ -406,7 +430,8 @@ leaves (see "Moving between changes" in `docs/product/project-pane-git-change-vi
   those Git reported first, not a chosen subset. A worktree whose whole `git status` output is more than 8 MiB has its
   uncommitted changes not listed at all, and says so.
 - **Only the newest commits are listed**, with how many, in a line under the list, grouped by commit, only when the
-  branch has more than 100 commits since the fork (see "Grouped by commit" above).
+  branch has more than 100 commits since the fork, or in all when listed with its whole history (see "Grouped by
+  commit" above).
 - **A failure** of a part — the uncommitted changes could not be listed, the branch could not be compared (a branch
   that no longer exists or is broken, or two branches with no commit in common, say), or the commits could not be
   listed — names the reason **in a line above the list**, announced to assistive technology, while the rest of the
@@ -454,7 +479,9 @@ The comparison on screen stays on the commits it was made at. Once a complete br
 its base, a line under the others says that branch no longer exists and that the comparison still uses the commits it
 was made at, announced to assistive technology as it appears; a chosen branch that is gone is named as no longer
 existing in the selector too, and nothing compares it again on its own. A branch list cut short says nothing of a
-branch it does not have. Refresh then fails, saying there is no such branch. A change opened from the comparison
+branch it does not have. Refresh then fails, saying there is no such branch. A remote branch that was the base is not
+reported this way: a branch list that no longer has it gives the main working copy's branch another base, or its whole
+history, which is then compared (see "Committed changes" above). A change opened from the comparison
 still on screen reads from its commits for as long as the repository has them (see "Errors" in
 `docs/product/project-pane-git-change-viewer.md`).
 
@@ -463,8 +490,8 @@ still on screen reads from its commits for as long as the repository has them (s
 Selecting one of the project's sessions in the sidebar sets the branch selector to **the session's branch**: of the
 branches whose responsible session is that session (see "The responsible session" in
 `docs/product/branch-responsible-session.md`), the one it became responsible for last. The changes shown are then that
-branch's: its uncommitted changes from the worktree that has it checked out, and what it has committed since it forked
-from the main working copy's branch.
+branch's: its uncommitted changes from the worktree that has it checked out, and what it has committed (see
+"Committed changes" above).
 
 - **A session with no branch of its own** sets the selector back to the default (see "The branch selector" above),
   which then follows what is checked out where the project's folder is. A branch list that could not be read counts as
