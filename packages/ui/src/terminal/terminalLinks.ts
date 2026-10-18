@@ -1,18 +1,19 @@
 import type { IBufferCell, IBufferRange, ILink, ILinkProvider, Terminal } from "@xterm/xterm";
 
-import { isPrimaryModifier } from "../useWindowShortcut";
+import { IS_MAC } from "../useWindowShortcut";
 
 /**
  * Returns the handler xterm calls for a click on a link, for both detected plain-text addresses
- * and OSC 8 hyperlinks. It opens the link only when the click carries the platform's shortcut
- * modifier (Cmd on an Apple keyboard, Ctrl elsewhere), so a plain click stays a text selection.
+ * and OSC 8 hyperlinks. xterm activates on mouseup even after a drag within a link, so an active
+ * selection must suppress opening. Secondary buttons and macOS Control-click belong to the menu.
  * `open` is the platform's link capability, which a missing one leaves out.
  */
 export function terminalLinkHandler(
   open: ((url: string) => Promise<void>) | undefined,
+  hasSelection: () => boolean,
 ): (event: MouseEvent, uri: string) => void {
   return (event, uri) => {
-    if (!open || !isPrimaryModifier(event)) return;
+    if (!open || event.button !== 0 || (IS_MAC && event.ctrlKey) || hasSelection()) return;
     open(uri).catch((error: unknown) => {
       console.warn("Terminal: cannot open the link", error);
     });

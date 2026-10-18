@@ -117,7 +117,7 @@ export interface TerminalControllerHandlers {
    * flight per session; resolves to whether the session was started. When it was not, the held
    * input is dropped and the next input asks again. */
   onWake?: (sessionId: string) => Promise<boolean>;
-  /** Opens a web address the user Cmd/Ctrl+clicked in the output, in their own browser; absent
+  /** Opens a web address the user clicked in the output, in their own browser; absent
    * where the platform has no way to, which leaves the links inert. */
   openLink?: (url: string) => Promise<void>;
   /** The OSC 8 hyperlink the pointer is on, whose visible text may differ from its target, or
@@ -188,7 +188,7 @@ export class TerminalController {
 
   constructor(handlers: TerminalControllerHandlers, initialColorTheme: "light" | "dark") {
     this.handlers = handlers;
-    const onLinkClick = terminalLinkHandler(handlers.openLink);
+    const onLinkClick = terminalLinkHandler(handlers.openLink, () => this.term.hasSelection());
     this.term = new Terminal({
       scrollback: 10000,
       // A monospace stack with CJK coverage: these agents render box-drawing TUIs and sometimes

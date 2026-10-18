@@ -5,13 +5,21 @@ import { expect, it, vi } from "vitest";
 import { IS_MAC } from "../useWindowShortcut";
 import { brokenUrlsAt, linkBox, linkSegmentsIn, type TerminalRow, TERMINAL_URL_REGEX, terminalLinkHandler, visibleLinkSegments } from "./terminalLinks";
 
-it("opens a link only on the platform's shortcut modifier", () => {
+it("opens a link with a plain click", () => {
   const open = vi.fn(async () => {});
-  const onClick = terminalLinkHandler(open);
+  const onClick = terminalLinkHandler(open, () => false);
   onClick(new MouseEvent("click"), "https://example.com");
-  expect(open).not.toHaveBeenCalled();
-  onClick(new MouseEvent("click", IS_MAC ? { metaKey: true } : { ctrlKey: true }), "https://example.com");
   expect(open).toHaveBeenCalledWith("https://example.com");
+});
+
+it.each<[string, MouseEventInit, boolean]>([
+  ["a text selection", {}, true],
+  ["a secondary button", { button: 2 }, false],
+  ...(IS_MAC ? [["macOS Control-click", { ctrlKey: true }, false] as [string, MouseEventInit, boolean]] : []),
+])("does not open a link for %s", (_name, options, selected) => {
+  const open = vi.fn(async () => {});
+  terminalLinkHandler(open, () => selected)(new MouseEvent("mouseup", options), "https://example.com");
+  expect(open).not.toHaveBeenCalled();
 });
 
 it("boxes a link from the cell grid", () => {

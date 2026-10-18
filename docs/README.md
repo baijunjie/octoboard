@@ -39,7 +39,7 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   moving agent records to the Trash automatically for unused sessions or optionally for used sessions.
 - [Session terminal](product/session-terminal.md) — the selected session's terminal: what its area shows with no
   session selected, typing and the mouse, output, scrollback and resizing, the reconnect and loading covers,
-  interrupted, archived and dormant sessions and the saved preview, links in the output (Cmd/Ctrl+click, the OSC 8
+  interrupted, archived and dormant sessions and the saved preview, links in the output (click to open, the OSC 8
   target tooltip), and the creation offer while a console has nothing in it.
 - [Session titles](product/session-titles.md) — the task title alongside created session names: where it is
   displayed, what renaming edits, where it comes from (the agent's records, its decorated terminal title, the first

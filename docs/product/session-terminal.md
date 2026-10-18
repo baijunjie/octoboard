@@ -168,18 +168,19 @@ Web addresses in a session's terminal are links:
   raw non-ASCII characters is cut short at the first one, and one whose host starts with one (`http://例え.jp`) is
   not a link at all; a percent-encoded address is recognised whole. An OSC 8 hyperlink is not affected, its target
   being the one the program gives.
-- **A link opens only with the shortcut modifier held**: `Cmd`+click on a Mac, `Ctrl`+click elsewhere. A click with
-  both `Cmd` and `Ctrl` held opens nothing. The address opens in the user's own browser — to a new tab, in the UI
-  opened in a browser — as a web link in a Markdown document does (see "A Markdown file as a document" in
-  `docs/product/project-pane.md`).
-- **A plain click on a link is an ordinary click in the terminal**: it selects text as anywhere else and opens
-  nothing. Neither a plain click nor opening a link resumes a dormant session.
+- **A link opens with a primary-button click**, without requiring a modifier key. The address opens in the user's
+  own browser — to a new tab, in the UI opened in a browser — as a web link in a Markdown document does (see
+  "A Markdown file as a document" in `docs/product/project-pane.md`).
+- **Selecting text does not open a link**: a click that leaves a terminal selection, including dragging within a
+  link, opens nothing. Other mouse buttons and a Mac's Control-click do not open a link. Right-click and a Mac's
+  Control-click open the editing menu described in "Copy, paste and selection" above. Opening a link does not resume
+  a dormant session.
 - **An OSC 8 hyperlink shows its real target as a tooltip** once the pointer has rested on it for the window's usual
   tooltip delay (see "How a tooltip behaves" in `docs/product/labels-and-tooltips.md`). A plain-text address has no
   tooltip, its text being its target. The tooltip goes when the pointer leaves the link, when the terminal's view
   scrolls, and when the terminal is cleared to draw a session afresh — selecting another session, a reattach, or a
-  dormant session's preview replacing the screen. It also closes on any key press or pointer press, so pressing
-  `Cmd` or `Ctrl` to open the link closes it. The target reaches no assistive technology, as none of the terminal's
+  dormant session's preview replacing the screen. It also closes on any key press or pointer press, including the
+  click that opens the link. The target reaches no assistive technology, as none of the terminal's
   output does.
 - **An address the program itself breaks onto the next line is joined**: when the program ends a row partway through
   an address and carries on with it on the next row — as Claude Code does with a long line of text, usually after an
