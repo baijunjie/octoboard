@@ -273,7 +273,7 @@ export function FileViewer({
         </DetailItem>
         {content.state === "file" && (
           <DetailItem>
-            <InlineChip size="sm" variant="soft">
+            <InlineChip size="xs" variant="soft">
               {formatFileSize(language, content.body.size)}
             </InlineChip>
           </DetailItem>
