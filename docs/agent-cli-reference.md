@@ -2,8 +2,9 @@
 
 Per-agent facts about the three agent CLIs Octoboard launches: the hook events, what their payloads carry, what the
 payloads can and cannot be correlated on, what a failing hook costs, how a project's own configuration layers around an
-injected one, the mechanism and conditions for injecting Octoboard into each, and what it takes to move a session's
-conversation into another config directory, and how to ask each one how much of its plan quota is left.
+injected one, the mechanism and conditions for injecting Octoboard into each, what it takes to move a session's
+conversation into another config directory, what happens when two accounts share a session directory, and how to ask
+each one how much of its plan quota is left.
 
 Established against **Claude Code 2.1.274**, **Codex 0.160.0** and **Grok Build 1.0.46**; what the Claude Code section
 says about a declined prompt was measured on **2.1.286** as well, and held identically on both. What "Moving a
@@ -16,7 +17,9 @@ re-checked on **0.161.0**, which the folder-trust facts above were measured on. 
 model itself is handed, and what it calls" says was re-confirmed on **Grok Build 1.0.52** with a real account, as was
 the timeout paragraph's `tool_timeout_sec = 660`; "The id a turn records is not one of the ids `grok models` prints"
 was first measured on that build. What "Plan quota" says was measured on **Claude Code 2.1.302**, **Codex 0.162.1** and
-**Grok Build 1.0.60**.
+**Grok Build 1.0.60**. What "Sharing a session directory between accounts" says, and the "Codex, history segments"
+and "Under a different account" notes under "Moving a conversation to another config directory", were measured on
+2026-10-19 on **Claude Code 2.1.302**, **Codex 0.162.1** and **Grok Build 1.0.62**.
 All three rewrite their hook surface, their payload fields, their configuration layering and their on-disk layout on
 upgrade, so check a detail here against the installed version before relying on it.
 
@@ -514,14 +517,15 @@ session's own:
 
 ## Moving a conversation to another config directory
 
-All three agents resume a conversation under a second config directory when **the session's own record alone** is
-copied into it. No index, registry or per-project entry has to travel with it, although all three keep one. Each result
-carried a control in the same run.
+All three agents resume a conversation under a second config directory when **the session's own record** is copied
+into it — for Codex, every rollout file of the thread, since a thread that was ever reverted is a chain of them (see
+"Codex, history segments" below). No index, registry or per-project entry has to travel with it, although all three
+keep one. Each result carried a control in the same run.
 
 | Agent | What to copy | Where it goes |
 |---|---|---|
 | Claude Code | `<session id>.jsonl` | `<config dir>/projects/<cwd slug>/` |
-| Codex | `rollout-<timestamp>-<thread id>.jsonl`, or `….jsonl.zst` once Codex has compressed it | anywhere under `<home>/sessions/` |
+| Codex | `rollout-<timestamp>-<thread id>.jsonl` and every later segment `rollout-<timestamp>-<thread id>_<segment id>.jsonl`, each as `….jsonl.zst` once Codex has compressed it | anywhere under `<home>/sessions/` |
 | Grok Build | the `<session id>/` directory, whole | `<home>/sessions/<url-encoded cwd>/` |
 
 **The record's path relative to the config directory is what matters**, and the source directory already holds it, so a
@@ -539,26 +543,45 @@ built from, never the per-session home itself, which is discarded with the proce
   with the conversation intact: the date directories are how Codex writes, not how it looks up, and
   `session_index.jsonl` is not consulted. Control: a thread id with no record in the home answers `thread/resume:
   thread/resume failed: no rollout found for thread id <id>`. Resolution precedes the login check here too.
-- **Codex, a rollout it has compressed** — Codex replaces a rollout older than about a week with
-  `rollout-…-<thread id>.jsonl.zst` in the same directory (zstd; 286 of the rollouts on the measured machine, none of
-  them newer than that). Its database does **not** follow: `threads.rollout_path` in `state_5.sqlite` still names the
+- **Codex, a rollout it has compressed** — with the feature `local_thread_store_compression` on (off by default in
+  0.162.1; see "Codex's compression is per-home maintenance" below), Codex replaces an old rollout with
+  `rollout-…-<thread id>.jsonl.zst` in the same directory (zstd). On the measured machine 286 rollouts were
+  compressed, none of them with a file date in the last week; "about a week" comes from those dates, not from a
+  measured threshold. Its database does **not** follow: `threads.rollout_path` in `state_5.sqlite` still names the
   `.jsonl` path that no longer exists (no row of 1,212 ends in `.zst`; read from a copy of the real database). A
   compressed rollout copied alone, byte for byte, into a fresh home with no database resumed with the conversation
   intact (`codex exec resume <thread id>`, 0.162.1, rollout written by 0.160.0; the session id echoed was the
   original's). Codex **decompresses it on resume**: afterwards the target home held a plain `.jsonl` at the same
   place, the `.zst` was gone, and the new database's `rollout_path` named that `.jsonl` inside the target home. So the
   database path is no obstacle to a copy, and the target's rollout is a plain file again until it ages out once more.
-- **Codex, subagent rollouts** — a spawned agent's rollout is a file of its own,
-  `rollout-<child start>-<parent thread id>_<child thread id>.jsonl` (or `.zst`), whose `session_meta` names the parent
-  as `parent_thread_id` and carries `source.subagent`. It sits in the date directory of the *child's* start, which can
-  differ from the parent's. **A resume by the parent's thread id picks one of them when they are present**: with the
-  parent's compressed rollout and two compressed subagent rollouts in a home (a real session copied into scratch
-  homes), `codex exec resume <parent id>` opened the newest subagent rollout, decompressed that one, and recorded
-  *its* path in the home's database, in the source copy as much as in the copy made by Octoboard's switch code; with
-  the parent's rollout alone it opened the parent's. (In a home whose database already holds the parent's row the
-  recorded path is presumably used instead; not measured.) Codex appears to match any rollout whose file name
-  contains the id and take the newest.
-  Octoboard's switch therefore leaves subagent rollouts behind and carries the parent's rollout alone.
+- **Codex, history segments** (0.162.1) — `rollout-<start>-<thread id>_<segment id>.jsonl` (or `.zst`) is **not a
+  subagent's rollout but a later segment of the same thread**. An earlier reading of this section took it for a
+  subagent's; every such file on the measured machine (26, written by 0.159.2–0.162.1) has a `session_meta` carrying the
+  thread's own id, and its lines carry only that thread id. The `session_meta` has `history_mode: "paginated"` and
+  `history_base: {thread_id, end_ordinal_exclusive, end_byte_offset}`, where `thread_id` names the file the segment
+  continues from — the thread's first rollout by the thread id, a later segment by its segment id — and the segment's
+  ordinals pick up at that cut. So the files form a chain, its last segment (the chain's leaf) is the conversation's
+  head, and the database's `rollout_path` names the head (read from a copy of the real database). Reverting a turn
+  starts a segment: through `codex app-server`, a thread with two turns, `thread/revert` before the second, then a third
+  turn, left the first rollout (ordinals 0–25) plus a segment (ordinals 15–28, based on the first at ordinal 15). A
+  segment can also start a fresh history instead (`history_base` null, ordinals from 0; seen on disk, trigger not
+  measured). Resumed with `codex exec resume <thread id>` in fresh homes, asking for the codewords given so far:
+  - every file of the chain present, no database row → the head, and the right conversation (first and third turns);
+    the same with the chain compressed, where only the head was decompressed and the first rollout read in place;
+  - the first rollout alone → that file, **the reverted turn back and the third turn gone, with no error or warning**;
+  - the head segment alone → refused: `thread/resume failed: invalid paginated history lineage for <id>: missing source
+    rollout`.
+
+  So a resume that matches the newest file containing the id picks the head, which is correct. What makes a file the
+  newest was not settled. In the fork described under "Which rollout a home resumes, over a shared directory" below,
+  a home with no row picked the segment with the later timestamp in its name. That segment was also the chain's leaf,
+  while the other segment had the later mtime. So mtime does not decide it; name order or lineage might.
+  **Octoboard's switch, which carries `rollout-…-<id>.jsonl` alone and leaves `<id>_…` behind, resumes a thread that
+  was ever reverted at a stale branch**, silently; the chain has to travel whole. Subagents are separate threads: a
+  spawned agent's rollout is `rollout-<child start>-<child thread id>.jsonl`, with
+  `source.subagent.thread_spawn.parent_thread_id` in its `session_meta`, so its name never contains the parent's id. A
+  home with no row resuming the parent with two such rollouts beside it opened the parent with the conversation intact
+  (and took rows for both children).
 - **Claude Code, beside the transcript** — `projects/<slug>/<session id>/` holds `subagents/`, `tool-results/` and
   `custom-title.json`, and `file-history/<session id>/` holds the rewind checkpoints (`<hash>@v<n>`). Both are layout
   as found on disk; a resume with the transcript alone was measured above, and what a resume without these loses
@@ -569,11 +592,34 @@ built from, never the per-session home itself, which is discarded with the proce
   sign-in (`Approve in your browser to finish signing in`, then `Waiting for approval`) instead of exiting. So, as with
   Claude Code and Codex, a switch to an account that is not signed in comes up and counts as a success, and the
   relaunched session can start the agent's own sign-in flow. Whether the session is looked up before or after that
-  sign-in was not measured, so a relocation cannot be verified without a login. One difference from the others: **a
-  session missing locally is fetched from a remote registry** (`Session "<id>" not found locally, restoring
-  conversation from remote...`, then a 404 in the control), so a switch between two homes of the same account might not
-  need a copy at all; across two different accounts the registry is the other account's and will not serve the
-  session.
+  sign-in was not measured, so a relocation cannot be verified without a login. For a session it does not hold
+  locally, Grok prints `Session "<id>" not found locally, restoring conversation from remote...`. Its remote registry
+  has never been seen to restore one: every attempt so far answered 404 (see "Grok Build over a linked `sessions/`"
+  below). Whether the registry would serve a session to a different account is unmeasured.
+- **Under a different account** — a conversation copied into a config directory signed in to another account:
+  - **Codex resumes it, encrypted reasoning included** (0.162.1). The two homes were signed in by copies of the
+    `auth.json` of two genuinely different ChatGPT accounts: a personal Plus account and a Business workspace, with
+    different account and organisation ids. The thread was made under A on `gpt-6.1-sol` at medium effort, with a turn
+    whose rollout holds a `reasoning` item carrying `encrypted_content`. Copied into B's home and resumed on the same
+    model, it ran a turn and recalled the earlier conversation. The response's per-input-item usage in the trace log
+    (`RUST_LOG=trace`) listed that reasoning item's id, so it was sent and accepted. Control in the same run: the same
+    rollout with eight characters of the `encrypted_content` changed was refused with `invalid_encrypted_content`
+    ("The encrypted content for item rs_… could not be verified. Reason: Encrypted content could not be decrypted or
+    parsed."). So the server verifies an earlier turn's reasoning, and it accepted the other account's. The reverse
+    direction (made under B, resumed under A) was the same. A resume on a smaller model (`gpt-6-luna`) worked too, with
+    a warning that the session was recorded with another model.
+  - **Claude Code does not resend an earlier turn's thinking, so its signature is no obstacle; the resume under a
+    second account itself was not measured** (2.1.302). Two scratch config directories were each signed in by the
+    user, to a personal Max account (A) and to a Team account (B). Under A, `claude -p --model haiku`
+    (`claude-haiku-5-5`) wrote a transcript whose assistant turn holds a `thinking` block with a 1,580-character
+    `signature`. Two copies were resumed under A with `--resume`, one as written and one with eight characters of the
+    signature changed. Both resumed and recalled the conversation; the tampered signature was not refused. The
+    transcript's own request log explains why: Claude Code 2.1.302 writes `api-request-blob` and `api-request` lines
+    into the transcript, and in the resumed request the earlier assistant turn was sent as its text alone, without the
+    thinking block. The request asked for `thinking: {type: "adaptive", display: "omitted"}`, with context management
+    `clear_thinking_20251015`, `keep: "all"`. The resume under B could not be run because every request B made was
+    answered "You've hit your weekly limit"; the signature finding makes a refusal on signatures unlikely.
+  - **Grok Build:** not measured; the machine has one Grok Build account.
 
 **The session comes up under the target directory's whole setup.** A config directory holds the agent's global
 configuration, not only its login: the same Codex thread resumed in a fresh home came up with that home's own defaults
@@ -595,8 +641,9 @@ answers `loggedIn: false` even under the real `HOME` with the variable unset —
 `Library/Keychains` symlink, without which the unset-variable case answers `loggedIn: false` too. Codex differs on
 every count: `CODEX_HOME` pointed at the user's real `~/.codex` keeps Codex logged in under a throwaway `HOME`, and it
 needs neither `USER` nor the symlink.
-Codex and Grok Build keep the login in a file inside the directory (`auth.json` in both), which is inferred from the
-layout, not measured. A fresh Grok home is signed in without a terminal by `GROK_HOME=<dir> grok login` (a browser
+Codex and Grok Build keep the login in a file inside the directory (`auth.json` in both). For Codex that is measured: a
+copy of an account's `auth.json` in an otherwise fresh home works as that account (0.162.1). For Grok Build it is
+inferred from the layout. A fresh Grok home is signed in without a terminal by `GROK_HOME=<dir> grok login` (a browser
 device code; plain `grok` needs a TTY and fails with `Device not configured` without one), and one turn of
 `grok -p "<prompt>"` then creates its `sessions/`, which is what makes it an initialized Grok home (measured with Grok
 Build 1.0.46).
@@ -608,6 +655,142 @@ before launching.
 **The trap a verification has to rule out** is an agent that resumes *successfully* into an empty conversation. None of
 the three did that here, each refusing distinctly, but a future version could introduce it and it would look like a
 successful switch.
+
+## Sharing a session directory between accounts
+
+Octoboard does not offer sharing an agent's session directory between accounts, whether by linking `projects/` or
+`sessions/` or otherwise. This section records the measurements behind that decision. Codex and Claude Code lose or
+split conversations in a shared directory, in ways they give no warning of, and Grok Build has no guard against two
+writers:
+
+- **Codex.** One home's rollout compression unlinks a rollout that another home holds open, and the turns that home
+  writes afterwards are lost. A home whose database row names an older history segment resumes a stale branch and
+  writes to it. Two homes running one thread both append to the same rollout, with duplicate ordinals.
+- **Claude Code.** The account with the shortest `cleanupPeriodDays` deletes every account's old transcripts through
+  the link. Two config directories resuming one conversation at once fork the transcript, and a later resume follows
+  one branch only.
+- **Grok Build.** Nothing stops two homes, or two processes in one home, from writing the same session.
+
+Octoboard's own per-session Grok Build homes are a different arrangement: each links `sessions/` to the home of the same
+account. Even so, a terminal `grok` under the same account can still resume a session that an Octoboard session is
+running, and nothing stops it. Resuming a conversation under another account is a separate question, covered under
+"Under a different account" in "Moving a conversation to another config directory" above.
+
+Measured on 2026-10-19 with **Codex 0.162.1**, **Claude Code 2.1.302** and **Grok Build 1.0.62**, the installs the
+login shell resolves, in scratch config directories holding copies. For Codex: two homes, A and B, signed in to the
+two different accounts described under "Under a different account", with B's `sessions/` a symbolic link to A's. Every
+conversation was checked by asking it what it had been told, together with the rollout path the home recorded in its
+database.
+
+**Codex's compression is per-home maintenance, blind to another home's writers.**
+
+- **What triggers it.** It runs only with the feature `local_thread_store_compression` on. That feature is listed as
+  under development and off by default in 0.162.1, and in the 0.163.0-alpha.10.2 bundled with the ChatGPT desktop
+  app; how the default home on the measured machine came to have compressed rollouts was not traced. With the feature
+  on, every Codex start runs a "rollout compression worker" over the home's `sessions/`. That includes `codex exec`,
+  even one that fails at once, such as resuming an unknown id. It compresses rollouts whose mtime is older than a
+  threshold: a file dated 2026-10-01 was compressed, files from the same day were not; the threshold itself was not
+  measured. It runs at most once per cooldown, recorded in `<home>/.tmp/rollout-compression.lock` (a pid and a start
+  time); deleting that file re-arms it. That lock lives in the home, so two homes sharing `sessions/` each run their
+  own worker over it.
+- **The guard is per home.** Within one home, a rollout with a turn in progress was skipped (`skipped=1`) even with its
+  mtime forced old; the worker respects the home's own writer lock, `<home>/thread-writer-locks/<thread id>.lock`.
+  **Across homes it is not guarded, and a turn is lost**: B had a turn in progress (a shell `sleep 45`) on a rollout in
+  the shared directory, its mtime was forced old, and A started. A compressed the rollout (`compressed=1`). B finished
+  the turn and printed its answer, but the shared record ended at B's prompt: the tool call, its output and the answer
+  were written into the unlinked file. The same happened with B's TUI idle on the thread (resumed, no turn) while A
+  compressed: B's next turn showed on B's screen and is nowhere in the record. B's process keeps writing to the file it
+  opened; only a later resume finds the path again (decompressing it) and records from there, so the turns in between
+  are gone.
+- **When that can happen for real.** Only a rollout older than the threshold is compressed, and a resume, even one
+  with no turn, rewrites the head rollout with a fresh mtime. So a loss needs a process in one home to keep a thread
+  open past the threshold while another home with the feature on starts Codex. Keeping a thread open is not only a
+  visible session's doing: the 0.162.1 TUI runs its threads in a per-home daemon
+  (`<home>/packages/app-server-daemon/…/codex app-server --listen unix:// --managed-daemon`). It was still up 17
+  minutes after the TUI exited, holding the thread's writer lock and the open rollout. While it held them, another
+  resume of the thread from the same home was refused with `thread <id> already has an active writer`. Whether an
+  Octoboard session's Codex goes through the same daemon was not checked.
+- **Each home's database after the other's maintenance.** Compression changes no database. After compressing its own
+  rollout, A's row still named the `.jsonl`, and A resumed the compressed rollout through that row all the same. B,
+  with no row, resumed the rollout A had compressed, decompressed it in the shared directory, and recorded the
+  link-resolved path. A then resumed it and saw B's turn. Each home also keeps its own projection of a rollout in
+  `thread_history_1.sqlite` (`thread_history_projection_state`: `next_rollout_byte_offset`, `next_rollout_ordinal`),
+  which falls behind whatever the other home appends. Resumes still worked. A home's revert failed once, with
+  `turn <id> does not have a persisted start boundary`, after the file had changed under its projection; that was
+  provoked by restoring an older copy of the file, which sharing does not do by itself.
+
+**Which rollout a home resumes, over a shared directory.** A home with no row resumes the right conversation through the
+link, as described under "Codex, history segments" above. Measured: a home whose row named the head as a `.jsonl` while
+the chain was compressed resumed the head, with the right conversation. **Sharing adds one arrangement: a home whose row
+names an older head resumes the older branch.** A made a thread with one revert, so A's row named segment S1. B, with no
+row, resumed it through the link, took two turns, reverted the second and took a third, which started segment S2 on top
+of S1. A then resumed the thread and followed its row to S1: B's reverted turn came back, B's third turn was missing,
+and A appended its own turn to S1. Afterwards B (row on S2) and a fresh home with no row both opened S2, without A's
+turn. So one home's revert in a shared directory splits the conversation into branches, and which branch a home sees
+depends on its own row.
+
+**Two homes can run the same Codex thread at once, and both write to one file.** A had a turn in progress (`sleep 30`)
+when B resumed the same thread from the other home and completed a turn. Neither was refused, since writer locks are
+per home. Both appended to the same rollout: B's turn lies inside A's, and ordinals 23–34 occur twice, each writer
+numbering on its own. Later resumes from A, from B and from a fresh home all went through and saw both turns. Within
+one home the second writer is refused (the `already has an active writer` above).
+
+**One account's `cleanupPeriodDays` prunes every account's conversations in a linked `projects/`** (Claude Code
+2.1.302). The setup was a signed-in scratch config directory with `cleanupPeriodDays: 1` and its `projects/` linked to a
+shared directory. The shared directory held three copies of real transcripts: two with mtimes a month back, one of them
+with a sidecar directory (`<id>/subagents/…`), and one fresh. A `claude -p` turn lasting about 15 seconds deleted both
+old transcripts and the old sidecar directory through the link. It kept the fresh copy and the transcript the turn
+itself wrote, and wrote `<config dir>/.last-cleanup`. Nothing marks which account wrote a transcript, so the shared
+directory is pruned by whichever sharing account has the shortest period (the default is 30 days).
+
+When the sweep runs:
+
+- **During a `-p` turn.** It ran about five seconds into the turn, also on a run that had nothing old enough to delete.
+- **Not soon after a TUI starts.** An idle TUI did not run it within 75 seconds. Read out of the executable, not
+  measured: housekeeping is put off by ten minutes while the user has been active within the last minute.
+- **At most once per `.last-cleanup` interval.** Once the file had been written, a later 14-minute TUI run did not
+  sweep again.
+- **Not without a login.** In unauthenticated directories it never ran, even after 13 idle minutes at the prompt.
+
+Read out of the executable: the transcript part lists `<config dir>/projects/` with a plain directory read, and
+transcripts from a desktop host (Claude Desktop, Cowork) are exempt.
+
+**Two Claude Code directories resuming one conversation at once both write to the transcript, and it forks** (2.1.302).
+Both signed-in scratch directories had `projects/` linked to one shared directory. A ran `claude -p --resume <id>` with
+a turn that made a tool call. While that turn was in progress, B ran `claude -p --resume <id>` on the same id. Neither
+was refused. B saw the transcript ending in A's `tool_result` and closed it with a synthetic assistant entry
+(`No response requested.`). B then appended its own prompt and the request's error entry; the request was refused by B's
+plan limit, but its lines were written all the same. A carried on and wrote its next assistant entries with `parentUuid`
+set to its own `tool_result`. So two branches now hang from the same entry. A later `--resume` from A followed A's
+branch: asked for every earlier prompt, it listed A's prompts and not B's. B's prompt is still in the file but out of
+the conversation. Which branch a resume follows when both complete a turn was not measured. The per-directory process
+registry (`sessions/<pid>.json`) is not under `projects/`, so neither directory can see the other's process.
+
+**Grok Build over a linked `sessions/`, one account in two homes** (Grok Build 1.0.62). Two scratch `GROK_HOME`s, each
+signed in by a copy of the same `auth.json`, B's `sessions/` linked to A's. **The account's Grok Build balance was
+exhausted**: every turn failed with `402 Payment Required: Grok Build usage balance exhausted`. So these results cover
+how a session is found and written, not a completed model turn. A failed turn still records its prompt in
+`updates.jsonl` and `chat_history.jsonl`.
+
+- **B resumes A's session from the shared directory.** `grok --resume <id> -p …` from B found the session through the
+  link, with no remote lookup, and appended B's prompt to the same session directory. A's TUI, resuming afterwards,
+  showed both A's and B's prompts.
+- **The remote session registry restored nothing.** A third home with its own empty `sessions/` asked for a session it
+  did not hold. Grok printed `Session "<id>" not found locally, restoring conversation from remote...` and then
+  `Failed to restore session from remote: fetching session record: session get failed: 404 Not Found`. That happened
+  for every id tried:
+  - the scratch session;
+  - one made with `relay.enabled = true` ("Enable session relay sync" in the config reference);
+  - two real sessions of the account from the user's own home, one of them with 74 messages.
+
+  No positive control was found, so this does not show whether a completed session is ever uploaded, or under what
+  setting. The registry plays no part over a shared directory, since the local copy is found first.
+- **Nothing stops two processes running one session.** A's TUI held the session open, registered in A's
+  `active_sessions.json`; that registry is per home. A `grok --resume <id> -p …` from B was not refused, and neither was
+  one from A itself. Each went on to its turn and appended its prompt to the shared `updates.jsonl`. How two completed
+  turns interleave there was not measured, because of the exhausted balance.
+- **Not measured:** whether a session made under one Grok account resumes, or is restored from the registry, under a
+  different account. The machine has one Grok Build account.
 
 ## Plan quota
 
