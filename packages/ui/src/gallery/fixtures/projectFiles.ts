@@ -209,7 +209,7 @@ export const projectFilesScenarios: Scenario[] = [
     category: "normal",
     title: "A file open from the tree",
     description:
-      "The viewer opened over the project's files, on a file pressed in the tree. Previous file and Next file sit to the left of its title, leaving the bottom edge for content.",
+      "The viewer opened over the project's files, on a file pressed in the tree. Its path uses the same code icon as the file tree. Previous file and Next file sit to the left of its title, leaving the bottom edge for content.",
     state,
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600)],
   },

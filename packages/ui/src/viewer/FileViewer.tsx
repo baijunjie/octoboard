@@ -1,7 +1,8 @@
 import { Button } from "@heroui/react";
-import { ChevronLeft, ChevronRight, Copy, File } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { FileTypeIcon } from "../components/FileTypeIcon";
 import { InlineChip } from "../components/InlineChip";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { PlainMarkedPath } from "../components/MarkedPath";
@@ -234,7 +235,7 @@ export function FileViewer({
           // Rendered only while there is a source, so a subject without one loses no height. The muted
           // colour is set here rather than inherited: the dialog's header carries none of its own, and
           // this line is the subject's metadata, not a second title.
-          <div data-viewer-subtitle="" className="col-span-full flex min-w-0 items-center text-xs text-app-muted">
+          <div data-viewer-subtitle="" className="col-span-full flex min-w-0 items-center ps-[calc(var(--pane-inset)+0.25rem)] text-xs text-app-muted">
             <FadeOverflow
               as="span"
               className="min-w-0"
@@ -268,7 +269,7 @@ export function FileViewer({
           {wrapClaimed && <WrapToggleHost />}
         </RowIconGroup>
         <DetailItem>
-          <PlainMarkedPath path={displayWirePath(subject.path)} icon={File} />
+          <PlainMarkedPath path={displayWirePath(subject.path)} icon={<FileTypeIcon path={subject.path} className="size-3.5 shrink-0 text-app-muted" />} />
         </DetailItem>
         {content.state === "file" && (
           <DetailItem>
@@ -353,7 +354,7 @@ function DetailItem({ children }: { children: React.ReactNode }): React.ReactEle
 function RenamedFrom({ path }: { path: string }): React.ReactElement {
   return (
     <span className="me-4 inline-block min-h-8 max-w-[calc(100%-1rem)] whitespace-normal align-top text-app-muted">
-      <Message id="viewer.change.renamedFrom" params={{ path: <InlineChip monospace wrap size="inherit" startContent={<File aria-hidden="true" className="inline-block size-3.5 align-text-bottom text-app-muted" />}>{displayWirePath(path)}</InlineChip> }} />
+      <Message id="viewer.change.renamedFrom" params={{ path: <bdi dir="ltr" className="font-mono [overflow-wrap:anywhere]"><FileTypeIcon path={path} className="me-1.5 inline-block size-3.5 align-text-bottom text-app-muted" />{displayWirePath(path)}</bdi> }} />
     </span>
   );
 }

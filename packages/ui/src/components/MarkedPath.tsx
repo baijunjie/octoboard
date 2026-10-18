@@ -21,11 +21,11 @@ export function PlainMarkedPath({
 }: {
   path: string;
   shown?: string;
-  icon?: LucideIcon;
+  icon?: LucideIcon | React.ReactElement;
 }): React.ReactElement {
   return (
     <span className="flex min-w-0 items-center gap-1.5">
-      <Icon size={14} aria-hidden className="shrink-0 text-app-muted" />
+      {React.isValidElement(Icon) ? Icon : <Icon size={14} aria-hidden className="shrink-0 text-app-muted" />}
       <FadeOverflow
         as="span"
         className="min-w-0 flex-1 font-mono text-xs leading-5"

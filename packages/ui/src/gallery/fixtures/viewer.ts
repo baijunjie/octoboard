@@ -1111,9 +1111,9 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Renamed file, long source path in the viewer header",
-    description: "The renamed-from path is a chip beneath the new file name. Narrow the window to check that the long source path wraps inside the header.",
+    description: "The comparison subtitle starts at the same inset as the current path's file icon. Both current and renamed-from paths use Markdown icons matching the file tree. The renamed-from path is plain monospace text without a chip background. Narrow the window to check that the long comparison clips and the source path wraps inside the header.",
     viewer: {
-      subjects: async (language) => (await changes(language)).filter(({ path }) => path === "docs/handbook/engineering/onboarding/renamed-guide.md"),
+      subjects: async (language) => (await changes(language)).filter(({ key }) => key === "Compare:docs/handbook/renamed-notes.md"),
     },
   },
   {

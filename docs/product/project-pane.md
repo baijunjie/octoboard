@@ -304,7 +304,8 @@ The header has three parts, one under the other:
 - **A subtitle**, a line of its own directly under the title, which carries one thing only: the commits a committed
   change is read from. It belongs to the title as a tag does, but is far too long to sit among them.
   A subject with no such commits has no such row at all, and the row costs the content below it that one line and no
-  more. It is a single line that fades out where it is cut off and carries its full wording as its tooltip.
+  more. Its start aligns with the file-path icon in the details below. It is a single line that fades out where it
+  is cut off and carries its full wording as its tooltip.
 - **The details** — the file's path within the project, its size and the path a rename came from — laid out beside
   the **controls**, which hold the end of the row in a fixed order: **Copy path**, then the document-or-source
   choice for a Markdown file (see "A Markdown file as a document" below), then the diff's unified-or-split choice,
@@ -333,9 +334,10 @@ where it has the header's whole width; several can move down, so the header is o
 Each item is one line that is never wrapped: where it does not fit even on a row of its own it fades out rather than
 ending in an ellipsis and carries its full text as its tooltip — one fade and one tooltip per detail, not one for the
 row. The title and the subtitle fade the same way. A path — the file's own and a rename's origin — fades at its start
-instead, so the file's own name stays visible, and shows with a file icon in front of it, as paths read elsewhere in
-the application. A cut detail, whichever edge it is cut at, runs as a marquee while the pointer is over it (see "Names
-too long for their space" in `docs/product/labels-and-tooltips.md`).
+instead, so the file's own name stays visible. Both paths show the same name- and extension-based icons as file rows
+(see "Rows and the keyboard" above), with a generic file icon for unrecognized names. A cut detail, whichever edge it
+is cut at, runs as a marquee while the pointer is over it (see "Names too long for their space" in
+`docs/product/labels-and-tooltips.md`).
 
 **Moving from file to file can move the code below the header**, when the details of one file need a row that the next
 one's do not, or when one subject has the subtitle row and the next has none.
