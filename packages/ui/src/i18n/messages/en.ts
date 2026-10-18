@@ -88,6 +88,8 @@ export const en = {
   "error.recovery.lostMessages": "Open the session they were meant for, or the one that took over, and check its terminal. Send again anything that did not arrive.",
   "error.recovery.trust": "Open the affected session’s terminal and answer its pending prompt. For folder trust, choose only the project’s folder, then retry.",
   "error.recovery.conversation": "Check the conversation ID and selected account. Resume the existing session when one is named above, or start a new session.",
+  "error.recovery.unresumable": "Archive this session if it isn't already, delete it, and start a new session to carry on the work.",
+  "error.recovery.unarchive": "Check that Codex runs in the login shell and can read its account directory, then reopen the session. If it still fails, delete the session and start a new one.",
   "error.recovery.session": "Select the current session in the sidebar. Reopen it from the archive if archived, or create a new session if it has been removed.",
   "error.recovery.configuration": "Choose a configuration file exported by a compatible {appName} version and review the project destinations before importing again.",
   "error.recovery.image": "Check that the image file is valid and readable. Repair or replace a damaged file, or choose a smaller supported image, then reopen or select it again.",
@@ -225,6 +227,9 @@ export const en = {
   "daemon.handoff_to_same_agent": "A handoff moves a session to another agent, and this session already runs on {agent}.",
   "daemon.conversation_not_found":
     "No {agent} conversation of this session was found in {path}, so it cannot continue under another account.",
+  "daemon.conversation_unresumable":
+    "{agent} no longer has this session's conversation, so it cannot be resumed.",
+  "daemon.codex_unarchive_failed": "Codex could not restore this session's archived conversation: {detail}",
   "daemon.conversation_to_resume_not_found":
     "No {agent} conversation with this ID was found in {path}. Check the ID, and that it was started under this account.",
   "daemon.resume_id_invalid": "This is not a conversation ID. It looks like {example}.",

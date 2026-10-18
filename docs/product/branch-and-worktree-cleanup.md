@@ -5,7 +5,7 @@ linked worktrees that have them checked out, wherever git can remove them safely
 user's confirmation takes it along. Removing a project with its folder moved to the Trash takes the project's outside
 worktrees, and where the repository outlives the folder its sessions' branches, along with the folder (see "With a
 project's folder moved to the Trash" below). Archiving itself is in "Archiving, interruption and resuming" in
-`docs/product/sessions.md`, and deleting in `docs/product/deleting-sessions.md`.
+`docs/product/archiving-and-resuming-sessions.md`, and deleting in `docs/product/deleting-sessions.md`.
 
 ## What is bound to a session
 
@@ -27,6 +27,8 @@ Sessions store no branch or worktree of their own.
   archived sessions deleted along), deletion of every archived session at once, and deletion of an unused session.
 - **An agent's**: `archive_session`, `archive_self`, and the archive a `done` report with no open items brings (see
   "Archives made by an agent" below).
+- **Octoboard's own** deletion of archived sessions whose conversation is gone (see "Deleting archived sessions whose
+  conversation is gone" in `docs/product/deleting-sessions.md`). It asks nothing, so it forces nothing.
 
 Ending a session's process otherwise — an interruption, an account switch — removes nothing, and neither does the
 archive that ends a handoff to another agent (see `docs/product/handing-off-sessions.md`). Removing a project
@@ -90,7 +92,7 @@ worktree is named by its path, with the home directory written as `~`, and the b
 - Unchecked, the listed items are kept, and are not reported afterwards while they stand as they were listed.
 
 **An archive that asks nothing of the sessions** — a session at its prompt or interrupted, with no unarchived session
-under it (see "Archiving, interruption and resuming" in `docs/product/sessions.md`) — first asks the daemon what is
+under it (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`) — first asks the daemon what is
 bound to it, from the menu's Archive and from the row's Archive button alike. It opens the archive confirmation only
 when that finds something git refuses or a locked worktree; otherwise the session is archived at once. Pressing
 Archive again while the answer is on its way does nothing. A session archived or gone by the time the answer arrives
@@ -139,6 +141,9 @@ that the confirmation did not list as kept in the state it stands in now — one
 confirmation listed it, or that was never listed. What is not reported: items the user chose to keep, while they stand
 as they were listed; a branch checked out in a worktree that stays; a worktree that is a project's folder. Nothing is
 shown when nothing is left.
+
+What Octoboard's own deletion of archived sessions whose conversation is gone leaves is not reported to anyone: it is
+only written to the daemon's log.
 
 ## Archives made by an agent
 

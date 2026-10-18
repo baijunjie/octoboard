@@ -67,4 +67,4 @@ instructions, for its owner to continue with `send_message` or to archive explic
 
 Automatic archiving archives the reporting session and nothing else. It never archives the owner the session is
 bound to, and does not touch the other sessions bound to it: archiving an owner, and what that takes with it, is
-covered in "Archiving, interruption and resuming" in `docs/product/sessions.md`.
+covered in "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`.

@@ -2752,6 +2752,13 @@ pub mod error_code {
     /// session's account directory. `params` names `agent`, the `path` of that directory and the
     /// `id` asked for.
     pub const CONVERSATION_TO_RESUME_NOT_FOUND: &str = "conversation_to_resume_not_found";
+    /// Reopening a session was refused because its agent no longer has the conversation record to
+    /// resume, so the launch could only fail. The session is left as it was. `params` names
+    /// `agent` and `session`.
+    pub const CONVERSATION_UNRESUMABLE: &str = "conversation_unresumable";
+    /// Reopening a Codex session was refused because `codex unarchive` could not bring its
+    /// archived rollout back. The session is left as it was. `params` names `detail`.
+    pub const CODEX_UNARCHIVE_FAILED: &str = "codex_unarchive_failed";
     /// An `open_session` asked to resume a conversation named an id that is not a UUID, which
     /// every agent's conversation ids are. `params` names the `id`.
     pub const RESUME_ID_INVALID: &str = "resume_id_invalid";

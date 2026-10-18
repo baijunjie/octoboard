@@ -20,6 +20,7 @@ was first measured on that build. What "Plan quota" says was measured on **Claud
 **Grok Build 1.0.60**. What "Sharing a session directory between accounts" says, and the "Codex, history segments"
 and "Under a different account" notes under "Moving a conversation to another config directory", were measured on
 2026-10-19 on **Claude Code 2.1.302**, **Codex 0.162.1** and **Grok Build 1.0.62**.
+What "Codex resume from aged rollouts" says was measured on **Codex 0.162.1**.
 All three rewrite their hook surface, their payload fields, their configuration layering and their on-disk layout on
 upgrade, so check a detail here against the installed version before relying on it.
 
@@ -791,6 +792,41 @@ how a session is found and written, not a completed model turn. A failed turn st
   turns interleave there was not measured, because of the exhausted balance.
 - **Not measured:** whether a session made under one Grok account resumes, or is restored from the registry, under a
   different account. The machine has one Grok Build account.
+
+## Codex resume from aged rollouts
+
+Measured on **Codex 0.162.1** with `codex exec resume <id> "<prompt>"` in a throwaway `CODEX_HOME`, on a thread whose
+first turn set a secret word; success means the model recalled it. Compression was done with `zstd`, giving the same
+`rollout-…-<id>.jsonl.zst` name Codex itself produces.
+
+| Rollout location | Resumes? |
+|---|---|
+| `sessions/YYYY/MM/DD/…jsonl` (control) | yes |
+| `sessions/YYYY/MM/DD/…jsonl.zst` | yes |
+| `archived_sessions/…jsonl` | no — ``session <id> is archived. Run `codex unarchive <id>` to unarchive it first.`` |
+| `archived_sessions/…jsonl.zst` | no — the same refusal |
+
+- **A compressed rollout resumes in place, and Codex decompresses it**: after the resume the `.zst` was gone and a plain
+  `.jsonl` stood at the same path. So a `.zst` under `sessions/` counts as a present record.
+- **An archived thread is refused by where it sits, plain or compressed**, with the text above (`code -32600`). It is
+  not a missing record: `codex unarchive <id>` moves the file to `sessions/YYYY/MM/DD/` keeping its extension (a `.zst`
+  stays `.zst`), and the resume that follows works from it. So a rollout in `archived_sessions/` is present but needs
+  an unarchive first.
+- **Codex's database** (`state_5.sqlite`, table `threads`, columns `rollout_path`, `archived`, `archived_at`) is
+  consulted before the directories. With a row present, resume reads the file at `rollout_path`; when that file is
+  missing the answer is `no rollout found for thread id <id>` **even if the record sits elsewhere under `sessions/` or
+  `archived_sessions/`** (measured with the plain control). With no database at all Codex rebuilds it by scanning, and
+  finds the record wherever it sits (`.jsonl` or `.jsonl.zst`, `sessions/` or `archived_sessions/`).
+- **The recorded path is not kept in step with compression.** On the measured machine's own database every thread's
+  `rollout_path` ends in `.jsonl` (980 under `sessions/`, 233 archived with `archived = 1` under `archived_sessions/`)
+  while the files on disk are largely `.jsonl.zst`; a row with a `.jsonl` path and a `.zst` file at that path still
+  resumed (tested with the file in `sessions/`). Do not treat `rollout_path` as the file's real name.
+- **A row with `archived = 1` but no `archived_at` did not refuse**: the resume went through and set `archived` to 0.
+  The refusal needs `archived_at` as well (the copy with `archived_at` set was refused), so a hand-edited row can
+  mislead.
+- **A resume that succeeds from a database row is not proof of the directories**: with the original home's database
+  copied along, the row's absolute path pointed back into the *source* home and every location "resumed" from there.
+  Clear or rewrite the row (or use no database) before judging a relocation.
 
 ## Plan quota
 

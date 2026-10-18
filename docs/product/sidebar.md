@@ -403,7 +403,7 @@ action menu offers:
   "Handing off from the window" in `docs/product/handing-off-sessions.md`). Present for a project session's and a
   console session's row; an archived session has no such entry. Disabled while the session is *working* or
   *starting*, and while it is locked.
-- **Archive** — archives the session (see "Archiving, interruption and resuming" in `docs/product/sessions.md`). A
+- **Archive** — archives the session (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). A
   session at its prompt or interrupted, with no unarchived session under it, is archived at once, unless a branch or
   worktree bound to it needs the user's word (see "The confirmation" in `docs/product/branch-and-worktree-cleanup.md`);
   any other asks for confirmation first, and so does one still being resumed. When the archived row takes keyboard focus with it, focus
@@ -611,7 +611,7 @@ Selecting a session shows its terminal; selecting an interrupted one resumes it,
 `Ctrl+Shift+Tab` in a console session's focus mode, which only shows an interrupted console session (see "The switch
 strip" in `docs/product/focus-mode.md`). Selecting an archived one does not reopen it: it is shown still archived,
 with its saved terminal preview read-only, and typing into its terminal or pressing Reopen reopens it
-(see "Archiving, interruption and resuming" in `docs/product/sessions.md` and "Interrupted, archived and dormant
+(see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md` and "Interrupted, archived and dormant
 sessions" in `docs/product/session-terminal.md`). Selecting a session also
 puts its own pane in the window's right pane: a console session's report panel, a project session's project pane (see
 "What the right pane shows" in `docs/product/window-layout.md`). Whatever it is selected from — a sidebar row, a "View

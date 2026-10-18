@@ -2761,15 +2761,53 @@ fn resumable_agent_session_id(session: &Session) -> Option<String> {
 /// rest, the session included, stay as they were. Reopening an owner reopens nothing bound to it,
 /// and no other session bound to the same owners is reopened: the group comes back one session at
 /// a time, from the one the user asked for.
+///
+/// Before anything is reopened, the session and each owner about to be launched are checked for a
+/// conversation the agent can still resume ([`check_resumable`]). The session itself is refused
+/// with `conversation_unresumable` when its conversation is proven gone, with nothing changed; an
+/// owner whose conversation is proven gone is relaunched into a fresh conversation instead. A
+/// Codex rollout that sits in `archived_sessions/` is brought back first ([`unarchive_rollout`]),
+/// the session's own before any owner is launched. An owner's leftover records of the conversation
+/// it gives up go to the Trash. The login-shell snapshot is taken once and serves the checks, the
+/// unarchive and every launch.
 pub async fn resume_session(
     state: &Arc<AppState>,
     id: &str,
     instruction: Option<&str>,
 ) -> Result<()> {
+    resume_session_with(state, id, instruction, env_shell::launch_snapshot).await
+}
+
+/// [`resume_session`] with the login-shell snapshot supplied by the caller. It is taken once and
+/// serves the resumability checks, any `codex unarchive` and every relaunch, so all of them look at
+/// the same accounts; tests pass a stub so no real login shell runs.
+async fn resume_session_with(
+    state: &Arc<AppState>,
+    id: &str,
+    instruction: Option<&str>,
+    shell_snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
+) -> Result<()> {
     // Claimed before anything else, so two overlapping relaunches cannot both get through, and
     // before the record is read, so a delete cannot slip in between reading and launching.
     let claim = state.begin_launch(id)?;
-    for owner in archived_owners(state, id)? {
+    // Taken once: the checks, the unarchive and every launch of this reopen see the one
+    // environment, and a default account is resolved from the same shell the agent will run in.
+    let shell = tokio::task::spawn_blocking(shell_snapshot).await??;
+    let owners = archived_owners(state, id)?;
+    // Every session this reopen would launch is checked before the first is, so a target whose
+    // record is gone leaves the whole group as it was instead of reopening the owners above it.
+    let mut checked_owners = Vec::new();
+    for owner in &owners {
+        checked_owners.push(check_resumable(state, owner, &shell).await?);
+    }
+    let target = check_resumable(state, id, &shell).await?;
+    if target.judgement.resumability == agent_records::Resumability::Unresumable {
+        return Err(conversation_unresumable(&target.session));
+    }
+    // Before any owner is launched, so a failed unarchive leaves the whole group as it was.
+    unarchive_rollout(&target, &shell).await?;
+    for checked in checked_owners {
+        let owner = checked.session.id.clone();
         // The owners were listed before the awaits of the earlier relaunches, so a reopen of a
         // sibling bound session may have brought this one back since: skip it unless it still
         // needs reopening. Two reopens can both read an owner as archived; the launch claim lets
@@ -2778,9 +2816,108 @@ pub async fn resume_session(
             continue;
         }
         let owner_claim = state.begin_launch(&owner)?;
-        relaunch_session(state, &owner_claim, &owner, None, true, None).await?;
+        // The verdict is acted on destructively, so it must still be about the conversation the
+        // owner has now: a hook may have recorded a new one since it was judged.
+        let current = state.session_record(&owner)?;
+        let checked = if current.agent_session_id != checked.session.agent_session_id
+            || current.has_conversation != checked.session.has_conversation
+        {
+            check_resumable(state, &owner, &shell).await?
+        } else {
+            checked
+        };
+        if checked.judgement.resumability == agent_records::Resumability::Unresumable {
+            forget_gone_conversation(state, &checked.session, &shell).await?;
+        } else {
+            unarchive_rollout(&checked, &shell).await?;
+        }
+        relaunch_session(state, &owner_claim, &owner, None, true, Some(shell.clone())).await?;
     }
-    relaunch_session(state, &claim, id, instruction, true, None).await
+    relaunch_session(state, &claim, id, instruction, true, Some(shell)).await
+}
+
+/// A session and what [`check_resumable`] found of its conversation.
+struct Checked {
+    session: Session,
+    judgement: agent_records::Judgement,
+}
+
+/// Looks for the conversation record of a dormant session in its own account, resolving a default
+/// account through `shell`, the snapshot the launch will use. Only a proven absence is
+/// [`agent_records::Resumability::Unresumable`]; anything unknown launches as it always has, and a
+/// session that is not dormant is not looked at.
+async fn check_resumable(
+    state: &Arc<AppState>,
+    id: &str,
+    shell: &HashMap<String, String>,
+) -> Result<Checked> {
+    let session = state.session_record(id)?;
+    if !session.status.is_dormant() {
+        return Ok(Checked {
+            session,
+            judgement: agent_records::Judgement {
+                resumability: agent_records::Resumability::Resumable,
+                needs_unarchive: false,
+            },
+        });
+    }
+    let shell = shell.clone();
+    tokio::task::spawn_blocking(move || {
+        let judgement = agent_records::judge(&agent_records::Locator::with_shell(shell), &session);
+        Checked { session, judgement }
+    })
+    .await
+    .map_err(Into::into)
+}
+
+/// Gives up the conversation of `session`, whose record the agent no longer has, so its next
+/// launch opens a fresh one: what is still left of it on disk goes to the Trash first, while the
+/// session still names it.
+async fn forget_gone_conversation(
+    state: &Arc<AppState>,
+    session: &Session,
+    shell: &HashMap<String, String>,
+) -> Result<()> {
+    trash_agent_records_with(
+        state,
+        vec![session.clone()],
+        agent_records::Locator::with_shell(shell.clone()),
+        state.host_tools.get().trash,
+    )
+    .await;
+    state.forget_conversation(&session.id)
+}
+
+/// The refusal of a reopen whose session the agent can no longer resume: launching it would only
+/// make the agent exit, and a reopen would move an archived session out of the archive for it.
+fn conversation_unresumable(session: &Session) -> anyhow::Error {
+    CodedError::raised(
+        error_code::CONVERSATION_UNRESUMABLE,
+        format!(
+            "{} no longer has the conversation of this session, so it cannot be resumed",
+            session.agent.label()
+        ),
+        &[("agent", session.agent.label()), ("session", &session.id)],
+    )
+}
+
+/// Runs `codex unarchive` for a checked Codex session whose rollout only sits in the account's
+/// `archived_sessions/`, which a resume refuses. A failure leaves the session untouched: this
+/// runs before its status is written.
+async fn unarchive_rollout(checked: &Checked, shell: &HashMap<String, String>) -> Result<()> {
+    if !checked.judgement.needs_unarchive {
+        return Ok(());
+    }
+    let (session, shell) = (checked.session.clone(), shell.clone());
+    tokio::task::spawn_blocking(move || {
+        let agent_session_id = session.agent_session_id.as_deref().unwrap_or_default();
+        adapter::codex::unarchive(
+            &shell,
+            session.config_dir.as_deref().map(Path::new),
+            agent_session_id,
+        )
+    })
+    .await?
 }
 
 /// Whether an owner listed by [`archived_owners`] is still to be relaunched by a reopen: it is
@@ -3247,30 +3384,45 @@ pub(crate) fn ensure_unlocked(sessions: impl IntoIterator<Item = Session>) -> Re
     Ok(())
 }
 
-/// The sessions bound to `owner`, in any status. A session with the role of a bound one owns none,
-/// so it is not looked up.
-pub(crate) fn bound_sessions(state: &Arc<AppState>, owner: &Session) -> Result<Vec<Session>> {
-    if owner.has_bound_role() {
-        return Ok(Vec::new());
+/// The sessions of `sessions` bound to `owner`, in any status. A session with the role of a bound
+/// one owns none, so it has none. Walks that build an owner's team or group go through it, so
+/// they agree on what is bound to what.
+fn bound_in<'a>(sessions: &'a [Session], owner: &Session) -> impl Iterator<Item = &'a Session> {
+    let owns = !owner.has_bound_role();
+    let owner_id = owner.id.clone();
+    sessions
+        .iter()
+        .filter(move |session| owns && session.bound_to.as_deref() == Some(owner_id.as_str()))
+}
+
+/// `root` and every session below it along the bindings, in any status: the sessions bound to it,
+/// each followed by its own. Bindings are two levels deep at most (a console session, its lead
+/// sessions, what is bound to those), so the walk goes no further.
+pub(crate) fn group_in<'a>(sessions: &'a [Session], root: &'a Session) -> Vec<&'a Session> {
+    let mut group = vec![root];
+    for bound in bound_in(sessions, root) {
+        group.push(bound);
+        group.extend(bound_in(sessions, bound));
     }
-    Ok(state
-        .store
-        .list_sessions()?
-        .into_iter()
-        .filter(|session| session.bound_to.as_deref() == Some(owner.id.as_str()))
-        .collect())
+    group
+}
+
+/// The sessions bound to `owner`, in any status.
+pub(crate) fn bound_sessions(state: &Arc<AppState>, owner: &Session) -> Result<Vec<Session>> {
+    let sessions = state.store.list_sessions()?;
+    Ok(bound_in(&sessions, owner).cloned().collect())
 }
 
 /// Every session below `owner` along the bindings, in any status, the deepest level first: the
 /// sessions bound to its lead sessions, then the sessions bound to it.
 pub(crate) fn team(state: &Arc<AppState>, owner: &Session) -> Result<Vec<Session>> {
-    let bound = bound_sessions(state, owner)?;
-    let mut sessions = Vec::new();
-    for session in &bound {
-        sessions.extend(bound_sessions(state, session)?);
+    let sessions = state.store.list_sessions()?;
+    let mut team = Vec::new();
+    for bound in bound_in(&sessions, owner) {
+        team.extend(bound_in(&sessions, bound).cloned());
     }
-    sessions.extend(bound);
-    Ok(sessions)
+    team.extend(bound_in(&sessions, owner).cloned());
+    Ok(team)
 }
 
 /// Archives the running sessions of the project `in_project` matches, the way the user's own
@@ -3790,21 +3942,33 @@ fn delete_unused_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Session>
     ))
 }
 
-/// Moves the agent's own records of the sessions just deleted to the Trash, on a blocking task:
-/// a move across volumes copies, and the accounts' records are listed. The delete has happened
-/// already, so nothing here fails the request: a failure is logged.
+/// Moves the agent's own records of the sessions just deleted to the Trash
+/// ([`trash_agent_records_with`], through the Trash proper and the default accounts).
 async fn trash_agent_records_after_delete(state: &Arc<AppState>, deleted: Vec<Session>) {
+    trash_agent_records_with(
+        state,
+        deleted,
+        agent_records::Locator::default(),
+        hostfs::move_to_trash,
+    )
+    .await;
+}
+
+/// [`trash_agent_records_of`] on a blocking task: a move across volumes copies, and the accounts'
+/// records are listed. The delete has happened already, so nothing here fails the request: a
+/// failure is logged.
+pub(crate) async fn trash_agent_records_with(
+    state: &Arc<AppState>,
+    deleted: Vec<Session>,
+    locator: agent_records::Locator,
+    trash: impl Fn(&Path) -> Result<()> + Send + 'static,
+) {
     if deleted.is_empty() {
         return;
     }
     let state = Arc::clone(state);
     let moved = tokio::task::spawn_blocking(move || {
-        trash_agent_records_of(
-            &state,
-            &deleted,
-            agent_records::Locator::default(),
-            hostfs::move_to_trash,
-        )
+        trash_agent_records_of(&state, &deleted, locator, trash)
     })
     .await;
     if let Err(err) = moved {
@@ -3813,9 +3977,10 @@ async fn trash_agent_records_after_delete(state: &Arc<AppState>, deleted: Vec<Se
 }
 
 /// Moves the agent's own records of each of `deleted` (see `agent_records::record_paths`) through
-/// `trash`, once the sessions' records are gone. A session is left alone when another remaining
-/// session refers to the same agent session id (a resumed copy, say), and a path that is missing
-/// is skipped. The records' loss costs the session its resumption in the agent only, so a
+/// `trash`. The sessions are gone from the store, or are about to give up their conversation and
+/// still on record: either way they do not count as sharing. A session is left alone when another
+/// remaining session refers to the same agent session id (a resumed copy, say), and a path that is
+/// missing is skipped. The records' loss costs the session its resumption in the agent only, so a
 /// failure to find or move one is logged, never raised. The accounts' records are listed once for
 /// the whole call, through `locator`.
 ///
@@ -3840,7 +4005,9 @@ fn trash_agent_records_of(
             continue;
         };
         let shared = remaining.iter().any(|other| {
-            other.agent == session.agent && other.agent_session_id.as_ref() == Some(agent_id)
+            other.agent == session.agent
+                && other.agent_session_id.as_ref() == Some(agent_id)
+                && !deleted.iter().any(|gone| gone.id == other.id)
         });
         if shared {
             continue;
@@ -3870,8 +4037,10 @@ fn trash_agent_records_of(
 /// step is skipped (a session being launched right now) or fails, the owner is already gone. That
 /// is left, because a bound session can only be mid-launch through a resume, which reopens the
 /// owner first, so the owner was no longer archived and the delete was refused. One that stopped
-/// being archived meanwhile is skipped. Each session deleted is added to `deleted`.
-fn delete_archived_group(
+/// being archived meanwhile is skipped. Each session deleted is added to `deleted`, also when a
+/// later step fails. The automatic cleanup meets none of the skips: it checks under the removal
+/// claim that no member is launching or has a process.
+pub(crate) fn delete_archived_group(
     state: &Arc<AppState>,
     session: &Session,
     deleted: &mut Vec<Session>,
@@ -4566,7 +4735,10 @@ mod tests {
     use super::*;
     use crate::paths;
     use crate::protocol::Console;
-    use crate::test_support::{fake_live_session, idle_stand_in, ScratchDir};
+    use crate::test_support::{
+        bare_session, console_session, console_with_project_and_accounts, fake_live_session,
+        idle_stand_in, project_session, session_ids, ScratchDir,
+    };
 
     #[test]
     fn tags_are_trimmed_and_deduplicated_ignoring_case_keeping_the_first_spelling() {
@@ -5479,39 +5651,6 @@ mod tests {
         let err = absolute_path("work/project").expect_err("relative");
         assert!(err.to_string().contains("not an absolute path"), "{err}");
         assert!(absolute_path("").is_err());
-    }
-
-    fn bare_session(id: &str, role: Role) -> Session {
-        Session {
-            id: id.to_string(),
-            agent: Agent::Claude,
-            agent_session_id: None,
-            console_id: "console-1".to_string(),
-            project_id: None,
-            host_id: LOCAL_HOST_ID.to_string(),
-            role,
-            origin: Origin::User,
-            title: "Session".to_string(),
-            status: SessionStatus::Idle,
-            terminal_title: None,
-            record_titles: Default::default(),
-            usage: None,
-            observed_model: None,
-            observed_effort: None,
-            model: None,
-            effort: None,
-            has_conversation: false,
-            bound_to: None,
-            lead: false,
-            colour: None,
-            ordinal: None,
-            account_id: None,
-            config_dir: None,
-            pinned: false,
-            locked: false,
-            started_at: 0,
-            ended_at: None,
-        }
     }
 
     /// A console session is never bound, whatever the request named — `resolve_bound_to` does not
@@ -7696,70 +7835,6 @@ mod tests {
         );
     }
 
-    /// A console and a project (whose directory does not exist, so a relaunch is refused at the
-    /// launch's first check before it writes anything), and one account of each agent whose
-    /// directory is under `dir`.
-    fn switch_fixture(name: &str) -> (Arc<AppState>, ScratchDir) {
-        let (state, dir) = crate::test_support::app_state(&format!("coordinator-{name}"));
-        state
-            .store
-            .insert_console(&console(Agent::Claude, &dir.join("no-such-workdir")))
-            .unwrap();
-        state
-            .store
-            .insert_project(&Project {
-                id: "project-1".to_string(),
-                console_id: "console-1".to_string(),
-                host_id: LOCAL_HOST_ID.to_string(),
-                name: "Project".to_string(),
-                path: dir.join("no-such-project").to_string_lossy().into_owned(),
-                default_agent: None,
-                source: ProjectSource::Local,
-                remote_url: None,
-                claude_account_id: ProjectAccount::Inherit,
-                codex_account_id: ProjectAccount::Inherit,
-                grok_account_id: ProjectAccount::Inherit,
-                claude_session_model: None,
-                claude_session_effort: None,
-                codex_session_model: None,
-                codex_session_effort: None,
-                grok_session_model: None,
-                grok_session_effort: None,
-                trust_consent: false,
-                pinned: false,
-                tags: Vec::new(),
-                description: None,
-            })
-            .unwrap();
-        for (id, agent) in [
-            ("claude-a", Agent::Claude),
-            ("codex-a", Agent::Codex),
-            ("grok-a", Agent::Grok),
-        ] {
-            state
-                .store
-                .insert_account(&Account {
-                    id: id.to_string(),
-                    agent,
-                    name: id.to_string(),
-                    config_dir: dir.join(id).to_string_lossy().into_owned(),
-                    approval_reviewer: None,
-                })
-                .unwrap();
-        }
-        (state, dir)
-    }
-
-    fn project_session(id: &str, agent: Agent, status: SessionStatus) -> Session {
-        Session {
-            agent,
-            project_id: Some("project-1".to_string()),
-            role: Role::Project,
-            status,
-            ..bare_session(id, Role::Project)
-        }
-    }
-
     fn code_of(err: &anyhow::Error) -> &'static str {
         err.downcast_ref::<CodedError>()
             .expect("a coded error")
@@ -7779,7 +7854,7 @@ mod tests {
     #[tokio::test]
     async fn a_conversation_to_resume_is_checked_before_a_session_is_opened() {
         const ID: &str = "11111111-2222-3333-4444-555555555555";
-        let (state, _dir) = switch_fixture("resume-id-checked");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-resume-id-checked");
         let mut holder = project_session("holder", Agent::Claude, SessionStatus::Archived);
         holder.agent_session_id = Some(ID.to_string());
         state.store.insert_session(&holder).unwrap();
@@ -7893,7 +7968,7 @@ mod tests {
     /// was never initialized is not given a `sessions/` directory by the refused attempt.
     #[tokio::test]
     async fn a_refused_switch_records_nothing() {
-        let (state, dir) = switch_fixture("switch-refused");
+        let (state, dir) = console_with_project_and_accounts("coordinator-switch-refused");
         std::fs::create_dir_all(dir.join("grok-a")).unwrap();
 
         // (what is refused, the session, the request's account, the code it is refused with)
@@ -7989,7 +8064,7 @@ mod tests {
     /// under the claim: a session handed to another owner meanwhile is refused and left alone.
     #[tokio::test]
     async fn a_session_handed_to_another_owner_meanwhile_is_not_switched() {
-        let (state, dir) = switch_fixture("switch-handed-over");
+        let (state, dir) = console_with_project_and_accounts("coordinator-switch-handed-over");
         let mut worker = bound_session("worker", SessionStatus::Idle, "hub");
         worker.has_conversation = true;
         state.store.insert_session(&worker).unwrap();
@@ -8109,7 +8184,7 @@ mod tests {
     /// archive.
     #[tokio::test]
     async fn a_switch_whose_relaunch_fails_is_back_on_its_account_and_archives_nothing() {
-        let (state, dir) = switch_fixture("switch-relaunch-refused");
+        let (state, dir) = console_with_project_and_accounts("coordinator-switch-relaunch-refused");
         let source = dir.join("default-claude");
         let record = "projects/slug/agent-1.jsonl";
         std::fs::create_dir_all(source.join(record).parent().unwrap()).unwrap();
@@ -8158,7 +8233,7 @@ mod tests {
     /// fails here only on the missing working directory, and leaves the bound session running.
     #[tokio::test]
     async fn a_switch_is_not_refused_for_a_running_bound_session() {
-        let (state, dir) = switch_fixture("switch-running-bound");
+        let (state, dir) = console_with_project_and_accounts("coordinator-switch-running-bound");
         state
             .store
             .insert_session(&console_session("hub", SessionStatus::Working))
@@ -8205,7 +8280,7 @@ mod tests {
     /// afterwards puts the new account back in a client's copy.
     #[tokio::test]
     async fn a_switch_that_did_not_come_up_is_restored_before_it_returns() {
-        let (state, _dir) = switch_fixture("switch-restored-first");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-switch-restored-first");
         let before = project_session("s", Agent::Claude, SessionStatus::Interrupted);
         state.store.insert_session(&before).unwrap();
         state
@@ -8266,7 +8341,7 @@ mod tests {
     /// archived.
     #[tokio::test]
     async fn a_relaunch_for_a_switch_never_reopens_an_archived_session() {
-        let (state, _dir) = switch_fixture("switch-archived-late");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-switch-archived-late");
         state
             .store
             .insert_session(&project_session(
@@ -8291,7 +8366,7 @@ mod tests {
     /// owner. Both a late process and a late refusal must leave that archive intact.
     async fn archive_during_relaunch(switching: bool, succeeds: bool) {
         use SessionStatus::{Archived, Idle, Interrupted};
-        let (state, dir) = switch_fixture("archive-during-relaunch");
+        let (state, dir) = console_with_project_and_accounts("coordinator-archive-during-relaunch");
         std::fs::create_dir_all(dir.join("claude-a")).unwrap();
         state
             .store
@@ -8412,7 +8487,7 @@ mod tests {
     /// the archive and the time its row reports both stay where they were.
     #[tokio::test]
     async fn a_reopen_that_fails_to_launch_keeps_the_time_it_was_archived_at() {
-        let (state, _dir) = switch_fixture("reopen-launch-refused");
+        let (state, dir) = console_with_project_and_accounts("coordinator-reopen-launch-refused");
         state
             .store
             .insert_session(&Session {
@@ -8421,7 +8496,7 @@ mod tests {
             })
             .unwrap();
 
-        let err = resume_session(&state, "s", None)
+        let err = resume_session_with(&state, "s", None, stub_shell(&dir))
             .await
             .expect_err("the project's directory does not exist");
         assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
@@ -8429,6 +8504,314 @@ mod tests {
         let after = state.store.get_session("s").unwrap().unwrap();
         assert_eq!(after.status, SessionStatus::Archived);
         assert_eq!(after.ended_at, Some(5));
+    }
+
+    const AGENT_ID: &str = "11111111-2222-3333-4444-555555555555";
+
+    /// An archived session of `agent` with a conversation, pinned to `account`, archived at 5.
+    fn archived_with_conversation(id: &str, agent: Agent, account: &Path) -> Session {
+        Session {
+            ended_at: Some(5),
+            has_conversation: true,
+            agent_session_id: Some(AGENT_ID.to_string()),
+            config_dir: Some(account.to_string_lossy().into_owned()),
+            ..project_session(id, agent, SessionStatus::Archived)
+        }
+    }
+
+    fn assert_still_archived_at_5(state: &Arc<AppState>, id: &str) {
+        let after = state.store.get_session(id).unwrap().unwrap();
+        assert_eq!(after.status, SessionStatus::Archived);
+        assert_eq!(after.ended_at, Some(5));
+    }
+
+    /// A reopen of a session whose conversation the agent no longer has is refused before any
+    /// launch, leaving the session archived with its archive time.
+    #[tokio::test]
+    async fn a_reopen_is_refused_when_the_conversation_record_is_gone() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-reopen-unresumable");
+        let account = dir.join("claude-a");
+        std::fs::create_dir_all(account.join("projects")).unwrap();
+        state
+            .store
+            .insert_session(&archived_with_conversation("s", Agent::Claude, &account))
+            .unwrap();
+
+        let err = resume_session_with(&state, "s", None, stub_shell(&dir))
+            .await
+            .expect_err("no transcript");
+        assert_eq!(code_of(&err), error_code::CONVERSATION_UNRESUMABLE);
+        assert_still_archived_at_5(&state, "s");
+
+        // The record's presence lets the reopen go as far as the launch, which this fixture's
+        // missing project directory then refuses.
+        let transcript = account.join(format!("projects/work/{AGENT_ID}.jsonl"));
+        std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
+        std::fs::write(&transcript, "{}\n").unwrap();
+        let err = resume_session_with(&state, "s", None, stub_shell(&dir))
+            .await
+            .expect_err("no cwd");
+        assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
+    }
+
+    /// Only proven absence refuses: a Grok session folder missing locally may be restored by Grok.
+    #[tokio::test]
+    async fn a_reopen_of_a_record_that_cannot_be_proven_gone_still_launches() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-reopen-unknown");
+        let account = dir.join("grok-a");
+        std::fs::create_dir_all(account.join("sessions")).unwrap();
+        state
+            .store
+            .insert_session(&archived_with_conversation("s", Agent::Grok, &account))
+            .unwrap();
+
+        let err = resume_session_with(&state, "s", None, stub_shell(&dir))
+            .await
+            .expect_err("no cwd");
+        assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
+    }
+
+    /// An archived console session `hub` with a bound `worker`. `hub`'s workdir is never created
+    /// (the fixture's console points at one that does not exist), so a reopen that reaches `hub`'s
+    /// launch stops at the missing directory instead of starting the real `claude`.
+    fn insert_hub_and_worker(state: &Arc<AppState>, hub_account: &Path, worker_account: &Path) {
+        for session in [
+            Session {
+                ended_at: Some(5),
+                has_conversation: true,
+                agent_session_id: Some("22222222-2222-3333-4444-555555555555".to_string()),
+                config_dir: Some(hub_account.to_string_lossy().into_owned()),
+                ..console_session("hub", SessionStatus::Archived)
+            },
+            Session {
+                bound_to: Some("hub".to_string()),
+                ..archived_with_conversation("worker", Agent::Claude, worker_account)
+            },
+        ] {
+            state.store.insert_session(&session).unwrap();
+        }
+    }
+
+    /// The session to reopen is checked before any owner is brought back, so a session whose
+    /// record is gone leaves the whole group archived.
+    #[tokio::test]
+    async fn a_reopen_checks_the_session_before_reopening_any_owner() {
+        let (state, dir) =
+            console_with_project_and_accounts("coordinator-reopen-target-unresumable");
+        let hub_account = dir.join("claude-hub");
+        let record = hub_account.join("projects/work/22222222-2222-3333-4444-555555555555.jsonl");
+        std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        std::fs::write(&record, "{}\n").unwrap();
+        let worker_account = dir.join("claude-worker");
+        std::fs::create_dir_all(worker_account.join("projects")).unwrap();
+        insert_hub_and_worker(&state, &hub_account, &worker_account);
+
+        let err = resume_session_with(&state, "worker", None, stub_shell(&dir))
+            .await
+            .expect_err("the session's transcript is gone");
+        assert_eq!(code_of(&err), error_code::CONVERSATION_UNRESUMABLE);
+        assert_still_archived_at_5(&state, "hub");
+        assert_still_archived_at_5(&state, "worker");
+    }
+
+    /// An owner whose record is gone is forgotten only when the reopen goes on: with the session
+    /// itself refused too, the owner keeps its conversation.
+    #[tokio::test]
+    async fn a_refused_reopen_leaves_an_unresumable_owner_with_its_conversation() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-reopen-both-unresumable");
+        let (hub_account, worker_account) = (dir.join("claude-hub"), dir.join("claude-worker"));
+        std::fs::create_dir_all(hub_account.join("projects")).unwrap();
+        std::fs::create_dir_all(worker_account.join("projects")).unwrap();
+        insert_hub_and_worker(&state, &hub_account, &worker_account);
+
+        let err = resume_session_with(&state, "worker", None, stub_shell(&dir))
+            .await
+            .expect_err("neither transcript exists");
+        assert_eq!(code_of(&err), error_code::CONVERSATION_UNRESUMABLE);
+        let hub = state.store.get_session("hub").unwrap().unwrap();
+        assert!(hub.has_conversation);
+        assert_eq!(
+            hub.agent_session_id.as_deref(),
+            Some("22222222-2222-3333-4444-555555555555")
+        );
+        assert_still_archived_at_5(&state, "hub");
+        assert_still_archived_at_5(&state, "worker");
+    }
+
+    /// An owner whose record is gone is relaunched into a fresh conversation, and the reopen goes
+    /// on instead of being refused. The launch here stops at the owner's missing workdir, after
+    /// the conversation was forgotten.
+    #[tokio::test]
+    async fn a_reopen_relaunches_an_owner_whose_record_is_gone_into_a_fresh_conversation() {
+        let (state, dir) =
+            console_with_project_and_accounts("coordinator-reopen-owner-unresumable");
+        let hub_account = dir.join("claude-hub");
+        std::fs::create_dir_all(hub_account.join("projects")).unwrap();
+        let worker_account = dir.join("claude-worker");
+        let record = worker_account.join(format!("projects/work/{AGENT_ID}.jsonl"));
+        std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        std::fs::write(&record, "{}\n").unwrap();
+        insert_hub_and_worker(&state, &hub_account, &worker_account);
+
+        let err = resume_session_with(&state, "worker", None, stub_shell(&dir))
+            .await
+            .expect_err("the owner's workdir does not exist");
+        assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
+        assert_still_archived_at_5(&state, "hub");
+        let hub = state.store.get_session("hub").unwrap().unwrap();
+        assert!(!hub.has_conversation);
+        assert_eq!(hub.agent_session_id, None);
+        assert_still_archived_at_5(&state, "worker");
+    }
+
+    /// A target whose `codex unarchive` fails is refused before any owner is relaunched, so the
+    /// archived owner above it stays archived too.
+    #[tokio::test]
+    async fn a_reopen_whose_target_cannot_be_unarchived_leaves_the_owner_archived() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-reopen-target-unarchive");
+        let hub_account = dir.join("claude-hub");
+        let hub_record =
+            hub_account.join("projects/work/22222222-2222-3333-4444-555555555555.jsonl");
+        std::fs::create_dir_all(hub_record.parent().unwrap()).unwrap();
+        std::fs::write(&hub_record, "{}\n").unwrap();
+        let account = dir.join("codex-a");
+        let archived = account.join(format!(
+            "archived_sessions/rollout-2026-10-01T00-00-00-{AGENT_ID}.jsonl.zst"
+        ));
+        std::fs::create_dir_all(archived.parent().unwrap()).unwrap();
+        std::fs::write(&archived, "x").unwrap();
+        insert_hub_and_worker(&state, &hub_account, &dir.join("claude-worker"));
+        state.store.delete_session_if_archived("worker").unwrap();
+        state
+            .store
+            .insert_session(&Session {
+                bound_to: Some("hub".to_string()),
+                ..archived_with_conversation("worker", Agent::Codex, &account)
+            })
+            .unwrap();
+
+        let err = resume_session_with(&state, "worker", None, fake_codex(&dir, false))
+            .await
+            .expect_err("unarchive fails");
+        assert_eq!(code_of(&err), error_code::CODEX_UNARCHIVE_FAILED);
+        assert_still_archived_at_5(&state, "hub");
+        assert_still_archived_at_5(&state, "worker");
+        assert!(archived.exists());
+    }
+
+    /// The leftovers of the conversation an owner gives up go to the Trash, wherever the
+    /// accounts hold a copy of it; a copy the owner's own account no longer has does not make the
+    /// owner resumable.
+    #[tokio::test]
+    async fn a_reopen_trashes_the_leftovers_of_the_conversation_an_owner_gives_up() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-reopen-owner-leftover");
+        let hub_account = dir.join("claude-hub");
+        std::fs::create_dir_all(hub_account.join("projects")).unwrap();
+        let leftover = dir
+            .join("claude-a")
+            .join("projects/work/22222222-2222-3333-4444-555555555555.jsonl");
+        std::fs::create_dir_all(leftover.parent().unwrap()).unwrap();
+        std::fs::write(&leftover, "{}\n").unwrap();
+        let worker_account = dir.join("claude-worker");
+        let record = worker_account.join(format!("projects/work/{AGENT_ID}.jsonl"));
+        std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        std::fs::write(&record, "{}\n").unwrap();
+        insert_hub_and_worker(&state, &hub_account, &worker_account);
+
+        let err = resume_session_with(&state, "worker", None, stub_shell(&dir))
+            .await
+            .expect_err("the owner's workdir does not exist");
+        assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
+        assert!(!leftover.exists(), "the Trash stand-in removed it");
+        assert!(record.exists(), "the session's own record is untouched");
+    }
+
+    /// A pinned account directory that cannot be read proves nothing, so the reopen goes on to the
+    /// launch, which refuses it for its own reason.
+    #[tokio::test]
+    async fn a_reopen_with_an_unreadable_account_directory_is_left_to_the_launch() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-reopen-account-gone");
+        state
+            .store
+            .insert_session(&archived_with_conversation(
+                "s",
+                Agent::Claude,
+                &dir.join("gone"),
+            ))
+            .unwrap();
+
+        let err = resume_session_with(&state, "s", None, stub_shell(&dir))
+            .await
+            .expect_err("no cwd");
+        assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
+        assert_still_archived_at_5(&state, "s");
+    }
+
+    /// A login-shell snapshot that runs no shell: only a `HOME`, below `dir`, for the default
+    /// accounts to be found under.
+    fn stub_shell(dir: &Path) -> impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static {
+        let env = HashMap::from([(
+            "HOME".to_string(),
+            dir.join("home").to_string_lossy().into_owned(),
+        )]);
+        move || Ok(env)
+    }
+
+    /// A `codex` that reports the home it ran under and moves the archived rollout back, or fails.
+    fn fake_codex(dir: &Path, succeeds: bool) -> impl Fn() -> Result<HashMap<String, String>> {
+        let body = if succeeds {
+            format!(
+                "echo \"$CODEX_HOME $*\" > '{log}'\nmkdir -p \"$CODEX_HOME/sessions/2026/10/01\"\nmv \"$CODEX_HOME\"/archived_sessions/* \"$CODEX_HOME/sessions/2026/10/01/\"\n",
+                log = dir.join("unarchive.log").display()
+            )
+        } else {
+            "echo 'thread is not archived' >&2\nexit 1\n".to_string()
+        };
+        let env = crate::test_support::fake_agent(dir, "codex", &body);
+        move || Ok(env.clone())
+    }
+
+    /// A Codex rollout only in `archived_sessions/` is brought back under the session's own
+    /// account before the resume; a failed `codex unarchive` is its own coded error and the
+    /// session stays as it was.
+    #[tokio::test]
+    async fn a_reopen_unarchives_a_codex_rollout_under_the_sessions_own_account() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-reopen-unarchive");
+        let account = dir.join("codex-a");
+        let rollout = format!("rollout-2026-10-01T00-00-00-{AGENT_ID}.jsonl.zst");
+        let archived = account.join("archived_sessions").join(&rollout);
+        std::fs::create_dir_all(archived.parent().unwrap()).unwrap();
+        std::fs::write(&archived, "x").unwrap();
+        state
+            .store
+            .insert_session(&archived_with_conversation("s", Agent::Codex, &account))
+            .unwrap();
+
+        let err = resume_session_with(&state, "s", None, fake_codex(&dir, false))
+            .await
+            .expect_err("unarchive fails");
+        assert_eq!(code_of(&err), error_code::CODEX_UNARCHIVE_FAILED);
+        let coded = err.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(
+            coded.params.get("detail").map(String::as_str),
+            Some("thread is not archived")
+        );
+        assert_still_archived_at_5(&state, "s");
+        assert!(archived.exists());
+
+        // The unarchive done, the reopen goes on to the launch, which this fixture refuses.
+        let err = resume_session_with(&state, "s", None, fake_codex(&dir, true))
+            .await
+            .expect_err("no cwd");
+        assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
+        assert!(!archived.exists());
+        assert!(account.join("sessions/2026/10/01").join(&rollout).exists());
+        let log = std::fs::read_to_string(dir.join("unarchive.log")).unwrap();
+        assert_eq!(
+            log.trim(),
+            format!("{} unarchive {AGENT_ID}", account.display())
+        );
+        assert_still_archived_at_5(&state, "s");
     }
 
     /// A project session bound to the console session `owner`, titled by its id so a refusal that
@@ -8441,29 +8824,8 @@ mod tests {
         }
     }
 
-    fn console_session(id: &str, status: SessionStatus) -> Session {
-        Session {
-            title: id.to_string(),
-            status,
-            ..bare_session(id, Role::Console)
-        }
-    }
-
     fn status_of(state: &Arc<AppState>, id: &str) -> Option<SessionStatus> {
         state.store.get_session(id).unwrap().map(|s| s.status)
-    }
-
-    /// The sessions on record, sorted by id.
-    fn session_ids(state: &Arc<AppState>) -> Vec<String> {
-        let mut ids: Vec<String> = state
-            .store
-            .list_sessions()
-            .unwrap()
-            .into_iter()
-            .map(|session| session.id)
-            .collect();
-        ids.sort();
-        ids
     }
 
     /// The line is the process, not the status: any bound session with one refuses the archive,
@@ -8472,7 +8834,7 @@ mod tests {
     #[tokio::test]
     async fn archiving_a_console_session_is_refused_while_a_bound_process_runs() {
         use SessionStatus::{Idle, Interrupted, WaitingUser, Working};
-        let (state, _dir) = switch_fixture("archive-refused");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-archive-refused");
         state
             .store
             .insert_session(&console_session("hub", Idle))
@@ -8543,7 +8905,7 @@ mod tests {
     #[tokio::test]
     async fn user_archive_ends_running_descendants_and_preserves_other_sessions() {
         use SessionStatus::{Archived, Idle, Interrupted, WaitingUser, Working};
-        let (state, _dir) = switch_fixture("user-archive-cascade");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-user-archive-cascade");
         for session in [
             console_session("hub", Idle),
             lead_session("lead", Working, "hub"),
@@ -8623,7 +8985,7 @@ mod tests {
     #[tokio::test]
     async fn archiving_a_console_session_archives_its_interrupted_bound_sessions() {
         use SessionStatus::{Archived, Idle, Interrupted};
-        let (state, _dir) = switch_fixture("archive-cascade");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-archive-cascade");
         for session in [
             console_session("hub", Idle),
             console_session("other-hub", Idle),
@@ -8671,7 +9033,7 @@ mod tests {
     #[tokio::test]
     async fn archiving_a_project_session_follows_the_rule_for_the_sessions_bound_to_it() {
         use SessionStatus::{Archived, Idle, Interrupted};
-        let (state, _dir) = switch_fixture("archive-project-owner");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-archive-project-owner");
         for session in [
             project_session("starter", Agent::Claude, Idle),
             bound_session("running", Idle, "starter"),
@@ -8699,7 +9061,7 @@ mod tests {
     /// neither takes the console session the session is bound to.
     #[tokio::test]
     async fn archiving_a_bound_project_session_leaves_its_console_session_alone() {
-        let (state, _dir) = switch_fixture("archive-bound-alone");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-archive-bound-alone");
         state
             .store
             .insert_session(&console_session("hub", SessionStatus::Idle))
@@ -8732,7 +9094,7 @@ mod tests {
     #[test]
     fn a_reopen_brings_back_the_archived_owners_above_it_topmost_first() {
         use SessionStatus::{Archived, Idle, Interrupted};
-        let (state, _dir) = switch_fixture("archived-owners");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-archived-owners");
         for session in [
             console_session("archived-hub", Archived),
             console_session("interrupted-hub", Interrupted),
@@ -8794,7 +9156,7 @@ mod tests {
     #[test]
     fn a_reopen_skips_an_owner_that_is_neither_archived_nor_being_launched() {
         use SessionStatus::{Archived, Idle, Interrupted};
-        let (state, _dir) = switch_fixture("needs-reopening");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-needs-reopening");
         for session in [
             console_session("archived", Archived),
             console_session("idle", Idle),
@@ -8823,7 +9185,7 @@ mod tests {
     /// failure can only be the console session's.
     #[tokio::test]
     async fn a_reopen_fails_as_a_whole_when_its_topmost_owner_cannot_be_reopened() {
-        let (state, dir) = switch_fixture("reopen-owner-fails");
+        let (state, dir) = console_with_project_and_accounts("coordinator-reopen-owner-fails");
         std::fs::create_dir_all(dir.join("no-such-project")).unwrap();
         for session in [
             console_session("hub", SessionStatus::Archived),
@@ -8839,7 +9201,7 @@ mod tests {
             state.store.insert_session(&session).unwrap();
         }
 
-        let err = resume_session(&state, "worker", None)
+        let err = resume_session_with(&state, "worker", None, stub_shell(&dir))
             .await
             .expect_err("the console session cannot launch");
 
@@ -8860,7 +9222,7 @@ mod tests {
 
     #[tokio::test]
     async fn session_lock_changes_cannot_cross_a_removal_claim() {
-        let (state, _dir) = switch_fixture("lock-removal-race");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-lock-removal-race");
         state
             .store
             .insert_session(&console_session("session", SessionStatus::Interrupted))
@@ -8899,7 +9261,7 @@ mod tests {
     #[test]
     fn locked_sessions_refuse_archive_and_delete_cascades_without_partial_changes() {
         use SessionStatus::{Archived, Interrupted};
-        let (state, _dir) = switch_fixture("locked-cascades");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-locked-cascades");
         for session in [
             console_session("hub", Interrupted),
             lead_session("lead", Interrupted, "hub"),
@@ -8935,7 +9297,7 @@ mod tests {
 
     #[test]
     fn a_locked_unused_session_cannot_be_deleted() {
-        let (state, _dir) = switch_fixture("locked-unused");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-locked-unused");
         state
             .store
             .insert_session(&console_session("unused", SessionStatus::Idle))
@@ -8958,7 +9320,7 @@ mod tests {
     #[tokio::test]
     async fn deleting_an_archived_console_session_deletes_its_archived_bound_sessions() {
         use SessionStatus::{Archived, Idle, Interrupted};
-        let (state, _dir) = switch_fixture("delete-cascade");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-delete-cascade");
         for session in [
             console_session("hub", Archived),
             bound_session("a", Archived, "hub"),
@@ -9020,7 +9382,7 @@ mod tests {
     #[test]
     fn the_agent_records_of_deleted_sessions_are_trashed_unless_shared() {
         use SessionStatus::{Archived, Interrupted};
-        let (state, dir) = switch_fixture("delete-trash-records");
+        let (state, dir) = console_with_project_and_accounts("coordinator-delete-trash-records");
         let account = dir.join("claude-account");
         let uuid = |name: &str| {
             let n = ["solo", "tail", "shared", "never-written"]
@@ -9082,7 +9444,7 @@ mod tests {
 
     #[tokio::test]
     async fn guarded_deletion_accepts_an_unused_codex_session_without_a_native_id() {
-        let (state, _dir) = switch_fixture("delete-unused-codex");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-delete-unused-codex");
         state
             .store
             .insert_session(&project_session(
@@ -9114,7 +9476,7 @@ mod tests {
 
     #[tokio::test]
     async fn guarded_deletion_accepts_and_trashes_unused_grok_native_records() {
-        let (state, dir) = switch_fixture("delete-unused-grok");
+        let (state, dir) = console_with_project_and_accounts("coordinator-delete-unused-grok");
         let account = dir.join("account");
         let native_id = "11111111-2222-3333-4444-555555555555";
         let records = account.join("sessions/work").join(native_id);
@@ -9151,7 +9513,7 @@ mod tests {
 
     #[tokio::test]
     async fn unused_deletion_returns_the_native_identity_at_the_atomic_delete() {
-        let (state, dir) = switch_fixture("delete-unused-identity");
+        let (state, dir) = console_with_project_and_accounts("coordinator-delete-unused-identity");
         let initial = project_session("unused", Agent::Codex, SessionStatus::Idle);
         state.store.insert_session(&initial).unwrap();
         let stale = state.session_record("unused").unwrap();
@@ -9197,7 +9559,7 @@ mod tests {
 
     #[tokio::test]
     async fn guarded_deletion_refuses_a_first_turn_or_archived_owner_instead_of_cascading() {
-        let (state, _dir) = switch_fixture("delete-unused-race");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-delete-unused-race");
         let session = project_session("first-turn", Agent::Codex, SessionStatus::Idle);
         state.store.insert_session(&session).unwrap();
         let mut started = session.clone();
@@ -9240,7 +9602,7 @@ mod tests {
     #[tokio::test]
     async fn deleting_a_session_that_is_not_archived_needs_it_to_be_unused() {
         use SessionStatus::{Idle, Interrupted};
-        let (state, _dir) = switch_fixture("delete-unused");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-delete-unused");
         for session in [
             project_session("fresh", Agent::Claude, Idle),
             project_session("never-used", Agent::Claude, Interrupted),
@@ -9302,7 +9664,7 @@ mod tests {
     async fn deleting_archived_sessions_in_bulk_follows_the_binding_for_console_sessions_only() {
         use SessionStatus::Archived;
         let seed = |name: &str| {
-            let (state, dir) = switch_fixture(name);
+            let (state, dir) = console_with_project_and_accounts(&format!("coordinator-{name}"));
             for session in [
                 console_session("hub", Archived),
                 bound_session("a", Archived, "hub"),
@@ -9342,14 +9704,14 @@ mod tests {
         assert_eq!(session_ids(&state), ["hub", "unbound"]);
     }
 
-    /// `switch_fixture` plus a second console and a second project of the first, with `sessions`
-    /// recorded and the ones in `live` given a stand-in process.
+    /// `console_with_project_and_accounts` plus a second console and a second project of the
+    /// first, with `sessions` recorded and the ones in `live` given a stand-in process.
     fn binding_fixture(
         name: &str,
         sessions: Vec<Session>,
         live: &[&str],
     ) -> (Arc<AppState>, ScratchDir, Vec<crate::test_support::StandIn>) {
-        let (state, dir) = switch_fixture(name);
+        let (state, dir) = console_with_project_and_accounts(&format!("coordinator-{name}"));
         state
             .store
             .insert_console(&Console {
@@ -9602,7 +9964,7 @@ mod tests {
     /// bound to it is told the lead session owns it.
     #[test]
     fn a_lead_session_launches_as_an_unbound_project_session() {
-        let (state, _dir) = switch_fixture("lead-launch");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-lead-launch");
         let lead = lead_session("lead", SessionStatus::Interrupted, "hub");
         let of_lead = bound_session("of-lead", SessionStatus::Interrupted, "lead");
         for session in [
@@ -9628,7 +9990,7 @@ mod tests {
     #[tokio::test]
     async fn archiving_a_console_session_covers_its_lead_sessions_own_sessions() {
         use SessionStatus::{Archived, Idle, Interrupted, Working};
-        let (state, _dir) = switch_fixture("archive-two-levels");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-archive-two-levels");
         for session in [
             console_session("hub", Idle),
             lead_session("lead", Interrupted, "hub"),
@@ -9666,7 +10028,7 @@ mod tests {
     #[tokio::test]
     async fn removing_a_project_with_a_lead_session_leaves_its_console_session_alone() {
         use SessionStatus::{Idle, Working};
-        let (state, _dir) = switch_fixture("delete-project-lead");
+        let (state, _dir) = console_with_project_and_accounts("coordinator-delete-project-lead");
         for session in [
             console_session("hub", Idle),
             lead_session("lead", Idle, "hub"),
@@ -10070,7 +10432,7 @@ mod tests {
     #[tokio::test]
     async fn a_conversation_to_resume_reaches_the_launch_after_the_reply() {
         const ID: &str = "11111111-2222-3333-4444-555555555555";
-        let (state, dir) = switch_fixture("resume-id-launched");
+        let (state, dir) = console_with_project_and_accounts("coordinator-resume-id-launched");
         let record = dir
             .join("claude-a/projects/slug")
             .join(format!("{ID}.jsonl"));
@@ -10108,7 +10470,7 @@ mod tests {
     /// A session that is starting cannot be deleted or relaunched out from under its launch.
     #[tokio::test]
     async fn a_starting_session_is_not_deleted_or_resumed() {
-        let (state, _dir) = state_for_opening("coordinator-open-starting-refusals");
+        let (state, dir) = state_for_opening("coordinator-open-starting-refusals");
         let (release, released) = std::sync::mpsc::channel();
         let (live_tx, live_rx) = std::sync::mpsc::channel::<Arc<LiveSession>>();
         let opened = open_started(&state, open_request(), move |request| {
@@ -10119,7 +10481,7 @@ mod tests {
 
         let err = delete_session(&state, &opened.id).expect_err("not while starting");
         assert_eq!(code_of(&err), error_code::SESSION_NOT_DELETABLE);
-        let err = resume_session(&state, &opened.id, None)
+        let err = resume_session_with(&state, &opened.id, None, stub_shell(&dir))
             .await
             .expect_err("already being started");
         assert_eq!(code_of(&err), error_code::SESSION_ALREADY_STARTING);
@@ -10201,5 +10563,38 @@ mod tests {
         assert_eq!(code_of(&err), error_code::UNKNOWN_SESSION);
         drop(followup);
         wait_until(|| !state.is_launching(&owner.id)).await;
+    }
+
+    #[test]
+    fn a_group_follows_the_bindings_two_levels_and_a_bound_role_owns_none() {
+        let sessions = [
+            Session {
+                bound_to: Some("hub".to_string()),
+                ..bare_session("member", Role::Project)
+            },
+            Session {
+                bound_to: Some("member".to_string()),
+                ..bare_session("stray", Role::Project)
+            },
+            Session {
+                bound_to: Some("hub".to_string()),
+                lead: true,
+                ..bare_session("lead", Role::Project)
+            },
+            Session {
+                bound_to: Some("lead".to_string()),
+                ..bare_session("led", Role::Project)
+            },
+            bare_session("hub", Role::Console),
+        ];
+        let ids = |group: Vec<&Session>| -> Vec<String> {
+            group.iter().map(|session| session.id.clone()).collect()
+        };
+        assert_eq!(
+            ids(group_in(&sessions, &sessions[4])),
+            ["hub", "member", "lead", "led"]
+        );
+        assert_eq!(ids(group_in(&sessions, &sessions[0])), ["member"]);
+        assert_eq!(ids(group_in(&sessions, &sessions[2])), ["lead", "led"]);
     }
 }

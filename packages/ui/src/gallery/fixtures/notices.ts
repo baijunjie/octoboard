@@ -144,12 +144,24 @@ export const noticeScenarios: Scenario[] = [
     category: "exceptional",
     title: "Queued error alerts",
     description:
-      "Errors require explicit OK, with no close button or automatic dismissal. The first names a missing folder as code. Recovery labels such as Browse, Try again, Settings and Accounts are chips. OK advances through path, connection and account remedies, a session-specific error, a failed trust confirmation and an unknown code with fallback text.",
+      "Errors require explicit OK, with no close button or automatic dismissal. The first names a missing folder as code. Recovery labels such as Browse, Try again, Settings and Accounts are chips. OK advances through path, connection and account remedies, two refused reopens (the agent no longer has the session's conversation, and Codex could not restore its archived one), each an expected refusal with its own advice rather than the unexpected-failure alert, a session-specific error, a failed trust confirmation and an unknown code with fallback text.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
       { kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "" },
       { kind: "error", code: "connection_closed", params: {}, message: "The daemon connection closed" },
       { kind: "error", code: "unknown_account", params: { account: "removed-account" }, message: "The configured account no longer exists" },
+      {
+        kind: "error",
+        code: "conversation_unresumable",
+        params: { agent: "Claude Code", session: "s-web-1" },
+        message: "Claude Code no longer has the conversation of this session, so it cannot be resumed",
+      },
+      {
+        kind: "error",
+        code: "codex_unarchive_failed",
+        params: { detail: "no rollout found for thread id 0199c3a2-7e41-7b52-9d0e-4f6a1c85b2d7" },
+        message: "`codex unarchive` failed: no rollout found for thread id 0199c3a2-7e41-7b52-9d0e-4f6a1c85b2d7",
+      },
       { kind: "error", code: "session_request_not_waiting", params: { session: "s-web-1" }, message: "", session: "s-web-1" },
       {
         kind: "error",

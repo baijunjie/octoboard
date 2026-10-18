@@ -1,7 +1,8 @@
 # The session terminal
 
 The terminal in the window's content panel, where the selected session's agent is shown and typed into. Sessions
-themselves — opening, statuses, archiving, interruption and resuming — are described in `docs/product/sessions.md`.
+themselves — opening and statuses — are described in `docs/product/sessions.md`, and archiving, interruption and
+resuming in `docs/product/archiving-and-resuming-sessions.md`.
 
 ## With no session selected
 

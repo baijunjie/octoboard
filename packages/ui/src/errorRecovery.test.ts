@@ -10,6 +10,7 @@ it.each([
   ["path_not_found", "path"], ["path_already_exists", "pathExists"], ["session_locked", "unlock"],
   ["account_name_taken", "uniqueName"], ["invalid_launch_setting", "launchSetting"],
   ["connection_closed", "connection"], ["not_a_git_repository", "repository"],
+  ["conversation_unresumable", "unresumable"], ["codex_unarchive_failed", "unarchive"],
   ["session_branches_not_removed", "sessionBranches"], ["project_branches_not_determined", "projectBranches"],
   ["session_working", "wait"], ["handoff_messages_dropped", "lostMessages"],
 ])("classifies the known domain code %s with its specific remedy", (code, recovery) => {

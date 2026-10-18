@@ -343,15 +343,17 @@ Grok console session reads the console's instruction file (see "The console sess
 
 Conversation history and session records belong to each agent and stay wherever that agent keeps them. Their
 retention and cleanup follow the agent's own rules, except for the automatic and opt-in moves to the system Trash
-when deleting sessions described in "Moving the agent's own records to the Trash" in
-`docs/product/deleting-sessions.md`. Octoboard copies a session's records only when that session is switched — by the user,
-or by its owner — to another account of the same agent, and only that session's (see "Carrying the conversation" in
-`docs/product/switching-session-accounts.md`). Copying leaves the records in the account they came from as well, so
+described in "Moving the agent's own records to the Trash" in `docs/product/deleting-sessions.md`. Before resuming a
+Codex session whose rollout Codex itself has archived, Octoboard runs `codex unarchive` for it (see "Archiving,
+interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). Octoboard copies a session's
+records only when that session is switched — by the user, or by its owner — to another account of the same agent, and
+only that session's (see "Carrying the conversation" in `docs/product/switching-session-accounts.md`). Copying leaves
+the records in the account they came from as well, so
 switching back needs no second copy; and what Octoboard copied is the agent's own from then on, retained and cleaned up
 by the agent's rules like any other.
 
 Codex compresses a session's rollout once it is about a week old, replacing `rollout-<timestamp>-<thread id>.jsonl` with
 `rollout-<timestamp>-<thread id>.jsonl.zst` in the same directory. Octoboard takes the compressed rollout for the
-session's record wherever it looks for one: the session's token usage and task title are still read from it, the check
-for a session's records before a deletion finds it, it is moved to the Trash with the session, and an account switch
-copies it.
+session's record wherever it looks for one: the session's token usage and task title are still read from it, the
+check for a session's records before a deletion and the check for whether its conversation can still be resumed find
+it, it is moved to the Trash with the session, and an account switch copies it.

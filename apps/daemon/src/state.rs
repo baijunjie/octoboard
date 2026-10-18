@@ -1257,6 +1257,16 @@ impl AppState {
         self.save_session(&session)
     }
 
+    /// Forgets the conversation of a session whose agent no longer has it, so that its next launch
+    /// opens a fresh one, as for a session that has had no turn. The new conversation's id is
+    /// recorded by its first hook, as for any session.
+    pub fn forget_conversation(&self, id: &str) -> Result<()> {
+        let mut session = self.session_record(id)?;
+        session.has_conversation = false;
+        session.agent_session_id = None;
+        self.save_session(&session)
+    }
+
     pub fn set_agent_session_id(&self, id: &str, agent_session_id: &str) -> Result<()> {
         let mut session = self.session_record(id)?;
         if session.agent_session_id.as_deref() == Some(agent_session_id) {

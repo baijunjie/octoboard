@@ -16,7 +16,10 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
-use crate::protocol::Agent;
+use crate::protocol::{
+    Account, Agent, Console, Origin, Project, ProjectAccount, ProjectSource, Role, Session,
+    SessionStatus,
+};
 use crate::session::{LiveSession, NewSession};
 use crate::state::AppState;
 use crate::store::Store;
@@ -683,4 +686,125 @@ pub(crate) fn move_modification_time_back(path: &Path) {
         .expect("the tracked file is writable");
     file.set_modified(std::time::SystemTime::now() - Duration::from_secs(60))
         .expect("its modification time is settable");
+}
+
+/// A console and a project (whose directory does not exist, so a relaunch is refused at the
+/// launch's first check before it writes anything), and one account of each agent whose
+/// directory is under `dir`. `prefix` labels the scratch directory.
+pub(crate) fn console_with_project_and_accounts(prefix: &str) -> (Arc<AppState>, ScratchDir) {
+    let (state, dir) = app_state(prefix);
+    state
+        .store
+        .insert_console(&Console {
+            workdir: dir.join("no-such-workdir").to_string_lossy().into_owned(),
+            ..console(&dir)
+        })
+        .unwrap();
+    state
+        .store
+        .insert_project(&Project {
+            id: "project-1".to_string(),
+            console_id: "console-1".to_string(),
+            host_id: crate::store::LOCAL_HOST_ID.to_string(),
+            name: "Project".to_string(),
+            path: dir.join("no-such-project").to_string_lossy().into_owned(),
+            default_agent: None,
+            source: ProjectSource::Local,
+            remote_url: None,
+            claude_account_id: ProjectAccount::Inherit,
+            codex_account_id: ProjectAccount::Inherit,
+            grok_account_id: ProjectAccount::Inherit,
+            claude_session_model: None,
+            claude_session_effort: None,
+            codex_session_model: None,
+            codex_session_effort: None,
+            grok_session_model: None,
+            grok_session_effort: None,
+            trust_consent: false,
+            pinned: false,
+            tags: Vec::new(),
+            description: None,
+        })
+        .unwrap();
+    for (id, agent) in [
+        ("claude-a", Agent::Claude),
+        ("codex-a", Agent::Codex),
+        ("grok-a", Agent::Grok),
+    ] {
+        state
+            .store
+            .insert_account(&Account {
+                id: id.to_string(),
+                agent,
+                name: id.to_string(),
+                config_dir: dir.join(id).to_string_lossy().into_owned(),
+                approval_reviewer: None,
+            })
+            .unwrap();
+    }
+    (state, dir)
+}
+
+pub(crate) fn project_session(id: &str, agent: Agent, status: SessionStatus) -> Session {
+    Session {
+        agent,
+        project_id: Some("project-1".to_string()),
+        role: Role::Project,
+        status,
+        ..bare_session(id, Role::Project)
+    }
+}
+
+pub(crate) fn bare_session(id: &str, role: Role) -> Session {
+    Session {
+        id: id.to_string(),
+        agent: Agent::Claude,
+        agent_session_id: None,
+        console_id: "console-1".to_string(),
+        project_id: None,
+        host_id: crate::store::LOCAL_HOST_ID.to_string(),
+        role,
+        origin: Origin::User,
+        title: "Session".to_string(),
+        status: SessionStatus::Idle,
+        terminal_title: None,
+        record_titles: Default::default(),
+        usage: None,
+        observed_model: None,
+        observed_effort: None,
+        model: None,
+        effort: None,
+        has_conversation: false,
+        bound_to: None,
+        lead: false,
+        colour: None,
+        ordinal: None,
+        account_id: None,
+        config_dir: None,
+        pinned: false,
+        locked: false,
+        started_at: 0,
+        ended_at: None,
+    }
+}
+
+pub(crate) fn console_session(id: &str, status: SessionStatus) -> Session {
+    Session {
+        title: id.to_string(),
+        status,
+        ..bare_session(id, Role::Console)
+    }
+}
+
+/// The sessions on record, sorted by id.
+pub(crate) fn session_ids(state: &Arc<AppState>) -> Vec<String> {
+    let mut ids: Vec<String> = state
+        .store
+        .list_sessions()
+        .unwrap()
+        .into_iter()
+        .map(|session| session.id)
+        .collect();
+    ids.sort();
+    ids
 }

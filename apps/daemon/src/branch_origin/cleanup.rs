@@ -230,19 +230,21 @@ pub async fn left_by(state: &Arc<AppState>, sessions: Vec<Session>) -> Vec<Sessi
         })
 }
 
-/// [`remove_once_stopped`] with nothing forced, off the caller's path, for an archive nobody
-/// waits on the removal of.
+/// [`remove_once_stopped`] with nothing forced, logging what is left rather than telling any
+/// client: for an archive or a deletion no one waits on the removal of.
+pub async fn remove_logging_left(state: Arc<AppState>, sessions: Vec<Session>) {
+    let left = remove_once_stopped(state, sessions, Vec::new()).await;
+    if !left.is_empty() {
+        tracing::info!(left = ?lines(&left), "branches of an archived or deleted session were left");
+    }
+}
+
+/// [`remove_logging_left`] off the caller's path.
 pub fn remove_in_background(state: &Arc<AppState>, sessions: Vec<Session>) {
     if sessions.is_empty() {
         return;
     }
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        let left = remove_once_stopped(state, sessions, Vec::new()).await;
-        if !left.is_empty() {
-            tracing::info!(left = ?lines(&left), "branches of an archived session were left");
-        }
-    });
+    tokio::spawn(remove_logging_left(Arc::clone(state), sessions));
 }
 
 /// Whether `target` names `item`.

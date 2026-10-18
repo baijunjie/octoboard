@@ -1,8 +1,9 @@
 # Deleting sessions
 
-How a session is deleted for good, rather than archived: an archived session, one at a time or all at once, and a
-session that has never been used. Archiving itself, and where archived sessions are listed, are in "Archiving,
-interruption and resuming" and "Archived sessions" in `docs/product/sessions.md`.
+How a session is deleted for good, rather than archived: an archived session, one at a time or all at once, an
+archived session whose agent's conversation is gone, deleted automatically, and a session that has never been used.
+Archiving itself, and where archived sessions are listed, are in "Archiving, interruption and resuming" and "Archived
+sessions" in `docs/product/archiving-and-resuming-sessions.md`.
 
 Every deletion is subject to "Locking a session" in `docs/product/sessions.md`, including unused sessions,
 archived descendants and bulk deletion. A locked session blocks the whole operation before any session is removed.
@@ -43,6 +44,30 @@ console session.
 
 Removing a project or deleting a console also deletes its archived sessions along with every other session record
 (see `docs/product/removing-projects.md` and "Deleting a console" in `docs/product/consoles.md`).
+
+## Deleting archived sessions whose conversation is gone
+
+Octoboard deletes on its own the archived sessions whose conversation their agent no longer has, since such a session
+could only be refused if reopened. Only a session judged unresumable is deleted — never one whose conversation is
+resumable or unknown (see "When a conversation can no longer be resumed" in
+`docs/product/archiving-and-resuming-sessions.md`).
+
+- **When**: when the daemon starts, which covers any time it was not running, and then whenever a day of wall-clock time
+  has passed since the last check, time the machine spent asleep included. The check for whether a day has passed runs
+  every hour.
+- **Pinned and locked sessions are never deleted this way.**
+- **An archived owner goes only together with the archived sessions bound to it, at both levels, and only when every
+  one of them is unresumable.** If any member of that group is resumable or unknown, pinned, locked, still being
+  launched or with a process still exiting, or if any session bound to the owner at either level is not archived, the
+  whole group is kept for the user. An unresumable archived session whose owner is not archived is deleted on its own.
+- A session that changed while it was being checked — reopened, pinned, locked, bound or unbound — is kept, with its
+  group, until a later check.
+- **A deletion is the same as the user's** (see "Deleting archived sessions" above): the session disappears from every
+  client, and its bound branches and worktrees are removed with nothing forced. In addition, what is left of its
+  agent's own records — a Claude Code subagents' directory left without its transcript, say — is moved to the Trash,
+  as if the confirmation's cleanup option had been ticked (see "Moving the agent's own records to the Trash" below).
+- **Nobody is told**: no confirmation, alert or notice is shown, and there is no setting to turn it off. Each
+  deletion, and any branch or worktree that could not be removed, is only written to the daemon's log.
 
 ## Deleting an unused session
 
@@ -93,7 +118,10 @@ unknown session.
 
 **Deleting one session automatically moves the records of every removed session with no conversation to the Trash**,
 including such archived descendants of a deleted owner. This applies even when the confirmation's cleanup option
-is left unticked. Deleting all archived sessions at once always requires opting in to record cleanup.
+is left unticked. Deleting all archived sessions at once always requires opting in to record cleanup. The automatic
+deletion of archived sessions whose conversation is gone, and reopening a session whose archived owner's conversation
+is gone (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`), always move
+the records of the sessions concerned, under the rules below.
 
 For a deletion that asks for confirmation, Octoboard checks the agent's own files across the accounts described
 below for **every session the deletion removes**, including archived descendants. The result is **present** when any
@@ -116,7 +144,8 @@ label is set in "What a confirmation's confirm button names" in `docs/product/wi
 the button shows as pending and the confirmation stays open until it has finished, including moving the records when
 the option is ticked; the option cannot be changed meanwhile.
 
-- **The records are moved to the system Trash, never deleted outright**, after the sessions themselves are deleted.
+- **The records are moved to the system Trash, never deleted outright**, after the sessions themselves are deleted
+  (for an archived owner relaunched into a fresh conversation, before it is relaunched).
   For each agent they are:
 
   | Agent | What is moved |

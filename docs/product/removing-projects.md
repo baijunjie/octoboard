@@ -18,7 +18,7 @@ Removing a project asks for confirmation. **Sessions of the project that are sti
   options and above its buttons, under a line saying that that many sessions are still running and will be ended, and
   its button reads **End and remove**. The list follows
   sessions starting or stopping while the confirmation is open. Confirming ends each running session's process the way
-  archiving does (see "Archiving, interruption and resuming" in `docs/product/sessions.md`), then removes the project
+  archiving does (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`), then removes the project
   with all its sessions and the last output Octoboard kept for each. Sessions bound to another session of the project
   are ended before the session they are bound to, the deepest level first, so ending that one is never refused over
   them. A lead session's console session belongs to no project and is left as it is; the lead session's binding to it

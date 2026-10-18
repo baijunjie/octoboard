@@ -23,7 +23,7 @@ session — which reports to the user and which the caller does not drive (see `
 
 The sessions an owner starts are ordinary project sessions, described in `docs/product/sessions.md`. Archiving,
 resuming and deleting an owner follow the same rules whichever kind it is (see "Archiving, interruption and resuming"
-in `docs/product/sessions.md` and "Deleting archived sessions" in `docs/product/deleting-sessions.md`).
+in `docs/product/archiving-and-resuming-sessions.md` and "Deleting archived sessions" in `docs/product/deleting-sessions.md`).
 
 Octoboard injects the tools into the session. A console session gets the full set (see "The console session's tools"
 below); a project session that can own sessions — an unbound one or a lead session — a narrower set, scoped to its own
@@ -179,7 +179,7 @@ session: it has the role of a bound one.
 
 A session is **under** an owner when it is bound to it, or bound to a lead session that is bound to it. Archiving,
 reopening and deleting follow the bindings across both levels; see "Archiving, interruption and resuming" in
-`docs/product/sessions.md` and "Deleting archived sessions" in `docs/product/deleting-sessions.md`.
+`docs/product/archiving-and-resuming-sessions.md` and "Deleting archived sessions" in `docs/product/deleting-sessions.md`.
 
 **The console session sees the lead session's sessions but does not drive them.** A lead session's `owner_kind` reads
 `console`; its own sessions read `project`, with the lead session as their `owner`. They appear in the console
@@ -263,7 +263,7 @@ and changes nothing:
   named grouped under their lead session, with the advice to wait for the lead session to finish them — its own
   `done` report archives it — or to archive the lead session with `archive_session`, which takes along its sessions
   that have no process running and is refused while any of them has one (see "Archiving, interruption and resuming"
-  in `docs/product/sessions.md`).
+  in `docs/product/archiving-and-resuming-sessions.md`).
 
 Otherwise the call is answered first — with the caller's id, the status `archived` and a note that its process will
 now end — and then the caller's process is ended and the caller is archived, as an owner's explicit archive does.

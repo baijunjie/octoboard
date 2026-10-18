@@ -8,6 +8,7 @@ mod account_quotas;
 mod adapter;
 mod agent_models;
 mod agent_records;
+mod archive_cleanup;
 mod availability;
 mod branch_origin;
 mod browse;
@@ -269,6 +270,7 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
     availability::spawn_determine(state.clone());
     usage::spawn(&state);
     account_quotas::spawn(&state);
+    archive_cleanup::spawn(&state);
     // Likewise off the runtime: it runs `git` in every project's directory, a few at a time.
     git_remote::reconcile_remote_urls(&state);
     git_watch::start(&state);

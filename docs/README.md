@@ -39,8 +39,11 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Sessions](product/sessions.md) — console and project sessions, their shared creation dialog, optional names,
   agent and account selection, Advanced launch settings, the five session statuses, their
   glyphs and their transitions, the raised hand and its notification, how a declined Claude Code prompt lowers the
-  hand from the agent's own transcript and what that costs to keep working, archiving, interruption and resuming,
-  how a console session's archive and reopen follow the sessions bound to it, and where archived sessions are kept.
+  hand from the agent's own transcript and what that costs to keep working.
+- [Archiving and resuming sessions](product/archiving-and-resuming-sessions.md) — archiving and interruption, how a
+  console session's archive and reopen follow the sessions bound to it, resuming a dormant session (the
+  `conversation_unresumable` and `codex_unarchive_failed` refusals, an archived owner whose conversation is gone
+  relaunched fresh), when a conversation counts as resumable per agent, and how long archived sessions are kept.
 - [Switching a session's account](product/switching-session-accounts.md) — moving a session to another account of its
   agent: the confirmation and the console-wide switch, an owner's `switch_session_account` tool, what is copied per
   agent (Claude Code sidecars and rewind checkpoints, Codex rollouts compressed or not, subagent rollouts left behind),
@@ -51,7 +54,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   its owner, branches and owned sessions, who is told, messages held during the handoff, and when it fails.
 - [Deleting sessions](product/deleting-sessions.md) — deleting archived sessions one at a time or all at once (an
   archived owner takes its bound archived sessions along), deleting a never-used session without confirmation, and
-  moving agent records to the Trash automatically for unused sessions or optionally for used sessions.
+  moving agent records to the Trash automatically for unused sessions or optionally for used sessions, and the
+  daemon's automatic deletion of archived sessions whose conversation is gone.
 - [Session terminal](product/session-terminal.md) — the selected session's terminal: what its area shows with no
   session selected, typing and the mouse, output, scrollback and resizing, the reconnect and loading covers,
   interrupted, archived and dormant sessions and the saved preview, links in the output (click to open, the OSC 8

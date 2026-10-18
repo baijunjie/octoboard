@@ -74,7 +74,7 @@ appears for an unlocked unused session that is not still starting, under the sam
 takes the same deletion action as the menu (see "Deleting archived sessions" in `docs/product/deleting-sessions.md` for the
 confirmation rules). The menu and an available shortcut show with the row's other controls as described in
 "Rows, names and keyboard focus" in `docs/product/sidebar.md`. Reopening follows "Archiving, interruption and
-resuming" in `docs/product/sessions.md`.
+resuming" in `docs/product/archiving-and-resuming-sessions.md`.
 Whenever any archived session is omitted — a child or a parent beyond the first ten — **View all** follows the
 preview as a row with the same alignment, hover feedback and keyboard focus treatment as the session rows; it
 opens the archive view and carries no count. With only archived children, the section shows its count and View all

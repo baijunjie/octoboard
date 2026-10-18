@@ -55,6 +55,15 @@ A claim like that is a guard released on `Drop`, never a `begin`/`end` pair: the
 can panic, and an entity whose claim is never released is excluded from every later refresh for the rest of the
 daemon's life.
 
+## Count a long period of the daemon's own on the wall clock, not on a timer of that length
+
+Applies to work the daemon schedules for itself every few hours or days, whatever any client shows. A
+`tokio::time::interval` or `sleep` (and `std::time::Instant`) runs on a clock that does not advance while the machine
+sleeps — on macOS, and on Linux across a suspend — so a 24-hour timer on a laptop that sleeps every night fires days
+late. Wake on a short period instead (an hour), compare the wall-clock time against when the work last ran, and treat
+a wall clock that went backwards past that point as due. Run the work once at start too, which covers the time the
+daemon was not running without keeping the last run across restarts.
+
 ## Cap how many blocking threads a per-entity pass starts at once
 
 Applies to daemon work that runs one blocking task per project, per directory or per session — a sweep over a console's
@@ -83,19 +92,22 @@ So look for a route with no process first: read what is wanted from where it is 
 takes HTTP hooks posts to the hook route with no forwarder process behind it). Where a process cannot be avoided, run
 it off the path the user waits on, cache what it returns, and bound how many run at once.
 
-## A request handler is never alone with the state: re-check after a step, or hold a claim
+## A request handler or daemon task is never alone with the state: re-check after a step, or hold a claim
 
 Every control request is handled on a task of its own (`apps/daemon/src/server.rs`) on a multi-threaded runtime
 (`apps/daemon/src/main.rs`), so any other request — another client's, or the same client's next one — can run between
-any two lines of a handler, not only across an `.await`. Making a step synchronous, or dropping an `.await` from it,
-gives the handler no exclusivity. A check made early in a handler (no session running in this project, nothing else
-using this path) can therefore be stale by the time the handler acts on it.
+any two lines of a handler, not only across an `.await`; a background task the daemon runs on its own is in the same
+position. Making a step synchronous, or dropping an `.await` from it, gives the code no exclusivity. A check made
+early (no session running in this project, nothing else using this path, this session still archived and unpinned)
+can therefore be stale by the time the code acts on it.
 
 Where acting on a stale check would do harm, either take a claim on `AppState` that the competing path checks too —
 `AppState::begin_launch` is the existing one — or redo the check after the long step and deal with what changed. A
 claim covers only the checks made once it is held: one made before it — including one the caller made before calling
 the operation that takes the claim, such as an MCP tool checking that the session asked about is the caller's — is
-repeated inside the operation under the claim, with whatever it needs passed in. Put
+repeated inside the operation under the claim, with whatever it needs passed in. When the judging ran before the claim
+was taken, re-read everything that decided it under the claim — each member of a group and its standing, not only the
+one row — and back out if any of it changed. Put
 blocking filesystem or process work in a handler on `tokio::task::spawn_blocking` and await it; do not use
 `block_in_place`, which panics under the current-thread runtime plain `#[tokio::test]` gives the coordinator tests.
 
@@ -113,6 +125,17 @@ id, a reported path counting only when it lies inside that directory; only an en
 is taken, since a name one level higher can be a whole directory's (a Claude project directory is named like
 `-Users-me-work`); and no directory between the records directory and the entry may be a link. `record_paths` in
 `apps/daemon/src/agent_records.rs` does all four; extend it rather than write a second one.
+
+## Act destructively on "it is gone" only when `NotFound` said so
+
+Applies to daemon code that deletes, trashes or refuses something because a file or directory is missing — an agent's
+record, an account directory, a worktree. `Path::exists`, `is_dir` and `is_file` answer false on any error (permission
+denied, an I/O error, a volume not mounted), so their false proves nothing: judge absence only from `metadata` or
+`symlink_metadata` failing with `ErrorKind::NotFound`, and take any other error as unknown. A place that reads as
+empty is not proof either — an unmounted volume's mount point is an empty directory, and an agent account directory
+holding none of the agent's record directories has never shown a record to be missing. So such a judgement has three
+answers, and unknown never destroys anything; `agent_records::Resumability` is the shape for a session's
+conversation.
 
 ## Read a file inside a project only through `browse::live`, never with `File::open`
 

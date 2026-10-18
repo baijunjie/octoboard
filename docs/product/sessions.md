@@ -338,7 +338,7 @@ opened from the dialog. It **has a conversation from the moment it is opened**, 
 before the user has typed anything, it resumes that conversation rather than starting a fresh one; it is never unused,
 so it is archived rather than deleted (see "Deleting an unused session" in `docs/product/deleting-sessions.md`);
 switching its account copies that conversation; and its relaunch is refused when its pinned config directory has gone (see "Archiving, interruption and
-resuming" below). Octoboard's status hooks and tools are injected as on any resume, so its status is tracked and its
+resuming" in `docs/product/archiving-and-resuming-sessions.md`). Octoboard's status hooks and tools are injected as on any resume, so its status is tracked and its
 tools are there; whether the role description takes effect in it is in "What is injected on every launch" in
 `docs/product/launching-agents.md`.
 
@@ -351,7 +351,7 @@ tools are there; whether the role description takes effect in it is in "What is 
 | Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision, including its folder-trust confirmation, or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a session request (see "Waiting for the answer" in `docs/product/session-requests.md`). |
 | Awaiting instructions | `idle` | a green speech bubble | The process is running and sitting at its prompt. |
 | Interrupted | `interrupted` | a pause sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
-| Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming"). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" below) and can be reopened. |
+| Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" in `docs/product/archiving-and-resuming-sessions.md`) and can be reopened. |
 
 *Working*, *waiting for the user* and *awaiting instructions* mean a process is running, and *starting* means one is
 about to be; the last two mean none is, and both can be resumed.
@@ -385,9 +385,10 @@ Transitions:
 - The process ending for any reason other than archiving — the agent exiting on its own, a crash, the application
   quitting — leaves the session *interrupted*.
 - Archiving leaves the session *archived*. User-initiated archiving of an owner also ends and archives the sessions under it;
-  agent-initiated archiving is refused while any descendant has a process running (see "Archiving, interruption and resuming").
+  agent-initiated archiving is refused while any descendant has a process running (see "Archiving, interruption and
+  resuming" in `docs/product/archiving-and-resuming-sessions.md`).
 - Resuming an *interrupted* or *archived* session puts it in *awaiting instructions*, whichever of the two it came
-  from. A resume that fails to launch leaves the session exactly where it was, archived included. Resuming a session
+  from. A resume that is refused or fails to launch leaves the session exactly where it was, archived included. Resuming a session
   whose owner is *archived* first does the same to its archived owners, the topmost first.
 - Switching a session to another account of its agent ends and relaunches its process without archiving it: it reads
   as *interrupted* while the process is down and comes back in *awaiting instructions*, and a switch that fails leaves
@@ -603,111 +604,8 @@ retry after that operation finishes. A failed lock change leaves the stored lock
 
 ## Archiving, interruption and resuming
 
-**Archiving** ends the agent's process and keeps the session and its record. The agent is asked to
-exit first and is killed only if it does not; a kill takes the agent's tool subprocesses with it.
-Archiving is available for a session that is not already archived, including an interrupted one, subject to
-"Locking a session" above. A console session is archived from its own row's menu, like any other (see "Console sessions and
-project sessions" above). The user archives a session from its row's menu. A session at its prompt or
-interrupted, with no unarchived session under it, is archived at once, since nothing is cut short, unless a branch or
-worktree bound to it needs the user's word; one starting, at work, waiting for the user, being resumed, or with an unarchived session under it asks for confirmation first. A session that has never been used offers **Delete** there instead, unless it is still starting (see "Deleting an unused session" in `docs/product/deleting-sessions.md`).
-Once the processes have ended, an archive removes the git branches the archived sessions were working on, and the
-linked worktrees that have them checked out, where git can do so safely; its confirmation lists what git refuses, and
-locked worktrees, with the choice of taking them along (see `docs/product/branch-and-worktree-cleanup.md`).
-Archiving a session that is still *starting* stands: it is archived at once, and its agent's process is ended as soon
-as it comes up.
-An archived session keeps its pin, if it had one (see "Order of projects and sessions" in `docs/product/sidebar.md`).
-
-Besides the user, four things archive a session: its owner, explicitly; a project session's own report saying the
-work is finished with nothing left open (see "Automatic archiving" in `docs/product/reporting-to-owners.md`); a
-console session or unbound project session archiving itself, which it can do only once every session under it is
-archived (see "A session archiving itself" in `docs/product/hub-orchestration.md`); and a handoff to another agent,
-which archives the original once its place has moved (see `docs/product/handing-off-sessions.md`). Each archives that
-one session and nothing else, except that an owner archiving a lead session archives it as an owner, under the rules
-below.
-
-**Archiving an owner — a console session, or a project session that has started sessions — follows its bindings.**
-It reaches every session **under** it: the sessions bound directly to it and, for a console session, those under a
-bound lead session, including descendants of an already archived lead (see "Lead sessions" in
-`docs/product/hub-orchestration.md`). This includes sessions the user opened and later bound to the owner, as well as
-sessions started by the owner.
-
-- **The user's archive confirmation lists every unarchived session under the owner**, with its current status,
-  and says that their processes will end and they will be archived together. The list follows the current bindings
-  while the confirmation is open. Confirming ends and archives the whole group, even if descendants are starting,
-  working, waiting for the user or at their prompt. It does not require archiving them separately first.
-- **Agent tools and automatic reports retain the running-session safeguard.** If any descendant has a process
-  running, including a launch, resume or account switch in progress, archiving the owner is refused and nothing
-  changes. The refusal counts and names those sessions. With none running, the owner and its remaining unarchived
-  descendants are archived together.
-- All paths check the owner and every descendant for a lock before ending any process or archiving any session;
-  an already archived descendant's lock also blocks the operation (see "Locking a session" above).
-- Sessions outside those bindings are not touched. Ending an owner's process for an account switch archives
-  nothing (see `docs/product/switching-session-accounts.md`).
-
-**Resuming** an interrupted session happens by selecting it, or by pressing "Resume" on its terminal's card (see
-"Interrupted, archived and dormant sessions" in `docs/product/session-terminal.md`, which also names the two ways of showing an interrupted session that do not resume it).
-**Reopening** an archived session is the same relaunch, but selecting an archived session does not do it:
-the session is shown, still archived, and is reopened by typing into its terminal, by pressing "Reopen" on its
-terminal's card, in a focus mode's archived-row action menu (see "What both views show" in
-`docs/product/focus-mode.md`), or in the archive view (see "The archive view" in `docs/product/sidebar.md`). Each
-relaunches the same agent in the same directory and reassembles everything Octoboard injects.
-
-- Where the agent has a stored conversation, that conversation is resumed.
-- A session that **nobody ever typed into** has no stored conversation on the agent's side; resuming it opens a fresh
-  conversation in its place, in the same project and under the same session. A session opened to resume a
-  conversation is the exception: it has that conversation from the start (see "Resuming a conversation started
-  outside Octoboard" above).
-- A resume carries no opening prompt, so the session comes up at the agent's prompt; an archived session reopened by
-  typing into its terminal is then handed what was typed (see "Interrupted, archived and dormant sessions" in
-  `docs/product/session-terminal.md`).
-- A session relaunches with the account and the config directory it last recorded for its agent — the one it was
-  opened with until it is switched to another account (see `docs/product/switching-session-accounts.md`), not the console's current
-  reference — and is refused if that directory no longer exists, but only when the session has a conversation to
-  resume; one with none yet, opened and never typed into without resuming a conversation, launches into the missing
-  directory instead (see "Agent config directories" in `docs/product/consoles.md`).
-- **Reopening a session whose owner is archived reopens its archived owners first, level by level from the topmost
-  down**, then the session itself, so what the session reports reaches a running owner: a session bound to an archived
-  lead session whose console session is archived too brings back the console session, then the lead session, then
-  itself. The walk goes up through the owners that are archived and stops at the first that is not; an owner that is
-  only interrupted is not relaunched by this. If an owner cannot be reopened, the whole reopen fails with its reason:
-  the owners already brought back stay reopened, and the rest, the session included, stay as they were. Likewise, if
-  the owners came back and it is the session's own relaunch that then fails, they stay reopened.
-- **Reopening an owner on its own reopens nothing bound to it**, and reopening a session reopens none of the other
-  sessions bound to the same owners. The group comes back one session at a time, from the session the user asked for.
-- Resuming a session whose process is already running is refused. The refusal a double-click produces is not surfaced
-  to the user.
-
-An interrupted session and an archived session are relaunched the same way; the difference is how the session got
-there, where it is listed, and that selecting an archived one does not relaunch it.
-
-### Switching a session's account
-
-A session can be moved to another account of its own agent, ending and relaunching its process with its conversation
-carried along. The user does it from the session's **Switch account** submenu, and an owner with the
-`switch_session_account` tool for a session of its own; how, and what is carried, is in
-`docs/product/switching-session-accounts.md`.
-
-### Handing a session off to another agent
-
-A session's work can be moved to a new session of another agent, which takes its place — its owner, its branches and
-the sessions it owns — and reads a package built from its conversation, while the original is archived. The user
-starts one from the session's **Hand off** menu item, and an owner with the `handoff_session` tool for a session of its
-own; see `docs/product/handing-off-sessions.md`.
-
-### Archived sessions
-
-A project's archived sessions, and a console's archived console sessions, stay until the user deletes them (see
-"Deleting archived sessions" in `docs/product/deleting-sessions.md`), the project is removed or the console is
-deleted. They are listed most recently archived first, and reached:
-
-- from the project's "View archive" submenu, or for console sessions the console's "Archived console
-  sessions" submenu, with the newest five;
-- from either focus mode, as the parent-session preview described in "The archive view" in
-  `docs/product/sidebar.md`, within that focus mode's scope;
-- from the archive view, with all of them.
-
-How each of those looks and behaves is in "Project rows" and "The archive view" in `docs/product/sidebar.md`, and in
-`docs/product/focus-mode.md`.
+Archiving a session, an interruption, resuming and reopening a dormant session, when its conversation can no longer be
+resumed, and how long archived sessions are kept are described in `docs/product/archiving-and-resuming-sessions.md`.
 
 ## Renaming a session
 

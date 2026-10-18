@@ -87,7 +87,8 @@ pub struct Locator {
 }
 
 impl Locator {
-    #[cfg(test)]
+    /// A locator that resolves default accounts through `shell`, a login-shell snapshot already
+    /// taken, instead of asking for one.
     pub fn with_shell(shell: HashMap<String, String>) -> Self {
         Self {
             shell: OnceCell::from(Some(shell)),
@@ -161,86 +162,131 @@ fn records_dir(agent: Agent, root: &Path) -> PathBuf {
     })
 }
 
-/// Index names once per account per pass; never read other sessions' contents or follow links.
-fn index_records(agent: Agent, root: &Path) -> Index {
-    fn walk(agent: Agent, dir: &Path, depth: usize, out: &mut Index) {
-        match std::fs::symlink_metadata(dir) {
-            Ok(meta) if meta.file_type().is_dir() => {}
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return,
-            _ => {
-                out.complete = false;
-                return;
-            }
-        }
-        let entries = match std::fs::read_dir(dir) {
-            Ok(entries) => entries,
-            Err(_) => {
-                out.complete = false;
-                return;
-            }
-        };
-        for entry in entries {
-            let Ok(entry) = entry else {
-                out.complete = false;
-                continue;
-            };
-            let Ok(kind) = entry.file_type() else {
-                out.complete = false;
-                continue;
-            };
-            if kind.is_symlink() {
-                out.complete = false;
-                continue;
-            }
-            let path = entry.path();
-            let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
-                out.complete = false;
-                continue;
-            };
-            let id = match agent {
-                Agent::Claude if kind.is_file() && depth == 1 => {
-                    name.strip_suffix(".jsonl").map(str::to_owned)
-                }
-                // A subagent directory may survive after the main transcript was removed.
-                Agent::Claude if kind.is_dir() && depth == 1 && plausible_id(&name) => {
-                    Some(name.clone())
-                }
-                Agent::Codex if kind.is_file() && name.starts_with("rollout-") => {
-                    rollout_stem(&name)
-                        .filter(|name| name.len() >= 36)
-                        .and_then(|name| name.get(name.len() - 36..))
-                        .map(str::to_owned)
-                }
-                Agent::Grok if kind.is_dir() && depth == 1 => Some(name),
-                _ => None,
-            };
-            if let Some(id) = id {
-                let path = match agent {
-                    Agent::Grok => path.join("usage.json"),
-                    Agent::Claude if kind.is_dir() => path.with_file_name(format!("{id}.jsonl")),
-                    _ => path,
-                };
-                let records = out.records.entry(id).or_default();
-                if !records.contains(&path) {
-                    records.push(path);
-                }
-            } else if kind.is_dir() && depth > 1 {
-                walk(agent, &path, depth - 1, out);
-            }
+/// What a [`walk_records`] visitor decides about one entry.
+enum Step {
+    /// The entry is a record (or otherwise settled): do not descend into it.
+    Matched,
+    /// Descend into it when it is a directory with levels left.
+    Descend,
+    /// Stop the whole walk.
+    Stop,
+}
+
+/// How a [`walk_records`] pass ended.
+struct Walked {
+    /// Every directory was listed and no link was met, so what was not found is not there.
+    complete: bool,
+    stopped: bool,
+}
+
+/// Visits the entries of `dir`, at most `depth` levels down (`depth` 1 is `dir`'s own entries),
+/// without following a link. `visit` gets each entry's path, name, type and the levels left
+/// counting its own. A missing `dir` is empty; a link, an unreadable entry or a name that is not
+/// UTF-8 makes the pass incomplete and is not visited.
+fn walk_records(
+    dir: &Path,
+    depth: usize,
+    visit: &mut dyn FnMut(&Path, &str, std::fs::FileType, usize) -> Step,
+) -> Walked {
+    let mut out = Walked {
+        complete: true,
+        stopped: false,
+    };
+    walk_level(dir, depth, visit, &mut out);
+    out
+}
+
+fn walk_level(
+    dir: &Path,
+    depth: usize,
+    visit: &mut dyn FnMut(&Path, &str, std::fs::FileType, usize) -> Step,
+    out: &mut Walked,
+) {
+    match std::fs::symlink_metadata(dir) {
+        Ok(meta) if meta.file_type().is_dir() => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return,
+        _ => {
+            out.complete = false;
+            return;
         }
     }
-    let mut out = Index {
-        complete: true,
-        ..Index::default()
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        out.complete = false;
+        return;
     };
+    for entry in entries {
+        let Ok(entry) = entry else {
+            out.complete = false;
+            continue;
+        };
+        let (Ok(kind), Some(name)) = (
+            entry.file_type(),
+            entry.file_name().to_str().map(str::to_owned),
+        ) else {
+            out.complete = false;
+            continue;
+        };
+        if kind.is_symlink() {
+            out.complete = false;
+            continue;
+        }
+        let path = entry.path();
+        match visit(&path, &name, kind, depth) {
+            Step::Stop => {
+                out.stopped = true;
+                return;
+            }
+            Step::Descend if kind.is_dir() && depth > 1 => {
+                walk_level(&path, depth - 1, visit, out);
+                if out.stopped {
+                    return;
+                }
+            }
+            Step::Descend | Step::Matched => {}
+        }
+    }
+}
+
+/// Index names once per account per pass; never read other sessions' contents or follow links.
+fn index_records(agent: Agent, root: &Path) -> Index {
+    let mut out = Index::default();
     let depth = match agent {
         Agent::Claude | Agent::Grok => 2,
         Agent::Codex => 6,
     };
-    if std::fs::symlink_metadata(root).is_ok_and(|meta| meta.file_type().is_symlink()) {
-        out.complete = false;
-    }
-    walk(agent, &records_dir(agent, root), depth, &mut out);
+    let mut visit = |path: &Path, name: &str, kind: std::fs::FileType, left: usize| {
+        // Claude's and Grok's records sit on the last level, below a working-directory folder.
+        let leaf = left == 1;
+        let id = match agent {
+            Agent::Claude if kind.is_file() && leaf => {
+                name.strip_suffix(".jsonl").map(str::to_owned)
+            }
+            // A subagent directory may survive after the main transcript was removed.
+            Agent::Claude if kind.is_dir() && leaf && plausible_id(name) => Some(name.to_owned()),
+            Agent::Codex if kind.is_file() && name.starts_with("rollout-") => rollout_stem(name)
+                .filter(|name| name.len() >= 36)
+                .and_then(|name| name.get(name.len() - 36..))
+                .map(str::to_owned),
+            Agent::Grok if kind.is_dir() && leaf => Some(name.to_owned()),
+            _ => None,
+        };
+        let Some(id) = id else {
+            return Step::Descend;
+        };
+        let path = match agent {
+            Agent::Grok => path.join("usage.json"),
+            Agent::Claude if kind.is_dir() => path.with_file_name(format!("{id}.jsonl")),
+            _ => path.to_path_buf(),
+        };
+        let records = out.records.entry(id).or_default();
+        if !records.contains(&path) {
+            records.push(path);
+        }
+        Step::Matched
+    };
+    let walked = walk_records(&records_dir(agent, root), depth, &mut visit);
+    out.complete = walked.complete
+        && !std::fs::symlink_metadata(root).is_ok_and(|meta| meta.file_type().is_symlink());
     out
 }
 
@@ -398,6 +444,164 @@ pub fn presence(
         Absent
     } else {
         Unknown
+    }
+}
+
+/// Whether a session's conversation can still be resumed, judged from the agent's own records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Resumability {
+    Resumable,
+    /// Proven gone: the record does not exist in the account that holds it. Only this answer may
+    /// be acted on destructively.
+    Unresumable,
+    /// Not provable either way: a location that cannot be resolved or read (a pinned account
+    /// directory included), a linked records directory, or a Grok session folder missing locally,
+    /// which Grok restores from its remote registry.
+    Unknown,
+}
+
+/// What [`judge`] found for a session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Judgement {
+    pub resumability: Resumability,
+    /// Resuming first needs `codex unarchive`: the rollout sits in the account's
+    /// `archived_sessions/`, which a resume refuses, and `sessions/` does not show it present.
+    pub needs_unarchive: bool,
+}
+
+/// Where a session's record sits in its own account.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Located {
+    Present,
+    /// Codex's `archived_sessions/`.
+    Archived,
+    Missing,
+    Uncertain,
+}
+
+/// Whether `session`'s conversation can be resumed, looking only at the session's own account
+/// (`Session.config_dir`, the agent's default account when none) and its current agent session id.
+/// A copy left in another account by an earlier switch does not count. A session with no
+/// conversation always is: it relaunches into a fresh one.
+///
+/// Claude Code needs `<id>.jsonl` in some project directory (the working directory's slug is not
+/// required); a subagent directory alone is not a record. Codex needs a rollout, plain or `.zst`,
+/// under `sessions/` or `archived_sessions/`. Grok needs its session directory, and its absence is
+/// only ever `Unknown`. File names are matched whatever the case of the id.
+pub fn resumability(locator: &Locator, session: &Session) -> Resumability {
+    judge(locator, session).resumability
+}
+
+/// [`resumability`], with whether resuming first needs `codex unarchive`, from one look at the
+/// account's records.
+pub fn judge(locator: &Locator, session: &Session) -> Judgement {
+    let (resumability, needs_unarchive) = match locate_own_record(locator, session) {
+        Err(answer) => (answer, false),
+        Ok(Located::Present) => (Resumability::Resumable, false),
+        Ok(Located::Archived) => (Resumability::Resumable, true),
+        Ok(Located::Missing) if session.agent == Agent::Grok => (Resumability::Unknown, false),
+        Ok(Located::Missing) => (Resumability::Unresumable, false),
+        Ok(Located::Uncertain) => (Resumability::Unknown, false),
+    };
+    Judgement {
+        resumability,
+        needs_unarchive,
+    }
+}
+
+/// `Err` carries the answer when the record need not, or cannot, be looked for.
+fn locate_own_record(locator: &Locator, session: &Session) -> Result<Located, Resumability> {
+    if !session.has_conversation {
+        return Err(Resumability::Resumable);
+    }
+    let agent = session.agent;
+    let Some(agent_id) = session
+        .agent_session_id
+        .as_deref()
+        .filter(|id| plausible_id(id))
+    else {
+        return Err(Resumability::Unknown);
+    };
+    let Some(root) = locator.root(agent, session.config_dir.as_deref()) else {
+        return Err(Resumability::Unknown);
+    };
+    let root = lexically_normalise(&root);
+    if !root.is_absolute() {
+        return Err(Resumability::Unknown);
+    }
+    // An account directory that cannot be read (gone, unmounted, denied) says nothing about the
+    // records in it.
+    if std::fs::read_dir(&root).is_err() {
+        return Err(Resumability::Unknown);
+    }
+    let (dirs, depth): (&[&str], usize) = match agent {
+        Agent::Claude => (&["projects"], 2),
+        Agent::Codex => (&["sessions", "archived_sessions"], 6),
+        Agent::Grok => (&["sessions"], 2),
+    };
+    // An account directory with none of the agent's record directories (an unmounted mount point
+    // leaves an empty one) has never shown any record to be missing from.
+    if !dirs
+        .iter()
+        .any(|dir| std::fs::symlink_metadata(root.join(dir)).is_ok())
+    {
+        return Err(Resumability::Unknown);
+    }
+    let agent_id = agent_id.to_ascii_lowercase();
+    let is_record = |name: &str, kind: std::fs::FileType| {
+        let name = name.to_ascii_lowercase();
+        match agent {
+            Agent::Claude => kind.is_file() && name == format!("{agent_id}.jsonl"),
+            Agent::Codex => {
+                kind.is_file()
+                    && name.starts_with("rollout-")
+                    && rollout_stem(&name)
+                        .is_some_and(|stem| stem.ends_with(&format!("-{agent_id}")))
+            }
+            Agent::Grok => kind.is_dir() && name == agent_id,
+        }
+    };
+    // The first directory is the one a resume reads; a record found only in a later one is
+    // archived. A directory that cannot be searched does not stop the next from being.
+    let (mut archived, mut uncertain) = (false, false);
+    for (at, dir) in dirs.iter().enumerate() {
+        match scan_for_record(&root.join(dir), depth, &is_record) {
+            Located::Present if at == 0 => return Ok(Located::Present),
+            Located::Present => archived = true,
+            Located::Uncertain => uncertain = true,
+            _ => {}
+        }
+    }
+    Ok(if archived {
+        Located::Archived
+    } else if uncertain {
+        Located::Uncertain
+    } else {
+        Located::Missing
+    })
+}
+
+/// Looks for an entry `is_record` accepts in `dir`, at most `depth` levels down, without following
+/// a link. A link anywhere, or anything unreadable, leaves a record that is not found `Uncertain`
+/// rather than `Missing`, since it could be behind that.
+fn scan_for_record(
+    dir: &Path,
+    depth: usize,
+    is_record: &dyn Fn(&str, std::fs::FileType) -> bool,
+) -> Located {
+    let walked = walk_records(dir, depth, &mut |_, name, kind, _| {
+        if is_record(name, kind) {
+            Step::Stop
+        } else {
+            Step::Descend
+        }
+    });
+    if walked.stopped {
+        Located::Present
+    } else if walked.complete {
+        Located::Missing
+    } else {
+        Located::Uncertain
     }
 }
 
@@ -836,6 +1040,245 @@ mod tests {
         assert_eq!(
             find(Agent::Grok, CLAUDE_ID),
             Some(grok.join("chat_history.jsonl"))
+        );
+    }
+
+    fn judged(session: &Session) -> Resumability {
+        resumability(&Locator::default(), session)
+    }
+
+    fn needs_unarchive(session: &Session) -> bool {
+        judge(&Locator::default(), session).needs_unarchive
+    }
+
+    #[test]
+    fn claude_is_resumable_only_with_its_main_transcript_in_its_own_account() {
+        let dir = crate::test_support::ScratchDir::new("agent-records-resume-claude");
+        let (account, other) = (dir.join("account"), dir.join("other"));
+        let own = session(Agent::Claude, CLAUDE_ID, Some(&account));
+        std::fs::create_dir_all(account.join("projects")).unwrap();
+        assert_eq!(judged(&own), Resumability::Unresumable);
+
+        // A subagent folder left without its main transcript is not a record.
+        std::fs::create_dir_all(account.join("projects/work").join(CLAUDE_ID)).unwrap();
+        assert_eq!(judged(&own), Resumability::Unresumable);
+
+        // Another account's copy, left by an earlier switch, does not count.
+        touch(
+            &other
+                .join("projects/work")
+                .join(format!("{CLAUDE_ID}.jsonl")),
+        );
+        assert_eq!(judged(&own), Resumability::Unresumable);
+
+        // Any project folder of the account will do.
+        touch(
+            &account
+                .join("projects/elsewhere")
+                .join(format!("{CLAUDE_ID}.jsonl")),
+        );
+        assert_eq!(judged(&own), Resumability::Resumable);
+    }
+
+    #[test]
+    fn a_session_without_a_conversation_is_resumable_and_an_unusable_id_is_unknown() {
+        let dir = crate::test_support::ScratchDir::new("agent-records-resume-fresh");
+        let account = dir.join("account");
+        for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+            let mut fresh = session(agent, CLAUDE_ID, Some(&account));
+            fresh.has_conversation = false;
+            assert_eq!(judged(&fresh), Resumability::Resumable);
+            let mut no_id = session(agent, CLAUDE_ID, Some(&account));
+            no_id.agent_session_id = None;
+            assert_eq!(judged(&no_id), Resumability::Unknown);
+            no_id.agent_session_id = Some("../x".to_owned());
+            assert_eq!(judged(&no_id), Resumability::Unknown);
+        }
+    }
+
+    #[test]
+    fn an_account_directory_that_cannot_be_read_is_unknown_for_every_agent() {
+        let dir = crate::test_support::ScratchDir::new("agent-records-resume-gone");
+        for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+            let gone = session(agent, CLAUDE_ID, Some(&dir.join("gone")));
+            assert_eq!(judged(&gone), Resumability::Unknown);
+        }
+        // Present but not a directory, so it cannot be read either.
+        touch(&dir.join("file"));
+        let file = session(Agent::Claude, CLAUDE_ID, Some(&dir.join("file")));
+        assert_eq!(judged(&file), Resumability::Unknown);
+    }
+
+    #[test]
+    fn an_account_directory_without_any_records_directory_is_unknown_for_every_agent() {
+        let dir = crate::test_support::ScratchDir::new("agent-records-resume-empty");
+        std::fs::create_dir_all(dir.join("account")).unwrap();
+        for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+            let empty = session(agent, CLAUDE_ID, Some(&dir.join("account")));
+            assert_eq!(judged(&empty), Resumability::Unknown);
+        }
+    }
+
+    #[test]
+    fn the_default_account_is_judged_through_the_shell_and_unknown_when_it_cannot_be_resolved() {
+        let dir = crate::test_support::ScratchDir::new("agent-records-resume-default");
+        let default = session(Agent::Claude, CLAUDE_ID, None);
+        let shell = HashMap::from([(
+            "CLAUDE_CONFIG_DIR".to_owned(),
+            dir.join("default").to_string_lossy().into_owned(),
+        )]);
+        let locator = Locator::with_shell(shell);
+        std::fs::create_dir_all(dir.join("default/projects")).unwrap();
+        assert_eq!(resumability(&locator, &default), Resumability::Unresumable);
+        touch(
+            &dir.join("default/projects/work")
+                .join(format!("{CLAUDE_ID}.jsonl")),
+        );
+        assert_eq!(resumability(&locator, &default), Resumability::Resumable);
+
+        // A location that is not absolute is not a place to look.
+        let relative = Locator::with_shell(HashMap::from([(
+            "CLAUDE_CONFIG_DIR".to_owned(),
+            "relative".to_owned(),
+        )]));
+        assert_eq!(resumability(&relative, &default), Resumability::Unknown);
+    }
+
+    #[test]
+    fn codex_counts_compressed_and_archived_rollouts_and_archived_ones_need_unarchiving() {
+        let dir = crate::test_support::ScratchDir::new("agent-records-resume-codex");
+        let account = dir.join("account");
+        let own = session(Agent::Codex, CODEX_ID, Some(&account));
+        std::fs::create_dir_all(account.join("sessions")).unwrap();
+        assert_eq!(judged(&own), Resumability::Unresumable);
+        assert!(!needs_unarchive(&own));
+
+        // Another thread's rollout is not this one's.
+        touch(&account.join("sessions/2026/10/01/rollout-2026-10-01T00-00-00-019a0000-0000-7000-8000-000000000002.jsonl"));
+        assert_eq!(judged(&own), Resumability::Unresumable);
+
+        let name = format!("rollout-2026-10-01T00-00-00-{CODEX_ID}.jsonl");
+        touch(
+            &account
+                .join("archived_sessions")
+                .join(format!("{name}.zst")),
+        );
+        assert_eq!(judged(&own), Resumability::Resumable);
+        assert!(needs_unarchive(&own));
+
+        touch(
+            &account
+                .join("sessions/2026/10/01")
+                .join(format!("{name}.zst")),
+        );
+        assert_eq!(judged(&own), Resumability::Resumable);
+        assert!(!needs_unarchive(&own));
+
+        let plain = dir.join("plain");
+        touch(&plain.join("sessions/2026/10/01").join(&name));
+        assert_eq!(
+            judged(&session(Agent::Codex, CODEX_ID, Some(&plain))),
+            Resumability::Resumable
+        );
+    }
+
+    #[test]
+    fn an_archived_codex_rollout_is_found_although_sessions_cannot_be_searched() {
+        let dir = crate::test_support::ScratchDir::new("agent-records-resume-codex-uncertain");
+        let account = dir.join("account");
+        let own = session(Agent::Codex, CODEX_ID, Some(&account));
+        std::fs::create_dir_all(dir.join("elsewhere")).unwrap();
+        std::fs::create_dir_all(&account).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(dir.join("elsewhere"), account.join("sessions")).unwrap();
+        assert_eq!(judged(&own), Resumability::Unknown);
+        assert!(!needs_unarchive(&own));
+
+        touch(
+            &account
+                .join("archived_sessions")
+                .join(format!("rollout-2026-10-01T00-00-00-{CODEX_ID}.jsonl")),
+        );
+        assert_eq!(judged(&own), Resumability::Resumable);
+        assert!(needs_unarchive(&own));
+    }
+
+    #[test]
+    fn record_names_match_the_id_whatever_its_case() {
+        let dir = crate::test_support::ScratchDir::new("agent-records-resume-case");
+        let (claude, codex) = (dir.join("claude"), dir.join("codex"));
+        touch(
+            &claude
+                .join("projects/work")
+                .join(format!("{}.jsonl", CLAUDE_ID.to_uppercase())),
+        );
+        assert_eq!(
+            judged(&session(Agent::Claude, CLAUDE_ID, Some(&claude))),
+            Resumability::Resumable
+        );
+        touch(&codex.join("sessions/2026/10/01").join(format!(
+            "rollout-2026-10-01T00-00-00-{}.jsonl",
+            CODEX_ID.to_uppercase()
+        )));
+        assert_eq!(
+            judged(&session(Agent::Codex, CODEX_ID, Some(&codex))),
+            Resumability::Resumable
+        );
+        // And an id recorded in capitals finds a lower-case file.
+        let upper = session(Agent::Codex, &CODEX_ID.to_uppercase(), Some(&codex));
+        assert_eq!(judged(&upper), Resumability::Resumable);
+    }
+
+    #[test]
+    fn a_codex_rollout_in_a_deep_date_tree_is_found() {
+        let dir = crate::test_support::ScratchDir::new("agent-records-resume-codex-deep");
+        let account = dir.join("account");
+        touch(
+            &account
+                .join("sessions/a/b/c/d/e")
+                .join(format!("rollout-x-{CODEX_ID}.jsonl")),
+        );
+        assert_eq!(
+            judged(&session(Agent::Codex, CODEX_ID, Some(&account))),
+            Resumability::Resumable
+        );
+    }
+
+    #[test]
+    fn grok_is_resumable_with_its_folder_and_only_unknown_without() {
+        let dir = crate::test_support::ScratchDir::new("agent-records-resume-grok");
+        let account = dir.join("account");
+        let own = session(Agent::Grok, CLAUDE_ID, Some(&account));
+        std::fs::create_dir_all(account.join("sessions")).unwrap();
+        assert_eq!(judged(&own), Resumability::Unknown);
+        touch(
+            &account
+                .join("sessions/work")
+                .join(CLAUDE_ID)
+                .join("usage.json"),
+        );
+        assert_eq!(judged(&own), Resumability::Resumable);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_records_directory_is_unknown_not_unresumable() {
+        let dir = crate::test_support::ScratchDir::new("agent-records-resume-link");
+        let account = dir.join("account");
+        std::fs::create_dir_all(dir.join("elsewhere")).unwrap();
+        std::fs::create_dir_all(&account).unwrap();
+        std::os::unix::fs::symlink(dir.join("elsewhere"), account.join("projects")).unwrap();
+        assert_eq!(
+            judged(&session(Agent::Claude, CLAUDE_ID, Some(&account))),
+            Resumability::Unknown
+        );
+        // A link inside the records directory could hide the record as well.
+        let inner = dir.join("inner");
+        std::fs::create_dir_all(inner.join("projects")).unwrap();
+        std::os::unix::fs::symlink(dir.join("elsewhere"), inner.join("projects/work")).unwrap();
+        assert_eq!(
+            judged(&session(Agent::Claude, CLAUDE_ID, Some(&inner))),
+            Resumability::Unknown
         );
     }
 }

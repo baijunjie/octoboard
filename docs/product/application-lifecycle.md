@@ -133,7 +133,7 @@ closed** switch in Settings' General section, which is **off to begin with** (se
 (see "Quitting" below): with a session starting, working or waiting for the user it asks the same confirmation, where
 Cancel leaves the window open and everything running, and otherwise it quits at once. The sessions a confirmed close
 ends are left *interrupted* and resumable, just as any confirmed quit leaves them (see "Archiving, interruption and
-resuming" in `docs/product/sessions.md`).
+resuming" in `docs/product/archiving-and-resuming-sessions.md`).
 
 **With the switch on, closing the window closes it into the background**: the window is hidden, Octoboard leaves the
 Dock, and the focus passes to the application used before it. The daemon, every session and its agent process keep
@@ -241,7 +241,7 @@ application on confirmation (see "Closing the window" above).
   the other cases were not yet tried by hand.
 - Once confirmed, every session process is ended and every one of those sessions is left **interrupted**, never
   archived. Clicking one next time resumes it (see "Archiving, interruption and resuming" in
-  `docs/product/sessions.md`).
+  `docs/product/archiving-and-resuming-sessions.md`).
 - With no session *starting*, *working* or *waiting for the user* — none at all, or only ones *awaiting
   instructions* — quitting is immediate and asks nothing, and a window closed into the background is not brought back
   for it. Seen with the menu bar icon's Quit and no session at all; with only sessions *awaiting instructions* not yet

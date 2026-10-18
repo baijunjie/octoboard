@@ -6,7 +6,7 @@ export type ErrorRecovery =
   | "configuration" | "image" | "clipboard" | "file" | "git" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
   | "contentSyntax" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
-  | "sessionBranches" | "projectBranches" | "lostMessages";
+  | "sessionBranches" | "projectBranches" | "lostMessages" | "unresumable" | "unarchive";
 
 /** A local failure whose user remedy is known without inspecting its translated message. */
 export class ActionableError extends DaemonRequestError {
@@ -36,6 +36,8 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   tool: ["binary_not_found", "agent_not_available", "git_unavailable"],
   shell: ["shell_environment_timeout"],
   account: ["unknown_account", "grok_home_not_initialized"],
+  unresumable: ["conversation_unresumable"],
+  unarchive: ["codex_unarchive_failed"],
   conversation: ["conversation_not_found", "conversation_to_resume_not_found", "resume_id_invalid", "conversation_outside_project", "conversation_in_session"],
   session: ["session_archived", "session_not_running", "session_already_on_account", "unknown_session", "session_request_not_waiting", "session_request_answered", "trust_not_waiting"],
   configuration: ["configuration_not_recognised", "configuration_version_unsupported", "configuration_unreadable", "import_choice_unavailable"],
