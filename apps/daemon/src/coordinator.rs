@@ -2582,19 +2582,55 @@ pub(crate) fn owner_refusal(
     Ok(None)
 }
 
+/// Takes the exclusive claim on `session_id` (see [`AppState::begin_switch`]) for as long as a
+/// change of the owner it is bound to takes. What a handoff or an account switch holds goes stale
+/// if it changes meanwhile: the owner read at the start (`bound_to` in the `OpenRequest` for a
+/// bound role, `lead_of` for a lead session, [`owner_of`] for the switch's relaunch). Taken before
+/// the session is read, so what is checked after it holds until the write; refused in prose when
+/// a launch, a resume, a handoff, a switch or another binding change of it is under way.
+fn claim_for_binding(state: &Arc<AppState>, session_id: &str) -> Result<crate::state::LaunchClaim> {
+    state.begin_switch(session_id).map_err(|_| {
+        anyhow::anyhow!(
+            "`{session_id}` is being started, resumed, handed off, switched to another account or \
+             having its owner changed, so its owner cannot change now: look again once that is \
+             done"
+        )
+    })
+}
+
+/// Refuses in prose when `owner_id`, the owner a binding change gains or loses a session for, has
+/// its claim held — a handoff of it would otherwise move and archive it with a session bound to
+/// it meanwhile. Only looked at, not claimed: an owner is not rewritten, and claims on owners
+/// would refuse concurrent binds to the same one. So the check is not made under a claim, which
+/// is acceptable: a write that lands before the handoff's `hand_over_binding` is moved by it in
+/// its transaction. Skipped when the owner is the session itself, which [`owner_refusal`] refuses
+/// by its own reason.
+fn refuse_if_owner_claimed(state: &Arc<AppState>, session_id: &str, owner_id: &str) -> Result<()> {
+    if owner_id != session_id && state.is_launching(owner_id) {
+        anyhow::bail!(
+            "`{owner_id}` is being started, resumed, handed off, switched to another account or \
+             having its owner changed, so sessions cannot be bound to or moved from it now: look \
+             again once that is done"
+        );
+    }
+    Ok(())
+}
+
 /// Binds the unbound project session `session_id` to `owner_id`, at its own request, and tells
 /// every client. Bound to a console session it becomes a lead session, keeping the sessions it
 /// started and the tools it drives them with; bound to a project session it becomes an ordinary
 /// bound session, which only one with no sessions of its own may (see [`owner_refusal`]).
 ///
-/// Refused, with the reason in prose and nothing changed, for a console session, a session that
-/// is already bound, and an owner [`owner_refusal`] refuses. Returns the session as it is now
-/// bound, and the owner as it was checked.
+/// Refused, with the reason in prose and nothing changed, for a session or an owner under a claim
+/// (see [`claim_for_binding`], [`refuse_if_owner_claimed`]), a console session, a session that is
+/// already bound, and an owner [`owner_refusal`] refuses. Returns the session as it is now bound,
+/// and the owner as it was checked.
 pub fn bind_session(
     state: &Arc<AppState>,
     session_id: &str,
     owner_id: &str,
 ) -> Result<(Session, Session)> {
+    let _claim = claim_for_binding(state, session_id)?;
     let session = state.session_record(session_id)?;
     if session.role == Role::Console {
         anyhow::bail!("a console session cannot be bound to another session");
@@ -2605,6 +2641,7 @@ pub fn bind_session(
              an owner"
         );
     }
+    refuse_if_owner_claimed(state, session_id, owner_id)?;
     let owner = state.session_record(owner_id)?;
     if let Some(reason) = owner_refusal(state, &session, &owner)? {
         anyhow::bail!(reason);
@@ -2630,16 +2667,18 @@ pub fn bind_session(
 /// project session it no longer can own sessions, which only one with none of its own may be (see
 /// [`owner_refusal`]).
 ///
-/// Refused, with the reason in prose and nothing changed, for a session that is not bound to
-/// `from_id`, one with no process running, or one still starting — it is told of its new owner,
-/// which it could not be — handing a session to the owner it already has, and an owner [`owner_refusal`] refuses. Returns
-/// the session as it is now bound, and its new owner as it was checked.
+/// Refused, with the reason in prose and nothing changed, for the session or either owner under a
+/// claim (see [`claim_for_binding`], [`refuse_if_owner_claimed`]), a session that is not bound to
+/// `from_id`, one with no process running — it could not be told of its new owner — handing a
+/// session to the owner it already has, and an owner [`owner_refusal`] refuses. Returns the
+/// session as it is now bound, and its new owner as it was checked.
 pub fn transfer_session(
     state: &Arc<AppState>,
     session_id: &str,
     from_id: &str,
     to_id: &str,
 ) -> Result<(Session, Session)> {
+    let _claim = claim_for_binding(state, session_id)?;
     let session = state.session_record(session_id)?;
     if session.bound_to.as_deref() != Some(from_id) {
         anyhow::bail!("`{session_id}` is not bound to `{from_id}`, so it is not its to hand over");
@@ -2647,8 +2686,9 @@ pub fn transfer_session(
     if to_id == from_id {
         anyhow::bail!("`{session_id}` is already bound to `{to_id}`");
     }
-    // Live, not merely claimed: one still starting, resuming or being switched cannot be told yet,
-    // and a launch under way goes on from the record it captured, which names the old owner.
+    refuse_if_owner_claimed(state, session_id, from_id)?;
+    refuse_if_owner_claimed(state, session_id, to_id)?;
+    // A session with no process could not be told of its new owner.
     if session.status.is_dormant() || state.live_session(&session.id).is_none() {
         anyhow::bail!(
             "`{session_id}` is not running, so it could not be told of its new owner: reopen it \
@@ -9352,6 +9392,8 @@ mod tests {
                 console_session("hub", Idle),
                 console_session("sleeping-hub", Interrupted),
                 console_session("starting-hub", Starting),
+                // Reads running, but has no process behind it.
+                console_session("ghost-hub", Idle),
                 Session {
                     console_id: "console-2".to_string(),
                     ..console_session("foreign-hub", Idle)
@@ -9389,6 +9431,7 @@ mod tests {
             ("loner", "foreign-hub", "another console"),
             ("loner", "sleeping-hub", "not running"),
             ("loner", "starting-hub", "not running"),
+            ("loner", "ghost-hub", "not running"),
             ("loner", "loner", "its own owner"),
         ] {
             let err = bind_session(&state, session, owner).expect_err(reason);
@@ -9451,7 +9494,7 @@ mod tests {
             ],
         );
 
-        // A session being launched holds the launch claim and has no live process yet.
+        // A session being launched holds the launch claim, which refuses a binding change.
         let _claim = state.begin_launch("starting").unwrap();
         for (session, from, to, reason) in [
             ("lead", "hub", "peer", "has sessions of its own (`child`)"),
@@ -9462,7 +9505,7 @@ mod tests {
             ("plain", "hub", "hub", "already bound"),
             ("plain", "hub", "plain", "its own owner"),
             ("dormant", "hub", "hub-2", "not running"),
-            ("starting", "hub", "hub-2", "not running"),
+            ("starting", "hub", "hub-2", "being started"),
             ("child", "hub", "hub-2", "not bound to `hub`"),
         ] {
             let before = state.store.get_session(session).unwrap().unwrap();
@@ -9489,6 +9532,68 @@ mod tests {
         );
         assert!(spare.has_bound_role());
         assert_eq!(owner.id, "peer");
+    }
+
+    /// A session, or an owner, under a handoff or switch claim is refused a binding change that
+    /// involves it, and nothing changes; once the claim is released the same change goes through.
+    #[tokio::test]
+    async fn a_claimed_session_or_owner_is_not_bound_to_or_from() {
+        use SessionStatus::Idle;
+        let (state, _dir, _live) = binding_fixture(
+            "binding-claimed",
+            vec![
+                console_session("hub", Idle),
+                console_session("hub-2", Idle),
+                project_session("loner", Agent::Claude, Idle),
+                bound_session("plain", Idle, "hub"),
+            ],
+            &["hub", "hub-2", "loner", "plain"],
+        );
+
+        let claim = state.begin_switch("loner").unwrap();
+        let err = bind_session(&state, "loner", "hub").expect_err("session claimed");
+        assert!(err.to_string().contains("cannot change now"), "{err}");
+        drop(claim);
+
+        let claim = state.begin_switch("hub").unwrap();
+        let err = bind_session(&state, "loner", "hub").expect_err("owner claimed");
+        assert!(
+            err.to_string().contains("cannot be bound to or moved from"),
+            "{err}"
+        );
+        assert_eq!(
+            state.store.get_session("loner").unwrap().unwrap().bound_to,
+            None
+        );
+        let err = transfer_session(&state, "plain", "hub", "hub-2").expect_err("old owner claimed");
+        assert!(
+            err.to_string().contains("cannot be bound to or moved from"),
+            "{err}"
+        );
+        drop(claim);
+
+        let claim = state.begin_switch("hub-2").unwrap();
+        let err = transfer_session(&state, "plain", "hub", "hub-2").expect_err("new owner claimed");
+        assert!(
+            err.to_string().contains("cannot be bound to or moved from"),
+            "{err}"
+        );
+        assert_eq!(
+            state
+                .store
+                .get_session("plain")
+                .unwrap()
+                .unwrap()
+                .bound_to
+                .as_deref(),
+            Some("hub")
+        );
+        drop(claim);
+
+        let (loner, _) = bind_session(&state, "loner", "hub").unwrap();
+        assert_eq!(loner.bound_to.as_deref(), Some("hub"));
+        let (plain, _) = transfer_session(&state, "plain", "hub", "hub-2").unwrap();
+        assert_eq!(plain.bound_to.as_deref(), Some("hub-2"));
     }
 
     /// Every launch of a session — opening, resuming, reopening, a switch of its account — tells it

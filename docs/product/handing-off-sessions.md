@@ -21,7 +21,8 @@ for instructions, waiting for the user or interrupted. A handoff is refused, wit
 - the session does not exist (`unknown_session`), is archived (`session_archived`; reopen it first), or is in the middle
   of a turn or still starting (`session_working`: a session still at work goes on writing to its worktree while the
   receiving session starts on it);
-- a launch, resume or account switch of it is under way (`session_already_starting`);
+- it is being started, resumed, switched to another account, handed off already or having its owner changed
+  (`session_already_starting`);
 - it is locked (`session_locked`; see "Locking a session" in `docs/product/sessions.md`);
 - the receiving agent is the session's own (`handoff_to_same_agent`, which points to switching its account);
 - the receiving agent is not available (`agent_not_available`), the account named is not one of that agent's

@@ -123,8 +123,8 @@ came from:
 ## When a switch fails
 
 **A switch that cannot be made leaves the session on the account it had, and says why.** It is refused, with nothing
-recorded, when the session is being launched or resumed at that moment, when it is archived, when it is on that
-account already, when the target is a Grok Build directory that is not an initialized Grok home, when the user's
+recorded, when the session is being launched, resumed, handed off, switched already or having its owner changed at
+that moment, when it is archived, when it is on that account already, when the target is a Grok Build directory that is not an initialized Grok home, when the user's
 shell environment could not be captured — which is read whenever either side of the switch is the default account,
 since that is what resolves its directory (see "The launch environment" in `docs/product/launching-agents.md`) — and
 when the conversation record is not where it should be; the session's process is then left running. The one further

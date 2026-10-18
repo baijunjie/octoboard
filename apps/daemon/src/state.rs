@@ -409,14 +409,12 @@ impl AppState {
         })
     }
 
-    /// Claims the right to relaunch this session for a switch of its account, which — unlike
-    /// [`Self::begin_launch`] — may be taken while its process is still running, because ending
-    /// that process is the switch's first step. It holds the same exclusion a launch does, for as
-    /// long as the guard lives: the switch keeps it from before the process is ended until after
-    /// the relaunched process has been judged to have come up or not, and any revert of the
-    /// recorded account is done, so a resume, a second switch and a delete are all refused for
-    /// that whole window — while the process is down, while it is being watched, and while the
-    /// account is put back. Fails only when a launch, a resume or another switch of it is under way.
+    /// Claims the session exclusively, as [`Self::begin_launch`] does but without needing its
+    /// process down: it may be taken while the process is still running. It is the claim of
+    /// every operation that must have the session to itself while it runs — an account switch,
+    /// which ends the process as its first step, a handoff, and a binding change — and it is held
+    /// for as long as the guard lives, so a resume, a launch, a delete and another holder are all
+    /// refused for that whole window. Fails only when a launch or another holder has it.
     pub fn begin_switch(self: &Arc<Self>, id: &str) -> Result<LaunchClaim> {
         let mut live = self.live.write().expect("live sessions lock poisoned");
         if !live.launching.insert(id.to_string()) {
@@ -450,18 +448,18 @@ impl AppState {
             .collect()
     }
 
-    /// Whether the session has a process right now, or is being launched, resumed or switched and
-    /// so is about to. This is the line archiving a console session draws, and it is not the
-    /// session's status: an interrupted session has none and an archived one may still be exiting
-    /// (its record says archived, so callers ask about the ones that are not).
+    /// Whether the session has a process right now, or its claim is held. This is the line
+    /// archiving a console session draws, and it is not the session's status: an interrupted
+    /// session has none and an archived one may still be exiting (its record says archived, so
+    /// callers ask about the ones that are not).
     pub fn has_process(&self, id: &str) -> bool {
         let live = self.live.read().expect("live sessions lock poisoned");
         live.sessions.contains_key(id) || live.launching.contains(id)
     }
 
-    /// Whether a launch, resume or switch of the session is under way: its claim is held. Unlike
-    /// [`Self::has_process`] this is false for a session whose process is up and whose claim is
-    /// already released.
+    /// Whether the session's claim is held (a launch, resume, switch, handoff or binding change is
+    /// under way). Unlike [`Self::has_process`] this is false for a session whose process is up
+    /// and whose claim is already released.
     pub fn is_launching(&self, id: &str) -> bool {
         let live = self.live.read().expect("live sessions lock poisoned");
         live.launching.contains(id)
@@ -1679,8 +1677,9 @@ impl Drop for SessionRemovalClaim {
     }
 }
 
-/// The right to start a process for one session, released on drop, and only then: it outlives
-/// `register_live`, so the holder decides how much of what follows a launch it covers.
+/// The exclusive claim on one session — to start a process for it, or (from
+/// [`AppState::begin_switch`]) to act on it while its process runs — released on drop, and only
+/// then: it outlives `register_live`, so the holder decides how much of what follows it covers.
 pub struct LaunchClaim {
     state: Arc<AppState>,
     id: String,

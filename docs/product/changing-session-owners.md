@@ -22,7 +22,9 @@ A session that has sessions of its own — archived ones included, since its own
 a console session: bound to a project session it could own none. A call that breaks a rule is refused, with the reason
 in prose, and changes nothing; so is one whose binding changed while it was being made — the session bound elsewhere
 meanwhile, it gained sessions of its own, or the owner can no longer own sessions — which says to look again before
-retrying.
+retrying. Both tools are also refused, changing nothing, while the session being rebound, or an owner involved — the
+owner it is to be bound to, or a handover's earlier or new owner — is being started, resumed, handed off, switched to
+another account or having its owner changed; the reason says to look again once that is done.
 
 ## Handing a session to another owner
 
@@ -36,8 +38,7 @@ a lead session.
 | `note` | yes | The handover, for the new owner: what the session is doing, where it stands and what is left. |
 
 Besides the rules above, it is refused for a session that is not the caller's (as for `send_message`), for one with no
-process running or still starting — it is to be told of its new owner, so it has to be reopened or its launch has
-to settle first — and for handing a session to the
+process running — it is to be told of its new owner, so it has to be reopened first — and for handing a session to the
 caller itself.
 
 Once handed over, the session is bound to the new owner and reports to it, and the caller no longer drives it. Nothing
