@@ -486,21 +486,23 @@ pub(crate) const BRANCH_HEADER_ARGS: &[&str] = &[
     "--porcelain=v2",
     "--branch",
     "--untracked-files=no",
+    "--ignore-submodules=all",
 ];
 
-/// Runs `git status --porcelain=v2 --branch --untracked-files=no` and applies what it says to
-/// `status`; a failure to run it records `status.error` and leaves every other field of `status`
-/// exactly as it was. A caller that reads a `GitStatus` it did not just build must therefore blank
-/// whatever it is about to rely on before calling this, as `pull_project` does for the fields its
-/// gate reads; on a brand-new `GitStatus` the fields left behind are already the empty reading —
-/// `None` branch, no upstream, zero ahead and behind.
+/// Runs the read [`BRANCH_HEADER_ARGS`] names and applies what it says to `status`; a failure to
+/// run it records `status.error` and leaves every other field of `status` exactly as it was. A
+/// caller that reads a `GitStatus` it did not just build must therefore blank whatever it is about
+/// to rely on before calling this, as `pull_project` does for the fields its gate reads; on a
+/// brand-new `GitStatus` the fields left behind are already the empty reading — `None` branch, no
+/// upstream, zero ahead and behind.
 /// `--untracked-files=no` skips enumerating the worktree's files, which `parse_branch_header`
 /// below never reads anyway (it only takes the `# branch.*` header lines, which this flag does not
 /// change) — on a large repository that enumeration is otherwise the dominant cost of the whole
 /// check, repeated every project every sweep. Keep the flag even once a feature wants a dirty
 /// worktree indicator; that reads `git status`'s file-status entries, which call for their own,
 /// separate invocation rather than reviving this one's enumeration for every sweep that does not
-/// need it.
+/// need it. `--ignore-submodules=all` likewise stops `git` from running a status inside every
+/// checked-out submodule, which the header does not depend on either.
 fn read_branch_header(path: &Path, status: &mut GitStatus) {
     match read_header(path) {
         Ok(header) => apply_header(status, header),
@@ -614,9 +616,9 @@ fn run_git_command(command: &mut std::process::Command) -> Result<String, String
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-/// What `git status --porcelain=v2 --branch --untracked-files=no`'s `# branch.*` header lines say
-/// about the local branch and its upstream — everything `GitStatus` needs beyond `repository`,
-/// `activity` and `error`, which the caller fills in around this.
+/// What the `# branch.*` header lines of the read [`BRANCH_HEADER_ARGS`] names say about the local
+/// branch and its upstream — everything `GitStatus` needs beyond `repository`, `activity` and
+/// `error`, which the caller fills in around this.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct BranchHeader {
     pub(crate) branch: Option<String>,
@@ -626,9 +628,9 @@ pub(crate) struct BranchHeader {
     pub(crate) behind: u32,
 }
 
-/// Parses the `# branch.*` header lines of `git status --porcelain=v2 --branch --untracked-files=no`'s
-/// output; every other line (the file-status entries this command also prints) is ignored, which is also what
-/// makes an unrecognised `# branch.*` line harmless. A pure function over the text, so it is
+/// Parses the `# branch.*` header lines of the output of the read [`BRANCH_HEADER_ARGS`] names;
+/// every other line (the file-status entries this command also prints) is ignored, which is also
+/// what makes an unrecognised `# branch.*` line harmless. A pure function over the text, so it is
 /// unit-tested with literal strings rather than a real repository fixture.
 pub(crate) fn parse_branch_header(output: &str) -> BranchHeader {
     let mut oid = None;
@@ -905,15 +907,20 @@ mod tests {
     /// Runs the branch-header read in `repo` with the given access, as [`run_git_read`] would
     /// but over [`isolated_git_env`] and the system `git`, and returns what it reported.
     fn read_header(repo: &Path, access: GitAccess) -> BranchHeader {
+        parse_branch_header(&run_header_args(repo, BRANCH_HEADER_ARGS, access))
+    }
+
+    /// [`read_header`]'s command with `args` in place of [`BRANCH_HEADER_ARGS`], returning its
+    /// raw output.
+    fn run_header_args(repo: &Path, args: &[&str], access: GitAccess) -> String {
         let mut command = git_command(
             Path::new(SYSTEM_GIT),
             &isolated_git_env(),
             repo,
-            BRANCH_HEADER_ARGS,
+            args,
             access,
         );
-        let output = run_git_command(&mut command).expect("the branch header is read");
-        parse_branch_header(&output)
+        run_git_command(&mut command).expect("the branch header is read")
     }
 
     #[test]
@@ -972,5 +979,52 @@ mod tests {
             "an unguarded `git status` was expected to rewrite the index"
         );
         assert_eq!(header, stale_stat_header());
+    }
+
+    #[test]
+    fn reading_the_branch_header_runs_no_status_inside_a_submodule() {
+        let sub = repo_with("git-status-sub", &[(b"a.txt", b"sub\n")]);
+        let repo = repo_with("git-status-super", &[(b"f.txt", b"one\n")]);
+        git(
+            &repo,
+            &[
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "-q",
+                "add",
+                sub.to_str().expect("the scratch path is UTF-8"),
+                "s",
+            ],
+        );
+        // A status run inside the submodule consults its fsmonitor command, which leaves a
+        // marker; the superproject's own status never does, as it is configured only there.
+        let marker = repo.join("marker");
+        git(
+            &repo.join("s"),
+            &[
+                "config",
+                "core.fsmonitor",
+                &format!("touch '{}'; :", marker.display()),
+            ],
+        );
+
+        read_header(&repo, GitAccess::Read);
+        assert!(
+            !marker.exists(),
+            "the read ran a status inside the submodule"
+        );
+
+        // The positive control: without the flag the same read does reach into the submodule.
+        let args: Vec<&str> = BRANCH_HEADER_ARGS
+            .iter()
+            .copied()
+            .filter(|arg| !arg.starts_with("--ignore-submodules"))
+            .collect();
+        run_header_args(&repo, &args, GitAccess::Read);
+        assert!(
+            marker.exists(),
+            "the fixture never provoked a status in the submodule"
+        );
     }
 }

@@ -884,9 +884,10 @@ one-minute floor does not apply (see `refresh_git_status` above):
    environment "Git environment" describes (as is every `git` of these steps); a failure (offline, authentication, no
    upstream remote) records `error` and the check continues to the next step regardless, so the branch name and the
    last known numbers still show.
-4. Read the local state in one call, `git status --porcelain=v2 --branch --untracked-files=no`, taking `branch`,
-   `detached`, `upstream`, `ahead` and `behind` from its `# branch.*` header lines; `--untracked-files=no` skips
-   enumerating the worktree's files, which this step never reads anyway.
+4. Read the local state in one call, `git status --porcelain=v2 --branch --untracked-files=no --ignore-submodules=all`,
+   taking `branch`, `detached`, `upstream`, `ahead` and `behind` from its `# branch.*` header lines;
+   `--untracked-files=no` skips enumerating the worktree's files and `--ignore-submodules=all` the status of every
+   checked-out submodule, neither of which this step ever reads.
 5. If `auto_pull_repositories` is on (or the check is a `pull_project_branch`), and `upstream` is set, and
    `behind > 0`, and `ahead == 0`: set `activity` to `pulling` and broadcast, run `git merge --ff-only <upstream>`,
    then redo step 4 to pick up the new numbers. A failed merge records `error`; `git` itself refuses rather than
