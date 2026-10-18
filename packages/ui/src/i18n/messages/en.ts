@@ -625,6 +625,8 @@ export const en = {
   "git.row.selected": "{name}, {status}, selected",
   "git.row.detail": "{name}, {status}, {detail}",
   "git.row.detail.selected": "{name}, {status}, {detail}, selected",
+  "git.row.lines": "lines added: {added}, removed: {removed}",
+  "git.row.detailLines": "{detail}, {lines}",
   "git.row.from": "from {path}",
   "git.row.fromOutside": "from {path}, outside the project",
   "git.row.toOutside": "to {path}, outside the project",

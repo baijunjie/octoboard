@@ -59,7 +59,13 @@ pub(super) fn committed_record<'a>(
     // Kept when a side is inside the project; one of an addition or a deletion outside it is
     // named outside on its other side too, so it is never kept.
     let inside = |side: &ChangeSide| matches!(side, ChangeSide::Present { .. });
-    Ok((inside(&old) || inside(&new)).then_some(ChangeEntry::Committed { old, new }))
+    Ok(
+        (inside(&old) || inside(&new)).then_some(ChangeEntry::Committed {
+            old,
+            new,
+            stats: None,
+        }),
+    )
 }
 
 /// The budget of the `git` output behind a comparison (`git diff-tree`) and behind a commit

@@ -44,7 +44,7 @@ Which API a site takes follows from its scroller:
   default to the side panes' colour; a `FadedScroller` on any other surface passes `stickySurface`.
 
 Sticky-heading surfaces use overlay fades (the "What both views show" section of `docs/product/focus-mode.md` and
-the "Folding a section" section of `docs/product/project-pane-git-mode.md`); other surfaces apply the fade as a
+the "Folding a section" section of `docs/product/project-pane-git-change-list.md`); other surfaces apply the fade as a
 `mask-image` on the scroller. For a masked scroller, the mask clips by that element's border box, so:
 
 - Padding that gives a control inside the scroller room — the room its focus ring needs — goes on the scroller itself,

@@ -108,7 +108,7 @@ A control that switches a view between two states is **one icon button**, not a 
 the two pane toggles (see "The two pane toggles" in `docs/product/window-layout.md`), the file viewer's three view
 controls (see "The file viewer" in `docs/product/project-pane.md`), the Files mode's file-name filter toggle
 (see "Filtering by file name" in that doc), and the Git mode's three — the toggle of its change
-filter field (see "Filtering by file name" in `docs/product/project-pane-git-mode.md`), Group by folder (see "Flat
+filter field (see "Filtering by file name" in `docs/product/project-pane-git-change-list.md`), Group by folder (see "Flat
 or grouped by folder" in the same doc) and Group by commit (see "Grouped by commit" in the same doc). For all of them:
 
 - Pressing the button switches the state, and its icon becomes the other state's.
@@ -168,7 +168,7 @@ These are:
 - a change's status letter on its row in the Git mode's change list, flat or grouped by folder, whose tooltip names
   the status in the same word the file viewer's header carries as the tag of an opened change, and is on the letter
   itself rather than on the row around it, the name and the detail beside it keeping their own tooltips (see "Rows
-  and the keyboard" in `docs/product/project-pane-git-mode.md`).
+  and the keyboard" in `docs/product/project-pane-git-change-list.md`).
 
 ## Names too long for their space
 

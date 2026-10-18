@@ -48,7 +48,8 @@ use crate::browse::git::{paths_nest, GitEnv, GitError};
 use crate::browse::source::{self, ProjectRoot};
 use crate::browse::wire_path::{self, RelPath};
 use crate::browse::{
-    budget, file_content, git_error, git_failed, json_escaped_len, line_count, live, Located,
+    budget, file_content, git_error, git_failed, json_escaped_len, line_count, line_counts, live,
+    Located,
 };
 use crate::protocol::{
     error_code, ChangeEntry, ChangeGroup, ChangeRef, ChangeSide, CodedError, ConflictKind,
@@ -96,7 +97,7 @@ pub fn list(env: &GitEnv, at: &Located, cancel: &AtomicBool) -> Result<ChangeLis
     };
     let mut path_bytes = 0;
     let mut fields = stdout.split(|&b| b == 0).filter(|f| !f.is_empty());
-    while let Some(field) = fields.next() {
+    'fields: while let Some(field) = fields.next() {
         let entries = match field.first() {
             Some(b'#') => {
                 if let Some(oid) = field.strip_prefix(b"# branch.oid ") {
@@ -119,13 +120,78 @@ pub fn list(env: &GitEnv, at: &Located, cancel: &AtomicBool) -> Result<ChangeLis
                 || path_bytes + bytes > budget::MAX_CHANGE_PATH_BYTES
             {
                 list.complete = false;
-                return Ok(list);
+                break 'fields;
             }
             path_bytes += bytes;
             list.changes.push(entry);
         }
     }
+    // Released before the counts are read, which hold buffers of their own.
+    drop(stdout);
+    add_line_counts(env, at, &mut list.changes, &mut live, cancel)?;
     Ok(list)
+}
+
+/// Sets the line counts of the listed changes: the staged and unstaged ones from `git diff`, and
+/// an untracked file's from the disk, where every line is an addition.
+fn add_line_counts(
+    env: &GitEnv,
+    at: &Located,
+    changes: &mut [ChangeEntry],
+    live: &mut LiveSides,
+    cancel: &AtomicBool,
+) -> Result<()> {
+    // Submodules are left out: a count never covers one, and `git` would look inside each.
+    count_group(
+        env,
+        at,
+        changes,
+        |entry| matches!(entry, ChangeEntry::Staged { .. }),
+        &[b"--cached", b"-M", b"--ignore-submodules=all"],
+        cancel,
+    )?;
+    count_group(
+        env,
+        at,
+        changes,
+        |entry| matches!(entry, ChangeEntry::Unstaged { .. }),
+        &[b"-M", b"--ignore-submodules=all"],
+        cancel,
+    )?;
+    let mut remaining = line_counts::untracked_budget();
+    for entry in changes
+        .iter_mut()
+        .filter(|entry| matches!(entry, ChangeEntry::Untracked { .. }))
+    {
+        let Some(rel) = line_counts::shape(entry).and_then(|shape| RelPath::parse(&shape.path))
+        else {
+            continue;
+        };
+        let Some(path) = live.exact_path(&rel) else {
+            continue;
+        };
+        let stats = line_counts::count_file(&path, &rel, &mut remaining, cancel)?;
+        line_counts::set(entry, stats);
+    }
+    Ok(())
+}
+
+/// Sets the counts of the changes of `changes` that `in_group` accepts, from `git diff <args>`.
+fn count_group(
+    env: &GitEnv,
+    at: &Located,
+    changes: &mut [ChangeEntry],
+    in_group: fn(&ChangeEntry) -> bool,
+    args: &[&[u8]],
+    cancel: &AtomicBool,
+) -> Result<()> {
+    let wanted = line_counts::wanted(changes.iter().filter(|entry| in_group(entry)));
+    if wanted.is_empty() {
+        return Ok(());
+    }
+    let counts = line_counts::read_diff(env, at, "diff", args, &wanted, cancel)?;
+    line_counts::apply(changes.iter_mut().filter(|entry| in_group(entry)), &counts);
+    Ok(())
 }
 
 /// The fields of a `git status --porcelain=v2` record of `kind`, split at its first `count`
@@ -158,12 +224,14 @@ fn ordinary(
         entries.push(ChangeEntry::Staged {
             old: head_side(head.as_deref(), modes[0], oids[0], &rel),
             new: index_side(&at.worktree, modes[1], oids[1], &rel),
+            stats: None,
         });
     }
     if xy[1] != b'.' {
         entries.push(ChangeEntry::Unstaged {
             old: index_side(&at.worktree, modes[1], oids[1], &rel),
             new: live.tracked(&rel, modes[2]),
+            stats: None,
         });
     }
     Ok(entries)
@@ -197,12 +265,14 @@ fn renamed(
                 Some(rel) => index_side(&at.worktree, modes[1], oids[1], rel),
                 None => outside(path),
             },
+            stats: None,
         }),
         b'C' => {
             if let Some(rel) = &rel {
                 entries.push(ChangeEntry::Staged {
                     old: ChangeSide::Absent,
                     new: index_side(&at.worktree, modes[1], oids[1], rel),
+                    stats: None,
                 });
             }
         }
@@ -217,14 +287,17 @@ fn renamed(
             (Some(from), Some(rel)) => entries.push(ChangeEntry::Unstaged {
                 old: index_side(&at.worktree, modes[1], oids[1], from),
                 new: live.tracked(rel, modes[2]),
+                stats: None,
             }),
             (Some(from), None) => entries.push(ChangeEntry::Unstaged {
                 old: index_side(&at.worktree, modes[1], oids[1], from),
                 new: ChangeSide::Absent,
+                stats: None,
             }),
             (None, Some(rel)) => entries.push(ChangeEntry::Unstaged {
                 old: ChangeSide::Absent,
                 new: live.tracked(rel, modes[2]),
+                stats: None,
             }),
             (None, None) => {}
         },
@@ -233,6 +306,7 @@ fn renamed(
                 entries.push(ChangeEntry::Unstaged {
                     old: index_side(&at.worktree, modes[1], oids[1], rel),
                     new: live.tracked(rel, modes[2]),
+                    stats: None,
                 });
             }
         }
@@ -277,6 +351,7 @@ fn untracked(path: &[u8], scope: &RelPath, live: &mut LiveSides) -> Vec<ChangeEn
         new => vec![ChangeEntry::Untracked {
             old: ChangeSide::Absent,
             new,
+            stats: None,
         }],
     }
 }
@@ -340,10 +415,10 @@ pub(super) fn entry_path_bytes(entry: &ChangeEntry) -> usize {
         ChangeSide::Absent => 0,
     };
     match entry {
-        ChangeEntry::Staged { old, new }
-        | ChangeEntry::Unstaged { old, new }
-        | ChangeEntry::Untracked { old, new }
-        | ChangeEntry::Committed { old, new } => side(old) + side(new),
+        ChangeEntry::Staged { old, new, .. }
+        | ChangeEntry::Unstaged { old, new, .. }
+        | ChangeEntry::Untracked { old, new, .. }
+        | ChangeEntry::Committed { old, new, .. } => side(old) + side(new),
         ChangeEntry::Conflicted { path, .. } => len(path),
     }
 }

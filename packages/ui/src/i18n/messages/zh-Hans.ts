@@ -565,6 +565,8 @@ export const zhHans: Translation<"other"> = {
   "git.row.selected": "{name}，{status}，已选中",
   "git.row.detail": "{name}，{status}，{detail}",
   "git.row.detail.selected": "{name}，{status}，{detail}，已选中",
+  "git.row.lines": "新增 {added} 行，删除 {removed} 行",
+  "git.row.detailLines": "{detail}，{lines}",
   "git.row.from": "来自 {path}",
   "git.row.fromOutside": "来自项目之外的 {path}",
   "git.row.toOutside": "移至项目之外的 {path}",

@@ -26,6 +26,7 @@ use anyhow::Result;
 
 use crate::browse::changes::{self, ChangeRead};
 use crate::browse::git::{GitEnv, GitError};
+use crate::browse::line_counts;
 use crate::browse::tree_diff;
 use crate::browse::wire_path;
 use crate::browse::{blob, budget, git_error, git_failed, json_escaped_len, Located};
@@ -441,6 +442,19 @@ pub fn list(
         }
         path_bytes += bytes;
         comparison.changes.push(entry);
+    }
+    // Released before the counts are read, which hold buffers of their own.
+    drop(stdout);
+    let wanted = line_counts::wanted(comparison.changes.iter());
+    if !wanted.is_empty() {
+        let args: &[&[u8]] = &[
+            b"-r",
+            b"-M",
+            comparison.base.as_bytes(),
+            comparison.right.commit.as_bytes(),
+        ];
+        let counts = line_counts::read_diff(env, at, "diff-tree", args, &wanted, cancel)?;
+        line_counts::apply(comparison.changes.iter_mut(), &counts);
     }
     Ok(comparison)
 }

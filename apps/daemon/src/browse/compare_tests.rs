@@ -1217,7 +1217,12 @@ fn a_comparison_is_cut_at_its_entry_budget_and_a_patch_past_its_budget_is_refuse
         (changes.len(), complete),
         (budget::MAX_CHANGE_ENTRIES, false)
     );
-    assert!(serialized < budget::COMPARISON_RESERVATION - budget::TREE_DIFF_STDOUT);
+    assert!(
+        serialized
+            < budget::COMPARISON_RESERVATION
+                - budget::TREE_DIFF_STDOUT
+                - budget::LINE_COUNT_RESERVATION
+    );
 
     let compared = Compared {
         left,

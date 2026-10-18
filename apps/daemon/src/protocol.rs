@@ -930,22 +930,37 @@ pub enum ConflictKind {
     DeletedByThem,
 }
 
+/// The lines a change adds and removes, as `git diff --numstat` counts them. See "Changes and
+/// comparisons" in `apps/daemon/PROTOCOL.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct LineStats {
+    pub added: u64,
+    pub removed: u64,
+}
+
 /// One entry of a change listing: a change between two sides, or a path in conflict, which is
-/// not a two-sided change at all.
+/// not a two-sided change at all. `stats` is what the change adds and removes, absent where the
+/// daemon does not count it (see "Changes and comparisons" in `apps/daemon/PROTOCOL.md`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "group", rename_all = "snake_case")]
 pub enum ChangeEntry {
     Staged {
         old: ChangeSide,
         new: ChangeSide,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        stats: Option<LineStats>,
     },
     Unstaged {
         old: ChangeSide,
         new: ChangeSide,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        stats: Option<LineStats>,
     },
     Untracked {
         old: ChangeSide,
         new: ChangeSide,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        stats: Option<LineStats>,
     },
     /// `path` is a wire path relative to the project's directory.
     Conflicted {
@@ -957,6 +972,8 @@ pub enum ChangeEntry {
     Committed {
         old: ChangeSide,
         new: ChangeSide,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        stats: Option<LineStats>,
     },
 }
 

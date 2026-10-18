@@ -17,6 +17,7 @@ pub mod commits;
 pub mod compare;
 pub mod git;
 pub mod lane;
+pub mod line_counts;
 pub mod live;
 pub mod source;
 pub mod tree_diff;
@@ -30,6 +31,8 @@ mod change_tests;
 mod commits_tests;
 #[cfg(test)]
 mod compare_tests;
+#[cfg(test)]
+mod line_count_tests;
 #[cfg(test)]
 mod nested_tests;
 #[cfg(test)]

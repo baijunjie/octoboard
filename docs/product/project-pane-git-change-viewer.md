@@ -27,10 +27,10 @@ title, each commit by its first seven characters:
   the commit the branch is at — "feature forked from main at 4f2a9c1, now at 9e8d7c6", say, or, with a remote branch as
   the base, "main forked from origin/main at 4f2a9c1, now at 9e8d7c6", in the same words as the list's own line about
   the fork. For a branch listed with its whole history (see
-  "Committed changes" in `docs/product/project-pane-git-mode.md`), the branch and the commit it was at, with all of its
+  "Committed changes" in `docs/product/project-pane-git-change-list.md`), the branch and the commit it was at, with all of its
   history.
 - **From under a commit's row**, grouped by commit (see "Grouped by commit" in
-  `docs/product/project-pane-git-mode.md`): the commit and
+  `docs/product/project-pane-git-change-list.md`): the commit and
   the parent it is compared with — "Commit 9e8d7c6, compared with its parent 4f2a9c1" — or, for a commit with no
   parent, that it has none.
 
@@ -96,7 +96,7 @@ the commit's first parent — the empty tree for a commit with none — and its 
   sides being a file or a symbolic link: with a side that is a repository of its own the change is shown instead as
   the old path's removal followed by the new path's addition in one diff, collapsing nothing and with no separator to
   expand, as a type change is; each side shows only the commit it records, nothing from inside the nested repository.
-  Two submodules are listed as one renamed change only when both record the same commit (see "What is listed" in `docs/product/project-pane-git-mode.md`),
+  Two submodules are listed as one renamed change only when both record the same commit (see "What is listed" in `docs/product/project-pane-git-change-list.md`),
   so that is the only way a nesting pair of them is ever opened.
 - **A rename with nothing else changed** says it was renamed and its content is unchanged, and shows that content as
   below. It is the wording of every rename whose patch shows nothing but the path changed — an empty patch, or one
@@ -217,8 +217,8 @@ shows a focus ring, in either appearance; pressing one with the mouse leaves key
 **Previous file** and **Next file**, and the **Left** and **Right** arrow keys, move through the change list the change
 was opened from as it is on screen — uncommitted and committed changes alike — top to bottom, from one section
 into the next, and stop at either end rather than going round. They follow the rows as shown: a change the filter
-hides is skipped (see "Filtering by file name" in `docs/product/project-pane-git-mode.md`), and so are the changes
-in a folded section (see "Folding a section" in `docs/product/project-pane-git-mode.md`), those under a folded commit
+hides is skipped (see "Filtering by file name" in `docs/product/project-pane-git-change-list.md`), and so are the changes
+in a folded section (see "Folding a section" in `docs/product/project-pane-git-change-list.md`), those under a folded commit
 row (see "Grouped by commit" in the same doc) and, grouped by folder, those under a folded folder. A file in both
 Staged and Unstaged is two stops, as is a file both uncommitted and committed, and, grouped by commit, a file several
 commits changed is a stop under each of their commit rows. A change with no row of its own — one the list no longer has — keeps its place in the order, and the keys move on to the changes that surround it.
@@ -233,7 +233,7 @@ last.
 ## When the open change changes
 
 For an uncommitted change, the listings that keep the change list up to date (see "Keeping the list up to date" in
-`docs/product/project-pane-git-mode.md`) also decide when the open change is read again:
+`docs/product/project-pane-git-change-list.md`) also decide when the open change is read again:
 
 - a listing with news of it — the change listed at other versions (a file overwritten, staged again or committed), or
   gone from a list that is not cut short — reads it again, and it shows as it is now;
@@ -246,7 +246,7 @@ For an uncommitted change, the listings that keep the change list up to date (se
 
 A committed change, its two commits being fixed, is not read again when the branches are read. When the comparison is
 made again at other commits while a change from the Committed section listed together is open (see "Keeping the list up to date"
-in `docs/product/project-pane-git-mode.md`), the change is read again from the new commits if the new comparison lists
+in `docs/product/project-pane-git-change-list.md`), the change is read again from the new commits if the new comparison lists
 it; if it does not, there is no such change between those commits: the viewer closes, no change is selected, and keyboard focus goes
 to the first row of the list, or to the branch selector when the list has no rows. A change from under a commit's row
 stays that commit's whatever the branch does; when the commits are listed again for a new comparison and no longer

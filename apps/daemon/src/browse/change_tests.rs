@@ -28,7 +28,7 @@ pub(super) struct Diff {
 }
 
 impl Fixture {
-    fn changes(
+    pub(super) fn changes(
         &self,
         project: &str,
         worktree: Option<&str>,
@@ -113,9 +113,9 @@ fn entry<'a>(
         .iter()
         .find_map(|entry| {
             let (g, old, new) = match entry {
-                ChangeEntry::Staged { old, new } => (ChangeGroup::Staged, old, new),
-                ChangeEntry::Unstaged { old, new } => (ChangeGroup::Unstaged, old, new),
-                ChangeEntry::Untracked { old, new } => (ChangeGroup::Untracked, old, new),
+                ChangeEntry::Staged { old, new, .. } => (ChangeGroup::Staged, old, new),
+                ChangeEntry::Unstaged { old, new, .. } => (ChangeGroup::Unstaged, old, new),
+                ChangeEntry::Untracked { old, new, .. } => (ChangeGroup::Untracked, old, new),
                 ChangeEntry::Conflicted { .. } | ChangeEntry::Committed { .. } => return None,
             };
             let names = side_path(old) == Some(path) || side_path(new) == Some(path);
@@ -130,11 +130,17 @@ pub(super) fn summary(changes: &[ChangeEntry]) -> Vec<String> {
     let mut all: Vec<String> = changes
         .iter()
         .map(|entry| match entry {
-            ChangeEntry::Staged { old, new } => format!("staged {} {}", name(old), name(new)),
-            ChangeEntry::Unstaged { old, new } => format!("unstaged {} {}", name(old), name(new)),
-            ChangeEntry::Untracked { old, new } => format!("untracked {} {}", name(old), name(new)),
+            ChangeEntry::Staged { old, new, .. } => format!("staged {} {}", name(old), name(new)),
+            ChangeEntry::Unstaged { old, new, .. } => {
+                format!("unstaged {} {}", name(old), name(new))
+            }
+            ChangeEntry::Untracked { old, new, .. } => {
+                format!("untracked {} {}", name(old), name(new))
+            }
             ChangeEntry::Conflicted { path, conflict } => format!("conflicted {path} {conflict:?}"),
-            ChangeEntry::Committed { old, new } => format!("committed {} {}", name(old), name(new)),
+            ChangeEntry::Committed { old, new, .. } => {
+                format!("committed {} {}", name(old), name(new))
+            }
         })
         .collect();
     all.sort();
@@ -1106,7 +1112,12 @@ fn a_change_list_is_cut_at_its_entry_budget_and_a_patch_past_its_budget_is_refus
         (changes.len(), complete),
         (budget::MAX_CHANGE_ENTRIES, false)
     );
-    assert!(serialized < budget::CHANGE_LIST_RESERVATION - budget::CHANGE_STATUS_STDOUT);
+    assert!(
+        serialized
+            < budget::CHANGE_LIST_RESERVATION
+                - budget::CHANGE_STATUS_STDOUT
+                - budget::LINE_COUNT_RESERVATION
+    );
 
     let line = "x".repeat(99) + "\n";
     write(

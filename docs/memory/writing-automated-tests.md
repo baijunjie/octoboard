@@ -85,6 +85,16 @@ wherever the CLI is installed. Call `test_support::offer_models` for that agent 
 models and efforts the test uses. It seeds the default account only; a test that gives a model under another account
 is checked against that account's own list.
 
+## Test a daemon budget by lowering it, never by asserting its value
+
+Applies to daemon tests of a limit in `apps/daemon/src/browse/budget.rs` whose real figure no small fixture reaches. A
+test asserting the constant equals its figure fails when the figure is retuned and passes when the check enforcing it
+is deleted, so it tests nothing. Have the production code read the limit through a getter that a `#[cfg(test)]`
+`thread_local!` override can lower — `tree_diff::tree_diff_stdout` with `TREE_DIFF_STDOUT_OVERRIDE` is the shape — set
+the override around the call in the test, clear it after, and assert what happens past the limit. The override is per
+thread, so it reaches only code running on the test's own thread: the browse fixtures' `serve` calls in directly,
+while anything moved onto another thread (`spawn_blocking`, a request through the coordinator) reads the real figure.
+
 ## Verify behaviour derived from an agent's output by replaying a committed capture
 
 Anything the daemon derives from what an agent CLI emits — a hook payload, the transcript it writes,

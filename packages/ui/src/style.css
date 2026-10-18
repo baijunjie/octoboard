@@ -633,6 +633,8 @@ html {
   --warning-glyph: oklch(0.5 0.15 55);
   --accent-glyph: var(--app-accent);
   --success-glyph: oklch(0.55 0.15 150);
+  --line-added: color-mix(in oklab, var(--success-glyph) 80%, var(--foreground));
+  --line-removed: color-mix(in oklab, var(--app-danger) 80%, var(--foreground));
 }
 
 .dark,
@@ -640,7 +642,17 @@ html {
   --warning-glyph: var(--warning);
   --accent-glyph: oklch(0.7 0.15 254);
   --success-glyph: var(--success);
+  --line-added: color-mix(in oklab, var(--success-glyph) 80%, var(--foreground));
+  --line-removed: color-mix(in oklab, var(--app-danger) 80%, var(--foreground));
 }
+
+/* The `+N` and `-M` of a change row (`LineCounts` in `browser/changeRow.tsx`) are small text on
+   the row's resting, hovered and selected fills, so they need 4.5:1 there, which the glyph greens
+   and `--app-danger` alone miss (the green 3.72:1 and the red 3.96:1 on a selected light row).
+   Mixing 20% of the foreground into each clears it in both appearances: at least 5.02:1 in light
+   and 5.42:1 in dark, on the panel under the row's three fills. The `+` and `-` signs carry the
+   meaning beside the colour. The tokens are set in both blocks above because `color-mix` resolves
+   its `var()`s where it is declared. */
 
 /* A console's default avatar (`ConsoleAvatar.tsx`): the network glyph in
    `--avatar-foreground` on one of these, picked from the name. Muted fills on hues spread around
@@ -689,6 +701,8 @@ html {
   --color-warning-glyph: var(--warning-glyph);
   --color-accent-glyph: var(--accent-glyph);
   --color-success-glyph: var(--success-glyph);
+  --color-line-added: var(--line-added);
+  --color-line-removed: var(--line-removed);
   --color-avatar-foreground: var(--avatar-foreground);
 }
 

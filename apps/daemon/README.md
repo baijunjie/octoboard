@@ -115,8 +115,9 @@ changes. The wire contract and budgets are in "Browsing a project" in [`PROTOCOL
 | `compare.rs` | Local branches, each with the remote branch to compare it with when it is the main working copy's, and the comparison of a branch with a local branch, a remote-tracking branch or the empty tree: `branches`, `list`, `read`, `read_bodies` |
 | `commits.rs` | The commits a branch made since it forked from another, or its whole history from the empty tree: `list`, `read`, `read_bodies` |
 | `tree_diff.rs` | Reading `git`'s raw tree-diff output, and the stdout budget it is read under, shared by `compare.rs` and `commits.rs` |
+| `line_counts.rs` | The lines each listed change adds and removes (`LineStats`), read from `git`'s numstat output beside the listing's own read under its own short deadline and output budget, with untracked files counted from disk; advisory, so a failed or over-budget run leaves a listing without counts. Used by `changes.rs`, `compare.rs` and `commits.rs`: `wanted`, `read_diff`, `read_log`, `apply`, `count_file` |
 | `budget.rs`, `lane.rs` | The limits every read is held to, and the per-connection lane (outstanding-request bound, superseding, retained-bytes reservation) |
-| `tests.rs`, `change_tests.rs`, `compare_tests.rs`, `commits_tests.rs`, `nested_tests.rs`, `body_tests.rs` | Test-only end-to-end tests over real repositories |
+| `tests.rs`, `change_tests.rs`, `compare_tests.rs`, `commits_tests.rs`, `line_count_tests.rs`, `nested_tests.rs`, `body_tests.rs` | Test-only end-to-end tests over real repositories |
 
 ### `src/adapter/`
 

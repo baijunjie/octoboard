@@ -43,6 +43,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 
 use anyhow::Result;
 
@@ -210,22 +211,45 @@ impl GitEnv {
         stdout_limit: usize,
         cancel: &AtomicBool,
     ) -> Result<Vec<u8>, GitError> {
-        self.run_command(
-            &mut self.command(dir, subcommand, args),
+        self.run_within(
+            dir,
+            subcommand,
+            args,
             stdout_limit,
+            budget::GIT_READ_TIMEOUT,
             cancel,
         )
     }
 
-    /// Runs `command`, built by [`GitEnv::command`] and then adjusted, as [`GitEnv::run`] does.
+    /// [`GitEnv::run`] with a deadline of `timeout` instead of the browse reads' own.
+    pub fn run_within(
+        &self,
+        dir: &Path,
+        subcommand: &str,
+        args: &[&[u8]],
+        stdout_limit: usize,
+        timeout: Duration,
+        cancel: &AtomicBool,
+    ) -> Result<Vec<u8>, GitError> {
+        self.run_command(
+            &mut self.command(dir, subcommand, args),
+            stdout_limit,
+            timeout,
+            cancel,
+        )
+    }
+
+    /// Runs `command`, built by [`GitEnv::command`] and then adjusted, as [`GitEnv::run`] does,
+    /// within `timeout`.
     pub fn run_command(
         &self,
         command: &mut Command,
         stdout_limit: usize,
+        timeout: Duration,
         cancel: &AtomicBool,
     ) -> Result<Vec<u8>, GitError> {
         let bounds = Bounds {
-            timeout: budget::GIT_READ_TIMEOUT,
+            timeout,
             stdout_limit,
             stderr_limit: budget::GIT_STDERR,
         };
@@ -262,7 +286,7 @@ impl GitEnv {
         // The magic below spells out literal matching itself; under `GIT_LITERAL_PATHSPECS` it
         // would be read as part of the name.
         command.env_remove("GIT_LITERAL_PATHSPECS");
-        self.run_command(&mut command, stdout_limit, cancel)
+        self.run_command(&mut command, stdout_limit, budget::GIT_READ_TIMEOUT, cancel)
     }
 
     #[cfg(test)]

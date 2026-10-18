@@ -7,16 +7,22 @@ import { onTestFinished } from "vitest";
 import { errorText } from "../errorText";
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
-import type { ChangeEntry } from "../protocol";
+import { isolate } from "../i18n/isolate";
+import type { ChangeEntry, LineStats } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import type { ChangeViewState } from "./changeView";
 
-/** A modified file, in the staged or the unstaged section. */
-export const change = (group: "staged" | "unstaged", path: string): ChangeEntry => ({
+/** A modified file, in the staged or the unstaged section, with the lines the daemon counted for it. */
+export const change = (group: "staged" | "unstaged", path: string, stats?: LineStats): ChangeEntry => ({
   group,
   old: { state: "present", path, kind: "file", source: { kind: "index", worktree: "w", blob: "b" } },
   new: { state: "present", path, kind: "file", source: { kind: "live", root_id: "r", version: "v" } },
+  ...(stats ? { stats } : {}),
 });
+
+/** The file row named `name`, found by its accessible name. */
+export const rowOf = (container: HTMLElement, name: string): HTMLElement =>
+  [...container.querySelectorAll<HTMLElement>("[role=row]")].find((row) => row.getAttribute("aria-label")?.startsWith(isolate(name)))!;
 
 /** A file a commit changed, in the committed section. */
 export const committedChange = (path: string): ChangeEntry => ({

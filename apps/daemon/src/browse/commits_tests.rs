@@ -115,7 +115,12 @@ impl Fixture {
 /// Commits `files` (a body, or `None` to delete it) on the branch checked out in `repo` with
 /// `message`, dated `second` seconds after a fixed moment so that `git log` orders the commits by
 /// it rather than by a tie, and returns the commit.
-fn commit_at(repo: &Path, message: &str, second: u32, files: &[(&str, Option<&[u8]>)]) -> String {
+pub(super) fn commit_at(
+    repo: &Path,
+    message: &str,
+    second: u32,
+    files: &[(&str, Option<&[u8]>)],
+) -> String {
     for (path, body) in files {
         match body {
             Some(body) => write(repo.join(path), body),
@@ -198,7 +203,7 @@ fn a_commit_list_is_each_commit_since_the_fork_newest_first_against_its_first_pa
     );
     assert!(listed.complete && listed.commits_complete);
     let a_txt = |commit: &CommitChanges| match &commit.changes[0] {
-        ChangeEntry::Committed { old, new } => (old.clone(), new.clone()),
+        ChangeEntry::Committed { old, new, .. } => (old.clone(), new.clone()),
         other => panic!("not a committed change: {other:?}"),
     };
     let (old, new) = a_txt(&listed.commits[1]);
@@ -437,7 +442,7 @@ fn a_commit_list_is_cut_at_its_path_budget() {
 
 #[test]
 fn a_worst_case_commit_list_fits_the_reservation_it_is_made_under() {
-    use crate::protocol::SideKind;
+    use crate::protocol::{LineStats, SideKind};
     let id = "f".repeat(64);
     let side = |path: &str| ChangeSide::Present {
         path: path.to_string(),
@@ -454,6 +459,10 @@ fn a_worst_case_commit_list_fits_the_reservation_it_is_made_under() {
     let entry = ChangeEntry::Committed {
         old: side(&path),
         new: side(&path),
+        stats: Some(LineStats {
+            added: u64::MAX,
+            removed: u64::MAX,
+        }),
     };
     let per_commit = budget::MAX_CHANGE_ENTRIES / budget::MAX_COMMITS;
     let commit = |changes: Vec<ChangeEntry>| CommitChanges {
@@ -490,7 +499,8 @@ fn a_worst_case_commit_list_fits_the_reservation_it_is_made_under() {
     let commits = budget::MAX_COMMITS * budget::COMMIT_ENTRY_BYTES;
     assert!(serialized(&worst) <= paths + entries + commits);
     assert!(
-        2 * (paths + entries + commits) + budget::TREE_DIFF_STDOUT <= budget::COMMITS_RESERVATION
+        2 * (paths + entries + commits) + budget::TREE_DIFF_STDOUT + budget::LINE_COUNT_RESERVATION
+            <= budget::COMMITS_RESERVATION
     );
 }
 

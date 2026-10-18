@@ -6,7 +6,7 @@ import { enter, leave, openTooltip, withFakeTimers } from "../components/tooltip
 import { isolate } from "../i18n/isolate";
 import type { ChangeEntry, ChangeSide } from "../protocol";
 import type { StatusKey } from "../viewer/statusMarks";
-import { change, changeViewFixture, mountRows } from "./browserTestSupport";
+import { change, changeViewFixture, mountRows, rowOf } from "./browserTestSupport";
 import { ChangeList } from "./ChangeList";
 import { changeItems } from "./changes";
 
@@ -28,11 +28,11 @@ const cases: { status: StatusKey; letter: string; word: string; name: string; en
   { status: "conflicted", letter: "C", word: "Conflicted", name: "conflicted.ts", entry: { group: "conflicted", path: "d/conflicted.ts", conflict: "both_modified" } },
 ];
 
-function render(layout: "flat" | "tree") {
+function render(layout: "flat" | "tree", entries: ChangeEntry[] = cases.map((c) => c.entry)) {
   const settle = withFakeTimers();
   const container = mountRows(
     <ChangeList
-      items={changeItems(cases.map((c) => c.entry))}
+      items={changeItems(entries)}
       selected={undefined}
       label="Changes"
       onOpen={() => {}}
@@ -45,8 +45,6 @@ function render(layout: "flat" | "tree") {
   settle();
   return { container, settle };
 }
-const rowOf = (container: HTMLElement, name: string) =>
-  [...container.querySelectorAll<HTMLElement>("[role=row]")].find((row) => row.getAttribute("aria-label")?.startsWith(isolate(name)))!;
 const chipOf = (row: HTMLElement) => row.querySelector<HTMLElement>("[data-slot=chip]")!;
 const press = (element: HTMLElement, key: string) =>
   act(() => {
@@ -145,4 +143,51 @@ it.each(["flat", "tree"] as const)("%s: goes when the list is scrolled, and is n
   leave(chip);
   settle();
   expect(vi.getTimerCount()).toBe(0);
+});
+
+const counted = [
+  change("unstaged", "d/both.ts", { added: 1234, removed: 2 }),
+  change("unstaged", "d/added.ts", { added: 5, removed: 0 }),
+  change("unstaged", "d/removed.ts", { added: 0, removed: 7 }),
+  change("unstaged", "d/mode.ts", { added: 0, removed: 0 }),
+  change("unstaged", "d/binary.ts"),
+];
+/** The visible counts at the end of a row: its text and the tones of its two halves. */
+const countsOf = (row: HTMLElement) => {
+  const counts = row.querySelector<HTMLElement>("[dir=ltr][aria-hidden=true]");
+  return counts && { text: counts.textContent, tones: [...counts.children].map((part) => part.className) };
+};
+
+it.each(["flat", "tree"] as const)("%s: shows a file's added and removed lines at the end of its row, each in its own tone", (layout) => {
+  const { container } = render(layout, counted);
+  expect(countsOf(rowOf(container, "both.ts"))).toEqual({ text: "+1,234-2", tones: ["text-line-added", "text-line-removed"] });
+  expect(countsOf(rowOf(container, "added.ts"))).toEqual({ text: "+5", tones: ["text-line-added"] });
+  expect(countsOf(rowOf(container, "removed.ts"))).toEqual({ text: "-7", tones: ["text-line-removed"] });
+});
+
+it.each(["flat", "tree"] as const)("%s: shows nothing for a file the daemon did not count or that changed no line", (layout) => {
+  const { container } = render(layout, counted);
+  expect(countsOf(rowOf(container, "binary.ts"))).toBeNull();
+  expect(countsOf(rowOf(container, "mode.ts"))).toBeNull();
+});
+
+it.each(["flat", "tree"] as const)("%s: says the counts in the row's accessible name, and hides the drawn ones from it", (layout) => {
+  const { container } = render(layout, counted);
+  const folder = layout === "flat" ? `, ${isolate("d")}` : "";
+  expect(rowOf(container, "both.ts").getAttribute("aria-label")).toBe(`${isolate("both.ts")}, modified${folder}, lines added: 1,234, removed: 2`);
+  expect(rowOf(container, "binary.ts").getAttribute("aria-label")).toBe(`${isolate("binary.ts")}, modified${folder}`);
+});
+
+it("gives a directory row no total", () => {
+  const { container } = render("tree", counted);
+  const directory = container.querySelector<HTMLElement>("[role=row][aria-expanded]")!;
+  expect(directory).not.toBeNull();
+  expect(countsOf(directory)).toBeNull();
+});
+
+it.each(["flat", "tree"] as const)("%s: keeps the room of the actions button while it is hidden, so the counts do not move", (layout) => {
+  const { container } = render(layout, counted);
+  const row = rowOf(container, "both.ts");
+  expect(row.querySelector("button")).not.toBeNull();
+  expect(row.querySelector(".max-w-0")).toBeNull();
 });

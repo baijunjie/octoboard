@@ -946,8 +946,9 @@ ContentSource     = { kind: "live", root_id, version }
                   | { kind: "index", worktree, blob }
                   | { kind: "commit", commit, branch?, blob }
 FileContent       { size, kind: "text"|"binary", media_type?, text?, data? }
-ChangeEntry       = { group: "staged"|"unstaged"|"untracked"|"committed", old: ChangeSide, new: ChangeSide }
+ChangeEntry       = { group: "staged"|"unstaged"|"untracked"|"committed", old: ChangeSide, new: ChangeSide, stats?: LineStats }
                   | { group: "conflicted", path, conflict }
+LineStats         { added, removed }
 ChangeSide        = { state: "present", path, kind: "file"|"symlink"|"submodule", source: ContentSource }
                   | { state: "absent" }
                   | { state: "out_of_scope", repository_path }
@@ -1136,6 +1137,23 @@ symbolic link — what lies beyond a link is, to Git, not there — and its `sou
 would report while it stays as it is. A list over its budget is cut and carries `complete: false`, as a listing does: at
 most 10,000 entries or 2 MiB of paths as sent, the entries `git status` gave first.
 
+A listed change carries `stats`, the lines it adds and removes (`added`, `removed`), for a change of files inside the
+project; it is absent where the daemon does not count, and a client shows nothing then. The counts of a staged and an
+unstaged change are `git diff --numstat` (`--cached` for the staged ones, submodules ignored), a comparison's are
+`git diff-tree --numstat` and a commit's `git log --numstat`, each run beside the listing's own read, limited to the
+project's directory and with rename detection on, so a rename counts only what changed on top of it and an unstaged
+change counts against the index. The listing detects renames over the whole tree and a count run only within the
+project's directory, so a count is kept only for a change of the same shape: a rename's for a change with the same source
+and destination, and any other for a change that is no rename. Counts are advisory: a run that fails, prints past its
+output budget or runs past its own deadline (5 s, not the `git` deadline, so that a slow run is dropped and the listing
+returns at once) leaves the listing without counts and never fails it. An untracked file has no diff, so it is counted
+from the disk, every line an addition, by the same rule `lines` counts (an unterminated last line counts); one over the
+file body budget, one whose content looks binary the way `git` judges it (a NUL in its first 8000 bytes; its
+`.gitattributes` are not consulted, so a file marked binary or `-diff` still gets a count) and every file past the
+untracked-count budget are left uncounted. Never counted: a binary file (`git` prints `-`), a link, a submodule, a type
+change, and a change with a side outside the project (a rename across its boundary), whose count would draw on content
+outside it. A change of nothing but a mode, or a pure rename, counts 0 and 0.
+
 `read_project_change` reads the change at the paths it names as they are when it is read; a side named absent is looked
 up at the other side's path, so an addition that has since become a modification reads as one. A staged change is read
 against the commit at `HEAD`, resolved first and named in the reply's `head` (the empty tree before the first commit; a
@@ -1161,8 +1179,9 @@ side, and a side read from the disk unless its body is carried, and either side 
 carried for (a change of mode alone, a pure rename), where no separator bar needs a count. A patch with no hunk whose
 bodies the reply does carry — a binary change — counts both sides from them all the same. A disk side is not counted
 from the disk on purpose: `git` numbers the lines of its cleaned content (a configured clean filter, such as Git LFS's),
-which the file's own lines need not match. The listing carries none, since it reads no content. A reply that carries a
-side's body counts the body's bytes; for a file side that is an object of the index or a commit, whose patch shows its
+which the file's own lines need not match. The listing carries no `lines`, since it reads no content; its entries'
+`stats` are counted apart, as above. A reply that carries a side's body counts the body's bytes; for a file side that is
+an object of the index or a commit, whose patch shows its
 content, one `git grep --no-textconv --no-color -G -c -e '' <old-blob> <new-blob> --` counts both blobs at once, named
 by bare object id, as `<id>:<count>` per blob (an empty blob prints no line, and when neither blob prints one `git`
 exits 1, which is not a failure). It takes no pathspec, so nothing of the worktree is searched and
@@ -1414,6 +1433,9 @@ born yet, and its staged changes are compared with the empty tree.
 | Search elapsed time | 5 s, checked between entries | Bounds traversal work while allowing the current filesystem operation to finish |
 | Change entries | 10,000 | The largest measured commit changed 704 files and 99 % changed under 170; a worktree's pending changes are smaller still. A change list past it is cut |
 | Change paths | 2 MiB, as sent | Bounds a change list whose entries are few but whose paths are long, counted as JSON writes them, the repository paths of sides outside the project included. A change list past it is cut |
+| Untracked files counted, per change list | 32 MiB | The bytes of untracked files a change list reads to count their lines, together; a file over the file body budget is never counted. Reached only by something like an untracked dependency directory nobody ignored, where reading every file would be the listing's slowest part. The files past it are listed without a count |
+| Line counts output, per listing | 2 MiB | The `git diff --numstat` or `git log --numstat` behind a listing's `stats`, sized for what a listing carries: two counts and a path (two for a rename) a record, within the path budget. A run that prints more, as one beside a cut listing can, leaves the listing without counts |
+| Line counts deadline | 5 s | The counts are an addition to a listing already read, so a slow run is dropped quickly rather than waiting out the `git` deadline; the listing goes without counts |
 | Branches | 10,000 | A repository usually has a handful to tens of local branches, and one kept for years with every branch left behind a few thousand. A branch list past it is cut |
 | Branch names | 2 MiB, as sent | Bounds a branch list whose branches are few but whose names are long, counted as JSON writes them, the name of an upstream with its branch's. A branch list past it is cut |
 | Branch origins, per repository | 1,000 | Which session is working on a branch, kept in the daemon's database (see "Comparing two branches"). In a repository with more branches than this the ones a listing reaches first keep theirs and the rest carry none; a record past the cap is dropped oldest first, by the time its branch was created. A branch list reserves 768 bytes for each one it attaches, as JSON writes it |
@@ -1432,7 +1454,7 @@ born yet, and its staged changes are compared with the empty tree.
 | `git` deadline | 30 s | Browse reads are local, so this only catches a wedged repository (a dead network volume, a held lock) |
 | Reads at once, daemon-wide | 4 | A viewer, its neighbour and a couple of directory expansions in parallel; more waits its turn. A read from disk has no deadline, so a volume that stops answering can hold these |
 | Outstanding requests, per connection | 16 | Waiting, being read, or queued until their reply is written. One more is refused with `limit_exceeded` at once, so a flooding client cannot grow the daemon's backlog |
-| Reserved per request | about 12 MiB for a file or a project source, about 7.8 MiB for a listing, about 11.8 MiB for a branch list, about 26.6 MiB for a change list or a comparison, about 26.9 MiB for a commit list, about 24.3 MiB for a change of either, or for the bodies of one | Each request reserves its worst case before it starts. For a file that is three times the file body (a text body held as read and serialized, JSON escaping at most doubling it; a binary body held base64-encoded and serialized again) and room for the rest of the frame; for a listing, its names and the rest of its entries, each held as read and serialized; for a branch list, the `git for-each-ref` output while it is read, its branches at 128 bytes each beside their names and the origins attached to at most 1,000 of them at 768 bytes each, held as built and serialized, and the upstream lookup's names and output; for a change list, the `git status` output while it is read and its entries, at 768 bytes each beside their paths, held as built and serialized, and for a comparison the same with its `git diff-tree` output, and for a commit list the same with its `git log` output and its commits at 1,536 bytes each beside their changes; for a change of either kind, two bodies as a file reserves them beside a patch of at most 64 KiB, a body coming with a patch only when the patch carries no content (a text patch alone, at most 4 MiB, needs no more than one body). The reservation shrinks to the serialized reply and is given back once the reply is written to the socket. A reply that would be larger than its reservation is refused (`reply_bytes`) |
+| Reserved per request | about 12 MiB for a file or a project source, about 7.8 MiB for a listing, about 11.8 MiB for a branch list, about 35 MiB for a change list or a comparison, about 35.3 MiB for a commit list, about 24.3 MiB for a change of either, or for the bodies of one | Each request reserves its worst case before it starts. For a file that is three times the file body (a text body held as read and serialized, JSON escaping at most doubling it; a binary body held base64-encoded and serialized again) and room for the rest of the frame; for a listing, its names and the rest of its entries, each held as read and serialized; for a branch list, the `git for-each-ref` output while it is read, its branches at 128 bytes each beside their names and the origins attached to at most 1,000 of them at 768 bytes each, held as built and serialized, and the upstream lookup's names and output; for a change list, the `git status` output while it is read and its entries, at 768 bytes each beside their paths, held as built and serialized, and for a comparison the same with its `git diff-tree` output, and for a commit list the same with its `git log` output and its commits at 1,536 bytes each beside their changes, each with the line counts' output (2 MiB) and the paths and records they are matched with, at 128 bytes each beside their paths; for a change of either kind, two bodies as a file reserves them beside a patch of at most 64 KiB, a body coming with a patch only when the patch carries no content (a text patch alone, at most 4 MiB, needs no more than one body). The reservation shrinks to the serialized reply and is given back once the reply is written to the socket. A reply that would be larger than its reservation is refused (`reply_bytes`) |
 | Bytes held for replies, per connection | about 48 MiB | Four file reads at their worst, so one window gets every read the daemon runs at a time |
 | Bytes held for replies, daemon-wide | about 96 MiB | Twice one connection's share, so a client that stops reading cannot hold every other connection's reads up |
 | Writing one frame | 30 s | Any frame on the control socket, not only a browse reply. On a loopback connection a client that takes no bytes for this long has stopped reading; its connection is closed, giving back what its queued replies held, and it reconnects to a fresh `snapshot` and asks again |

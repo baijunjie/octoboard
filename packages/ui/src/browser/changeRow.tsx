@@ -5,7 +5,8 @@ import { AnchoredTooltip } from "../components/AnchoredTooltip";
 import { FadeOverflow } from "../components/FadeOverflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import { Message, useT } from "../i18n/react";
+import { Message, useCurrentLanguage, useT } from "../i18n/react";
+import type { LineStats } from "../protocol";
 import { StatusChip } from "../viewer/StatusChip";
 import { STATUS_LABELS, STATUS_MARKS, type StatusKey } from "../viewer/statusMarks";
 import { displayWirePath, wireBaseName } from "../wirePath";
@@ -51,7 +52,17 @@ function rowDetail(t: Translate, item: ChangeItem, inFolder: boolean): { shown: 
   return { shown: folder, sentence: isolate(folder) };
 }
 
-/** What a change's row is named, for assistive technology, and says beside its name. */
+/** What a change adds and removes, when it is worth saying: the daemon counted it and it is not a
+ * change of nothing but a mode or a name. */
+function lineStats(item: ChangeItem): LineStats | undefined {
+  const { entry } = item;
+  if (entry.group === "conflicted" || !entry.stats) return undefined;
+  return entry.stats.added + entry.stats.removed > 0 ? entry.stats : undefined;
+}
+
+/** What a change's row is named, for assistive technology, and says beside its name. The line
+ * counts the row shows at its end are part of the sentence after the name and status, with the
+ * detail. */
 export function changeRowText(
   t: Translate,
   item: ChangeItem,
@@ -59,18 +70,23 @@ export function changeRowText(
   inFolder: boolean,
 ): { name: string; detail: string; ariaLabel: string } {
   const name = wireBaseName(item.path);
-  const { shown: detail, sentence } = rowDetail(t, item, inFolder);
+  const { shown: detail, sentence: detailSentence } = rowDetail(t, item, inFolder);
   const status = t(STATUS_WORDS[item.status]);
+  const stats = lineStats(item);
+  const lines = stats ? t("git.row.lines", stats) : "";
+  const sentence = detailSentence !== "" && lines !== "" ? t("git.row.detailLines", { detail: detailSentence, lines }) : detailSentence || lines;
   const ariaLabel =
-    detail === ""
+    sentence === ""
       ? t(isSelected ? "git.row.selected" : "git.row", { name: isolate(name), status })
       : t(isSelected ? "git.row.detail.selected" : "git.row.detail", { name: isolate(name), status, detail: sentence });
   return { name, detail, ariaLabel };
 }
 
 /** What a change's row shows: its status mark, its file's name and the detail beside it, and at its
- * end the button of the row's actions. A committed change names versions in commits rather than in
- * a worktree, so its actions have no live directory to act on, whatever the list's is. */
+ * end the lines it adds and removes and the button of the row's actions. The button keeps its room
+ * while hidden, so the counts do not move when it shows. A committed change names versions in
+ * commits rather than in a worktree, so its actions have no live directory to act on, whatever the
+ * list's is. */
 export function ChangeRowBody({ item, name, detail, contextTargetRef }: { item: ChangeItem; name: string; detail: string; contextTargetRef: React.RefObject<HTMLElement | null> }): React.ReactElement {
   const prose = pathDetail(item);
   const shownDetail = prose ? <Message id={prose.id} params={{ path: <InlineChip monospace size="inherit">{prose.path}</InlineChip> }} /> : detail;
@@ -80,19 +96,40 @@ export function ChangeRowBody({ item, name, detail, contextTargetRef }: { item: 
       <FadeOverflow as="span" dir="auto" className="min-w-0 shrink" titleWhenClipped={name}>
         {name}
       </FadeOverflow>
-      {detail !== "" && (
+      {detail !== "" ? (
         <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1 text-xs text-app-muted" titleWhenClipped={shownDetail}>
           {shownDetail}
         </FadeOverflow>
+      ) : (
+        <span className="flex-1" />
       )}
+      <LineCounts item={item} />
       {item.entry.group === "committed" ? (
         <RowPathScope.Provider value={undefined}>
-          <RowActions contextTargetRef={contextTargetRef} path={item.path} name={name} />
+          <RowActions reserve contextTargetRef={contextTargetRef} path={item.path} name={name} />
         </RowPathScope.Provider>
       ) : (
-        <RowActions contextTargetRef={contextTargetRef} path={item.path} name={name} />
+        <RowActions reserve contextTargetRef={contextTargetRef} path={item.path} name={name} />
       )}
     </>
+  );
+}
+
+/** The lines a change adds and removes, at the end of its row: `+N` in green and `-M` in red, each
+ * left out when it is none. It is a visual duplicate of what the row's accessible name says
+ * (`changeRowText`), so it stays out of the accessibility tree, and it keeps its order and its
+ * digits whatever the text direction, as a diff's own gutter does. It never shrinks: the name gives
+ * way first. */
+function LineCounts({ item }: { item: ChangeItem }): React.ReactElement | null {
+  const language = useCurrentLanguage();
+  const stats = lineStats(item);
+  if (!stats) return null;
+  const number = new Intl.NumberFormat(language);
+  return (
+    <span aria-hidden="true" dir="ltr" className="flex shrink-0 gap-1.5 text-xs tabular-nums">
+      {stats.added > 0 && <span className="text-line-added">+{number.format(stats.added)}</span>}
+      {stats.removed > 0 && <span className="text-line-removed">-{number.format(stats.removed)}</span>}
+    </span>
   );
 }
 

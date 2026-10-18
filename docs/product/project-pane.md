@@ -56,7 +56,7 @@ The **Files** and **Changes** tabs in the header switch directly between the pro
 explicitly chooses Files. Both tabs remain available while content is loading, has failed, or has no repository.
 
 Only the mode on screen is kept up to date on its own: the Files tree as "Keeping the tree up to date" below says,
-a file-name search as "Filtering by file name" below says, and the Git mode as "Keeping the list up to date" in `docs/product/project-pane-git-mode.md` says. Switching to a mode counts as
+a file-name search as "Filtering by file name" below says, and the Git mode as "Keeping the list up to date" in `docs/product/project-pane-git-change-list.md` says. Switching to a mode counts as
 showing it again, so the tree or the Git mode's changes are refreshed when their last refresh is more than 5 seconds old; an active
 file-name search is repeated whenever its filter is shown again. The
 header's **Refresh** refreshes the mode on screen: in Files every visible folder of the unfiltered tree is listed
@@ -235,7 +235,7 @@ menu at the pointer** (Control-click also works in the desktop app).
   neither action**, since it names versions in commits rather than in a live worktree: its only action is Copy path.
 - **Copy path** puts the file or folder's path on the clipboard, slash separated, as a path within the project. For a
   change it is the path the row names, which for a rename is its new path — the old one only where the new side is
-  absent (a deletion) or outside the project (see "What is listed" in `docs/product/project-pane-git-mode.md`). The path
+  absent (a deletion) or outside the project (see "What is listed" in `docs/product/project-pane-git-change-list.md`). The path
   is copied **as the window shows it**, for a human to paste: a byte of a name that is not valid UTF-8 is copied as the
   replacement character U+FFFD, the character the name is displayed with. A **toast** then confirms that the path was
   copied; where the clipboard refuses it, an error alert says it could not be copied (see "Error alerts" in `docs/product/error-alerts.md`). The
@@ -243,9 +243,11 @@ menu at the pointer** (Control-click also works in the desktop app).
 - **The Git mode's grouping folders and commit rows have no button**, and neither does a row that says something about a folder instead
   of listing an entry (loading, empty, unreadable, cut short; see "Rows and the keyboard" above).
 - **The button shows while its row is hovered, holds keyboard focus, is the selected file or change, or has its menu
-  open**, fading and opening out as it appears, as the sidebar's row controls do (see "Rows, names and keyboard focus"
-  in `docs/product/sidebar.md`). While hidden it takes up no width, so the entry's name has the room; it is reachable
-  from the keyboard either way.
+  open**, and is reachable from the keyboard either way. In Files it fades and opens out as it appears, as the
+  sidebar's row controls do (see "Rows, names and keyboard focus" in `docs/product/sidebar.md`), and while hidden it
+  takes up no width, so the entry's name has the room. In the Git mode's change list it keeps its room while hidden and
+  only fades in, so the line counts before it do not move (see "Line counts" in
+  `docs/product/project-pane-git-change-list.md`).
 - **The keyboard reaches it along the row, not with Tab.** Tab moves into the tree or the change list and out of it
   again, never along a row's parts; it is the arrow key that runs along the row — Right, Left under a right-to-left
   language — that moves from the row to its button; the opposite key moves back to the row. On a collapsed folder that

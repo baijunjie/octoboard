@@ -56,7 +56,7 @@ pub const MAX_CHANGE_PATH_BYTES: usize = 2 * 1024 * 1024;
 
 /// What one change listing entry takes beyond its paths, counted generously as JSON writes it: two
 /// sides, each with its kind and a source naming a commit, a worktree, a directory or a version and
-/// an object id (64 hex digits in a SHA-256 repository).
+/// an object id (64 hex digits in a SHA-256 repository), and the `stats` of its line counts.
 pub const CHANGE_ENTRY_BYTES: usize = 768;
 
 /// The most stdout the `git status` behind a change listing may print. It covers the whole
@@ -73,6 +73,34 @@ pub const CHANGE_STATUS_STDOUT: usize = 8 * 1024 * 1024;
 /// repository's root is read within its own directory instead, and a read still past it is
 /// refused rather than built from part of the output.
 pub const TREE_DIFF_STDOUT: usize = 8 * 1024 * 1024;
+
+/// The most bytes of untracked files one change listing reads to count their lines, together;
+/// the files past it are listed without a count. A file larger than [`MAX_FILE_BYTES`] is never
+/// counted. This is reached only by something like an untracked dependency directory nobody
+/// ignored, where reading every file would be the listing's slowest part.
+pub const UNTRACKED_COUNT_BYTES: usize = 32 * 1024 * 1024;
+
+/// The most stdout the `git diff --numstat` or `git log --numstat` behind a listing's line counts
+/// may print: sized for what a listing carries (a record is two counts and a path, two for a
+/// rename, within [`MAX_CHANGE_PATH_BYTES`] of paths). A run that prints more, as one beside a
+/// cut listing can, leaves the listing without counts.
+pub const LINE_COUNT_STDOUT: usize = 2 * 1024 * 1024;
+
+/// The deadline of a line count run. The counts are an addition to a listing that is already
+/// read, so a run that is slow (a huge diff, a repository on a slow volume) is dropped quickly and
+/// the listing returns without counts, rather than waiting out [`GIT_READ_TIMEOUT`] for them.
+pub const LINE_COUNT_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// What one entry of the map of a line count run takes beyond its path: the key and the record
+/// as the map holds them, with their per-entry overhead, counted generously.
+pub const LINE_COUNT_ENTRY_BYTES: usize = 128;
+
+/// What a listing's line counts reserve beyond the listing itself: the output of a count run, and
+/// the paths a listing asks counts for and the records read back, each at its largest. The
+/// untracked files read for their counts come one at a time after a run's buffers are released,
+/// and fit in it.
+pub const LINE_COUNT_RESERVATION: usize =
+    LINE_COUNT_STDOUT + 2 * (MAX_CHANGE_PATH_BYTES + MAX_CHANGE_ENTRIES * LINE_COUNT_ENTRY_BYTES);
 
 /// The most commits one commit listing carries, newest first, before it is cut and marked
 /// incomplete. A branch under review usually holds a handful to a few tens of commits since it
@@ -184,20 +212,25 @@ pub const READ_RESERVATION: usize = 3 * MAX_FILE_BYTES + 64 * 1024;
 pub const LISTING_RESERVATION: usize = 2 * (MAX_LISTING_NAME_BYTES + MAX_DIR_ENTRIES * 200);
 
 /// What a change listing reserves: the `git status` output while it is parsed, and its entries at
-/// [`MAX_CHANGE_ENTRIES`] with [`MAX_CHANGE_PATH_BYTES`] of paths, held as built and as serialized.
-pub const CHANGE_LIST_RESERVATION: usize =
-    CHANGE_STATUS_STDOUT + 2 * (MAX_CHANGE_PATH_BYTES + MAX_CHANGE_ENTRIES * CHANGE_ENTRY_BYTES);
+/// [`MAX_CHANGE_ENTRIES`] with [`MAX_CHANGE_PATH_BYTES`] of paths, held as built and as serialized,
+/// and its line counts ([`LINE_COUNT_RESERVATION`]).
+pub const CHANGE_LIST_RESERVATION: usize = CHANGE_STATUS_STDOUT
+    + LINE_COUNT_RESERVATION
+    + 2 * (MAX_CHANGE_PATH_BYTES + MAX_CHANGE_ENTRIES * CHANGE_ENTRY_BYTES);
 
 /// What a branch comparison reserves: the `git diff-tree` output while it is parsed, and its
-/// entries as a change listing's are held. Its two endpoints, each a branch name and a commit id,
-/// fit in the room each entry is given generously.
-pub const COMPARISON_RESERVATION: usize =
-    TREE_DIFF_STDOUT + 2 * (MAX_CHANGE_PATH_BYTES + MAX_CHANGE_ENTRIES * CHANGE_ENTRY_BYTES);
+/// entries as a change listing's are held, and its line counts. Its two endpoints, each a branch
+/// name and a commit id, fit in the room each entry is given generously.
+pub const COMPARISON_RESERVATION: usize = TREE_DIFF_STDOUT
+    + LINE_COUNT_RESERVATION
+    + 2 * (MAX_CHANGE_PATH_BYTES + MAX_CHANGE_ENTRIES * CHANGE_ENTRY_BYTES);
 
 /// What a commit listing reserves: the `git log` output while it is parsed — held to the same
 /// budget as a comparison's `git diff-tree` — and its commits and their entries, held as built
-/// and as serialized, the entries across every commit within one change listing's budgets.
+/// and as serialized, the entries across every commit within one change listing's budgets, and the
+/// line counts of all of them.
 pub const COMMITS_RESERVATION: usize = TREE_DIFF_STDOUT
+    + LINE_COUNT_RESERVATION
     + 2 * (MAX_CHANGE_PATH_BYTES
         + MAX_CHANGE_ENTRIES * CHANGE_ENTRY_BYTES
         + MAX_COMMITS * COMMIT_ENTRY_BYTES);
@@ -237,5 +270,6 @@ const _: () = assert!(DIFF_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
 const _: () = assert!(COMPARISON_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
 const _: () = assert!(COMMITS_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
 const _: () = assert!(BRANCH_LIST_RESERVATION <= READ_RESERVATION);
+const _: () = assert!(MAX_FILE_BYTES <= LINE_COUNT_RESERVATION);
 const _: () = assert!(MAX_PATCH_BYTES <= MAX_FILE_BYTES);
 const _: () = assert!(MAX_RETAINED_PER_CONNECTION <= MAX_RETAINED_BYTES);

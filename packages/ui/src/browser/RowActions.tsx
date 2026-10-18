@@ -13,10 +13,12 @@ import { useDaemon } from "../store";
 export const RowPathScope = createContext<{ project: string; worktree?: string } | undefined>(undefined);
 
 /** The row's button and right-click share the same actions and focus handling. */
-export function RowActions({ path, name, directory = false, contextTargetRef }: {
+export function RowActions({ path, name, directory = false, reserve = false, contextTargetRef }: {
   path: string;
   name: string;
   directory?: boolean;
+  /** Keep the button's room while it is hidden, for a row that has content laid out before it. */
+  reserve?: boolean;
   contextTargetRef?: React.RefObject<HTMLElement | null>;
 }): React.ReactElement | null {
   const t = useT();
@@ -41,7 +43,7 @@ export function RowActions({ path, name, directory = false, contextTargetRef }: 
   }
   if (items.length === 0) return null;
   return (
-    <RowControls className="ms-auto">
+    <RowControls reserve={reserve} className="ms-auto">
       <ActionMenu
         label={t(directory ? "browser.directory.actions" : "browser.row.actions", { name: isolate(name) })}
         contextTargetRef={contextTargetRef}

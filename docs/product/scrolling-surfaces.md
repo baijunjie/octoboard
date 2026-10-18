@@ -22,7 +22,7 @@ alone, are in "The surfaces that fade" below.
   scrolls both ways included, which lies inside the fade's band for its whole length.
 - In focus mode's lists and the Git mode's change lists, the top fade begins below the section heading; see
   "What both views show" in `docs/product/focus-mode.md` and "Folding a section" in
-  `docs/product/project-pane-git-mode.md` for the headings' scrolling behavior. In Settings' Agent accounts section it
+  `docs/product/project-pane-git-change-list.md` for the headings' scrolling behavior. In Settings' Agent accounts section it
   begins below the agent tab strip once the strip is pinned at the top (see "Agent accounts" in
   `docs/product/settings.md`).
 - Only the **top and bottom** edges fade, apart from the strips that scroll sideways and fade at their sideways
@@ -45,7 +45,7 @@ Once it holds more than it can show, each of these fades at its edge:
 - the **welcome screen's** content (see "What the welcome screen shows" in `docs/product/welcome-screen.md`);
 - **every dialog's body**, and in Settings the panel holding the section on screen (see `docs/product/settings.md`);
 - the **project pane's** file tree (see "The file tree" in `docs/product/project-pane.md`), and the Git mode's change
-  list (see "The change list" in `docs/product/project-pane-git-mode.md`);
+  list (see `docs/product/project-pane-git-change-list.md`);
 - the **file viewer's** reading surfaces — a file shown as plain text, a highlighted file, a diff and a rendered
   Markdown document (see "The file viewer" in `docs/product/project-pane.md`);
 - the **lists inside a popover**: the list of branches of the Git mode's branch selector (see "The branch
@@ -100,7 +100,7 @@ covers. These are:
 **Keyboard focus does not land under a fade**: a row, a control or a region scrolled into view stops 24 px short of
 the edge, clear of the fade, rather than arriving underneath. In focus mode's lists and the Git mode's change lists
 that space is measured below the section heading (see "What both views show" in `docs/product/focus-mode.md` and
-"Folding a section" in `docs/product/project-pane-git-mode.md`), and in Settings' Agent accounts section below the
+"Folding a section" in `docs/product/project-pane-git-change-list.md`), and in Settings' Agent accounts section below the
 agent tab strip. A strip of tabs is the exception, as above.
 
 **A control in a section heading pinned at the top is not scrolled to**: in the sidebar, in focus mode and in

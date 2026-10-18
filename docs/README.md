@@ -138,13 +138,15 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   keys, closing it, a file that changes while open), its errors, and a pane that fails to load.
 - [Project pane: Git mode](product/project-pane-git-mode.md) — the project pane's read-only review of one local branch
   in the Changes tab: the branch selector (the default branch from the worktree holding the project's folder, a choice
-  that stands, a branch that goes away), its uncommitted changes (Conflicted, Staged, Unstaged, Untracked) from the
-  worktree that has it checked out, what it has committed since forking from the main working copy's branch (one
-  Committed section, its changes together or under a foldable row per commit with Group by commit, at most 100 commits),
-  a subdirectory project and renames across its boundary, the lines saying what the list is made of and what failed,
-  folding sections and commits, grouping by folder, filtering, refreshes and the comparison following the branches,
-  following the selected session, that it never writes to the repository and how it differs from the branch badge, and
-  what is remembered.
+  that stands, a branch that goes away), the repository and its worktrees, following the selected session, that it
+  never writes to the repository and how it differs from the branch badge, and what is remembered.
+- [Project pane: Git change list](product/project-pane-git-change-list.md) — the Git mode's change list: its
+  uncommitted changes (Conflicted, Staged, Unstaged, Untracked) from the worktree that has the branch checked out, what
+  it has committed since forking from the main working copy's branch (one Committed section, its changes together or
+  under a foldable row per commit with Group by commit, at most 100 commits), a subdirectory project and renames across
+  its boundary, rows and the keyboard, each row's added and removed line counts, the lines saying what the list is made
+  of and what failed, folding sections and commits, grouping by folder, filtering, and refreshes and the comparison
+  following the branches.
 - [Project pane: Git change viewer](product/project-pane-git-change-viewer.md) — opening a Git change in the file
   viewer: its tags and the subtitle naming the commits a committed change is read from, what a change shows (diffs,
   images, renames, type changes, conflicts, no differences), expanding the lines a diff collapses, moving between
@@ -389,25 +391,28 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   it and why a clean whole-file run is no evidence that it was, why a dialog test waits out react-aria's mount refocus
   before a step whose focus it asserts, why a jsdom test cannot tell where keyboard focus ends
   after a session is selected, and why it cannot tell what a selection over the viewer's code copies either, since the
-  tests mock the renderer away and the real one draws into a shadow root.
+  tests mock the renderer away and the real one draws into a shadow root; and why a daemon budget is tested by lowering
+  it through a test-only thread-local override rather than by asserting the constant, an override that reaches only
+  code on the test's own thread.
 - [Writing desktop shell code](memory/writing-desktop-shell-code.md) — rules for the Tauri shell in
   `apps/desktop/src-tauri/`: why work meant to run after the current AppKit callback returns is queued on the main
   `NSOperationQueue`, since `run_on_main_thread` runs it at once when called on the main thread.
+- [Running git from the daemon](memory/running-git-from-the-daemon.md) — why every `git` the daemon spawns is built
+  from the one shared base in `git_env.rs` and bounded in time there (a `git` that can prompt hangs the daemon with
+  nothing naming the stuck call, and a read that rewrites the index fails an agent's `git add` on `index.lock`); why a
+  `git` that compares with the worktree passes `--ignore-submodules`, since it otherwise runs a status in every
+  checked-out submodule; why a diff between two specific versions names each one `<revision>:<path>` and ends its
+  arguments with `--`; what a test proving a read leaves the repository alone has to set up first (a stale-stat
+  fixture and a positive control); and why a test fixture is built only from Git 2.36's commands.
 - [Writing daemon code](memory/writing-daemon-code.md) — conventions for the Rust daemon: live state the daemon derives
   held on `AppState` and published by its own event rather than as a field on a stored record, with the cleanups that
   follow from there being no deletion event for it; why a repeating refresh is timed by the client and has to be bounded
   in the daemon by a drop-guard claim and a completion floor, since an in-flight claim alone never fires across clients
-  polling on their own phases; why every `git` the daemon spawns is built from the one shared base in `git_env.rs`
-  rather than at the call site and bounded in time there, with the two consequences that make a call site reach for
-  it — a `git` that can prompt hangs the daemon with nothing naming the stuck call, and a read that rewrites the index
-  fails an agent's `git add` on `index.lock`; what a test proving a read leaves the repository alone has to set up
-  first; why a diff between two specific versions names each one `<revision>:<path>` rather than by object id and ends
-  its arguments with `--`, since bare ids leave git no path to look the repository's own attributes up by and a
-  worktree file named like an operand otherwise makes git refuse the command; why the Rust crates are linted with
-  `cargo clippy --all-targets`, since the plain command lints no `#[cfg(test)]` code and so none of this repository's
-  tests; how to type-check Linux-only code from macOS (a scratch crate, since bundled SQLite blocks a cross-check
-  of the daemon); and why a test fixture is built only from Git 2.36's commands, since the Mac's newer git lets a
-  fixture needing more pass every local run; why a request handler can never assume it is alone with the daemon's
+  polling on their own phases; why a file inside a project is read only through `browse::live`, never with
+  `File::open`, since a project's contents can link out, block as a FIFO or be swapped mid-read; why the Rust crates are
+  linted with `cargo clippy --all-targets`, since the plain command lints no `#[cfg(test)]` code and so none of this
+  repository's tests; how to type-check Linux-only code from macOS (a scratch crate, since bundled SQLite blocks a cross-check
+  of the daemon); why a request handler can never assume it is alone with the daemon's
   state, so it re-checks after a long step or holds a claim; why a path built from a hook's values,
   `Session.agent_session_id` among them, holds to the agent's id shape, a daemon-resolved records directory, the exact
   layout depth and no linked directories; and why macOS host integrations avoid Apple Events (`osascript`, a crate's

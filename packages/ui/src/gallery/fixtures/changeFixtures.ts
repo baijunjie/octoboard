@@ -7,7 +7,7 @@
 // what the real daemon's reply for that kind carries and derives the rest, so a change that could
 // not be answered faithfully cannot be written at all. That is the half of the net the types can
 // hold; the fixture daemon refuses at run time what no signature can settle.
-import type { BranchInfo, ChangeEntry, ChangeSide, ConflictKind, ContentSource, FileContent, WorktreeInfo } from "../../protocol";
+import type { BranchInfo, ChangeEntry, ChangeSide, ConflictKind, ContentSource, FileContent, LineStats, WorktreeInfo } from "../../protocol";
 import type { FixtureError } from "./projectFiles";
 import { text } from "./builders";
 
@@ -129,6 +129,20 @@ const rangeOf = (count: number) => (count === 1 ? "1" : `1,${count}`);
 /** A text's lines, without the empty one its terminating newline leaves after it. */
 const linesOf = (content: string) => content.replace(/\n$/, "").split("\n");
 
+/** The lines a patch adds and removes, as `git diff --numstat` counts them: those of its hunks
+ * only, the `---` and `+++` headers above a hunk being none of them. */
+function statsOf(patch: string): LineStats {
+  const stats = { added: 0, removed: 0 };
+  let inHunk = false;
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("diff --git")) inHunk = false;
+    else if (line.startsWith("@@")) inHunk = true;
+    else if (inHunk && line.startsWith("+")) stats.added++;
+    else if (inHunk && line.startsWith("-")) stats.removed++;
+  }
+  return stats;
+}
+
 /** The addition of a whole file as `git` writes it, from `--- /dev/null` down, the mirror of
  * `removalOf`: nothing at all for an empty file, which has no line to add, and the marker after the
  * last line where the file does not end in a newline. */
@@ -176,7 +190,7 @@ export function renamedTo(
   expand?: Expansion,
 ): FixtureChange {
   return {
-    entry: { group, old: sideFile(from, fromSource), new: sideFile(to, toSource) },
+    entry: { group, old: sideFile(from, fromSource), new: sideFile(to, toSource), stats: statsOf(versions.patch) },
     patch: versions.patch,
     whole: { old: versions.old, new: versions.new },
     expand,
@@ -276,29 +290,24 @@ export function typeChange(group: TwoSided, path: string, from: ObjectSource, to
  * alone is counted, from `content`, and a request for the whole bodies answers with that content
  * and an absent new side — the daemon reads the side that is there and leaves the other absent. */
 export function deletion(group: TwoSided, path: string, from: ObjectSource, content: string): FixtureChange {
-  return {
-    entry: { group, old: sideFile(path, from), new: { state: "absent" } },
-    patch: [`diff --git a/${path} b/${path}`, "deleted file mode 100644", `index ${from.blob}..0000000`, ...removalOf(path, content), ""].join("\n"),
-    whole: { old: content },
-  };
+  const patch = [`diff --git a/${path} b/${path}`, "deleted file mode 100644", `index ${from.blob}..0000000`, ...removalOf(path, content), ""].join("\n");
+  return { entry: { group, old: sideFile(path, from), new: { state: "absent" }, stats: statsOf(patch) }, patch, whole: { old: content } };
 }
 
 /** A file added: `git` writes every line of it as an addition. Only the new side exists, so it alone is
  * counted, from `content`, and a request for the whole bodies answers with that content and an
  * absent old side, as for a removal. Not an untracked file, which Git has no patch for. */
 export function addition(group: TwoSided, path: string, to: ObjectSource, content: string): FixtureChange {
-  return {
-    entry: { group, old: { state: "absent" }, new: sideFile(path, to) },
-    patch: [`diff --git a/${path} b/${path}`, "new file mode 100644", `index 0000000..${to.blob}`, ...additionOf(path, content), ""].join("\n"),
-    whole: { new: content },
-  };
+  const patch = [`diff --git a/${path} b/${path}`, "new file mode 100644", `index 0000000..${to.blob}`, ...additionOf(path, content), ""].join("\n");
+  return { entry: { group, old: { state: "absent" }, new: sideFile(path, to), stats: statsOf(patch) }, patch, whole: { new: content } };
 }
 
 /** A file Git neither tracks nor ignores: there is nothing to compare it with, so the reply carries
  * its body in place of a patch and counts its lines from that body. Having no patch, it has no
  * collapsed lines either, so a request for its whole bodies is refused. */
 export function untracked(path: string, source: ContentSource, content: string): FixtureChange {
-  return { entry: { group: "untracked", old: { state: "absent" }, new: sideFile(path, source) }, bodies: { new: text(content) } };
+  const stats = { added: content === "" ? 0 : linesOf(content).length, removed: 0 };
+  return { entry: { group: "untracked", old: { state: "absent" }, new: sideFile(path, source), stats }, bodies: { new: text(content) } };
 }
 
 /** A symbolic link, or a repository of its own inside the project, that Git neither tracks nor

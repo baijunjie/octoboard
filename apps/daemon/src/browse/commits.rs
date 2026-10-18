@@ -13,12 +13,14 @@
 //! rename detection on, so a rename across the project's boundary is found against the rest of the
 //! repository, and only what touches the project is kept (`tree_diff::committed_record`).
 
+use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 
 use anyhow::Result;
 
 use crate::browse::changes::{self, ChangeRead};
 use crate::browse::git::{GitEnv, GitError};
+use crate::browse::line_counts;
 use crate::browse::tree_diff;
 use crate::browse::{blob, budget, git_error, git_failed, Located};
 use crate::protocol::{CommitChanges, ComparedChangeRef};
@@ -36,32 +38,42 @@ pub struct CommitList {
     pub commits_complete: bool,
 }
 
-/// The `git log` options a listing runs with, before its revision range. Each one fixes something
-/// the user's configuration could otherwise change:
+/// The `git log` options that choose which commits a listing holds and against what each is
+/// compared, shared by the listing and by the run that counts its lines, so that the two cannot
+/// drift apart. Each one fixes something the user's configuration could otherwise change:
 ///
-/// - `-z --raw --no-abbrev` writes each commit's changes as the records
-///   `tree_diff::committed_record` parses, with full object ids and paths as bytes;
 /// - `-M` turns rename detection on whatever `diff.renames` says, as a comparison does;
 /// - `--diff-merges=first-parent` gives a merge commit its changes against its first parent rather
 ///   than none (`log.diffMerges` aside), and `--root` gives a commit with no parent its changes
 ///   against the empty tree, whatever `log.showRoot` says;
 /// - `--no-show-signature` keeps `log.showSignature` from writing a signature check into the
 ///   output, and `--no-follow` keeps `log.follow` from following one path when the listing is made
-///   within a subdirectory project's own directory;
-/// - `--encoding=UTF-8` re-encodes a subject written in another encoding, so it reads as text;
-/// - the format is the commit, its parents and then its subject, one NUL-terminated field each.
-const LOG_OPTIONS: &[&[u8]] = &[
-    b"-z",
-    b"--raw",
-    b"--no-abbrev",
+///   within a subdirectory project's own directory.
+const LOG_SELECTION: &[&[u8]] = &[
     b"-M",
     b"--diff-merges=first-parent",
     b"--root",
     b"--no-show-signature",
     b"--no-follow",
-    b"--encoding=UTF-8",
-    b"--format=%H %P%x00%s",
 ];
+
+/// `-z --raw --no-abbrev` writes each commit's changes as the records
+/// `tree_diff::committed_record` parses, with full object ids and paths as bytes.
+const LOG_RECORDS: &[&[u8]] = &[b"-z", b"--raw", b"--no-abbrev"];
+
+/// The listing's output format, around [`LOG_SELECTION`] and before its revision range:
+///
+/// - `--encoding=UTF-8` re-encodes a subject written in another encoding, so it reads as text;
+/// - the format is the commit, its parents and then its subject, one NUL-terminated field each.
+const LOG_FORMAT: &[&[u8]] = &[b"--encoding=UTF-8", b"--format=%H %P%x00%s"];
+
+/// The `git log` options the line counts of a listing are read with: [`LOG_SELECTION`] and a
+/// format that is only the commit's id.
+fn count_options() -> Vec<&'static [u8]> {
+    let mut options = LOG_SELECTION.to_vec();
+    options.push(b"--format=%H%x00");
+    options
+}
 
 /// Lists the commits reachable from `tip` and not from `base`, both full ids of commits in the
 /// repository (`base` may be the empty tree's id instead, as a comparison from nothing reports
@@ -101,7 +113,7 @@ pub fn list(
         format!("{base}..{tip}")
     };
     let run = |within_scope: bool| {
-        let mut args: Vec<&[u8]> = LOG_OPTIONS.to_vec();
+        let mut args: Vec<&[u8]> = [LOG_RECORDS, LOG_SELECTION, LOG_FORMAT].concat();
         args.push(count.as_bytes());
         if within_scope {
             args.push(b"--full-history");
@@ -185,7 +197,53 @@ pub fn list(
             break;
         }
     }
+    // Released before the counts are read, which hold buffers of their own.
+    drop(stdout);
+    add_line_counts(env, at, (&range, &count), &mut list, cancel)?;
     Ok(list)
+}
+
+/// Sets the line counts of the listed changes, from one more `git log` over `range`, cut at
+/// `count` commits as the listing was: the commits are told apart by their ids, so a listing that
+/// holds only some of them (cut at a budget) takes what it needs. Within a subdirectory project's
+/// own directory the log is limited to it, as `line_counts::read_log` limits every run.
+fn add_line_counts(
+    env: &GitEnv,
+    at: &Located,
+    (range, count): (&str, &str),
+    list: &mut CommitList,
+    cancel: &AtomicBool,
+) -> Result<()> {
+    let wanted: HashMap<Vec<u8>, _> = list
+        .commits
+        .iter()
+        .map(|commit| {
+            (
+                commit.commit.as_bytes().to_vec(),
+                line_counts::wanted(commit.changes.iter()),
+            )
+        })
+        .filter(|(_, paths)| !paths.is_empty())
+        .collect();
+    if wanted.is_empty() {
+        return Ok(());
+    }
+    let mut args = count_options();
+    args.push(count.as_bytes());
+    if !at.repository.scope.is_root() {
+        args.push(b"--full-history");
+    }
+    args.extend_from_slice(&[b"--end-of-options", range.as_bytes()]);
+    let groups = line_counts::read_log(env, at, &args, &wanted, cancel)?;
+    for commit in &mut list.commits {
+        let counts = groups
+            .iter()
+            .find(|(id, _)| id.as_slice() == commit.commit.as_bytes());
+        if let Some((_, counts)) = counts {
+            line_counts::apply(commit.changes.iter_mut(), counts);
+        }
+    }
+    Ok(())
 }
 
 /// A commit's header field, `<commit> <parent>…`: the commit and its first parent, if any. A

@@ -646,12 +646,19 @@ export type ConflictKind =
   | "deleted_by_us"
   | "deleted_by_them";
 
+/** The lines a change adds and removes, as `git diff --numstat` counts them. */
+export interface LineStats {
+  added: number;
+  removed: number;
+}
+
 /** One entry of `project_changes` or `project_comparison`: a change between two sides, or a path
  * in conflict, which is no two-sided change and is read as a live file. A `committed` change is one
  * of a branch comparison's, its old side from the left branch's commit and its new side from the
- * right's. */
+ * right's. `stats` is what the change adds and removes; absent where the daemon does not count it
+ * (see "Changes and comparisons" in `apps/daemon/PROTOCOL.md`). */
 export type ChangeEntry =
-  | { group: ChangeGroup | "committed"; old: ChangeSide; new: ChangeSide }
+  | { group: ChangeGroup | "committed"; old: ChangeSide; new: ChangeSide; stats?: LineStats }
   | { group: "conflicted"; path: string; conflict: ConflictKind };
 
 /** One local branch, as `project_branches` lists it: its name below `refs/heads/` (a wire path) and
