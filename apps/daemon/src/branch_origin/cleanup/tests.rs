@@ -5,6 +5,7 @@ use std::time::Instant;
 use serde_json::Map;
 
 use super::*;
+use crate::branch_origin::repository_of;
 use crate::protocol::{error_code, now_millis, Agent, Event, Origin, RequestBody, Role};
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{

@@ -8,7 +8,7 @@ use std::sync::Mutex;
 
 use anyhow::Result;
 
-use crate::branch_origin::cleanup::Git;
+use crate::branch_origin::git::Git;
 use crate::hostfs;
 
 #[derive(Clone, Copy)]

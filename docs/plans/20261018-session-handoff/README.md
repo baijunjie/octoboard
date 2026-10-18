@@ -60,7 +60,7 @@ Octoboard's records, and only Octoboard can move them.
 
 ## Milestones
 
-1. [Handoff package](01-handoff-package.md)
+1. 01 Handoff package (closed)
 2. [Handoff operation](02-handoff-operation.md)
 3. [Hand off entry in the UI](03-handoff-ui.md)
 4. [Handoff tool for owners](04-handoff-tool.md)

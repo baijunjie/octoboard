@@ -486,6 +486,20 @@ name):
   and `⠋ - Waiting for response… - Explain in one sentence what a pseudo te… - grok` while working, `Explain in one
   sentence what a pseudo te… - grok` when idle. The session directory's `summary.json` holds `generated_title`.
 
+**What the user said, in an agent's own record**, beyond the user lines one would expect (observed on Claude Code
+2.1.295–2.1.302, Codex 0.162.1 and Grok Build 1.0.62):
+
+- Claude Code — a message typed while the model is working is recorded only as an `attachment` line with
+  `attachment.type` `queued_command` and `attachment.origin.kind` `human`, the text in `attachment.prompt` (a string or
+  a list of text blocks); no `type: "user"` line carries it. Conversely, `type: "user"` lines whose `origin.kind` is
+  present and not `human` are not the user's: `task-notification` (a background task's or subagent's completion,
+  text opening with `<task-notification>`) and `peer` (a message from another session).
+- Compaction — Claude Code and Codex keep the earlier messages in the same record. Grok Build rewrites
+  `chat_history.jsonl`: the first `<user_query>` stays, most of the earlier conversation moves to
+  `compaction/segment_NNN.md` beside it (indexed by `compaction/INDEX.md`), and the summary is a `user` line with
+  `synthetic_reason` `compaction_meta` opening "This session is being continued from a previous conversation"; another
+  `compaction_meta` line carries the user info and rules.
+
 **Subagent events**, none of which Octoboard registers, carry join traps that make them unusable as if they were the
 session's own:
 

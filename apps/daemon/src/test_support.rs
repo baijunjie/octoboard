@@ -132,7 +132,7 @@ pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
 pub(crate) fn host_tools() -> crate::host_tools::Tools {
     crate::host_tools::Tools {
         git: || {
-            Ok(crate::branch_origin::cleanup::Git::new(
+            Ok(crate::branch_origin::git::Git::new(
                 SYSTEM_GIT,
                 isolated_git_env(),
             ))

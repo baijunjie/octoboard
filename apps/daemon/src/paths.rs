@@ -53,3 +53,9 @@ pub fn session_scratch(session_id: &str) -> PathBuf {
 pub fn saved_output_dir() -> PathBuf {
     data_dir().join("output")
 }
+
+/// The handoff packages, one file per receiving session. They are kept outside `run_dir`, which
+/// is cleared at startup, because a package is read by a session that may be resumed long after.
+pub fn handoff_dir() -> PathBuf {
+    data_dir().join("handoff")
+}

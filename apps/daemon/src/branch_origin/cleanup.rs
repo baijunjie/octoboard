@@ -36,12 +36,12 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use serde_json::{json, Value};
 
+use super::bound::{bound_in, Bound, BoundBranch};
+use super::git::{changes, worktrees, Git, Listed};
 use super::git_files::uses_reftable;
-use super::{is_same_branch, repo_key, repository_of};
-use crate::browse::source::{admin_dir, parse_worktree_list};
+use super::repo_key;
+use crate::browse::source::admin_dir;
 use crate::browse::wire_path;
-use crate::env_shell;
-use crate::git_env;
 use crate::hostfs;
 use crate::protocol::{
     Session, SessionBranchItem, SessionBranchKind, SessionBranchState, SessionBranchTarget,
@@ -49,66 +49,10 @@ use crate::protocol::{
 };
 use crate::state::AppState;
 
-/// How long one `git` of the cleanup may take. A forced removal deletes a whole worktree.
-const GIT_TIMEOUT: Duration = Duration::from_secs(120);
-
 /// How long removal waits for the sessions' processes to end before going ahead anyway. Far above
 /// the graceful period an ending process gets; past it, a process that would not die is left to
 /// itself, and an unforced removal still refuses a worktree with changes.
 const STOP_TIMEOUT: Duration = Duration::from_secs(30);
-
-/// The `git` the cleanup runs, and the environment it runs it in.
-pub struct Git {
-    binary: PathBuf,
-    env: HashMap<String, String>,
-}
-
-impl Git {
-    /// The user's own `git`, as their login shell's `PATH` resolves it, in that shell's
-    /// environment.
-    pub(crate) fn of_user_shell() -> Result<Self> {
-        let env = env_shell::cached_snapshot()?;
-        let binary = env_shell::resolve_binary("git", &env)?.into();
-        Ok(Self { binary, env })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn new(binary: impl Into<PathBuf>, env: HashMap<String, String>) -> Self {
-        Self {
-            binary: binary.into(),
-            env,
-        }
-    }
-
-    /// Runs `git <args>` in `dir` and returns its stdout; a read leaves the index alone. The error
-    /// is git's own message, or why it could not run.
-    fn run(&self, dir: &Path, args: &[&OsStr], write: bool) -> Result<Vec<u8>, String> {
-        let mut command =
-            git_env::non_interactive(&self.binary, git_env::user_configuration_only(&self.env));
-        command.current_dir(dir);
-        // A configured fsmonitor is a program `git` would start on every status read.
-        command.args(["--no-pager", "-c", "core.fsmonitor=false"]);
-        if !write {
-            git_env::read_only(&mut command);
-        }
-        command.args(args);
-        let output = crate::subprocess::run_with_timeout(&mut command, GIT_TIMEOUT)
-            .map_err(|err| format!("running git: {err:#}"))?;
-        if output.status.success() {
-            Ok(output.stdout)
-        } else {
-            Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
-        }
-    }
-
-    fn read(&self, dir: &Path, args: &[&OsStr]) -> Result<Vec<u8>, String> {
-        self.run(dir, args, false)
-    }
-
-    fn write(&self, dir: &Path, args: &[&OsStr]) -> Result<(), String> {
-        self.run(dir, args, true).map(|_| ())
-    }
-}
 
 /// What `AppState` holds for the cleanup: one gate per repository, which keeps an archive's and a
 /// deletion's removals in the same repository from running at once and acting on each other's
@@ -450,23 +394,6 @@ fn failed(mut item: SessionBranchItem, detail: String) -> SessionBranchItem {
 
 // -- what is bound -------------------------------------------------------------
 
-/// One branch a session is responsible for: its name as a wire path, the session, and that
-/// session's project.
-#[derive(Clone)]
-struct BoundBranch {
-    branch: String,
-    session: String,
-    project: String,
-}
-
-/// One repository the sessions' projects are in, with the branches in it they are responsible
-/// for.
-#[derive(Clone)]
-struct Bound {
-    repo: PathBuf,
-    branches: Vec<BoundBranch>,
-}
-
 impl Bound {
     /// Every branch of the repository as failed, for a repository whose worktrees cannot be
     /// listed.
@@ -520,50 +447,6 @@ fn item_of(
     }
 }
 
-/// The repositories `sessions`' projects are in that hold a branch one of them is responsible
-/// for. Read from the store and the reflog files only, so it starts no process.
-fn bound_in(state: &AppState, sessions: &[Session]) -> Result<Vec<Bound>> {
-    let mut repos: Vec<(PathBuf, HashMap<&str, String>)> = Vec::new();
-    for session in sessions {
-        let Some(project_id) = &session.project_id else {
-            continue;
-        };
-        let Some(project) = state.store.get_project(project_id)? else {
-            continue;
-        };
-        let Some(repo) = repository_of(Path::new(&project.path)) else {
-            continue;
-        };
-        match repos.iter_mut().find(|(known, _)| *known == repo) {
-            Some((_, of)) => {
-                of.insert(&session.id, project.id);
-            }
-            None => repos.push((repo, HashMap::from([(session.id.as_str(), project.id)]))),
-        }
-    }
-    let mut bound = Vec::new();
-    for (repo, projects) in repos {
-        let branches: Vec<BoundBranch> = state
-            .store
-            .branch_origins(&repo_key(&repo))?
-            .into_iter()
-            .filter(|row| is_same_branch(&repo, row))
-            .filter_map(|row| {
-                let project = projects.get(row.responsible_session.as_str())?.clone();
-                Some(BoundBranch {
-                    branch: row.branch,
-                    session: row.responsible_session,
-                    project,
-                })
-            })
-            .collect();
-        if !branches.is_empty() {
-            bound.push(Bound { repo, branches });
-        }
-    }
-    Ok(bound)
-}
-
 /// Every project's folder but `except`'s, resolved, so a worktree that is one, or holds one, can
 /// be told.
 fn project_folders(state: &AppState, except: Option<&str>) -> Result<Vec<PathBuf>> {
@@ -594,44 +477,6 @@ fn stored_names<'b>(
 }
 
 // -- where it stands -----------------------------------------------------------
-
-/// One worktree of the repository, as `git worktree list` gives it.
-struct Listed {
-    root: PathBuf,
-    branch: Option<Vec<u8>>,
-    main: bool,
-    locked: bool,
-    /// Its directory is gone, and only git's record of it is left.
-    prunable: bool,
-}
-
-/// The repository's worktrees, the main one first.
-fn worktrees(git: &Git, repo: &Path) -> Result<Vec<Listed>, String> {
-    let stdout = git.read(
-        repo,
-        &[
-            OsStr::new("worktree"),
-            OsStr::new("list"),
-            OsStr::new("--porcelain"),
-            OsStr::new("-z"),
-        ],
-    )?;
-    Ok(parse_worktree_list(&stdout)
-        .iter()
-        .enumerate()
-        .filter(|(_, record)| !record.bare)
-        .map(|(at, record)| {
-            let path = Path::new(OsStr::from_bytes(&record.path));
-            Listed {
-                root: std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()),
-                branch: record.branch.clone(),
-                main: at == 0,
-                locked: record.locked,
-                prunable: record.prunable,
-            }
-        })
-        .collect())
-}
 
 /// The branches some worktree of the repository has checked out now.
 fn held_branches(git: &Git, repo: &Path) -> Result<HashSet<Vec<u8>>, String> {
@@ -801,22 +646,6 @@ fn exists(git: &Git, repo: &Path, name: &[u8]) -> bool {
         ],
     )
     .is_ok()
-}
-
-/// Whether the worktree at `root` holds anything `git worktree remove` refuses to discard:
-/// modified tracked files or untracked ones, the same `git status` it asks itself.
-fn changes(git: &Git, root: &Path) -> Result<bool, String> {
-    let stdout = git.read(
-        root,
-        &[
-            OsStr::new("status"),
-            OsStr::new("--porcelain"),
-            OsStr::new("-z"),
-            OsStr::new("--ignore-submodules=none"),
-            OsStr::new("--untracked-files=normal"),
-        ],
-    )?;
-    Ok(!stdout.is_empty())
 }
 
 /// Whether the worktree at `root` has initialized submodules, which `git worktree remove` refuses

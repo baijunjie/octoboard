@@ -28,9 +28,11 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use super::{
-    bound_in, changes, exists, failed, is_merged, item_of, names, project_folders, repository_of,
-    stored_names, wait_until_stopped, worktrees, Git,
+    exists, failed, is_merged, item_of, names, project_folders, stored_names, wait_until_stopped,
 };
+use crate::branch_origin::bound::bound_in;
+use crate::branch_origin::git::{changes, worktrees, Git};
+use crate::branch_origin::repository_of;
 use crate::browse::wire_path;
 use crate::protocol::{
     Project, SessionBranchItem, SessionBranchKind, SessionBranchState, SessionBranchTarget,

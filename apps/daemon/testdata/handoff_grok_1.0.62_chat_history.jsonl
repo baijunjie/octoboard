@@ -1,0 +1,16 @@
+{"type":"system","content":"INJECTED system prompt"}
+{"type":"user","content":[{"type":"text","text":"INJECTED project instructions"}],"synthetic_reason":"project_instructions"}
+{"type":"user","content":[{"type":"text","text":"<user_info>\nINJECTED\n</user_info>"}]}
+{"type":"user","content":[{"type":"text","text":"<image_files>\nINJECTED\n</image_files>"}]}
+{"type":"user","content":[{"type":"text","text":"Fix the flaky test"}],"prompt_index":0}
+{"type":"reasoning","id":"x","summary":[{"type":"summary_text","text":"x"}],"encrypted_content":"REASONING","status":"completed"}
+{"type":"assistant","content":"Reading the test.","tool_calls":[{"id":"c1","name":"read_file","arguments":"{\"target_file\": \"/work/src/a.rs\"}"},{"id":"c2","name":"todo_write","arguments":"{\"todos\": [{\"id\": \"test\", \"content\": \"Fix the test\", \"status\": \"in_progress\"}, {\"id\": \"lint\", \"content\": \"Run the linter\", \"status\": \"pending\"}], \"merge\": true}"}],"model_id":"x","model_fingerprint":"x","reasoning_effort":"x"}
+{"type":"tool_result","tool_call_id":"c1","content":"TOOL-OUTPUT file body"}
+{"type":"assistant","content":"","tool_calls":[{"id":"c3","name":"search_replace","arguments":"{\"file_path\": \"/work/src/a.rs\", \"old_string\": \"a\", \"new_string\": \"b\"}"},{"id":"c4","name":"write","arguments":"{\"file_path\": \"/tmp/scratch.swift\", \"content\": \"x\"}"},{"id":"c6","name":"todo_write","arguments":"{\"todos\": [{\"id\": \"test\", \"content\": \"Fix the test\", \"status\": \"completed\"}], \"merge\": true}"}],"model_id":"x","model_fingerprint":"x","reasoning_effort":"x"}
+{"type":"user","content":[{"type":"text","text":"<system-reminder>INJECTED</system-reminder>"}],"synthetic_reason":"system_reminder"}
+{"type":"user","content":[{"type":"text","text":"<system-reminder>INJECTED</system-reminder>"}]}
+{"type":"user","content":[{"type":"text","text":"<user_info>\nINJECTED\n</user_info>\n\n<rules>INJECTED</rules>"}],"synthetic_reason":"compaction_meta"}
+{"type":"user","content":[{"type":"text","text":"This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary:\n1. Primary Request and Intent: fix the flaky test."}],"synthetic_reason":"compaction_meta"}
+{"type":"user","content":[{"type":"text","text":"<user_query>\nAlso run the linter\n</user_query>"}],"prompt_index":5}
+{"type":"assistant","content":"","tool_calls":[{"id":"c5","name":"todo_write","arguments":"{\"todos\": [{\"id\": \"lint\", \"content\": \"Run the linter\", \"status\": \"completed\"}], \"merge\": true}"}],"model_id":"x","model_fingerprint":"x","reasoning_effort":"x"}
+{"type":"assistant","content":"Both pass.","model_id":"x","model_fingerprint":"x","reasoning_effort":"x"}

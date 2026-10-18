@@ -339,6 +339,26 @@ fn account_roots(
     (roots, complete)
 }
 
+/// The file that holds `session`'s conversation, for reading: Claude Code's transcript, Codex's
+/// rollout, Grok Build's `chat_history.jsonl`. Found the way [`record_paths`] finds a session's
+/// records, so a session switched to another account is found where it left its copy; when more
+/// than one copy exists the most recently modified is taken.
+pub fn conversation_record(
+    hints: &Hints,
+    locator: &mut Locator,
+    accounts: &[Account],
+    session: &Session,
+) -> Option<PathBuf> {
+    record_paths(hints, locator, accounts, session)
+        .into_iter()
+        .map(|path| match session.agent {
+            Agent::Grok => path.join("chat_history.jsonl"),
+            Agent::Claude | Agent::Codex => path,
+        })
+        .filter(|path| std::fs::metadata(path).is_ok_and(|meta| meta.is_file()))
+        .max_by_key(|path| modified(path))
+}
+
 /// Whether all known account locations can prove the absence of this session's native records.
 /// Missing ids and unreadable or linked directories cannot establish absence.
 pub fn presence(
@@ -729,6 +749,54 @@ mod tests {
                 &session(Agent::Claude, CLAUDE_ID, Some(&account))
             ),
             [inside, projects.join(CLAUDE_ID)]
+        );
+    }
+
+    /// The file a conversation is read from: the transcript or rollout itself, and for Grok the
+    /// chat history inside its session directory; the newest copy when a switched session left one
+    /// behind, and nothing for a session that has only a directory with no conversation in it.
+    #[test]
+    fn the_conversation_record_is_the_newest_file_holding_the_conversation() {
+        let dir = crate::test_support::ScratchDir::new("agent-records-conversation");
+        let account = dir.join("account");
+        let hints = Hints::default();
+        let shell = || {
+            HashMap::from([(
+                "HOME".to_owned(),
+                dir.join("home").to_string_lossy().into_owned(),
+            )])
+        };
+        let find = |agent, id| {
+            conversation_record(
+                &hints,
+                &mut Locator::with_shell(shell()),
+                &[],
+                &session(agent, id, Some(&account)),
+            )
+        };
+
+        assert_eq!(find(Agent::Claude, CLAUDE_ID), None);
+        let orphan = account.join("projects/one").join(CLAUDE_ID);
+        std::fs::create_dir_all(orphan.join("subagents")).unwrap();
+        assert_eq!(find(Agent::Claude, CLAUDE_ID), None);
+        let old = account
+            .join("projects/one")
+            .join(format!("{CLAUDE_ID}.jsonl"));
+        touch(&old);
+        crate::test_support::move_modification_time_back(&old);
+        let new = account
+            .join("projects/two")
+            .join(format!("{CLAUDE_ID}.jsonl"));
+        touch(&new);
+        assert_eq!(find(Agent::Claude, CLAUDE_ID), Some(new));
+
+        let grok = account.join("sessions/work").join(CLAUDE_ID);
+        touch(&grok.join("usage.json"));
+        assert_eq!(find(Agent::Grok, CLAUDE_ID), None);
+        touch(&grok.join("chat_history.jsonl"));
+        assert_eq!(
+            find(Agent::Grok, CLAUDE_ID),
+            Some(grok.join("chat_history.jsonl"))
         );
     }
 }

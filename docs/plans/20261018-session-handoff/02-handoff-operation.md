@@ -15,7 +15,7 @@
       working (in the middle of a turn); the receiving agent is not the session's own agent, the refusal pointing to
       switching the account instead; the agent is available and the account belongs to it; the model and effort are
       ones the agent offers.
-- [ ] The receiving session's brief carries the package from milestone 01 — its path and the instruction to read it
+- [ ] The receiving session's brief carries the handoff package (the daemon's `handoff` module) — its path and the instruction to read it
       first — together with the original's brief.
 - [ ] What moves to the receiving session:
   - the original's owner binding, keeping its role (unbound, lead or bound);
@@ -42,3 +42,14 @@
   not a change to it. Archiving the original must not archive the sessions it owned; they have moved before it.
 - **Reference docs**: `docs/product/hub-orchestration.md`, `docs/product/session-requests.md`,
   `docs/product/sessions.md`, `docs/product/message-delivery.md`, `docs/product/branch-responsible-session.md`.
+
+## Handoff
+
+- Remove the package file when the receiving session is deleted (`handoff::remove` with the package's key); the
+  file is written by `handoff::prepare` under a key the caller chooses, so pick a key that exists before the
+  receiving session is started, and remove the file if the start fails.
+- Pass the original session's brief to `handoff::build` / `handoff::prepare`: a session does not store its brief, so
+  find where it can be had (otherwise the package's brief section stays empty; the first user message usually holds
+  the same text).
+- Once the operation calls the `handoff` module, remove its `#![allow(dead_code)]` and TODO, and the "Nothing calls
+  it yet" sentence in the `src/handoff/` row of the daemon's README.

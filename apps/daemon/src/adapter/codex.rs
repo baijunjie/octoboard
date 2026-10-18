@@ -76,6 +76,34 @@ const HOOK_EVENTS: &[&str] = &[
 
 pub struct CodexAdapter;
 
+/// What the user typed, from one parsed line of a rollout: the `user_message` event of older Codex,
+/// or the `item_completed` event of a `UserMessage` item of newer. The user-role response items
+/// beside them include the environment context and `AGENTS.md` instructions Codex adds itself.
+pub(crate) fn typed_text(value: &serde_json::Value) -> Option<String> {
+    if value.get("type")?.as_str()? != "event_msg" {
+        return None;
+    }
+    let payload = value.get("payload")?;
+    match payload.get("type")?.as_str()? {
+        "user_message" => Some(payload.get("message")?.as_str()?.to_owned()),
+        "item_completed" => {
+            let item = payload.get("item")?;
+            if item.get("type")?.as_str()? != "UserMessage" {
+                return None;
+            }
+            let text: Vec<&str> = item
+                .get("content")?
+                .as_array()?
+                .iter()
+                .filter(|part| part.get("type").and_then(|kind| kind.as_str()) == Some("text"))
+                .filter_map(|part| part.get("text")?.as_str())
+                .collect();
+            (!text.is_empty()).then(|| text.join("\n"))
+        }
+        _ => None,
+    }
+}
+
 impl AgentAdapter for CodexAdapter {
     fn binary(&self) -> &'static str {
         "codex"
@@ -145,29 +173,7 @@ impl AgentAdapter for CodexAdapter {
         if !line.contains("\"user_message\"") && !line.contains("\"UserMessage\"") {
             return None;
         }
-        let value: serde_json::Value = serde_json::from_str(line).ok()?;
-        if value.get("type")?.as_str()? != "event_msg" {
-            return None;
-        }
-        let payload = value.get("payload")?;
-        match payload.get("type")?.as_str()? {
-            "user_message" => Some(payload.get("message")?.as_str()?.to_owned()),
-            "item_completed" => {
-                let item = payload.get("item")?;
-                if item.get("type")?.as_str()? != "UserMessage" {
-                    return None;
-                }
-                let text: Vec<&str> = item
-                    .get("content")?
-                    .as_array()?
-                    .iter()
-                    .filter(|part| part.get("type").and_then(|kind| kind.as_str()) == Some("text"))
-                    .filter_map(|part| part.get("text")?.as_str())
-                    .collect();
-                (!text.is_empty()).then(|| text.join("\n"))
-            }
-            _ => None,
-        }
+        typed_text(&serde_json::from_str(line).ok()?)
     }
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> anyhow::Result<LaunchPlan> {

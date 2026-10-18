@@ -111,6 +111,16 @@ the bytes — the offset the real caller would have started from, the truncation
 leaves. Commit the near-miss capture next to the matching one: the shape that must *not* be
 recognised is what makes recognising the other one mean anything.
 
+Where the code classifies an agent's record line by line — which lines are the person speaking, which
+are the conversation — one session's capture is not enough, and a hand-written fixture is worth
+nothing: both hold only the shapes you already expected. Before writing the reader, survey every
+record of that agent on the machine, across all the CLI versions they span and including long,
+compacted sessions: tally each distinct value of the fields that tell lines apart (`type`, `origin`,
+attachment and synthetic-line markers, event types) and build the capture from a real line for every
+value the reader must keep or drop. A reader built otherwise here passed its tests while missing
+messages typed mid-turn, which carry no user line at all, taking background-task notifications for
+the user, and losing the part of a conversation that compaction moved out of the record file.
+
 ## A jsdom test leaves nothing running, and the cleanup is bound to the test that armed it
 
 Applies to the `packages/ui` component tests (`vitest` under jsdom). Work a test leaves running outlives the file:
