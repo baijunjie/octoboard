@@ -17,10 +17,11 @@ the focused item is removed, that surface's usual focus handoff applies.
 
 The first appearance of a collection shows its items without animation. Adding an item to an already displayed
 empty collection uses the entrance effect. Scrolling and adjusting the collection's width do not animate its
-items. In the virtualized file and Git change collections, only rows that stay rendered can slide; rows appear
-and disappear immediately, without entrance or exit effects. Scrolling new rows into view, resizing the viewport
-and reusing an off-screen row for another item do not animate those rows. Replacing a whole page or directory
-listing and displaying a fixed result snapshot do not require collection movement.
+items. In the virtualized file and Git change collections, adding or removing rows from the displayed list,
+including expanding or folding directories, commits and change sections, uses the same entrance and exit effects
+for rendered rows. Only rows that stay rendered can slide to new positions. Scrolling new rows into view,
+resizing the viewport and reusing an off-screen row for another item do not animate those rows. Replacing a whole
+page or directory listing and displaying a fixed result snapshot do not require collection movement.
 
 With the system's **Reduce motion** preference enabled, items appear, disappear and change positions immediately.
 Enabling it during an animation stops the effects already in progress and clears departing items.

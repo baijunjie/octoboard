@@ -121,7 +121,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "A project session's files",
-    description: "Folders come first in natural order, with .git left out. src is expanded and main.ts is selected, its rounded highlight keeping space on all four sides, as Git rows do. Expand or collapse a folder to watch the following rows slide into place, and press a file for the viewer, then Left/Right to visit visible files. Switch between the Website and Search API sessions to inspect the short file-pane entrance and Search API's own tree. Switching between the two Website sessions keeps the tree steady. A project's actions offer Browse files when its pane is hidden or belongs to another project.",
+    description: "Folders come first in natural order, with .git left out. src is expanded and main.ts is selected, its rounded highlight keeping space on all four sides, as Git rows do. Expand or collapse a folder to watch its children slide and fade in or out with the same timing as the session menu, while following rows slide into place. Press a file for the viewer, then Left/Right to visit visible files. Switch between the Website and Search API sessions to inspect the short file-pane entrance and Search API's own tree. Switching between the two Website sessions keeps the tree steady. A project's actions offer Browse files when its pane is hidden or belongs to another project.",
     state,
     filesByProject: {
       [api.id]: {

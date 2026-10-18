@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { act } from "react";
-import { expect, it, vi } from "vitest";
+import { act, useState } from "react";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { isolate } from "../i18n/isolate";
 import type { PlatformAdapter } from "../platform";
@@ -157,4 +157,35 @@ it.each(["file", "directory"] as const)("opens a %s row's context menu without a
   expect(document.querySelector<HTMLElement>("[role=menuitem]")!.textContent).toBe("Copy path");
   expect(onOpenFile).not.toHaveBeenCalled();
   expect(onExpandedChange).not.toHaveBeenCalled();
+});
+
+
+it("animates actual virtual tree folder children entering and leaving", async () => {
+  const animate = vi.fn(() => ({ cancel: vi.fn(), effect: { getComputedTiming: () => ({ progress: 1 }) }, onfinish: null, oncancel: null }));
+  const previous = HTMLElement.prototype.animate;
+  HTMLElement.prototype.animate = animate as unknown as typeof HTMLElement.prototype.animate;
+  onTestFinished(() => { HTMLElement.prototype.animate = previous; });
+  const directory: TreeNode = {
+    type: "directory", key: rowKey("src"), path: "src",
+    entry: { name: "src", kind: "directory", size: 0, version: "v1", target: null },
+    children: [fileNode("src/child.ts", false)],
+  };
+  function Folder() {
+    const [expanded, setExpanded] = useState(new Set<string | number>());
+    return <FileTree nodes={[directory]} expanded={new Set([...expanded].map(String))} label="Files" onExpandedChange={setExpanded} onOpenFile={() => {}} onRetry={() => {}} treeRef={() => {}} />;
+  }
+  const container = mountRows(<Folder />);
+  await act(async () => {});
+  expect(animate).not.toHaveBeenCalled();
+  const toggle = () => act(() => container.querySelector<HTMLElement>("[slot=chevron]")!.click());
+  toggle();
+  await act(async () => {});
+  expect(container.querySelector(`[data-list-motion="${rowKey("src/child.ts")}"]`)).not.toBeNull();
+  expect(animate.mock.calls.some((call) => (call as unknown as [Keyframe[]])[0][0].opacity === 0)).toBe(true);
+  toggle();
+  await act(async () => {});
+  expect(container.querySelector(`[data-list-motion="${rowKey("src/child.ts")}"]`)).toBeNull();
+  const ghost = container.querySelector<HTMLElement>("[data-list-motion-ghost]")!;
+  expect(ghost.textContent).toContain("child.ts");
+  expect(ghost.hasAttribute("inert")).toBe(true);
 });

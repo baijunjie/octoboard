@@ -4,6 +4,7 @@ import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { BrowserListMotion, useBrowserListMotion } from "../browser/useBrowserListMotion";
 import { useListMotion } from "./useListMotion";
 import { MotionListBox } from "./MotionListBox";
 
@@ -326,4 +327,58 @@ it("bounds exit visuals to their previous box without clipping real controls or 
   expect(list.list.style.overflowX).toBe("");
   list.render(["a", "b"]);
   expect(list.list.querySelector("[data-list-motion-exit]")).toBeNull();
+});
+
+
+it("captures logical virtual exits before recycled DOM changes and ignores viewport-only identities", async () => {
+  let presenceShift = 0;
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    const [layoutX, y] = points[this.dataset.listMotion ?? ""] ?? [0, 0];
+    const x = layoutX + (this.dataset.listMotion ? presenceShift : 0);
+    return { x, y, top: y, left: x, right: x + 180, bottom: y + 28, width: 180, height: 28, toJSON: () => ({}) };
+  });
+  onTestFinished(() => { vi.restoreAllMocks(); });
+  function Virtual({ logical, window }: { logical: string[]; window: string[] }) {
+    const keys = new Set(logical);
+    const { ref, prepare } = useBrowserListMotion(null, keys);
+    return <BrowserListMotion keys={keys} prepare={prepare}><div ref={ref} data-root="">{window.map((key, index) => <div key={index} style={{ transform: `translateY(${index * 32}px)` }}><button data-list-motion={key}>{key}</button></div>)}</div></BrowserListMotion>;
+  }
+  const host = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => { act(() => root.unmount()); host.remove(); });
+  const render = (logical: string[], window: string[]) => act(() => root.render(<Virtual logical={logical} window={window} />));
+  points = { a: [12, 34], b: [12, 66], c: [12, 98] };
+  render(["a", "b", "c"], ["a", "b"]);
+  const original = host.querySelector('[data-list-motion="a"]');
+  const clone = vi.spyOn(original!, "cloneNode");
+  render(["a", "b", "c"], ["b", "c"]);
+  expect(animate).not.toHaveBeenCalled();
+  expect(clone).not.toHaveBeenCalled();
+  render(["a", "c", "d"], ["c", "d"]);
+  const ghost = host.querySelector<HTMLElement>("[data-list-motion-ghost]")!;
+  expect(ghost.textContent).toBe("b");
+  expect(ghost.parentElement!.style.left).toBe("12px");
+  expect(ghost.parentElement!.style.top).toBe("66px");
+  expect(ghost.style.width).toBe("180px");
+  expect(ghost.style.height).toBe("28px");
+  expect(ghost.style.transform).toBe("none");
+  expect(ghost.hasAttribute("inert")).toBe(true);
+  expect(animate.mock.calls.map(([frames]) => frames)).toEqual([
+    [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(25%)" }],
+    [{ opacity: 0, transform: "translateX(-25%)" }, { opacity: 1, transform: "none" }],
+  ]);
+  expect(animate.mock.calls.map(([, options]) => options.easing)).toEqual(Array(2).fill("cubic-bezier(0.4, 0, 0.2, 1)"));
+  presenceShift = -45;
+  act(() => resize());
+  expect(animate).toHaveBeenCalledTimes(2);
+  reduced = true;
+  act(() => preferenceChanged());
+  expect(host.querySelector("[data-list-motion-ghost]")).toBeNull();
+  render(["e"], ["e"]);
+  expect(animate).toHaveBeenCalledTimes(2);
+  reduced = false;
+  render(["e", "offscreen"], ["e"]);
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  render(["e", "offscreen"], ["offscreen"]);
+  expect(animate).toHaveBeenCalledTimes(2);
 });

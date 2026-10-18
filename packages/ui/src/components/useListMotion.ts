@@ -12,12 +12,14 @@ interface ListMotionOptions {
   descendants?: boolean;
   /** A virtualizer's visible rows: only the same rendered element and identity may move. */
   virtualized?: boolean;
+  /** Logical visible identities, including rows outside the virtualizer's DOM window. */
+  keys?: ReadonlySet<string>;
 }
 
 interface Point { x: number; y: number }
 interface Position extends Point { element: HTMLElement; parent: HTMLElement | null; width: number; height: number; columns?: string }
 interface Slide extends Point { animation: Animation }
-interface ListWatch { list: HTMLElement; rendered: () => void; stop: () => void }
+interface ListWatch { list: HTMLElement; prepare: (keys: ReadonlySet<string>) => void; rendered: () => void; stop: () => void }
 
 /** Layout coordinates ignore running translations and scrolling. The list and rows share the
  * same offset-parent chain; subtracting their origins also supports display:contents wrappers. */
@@ -40,7 +42,11 @@ function presenceFrames(transform: string, entering: boolean): Keyframe[] {
     : [{ opacity: 1, transform: base || "none" }, { opacity: 0, transform: shifted }];
 }
 
-function watchList(list: HTMLElement, { descendants = false, virtualized = false }: ListMotionOptions): ListWatch {
+function watchList(list: HTMLElement, { descendants = false, virtualized = false, keys }: ListMotionOptions): ListWatch {
+  let logical = keys;
+  const added = new Set<string>();
+  const departing = new Map<string, Position>();
+  let additionTimer: ReturnType<typeof setTimeout> | undefined;
   let positions = new Map<string, Position>();
   let initialized = false;
   let order = "";
@@ -87,7 +93,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
   const leave = (key: string, before: Position) => {
     // React removes the real control immediately. Its inert copy is only a visual; it never
     // holds focus, participates in the collection, or keeps a removed action reachable.
-    const ghost = before.element.cloneNode(true) as HTMLElement;
+    const ghost = virtualized ? before.element : before.element.cloneNode(true) as HTMLElement;
     for (const node of [ghost, ...ghost.querySelectorAll<HTMLElement>("*")]) {
       for (const attribute of Array.from(node.attributes)) {
         if (attribute.name === "id" || attribute.name === "name" || attribute.name === "autofocus" || attribute.name === "data-list-motion" || attribute.name === "data-flip" || attribute.name.startsWith("on")) node.removeAttribute(attribute.name);
@@ -96,7 +102,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     ghost.dataset.listMotionGhost = "";
     ghost.setAttribute("aria-hidden", "true");
     ghost.setAttribute("inert", "");
-    const residual = offset(before.element);
+    const residual = virtualized ? { x: 0, y: 0 } : offset(before.element);
     let parent = before.parent && list.contains(before.parent) ? before.parent : list;
     let scrollX = 0;
     let scrollY = 0;
@@ -147,19 +153,35 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     // Read all geometry before creating or cancelling animations, keeping layout reads in one pass.
     const moves = rows.map((element) => {
       const residual = offset(element);
-      const point = virtualized ? element.getBoundingClientRect() : origin(element);
+      // Virtual wrappers carry layout transforms; the row itself may be entering. Measure
+      // through its parent so that presence never becomes a spurious layout displacement.
+      const parent = virtualized && logical ? element.parentElement : null;
+      const wrapper = parent?.getBoundingClientRect();
+      const local = parent ? origin(element) : undefined;
+      const parentOrigin = parent ? origin(parent) : undefined;
+      const point = wrapper && local && parentOrigin && parent
+        ? { x: wrapper.x + local.x - parentOrigin.x - parent.scrollLeft, y: wrapper.y + local.y - parentOrigin.y - parent.scrollTop }
+        : virtualized ? element.getBoundingClientRect() : origin(element);
       const style = virtualized ? undefined : getComputedStyle(element);
       // Absolute elements cannot inherit subgrid tracks. Full-span rows keep the parent's
       // resolved tracks so their visual copy retains the same column widths after removal.
       const columns = style?.gridTemplateColumns.startsWith("subgrid") && style.gridColumn === "1 / -1" && element.parentElement
         ? getComputedStyle(element.parentElement).gridTemplateColumns : undefined;
-      const position = { element, columns, parent: element.parentElement, width: virtualized ? 0 : element.offsetWidth, height: virtualized ? 0 : element.offsetHeight, x: point.x - base.x + (virtualized ? list.scrollLeft - residual.x : 0), y: point.y - base.y + (virtualized ? list.scrollTop - residual.y : 0) };
+      const position = { element, columns, parent: element.parentElement, width: virtualized ? 0 : element.offsetWidth, height: virtualized ? 0 : element.offsetHeight, x: point.x - base.x + (virtualized ? list.scrollLeft - (parent ? 0 : residual.x) : 0), y: point.y - base.y + (virtualized ? list.scrollTop - (parent ? 0 : residual.y) : 0) };
       const key = element.dataset.listMotion ?? element.dataset.flip!;
       const before = positions.get(key);
       next.set(key, position);
       return { element, position, before, residual, transform: style?.transform ?? "none" };
     });
     for (const key of exits.keys()) if (!moving || next.has(key)) clearExit(key);
+    if (moving && virtualized) {
+      for (const [key, before] of departing) {
+        if (next.has(key)) continue;
+        leave(key, before);
+        departing.delete(key);
+      }
+    }
+    if (!moving) { departing.clear(); added.clear(); }
     if (moving && !virtualized) {
       for (const [key, before] of positions) if (!next.has(key)) leave(key, before);
     }
@@ -170,9 +192,10 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
       if (!before || before.element !== element) {
         cancel(element);
         clearEntrance(element);
-        if (!virtualized && !before) {
+        if ((!virtualized && !before) || (virtualized && added.has(element.dataset.listMotion ?? element.dataset.flip!))) {
           const animation = element.animate?.(presenceFrames(transform, true), { duration: DURATION, easing: PRESENCE_EASING });
           if (animation) {
+            added.delete(element.dataset.listMotion ?? element.dataset.flip!);
             entrances.set(element, animation);
             animation.onfinish = () => { if (entrances.get(element) === animation) entrances.delete(element); };
           }
@@ -216,20 +239,45 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
   });
   mutations?.observe(list, { childList: true, subtree: true, attributes: true, attributeFilter: virtualized ? ["data-list-motion", "data-flip", "style"] : ["data-list-motion", "data-flip"] });
   const onScroll = () => {
-    if (virtualized) measure(false);
-    else for (const key of exits.keys()) clearExit(key);
+    if (virtualized) { added.clear(); measure(false); } else for (const key of exits.keys()) clearExit(key);
   };
   const onReducedMotion = () => { if (prefersReducedMotion()) measure(false); };
   list.addEventListener("scroll", onScroll, { passive: true, capture: true });
   query?.addEventListener?.("change", onReducedMotion);
   return {
     list,
+    prepare(nextKeys) {
+      if (!virtualized || !logical) return;
+      for (const key of nextKeys) {
+        if (!logical.has(key)) added.add(key);
+        departing.delete(key);
+      }
+      for (const key of added) if (!nextKeys.has(key)) added.delete(key);
+      if (!prefersReducedMotion()) {
+        const base = list.getBoundingClientRect();
+        for (const element of children()) {
+          const key = element.dataset.listMotion ?? element.dataset.flip!;
+          if (!logical.has(key) || nextKeys.has(key)) continue;
+          // Capture only real removals, before React can recycle their elements or wrappers.
+          // The viewport rectangle already includes every virtual wrapper's transform.
+          const rect = element.getBoundingClientRect();
+          const copy = element.cloneNode(true) as HTMLElement;
+          copy.style.transform = "none";
+          departing.set(key, { element: copy, parent: list, width: rect.width, height: rect.height, x: rect.x - base.x + list.scrollLeft, y: rect.y - base.y + list.scrollTop });
+        }
+      }
+      logical = nextKeys;
+      clearTimeout(additionTimer);
+      additionTimer = setTimeout(() => added.clear(), 0);
+    },
     rendered() {
       const keys = JSON.stringify(children().map((element) => element.dataset.listMotion ?? element.dataset.flip));
-      if (keys !== order) measure(true);
+      if (keys !== order || departing.size > 0) measure(true);
     },
     stop() {
       stopped = true;
+      clearTimeout(additionTimer);
+      departing.clear();
       resize?.disconnect();
       mutations?.disconnect();
       list.removeEventListener("scroll", onScroll, true);
@@ -241,8 +289,12 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
   };
 }
 
+export interface ListMotionRef<T extends HTMLElement> extends React.RefObject<T | null> {
+  prepare: (keys: ReadonlySet<string>) => void;
+}
+
 interface ListFollower<T extends HTMLElement> {
-  ref: ((list: T | null) => void) & { current: T | null };
+  ref: ((list: T | null) => void) & ListMotionRef<T>;
   /** After each render of the owner: takes the latest options and records any change of the rows. */
   rendered: (options: ListMotionOptions) => void;
   stop: () => void;
@@ -267,7 +319,7 @@ function followList<T extends HTMLElement>(initial: ListMotionOptions): ListFoll
     ref.current = list;
     attach();
     watch?.rendered();
-  }, { current: null as T | null });
+  }, { current: null as T | null, prepare: (keys: ReadonlySet<string>) => watch?.prepare(keys) });
   return {
     ref,
     rendered(next) {
@@ -285,9 +337,9 @@ function followList<T extends HTMLElement>(initial: ListMotionOptions): ListFoll
 
 /** Keyed rows enter, leave and slide to their new positions in either axis. Removed controls
  * leave only inert visual copies; actions and focus handoffs take effect immediately. Virtual
- * collections animate surviving rows only, never newly rendered or recycled identities. */
-export function useListMotion<T extends HTMLElement>({ descendants = false, virtualized = false }: ListMotionOptions = {}): React.RefObject<T | null> {
-  const [motion] = useState(() => followList<T>({ descendants, virtualized }));
+ * collections distinguish logical changes from newly rendered or recycled identities when supplied keys. */
+export function useListMotion<T extends HTMLElement>({ descendants = false, virtualized = false, keys }: ListMotionOptions = {}): ListMotionRef<T> {
+  const [motion] = useState(() => followList<T>({ descendants, virtualized, keys }));
   const focused = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     const onFocus = (event: FocusEvent) => {
@@ -315,7 +367,7 @@ export function useListMotion<T extends HTMLElement>({ descendants = false, virt
     };
   }, [motion, virtualized]);
   useLayoutEffect(() => {
-    motion.rendered({ descendants, virtualized });
+    motion.rendered({ descendants, virtualized, keys });
     const list = motion.ref.current;
     const lost = focused.current;
     if (!virtualized && lost?.isConnected && list?.contains(lost) && document.activeElement === document.body) lost.focus({ preventScroll: true });

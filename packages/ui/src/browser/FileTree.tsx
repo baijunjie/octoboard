@@ -20,7 +20,7 @@ import { wireBaseName } from "../wirePath";
 import { RowActions } from "./RowActions";
 import { FileIcon } from "./FileIcon";
 import type { TreeNode } from "./tree";
-import { useBrowserListMotion } from "./useBrowserListMotion";
+import { BrowserListMotion, useBrowserListMotion } from "./useBrowserListMotion";
 import { DirectoryRow, ROW_CLASS, ROW_HEIGHT, RowContent, RowName } from "./treeRow";
 
 /** The rows of the tree with their rendering kept for every row whose content did not change: the
@@ -102,8 +102,22 @@ export function FileTree({
 }): React.ReactElement {
   const language = useCurrentLanguage();
   const items = useStableNodes(nodes);
-  const motionRef = useBrowserListMotion(treeRef);
-  const fade = useScrollFade({ ref: motionRef, className: "min-h-0 flex-1 overflow-auto py-1 outline-none" });
+  const visibleKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const walk = (rows: TreeNode[]) => {
+      for (const node of rows) {
+        keys.add(node.key);
+        if (node.type === "directory" && expanded.has(node.key)) {
+          if (node.children.length > 0) walk(node.children);
+          else keys.add(`collapsed:${node.path}`);
+        }
+      }
+    };
+    walk(items);
+    return keys;
+  }, [items, expanded]);
+  const motion = useBrowserListMotion(treeRef, visibleKeys);
+  const fade = useScrollFade({ ref: motion.ref, className: "min-h-0 flex-1 overflow-auto py-1 outline-none" });
   // react-aria-components 1.21.1 decides whether a row can expand — its `aria-expanded` and Left /
   // Right — from the children it holds, not from `hasChildItems`, which it hands only to the
   // chevron slot. So a collapsed directory, whose rows are not built, holds one
@@ -155,19 +169,21 @@ export function FileTree({
   };
 
   return (
-    <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT }}>
-      <Tree
-        {...fade}
-        aria-label={label}
-        items={items}
-        expandedKeys={expanded}
-        onExpandedChange={onExpandedChange}
-        onAction={onAction}
-        dependencies={[language]}
-      >
-        {renderNode}
-      </Tree>
-    </Virtualizer>
+    <BrowserListMotion keys={visibleKeys} prepare={motion.prepare}>
+      <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT }}>
+        <Tree
+          {...fade}
+          aria-label={label}
+          items={items}
+          expandedKeys={expanded}
+          onExpandedChange={onExpandedChange}
+          onAction={onAction}
+          dependencies={[language]}
+        >
+          {renderNode}
+        </Tree>
+      </Virtualizer>
+    </BrowserListMotion>
   );
 }
 

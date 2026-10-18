@@ -11,7 +11,7 @@ import { ChangeRowBody, changeRowText } from "./changeRow";
 import { changeGroups, sectionKey, type ChangeItem, type ChangeNode, type CommitRef } from "./changes";
 import { ChangeSectionHeading, ChangeSectionHeadingStops, ChangeListLayout, CHANGE_SCROLL_CLASS, HEADING_CLASS, HEADING_HEIGHT } from "./changeSectionHeading";
 import { shortCommit } from "./shortCommit";
-import { useBrowserListMotion } from "./useBrowserListMotion";
+import { BrowserListMotion, useBrowserListMotion } from "./useBrowserListMotion";
 import { DirectoryRow, ExpandChevron, ROW_CLASS, ROW_HEIGHT, RowContent } from "./treeRow";
 
 /** The rows of `nodes` that open and close — the directories and the commits — and everything
@@ -61,8 +61,6 @@ export function ChangeTree({
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
 }): React.ReactElement {
   const language = useCurrentLanguage();
-  const motionRef = useBrowserListMotion(listRef);
-  const { props: fade, wrap } = useStickyScrollFade({ ref: motionRef, className: "min-h-0 flex-1 overflow-auto pb-1 outline-none " + CHANGE_SCROLL_CLASS, stickyHeadingHeight: HEADING_HEIGHT });
   const groups = useMemo(() => changeGroups(items, layout).map((group) => ({ id: group.section, ...group })), [items, layout]);
   // Only the commits and directories of the sections on screen: a folded section renders none of
   // its rows, so whether a row inside one is folded is not this list's to decide. react-aria hands
@@ -81,6 +79,23 @@ export function ChangeTree({
     return map;
   }, [shown]);
   const expanded = useMemo(() => new Set<Key>(foldable.filter((key) => !collapsed.has(key))), [foldable, collapsed]);
+
+  const visibleKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const walk = (nodes: readonly ChangeNode[]) => {
+      for (const node of nodes) {
+        keys.add(node.key);
+        if (node.type !== "change" && expanded.has(node.key)) walk(node.children);
+      }
+    };
+    for (const group of groups) {
+      keys.add(`heading:${group.section}`);
+      if (!collapsed.has(sectionKey(group.section))) walk(group.nodes);
+    }
+    return keys;
+  }, [groups, expanded, collapsed]);
+  const motion = useBrowserListMotion(listRef, visibleKeys);
+  const { props: fade, wrap } = useStickyScrollFade({ ref: motion.ref, className: "min-h-0 flex-1 overflow-auto pb-1 outline-none " + CHANGE_SCROLL_CLASS, stickyHeadingHeight: HEADING_HEIGHT });
 
   // Only the commits and directories this list shows are decided here: the sections' own keys and
   // the rows inside a folded section all stay as they are.
@@ -117,33 +132,35 @@ export function ChangeTree({
   };
 
   return (
-    <ChangeSectionHeadingStops>
-      {wrap(<Virtualizer layout={ChangeListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT, headingHeight: HEADING_HEIGHT }}>
-        <Tree
-          {...fade}
-          aria-label={label}
-          items={groups}
-          expandedKeys={expanded}
-          onExpandedChange={onExpandedChange}
-          onAction={onAction}
-          // `collapsed` among the dependencies, or the collection keeps the rows of a section that
-          // has just been folded: nothing else about it changed.
-          dependencies={[language, selected, collapsed, layout]}
-        >
-          {(group) => (
-            <TreeSection className="h-full" id={group.section}>
-              <TreeHeader data-list-motion={`heading:${group.section}`} className={HEADING_CLASS}>
-                <ChangeSectionHeading section={group.section} count={group.items.length} collapsed={collapsed} onCollapsedChange={onCollapsedChange} />
-              </TreeHeader>
-              {/* A folded section is its heading and nothing else, still counting what it holds. */}
-              <Collection items={collapsed.has(sectionKey(group.section)) ? [] : group.nodes} dependencies={[language, selected, layout]}>
-                {renderNode}
-              </Collection>
-            </TreeSection>
-          )}
-        </Tree>
-      </Virtualizer>)}
-    </ChangeSectionHeadingStops>
+    <BrowserListMotion keys={visibleKeys} prepare={motion.prepare}>
+      <ChangeSectionHeadingStops>
+        {wrap(<Virtualizer layout={ChangeListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT, headingHeight: HEADING_HEIGHT }}>
+          <Tree
+            {...fade}
+            aria-label={label}
+            items={groups}
+            expandedKeys={expanded}
+            onExpandedChange={onExpandedChange}
+            onAction={onAction}
+            // `collapsed` among the dependencies, or the collection keeps the rows of a section that
+            // has just been folded: nothing else about it changed.
+            dependencies={[language, selected, collapsed, layout]}
+          >
+            {(group) => (
+              <TreeSection className="h-full" id={group.section}>
+                <TreeHeader data-list-motion={`heading:${group.section}`} className={HEADING_CLASS}>
+                  <ChangeSectionHeading section={group.section} count={group.items.length} collapsed={collapsed} onCollapsedChange={onCollapsedChange} />
+                </TreeHeader>
+                {/* A folded section is its heading and nothing else, still counting what it holds. */}
+                <Collection items={collapsed.has(sectionKey(group.section)) ? [] : group.nodes} dependencies={[language, selected, layout]}>
+                  {renderNode}
+                </Collection>
+              </TreeSection>
+            )}
+          </Tree>
+        </Virtualizer>)}
+      </ChangeSectionHeadingStops>
+    </BrowserListMotion>
   );
 }
 

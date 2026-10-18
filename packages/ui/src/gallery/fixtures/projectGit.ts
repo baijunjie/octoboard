@@ -755,7 +755,7 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "Commits grouped by folder",
     description:
-      "Group by commit and Group by folder are both on: each commit holds its own folders, which start open. Cache query results is folded to its row, which still counts its two changes.",
+      "Group by commit and Group by folder are both on: each commit holds its own folders, which start open. Cache query results is folded to its row, which still counts its two changes. Expand or collapse a commit or folder to watch its children slide and fade in or out with the same timing as the session menu.",
     state,
     preferences: gitMode({ byCommit: true, layout: "tree" }),
     steps: [...selecting(rankingSession), (ui) => ui.press(commitRow("Cache query results")), (ui) => ui.wait(300)],
@@ -863,7 +863,7 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Changes grouped by folder",
-    description: "Directories start expanded and config.ts is selected inside src, its highlight spaced like the flat list's while file labels follow the folder indentation.",
+    description: "Directories start expanded and config.ts is selected inside src, its highlight spaced like the flat list's while file labels follow the folder indentation. Expand or collapse a folder or section to watch its children slide and fade in or out with the same timing as the session menu, while following rows slide into place.",
     state,
     preferences: gitMode({ layout: "tree" }),
     steps: [
