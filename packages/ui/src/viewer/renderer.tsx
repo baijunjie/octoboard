@@ -43,20 +43,24 @@ function readingCss(theme: "light" | "dark"): string {
  * Diff colours that keep every token at 4.5:1 and mark a change by more than colour. The library
  * marks a changed word with a tint over the changed line's tint, and in the light appearance the
  * palette's grey comments fall short under either tint; so a changed word is underlined instead of
- * tinted in both appearances, and in the light one the line tints are the lightest that still read
- * as a tint. The dark palette meets the ratio on the library's own line tints. The `+` / `-`
- * indicators mark changed lines. The same sheet draws what the viewer adds to the separators of
- * collapsed lines (`expansion.ts`): the whole-file control, and a focus ring. Every `data-*`
- * selector and `--diffs-*` property in the sheet is the library's own markup and styling, except the
- * attributes the viewer sets itself (`data-whole-file`, `data-focus-visible`, `data-faded-label`),
- * so a library upgrade is checked against them.
+ * tinted in both appearances, and in the light one the line tints are GitHub's, the deletion's
+ * lightened just enough for the comments to keep the ratio, and their line numbers' cells take
+ * GitHub's deeper tints rather than the library's mix toward the palette's dark git colours. The
+ * dark palette meets the ratio on the library's own line tints. The `+` / `-` indicators mark
+ * changed lines. The same sheet draws what the viewer adds to the separators of collapsed lines
+ * (`expansion.ts`): the whole-file control, and a focus ring. Every `data-*` selector and
+ * `--diffs-*` property in the sheet is the library's own markup and styling, except the attributes
+ * the viewer sets itself (`data-whole-file`, `data-focus-visible`, `data-faded-label`), so a
+ * library upgrade is checked against them.
  */
 function diffCss(theme: "light" | "dark"): string {
   const [added, removed] = theme === "light" ? ["#1a7f37", "#cf222e"] : ["#3fb950", "#f85149"];
   const lineTints =
     theme === "light"
-      ? `[data-line][data-line-type="change-addition"] { background-color: #ebf7ed !important; }
-         [data-line][data-line-type="change-deletion"] { background-color: #fdf0f0 !important; }`
+      ? `[data-line][data-line-type="change-addition"] { background-color: #dafbe1 !important; }
+         [data-line][data-line-type="change-deletion"] { background-color: #ffefed !important; }
+         [data-line-type="change-addition"][data-column-number] { background-color: #ccffd8 !important; }
+         [data-line-type="change-deletion"][data-column-number] { background-color: #ffd7d5 !important; }`
       : "";
   return `${readingCss(theme)}
     ${lineTints}

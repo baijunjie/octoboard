@@ -11,7 +11,7 @@ it.each([
   const colours = theme.colors ?? {};
   expect(CODE_THEMES[appearance]).toEqual({
     name: theme.name,
-    background: appearance === "light" ? "#f3f4f6" : colours["editor.background"],
+    background: colours["editor.background"],
     foreground: colours["editor.foreground"],
   });
 });
