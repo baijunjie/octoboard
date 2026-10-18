@@ -276,8 +276,8 @@ project's, and a project's heading in a console session's focus mode, apart from
 (see "What both views show" and "A console session's focus mode" in `docs/product/focus-mode.md`). Choosing an action
 closes the menu at once; submenu entries open their next menu. Separators split it into four groups, in this order:
 the first holds **Pin** / **Unpin**, as in a session's menu, and the actions for viewing the project inside the app
-(**Focus mode**, **Browse files**, **View archive**); then opening it in outside tools (**Open in file manager**,
-**Open terminal**, **Git**); managing the project itself (**Rename**, **Copy project name**, **Project settings**);
+(**Focus mode**, **Browse files**, **View archive**); then the **Open in** submenu and **Git** submenu; managing the
+project itself (**Rename**, **Copy project name**, **Project settings**);
 and **Remove project**. An item a view does not offer is left out without moving the others.
 
 - **Pin** / **Unpin** — see "Pinning" below.
@@ -288,11 +288,18 @@ and **Remove project**. An item a view does not offer is left out without moving
   with its agent's icon and its title; choosing one selects it (see "Selecting a session" below). After them,
   **View all**, without a count, opens the archive view whenever the project has an archived session, including
   when all of them fit in the submenu. A project with no archived session shows only a disabled item saying so.
-- **Open in file manager** — opens the project's directory in the system file manager on the daemon's host; see
-  "Opening the system file manager" below.
-- **Open terminal** — every project, including one that is not a git repository and one whose git status has not
-  arrived. Opens the system terminal at the project's directory (see "Opening a project terminal" in
-  `docs/product/project-terminal.md`). Opening it toasts nothing; a failure is an error toast.
+- **Open in** — a submenu with **File manager**, then **Terminal**, then the project's repository host when available.
+  File manager opens the project's directory on the daemon's host (see "Opening the system file manager" below).
+  Terminal opens the system terminal at that directory (see "Opening a project terminal" in
+  `docs/product/project-terminal.md`). Both are offered for every project, including one that is not a git repository
+  and one whose git status has not arrived. Neither raises a success toast; a failure is an error toast.
+  The repository entry opens the recorded remote's web address in the client's browser. Public GitHub, GitLab and
+  Bitbucket hosts carry their brand names and icons; other hosts carry their hostname and a globe icon, including
+  self-hosted installations. A missing, invalid, local or unsupported remote, or a client unable to open web links,
+  leaves out the repository entry. HTTP and HTTPS remotes retain their web scheme; SSH, SCP-style, `git://`,
+  `git+ssh://` and `ssh+git://` remotes use HTTPS. Credentials, query strings, fragments and a trailing `.git` are
+  omitted from the opened address, as are transport ports on non-web remotes. Opening raises no success toast;
+  a failure is an error toast.
 - **Git** — a submenu, only while the project's status says its directory is a git repository, so not before the
   first status and not when the directory is not one (see "What one check does" in
   `docs/product/project-git-status.md`). It holds **Pull current branch**, then **Push current branch**, then
@@ -325,8 +332,8 @@ control of its own: the sessions under an owner fold away with their project, li
 
 ### Opening the system file manager
 
-**Open in file manager** is available for every project in all the project-menu placements above, independently of
-whether its project pane is visible, which mode it shows, and whether the directory is a Git repository. It opens
+**File manager** under **Open in** is available for every project in all the project-menu placements above,
+independently of whether its project pane is visible, which mode it shows, and whether the directory is a Git repository. It opens
 the project's directory on the machine running the daemon, including when the client is a browser on another machine.
 It changes no session selection or pane ownership. Success raises no toast; a refusal raises an error toast with the
 reason.

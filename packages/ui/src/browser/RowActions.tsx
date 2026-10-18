@@ -30,8 +30,13 @@ export function RowActions({ path, name, directory = false, contextTargetRef }: 
       void request({ type, ...scope, path }).catch((error: Error) => toastError(error));
     };
     items.push(
-      { label: t("browser.row.reveal"), icon: FolderOpen, onClick: () => run("reveal_project_path") },
-      { label: t("browser.row.open"), icon: SquareArrowOutUpRight, onClick: () => run("open_project_path") },
+      {
+        label: t("common.openIn"), icon: SquareArrowOutUpRight,
+        items: [
+          { label: t("common.fileManager"), icon: FolderOpen, onClick: () => run("reveal_project_path") },
+          { label: t("common.defaultApplication"), icon: SquareArrowOutUpRight, onClick: () => run("open_project_path") },
+        ],
+      },
     );
   }
   if (items.length === 0) return null;

@@ -1,7 +1,9 @@
-import { Archive, ArrowLeftRight, Copy, Download, Focus, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Upload } from "lucide-react";
+import { Archive, ArrowLeftRight, Copy, Download, Focus, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Upload, SquareArrowOutUpRight } from "lucide-react";
 
 import { switchEntries } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/ActionMenu";
+import { RepositoryIcon } from "../components/RepositoryIcon";
+import { repositoryLink } from "../repositoryLink";
 import { AgentIcon } from "../components/AgentIcon";
 import { PathText } from "../components/PathText";
 import type { Translate } from "../i18n/catalog";
@@ -88,6 +90,7 @@ export function projectMenu(
   sessions: Session[],
   { placement = "list", gitRepository = false }: { placement?: MenuPlacement; gitRepository?: boolean } = {},
 ): ActionMenuEntry[] {
+  const repository = repositoryLink(project.remote_url);
   return [
     ...(placement === "focused" ? [] : [pinItem(t, project.pinned, () => handlers.onSetPinned({ project }, !project.pinned))]),
     ...(placement === "list" ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ project }) }] : []),
@@ -98,8 +101,17 @@ export function projectMenu(
       handlers.onOpenArchive({ console: project.console_id, project: project.id }),
     ),
     "separator",
-    { label: t("sidebar.project.openDirectory"), icon: Folder, onClick: () => handlers.onOpenProjectDirectory(project) },
-    { label: t("sidebar.project.openTerminal"), icon: Terminal, onClick: () => handlers.onOpenProjectTerminal(project) },
+    {
+      label: t("common.openIn"), icon: SquareArrowOutUpRight,
+      items: [
+        { label: t("common.fileManager"), icon: Folder, onClick: () => handlers.onOpenProjectDirectory(project) },
+        { label: t("common.terminal"), icon: Terminal, onClick: () => handlers.onOpenProjectTerminal(project) },
+        ...(repository && handlers.onOpenRepository ? [{
+          label: repository.host, icon: <RepositoryIcon brand={repository.brand} />,
+          onClick: () => handlers.onOpenRepository!(repository.url),
+        }] : []),
+      ],
+    },
     ...(gitRepository
       ? [
         {

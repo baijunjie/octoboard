@@ -11,6 +11,10 @@
  * "Ellipsis" entry of "This project" in `.claude/skills/knowledge-i18n-copy/SKILL.md`.
  */
 export const en = {
+  "common.openIn": "Open in",
+  "common.fileManager": "File manager",
+  "common.terminal": "Terminal",
+  "common.defaultApplication": "Default application",
   "common.add": "Add",
   "common.browse": "Browse",
   "common.cancel": "Cancel",
@@ -382,8 +386,6 @@ export const en = {
   "sidebar.project.rename": "Rename",
   "sidebar.project.edit": "Project settings",
   "sidebar.project.browse": "Browse files",
-  "sidebar.project.openDirectory": "Open in file manager",
-  "sidebar.project.openTerminal": "Open terminal",
   "menu.loading": "Loading…",
   "menu.loadFailed": "Could not load items: {detail}",
   "sidebar.project.switchBranch": "Switch branch",
@@ -637,8 +639,6 @@ export const en = {
   "browser.tree.row.selected": "{name}, selected",
   "browser.tree.row.removed": "{name}, removed, selected",
   "browser.tree.row.unlisted": "{name}, not in the listing, selected",
-  "browser.row.open": "Open",
-  "browser.row.reveal": "Show in file manager",
   "browser.row.actions": "Actions for file {name}",
   "browser.directory.actions": "Actions for folder {name}",
 

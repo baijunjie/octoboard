@@ -43,6 +43,8 @@ export interface SidebarHandlers {
   onOpenProjectDirectory: (project: Project) => void;
   /** Opens the system terminal at the project's directory. */
   onOpenProjectTerminal: (project: Project) => void;
+  /** Opens a validated repository web URL; absent without browser-link support. */
+  onOpenRepository?: (url: string) => void;
   /** Copies the project name; absent without a clipboard capability. */
   onCopyProjectName?: (project: Project) => void;
   /** Absent without a clipboard capability. */

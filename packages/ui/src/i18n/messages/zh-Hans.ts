@@ -6,6 +6,10 @@ import type { Translation } from "../catalog";
  * session, 智能体 agent. Chinese has only the `other` plural category. Ellipses follow the rule in the
  * English catalog's header. */
 export const zhHans: Translation<"other"> = {
+  "common.openIn": "打开方式",
+  "common.fileManager": "文件管理器",
+  "common.terminal": "终端",
+  "common.defaultApplication": "默认应用程序",
   "common.add": "添加",
   "common.browse": "浏览",
   "common.cancel": "取消",
@@ -334,8 +338,6 @@ export const zhHans: Translation<"other"> = {
   "sidebar.project.rename": "重命名",
   "sidebar.project.edit": "项目设置",
   "sidebar.project.browse": "浏览文件",
-  "sidebar.project.openDirectory": "在文件管理器中打开",
-  "sidebar.project.openTerminal": "打开终端",
   "menu.loading": "正在载入…",
   "menu.loadFailed": "无法载入菜单项：{detail}",
   "sidebar.project.switchBranch": "切换分支",
@@ -576,8 +578,6 @@ export const zhHans: Translation<"other"> = {
   "browser.tree.row.selected": "{name}，已选中",
   "browser.tree.row.removed": "{name}，已移除，已选中",
   "browser.tree.row.unlisted": "{name}，未列出，已选中",
-  "browser.row.open": "打开",
-  "browser.row.reveal": "在文件管理器中显示",
   "browser.row.actions": "文件 {name} 的操作",
   "browser.directory.actions": "文件夹 {name} 的操作",
 

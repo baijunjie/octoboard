@@ -222,9 +222,10 @@ entry**, whether the folder is collapsed or expanded, filtered or not. Every fil
 has the same button, uncommitted and committed alike, flat or grouped by folder. **Right-clicking a row opens the same
 menu at the pointer** (Control-click also works in the desktop app).
 
-- The menu's order is **Copy path**, **Show in file manager**, then **Open**, omitting unavailable actions.
-- **Show in file manager** opens the containing folder and selects that entry, including when the entry is a folder.
-  **Open** opens the live file or folder with the operating system's default application.
+- The menu's order is **Copy path**, then the **Open in** submenu, omitting unavailable actions. Open in holds
+  **File manager**, then **Default application**.
+- **File manager** opens the containing folder and selects that entry, including when the entry is a folder.
+  **Default application** opens the live file or folder with the operating system's default application.
   Both act on the machine running the daemon, including when the client is a browser on another machine. Files uses
   the project directory; an uncommitted change uses the worktree the branch is checked out in and the project's
   directory within it. They act on what is on disk now, including for a staged change. **A committed change offers
@@ -254,24 +255,24 @@ menu at the pointer** (Control-click also works in the desktop app).
 - Its **accessible name names the file or folder** — "Actions for file server.ts" or "Actions for folder src" — so each
   row's button is told apart, while its tooltip is the short one every such button has (see "Tooltips on icon-only
   controls" in `docs/product/labels-and-tooltips.md`).
-- **Where the platform has no clipboard, Copy path is omitted**. Open and Show in file manager remain available in
+- **Where the platform has no clipboard, Copy path is omitted**. Default application and File manager remain available in
   Files and on uncommitted changes. A committed change then has no row button or action menu. A plain browser whose page is not a secure
   context — served over `http` from anywhere but `localhost` — has no clipboard; the packaged desktop app always does.
 
-Open and Show in file manager raise no success toast; failures raise an error toast with the reason. A missing
+Default application and File manager raise no success toast; failures raise an error toast with the reason. A missing
 live entry, such as a deleted file that is still absent on disk, is refused with `file_not_found`; an entry or
 symbolic-link target outside the project's directory in the worktree acted on is refused with `outside_scope`. A
 worktree that no longer exists is refused with `worktree_unavailable`. Revealing a symbolic link selects the
 link itself.
 
-On macOS the system opener handles Open and asks Finder to reveal the entry for Show in file manager. On Linux Open
-uses `xdg-open`; Show in file manager requires `gdbus` and a desktop file manager providing
+On macOS the system opener handles Default application and asks Finder to reveal the entry for File manager. On Linux Default application
+uses `xdg-open`; File manager requires `gdbus` and a desktop file manager providing
 `org.freedesktop.FileManager1.ShowItems`. The Linux tools are looked up in the user's login-shell environment.
-On macOS, and for Linux Show in file manager, the request waits for the launcher to finish, at most **15 seconds**
+On macOS, and for Linux File manager, the request waits for the launcher to finish, at most **15 seconds**
 with at most **16 KiB** each of output and error, rather than waiting for the application window to close. Linux
-Open succeeds once its launcher starts; a later launcher failure is not reported. Unsupported operating systems,
-unavailable launchers or desktop services, and launcher failures are reported as `path_open_failed` for Open and
-`directory_unavailable` for Show in file manager, carrying the reason as `detail`.
+Default application succeeds once its launcher starts; a later launcher failure is not reported. Unsupported operating systems,
+unavailable launchers or desktop services, and launcher failures are reported as `path_open_failed` for Default application and
+`directory_unavailable` for File manager, carrying the reason as `detail`.
 
 
 ## What is remembered

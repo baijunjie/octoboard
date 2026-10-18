@@ -109,9 +109,12 @@ it.each(["open_project_path", "reveal_project_path"] as const)("sends %s with th
     { request, toasts },
   );
   act(() => actionsOf(container).click());
+  expect([...document.querySelectorAll<HTMLElement>("[role=menuitem]")].map((entry) => entry.textContent)).toEqual(["Open in"]);
+  act(() => document.querySelector<HTMLElement>("[role=menuitem]")!.click());
   const entries = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")];
-  expect(entries.map((entry) => entry.textContent)).toEqual(["Show in file manager", "Open"]);
-  act(() => entries[type === "open_project_path" ? 1 : 0].click());
+  const entry = entries.find((item) => item.textContent === (type === "open_project_path" ? "Default application" : "File manager"))!;
+  expect(entry).toBeDefined();
+  act(() => entry.click());
   await flush();
   expect(request).toHaveBeenCalledExactlyOnceWith({ type, project: "p", worktree: "w", path: "src/caf%C3%A9.ts" });
 });
@@ -123,6 +126,7 @@ it("reports a system-open failure through the existing error toast", async () =>
   );
   act(() => actionsOf(container).click());
   act(() => document.querySelector<HTMLElement>("[role=menuitem]")!.click());
+  act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent === "Default application")!.click());
   await flush();
   expect(toasts.error).toHaveBeenCalledWith("File not found");
 });

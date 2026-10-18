@@ -70,7 +70,7 @@ const NO_SESSIONS: Session[] = [];
 
 export function App(): React.ReactElement {
   const t = useT();
-  const { clipboard } = usePlatform();
+  const { clipboard, links } = usePlatform();
   const { request, toastError, toastNotice, reconnect, store } = useDaemon();
   const connectionState = useDaemonStore((s) => s.connectionState);
   const hosts = useDaemonStore((s) => s.hosts);
@@ -392,6 +392,10 @@ export function App(): React.ReactElement {
     request({ type: "pull_project_branch", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
   };
 
+  const openRepository = (url: string) => {
+    void links?.open(url).catch((error: unknown) => toastError(errorPresentation(error as Error)));
+  };
+
   const openProjectDirectory = (project: Project) => {
     request({ type: "open_project_directory", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
   };
@@ -634,6 +638,7 @@ export function App(): React.ReactElement {
   const stableToggleAside = useStableHandler(panes.toggleAside);
   const stableFocus = useStableHandler(sidebarView.setFocus);
   const stableOpenProjectDirectory = useStableHandler(openProjectDirectory);
+  const stableOpenRepository = useStableHandler(openRepository);
   const stableOpenProjectTerminal = useStableHandler(openProjectTerminal);
   const stableCopySessionId = useStableHandler((session: Session) => copySessionId?.(session));
   const stableCopyProjectName = useStableHandler((project: Project) => copyProjectName?.(project));
@@ -748,6 +753,7 @@ export function App(): React.ReactElement {
                 onBrowseProject={stableBrowseProject}
                 onOpenProjectDirectory={stableOpenProjectDirectory}
                 onOpenProjectTerminal={stableOpenProjectTerminal}
+                onOpenRepository={links ? stableOpenRepository : undefined}
                 onCopyProjectName={clipboard ? stableCopyProjectName : undefined}
                 onCopySessionId={clipboard ? stableCopySessionId : undefined}
                 onPullProjectBranch={stablePullProjectBranch}

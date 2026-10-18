@@ -151,6 +151,23 @@ const switchFixture = {
 const openSwitch = [...openGitSubmenu(restoreProject.name), (ui: Ui) => ui.press(ui.t("sidebar.project.switchBranch")), (ui: Ui) => ui.wait(300)];
 
 export const gitScenarios: Scenario[] = [
+  ...[
+    { id: "github", host: "GitHub", remote: "https://github.com/octoboard/search-api" },
+    { id: "gitlab", host: "GitLab", remote: "https://gitlab.com/octoboard/search-api" },
+    { id: "bitbucket", host: "Bitbucket", remote: "https://bitbucket.org/octoboard/search-api" },
+    { id: "custom-host", host: "code.example.org", remote: "https://code.example.org/octoboard/search-api" },
+  ].map(({ id, host, remote }): Scenario => ({
+    id: `project-open-in-${id}`,
+    group: "Projects",
+    category: "normal",
+    title: `Open a project in ${host}`,
+    description: `Open in groups File manager, Terminal and ${host}. The repository destination uses ${id === "custom-host" ? "the hostname and a globe icon" : `the ${host} brand icon`}.`,
+    state: snapshotState({
+      consoles: [console_], projects: [{ ...restoreProject, remote_url: remote }],
+      gitStatuses: [gitStatusOf(restoreProject.id)],
+    }),
+    steps: [openProjectMenu(restoreProject.name), (ui) => ui.press(ui.t("common.openIn"))],
+  })),
   {
     id: "git-transfer-badges", group: GROUP, category: "normal",
     title: "Push and pull count indicators",

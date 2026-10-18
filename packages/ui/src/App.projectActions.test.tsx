@@ -9,6 +9,7 @@ import { mountForTooltip } from "./components/tooltipTestSupport";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./gallery/fixtures/builders";
 import { isolate } from "./i18n/isolate";
 import { PlatformProvider } from "./platform/react";
+import type { PlatformAdapter } from "./platform";
 import type { Project } from "./protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "./store";
 import { ThemeProvider } from "./theme";
@@ -37,7 +38,7 @@ vi.mock("./terminal/TerminalController", () => ({
   },
 }));
 
-function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Promise<void> }, withSession = false) {
+function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Promise<void> }, withSession = false, links?: PlatformAdapter["links"]) {
   vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: !narrow && media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   document.documentElement.style.setProperty("--rail-width", "48px");
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
@@ -56,7 +57,7 @@ function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Pro
     dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
   const container = mountForTooltip(
-    <PlatformProvider value={{ kind: "browser", clipboard }}>
+    <PlatformProvider value={{ kind: "browser", clipboard, links }}>
       <ThemeProvider><DaemonProvider value={daemon}><App /></DaemonProvider></ThemeProvider>
     </PlatformProvider>,
   );
@@ -68,7 +69,14 @@ async function press(label: string) {
     element.getAttribute("aria-label") === label || element.textContent === label,
   );
   expect(target, label).toBeDefined();
-  await act(async () => target!.click());
+  await act(async () => {
+    if (target!.getAttribute("role") === "menuitem" && target!.hasAttribute("aria-haspopup")) {
+      target!.focus();
+      target!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    } else {
+      target!.click();
+    }
+  });
 }
 
 const menuHas = (label: string) => Array.from(document.querySelectorAll("[role=menuitem]")).some((item) => item.textContent === label);
@@ -84,10 +92,12 @@ it.each([false, true])("reopens a hidden project's Files pane when narrow=%s", a
   if (!narrow) {
     await openProjectMenu(project.name);
     expect(menuHas("Browse files")).toBe(false);
-    await press("Open in file manager");
+    await press("Open in");
+    await press("File manager");
     await openProjectMenu("API");
     expect(menuHas("Browse files")).toBe(true);
-    await press("Open in file manager");
+    await press("Open in");
+    await press("File manager");
   }
   await press("Hide project pane");
   if (narrow) await press("Show sessions");
@@ -103,7 +113,8 @@ it("sends the project directory request and reports a failure through the normal
   const { daemon, project } = mountApp();
   vi.mocked(daemon.request).mockRejectedValueOnce(new Error("The system file manager could not be opened."));
   await openProjectMenu(project.name);
-  await press("Open in file manager");
+  await press("Open in");
+  await press("File manager");
   expect(daemon.request).toHaveBeenCalledWith({ type: "open_project_directory", project: project.id });
   expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith("The system file manager could not be opened.");
 });
@@ -209,4 +220,22 @@ it("hands focus on once an unselected session archived from its menu reads archi
     sessions: new Map(state.sessions).set("s-archive", { ...state.sessions.get("s-archive")!, status: "archived" }),
   })));
   expect(reactAria.setInteractionModality).toHaveBeenCalledWith("keyboard");
+});
+
+
+it("opens the project repository through the platform and reports an opening failure", async () => {
+  const links = { open: vi.fn(async () => {}) };
+  const { daemon, project } = mountApp(false, undefined, false, links);
+  await act(async () => daemon.store.setState((state) => ({
+    projects: new Map(state.projects).set(project.id, { ...project, remote_url: "git@gitlab.com:team/app.git" }),
+  })));
+  await openProjectMenu(project.name);
+  await press("Open in");
+  await press("GitLab");
+  expect(links.open).toHaveBeenCalledExactlyOnceWith("https://gitlab.com/team/app");
+  vi.mocked(links.open).mockRejectedValueOnce(new Error("Browser unavailable"));
+  await openProjectMenu(project.name);
+  await press("Open in");
+  await press("GitLab");
+  expect(daemon.toastError).toHaveBeenCalledWith("Browser unavailable");
 });

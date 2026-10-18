@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { ActionMenuEntry, ActionMenuSubmenu } from "../components/ActionMenu";
 import { consoleOf, sessionOf } from "../gallery/fixtures/builders";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
@@ -8,6 +9,7 @@ import { archiveSubmenu, consoleMenu, type MenuPlacement, projectMenu, sessionMe
 import type { SidebarHandlers } from "./types";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
+const openIn = (menu: ActionMenuEntry[]) => menu.find((entry) => typeof entry === "object" && entry.label === "Open in") as ActionMenuSubmenu;
 const account = (id: string, agent: Account["agent"]): Account => ({ id, agent, name: id, config_dir: `/home/${id}` });
 
 function submenu(session: Session, accounts: Account[], handlers = {} as SidebarHandlers) {
@@ -133,15 +135,27 @@ describe("a project's menu", () => {
     const menu = projectMenu(t, handlers, { id: "p", pinned: false } as Project, [], [], { gitRepository: true });
     expect(menu.map((entry) => (entry === "separator" ? entry : entry.label))).toEqual([
       "Pin", "Focus mode", "Browse files", "View archive", "separator",
-      "Open in file manager", "Open terminal", "Git", "separator",
+      "Open in", "Git", "separator",
       "Rename", "Copy project name", "Project settings", "separator",
       "Remove project",
     ]);
   });
 
-  it("offers Open terminal for every project", () => {
-    expect(labels("list")).toContain("Open terminal");
-    expect(labels("focused")).toContain("Open terminal");
+  it.each(["list", "focused", "nested"] as const)("groups outside tools for every project in %s", (placement) => {
+    const menu = projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], [], { placement });
+    expect(openIn(menu).items.map((entry) => typeof entry === "object" ? entry.label : entry)).toEqual(["File manager", "Terminal"]);
+    expect(labels(placement)).not.toContain("Terminal");
+  });
+
+  it.each(["list", "focused", "nested"] as const)("opens the branded repository through the same %s submenu", (placement) => {
+    const handlers = { onOpenRepository: vi.fn() } as unknown as SidebarHandlers;
+    const project = { id: "p", remote_url: "git@github.com:acme/app.git" } as Project;
+    const entry = openIn(projectMenu(t, handlers, project, [], [], { placement })).items[2];
+    expect(entry).toMatchObject({ label: "GitHub", icon: { props: { brand: "github" } } });
+    (entry as { onClick: () => void }).onClick();
+    expect(handlers.onOpenRepository).toHaveBeenCalledExactlyOnceWith("https://github.com/acme/app");
+    expect(openIn(projectMenu(t, {} as SidebarHandlers, project, [], [])).items).toHaveLength(2);
+    expect(openIn(projectMenu(t, handlers, { ...project, remote_url: "/tmp/repo" }, [], [])).items).toHaveLength(2);
   });
 
   it.each(["list", "focused", "nested"] as const)("offers Browse files only while this project's browser is not visible in the %s menu", (placement) => {
@@ -150,7 +164,7 @@ describe("a project's menu", () => {
       const menu = projectMenu(t, handlers, { id: "p" } as Project, [], [], { placement });
       const menuLabels = menu.flatMap((entry) => typeof entry === "object" ? [entry.label] : []);
       expect(menuLabels.includes("Browse files")).toBe(visibleBrowserProjectId !== "p");
-      expect(menuLabels).toContain("Open in file manager");
+      expect(menuLabels).toContain("Open in");
     }
   });
 
@@ -158,7 +172,7 @@ describe("a project's menu", () => {
     const project = { id: "p" } as Project;
     const handlers = { onOpenProjectDirectory: vi.fn(), visibleBrowserProjectId: "p" } as unknown as SidebarHandlers;
     const menu = projectMenu(t, handlers, project, [], []);
-    const entry = menu.find((item) => typeof item === "object" && item.label === "Open in file manager");
+    const entry = openIn(menu).items.find((item) => typeof item === "object" && item.label === "File manager");
     (entry as { onClick: () => void }).onClick();
     expect(handlers.onOpenProjectDirectory).toHaveBeenCalledExactlyOnceWith(project);
   });
@@ -178,7 +192,7 @@ describe("a project's menu", () => {
     const handlers = { onOpenProjectTerminal: vi.fn(), onPushProjectBranch: vi.fn() } as unknown as SidebarHandlers;
     const project = { id: "p" } as Project;
     const menu = projectMenu(t, handlers, project, [], [], { gitRepository: true });
-    const terminal = menu.find((entry) => typeof entry === "object" && entry.label === "Open terminal");
+    const terminal = openIn(menu).items.find((entry) => typeof entry === "object" && entry.label === "Terminal");
     (terminal as { onClick: () => void }).onClick();
     expect(handlers.onOpenProjectTerminal).toHaveBeenCalledWith(project);
     const git = menu.find((entry) => typeof entry === "object" && "items" in entry && entry.label === "Git");
