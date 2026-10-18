@@ -173,7 +173,7 @@ Example of an `archive_session` answer with something left:
 ## With a project's folder moved to the Trash
 
 Removing a project without moving its folder to the Trash touches no branch or worktree. Moving the folder to the
-Trash (see "Moving the project folder to the Trash" in `docs/product/consoles-and-projects.md`) takes along what would
+Trash (see "Moving the project folder to the Trash" in `docs/product/removing-projects.md`) takes along what would
 otherwise be left without its folder:
 
 - **When the folder holds the repository** — the repository's common git directory is inside the folder — every
@@ -200,14 +200,14 @@ worktrees) and deleted permanently (the branches). Locked worktrees come after i
 despite their locks and can be recovered from the Trash, and a Details disclosure over them. A branch a locked worktree
 has checked out is counted among what goes only while that box is checked.
 
-The confirmation's one warning, below the options (see "Removing a project" in
-`docs/product/consoles-and-projects.md` for the running sessions it lists), gains a line while the Trash option is
-ticked for each kind of item that goes — that it also moves that many worktrees outside the folder to the Trash, and
-that it also permanently deletes that many branches of the project's sessions — and, while the locked box is checked,
-that it also moves that many locked worktrees to the Trash, uncommitted changes included. When the lookup fails, the
-line instead says that worktrees of the repository outside the project folder may be moved to the Trash, and its
-branches deleted permanently. A removal that would be refused (see "Moving the project folder to the Trash" in
-`docs/product/consoles-and-projects.md`) lists nothing and adds no line; confirming it shows the refusal.
+The confirmation's one warning, below the options (see `docs/product/removing-projects.md` for the running sessions it
+lists), gains a line while the Trash option is ticked for each kind of item that goes — that it also moves that many
+worktrees outside the folder to the Trash, and that it also permanently deletes that many branches of the project's
+sessions — and, while the locked box is checked, that it also moves that many locked worktrees to the Trash, uncommitted
+changes included. When the lookup fails, the line instead says that worktrees of the repository outside the project
+folder may be moved to the Trash, and its branches deleted permanently. A removal that would be refused (see "Moving the
+project folder to the Trash" in `docs/product/removing-projects.md`) lists nothing and adds no line; confirming it shows
+the refusal.
 
 **What goes is worked out again when the removal is made**, while the folder is still there, so what changed after the
 confirmation listed it is taken into account. It runs after the project has been removed and its sessions' processes

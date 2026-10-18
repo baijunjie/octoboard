@@ -27,15 +27,15 @@ has never been used (see "Deleting an unused session" in `docs/product/deleting-
 console session's title is renameable, like a project session's; its default is under **Name** in "Opening a session"
 below.
 
-The user archives a console session from its own row's menu, as any session is archived; the console
-session can also archive itself once every session under it is archived (see "A session archiving itself" in
-`docs/product/hub-orchestration.md`). Archiving it moves it among the console's archived console sessions; these are not reached
-from any one row, but from the console's own menu, which offers **Archived console sessions** — a
-submenu of the console's newest archived console sessions, each of which can be selected, and the way
-to the archive view of all of them (see "The console header" in `docs/product/sidebar.md`). The console
-header's **New console session** button opens the session dialog described in "Opening a session" below — whereas resuming or reopening a console session keeps its
+The user archives a console session from its own row's menu, as any session is archived; the console session can also
+archive itself once every session under it is archived (see "A session archiving itself" in
+`docs/product/hub-orchestration.md`). Archiving it moves it among the console's archived console sessions; these are not
+reached from any one row, but from the console's own menu, which offers **Archived console sessions** — a submenu of the
+console's newest archived console sessions, each of which can be selected, and the way to the archive view of all of
+them (see "The console header" in `docs/product/sidebar.md`). The console header's **New console session** button opens
+the session dialog described in "Opening a session" below — whereas resuming or reopening a console session keeps its
 recorded agent and account; only switching accounts changes its account (see "Agent config directories" in
-`docs/product/consoles-and-projects.md` and `docs/product/switching-session-accounts.md`).
+`docs/product/consoles.md` and `docs/product/switching-session-accounts.md`).
 
 A console session carries no project; it runs in the console's working directory. It is given
 Octoboard's orchestration tools and dispatches work to sessions in the console's projects — see
@@ -101,7 +101,7 @@ Both dialogs offer these fields in this order:
   `docs/product/session-titles.md`.
 - **Agent** — an agent picker joined to an account picker, as in the project dialog. The agent picker lists the
   agents with their icons and names, leaving out those not installed except the one it holds (see "Agents that are not
-  installed" in `docs/product/consoles-and-projects.md`). The field opens on a selectable agent whenever there is
+  installed" in `docs/product/consoles.md`). The field opens on a selectable agent whenever there is
   one, starting from the default resolved in "Which agent a session uses" below.
   The account picker offers only that agent's accounts, with its default account first, and is omitted when the agent
   has no named accounts. It opens on the account resolved from the project and console for that agent (see "Which
@@ -164,17 +164,16 @@ under, whichever agent asked — or asks them first; see `docs/product/folder-tr
 If the launch itself fails — the directory cannot be reached, the agent binary is not on the user's `PATH`, the user's
 shell environment could not be captured (see "The launch environment" in `docs/product/launching-agents.md`), or, for
 Grok Build only, the account the session would hold pins a directory that is not an initialized Grok home (see "Agent
-config directories" in `docs/product/consoles-and-projects.md`) — the *starting* session is removed again and no
-session is left behind. For a session opened from the dialog, or with defaults (see "Opening a session with
-defaults" below), the failure is reported in an error alert that names
-the session and gives the reason, worded from the failure's own code in the UI's language; for a shell environment
-capture that ran out of time, the title names the session alone and the explanation is laid out beneath it — the
-command that did not finish and its time limit, the likely cause, and what to fix. Should the session's record itself
-fail to be removed, it is left *interrupted* instead, and the error alert is shown all the same. For `new_session` and an
-approved session request the failure is reported through that call instead (see "When an approval cannot be carried
-out" in `docs/product/session-requests.md` for the latter). A missing config directory does not fail a brand new
-session for the other two agents: it has no conversation to lose, so Claude Code creates the directory itself and
-Octoboard creates it for Codex.
+config directories" in `docs/product/consoles.md`) — the *starting* session is removed again and no session is left
+behind. For a session opened from the dialog, or with defaults (see "Opening a session with defaults" below), the
+failure is reported in an error alert that names the session and gives the reason, worded from the failure's own code in
+the UI's language; for a shell environment capture that ran out of time, the title names the session alone and the
+explanation is laid out beneath it — the command that did not finish and its time limit, the likely cause, and what to
+fix. Should the session's record itself fail to be removed, it is left *interrupted* instead, and the error alert is
+shown all the same. For `new_session` and an approved session request the failure is reported through that call instead
+(see "When an approval cannot be carried out" in `docs/product/session-requests.md` for the latter). A missing config
+directory does not fail a brand new session for the other two agents: it has no conversation to lose, so Claude Code
+creates the directory itself and Octoboard creates it for Codex.
 
 **With every agent determined unavailable, opening a session is refused outright, before any of that**: the dialog
 cannot be submitted, the console header's new-session action is disabled, no **+** offers to open a session with
@@ -240,14 +239,14 @@ In descending priority:
 
 A console session has no project, so it uses the agent chosen for that session, or the console's default agent for
 console sessions when none is given; the default for project sessions never applies to it. Both console defaults are
-in "Consoles" in `docs/product/consoles-and-projects.md`. Console sessions of different agents can run alongside each
+in `docs/product/consoles.md`. Console sessions of different agents can run alongside each
 other in the same console, and all read the same instruction file, described in "The console session's instruction
 file" in `docs/product/launching-agents.md`.
 
 The same order settles the agent everywhere a session's agent is not given outright: the session dialog's initial
 choice, a session opened with defaults, `new_session` without an `agent`, a session request without one once it is
 approved (see `docs/product/session-requests.md`), and a session of a project associated with "Detect from files" whose
-directory named no agent (see "The project's default agent" in `docs/product/consoles-and-projects.md`).
+directory named no agent (see "The project's default agent" in `docs/product/projects.md`).
 
 A session's agent is fixed for its lifetime. Resuming or reopening a session always relaunches the same agent —
 session records belong to a specific agent and cannot be moved across agents.
@@ -263,11 +262,12 @@ The account of the session's agent, in descending priority:
 4. that agent's default account.
 
 A console session carries no project, so after its own account choice its chain goes straight to the console's
-reference. A project leaves the account to the console for every agent it inherits for, which is how every project starts (see "The project's account, model and
-reasoning effort" in `docs/product/consoles-and-projects.md`). A session opened without changing the account picker
-therefore runs under the project's account for its agent, or the console's, or the agent's default account when
-neither pins anything. The session's account is identified by its agent icon's tooltip and its accessible session
-name, without an account suffix in visible session metadata (see "Session rows" in `docs/product/sidebar.md`).
+reference. A project leaves the account to the console for every agent it inherits for, which is how every project
+starts (see "The project's account, model and reasoning effort" in `docs/product/projects.md`). A session opened without
+changing the account picker therefore runs under the project's account for its agent, or the console's, or the agent's
+default account when neither pins anything. The session's account is identified by its agent icon's tooltip and its
+accessible session name, without an account suffix in visible session metadata (see "Session rows" in
+`docs/product/sidebar.md`).
 
 A session that makes no choice of its own — one a console session or a project session starts with its own
 `new_session` tool, or one started on another session's request, without an `account` — takes the project's
@@ -318,7 +318,7 @@ sent only when the dialog is submitted from the **Resume conversation** tab; one
 - **The conversation must be in the session's account directory.** It is looked for in the config directory of the
   account the session will use (see "Which account a session uses" above): the account's own directory, or for the
   default account the directory the agent defaults to under the user's login shell environment (see "Agent config
-  directories" in `docs/product/consoles-and-projects.md`). With no record of it there, the open is refused, naming the
+  directories" in `docs/product/consoles.md`). With no record of it there, the open is refused, naming the
   agent and the directory but not the ID, which is in the field above (`conversation_to_resume_not_found`). A
   conversation started in a terminal is
   therefore found only when the session's account resolves to the same config directory that terminal's agent used.
@@ -663,7 +663,7 @@ relaunches the same agent in the same directory and reassembles everything Octob
   opened with until the user switches it (see `docs/product/switching-session-accounts.md`), not the console's current
   reference — and is refused if that directory no longer exists, but only when the session has a conversation to
   resume; one with none yet, opened and never typed into without resuming a conversation, launches into the missing
-  directory instead (see "Agent config directories" in `docs/product/consoles-and-projects.md`).
+  directory instead (see "Agent config directories" in `docs/product/consoles.md`).
 - **Reopening a session whose owner is archived reopens its archived owners first, level by level from the topmost
   down**, then the session itself, so what the session reports reaches a running owner: a session bound to an archived
   lead session whose console session is archived too brings back the console session, then the lead session, then

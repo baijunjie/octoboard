@@ -51,7 +51,7 @@ Everything the window shows follows the chosen appearance, including:
   it in either appearance. A diagram
   in that document is drawn in the same ink and paper as the highlighted code.
 - **A console's default avatar**, whose fills have their own light and dark values (see "Avatar" in
-  `docs/product/consoles-and-projects.md`).
+  `docs/product/consoles.md`).
 - **The native window's own appearance** in the macOS application — the window's close, minimise and zoom buttons
   and anything else the system draws for the window. Choosing System hands the window's appearance back to the
   operating system rather than pinning it to whatever System resolved to at that moment, so it keeps following a

@@ -9,9 +9,16 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   reading / unavailable / out-of-date states and their reasons, and what a reading leaves in the account's directory.
 - [Collection motion](product/collection-motion.md) — entry, exit and position transitions for dynamic collections, including
   horizontal and wrapping items, virtualized rows, keyboard focus and reduced motion.
-- [Consoles and projects](product/consoles-and-projects.md) — consoles, their working directory, agent defaults and
-  per-agent config directories; the three ways a project is associated, what is editable afterwards, how the
-  project's git remote URL is recorded and kept current, and what deleting either one does.
+- [Consoles](product/consoles.md) — consoles: their fields and working directory, the two default agents, agents
+  that are not installed, the avatar, console session instructions, per-agent config directories (accounts and how
+  sessions hold their directory), and editing and deleting a console.
+- [Projects](product/projects.md) — what a project carries and its trust permission, the three ways a project is
+  associated, its name, description, default agent and per-agent account, model and effort, how its git remote URL
+  is recorded and kept current, what is editable afterwards, the directory browser, and hosts.
+- [Project tags](product/project-tags.md) — what a project tag is, how tags are normalised and offered, and how a
+  picked tag in the project dialog's Tags field looks and behaves.
+- [Removing a project](product/removing-projects.md) — what goes with a removed project, the confirmation listing its
+  running sessions, refusals, and moving the project folder to the Trash.
 - [Configuration export and import](product/configuration-export-and-import.md) — carrying configuration to another
   machine as a versioned JSON document: where the window offers it (Settings' Configuration section and the welcome
   screen's Import configuration…, all through the window's own file dialogs),

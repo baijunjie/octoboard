@@ -227,7 +227,7 @@ component before it, trailing slashes ignored):
 - names are compared exactly, so a spelling of the same folder that differs only in letter case is not covered;
 - only absolute paths are ever covered: a project recorded with a relative path is never under a trusted folder.
   Octoboard records every project it associates with an absolute path (see "Associating a project" in
-  `docs/product/consoles-and-projects.md`).
+  `docs/product/projects.md`).
 
 **Trusting a folder presses what is already waiting.** At the moment a folder is added, every trust confirmation still
 waiting in a project under it is pressed, whichever agent shows it, including one the user put off with "Not now";

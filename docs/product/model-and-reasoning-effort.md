@@ -27,9 +27,9 @@ a running session keeps what it started with.
 Octoboard — including whatever the agent's own configuration pins. It is not a promise of the agent's newest model.
 A value none of the defaults above sets has this meaning too.
 
-Where defaults are set is in "Editing a console" and "Editing a project" in `docs/product/consoles-and-projects.md`;
-opening a session is in "Opening a session" in `docs/product/sessions.md`; how each value reaches the agent, and what
-each agent does with one it cannot honour, is in "The model and reasoning effort" in
+Where defaults are set is in "Editing a console" in `docs/product/consoles.md` and "Editing a project" in
+`docs/product/projects.md`; opening a session is in "Opening a session" in `docs/product/sessions.md`; how each value
+reaches the agent, and what each agent does with one it cannot honour, is in "The model and reasoning effort" in
 `docs/product/launching-agents.md`.
 
 ## The Advanced section
@@ -49,7 +49,7 @@ accounts keeps those edits.
 In the console dialog it starts with a note that each agent has its own models and reasoning efforts, and holds a row of
 tabs, one per agent, each with the agent's icon and name; the row of tabs and the shown tab's content sit together
 inside a bordered frame. An agent that is not installed (see "Agents that are not installed" in
-`docs/product/consoles-and-projects.md`) has a tab, labelled as not installed, only while the console stores a console
+`docs/product/consoles.md`) has a tab, labelled as not installed, only while the console stores a console
 session or project session value for it, until every one of them is cleared; before availability has been determined
 every agent has a tab. Until the user picks a tab, the one shown follows the agent the Default agent group's Console
 sessions field holds; a picked tab stays shown until that tab goes away, which forgets the pick. From a window 768 px
@@ -61,7 +61,7 @@ under its own heading, then its Model and Reasoning effort pickers, each with th
 Tab moves through one kind's pickers before the other's: Console sessions' Model and Reasoning effort, then Project
 sessions'. Edits on one tab are kept while another is shown, and each value is saved only when changed. Below the frame
 and outside it, since it applies whichever tab is shown, is the console session instructions field (see "Console
-session instructions" in `docs/product/consoles-and-projects.md`).
+session instructions" in `docs/product/consoles.md`).
 
 An unset picker is empty, showing a placeholder instead of a value. The placeholder stands for the agent's own setting,
 except in the project dialog, where it stands for what the project inherits: "Inherit from console", naming the
@@ -102,7 +102,7 @@ A catalogue belongs to an account, so the list is asked for the account that age
 console dialog the account the dialog is currently set to for the agent whose tab is shown, and in the project dialog
 the project's own account for that agent — the agent's default account included — else the one its console resolves to;
 in the session dialog the account currently selected for that session (see "The project's account, model and reasoning
-effort" in `docs/product/consoles-and-projects.md` and "Which account a session uses" in `docs/product/sessions.md`).
+effort" in `docs/product/projects.md` and "Which account a session uses" in `docs/product/sessions.md`).
 
 Nothing is asked of the agent until the Advanced section is opened for the first time, and it is asked again whenever
 the agent or that account changes; an answer to a question the dialog has since moved off is dropped. An answer is

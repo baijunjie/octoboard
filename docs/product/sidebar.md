@@ -5,7 +5,7 @@ narrow window are in `docs/product/window-layout.md`). It shows **one console at
 a header naming that console at its top, then its console sessions, then its projects with their sessions. A **focus
 mode** gives the whole sidebar over to one project or one console session (see `docs/product/focus-mode.md`), and a
 project's, a console session's or a console's full archive opens in the **archive view**, over the terminal.
-What consoles, projects and sessions are is in `docs/product/consoles-and-projects.md` and
+What consoles, projects and sessions are is in `docs/product/consoles.md`, `docs/product/projects.md` and
 `docs/product/sessions.md`.
 
 **With no console at all there is no sidebar**: the content panel shows the welcome screen instead, which is where the
@@ -19,7 +19,7 @@ own menu and the archive view.
 ## The console switcher
 
 The consoles are switched from the top of the rail, at the window's left edge (see "The rail" in
-`docs/product/window-layout.md`): one avatar per console (see "Avatar" in `docs/product/consoles-and-projects.md`), in
+`docs/product/window-layout.md`): one avatar per console (see "Avatar" in `docs/product/consoles.md`), in
 the order the consoles were created, followed by **New console**. The console the sidebar shows is the **current
 console**; its avatar has a tile behind it and is announced as the current one. (A sidebar floating in to preview
 another console is the one exception, see "Previewing a console from the rail" below.) Pressing another avatar makes
@@ -108,17 +108,17 @@ is a **preview**:
 
 ## The console header
 
-The top of the sidebar names the console being shown, followed by a **+** button, **New console session**,
-then its action menu. The **+** opens the session dialog before launching anything (see "Opening a session" in
+The top of the sidebar names the console being shown, followed by a **+** button, **New console session**, then its
+action menu. The **+** opens the session dialog before launching anything (see "Opening a session" in
 `docs/product/sessions.md`), or, with the primary modifier held, opens a console session at once without it (see
-"Opening a session with defaults" in `docs/product/sessions.md`). The menu offers **Add project**, **Console settings**, **Archived console sessions** and,
-after a separator, **Delete console** (see "Associating a project",
-"Editing a console" and "Deleting a console" in `docs/product/consoles-and-projects.md`; deleting asks for a typed
-confirmation first). **Archived console sessions** is a submenu of the console's newest archived console sessions, each
-with its agent's icon and its title; choosing one selects it (see "Selecting a session" below). After them, **View
-all** opens the archive view of all of them whenever the console has an archived console session (see "The archive
-view" below). A console with no archived console session shows only a disabled item saying so. The console's avatar is
-not repeated here; the rail marks it.
+"Opening a session with defaults" in `docs/product/sessions.md`). The menu offers **Add project**, **Console settings**,
+**Archived console sessions** and, after a separator, **Delete console** (see "Associating a project" in
+`docs/product/projects.md`, and "Editing a console" and "Deleting a console" in `docs/product/consoles.md`; deleting
+asks for a typed confirmation first). **Archived console sessions** is a submenu of the console's newest archived
+console sessions, each with its agent's icon and its title; choosing one selects it (see "Selecting a session" below).
+After them, **View all** opens the archive view of all of them whenever the console has an archived console session (see
+"The archive view" below). A console with no archived console session shows only a disabled item saying so. The
+console's avatar is not repeated here; the rail marks it.
 
 ## The console sessions section and the project list
 
@@ -165,22 +165,21 @@ While the console has projects, a filter button sits among the controls at the e
 tag, it shows a funnel, is named **Filter projects**, and opens a small popover with two controls. With a filter in
 force and the popover closed, it shows a funnel with a cross, is named **Clear filter**, and clears all stored
 conditions — the keyword and every picked tag, including tags no project currently carries — rather than opening the
-popover. A search field filters the project list as it is typed: a project stays listed when its name contains
-the keyword, ignoring case and the keyword's surrounding spaces. Below it, the tags in use (see "Tags" in
-`docs/product/consoles-and-projects.md`) are shown as toggles, and picking one narrows the list to the projects carrying
-it; with several picked, a project must carry all of them, and it must match the keyword too. With no project carrying a
-tag yet, a full empty panel in place of the toggles says there are no tags yet, with a line saying tags are added in a
-project's settings (see "The full panel" in `docs/product/empty-states.md`). `Escape`, from anywhere in the popover, and
-Enter in the search field close it and keep the filter; on a tag, Enter or Space picks or drops that tag and the popover
-stays open. Typing or picking a tag does not close the popover when a filter comes into force. A picked tag also shows
-a check mark, so it is not told apart by colour alone. Opening and closing it with
-the mouse leaves keyboard focus where it was.
+popover. A search field filters the project list as it is typed: a project stays listed when its name contains the
+keyword, ignoring case and the keyword's surrounding spaces. Below it, the tags in use (see
+`docs/product/project-tags.md`) are shown as toggles, and picking one narrows the list to the projects carrying it; with
+several picked, a project must carry all of them, and it must match the keyword too. With no project carrying a tag yet,
+a full empty panel in place of the toggles says there are no tags yet, with a line saying tags are added in a project's
+settings (see "The full panel" in `docs/product/empty-states.md`). `Escape`, from anywhere in the popover, and Enter in
+the search field close it and keep the filter; on a tag, Enter or Space picks or drops that tag and the popover stays
+open. Typing or picking a tag does not close the popover when a filter comes into force. A picked tag also shows a check
+mark, so it is not told apart by colour alone. Opening and closing it with the mouse leaves keyboard focus where it was.
 
 - While a filter is in force, a strip in the Projects heading's own line, between "Projects (n)" and the controls at
   the line's end, shows it; with no filter the strip is not there. Being part of the heading, it stays at the top
   while the project list scrolls underneath. The keyword, if there is one, comes first, as a small tag in a neutral
   grey; the picked tags follow it, filled with the light accent tint and accent-coloured text of a project's picked
-  tags (see "Picked tags" in `docs/product/consoles-and-projects.md`), so they are told apart from the keyword.
+  tags (see "Picked tags" in `docs/product/project-tags.md`), so they are told apart from the keyword.
 - The strip only shows the filter: nothing in it is a control. Its tags have no remove buttons, take no keyboard
   focus and are not Tab stops, and neither the keyword nor a single tag can be dropped from here. The way to drop
   the filter from the heading is Clear filter, which drops the keyword and every picked tag together; the popover
@@ -320,8 +319,8 @@ and **Remove project**. An item a view does not offer is left out without moving
 - **Copy project name** — copies the project's name exactly to the clipboard. Available in all the
   project-menu placements above, including right-click menus, when the platform offers a clipboard; otherwise the
   item is absent. Success raises a notice toast; a refused copy raises an error alert.
-- **Project settings** — the project dialog, see "Editing a project" in `docs/product/consoles-and-projects.md`.
-- **Remove project** — see "Removing a project" in `docs/product/consoles-and-projects.md`; it asks for confirmation
+- **Project settings** — the project dialog, see "Editing a project" in `docs/product/projects.md`.
+- **Remove project** — see `docs/product/removing-projects.md`; it asks for confirmation
   first.
 
 An expanded project lists its sessions that are not archived as session rows, with a connector bending smoothly

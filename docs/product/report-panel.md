@@ -28,7 +28,7 @@ panel when they come back to the console session.
 
 **Every page ever pushed is kept.** Pages belong to the console session that pushed them and are deleted with it,
 and so with its console, which deletes its console sessions (see "Deleting a console" in
-`docs/product/consoles-and-projects.md`). Nothing else deletes a page, and the console session cannot withdraw one it
+`docs/product/consoles.md`). Nothing else deletes a page, and the console session cannot withdraw one it
 has pushed.
 
 The panel's bar carries, left to right (mirrored under a right-to-left language, except for what "Right-to-left

@@ -171,9 +171,9 @@ tree.
   came from a session's git report: any other is deleted when the daemon opens it, and its branch is not attributed
   again. A record kept makes the reporting session the branch's responsible session from the branch's creation, named
   by the title recorded with the report.
-- **Removing a project** clears the records of its repository, unless another project still points into that
-  repository (see "Removing a project" in `docs/product/consoles-and-projects.md`). Deleting a console removes every
-  project under it, so it clears theirs the same way.
+- **Removing a project** clears the records of its repository, unless another project still points into that repository
+  (see `docs/product/removing-projects.md`). Deleting a console removes every project under it, so it clears theirs the
+  same way.
 - At most **1,000 branches of one repository** carry a record; past that, the records of the branches created longest
   ago are dropped.
 

@@ -54,7 +54,7 @@ Once it holds more than it can show, each of these fades at its edge:
 - the list of accounts in the **rail's account quota panel** (see "What the panel shows" in
   `docs/product/account-quotas.md`);
 - the **directory browser's** list of directories (see "Browsing directories" in
-  `docs/product/consoles-and-projects.md`);
+  `docs/product/projects.md`);
 - a **strip of tabs** whose tabs do not fit, which scrolls sideways: the row Settings' list of sections becomes
   in a narrow window (see "In a narrow window" in `docs/product/settings.md`). **A tab strip fades over 64 px,
   not 24**, and is the one surface where the fade can cover what the keyboard moved to: a tab reached with the arrow

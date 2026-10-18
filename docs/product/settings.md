@@ -49,7 +49,7 @@ Settings opens from:
   section instead of the first (see "Session rows" in `docs/product/sidebar.md`);
 - the **Manage accounts…** button in the console dialog's Agent accounts table, which opens it on the Agent accounts
   section above the console dialog, left open beneath it (see "Agent config directories" in
-  `docs/product/consoles-and-projects.md`);
+  `docs/product/consoles.md`);
 - the **Manage accounts…** button in the rail's account quota panel, which closes the panel and opens it on the Agent
   accounts section (see "The account quota panel on the rail" in `docs/product/account-quotas.md`).
 
@@ -101,20 +101,19 @@ options are, how the first launch picks a language, what follows the choice and 
 ### Default clone directory
 
 A text field with a folder icon in it and a **Browse** button beside it (the directory browser, see "Browsing
-directories" in `docs/product/consoles-and-projects.md`), showing the directory a repository is cloned into when a
-project is added from a git URL and no other directory is named. It is `~/Projects` until the user sets one. The field
-shows the directory in a monospace font, with the daemon host's home directory written as `~` under the same rules as in
-"How paths are shown" above, and the full path as the field's tooltip whenever the two differ. The daemon stores the
+directories" in `docs/product/projects.md`), showing the directory a repository is cloned into when a project is added
+from a git URL and no other directory is named. It is `~/Projects` until the user sets one. The field shows the
+directory in a monospace font, with the daemon host's home directory written as `~` under the same rules as in "How
+paths are shown" above, and the full path as the field's tooltip whenever the two differ. The daemon stores the
 directory expanded, as an absolute path without a trailing slash; a leading `~/` in what is sent is expanded again. The
 value is sent when the field loses focus or Enter is pressed, and at once when a directory is picked; a value equal to
 what the field shows unedited, or to the full path it stands for, sends nothing. `Escape` while the field holds keyboard
 focus closes Settings and discards what was typed. It is the only exit that loses it: the close button, a press on the
 dimmed area around the dialog, and moving focus out of the field all save the typed path first. Once a send is answered
 the field shows the stored directory again, written as above. A value that is neither absolute nor starts with `~/` is
-refused with an error alert and the field returns to the stored one, and a blank value goes back to `~/Projects`. The browser
-opens on the nearest existing ancestor when the directory does not exist yet (see "Browsing directories" in
-`docs/product/consoles-and-projects.md`). Where the directory applies is in "Associating a project" in the same
-document.
+refused with an error alert and the field returns to the stored one, and a blank value goes back to `~/Projects`. The
+browser opens on the nearest existing ancestor when the directory does not exist yet (see "Browsing directories" in
+`docs/product/projects.md`). Where the directory applies is in "Associating a project" in the same document.
 
 ### Keep running in the background
 
@@ -186,28 +185,26 @@ writing its configuration files or changing its sandbox or approval policy. They
 "What is not configuration and never travels" in `docs/product/configuration-export-and-import.md`.
 
 One **Add account** button, above the agent tabs, serves every agent: its form asks for the agent — every agent is
-listed and can be picked, one that is not installed included and labelled as not installed, since an account may be
-set up before its agent is, unlike the agent pickers elsewhere (see "Agents that are not installed" in
-`docs/product/consoles-and-projects.md`) — then a name and a
-directory, which can be typed or picked with the directory browser (see "Browsing directories" in
-`docs/product/consoles-and-projects.md`). Editing an account offers its name and its directory, never its agent: a
-directory belongs to one agent's layout. The directory is checked for being absolute (or starting with `~/`) and for
-not being already used by another account of the same agent, the default account included (the full rules are in
-"Agent config directories" in `docs/product/consoles-and-projects.md`); one that does not exist yet is accepted, and the
-form says that Octoboard does not require it to exist. A directory already in use is reported, once saving is
-attempted, under the directory field, naming the account that uses it — the default account by its name in the
-current language; the report goes away as soon as the directory is changed, typed or picked, or another agent is
-picked.
-For a Grok Build account the form adds that the directory has to be a Grok home that Grok has already been run
-against, which is checked when a session launches. Every account is named by the user, and the name is required: it is
-stored trimmed, and one left blank is refused. A name has to be unique within its agent, compared trimmed and ignoring
-letter case; accounts of different agents may share a name. A name already taken by another account of the same agent,
-or by the default account — its name in the current language, and the English word "Default", which is reserved in
-every language — is reported under the name field. Removing an account asks first and says that consoles referring to it go
-back to the agent's default account and that sessions already open are not affected. A project referring to it is put
-back to inheriting its console's reference at the same time (see "The project's account, model and reasoning effort" in
-`docs/product/consoles-and-projects.md`). What an account is and how
-consoles, projects and sessions use one are in "Agent config directories" in `docs/product/consoles-and-projects.md`.
+listed and can be picked, one that is not installed included and labelled as not installed, since an account may be set
+up before its agent is, unlike the agent pickers elsewhere (see "Agents that are not installed" in
+`docs/product/consoles.md`) — then a name and a directory, which can be typed or picked with the directory browser (see
+"Browsing directories" in `docs/product/projects.md`). Editing an account offers its name and its directory, never its
+agent: a directory belongs to one agent's layout. The directory is checked for being absolute (or starting with `~/`)
+and for not being already used by another account of the same agent, the default account included (the full rules are in
+"Agent config directories" in `docs/product/consoles.md`); one that does not exist yet is accepted, and the form says
+that Octoboard does not require it to exist. A directory already in use is reported, once saving is attempted, under the
+directory field, naming the account that uses it — the default account by its name in the current language; the report
+goes away as soon as the directory is changed, typed or picked, or another agent is picked. For a Grok Build account the
+form adds that the directory has to be a Grok home that Grok has already been run against, which is checked when a
+session launches. Every account is named by the user, and the name is required: it is stored trimmed, and one left blank
+is refused. A name has to be unique within its agent, compared trimmed and ignoring letter case; accounts of different
+agents may share a name. A name already taken by another account of the same agent, or by the default account — its name
+in the current language, and the English word "Default", which is reserved in every language — is reported under the
+name field. Removing an account asks first and says that consoles referring to it go back to the agent's default account
+and that sessions already open are not affected. A project referring to it is put back to inheriting its console's
+reference at the same time (see "The project's account, model and reasoning effort" in `docs/product/projects.md`). What
+an account is and how consoles, projects and sessions use one are in "Agent config directories" in
+`docs/product/consoles.md`.
 
 ## Trusted folders
 

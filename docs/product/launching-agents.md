@@ -12,7 +12,7 @@ This is the guarantee the whole design rests on:
   while it works is the point of the
   whole thing and is not Octoboard's doing. Removing a project removes an association and leaves the directory
   alone, unless the user chooses to move the folder to the system Trash with it (see "Moving the project folder to
-  the Trash" in `docs/product/consoles-and-projects.md`).
+  the Trash" in `docs/product/removing-projects.md`).
   Octoboard changes a project's files only through an authorized fast-forward, **Switch branch** or
   **Restore file changes**, and does not push except at the user's word. A branch that is
   behind its upstream and has no commits of its own is fast-forwarded, which moves its working tree — on its own
@@ -131,7 +131,7 @@ agent's prefix. Each console session's role description points it to the file by
 The file holds the console session's role — decompose, dispatch, follow up, summarize, and make no change to a project
 itself, reading one being how it checks what its sessions report (see `docs/product/hub-orchestration.md`) — and how to
 use the orchestration and settings tools. When the console has console session instructions of the user's (see
-"Console session instructions" in `docs/product/consoles-and-projects.md`), they are the file's last section,
+"Console session instructions" in `docs/product/consoles.md`), they are the file's last section,
 held between a `<user_instructions>` and a `</user_instructions>` tag under a heading of the file's own.
 That heading's paragraph says the tags hold the user's own text, that any heading inside them belongs to that text and
 not to the file's sections, and that the console session follows the user's text wherever it disagrees with the
@@ -203,7 +203,7 @@ one it was:
 - the shell exited cleanly without having produced a complete environment dump.
 
 The same capture is what gives a git clone the user's `git` and git credentials, so a clone is refused the same
-way (see "Associating a project" in `docs/product/consoles-and-projects.md`).
+way (see "Associating a project" in `docs/product/projects.md`).
 
 Two groups of variables are removed from that snapshot:
 
@@ -234,7 +234,7 @@ hook" warning; the session ended on an API error before status could be observed
 (see "Codex" in `docs/agent-cli-reference.md`). The cause is the user's `PATH` order, not Octoboard.
 
 Which directory a session holds, and the refusal of a launch whose directory no longer exists, are described in "Agent
-config directories" in `docs/product/consoles-and-projects.md`.
+config directories" in `docs/product/consoles.md`.
 
 **What a session may do under macOS's privacy rules is Octoboard's, not the agent's.** macOS attributes a privacy
 request made by a session's process — taking a screenshot, driving another application's interface — to Octoboard, so
@@ -244,7 +244,7 @@ permissions this concerns are granted ahead of time in Settings; see "Permission
 **Whether an agent is installed at all is worked out once, not per launch.** Right after the daemon starts it takes
 one login-shell snapshot of its own — the same kind described above — resolves each agent's binary against that
 snapshot's `PATH`, and reads what each agent's default account resolves to from it (see "Agent config directories" in
-`docs/product/consoles-and-projects.md`). A binary that resolves is all "available" means: whether an account's
+`docs/product/consoles.md`). A binary that resolves is all "available" means: whether an account's
 directory holds a login is never checked, since a user may sign in through an API key from their shell, a credential
 helper or an organization's gateway, none of which shows in the directory. This does not hold up the daemon's start:
 the application is served immediately, and the result follows once it lands, typically within a couple of seconds

@@ -86,14 +86,14 @@ travels, whether or not its directory is a git repository.
 
 ### What each console carries
 
-Its name, its avatar image if it has one, its default agent for console sessions, its default agent for project
-sessions — none while it follows the one for console sessions — the account it names for each agent, the models and
-reasoning efforts it sets for its console sessions and for its project sessions, one pair of each per agent, and its
-console session instructions if it has any (see "Consoles" in `docs/product/consoles-and-projects.md`). An import restores the instructions trimmed, as
-saving them in the console dialog does, and a document that does not carry them gives the console none. A document
-that does not carry a default agent for project sessions, such as one exported before consoles had one, gives the
-console none, so its project sessions follow its default agent for console sessions; one that does not carry the
-project session models and efforts leaves them unset.
+Its name, its avatar image if it has one, its default agent for console sessions, its default agent for project sessions
+— none while it follows the one for console sessions — the account it names for each agent, the models and reasoning
+efforts it sets for its console sessions and for its project sessions, one pair of each per agent, and its console
+session instructions if it has any (see "Console session instructions" in `docs/product/consoles.md`). An import
+restores the instructions trimmed, as saving them in the console dialog does, and a document that does not carry them
+gives the console none. A document that does not carry a default agent for project sessions, such as one exported before
+consoles had one, gives the console none, so its project sessions follow its default agent for console sessions; one
+that does not carry the project session models and efforts leaves them unset.
 
 A console's working directory is **not** in the document. It is no directory of the user's choosing: Octoboard creates
 it under its own data directory and names it after the console, so it would carry nothing another machine could use. An
@@ -101,10 +101,11 @@ import creates the console, and with it a working directory of its own.
 
 ### What each project carries
 
-Its name, its description if it has one, the directory it points at, how it was associated, the remote URL recorded
-for it, its own default agent if it has one, whether it is pinned, its tags, and — one set per agent — the account its sessions run under and the model
-and reasoning effort they launch with (see "Projects" in `docs/product/consoles-and-projects.md`). An import stores the
-description trimmed, and a project of a document that carries no description is imported with none.
+Its name, its description if it has one, the directory it points at, how it was associated, the remote URL recorded for
+it, its own default agent if it has one, whether it is pinned, its tags (see `docs/product/project-tags.md`), and — one
+set per agent — the account its sessions run under and the model and reasoning effort they launch with (see
+`docs/product/projects.md`). An import stores the description trimmed, and a project of a document that carries no
+description is imported with none.
 
 A project's path is **the one path of the exporting machine anywhere in the document**, which is the thing to look at
 before handing the file to someone else. An import treats it as a starting point and never as a place to write (see
@@ -121,7 +122,7 @@ machine's own accounts (see "Accounts are rebound by name" below).
 A reference to an account that has since been deleted, or that belongs to another agent than the setting it sits in, is
 dropped from the document, leaving exactly what deleting that account leaves behind: the console on that agent's
 default account, the project back to inheriting its console's reference (see "Agent config directories" in
-`docs/product/consoles-and-projects.md`).
+`docs/product/consoles.md`).
 
 A project keeps all three states its account setting can be in: inheriting its console's reference, the agent's default
 account pinned even where the console names another, or a named account.
@@ -191,7 +192,7 @@ no longer there is an ordinary case rather than a fault.
 ### What may be cloned from
 
 A document came from somewhere else, so a URL in it is held to a stricter rule than one the user types into the project
-form, which leaves the judgement to git (see "Associating a project" in `docs/product/consoles-and-projects.md`):
+form, which leaves the judgement to git (see "Associating a project" in `docs/product/projects.md`):
 
 - **accepted**: an `http`, `https`, `ssh`, `git`, `git+ssh` or `ssh+git` URL, and the `host:path` form, with no
   whitespace or control character anywhere in it and a host that cannot be read as an option;
@@ -215,7 +216,7 @@ is listed one by one: the inspection says which references would fall back, the 
 is already there — console names are not unique, so two of a name stand side by side.
 
 Each project then goes through **exactly the association a project added by hand goes through** (see "Associating a
-project" in `docs/product/consoles-and-projects.md`): its directory has to exist, its name, tags and launch settings are
+project" in `docs/product/projects.md`): its directory has to exist, its name, tags and launch settings are
 normalized the same way, and a directory already associated with the console being imported into is not associated a
 second time, which is what two projects of one console resolving to the same directory runs into — the second of them is
 reported as failed. What the document says about a project — its pin, its tags, its default agent (none stays none, and
@@ -253,7 +254,7 @@ Refused before anything at all is created:
   directory it points at is neither absolute nor starts with `~/`;
 - a request to apply application settings a document does not carry;
 - anything creating a console by hand would refuse of any console in the document — an avatar that is not an image, or
-  one too large (see "Avatar" in `docs/product/consoles-and-projects.md`).
+  one too large (see "Avatar" in `docs/product/consoles.md`).
 
 **Past that point nothing is refused and nothing is undone**, because by then earlier consoles and projects exist and
 have already appeared:

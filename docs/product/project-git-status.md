@@ -123,7 +123,7 @@ again until its next check, or until its refs change (see "Following changes to 
   entry of its own; a subdirectory of a repository is not one. The project pane's Git mode looks further up the
   folders (see "The repository and its worktrees" in `docs/product/project-pane-git-mode.md`); the badge does not.
   The project's recorded remote URL is cleared, unless the directory cannot be seen at all (see "The project's remote
-  URL" in `docs/product/consoles-and-projects.md`).
+  URL" in `docs/product/projects.md`).
 - Otherwise the repository's remotes are read, and the project's recorded remote URL is made the one that read gives,
   which is how that value is kept true to a repository whose remote changed outside Octoboard (same section). A read
   that could not be made leaves the recorded value alone. A changed value reaches the open windows at once; nothing
@@ -189,7 +189,7 @@ Two consequences are worth knowing:
   publishing some other repository (see "Pushing the current branch" in `docs/product/project-git-actions.md`).
 
 A git association's clone, and the check the association form makes of a git URL, are **not** filtered this way: they
-run with the whole shell environment (see "Associating a project" in `docs/product/consoles-and-projects.md`).
+run with the whole shell environment (see "Associating a project" in `docs/product/projects.md`).
 
 `git` is run so that it can never stop to ask for a credential, a passphrase or an unknown host key — each of those
 fails immediately instead — and every `git` call of a check is given at most two minutes, so a check cannot hang; a

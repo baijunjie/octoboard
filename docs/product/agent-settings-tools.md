@@ -15,7 +15,7 @@ tool is in the tool tables of `docs/product/hub-orchestration.md`; this document
 Never through these tools, by any session: changing a project's directory, source, host or remote URL; giving or
 taking away a project's trust permission; removing a project; creating or deleting a console; setting or removing a
 console's avatar; reading, setting or clearing a console's console session instructions (see "Console session
-instructions" in `docs/product/consoles-and-projects.md`); adding, editing or removing an account; adding or removing
+instructions" in `docs/product/consoles.md`); adding, editing or removing an account; adding or removing
 a trusted folder. Each of those stays the user's own, in the UI.
 
 The console session's instructions tell it that projects, its console and the application settings belong to the
@@ -36,7 +36,7 @@ A name is looked up among that agent's own accounts, compared as account names a
 see "Agent accounts" in `docs/product/settings.md`). An account of another agent is refused as an unknown account.
 Results always name an account by its id, and say `inherit` or `default` for the other states. The three states a
 project's account can be in are in "The project's account, model and reasoning effort" in
-`docs/product/consoles-and-projects.md`.
+`docs/product/projects.md`.
 
 **`launch`** is an object keyed by agent, each value `{"model": …, "effort": …}`. In an argument, a field left out is
 left as it is, and `null` or a blank string is the agent's own default. A model or effort that is being changed must be
@@ -51,11 +51,11 @@ give every agent, with `null` for an unset value.
 |---|---|
 | `project` | The project's id. |
 | `name` | Its name. |
-| `description` | What the project is for, as the user or the console session gave it (see "The project's description" in `docs/product/consoles-and-projects.md`), or `null` when it has none. |
+| `description` | What the project is for, as the user or the console session gave it (see "The project's description" in `docs/product/projects.md`), or `null` when it has none. |
 | `host` | The host it is bound to. |
 | `path` | Its directory. |
 | `source` | How it was associated: `local`, `parent` or `git`. |
-| `remote_url` | The recorded remote URL (see "The project's remote URL" in `docs/product/consoles-and-projects.md`), or `null`, always without any credential it carries. |
+| `remote_url` | The recorded remote URL (see "The project's remote URL" in `docs/product/projects.md`), or `null`, always without any credential it carries. |
 | `default_agent` | Its own default agent, or `null` when it follows the console's `project_session_agent`, else its `default_agent`. |
 | `pinned` | Whether it is pinned. |
 | `tags` | Its tags. |
@@ -73,10 +73,10 @@ the user in `ssh://git@example.com/r.git` names the remote and stays. A URL of a
 ## Adding a project with its settings
 
 The console session's `add_project` associates projects from the same three sources as the user's form (see
-"Associating a project" in `docs/product/consoles-and-projects.md`), and besides the location takes the settings the
+"Associating a project" in `docs/product/projects.md`), and besides the location takes the settings the
 form does: `name`, `description`, `default_agent`, `tags`, `accounts`, `launch` and `pinned`. Every project one call
 adds takes the same settings, except that `name` and `description` apply only when a single project is associated (see
-"Project names" in `docs/product/consoles-and-projects.md`). A blank `name` or `description` counts as none given, and
+"Project names" in `docs/product/projects.md`). A blank `name` or `description` counts as none given, and
 so does a `description` of `null`. The call answers with each added project's settings.
 
 A `git` association's `remote_url` is held to a stricter rule than the form's:
@@ -102,18 +102,17 @@ Takes `project` — an id, or a name that names exactly one project of the conso
 | `default_agent` | An agent, or `null` to follow the console's again (its `project_session_agent`, else its `default_agent`). |
 | `accounts`, `launch` | As above. |
 
-`tags` beside `add_tags` or `remove_tags` is refused. Tags end up normalised as in "Tags" in
-`docs/product/consoles-and-projects.md`. Anything left out is left as it is, and the call answers with the project's
-settings as stored.
+`tags` beside `add_tags` or `remove_tags` is refused. Tags end up normalised as in `docs/product/project-tags.md`.
+Anything left out is left as it is, and the call answers with the project's settings as stored.
 
 ## The console's own settings: `get_console` and `update_console`
 
-`get_console` answers with the calling console session's own console: `console` (its id), `name`, `default_agent` —
-the default agent for console sessions — `project_session_agent` — the default agent for project sessions, `null` while
-it follows `default_agent` (see "Consoles" in `docs/product/consoles-and-projects.md`) — `accounts`, `launch` — the
-model and reasoning effort of the console's console sessions — `project_session_launch` — in the same shape, the model
-and reasoning effort a project session takes for each value neither it nor its project sets — `has_icon`, whether it
-has an avatar, and `workdir`, its working directory. Neither the avatar itself nor the console's console session instructions are ever returned.
+`get_console` answers with the calling console session's own console: `console` (its id), `name`, `default_agent` — the
+default agent for console sessions — `project_session_agent` — the default agent for project sessions, `null` while it
+follows `default_agent` (see `docs/product/consoles.md`) — `accounts`, `launch` — the model and reasoning effort of the
+console's console sessions — `project_session_launch` — in the same shape, the model and reasoning effort a project
+session takes for each value neither it nor its project sets — `has_icon`, whether it has an avatar, and `workdir`, its
+working directory. Neither the avatar itself nor the console's console session instructions are ever returned.
 
 `update_console` takes any of `name` (a blank one is refused), `default_agent` (an agent; it cannot be cleared),
 `project_session_agent` (an agent, or `null` to follow `default_agent` again), `accounts`, `launch` and

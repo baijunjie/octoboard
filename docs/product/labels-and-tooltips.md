@@ -73,7 +73,7 @@ buttons, the pin buttons and the session Delete or Archive shortcuts below. Thes
   change filter field, Group by folder and Group by commit — whose tooltip is the name they announce and alternates with their state (see
   "Two-state icon toggles" below);
 - the two controls of the console dialog's Avatar field (see "Avatar" in
-  `docs/product/consoles-and-projects.md`) — the round control itself, named for choosing an image while it is empty
+  `docs/product/consoles.md`) — the round control itself, named for choosing an image while it is empty
   and for replacing it once one is picked, and the delete button over its corner, named for removing the image;
 - the "?" help tip, a small muted icon button that takes an explanation out of a row's visible text: its tooltip is the
   explanation, and the name announced for it says what it explains ("About the default account"), so the explanation
@@ -177,15 +177,15 @@ These are:
 ## Names too long for their space
 
 A single-line name or label too long for its space — a sidebar row's name, a focus mode session card's title, the top
-bar's breadcrumb, a session listed in a confirmation, the report panel's page timestamp, a name in a project pane's
-file tree or its header, a name or what follows it in the Git mode's change list, a commit's subject on its commit row
-there, a branch's name in its branch selector, a picked tag's label (see "Picked tags" in
-`docs/product/consoles-and-projects.md`) and the project filter's strip of conditions in the sidebar's Projects
-heading, which counts as one label (see "Filtering the project list" in `docs/product/sidebar.md`) — fades out where
-it is cut off rather than ending in an ellipsis. The same holds for action-menu items and submenu names, a select's current choice or placeholder and
-its listed options, directory-picker rows, the console name above a focus view's title, the archive view's heading
-and count, the model line on a focus mode card and the agent name on a full archive row. A fixed session-owner label
-and a diff's collapsed-line label follow the same fade and marquee rules.
+bar's breadcrumb, a session listed in a confirmation, the report panel's page timestamp, a name in a project pane's file
+tree or its header, a name or what follows it in the Git mode's change list, a commit's subject on its commit row there,
+a branch's name in its branch selector, a picked tag's label (see "Picked tags" in `docs/product/project-tags.md`) and
+the project filter's strip of conditions in the sidebar's Projects heading, which counts as one label (see "Filtering
+the project list" in `docs/product/sidebar.md`) — fades out where it is cut off rather than ending in an ellipsis. The
+same holds for action-menu items and submenu names, a select's current choice or placeholder and its listed options,
+directory-picker rows, the console name above a focus view's title, the archive view's heading and count, the model line
+on a focus mode card and the agent name on a full archive row. A fixed session-owner label and a diff's collapsed-line
+label follow the same fade and marquee rules.
 
 Except for the report timestamp, clipped text then has its full text as its tooltip — for the project filter's strip,
 its conditions drawn as the same tags the strip shows (see "Filtering the project list" in `docs/product/sidebar.md`)
@@ -226,4 +226,4 @@ state, shown whether or not the line is cut (see "The branch badge" in `docs/pro
   so the cut edge stops fading as the run reaches it and the opposite edge fades meanwhile.
 - Nothing moves where the system asks for reduced motion.
 - On a picked tag, where the remove button covers the label's end while the pointer is over the tag, the text scrolls
-  until its end is clear of the button (see "Picked tags" in `docs/product/consoles-and-projects.md`).
+  until its end is clear of the button (see "Picked tags" in `docs/product/project-tags.md`).
