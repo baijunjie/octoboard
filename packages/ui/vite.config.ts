@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import { Features } from "lightningcss";
 import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
@@ -87,6 +88,13 @@ export default defineConfig(({ command }) => {
     // the node environment run it uncompiled.
     plugins: [react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss(), appName, galleryFrameCsp, viewerThemes],
     define: { __OCTOBOARD_DEV_PROXY__: JSON.stringify(Boolean(daemonPort)) },
+    // A build's CSS minifier lowers `:dir()` to `:lang()` lists for its default targets, so every
+    // `:dir()` rule would follow the page's language instead of the element's own reading direction:
+    // the task-list rules in `src/viewer/markdown.css` then put a right-to-left item's box opposite
+    // its list's markers. Keeping `:dir()` throughout (Tailwind's `rtl:`/`ltr:` variants and HeroUI's
+    // rules too) makes a build match the dev server, and leaves browsers without `:dir()` to drop
+    // the rules that rely on it alone, where the lowered form gets them wrong.
+    css: { lightningcss: { exclude: Features.DirSelector } },
     clearScreen: false,
     test: { setupFiles: ["./src/test/setup.ts"] },
     server: {
