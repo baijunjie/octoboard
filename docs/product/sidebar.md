@@ -218,12 +218,12 @@ the filter button followed by this button.
   Projects hidden by a filter keep their state in either direction. What it changes is the same state a project row
   changes (see "Project rows" below). A press records the opposite action, subject to the all-expanded or
   all-collapsed reconciliation below.
-- Projects start expanded, and whether a project is collapsed is kept per window and is not stored (see "Project
-  rows" below). The button's choice is kept the same way, separately for each console: switching to another console
+- A project's initial expanded or collapsed state follows "Project rows" below and is kept per window without being
+  stored. The button's choice is kept the same way, separately for each console: switching to another console
   shows that console's own, and switching back, or entering and leaving focus mode, keeps it. It is not stored, so
   reloading the window starts each console's button over. On first show, if any project of the console is expanded
   the button offers Collapse all projects; if every project of the console is collapsed it offers to expand
-  projects with unarchived sessions. The usual start is Collapse all projects.
+  projects with unarchived sessions.
 - Expanding or collapsing a project from its own row does not change the button while the console still has both
   expanded and collapsed projects. The button changes on its own only when every project of the console is expanded,
   when it offers Collapse all projects, or every project of the console is collapsed, when it offers to expand
@@ -252,7 +252,11 @@ for the current scope (see "A console with nothing in it" in `docs/product/sessi
 ## Project rows
 
 A project row shows the project's name and a chevron after the name. Clicking the row, or Enter or Space on it,
-collapses or expands it. Projects start expanded; whether one is collapsed is kept per window and is not stored. The
+collapses or expands it. A project starts collapsed unless it has at least one unarchived session, including an
+interrupted session; a project with only archived sessions starts collapsed. This default is applied once when the
+project first appears in the window, including projects added later. After that, session changes do not change its
+expanded or collapsed state. The state is kept per window across console switches and entering or leaving focus
+mode, and is not stored: reloading the window applies the default again. The
 chevron always shows while the project is collapsed, and only while the row is hovered or focused while it is
 expanded, and while hidden it takes no room, so a long name runs as far as it would in a session row and ends sooner
 when the chevron appears. The hover chevron fades and opens out as it

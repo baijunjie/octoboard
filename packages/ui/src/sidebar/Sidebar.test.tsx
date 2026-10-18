@@ -436,6 +436,8 @@ it("expands only projects with unarchived sessions and keeps interrupted project
     ],
   });
   const press = (label: string) => act(() => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click());
+  const expanded = (id: string) => container.querySelector(`[data-flip="${id}"] [aria-expanded="true"]`) !== null;
+  expect([web, stopped, archived, empty].map((project) => expanded(project.id))).toEqual([true, true, false, false]);
   press("Collapse all projects");
   press("Expand projects with unarchived sessions");
   const groups = Array.from(container.querySelectorAll<HTMLElement>("[data-flip]")).filter((row) =>
@@ -476,4 +478,30 @@ it("shows existing rows immediately when switching consoles and animates additio
   render({ projects: [...projects, added], sessions: [...held, addedHub] });
   expect(presenceCalls()).toHaveLength(2);
   expect(animate.mock.contexts.map((element) => (element as HTMLElement).dataset.flip)).toEqual(expect.arrayContaining([added.id, addedHub.id]));
+});
+
+
+it("seeds projects arriving later once and preserves manual folds across session updates and console switches", () => {
+  const empty = projectOf("p-empty", main.id, "Empty");
+  const other = consoleOf("c-2", "Other");
+  const added = projectOf("p-added", other.id, "Added");
+  const { container, render } = mountSidebar({ projects: [], sessions: [] });
+  const projects = [web, empty, added];
+  const held = [sessionOf("s-added", other.id, added.id, "Added task", "interrupted"), ...sessions];
+  const expanded = (id: string) => container.querySelector(`[data-flip="${id}"] [aria-expanded="true"]`) !== null;
+  const toggle = (id: string) => act(() => container.querySelector<HTMLElement>(`[data-flip="${id}"] [aria-expanded]`)!.click());
+  render({ projects, sessions: held });
+  expect(expanded(web.id)).toBe(true);
+  expect(expanded(empty.id)).toBe(false);
+  toggle(web.id);
+  toggle(empty.id);
+  const updated = [...held, sessionOf("s-empty", main.id, empty.id, "New task", "idle")];
+  render({ projects, sessions: updated });
+  expect(expanded(web.id)).toBe(false);
+  expect(expanded(empty.id)).toBe(true);
+  render({ projects, sessions: updated, shownConsole: other });
+  expect(expanded(added.id)).toBe(true);
+  render({ projects, sessions: [], shownConsole: main });
+  expect(expanded(web.id)).toBe(false);
+  expect(expanded(empty.id)).toBe(true);
 });

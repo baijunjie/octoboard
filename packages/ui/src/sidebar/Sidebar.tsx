@@ -162,7 +162,21 @@ export function Sidebar({
     onArchiveSession,
     onOpenSettings,
   } satisfies Record<keyof SidebarHandlers, unknown>;
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const initiallyCollapsed = useDaemonStore(useShallow((s) => {
+    const { byProject } = indexSessions(s.sessions);
+    return projects.map((project) => !sessionsOf(byProject, project.id).some((session) => session.status !== "archived"));
+  }));
+  // Seed each project once, including projects arriving after the initial snapshot. Session updates
+  // must not undo a manual fold or change a project's state after it has first appeared.
+  const [folds, setFolds] = useState<Map<string, boolean>>(new Map());
+  if (projects.some((project) => !folds.has(project.id))) {
+    const next = new Map(folds);
+    projects.forEach((project, index) => {
+      if (!next.has(project.id)) next.set(project.id, initiallyCollapsed[index]!);
+    });
+    setFolds(next);
+  }
+  const collapsed = new Set(projects.filter((project) => folds.get(project.id)).map((project) => project.id));
   // Per console. Set when the Projects heading's fold button should keep offering Expand until
   // every project of that console is expanded again. A mixed list does not change it; only
   // collapsing or expanding all of them, or pressing the button, does.
@@ -179,25 +193,18 @@ export function Sidebar({
   }, [projects, collapsed]);
 
   const toggle = (id: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setFolds((prev) => new Map(prev).set(id, !prev.get(id)));
 
   // Collapse or expand a whole list of projects at once. It is given the ids rather than reading
   // the console's projects itself, so a filtered list only moves the projects it shows; the ones
   // the filter hides keep the state they had. Pressing it again once they are all there is an
-  // ordinary thing to do, so an unchanged set is returned as it was and the tree is left alone.
+  // ordinary thing to do, so unchanged state is returned as it was and the tree is left alone.
   const setCollapsedFor = (ids: string[], value: boolean) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      for (const id of ids) {
-        if (value) next.add(id);
-        else next.delete(id);
-      }
-      return next.size === prev.size ? prev : next;
+    setFolds((prev) => {
+      if (ids.every((id) => prev.get(id) === value)) return prev;
+      const next = new Map(prev);
+      for (const id of ids) next.set(id, value);
+      return next;
     });
 
   // Entering or leaving focus mode swaps the sidebar's content, which unmounts the control that

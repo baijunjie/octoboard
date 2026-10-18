@@ -10,8 +10,8 @@ export type ProjectFoldControl = "collapse" | "expand";
  * does the same on its own: every project expanded clears the pin, every project collapsed sets it.
  * Opening or closing a single project, while any project is still the other way, leaves the pin
  * as it was. With the pin clear, any project that is still open makes the button offer collapse,
- * which is how it starts — projects begin expanded. It offers expand with the pin clear only when
- * every project is collapsed.
+ * including when projects with unarchived sessions start expanded. It offers expand with the pin
+ * clear only when every project is collapsed.
  *
  * `projectIds` is every project of one console. A filter decides which of them a press changes; it
  * does not decide this. An empty list has nothing to judge, so the pin is what shows.

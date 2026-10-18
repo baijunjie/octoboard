@@ -61,6 +61,7 @@ export const emptyScenarios: Scenario[] = [
       }),
       agentAvailability: NO_AGENTS,
     },
+    steps: [(ui) => ui.press("Website")],
   },
   {
     id: "empty-console-no-projects",
@@ -79,7 +80,7 @@ export const emptyScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "No console session: create a console session",
-    description: "The headings show Console sessions (0) and Projects (1); their sections keep compact creation rows. The main area offers New console session.",
+    description: "The headings show Console sessions (0) and Projects (1). Console sessions keeps its compact creation row, while Website starts folded. The main area offers New console session.",
     state: snapshotState({
       consoles: [consoleOf("c-1", "Main")],
       projects: [projectOf("p-1", "c-1", "Website")],
@@ -90,7 +91,7 @@ export const emptyScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "A console session and one project: create a project session",
-    description: "The console session remains unselected. The main area offers New session for Website, whose sidebar row offers the same action.",
+    description: "The console session remains unselected and Website starts folded. The main area offers New session for Website, whose sidebar header offers the same action.",
     state: snapshotState({
       consoles: [consoleOf("c-1", "Main")],
       projects: [projectOf("p-1", "c-1", "Website")],
@@ -102,7 +103,7 @@ export const emptyScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "A console session and several projects: select a session",
-    description: "The console session remains unselected and both projects keep creation rows. The main area asks for a session to be selected, with no creation button.",
+    description: "The console session remains unselected and both projects start folded. The main area asks for a session to be selected, with no creation button.",
     state: snapshotState({
       consoles: [consoleOf("c-1", "Main")],
       projects: [projectOf("p-1", "c-1", "Website"), projectOf("p-2", "c-1", "Search API")],

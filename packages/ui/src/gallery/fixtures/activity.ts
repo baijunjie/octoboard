@@ -25,14 +25,24 @@ const sessions = [
   sessionOf("s-archived-1", console_.id, archived.id, "Completed draft", "archived"),
 ];
 
+const state = snapshotState({ consoles: [console_], projects: [archived, empty, website, api, billing, docs], sessions });
+
 export const activityScenarios: Scenario[] = [
+  {
+    id: "project-default-folds",
+    group: "Projects",
+    category: "normal",
+    title: "Projects open only when they have unarchived sessions",
+    description: "Website, Search API and Billing open with their sessions visible. Docs also opens because its interrupted session is unarchived. The pinned Archived only and No sessions yet projects start folded and follow the expanded projects. Toggle a project to change its fold state.",
+    state,
+  },
   {
     id: "collapsed-project-activity",
     group: GROUP,
     category: "normal",
     title: "Collapsed project rows, by what is going on beneath them",
     description: "Each collapsed row's marker shows the most pressing activity beneath it: a waving hand for Website (waiting beats working), a pinging dot for Search API, a speech bubble for Billing and none for Docs. Hover a marker to read its tooltip. Docs, whose only session is interrupted, stays undimmed. The pinned Archived only and No sessions yet projects sort after the active ones, dimmed together. Expand from the Projects heading: only the four active projects open, and those two stay folded.",
-    state: snapshotState({ consoles: [console_], projects: [archived, empty, website, api, billing, docs], sessions }),
+    state,
     steps: [
       (ui) => ui.press(ui.t("sidebar.collapseAll")),
       (ui) => ui.wait(500),
