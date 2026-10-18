@@ -61,7 +61,7 @@ const READY_TIMEOUT_MS = 60_000;
 const SETTLE_MS = 150;
 /** How long reading a page, or the list of scenarios from one, may take. Playwright puts no limit on it. */
 const READ_TIMEOUT_MS = 30_000;
-/** How long a signal waits for the browser and server to close before the process exits regardless. */
+/** How long each owned resource has to close, including after a successful sweep. */
 const CLOSE_TIMEOUT_MS = 5_000;
 
 class SetupError extends Error {}
@@ -263,6 +263,8 @@ async function startServer() {
     logLevel: "error",
     server: { port: 0, strictPort: false, open: false, watch: null, hmr: false, forwardConsole: false },
   });
+  // Own the server before listening: a failed listen still needs its plugin resources closed.
+  running.server = server;
   await server.listen();
   const address = server.httpServer?.address();
   if (!address || typeof address === "string") throw new SetupError("The dev server did not report a port");
@@ -422,6 +424,33 @@ const label = (r) => `${r.language}/${r.theme}  ${r.scenario.id}`;
 /** What is open, for the signal handlers to close; `interrupted` is set before they close it, so that
  * the pages that fail because their browser went away are not reported. */
 const running = { browser: undefined, server: undefined, interrupted: false };
+let cleanup;
+let cleanupFailed = false;
+
+/** Closing independently keeps a stuck browser from preventing the server from releasing its resources.
+ * Share the promise with signal handlers so a close is never started twice. */
+function closeResources() {
+  return cleanup ??= Promise.all([
+    ["Chromium", running.browser],
+    ["Vite server", running.server],
+  ].map(async ([name, resource]) => {
+    if (!resource) return;
+    try {
+      await within(CLOSE_TIMEOUT_MS, Promise.resolve().then(() => resource.close()), `closing ${name}`);
+    } catch (error) {
+      cleanupFailed = true;
+      console.error(`Cleanup failed for ${name}: ${firstLine(error)}`);
+    }
+  }));
+}
+
+/** A failed close may leave referenced native handles. Report it before ending the process, and wait
+ * for piped output to flush so a task runner receives both the sweep result and cleanup diagnostic. */
+async function exitAfterOutput(code) {
+  const flushed = Promise.all([process.stdout, process.stderr].map((stream) => new Promise((resolve) => stream.write("", resolve))));
+  await within(CLOSE_TIMEOUT_MS, flushed, "flushing output").catch(() => {});
+  process.exit(code);
+}
 
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(signal, () => {
@@ -430,11 +459,7 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     running.interrupted = true;
     process.exitCode = code;
     console.error(`\n${signal}: stopping`);
-    // A browser that will not close must not make one Ctrl-C hang until a second: exit after a bound either way.
-    within(CLOSE_TIMEOUT_MS, Promise.allSettled([running.browser?.close(), running.server?.close()]), "closing").then(
-      () => process.exit(code),
-      () => process.exit(code),
-    );
+    void closeResources().then(() => exitAfterOutput(code));
   });
 }
 
@@ -503,8 +528,7 @@ async function main() {
     );
     return failed.length > 0 ? 1 : 0;
   } finally {
-    await running.browser?.close().catch(() => {});
-    await running.server?.close().catch(() => {});
+    await closeResources();
   }
 }
 
@@ -517,4 +541,9 @@ try {
     else console.error(error);
     process.exitCode = 2;
   }
+}
+
+if (!running.interrupted && cleanupFailed) {
+  if (!process.exitCode) process.exitCode = 2;
+  await exitAfterOutput(process.exitCode);
 }
