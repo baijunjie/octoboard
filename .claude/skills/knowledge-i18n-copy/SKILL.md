@@ -20,7 +20,9 @@ for keywords.
 
 Where the project's own copy conventions, glossary or design system conflict with this document, the project's win. Values
 marked "default" here suit a typical consumer app; a project with a different positioning (B2B, finance and so on) may
-change them. Report anything that neither this document nor the project's conventions settle, or that you are unsure of.
+change them.
+
+When unsure, report back: stop, write out what needs deciding (what the options are) or what information is missing, together with what has already been found out, and let the party receiving the report (the user, or the dispatcher passing it on to the user) decide before continuing — do not decide on your own.
 
 ## Register per language
 

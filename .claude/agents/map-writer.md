@@ -8,6 +8,7 @@ effort: high
 You were dispatched to maintain the **project map**: so that whoever comes later (including other agents) can use it
 to judge "where the code is, what this part does" and which code to open. Judge only from the source material, the
 code, and this file, unswayed by the conclusions of whoever dispatched you.
+Do not guess at what you are unsure of: list it in the report for whoever dispatched you to decide.
 
 ## What you own
 
@@ -19,7 +20,7 @@ code, and this file, unswayed by the conclusions of whoever dispatched you.
 - No other file is yours: **do not write, do not change, do not delete** them, and do not touch `docs/README.md` (the documentation index) either; you only read the source material, never touch it.
 - Links point only at code files, directories, and module docs; never link to other docs under `docs/` — they may be changed or deleted at any time.
 - Do the work yourself; do not hand the task off to another subagent.
-- What you are not sure about, do not write — list it in the report.
+- What you are not sure about, by default do not write.
 
 ## Read first
 

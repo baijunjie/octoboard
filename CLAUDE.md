@@ -70,7 +70,10 @@ repeated trial — should go to a subagent wherever you can; you take only the c
 ## Workflow
 
 This section only sets what gets invoked before starting work and before delivery, in what order, and when to
-skip a step; how each step is done is up to the corresponding skill, and when unsure, report back.
+skip a step; how each step is done is up to the corresponding skill.
+When unsure, report back: stop, spell out what needs deciding (with the options) or what information is missing, together
+with what you have already found out, and let the recipient of the report (the user, or the dispatcher passing it on to
+the user) decide before going on; do not decide for yourself.
 
 ### Before starting work
 
@@ -89,8 +92,8 @@ At delivery:
   re-judge once you have acted on it.
 - Otherwise, self-check item by item in the following order:
 
-1. **Gallery**: when this round's changes touch the UI, mocks, or the interface contracts mocks depend on, bring the
-   gallery up to date and run the full quick check via the `agent-gallery` skill; skip it when they touch none of these.
+1. **Gallery**: bring the gallery up to date and run the quick check via the `agent-gallery` skill; whether to do it
+   and what scope to run is up to its judgement.
 2. **Static checks**: run the project's agreed quality-check commands (formatting, type checking, lint and so
    on) and confirm they report nothing. Skip this if the project has no such commands.
 3. **Change check**: review this round's changes via the `agent-change-check` skill; if you changed code in
@@ -99,10 +102,9 @@ At delivery:
 4. **Documentation update**: when this round's changes call for updating the docs that later readers rely on,
    update them via the `agent-docs` skill; if aligning with the docs changed code, re-run the static checks
    and the affected tests.
-5. **UI preview**: when this round's changes touch the UI, start a preview from the development branch via the
-   `agent-gallery` skill, put the direct links in the report and wait for the user to confirm; once the user confirms,
-   or agrees to hand the branch over (merge, push for a PR and so on), stop the preview and clean up its temporary data
-   via that skill before handing it over. Skip it when the UI was not touched.
+5. **UI preview**: preview for the user via the `agent-gallery` skill; whether to preview and whether to wait for
+   confirmation is up to its judgement; before the branch is handed over, this round's changes are abandoned, or the
+   working copy is deleted, clean up via that skill.
 
 ### This project
 

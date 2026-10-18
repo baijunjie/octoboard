@@ -18,7 +18,8 @@ The locations in the table are the default; when the project already has its own
 - Development memory is a loose collection of smallest units and **cannot be referenced by code comments or other docs**; wherever it is needed, write that sentence straight in.
 - Other docs under `docs/` are maintained by the agent responsible for the corresponding task, and this skill does not touch them. Long-lived ones among them (such as topic docs — a focused writeup kept as the record of one task, e.g. research conclusions, measured baselines) are registered in the documentation index; temporary docs that are deleted once done (development plans, tickets, etc.) are not registered.
 - Content that only holds on this machine (local paths, environment values, etc.) goes into none of these categories: docs are committed with the repo, so it breaks on another machine or with multiple people.
-- Report when this skill cannot work it out or you are not sure.
+
+When you are unsure, report: stop, spell out what has to be decided (with the options) or what information is missing, together with what you have already established, and let the recipient of the report (the user, or the dispatcher who passes it on to the user) decide before you continue; do not decide yourself.
 
 ## Before starting work: read
 
@@ -39,6 +40,8 @@ The locations in the table are the default; when the project already has its own
 - Dispatch **one after another** in the table's order, not concurrently; when dispatching `memory-writer`, hand it the earlier subagents' reports too, so what is already written is not recorded again.
 - The subagent cannot see your conversation: tell it what was finished this time and what you want recorded, and give it **source material it can read** (the change scope, task notes, requirement descriptions, etc.); anything that exists only in the conversation has to be written up as key points inside what you tell it first. Whether it is worth writing and which doc it goes into is its call — it may refuse.
 - The subagent only reads the source material and does not touch it; what happens to it afterwards is your business.
+- The subagents this skill dispatches are installed together with it: if there is a subagent mechanism but the definition of the subagent to dispatch cannot be found, the installation is incomplete: stop and ask the user to rerun the installer that installed this skill. With no subagent mechanism, read the installed definitions and do the work yourself following the rules inside.
+- When writing it yourself with no subagent mechanism, go through the categories in the same table order; **the default is to write nothing**; lay out the file changes in the format of a subagent report, to be used for updating the documentation index.
 
 Handle what a subagent hands back according to where it belongs; for a destination not in this table, you decide:
 
@@ -47,8 +50,6 @@ Handle what a subagent hands back according to where it belongs; for a destinati
 | Another category (project map, product docs, or development memory) | If that subagent has not been dispatched yet, dispatch it in order carrying these items; if it already has been, dispatch it again carrying these items |
 | A code comment somewhere | You write it yourself from the key points per the "Comment conventions" section |
 | Only holds on this machine | Record it in your own local-machine memory not committed with the repo (not `docs/memory/`); if there is no such mechanism, state it clearly in your final reply |
-
-When there is no subagent mechanism: read the installed `map-writer` / `product-writer` / `memory-writer` definitions, write it yourself in the same order following the rules inside — **the default is to write nothing**; lay out the file changes in the format of a subagent report, to be used for updating the documentation index.
 
 ## Wrapping up: update the documentation index
 

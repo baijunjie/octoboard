@@ -8,6 +8,10 @@ description: Edit the "Workflow" section of the project instruction file — the
 The "Workflow" section between `<!-- setup-agent:workflow:begin -->` and `<!-- setup-agent:workflow:end -->` in the
 project instruction file is the only place in the project where the workflow is written.
 
+When unsure, report back: stop, spell out what needs deciding (with the options) or what information is missing, together
+with what you have already found out, and let the recipient of the report (the user, or the dispatcher passing it on to
+the user) decide before going on; do not decide for yourself.
+
 - Edit only between this pair of markers; the markers themselves are neither deleted nor changed.
 - When no instruction file in the project carries this pair of markers, do not create it yourself: report back and
   ask the user to run the `setup-agent:workflow` installer to generate this section first, then edit it.

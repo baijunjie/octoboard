@@ -7,8 +7,8 @@
 # ignored). At run time the gate reads only the git config, never this file: files in the working tree can be
 # changed by the branch being merged, and must not influence what the gate decides.
 # --branches-only: write only the resident guarded branch config and install no hooks, for a clone whose
-# hooks are owned by a system such as husky (core.hooksPath is set, and .githooks/hook.sh is called from
-# within that system).
+# hooks are owned by a system such as husky (core.hooksPath is set in the configuration file, and
+# .githooks/hook.sh is called from within that system).
 # --pr-only: install only the hooks, without reading .githooks/branches or touching revert-gate.branch, for
 # a repository that has only the PR flow installed (it has no resident guarded branch; the gate is
 # triggered by the PR target branch each branch records); mutually exclusive with --branches-only, and
@@ -39,8 +39,14 @@ root=$(git rev-parse --show-toplevel)
 hooks="$(git rev-parse --git-common-dir)/hooks"
 list="${root}/.githooks/branches"
 
-if [ "${hooks_too}" = 1 ] && [ -n "$(git config core.hooksPath || true)" ]; then
-  echo "core.hooksPath is set to $(git config core.hooksPath), so the common hooks directory will not take effect; call sh .githooks/hook.sh <reference-transaction|pre-push> \"\$@\" from within that hook system. Run sh .githooks/install.sh --branches-only afterward if resident guarded branches need writing; nothing further is needed for a repo with only the PR flow installed." >&2
+# Only core.hooksPath in the configuration files (including included ones) counts. Entries from -c (passed down
+# through GIT_CONFIG_PARAMETERS) and GIT_CONFIG_COUNT are temporary and apply only to that one process tree
+# (for example injected by a tool that launches the agent session, pointing at a dispatcher that forwards to
+# this clone's own hooks); judging by them would write only the resident guarded branches, install no hooks,
+# and leave the gate silently inactive.
+hookspath=$(env -u GIT_CONFIG_COUNT -u GIT_CONFIG_PARAMETERS git config core.hooksPath || true)
+if [ "${hooks_too}" = 1 ] && [ -n "${hookspath}" ]; then
+  echo "core.hooksPath is set to ${hookspath}, so the common hooks directory will not take effect; call sh .githooks/hook.sh <reference-transaction|pre-push> \"\$@\" from within that hook system. Run sh .githooks/install.sh --branches-only afterward if resident guarded branches need writing; nothing further is needed for a repo with only the PR flow installed." >&2
   exit 1
 fi
 

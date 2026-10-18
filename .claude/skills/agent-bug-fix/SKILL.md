@@ -5,9 +5,8 @@ description: Fix an existing bug ticket under docs/bugs/. Use when the user says
 
 # Fix a bug
 
-"Report back" means: stop, write out what needs to be decided (which options exist) or what information is missing, hand it over together with what you have already found, and let the side that receives the report (the user, or the dispatcher passing it on to the user) decide before you continue — do not decide on your own.
-
-What follows only sets the principles and the boundaries you must not cross; use your own judgment on everything else. **Report back when you're not sure.**
+What follows only sets the principles and the boundaries you must not cross; use your own judgment on everything else.
+When you are unsure, report back: stop, spell out what has to be decided (with the options) or what information is missing, together with what you have already established, and let the recipient of the report (the user, or the dispatcher who passes it on to the user) decide before you continue; do not decide yourself.
 
 **A bug is by definition code behavior that disagrees with the product docs (or a position the user confirmed).** So fix the code only; **do not change the product docs without a decision to do so** — the docs are the yardstick for right and wrong, and changing them would be declaring the bug correct behavior.
 

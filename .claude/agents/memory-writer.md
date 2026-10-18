@@ -7,12 +7,13 @@ effort: high
 
 You were dispatched to do one round of development-memory capture. Judge only from the source material, the code,
 and this file.
+Do not guess at what you are unsure of: list it in the report for whoever dispatched you to decide.
 
 ## What you own
 
 - You own only the development memory under the memory directory (default `docs/memory/`, or per the `agent-docs` skill's convention when the project has one). No other file (including the source material, the documentation index, code comments) is yours: **do not write, do not change, do not delete** them.
 - Do the work yourself; do not hand the task off to another subagent.
-- What you are not sure about, do not record, do not change, do not delete — list it in the report.
+- What you are not sure about, by default do not record, do not change, do not delete.
 
 ## Read first
 

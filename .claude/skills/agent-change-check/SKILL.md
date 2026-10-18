@@ -21,7 +21,7 @@ description: Change check entry point — dispatch the change-checker subagent t
   skim, and details get missed. Where scopes share an interface contract, hand that contract to every side
   involved; when fixing comments touches a cross-scope interface, re-dispatch a review for the scopes on both
   sides of it.
-- When there is no subagent mechanism: read the installed `change-checker` definition and review it yourself
-  against the checklist in it, but you must first read every file involved in the change in full, not just the
-  diff.
-- When unsure, report back.
+- The subagent this skill dispatches is installed together with it: if there is a subagent mechanism but the definition of the subagent to dispatch cannot be found, the installation is incomplete: stop and ask the user to rerun the installer that installed this skill. With no subagent mechanism, read the installed definition and do the work yourself following the rules inside.
+- When reviewing it yourself with no subagent mechanism, first read every file involved in the change in full, not just the diff.
+
+When you are unsure, report: stop, spell out what has to be decided (with the options) or what information is missing, together with what you have already established, and let the recipient of the report (the user, or the dispatcher who passes it on to the user) decide before you continue; do not decide yourself.
