@@ -58,7 +58,7 @@ it("opens the session on the dialog's defaults without asking anything, and sele
     bound_to: undefined,
     agent: "claude",
     account: null,
-    title: undefined,
+    title: "Search API session",
   });
   expect(onOpened).toHaveBeenCalledWith("s-new");
 });

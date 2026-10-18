@@ -44,7 +44,7 @@ export function useQuickCreateSession(
     }
     const startedIn = latestConsoleId.current;
     pending.current = true;
-    request(defaultOpenSessionRequest(target.console, project, binding, settings.accounts, agentAvailability))
+    request(defaultOpenSessionRequest(t, target.console, project, binding, settings.accounts, agentAvailability))
       .then((reply) => {
         if (reply.type === "session_opened" && latestConsoleId.current === startedIn) onOpened(reply.session.id);
       })

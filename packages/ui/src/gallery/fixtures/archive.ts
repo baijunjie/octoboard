@@ -164,7 +164,7 @@ export const archiveScenarios: Scenario[] = [
       // Selecting the archived lead from the menu, then opening the full archive, marks its row.
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
-      (ui) => ui.press(archivedLead.title),
+      (ui) => ui.press((name) => name === archivedLead.title),
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
@@ -243,7 +243,7 @@ export const archiveScenarios: Scenario[] = [
     description: "Native files exist for a child, so the confirmation keeps the Trash option, unchecked, with the hint that the sessions deleted with it go too. It lists both archived children with their agent icons and titles.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
-      (ui) => ui.press(ui.t("archive.delete", { title: archivedLead.title })),
+      (ui) => ui.press((name) => name === ui.t("archive.delete", { title: archivedLead.title })),
     ],
   },
   {
@@ -257,7 +257,7 @@ export const archiveScenarios: Scenario[] = [
     description: "The used archived lead still requires confirmation and lists its two archived children. No native files exist for any of them, so the Trash checkbox and hint are absent.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
-      (ui) => ui.press(ui.t("archive.delete", { title: archivedLead.title })),
+      (ui) => ui.press((name) => name === ui.t("archive.delete", { title: archivedLead.title })),
     ],
   },
   {

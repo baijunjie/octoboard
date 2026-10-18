@@ -91,12 +91,14 @@ a new conversation.
 
 Both dialogs offer these fields in this order:
 
-- **Name** (optional) — the empty field shows the project's name for a project session, or the console's name for a
-  console session, as its placeholder. Leaving it empty uses that parent's current name when the session is created,
-  with no numeric suffix; multiple sessions can have the same name. The field stays empty until the user enters a
-  custom name. The dialog removes surrounding whitespace from an entered name and uses the parent name when nothing
-  remains. Renaming a console changes the default for future console sessions; existing sessions keep their created
-  names.
+- **Name** (optional) — the empty field previews the default name: the project's name for a project session, or the
+  console's name for a console session, followed by the session label in the UI's current language. Leaving it empty
+  uses that default when the session is created, with no numeric suffix; multiple sessions can have the same name.
+  The field stays empty until the user enters a custom name. The dialog removes surrounding whitespace from an
+  entered name and uses the default when nothing remains; a custom name gets no session label added. Renaming the
+  parent or changing the UI's language affects future defaults; existing sessions keep their created names. A task
+  title can still appear before either kind of created name, as described in "Displayed names" in
+  `docs/product/session-titles.md`.
 - **Agent** — an agent picker joined to an account picker, as in the project dialog. The agent picker lists the
   agents with their icons and names, leaving out those not installed except the one it holds (see "Agents that are not
   installed" in `docs/product/consoles-and-projects.md`). The field opens on a selectable agent whenever there is
@@ -133,7 +135,9 @@ The choices, clearing and account-specific lists are described in "The Advanced 
 
 A console session has no project or Report to field and is never bound to another session. Opening it with the daemon
 protocol's `open_session` accepts an explicit agent and account as the dialog does. Its `title` is stored trimmed, and
-one that is absent, `null` or blank uses the console's current name, as the dialog's empty name does.
+one that is absent, `null` or blank uses the parent's current name alone: the console's name for a console session,
+or the project's name for a project session. The daemon has no UI language; the UI supplies its localized default
+explicitly when no custom name was entered.
 
 **Every new session is listed at once as *starting*,** before its agent has been launched, and the launch goes on
 behind it (see "The launch environment" in `docs/product/launching-agents.md`). The dialog does not wait for the
@@ -206,7 +210,7 @@ already down while the window was in the background is picked up once the pointe
 
 The session opened is the one the dialog would open if submitted untouched:
 
-- no name, so it takes its parent's current name (see **Name** above);
+- the localized default name (see **Name** above);
 - the agent and account the dialog opens on (see "Which agent a session uses" and "Which account a session uses"
   below), sent as the session's own choice;
 - no model or reasoning effort of its own, so both follow the parent;

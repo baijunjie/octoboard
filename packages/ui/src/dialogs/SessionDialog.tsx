@@ -176,7 +176,7 @@ export function SessionDialog({
     }
     void run(async () => {
       setRefusal(undefined);
-      const reply = await request(openSessionRequest({
+      const reply = await request(openSessionRequest(t, {
         console: parentConsole,
         project,
         ownerId: owner?.id,
@@ -202,9 +202,9 @@ export function SessionDialog({
         label={t("common.name")}
         value={title}
         onChange={setTitle}
-        placeholder={project?.name ?? parentConsole.name}
+        placeholder={t("session.defaultName", { name: project?.name ?? parentConsole.name })}
         autoFocus={!switched}
-        description={t(project ? "dialog.session.titleHint" : "dialog.consoleSession.consoleNameHint")}
+        description={t("dialog.session.defaultNameHint")}
       />
       <AgentAccountField
         label={t("dialog.session.agent")}

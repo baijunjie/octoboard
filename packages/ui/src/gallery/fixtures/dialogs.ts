@@ -363,7 +363,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "New console session",
-    description: "The empty Name field previews the console name without a numeric suffix. Joined agent and inherited account pickers follow; Advanced starts collapsed and there is no report-to field.",
+    description: "The empty Name field previews the console name followed by the localized session label, without a numeric suffix. Joined agent and inherited account pickers follow; Advanced starts collapsed and there is no report-to field.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.consoleSessions.new")),
     ],
@@ -516,7 +516,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "New session advanced settings",
-    description: "New conversation is selected with Name below the tabs. Claude Code and its long inherited account name share the joined field; expanded Advanced shows the project's Opus model with the console's Low project session reasoning effort, with Report to still offered above.",
+    description: "New conversation is selected with Name below the tabs; its placeholder combines the project name and localized session label. Claude Code and its long inherited account name share the joined field; expanded Advanced shows the project's Opus model with the console's Low project session reasoning effort, with Report to still offered above.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),

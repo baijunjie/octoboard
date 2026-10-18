@@ -76,6 +76,7 @@ What follows the current language:
 
 - every piece of text the UI itself shows: labels, tooltips, accessible names, dialogs, toasts, status labels and
   Settings;
+- the default name when the UI creates a session (see "Opening a session" in `docs/product/sessions.md`);
 - the text of the system notifications the UI composes, such as the one for a session waiting for the user (see "The
   raised hand" in `docs/product/sessions.md`);
 - the errors and notices the daemon reports. The daemon reports each as a stable code with its details, and the UI
@@ -99,6 +100,8 @@ What follows the current language:
 
 What does not follow it:
 
+- **Existing session names.** A created name keeps its saved wording when the UI's language changes, including one
+  that used the localized default when it was created (see "Opening a session" in `docs/product/sessions.md`).
 - **A report page.** It is content the console session's model wrote, with its own language and direction, and it is never
   mirrored under a right-to-left language; only the panel around it follows the UI (see `docs/product/report-panel.md`).
 - **The terminal.** What the agent draws is laid out left to right whatever the language, and is never mirrored.

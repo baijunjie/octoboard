@@ -528,7 +528,7 @@ it.each(["inherit", "pick", "clear"] as const)("opens console sessions with cons
   expect(document.body.querySelector('[role="dialog"] h2')?.textContent).toBe(`Open console session in ${isolate("Main")}`);
   expect(document.body.textContent).not.toContain("Report to");
   const name = document.body.querySelector<HTMLInputElement>('[role="dialog"] input')!;
-  expect(name.placeholder).toBe(parentConsole.name);
+  expect(name.placeholder).toBe(`${parentConsole.name} session`);
   expect(pickerNamed("Agent").textContent).toContain("Claude Code");
   expect(pickerNamed("Claude Code account").textContent).toContain("Console account");
   expect(vi.mocked(daemon.request).mock.calls.some(([body]) => body.type === "list_agent_models")).toBe(false);
@@ -565,7 +565,7 @@ it.each(["inherit", "pick", "clear"] as const)("opens console sessions with cons
     expect(sent).toMatchObject({ agent: "claude", account: "a-console" });
     expect(sent).not.toHaveProperty("model");
     expect(sent).not.toHaveProperty("effort");
-    expect(sent).toHaveProperty("title", undefined);
+    expect(sent).toHaveProperty("title", "Main session");
   } else if (mode === "pick") {
     expect(sent).toMatchObject({ title: "Release coordination", agent: "codex", account: null, model: "sonnet", effort: "low" });
   } else {
@@ -588,15 +588,15 @@ it("opens console sessions on the console's default agent and its account", asyn
 });
 
 
-it("uses the console name as its placeholder without submitting it as a custom title", async () => {
+it("uses the localized default name as its placeholder and submitted title", async () => {
   const { container, root, daemon } = renderDialog([], {}, {}, undefined, null);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
   const name = document.body.querySelector<HTMLInputElement>('[role="dialog"] input')!;
-  expect(name.placeholder).toBe(parentConsole.name);
+  expect(name.placeholder).toBe(`${parentConsole.name} session`);
   expect(name.value).toBe("");
   expect(daemon.request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "preview_console_session_title" }));
   await act(async () => buttons().find((button) => button.textContent === "Open")!.click());
-  expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", title: undefined }));
+  expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", title: "Main session" }));
 });
 
 it.each(["Backspace", "Delete"])("clears a launch choice with %s only while its list is closed", async (key) => {
