@@ -1,5 +1,6 @@
 import { Button } from "@heroui/react";
 import React from "react";
+import type { PressEvent } from "react-aria";
 
 import { TitledControl } from "./TitledControl";
 
@@ -25,12 +26,17 @@ export function ChromeButton({
   onMouseHoverChange,
   expanded,
   controls,
+  popupId,
+  onBlur,
+  buttonRef,
+  tooltipDisabled,
   tooltipPlacement,
   className = "",
 }: {
   id?: string;
   label: string;
-  onPress: () => void;
+  /** Called with the press, so a caller can tell a keyboard activation from a pointer's. */
+  onPress: (event: PressEvent) => void;
   children: React.ReactNode;
   isDisabled?: boolean;
   /** For a button that shows or hides a region: whether the region is shown, as `aria-expanded`;
@@ -39,6 +45,13 @@ export function ChromeButton({
    * toggle in the DOM (`usePanePeekPointer`) matches `data-pane-toggle`. */
   expanded?: boolean;
   controls?: string;
+  /** For a button that opens a floating panel: the panel's id, as `aria-controls`. Unlike `controls`
+   * it does not mark the button as a pane toggle. */
+  popupId?: string;
+  onBlur?: () => void;
+  buttonRef?: React.Ref<HTMLButtonElement>;
+  /** Holds the tooltip back while the button shows what it says some other way (its panel is open). */
+  tooltipDisabled?: boolean;
   /** Called as a mouse pointer enters or leaves the button; touch and pen are ignored. */
   onMouseHoverChange?: (hovered: boolean) => void;
   tooltipPlacement?: "end";
@@ -46,18 +59,20 @@ export function ChromeButton({
   className?: string;
 }): React.ReactElement {
   return (
-    <TitledControl title={label} placement={tooltipPlacement}>
+    <TitledControl title={label} placement={tooltipPlacement} isDisabled={tooltipDisabled}>
       <Button
         id={id}
+        ref={buttonRef}
         isIconOnly
         isDisabled={isDisabled}
         size="sm"
         variant="ghost"
         aria-label={label}
         aria-expanded={expanded}
-        aria-controls={controls}
+        aria-controls={controls ?? popupId}
         data-pane-toggle={controls}
         preventFocusOnPress
+        onBlur={onBlur}
         className={`${CHROME_BUTTON_FILLS} ${className}`}
         onPress={onPress}
         onHoverStart={(event) => event.pointerType === "mouse" && onMouseHoverChange?.(true)}

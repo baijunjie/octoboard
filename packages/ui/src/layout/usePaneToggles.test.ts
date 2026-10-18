@@ -92,3 +92,20 @@ it.each([
   wide.render(gone);
   expect(floats(wide.panes())).toBe(false);
 });
+
+it("leaves Escape to a floating panel over an open drawer, and closes the drawer on the next one", () => {
+  const { panes } = mountToggles(true);
+  act(() => panes().toggleSidebar());
+  expect(panes().sidebarOpen).toBe(true);
+  const scope = document.body.appendChild(document.createElement("div"));
+  scope.setAttribute("data-escape-scope", "");
+  const escape = () => act(() => void scope.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  const panel = document.body.appendChild(document.createElement("div"));
+  panel.setAttribute("data-escape-topmost", "");
+  escape();
+  expect(panes().sidebarOpen).toBe(true);
+  panel.remove();
+  escape();
+  expect(panes().sidebarOpen).toBe(false);
+  scope.remove();
+});

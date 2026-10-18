@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 
 import { accountsByAgent, AGENT_LABEL, AGENT_OPTIONS } from "../agents";
 import { InlineChip } from "../components/InlineChip";
-import { AgentIcon } from "../components/AgentIcon";
+import { AgentTabList } from "../components/AgentTabList";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { HelpTip } from "../components/HelpTip";
 import { PATH_VAR_PARAMS } from "../components/literalParams";
@@ -12,10 +12,9 @@ import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Account, Agent, ApprovalReviewer } from "../protocol";
-import { AccountQuotaSummary, QuotaPlan } from "../quota/AccountQuotaSummary";
+import { AccountNameLine, AccountQuotaSummary } from "../quota/AccountQuotaSummary";
 import { useAccountQuota } from "../quota/useAccountQuota";
 import { useDaemon, useDaemonStore } from "../store";
-import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { useListMotion } from "../components/useListMotion";
 import { AccountDialog } from "./AccountDialog";
 import { OptionSelect } from "../dialogs/OptionSelect";
@@ -35,7 +34,6 @@ export const AGENT_STRIP_HEIGHT = 45;
  * daemon to refresh the quotas that are due, those of every agent and not only of the tab in view. */
 export function AgentAccountsSection(): React.ReactElement {
   const t = useT();
-  const tabScrollLabels = useTabScrollLabels();
   const { request } = useDaemon();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   // `undefined` is closed; `null` is the form for a new account.
@@ -67,21 +65,12 @@ export function AgentAccountsSection(): React.ReactElement {
           itself to the top of the section's scroller over the rows, opaque on the dialog's own surface and flush
           with the scroller's edge (`--section-padding` is the padding the Settings dialog gives the section). */}
       <Tabs variant="secondary">
-        <Tabs.ListContainer
+        <AgentTabList
           {...pinnedFocus}
+          agents={AGENT_OPTIONS.map(({ value }) => value)}
+          label={t("settings.accounts.agents")}
           className={`sticky top-[calc(-1*var(--section-padding))] z-3 h-[45px] groove-b bg-overlay ${pinnedFocus.className}`}
-          render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}
-        >
-          <Tabs.List aria-label={t("settings.accounts.agents")} className="p-1.5">
-            {AGENT_OPTIONS.map(({ value: agent }) => (
-              <Tabs.Tab key={agent} id={agent} className="scroll-mx-1.5 gap-2 whitespace-nowrap hover:text-foreground hover:opacity-100">
-                <AgentIcon agent={agent} />
-                {AGENT_LABEL[agent]}
-                <Tabs.Indicator className="-bottom-1.5" />
-              </Tabs.Tab>
-            ))}
-          </Tabs.List>
-        </Tabs.ListContainer>
+        />
         {accountsByAgent(accounts).map(({ agent, accounts: owned }) => (
           <AgentAccountsPanel key={agent} agent={agent} owned={owned} onEdit={setEditing} onRemove={setRemoving} />
         ))}
@@ -202,11 +191,7 @@ function AccountRow({ agent, account, label, help, description, reviewer, childr
   return (
     <div data-list-motion={motionKey} className="col-span-full grid grid-cols-subgrid items-center gap-x-4 gap-y-3 groove-b py-4 last:border-b-0">
       <div className="min-w-0">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <div className="min-w-0">{label}</div>
-          <QuotaPlan quota={quota} />
-          {help}
-        </div>
+        <AccountNameLine name={label} quota={quota} help={help} />
         <div className="text-sm text-app-muted">{description}</div>
       </div>
       {reviewer && <div className="min-w-0">{reviewer}</div>}

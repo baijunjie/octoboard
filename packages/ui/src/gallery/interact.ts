@@ -170,6 +170,12 @@ export interface Ui {
    * rail avatar while the hidden sidebar can float in, where the pointer floats the sidebar instead)
    * is not passed over. */
   hoverTitledControl: (matcher: Matcher) => Promise<void>;
+  /** Moves the pointer onto the first control named `host` and leaves it there, for a control that
+   * floats a panel in while the pointer rests on it (the rail's quota entry), and returns once the
+   * dialog named `panel` is up. Fails if none opens, which also catches a control whose panel needs a
+   * press. The pointer's events are those of a mouse, so the panel is the hovered one and no press
+   * pins it. */
+  hoverPanel: (host: Matcher, panel: Matcher) => Promise<void>;
   /** Moves the pointer onto the status letter of the change row named `row` and leaves it there, as
    * `hoverIndicator` does, for the tooltip that names `status`. The letter is `aria-hidden` and its
    * tooltip is the anchored shape, which is mounted only while the pointer is on the letter and is
@@ -354,16 +360,20 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     );
   };
 
+  /** Puts a mouse pointer on `element`. A tooltip opens only for a pointer, and react-aria takes the
+   * modality from the last event it saw: the presses before it were clicks, which it reads as
+   * virtual. React raises `onPointerEnter` from a bubbling `pointerover`. */
+  const pointAt = (element: HTMLElement) => {
+    for (const type of ["pointermove", "pointerover"]) {
+      element.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerType: "mouse" }));
+    }
+  };
+
   /** Puts the pointer on what `look` finds, waiting for it to appear, and waits for its tooltip.
    * Returns what it hovered. */
   const hover = async (look: () => HTMLElement | null | undefined, missing: string): Promise<HTMLElement> => {
     const indicator = await waitFor(() => look() ?? undefined, missing);
-    // A tooltip opens only for a pointer, and react-aria takes the modality from the last event it
-    // saw: the presses before it were clicks, which it reads as virtual. React raises
-    // `onPointerEnter` from a bubbling `pointerover`.
-    for (const type of ["pointermove", "pointerover"]) {
-      indicator.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerType: "mouse" }));
-    }
+    pointAt(indicator);
     await wait(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
     return indicator;
   };
@@ -530,6 +540,14 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       if (!shown || withoutIsolates(shown).trim() !== nameOf(control)) {
         throw new Error(`The control matching ${String(matcher)} has no tooltip of its name: its last tooltip is ${shown ? `"${shown}"` : "none"}`);
       }
+    },
+    async hoverPanel(host, panel) {
+      const control = await waitFor(() => find(host), `Nothing to hover matching ${String(host)}`);
+      pointAt(control);
+      await waitFor(
+        () => Array.from(doc.querySelectorAll<HTMLElement>("[role=dialog]")).find((dialog) => matches(panel, labelledNameOf(doc, dialog) ?? "")),
+        `The control matching ${String(host)} floated in no dialog matching ${String(panel)} under the pointer`,
+      );
     },
     async hoverSessionUsage(row) {
       const entry = t("session.usage.entry", { label: t("session.usage.input"), tokens: "\0" }).split("\0")[0];

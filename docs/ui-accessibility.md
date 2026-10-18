@@ -125,6 +125,21 @@ there; with only its empty line it is skipped. A region whose focus goes through
 of its own rather than its first control (the terminal's) is only a stop when that method actually leaves focus inside
 it, which is how the cycle tells the two apart.
 
+### A floating panel that does not take the window
+
+A panel that floats in from a button and leaves the rest of the window usable (the rail's account quota panel) is not
+a region: it is reached through its button, the way a menu is.
+
+- Its `role="dialog"` element carries `aria-modal="false"`. The window's check for an open modal matches every dialog
+  without it, and would hold F6, window shortcuts, Back / Forward and floating panes while the panel is merely open.
+- Opening it on hover never moves focus, so it is not a dialog that focuses itself on mount; only a press from the
+  keyboard or assistive technology moves focus into it, and closing with focus still inside it returns focus to
+  whatever held it when it opened.
+- Escape closes the topmost floating thing first: while open, the panel marks itself `data-escape-topmost`, and the
+  drawer and floating-pane Escape handling stands aside while such an element exists.
+- Its button's tooltip is held back while the panel is open and right after it closes, as a help tip's is (below),
+  but not after a press outside, which leaves focus elsewhere.
+
 ## Input placeholders
 
 Every editable text input has a non-empty placeholder, including fields whose current value hides it.
@@ -411,7 +426,8 @@ the surface around it does not forbid selection. It is accepted there because th
 
 ### Expanded and selected
 
-- A control that shows or hides a region carries `aria-expanded`.
+- A control that shows or hides a region carries `aria-expanded`. One that opens a floating panel also carries
+  `aria-controls` pointing at the panel's element, but not the pane toggles' `data-pane-toggle` marker.
 - The selected row of a hand-built list or tree carries `aria-current` (as the sidebar rows do).
 - HeroUI's `Tabs` and `ListBox` mark their selection themselves with `aria-selected` and get no `aria-current` on top.
 

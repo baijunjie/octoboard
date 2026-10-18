@@ -35,6 +35,7 @@ function avatarOf(statuses: SessionStatus[], hoverOpensSidebar = false): HTMLBut
           waitingCount={0}
           onNextWaiting={() => {}}
           onOpenSettings={() => {}}
+          onOpenSettingsAt={() => {}}
           focusTerminal={() => {}}
         />
       </DaemonProvider>

@@ -51,6 +51,8 @@ Once it holds more than it can show, each of these fades at its edge:
 - the **lists inside a popover**: the list of branches of the Git mode's branch selector (see "The branch
   selector" in `docs/product/project-pane-git-mode.md`), and the tags offered by the project filter (see "Filtering
   the project list" in `docs/product/sidebar.md`);
+- the list of accounts in the **rail's account quota panel** (see "What the panel shows" in
+  `docs/product/account-quotas.md`);
 - the **directory browser's** list of directories (see "Browsing directories" in
   `docs/product/consoles-and-projects.md`);
 - a **strip of tabs** whose tabs do not fit, which scrolls sideways: the row Settings' list of sections becomes
@@ -96,6 +98,9 @@ covers. These are:
 - **the stack trace on the screen for a UI that failed**, named as the stack trace. Nothing else on that screen
   scrolls the stack, so without it the fade at the stack's edge would be saying there is more where a keyboard could
   not go. In Tab order it comes before Try again, and after the screen's column where that is a stop too.
+- **the list of accounts in the rail's account quota panel**, named "Accounts". Its rows hold nothing that takes
+  focus, so nothing else would scroll it. In Tab order it comes after the agent tabs and before Manage accounts… (see
+  "What the panel shows" in `docs/product/account-quotas.md`).
 
 **Keyboard focus does not land under a fade**: a row, a control or a region scrolled into view stops 24 px short of
 the edge, clear of the fade, rather than arriving underneath. In focus mode's lists and the Git mode's change lists

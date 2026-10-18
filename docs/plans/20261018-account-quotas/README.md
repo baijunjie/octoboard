@@ -58,7 +58,7 @@ Claude Code accounts have no such choice, although Claude Code takes a permissio
 
 1. 01 Daemon account quotas (closed)
 2. 02 Account management with quotas (closed)
-3. [Rail quota entry](03-rail-quota-entry.md)
+3. 03 Rail quota entry (closed)
 4. [Menu bar quota submenus](04-menu-bar-quota-submenus.md)
 5. [Claude Code approval mode](05-claude-approval-mode.md)
 6. [Final confirmation](06-final-confirmation.md)

@@ -372,6 +372,12 @@ export const en = {
   },
   "rail.waitingBadgeOverflow": "99+",
   "rail.notifications.enable": "Turn on notifications",
+  "rail.quota": "Account quota",
+  "rail.quota.accounts": "Accounts",
+  "rail.quota.agents": "Agents",
+  "rail.quota.none": "No agent available",
+  "rail.quota.noneHint": "An agent's quota is shown once its command is found on your {pathVar}.",
+  "rail.quota.manage": "Manage accounts…",
   "rail.settings": "Settings",
 
   "pane.resizeSidebar": "Resize sidebar",

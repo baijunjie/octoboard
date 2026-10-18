@@ -744,6 +744,7 @@ export function App(): React.ReactElement {
           waitingCount={waitingCount}
           onNextWaiting={stableNextWaiting}
           onOpenSettings={openSettings}
+          onOpenSettingsAt={stableOpenSettingsAt}
           focusTerminal={focusTerminal}
         />
         <ContentPanel>

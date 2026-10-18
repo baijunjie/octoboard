@@ -43,7 +43,11 @@ buttons, the pin buttons and the session Delete or Archive shortcuts below. Thes
 - the rail's buttons — each console's avatar, whose tooltip is the console's name with what is going on in it folded
   in, the same text as the name announced for it (see "The console switcher" in `docs/product/sidebar.md`), New
   console, the waiting count, whose tooltip says how many sessions are waiting and that pressing it goes to the next
-  one, Turn on notifications, and Settings;
+  one, Turn on notifications, Account quota and Settings. Account quota's floating panel opens sooner than its
+  tooltip would (see "Opening and pinning the panel" in `docs/product/account-quotas.md`), so a resting mouse meets
+  the panel; the tooltip is held back while the panel is open. When the panel closes with the pointer resting on the
+  button or keyboard focus on it — Escape after a keyboard pin returns focus there — the tooltip stays shut until
+  focus or the pointer leaves the button; closed by a press elsewhere, nothing is held back;
 - the ⋮ button that opens an action menu — a sidebar row's, the console's in the sidebar's header, the project's in
   focus mode, and a file or folder's in the Files mode's tree or a file's in the Git mode's change list (see "A
   row's actions" in `docs/product/project-pane.md`). Its tooltip is a short "More actions", while the name announced

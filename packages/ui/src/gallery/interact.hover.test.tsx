@@ -16,6 +16,8 @@ import { gitBadgeAriaLabel } from "../gitStatusLabel";
 import type { ChangeEntry } from "../protocol";
 import { GitBadge } from "../sidebar/GitBadge";
 import { ProjectFilterSummary } from "../sidebar/ProjectFilter";
+import { RailQuotaEntry } from "../quota/RailQuotaEntry";
+import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { gitStatusOf } from "./fixtures/builders";
 import { createUi } from "./interact";
 
@@ -310,6 +312,42 @@ it("hoverTitledControl fails for a control whose tooltip stays shut under the po
 it("hoverTitledControl fails for a control that is not there", async () => {
   mountWindow();
   const done = expect(createUi(document, "en").hoverTitledControl("Nothing")).rejects.toThrow(/Nothing to hover/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await done;
+});
+
+/** The rail's quota entry over a daemon with Claude Code available, the panel a resting pointer floats in. */
+function mountQuotaEntry(): void {
+  // jsdom has no Web Animations, which the popover's exit waits for.
+  HTMLElement.prototype.animate = vi.fn(() => ({ cancel: vi.fn(), finished: Promise.resolve(), onfinish: null })) as unknown as typeof HTMLElement.prototype.animate;
+  onTestFinished(() => void delete (HTMLElement.prototype as Partial<HTMLElement>).animate);
+  const store = createStateStore({ agentAvailability: new Map([["claude", { agent: "claude", availability: "available" }]]) });
+  const daemon = { store, request: () => Promise.resolve({}) } as unknown as Daemon;
+  mountForTooltip(
+    <DaemonProvider value={daemon}>
+      <RailQuotaEntry onOpenSettingsAt={() => {}} />
+    </DaemonProvider>,
+  );
+}
+
+it("hoverPanel floats in the panel of the control it names", async () => {
+  mountQuotaEntry();
+  await settledLive(createUi(document, "en").hoverPanel("Account quota", "Account quota"));
+  expect(document.querySelector('[role="dialog"][aria-label="Account quota"]')).not.toBeNull();
+  release(document.querySelector('[aria-label="Account quota"]')!);
+});
+
+it("hoverPanel fails for a control whose hover floats in no such panel", async () => {
+  mountQuotaEntry();
+  const done = expect(createUi(document, "en").hoverPanel("Account quota", "Nothing")).rejects.toThrow(/floated in no dialog matching Nothing/);
+  await vi.advanceTimersByTimeAsync(8000);
+  await done;
+  release(document.querySelector('[aria-label="Account quota"]')!);
+});
+
+it("hoverPanel fails for a control that is not there", async () => {
+  mountQuotaEntry();
+  const done = expect(createUi(document, "en").hoverPanel("Nothing", "Account quota")).rejects.toThrow(/Nothing to hover/);
   await vi.advanceTimersByTimeAsync(6000);
   await done;
 });

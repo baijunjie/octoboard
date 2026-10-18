@@ -14,6 +14,7 @@ import { layoutScenarios } from "./layout";
 import { projectFilesScenarios } from "./projectFiles";
 import { projectGitScenarios } from "./projectGit";
 import { noticeScenarios } from "./notices";
+import { railQuotaScenarios } from "./railQuota";
 import { reportScenarios } from "./report";
 import { settingsScenarios } from "./settings";
 import { startupScenarios } from "./startup";
@@ -49,6 +50,7 @@ export const SCENARIOS: Scenario[] = [
   ...configurationScenarios,
   ...viewerScenarios,
   ...layoutScenarios,
+  ...railQuotaScenarios,
   {
     id: "code-colors",
     group: "Component colors",

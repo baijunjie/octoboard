@@ -307,6 +307,9 @@ export function usePaneToggles({
     if (!sidebarOpen && !asideOpen && !sidebarPeek.active && !asidePeek.active) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      // An element marking itself `data-escape-topmost` is a floating panel over the drawer that
+      // closes first, on a listener of its own that runs after this one.
+      if (document.querySelector("[data-escape-topmost]")) return;
       const target = event.target as Element | null;
       if (target && target !== document.body && !target.closest("[data-escape-scope]")) return;
       if (holdsText(target) || isImeKey(event)) return;

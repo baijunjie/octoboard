@@ -8,6 +8,8 @@ import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Console } from "../protocol";
 import { activityLabelKey } from "../sessionLabel";
 import { consoleMenu, type ConsoleMenuHandlers } from "../sidebar/menus";
+import type { SettingsSectionId } from "../settings/SettingsDialog";
+import { RailQuotaEntry } from "../quota/RailQuotaEntry";
 import { useArchivedOwnerSessions, useConsoleActivity } from "../sessions/useSessions";
 import { ActionMenu } from "./ActionMenu";
 import { ActivityBadge } from "./ActivityMarker";
@@ -143,6 +145,8 @@ interface RailProps extends ConsoleMenuHandlers {
   waitingCount: number;
   onNextWaiting: () => void;
   onOpenSettings: () => void;
+  /** Opens Settings on a section, as the quota panel's way into the accounts one. */
+  onOpenSettingsAt: (section: SettingsSectionId) => void;
   /** Where focus goes when a control that held it goes away (the notifications bell). */
   focusTerminal: () => void;
 }
@@ -150,9 +154,9 @@ interface RailProps extends ConsoleMenuHandlers {
 /**
  * The left rail, the window chrome's second half beside the top bar: at the top the console
  * switcher (one avatar per console, in their order, then New console), at the bottom, pushed down,
- * the waiting count, the notifications bell (browser only, while the permission is undecided) and
- * Settings. It sits at the reading direction's start, like the sidebar, and holds only glyphs and
- * avatars.
+ * the waiting count, the notifications bell (browser only, while the permission is undecided), the
+ * account quota entry and Settings. It sits at the reading direction's start, like the sidebar, and
+ * holds only glyphs and avatars.
  */
 export function Rail({
   consoles,
@@ -167,6 +171,7 @@ export function Rail({
   waitingCount,
   onNextWaiting,
   onOpenSettings,
+  onOpenSettingsAt,
   focusTerminal,
 }: RailProps): React.ReactElement {
   const t = useT();
@@ -226,6 +231,7 @@ export function Rail({
           </ChromeButton>
         )}
         <NotificationsBell focusTerminal={focusTerminal} />
+        <RailQuotaEntry onOpenSettingsAt={onOpenSettingsAt} />
         <ChromeButton label={t("rail.settings")} onPress={onOpenSettings} tooltipPlacement="end">
           <Settings aria-hidden="true" className="size-4" />
         </ChromeButton>

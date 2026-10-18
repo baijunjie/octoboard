@@ -49,7 +49,9 @@ Settings opens from:
   section instead of the first (see "Session rows" in `docs/product/sidebar.md`);
 - the **Manage accounts…** button in the console dialog's Agent accounts table, which opens it on the Agent accounts
   section above the console dialog, left open beneath it (see "Agent config directories" in
-  `docs/product/consoles-and-projects.md`).
+  `docs/product/consoles-and-projects.md`);
+- the **Manage accounts…** button in the rail's account quota panel, which closes the panel and opens it on the Agent
+  accounts section (see "The account quota panel on the rail" in `docs/product/account-quotas.md`).
 
 Settings closes on `Escape`, on its close button, and on a press on the dimmed area around it. Closing it puts
 keyboard focus back on the selected session's terminal, or, when it was opened from the console dialog, on the row of

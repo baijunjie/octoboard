@@ -28,6 +28,18 @@ export function QuotaPlan({ quota }: { quota: QuotaReading }): React.ReactElemen
   return <InlineChip className="shrink-0">{planLabel(quota.plan)}</InlineChip>;
 }
 
+/** The line naming an account: its `name`, its plan chip when the agent names one, and a `help` tip
+ * that ends the line. */
+export function AccountNameLine({ name, quota, help }: { name: React.ReactNode; quota: QuotaReading; help?: React.ReactNode }): React.ReactElement {
+  return (
+    <div className="flex items-center gap-2 text-sm font-medium">
+      <div className="min-w-0">{name}</div>
+      <QuotaPlan quota={quota} />
+      {help}
+    </div>
+  );
+}
+
 /** One account's quota windows as meters, and what stands in their place or beside them when there
  * is nothing current to show:
  *
@@ -36,7 +48,11 @@ export function QuotaPlan({ quota }: { quota: QuotaReading }): React.ReactElemen
  * - an entry with no windows: the reason it is unavailable;
  * - windows and a failure: the last good readings stay, marked as out of date with when they were
  *   taken and why the newer attempt failed. */
-export function AccountQuotaSummary({ quota }: { quota: QuotaReading }): React.ReactElement | null {
+export function AccountQuotaSummary({ quota, single }: {
+  quota: QuotaReading;
+  /** One window to a row whatever the viewport, for a surface narrower than the window. */
+  single?: boolean;
+}): React.ReactElement | null {
   const t = useT();
   const language = useCurrentLanguage();
   const now = useNow();
@@ -59,7 +75,7 @@ export function AccountQuotaSummary({ quota }: { quota: QuotaReading }): React.R
           <div><QuotaFailure unavailable={unavailable} /></div>
         </div>
       )}
-      <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+      <div className={`grid grid-cols-1 gap-x-6 gap-y-3 ${single ? "" : "sm:grid-cols-2"}`}>
         {windows.map((window) => (
           <QuotaMeter key={`${window.kind}:${window.label ?? ""}`} agent={quota.agent} window={window} />
         ))}

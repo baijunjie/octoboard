@@ -288,6 +288,7 @@ function mountPeeking() {
         waitingCount={0}
         onNextWaiting={vi.fn()}
         onOpenSettings={vi.fn()}
+        onOpenSettingsAt={vi.fn()}
         focusTerminal={vi.fn()}
       />
     </>

@@ -328,6 +328,12 @@ export const zhHans: Translation<"other"> = {
   },
   "rail.waitingBadgeOverflow": "99+",
   "rail.notifications.enable": "开启通知",
+  "rail.quota": "账户额度",
+  "rail.quota.accounts": "账户",
+  "rail.quota.agents": "智能体",
+  "rail.quota.none": "没有可用的智能体",
+  "rail.quota.noneHint": "智能体的命令出现在 {pathVar} 中后，才会显示它的额度。",
+  "rail.quota.manage": "管理账户…",
   "rail.settings": "设置",
 
   "pane.resizeSidebar": "调整侧边栏大小",

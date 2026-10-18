@@ -14,3 +14,7 @@
 - [ ] The default account's help tip opens its popover on a trackpad tap and on a touch tap where available.
 - [ ] Creating an account with the default account's directory, written as `~/…` and as the absolute path, is
       refused once the daemon has determined the agent's default directory.
+- [ ] In the desktop app's WebKit view, the rail's account quota panel floats in on hover beside the rail above
+      Settings, plays its open and close motion, and stays within the window at the narrowest window width.
+- [ ] With a long account list in the rail panel, Tab reaches the "Accounts" list and it shows its focus ring; Tab and
+      Shift+Tab out of a keyboard-pinned panel close it and move on to the control after or before the quota button.
