@@ -4,6 +4,7 @@ import React from "react";
 import { failureParam } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
 import { CodeBlock } from "../components/CodeBlock";
 import { InlineChip } from "../components/InlineChip";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
@@ -89,6 +90,7 @@ function loadingText(t: Translate, props: ChangesViewProps): string | undefined 
 function GitContent(props: { source: SourceState } & ChangesViewProps): React.ReactElement {
   const t = useT();
   const { source, onRetry } = props;
+  useErrorAcknowledgement(source.state === "loaded" ? source.source.git_error ?? undefined : undefined, t("git.unavailable"));
   if (source.state === "loading") return <GitLoading label={t("git.loading")} />;
   if (source.state === "error") return <GitFailure title={t("git.error.source")} message={source.message} onRetry={onRetry} />;
   const git = source.source.git;
@@ -169,6 +171,10 @@ function ChangesView({
   const branchesError = branches.state === "error" ? branches.message : branches.state === "loaded" ? branches.error : undefined;
 
   const { notices, failures, goneBranches, partial, commitsCut } = changesStatus({ branches, uncommitted, committed, homeDir });
+  useErrorAcknowledgement(branchesError, t("git.branch.branchesFailed"));
+  useErrorAcknowledgement(failures.find((failure) => failure.key === "uncommitted")?.message, t("git.error.list"));
+  useErrorAcknowledgement(failures.find((failure) => failure.key === "committed")?.message, t("git.changes.compareFailed"));
+  useErrorAcknowledgement(failures.find((failure) => failure.key === "commits")?.message, t("git.changes.commitsFailed"));
   const loading = partsLoading({ uncommitted, committed });
   const nothingYet = items.length === 0;
   // With nothing to list, the first failure takes the list's place, with Try again; every other one
@@ -193,7 +199,7 @@ function ChangesView({
         </div>
       </div>
       {branchesError !== undefined && !(branch === undefined && branches.state === "error") && (
-        <PaneNote role="alert">
+        <PaneNote>
           <Message id="git.branch.branchesError" params={{ message: failureParam(branchesError) }} />
         </PaneNote>
       )}
@@ -215,7 +221,7 @@ function ChangesView({
                 </p>
               ))}
               {lineFailures.map((failure) => (
-                <p key={failure.key} role="alert">
+                <p key={failure.key}>
                   <Message id={failure.line} params={{ message: failureParam(failure.message) }} />
                 </p>
               ))}

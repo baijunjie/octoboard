@@ -1038,7 +1038,7 @@ export const viewerScenarios: Scenario[] = [
   {
     id: "viewer-files-errors", group: GROUP, category: "exceptional",
     title: "Failed reads, disconnected files and renderer fallbacks",
-    description: "Starts on a failed read; Previous / Next also shows a disconnected read, malformed SVG and a grammar that fails to load.",
+    description: "A required error alert opens over the failed read. After OK, Previous / Next also shows a disconnected read, malformed SVG and a grammar that fails to load.",
     viewer: { subjects: failedFiles },
   },
   {
@@ -1050,7 +1050,7 @@ export const viewerScenarios: Scenario[] = [
   {
     id: "viewer-document-errors", group: GROUP, category: "exceptional",
     title: "Document rendering failures and limits",
-    description: "A document with an invalid diagram, unfinished formulas, a missing image and a diagram past the render budget. Scroll to compare the inline notices and retained source; successful content provides context for each failure.",
+    description: "A document with an invalid diagram, unfinished formulas, a missing image and a diagram past the render budget. Acknowledge the error alerts, then scroll to compare the notices and retained source; successful content provides context for each failure.",
     files: { "docs/picture.png": { image: IMAGES.before_png } },
     viewer: { subjects: async () => [file("docs/notes.md", text("docs/notes.md", NOTES)), file("docs/other.md", text("docs/other.md", OTHER))] },
   },
@@ -1075,7 +1075,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rendered document",
-    description: "Rendered diagrams and formulas, a project image, mixed text directions and links between documents. The named diagram is Request flow; the second uses the translated Diagram label. Follow the other-note link to its Kept heading or the local link to Kept aside.",
+    description: "Rendered diagrams and formulas, a project image, mixed text directions and links between documents. Outbound web links carry an external-link icon, while local document links remain internal. The named diagram is Request flow; the second uses the translated Diagram label. Follow the other-note link to its Kept heading or the local link to Kept aside.",
     files: { "docs/picture.png": { image: IMAGES.before_png } },
     viewer: { subjects: documentSubjects },
   },

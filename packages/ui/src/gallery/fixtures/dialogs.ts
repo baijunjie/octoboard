@@ -45,15 +45,16 @@ const accountsState = snapshotState({
   },
 });
 
-// A console session whose bound sessions are all interrupted, so archiving it takes them along.
+// Manually bound running sessions and a lead with its own child all join the archive confirmation.
 const cascadeHub = sessionOf("s-hub-4", console_.id, undefined, "Hub 4", "idle", { colour: "cyan", ordinal: 4 });
 const cascadeState = snapshotState({
   consoles: [console_],
   projects: [web, api],
   sessions: [
     cascadeHub,
-    sessionOf("s-web-3", console_.id, web.id, "Tidy the changelog", "interrupted", { bound_to: cascadeHub.id }),
-    sessionOf("s-api-3", console_.id, api.id, "Rename the index", "interrupted", { bound_to: cascadeHub.id, account_id: "a-work" }),
+    sessionOf("s-web-3", console_.id, web.id, "Tidy the changelog", "working", { bound_to: cascadeHub.id, origin: "user" }),
+    sessionOf("s-api-3", console_.id, api.id, "Rename the index", "waiting_user", { bound_to: cascadeHub.id, account_id: "a-work" }),
+    sessionOf("s-api-4", console_.id, api.id, "Review the migration", "interrupted", { bound_to: "s-api-3" }),
   ],
   settings: accountsState.settings,
 });
@@ -338,9 +339,15 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Console account switch partial failure",
-    description: "The completed batch keeps each failed session and its cause visible beside the completion count, the cause naming its folder as code. Retry targets only the failed sessions; successful switches are retained.",
+    description: "The completed batch reports a full disk and an unexpected internal failure together. Each row keeps its own cause and guidance; the unexpected item also enables diagnostics and Report issue. After acknowledgement, Retry targets only failed sessions and preserves the successful switch.",
     state: switchAccountState,
+    externalLinks: "available",
     sessionAccountSwitches: {
+      "s-switch-bound": {
+        code: "internal_error",
+        params: { detail: "Unexpected session state while applying the account update" },
+        message: "Unexpected session state while applying the account update",
+      },
       "s-switch-work": {
         code: "relocation_failed",
         params: { path: "/Users/dev/.claude-work/projects/-Users-dev-code-website", detail: "No space left on device (os error 28)" },
@@ -627,7 +634,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Project folder protected from the Trash",
-    description: "The daemon refuses to move a protected folder (the home directory, the root of a disk, or one holding Octoboard's data); the error names why, shows in the dialog and the project is kept.",
+    description: "The daemon refuses to move a protected folder (the home directory, the root of a disk, or one holding Octoboard's data); a separate error alert names why, and the project is kept.",
     steps: [...removeDocsSite, (ui) => ui.confirm()],
   },
   {
@@ -641,7 +648,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Project folder could not be moved to the Trash",
-    description: "The move to the Trash failed; the error shows in the dialog and the project is kept.",
+    description: "The move to the Trash failed; a separate error alert requires acknowledgement and the project is kept.",
     steps: [...removeDocsSite, (ui) => ui.confirm()],
   },
   {
@@ -650,9 +657,24 @@ export const dialogScenarios: Scenario[] = [
     group: "Archive view",
     category: "normal",
     title: "Archive console session and its bound sessions",
+    description: "The confirmation lists the running manually bound session, the waiting lead and its interrupted child. Confirming stops and archives all of them together.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),
       (ui) => ui.press(ui.t("sidebar.session.archive")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    id: "dialog-archive-session-failed",
+    group: "Archive view",
+    category: "exceptional",
+    title: "Archive failed after confirmation",
+    description: "The danger error alert identifies the full disk and tells the user to free space before retrying. After OK, the archive confirmation remains open and usable, with the original sessions intact.",
+    sessionArchiveError: { code: "store_io_failed", params: { detail: "No space left on device (os error 28)" }, message: "No space left on device (os error 28)" },
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),
+      (ui) => ui.press(ui.t("sidebar.session.archive")),
+      (ui) => ui.confirm(),
     ],
   },
   {

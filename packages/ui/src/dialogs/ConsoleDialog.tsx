@@ -1,3 +1,5 @@
+import { ActionableError } from "../errorRecovery";
+import { reportError } from "../reportError";
 import React, { useState } from "react";
 
 import { changedAgentFields, readAgentFields } from "../agentFields";
@@ -79,7 +81,7 @@ export function ConsoleDialog({
     try {
       setIcon(await imageToAvatar(file));
     } catch {
-      setError(t("dialog.console.avatarUnreadable"));
+      reportError(new ActionableError(t("dialog.console.avatarUnreadable"), "image"));
     } finally {
       setDecoding(false);
     }

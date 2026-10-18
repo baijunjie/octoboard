@@ -28,8 +28,8 @@ Per-package commands are in that package's doc.
   formatting rules, combining ESLint, Stylistic, TypeScript, Vue and React Hooks checks.
 - [`rustfmt.toml`](../rustfmt.toml) — the formatting configuration shared by both Cargo workspace crates.
 - [`.github/workflows/quality.yml`](../.github/workflows/quality.yml) — the CI checks for ESLint and Rust formatting.
-- [`config/app.json`](../config/app.json) — the single source for product identity, repository, author and support
-  contact details. The UI and website fill the name into their copy as `{appName}` and into page titles; the website
+- [`config/app.json`](../config/app.json) — the single source for product identity, repository and issue-report destinations,
+  author and support contact details. The UI and website fill the name into their copy as `{appName}` and into page titles; the website
   exposes `author.name` as `operatorName` and `support.email` as `contactEmail`. The desktop and daemon crates'
   `build.rs` hand the name to the menu, window title and daemon messages. The copies Tauri and Cargo require
   (`productName` in `tauri.conf.json`, `repository` in the root `Cargo.toml`) mirror it, and the desktop crate's

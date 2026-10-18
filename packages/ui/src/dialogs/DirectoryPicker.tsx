@@ -6,11 +6,11 @@ import { InlineChip } from "../components/InlineChip";
 import { DaemonRequestError } from "../daemon-client";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { useScrollFade } from "../components/scrollFade";
-import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
+import { reportError } from "../reportError";
 import { useT } from "../i18n/react";
 import type { DirEntry, Event } from "../protocol";
 import { useDaemon } from "../store";
-import { Dialog, DialogError, useRefocusIfLost } from "./Dialog";
+import { Dialog, useRefocusIfLost } from "./Dialog";
 import { useTrimmedField } from "./useTrimmedField";
 
 /** The ids of the list's two entries that are not a directory. A real entry's id is its absolute
@@ -33,8 +33,8 @@ function ancestorOf(path: string): string {
  *
  * Failure here is a normal path, not an edge case: a packaged application raises a macOS
  * file-access prompt per volume, and the user may decline it or leave it unanswered (see "Known
- * pitfalls of the Tauri / Rust approach" in docs/architecture.md), so a failed listing is shown
- * inline, alongside whatever was listed before it, rather than clearing the screen.
+ * pitfalls of the Tauri / Rust approach" in docs/architecture.md), so a failed listing requires acknowledgement
+ * while the previous listing stays available.
  */
 export function DirectoryPicker({
   title,
@@ -54,13 +54,11 @@ export function DirectoryPicker({
   const pathField = useTrimmedField(path, setPath);
   const [entries, setEntries] = useState<DirEntry[]>();
   const [resolvedPath, setResolvedPath] = useState<string>();
-  const [error, setError] = useState<ErrorPresentation>();
   const listRef = useRef<HTMLDivElement>(null);
   // The list scrolls on its own inside the dialog, which `Dialog`'s body fade does not reach.
   const fade = useScrollFade({ ref: listRef, className: "max-h-72 overflow-y-auto" });
 
   const load = async (targetPath: string, fallBackToAncestor = false) => {
-    setError(undefined);
     try {
       const event = (await request({ type: "list_dir", path: targetPath })) as Extract<Event, { type: "dir_listing" }>;
       setResolvedPath(event.path);
@@ -77,7 +75,7 @@ export function DirectoryPicker({
       if (fallBackToAncestor && targetPath !== "~" && err instanceof DaemonRequestError && err.code === "path_not_found") {
         return load(ancestorOf(targetPath), true);
       }
-      setError(errorPresentation(err as Error));
+      reportError(err as Error);
       // Deliberately not clearing `entries`/`resolvedPath`: a denied or not-yet-answered volume
       // prompt is the expected failure here, and it should not yank the previous listing (and its
       // parent-directory row back up) out from under the user along with it.
@@ -124,7 +122,6 @@ export function DirectoryPicker({
           {t("directoryPicker.go")}
         </Button>
       </div>
-      <DialogError message={error} />
       {entries && (
         <ListBox
           {...fade}

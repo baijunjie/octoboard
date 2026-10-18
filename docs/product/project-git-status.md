@@ -185,7 +185,7 @@ Two consequences are worth knowing:
   those variables alone rather than through a configuration file.
 - A setting only a dropped variable carries does not apply. The check then fails, rather than quietly reporting the
   branch and counts of whatever repository such a variable names, and its reason reaches the badge like any other
-  failure (see "The branch badge" above). A push fails the same way, as an error toast, rather than
+  failure (see "The branch badge" above). A push fails the same way, as an error alert, rather than
   publishing some other repository (see "Pushing the current branch" in `docs/product/project-git-actions.md`).
 
 A git association's clone, and the check the association form makes of a git URL, are **not** filtered this way: they

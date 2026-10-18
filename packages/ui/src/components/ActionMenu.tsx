@@ -1,3 +1,4 @@
+import { reportError } from "../reportError";
 import { Dropdown, Label, Separator } from "@heroui/react";
 import { EllipsisVertical, LoaderCircle, RefreshCw, TriangleAlert, type LucideIcon } from "lucide-react";
 import { MenuContext, useSlottedContext } from "react-aria-components";
@@ -243,7 +244,7 @@ function LoadedMenuItems({ load }: { load: () => Promise<ActionMenuEntry[]> }): 
     setError(undefined);
     load().then(
       (items) => { if (asked === sequence.current) setEntries(items); },
-      (err: unknown) => { if (asked === sequence.current) setError((err as Error).message); },
+      (err: unknown) => { if (asked === sequence.current) { setError((err as Error).message); reportError(err as Error); } },
     );
   };
   useEffect(() => {

@@ -3,6 +3,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
+import { ErrorAlerts } from "../dialogs/ErrorAlerts";
+import { errorAlerts } from "../errorAlerts";
 import { setLanguage } from "../i18n/language";
 import type { ImportedProject } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
@@ -123,4 +125,53 @@ it("puts no space between the sentences of the summary in a language that has no
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
   act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles }} /></DaemonProvider>));
   expect(container.textContent).toContain("已创建 1 个控制台。已创建 1 个项目。没有失败项。");
+});
+
+it("requires acknowledgement of partial import failures and retains the result after acknowledgement", () => {
+  const daemon = { store: createStateStore({}) } as Daemon;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  const result = {
+    type: "configuration_imported" as const,
+    consoles: [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [{ ...project(1), status: "failed" as const, error: { code: "path_not_found", message: "Directory unavailable", params: { path: "/missing" } } }] }],
+  };
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+  });
+  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+  const render = () => act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={result} /><ErrorAlerts daemon={daemon} /></DaemonProvider>));
+  render();
+  expect(document.querySelector('[role="alertdialog"] code')?.textContent).toBe("/missing");
+  act(() => errorAlerts.acknowledge());
+  render();
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(container.textContent).toContain("1 item failed");
+});
+
+it.each([false, true])("keeps each batch item's remedy and adds Issue guidance only for unexpected members: %s", (unexpected) => {
+  const daemon = { store: createStateStore({}) } as Daemon;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+  const failures: ImportedProject[] = [
+    { ...project(1), status: "failed" as const, error: { code: "path_not_found", message: "Missing folder", params: { path: "/missing" } } },
+    { ...project(2), status: "failed" as const, error: { code: "internal_error", message: "No space left on device (os error 28)", params: { detail: "No space left on device (os error 28)" } } },
+    ...(unexpected ? [{ ...project(3), status: "failed" as const, error: { code: "internal_error", message: "Invariant failed", params: { detail: "Invariant failed" } } }] : []),
+  ];
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+  });
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles: [{ name: "C", status: "created", console: "c-1", error: null, account_fallbacks: [], projects: failures }] }} /><ErrorAlerts daemon={daemon} /></DaemonProvider>));
+  const alert = document.querySelector('[role="alertdialog"]')!;
+  const rows = alert.querySelectorAll("li");
+  expect(rows[0].textContent).toContain("Select an existing, accessible folder");
+  expect(rows[1].textContent).toContain("Free space on the disk");
+  expect(alert.textContent?.split("Free space on the disk")).toHaveLength(2);
+  expect(errorAlerts.getSnapshot()).toHaveLength(1);
+  expect(alert.textContent?.includes("Take a screenshot")).toBe(unexpected);
+  if (unexpected) expect(rows[2].textContent).toContain("This failure may be a bug");
 });

@@ -10,6 +10,7 @@ import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { TitledControl } from "../components/TitledControl";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
 import { useCopyPath } from "../components/useCopyPath";
+import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
 import { useLatest } from "../components/useLatest";
 import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
 import { isolate } from "../i18n/isolate";
@@ -476,12 +477,13 @@ function ImageView({
 }): React.ReactElement {
   const t = useT();
   const [failed, setFailed] = useState(false);
+  useErrorAcknowledgement(failed && body.text === undefined ? t("viewer.image.failed") : undefined, undefined, undefined, "image");
   if (failed) {
     return body.text !== undefined ? (
       <>
         {/* The image fails only once it has been fetched and decoded, long after the dialog was
             drawn, so the fall back to its text is spoken as well as shown. */}
-        <Notice tone="failed" speak={t("viewer.image.asText")} />
+        <Notice tone="failed" speak={t("viewer.image.asText")} recovery="image" />
         <CodeSurface resetKey={body.url} name={name} text={body.text} theme={theme} />
       </>
     ) : (
@@ -611,7 +613,7 @@ function UnchangedView({
   // What the read answered for this subject: its text, or why there is none. A read given up for a
   // newer one is left as `unavailable`, like any other content that is not to be had, rather than
   // as a spinner nothing would resolve.
-  const [read, setRead] = useState<{ key: string; text?: string; why?: "failed" | "unavailable" | "changed"; message?: string }>();
+  const [read, setRead] = useState<{ key: string; text?: string; why?: "failed" | "unavailable" | "changed"; message?: string; error?: unknown }>();
   useEffect(() => {
     if (!loadBodies) return;
     let current = true;
@@ -629,7 +631,7 @@ function UnchangedView({
         if (!current) return;
         const reason = error instanceof ChangeBodiesError ? error.reason : "failed";
         const message = error instanceof Error ? error.message : String(error);
-        setRead({ key: resetKey, why: reason === "superseded" ? "unavailable" : reason, message });
+        setRead({ key: resetKey, why: reason === "superseded" ? "unavailable" : reason, message, error });
       },
     );
     return () => {
@@ -652,7 +654,7 @@ function UnchangedView({
     <>
       {/* Mounted for as long as the change is, so the read's own progress and its outcome are both
           spoken: every one of them arrives after the dialog was drawn. */}
-      <StatusAnnouncer text={done === undefined ? t("viewer.loading") : (reason?.text ?? said)} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} />
+      <StatusAnnouncer text={done === undefined ? t("viewer.loading") : reason?.tone === "failed" ? undefined : (reason?.text ?? said)} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} />
       {done === undefined ? (
         <Loading />
       ) : done.text !== undefined ? (
@@ -664,7 +666,7 @@ function UnchangedView({
       ) : (
         <>
           {reason && (
-            <Notice tone={reason.tone} announced>
+            <Notice tone={reason.tone} announced error={done.error}>
               {reason.text}
             </Notice>
           )}

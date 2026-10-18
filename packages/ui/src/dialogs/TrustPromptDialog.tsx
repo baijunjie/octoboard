@@ -1,3 +1,4 @@
+import { ActionableError } from "../errorRecovery";
 import { Alert, Checkbox, Description, Label } from "@heroui/react";
 import { errorPresentation } from "../errorPresentation";
 import React, { useState } from "react";
@@ -149,7 +150,7 @@ export function useTrustPromptDialogProps(
       if (err instanceof DaemonRequestError && err.code === TRUST_NOT_WAITING) {
         // Nothing to tell for the plain go-ahead; but a folder the user asked to trust was not.
         if (trustParentDir) {
-          toastError(t("dialog.trust.alreadyAnswered"), prompt.session);
+          toastError(new ActionableError(t("dialog.trust.alreadyAnswered"), "session"), prompt.session);
         }
       } else {
         toastError(errorPresentation(err as Error), prompt.session);

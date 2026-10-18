@@ -4,7 +4,7 @@
 shell in [`../../apps/desktop/`](../../apps/desktop/README.md) loads this package's `dist/` (bundled into the
 application, not served by the daemon), and the same build also runs in a plain browser. It has the window chrome (top
 bar and left rail), the content panel (sidebar, terminal pane and aside) or, while the daemon has no console, a welcome
-screen, the archive view, the dialogs and settings, toasts and the failure screens, all in the user's language
+screen, the archive view, the dialogs and settings, notices, error acknowledgement and the failure screens, all in the user's language
 (`src/i18n/`).
 
 It talks to `octoboardd` (see [`../../apps/daemon/`](../../apps/daemon/README.md)) only over the WebSocket protocol in
@@ -74,6 +74,7 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   presses a dialog's confirming button, `ui.contextMenu` opens a row's right-click menu).
 - Other fields of the scenario type (`scenario.ts`) include `preferences` (what the app persists), `toasts`,
   `sessionOpenError`, `terminal: "refuse"`, `clipboard: "unavailable"` (a plain browser over insecure http),
+  `externalLinks` (the external-link capability stub),
   `macosPermissions` (stubs the desktop shell's privacy grants; without it the page is a plain browser's),
   `agentModels` (what the fixture daemon lists per agent, default `SAMPLE_CLAUDE_MODELS`), `files` / `filesByProject` /
   `git` (replace the project browser's fixtures; a `null` `git` is no repository) and `viewer` (renders the file
@@ -126,7 +127,7 @@ them. Nothing enforces this.
 | `scripts/gallery-sweep.mjs` | `pnpm gallery:sweep` |
 | `scripts/gallery-chip-geometry.mjs` | A standalone Playwright check of chip geometry over gallery scenarios, run by hand against a served gallery |
 | `scripts/wkbench/` | `pnpm bench:wkwebview`: the WKWebView latency benchmark (see [its README](scripts/wkbench/README.md)) |
-| `src/main.tsx` | Startup: picks the platform, locates the daemon, creates the connection, pushes the theme, reveals the native window, and renders the app or `StartupScreen` |
+| `src/main.tsx` | Startup: picks the platform, locates the daemon, creates the connection, pushes the theme, reveals the native window, registers global runtime-error handlers, and mounts the app or `StartupScreen` with the error-alert host |
 | `src/App.tsx` | The screen: window chrome (`TitleBar`, `Rail`), the content panel (`WelcomeScreen`, or sidebar, terminal pane and aside), session selection and resume, the open archive, toasts, connection banner and dialog layer; holds who owns the aside |
 | `src/StartupScreen.tsx`, `src/ErrorBoundary.tsx` | The screens shown when there is no daemon connection, or the UI itself crashed |
 | `src/WelcomeScreen.tsx` | `WelcomeScreen`: what the content area shows while the daemon has no console (New console, and Import configuration where the platform can) |
@@ -137,10 +138,12 @@ them. Nothing enforces this.
 | `src/store.ts` | The Zustand store of the connection and the console/project/session state derived from daemon events; `createDaemon(origin)`, `useDaemon` / `useDaemonStore` / `useDaemonStoreEqual`, `accountQuotaOf` (an account's plan quota from the store's `accountQuotas`), and the `onToast` stream (`toastError`, `toastNotice`) |
 | `src/sessions/`, `src/sameValue.ts` | `indexSessions` (sessions grouped by project and console), the hooks reading a group, and `sameValue` (deep equality) |
 | `src/daemonMessage.ts` | Words a daemon `error` or `session_notice` from its `code` and `params` in a given language (`CODE_PARAMS`, `UI_PARAMS`, `messageCode`, `withUiParams`, `daemonParams`) |
-| `src/errorPresentation.ts`, `src/errorText.ts` | `ErrorPresentation`, the shared error value for failures rendered as markup, and `errorText`, its plain-text form |
+| `src/errorPresentation.ts`, `src/errorText.ts` | `ErrorPresentation`, the shared failure value preserving daemon metadata and local exception causes for rendering and classification, and `errorText`, its plain-text form |
+| `src/errorRecovery.ts` | `ErrorRecovery` names known user remedies, `ActionableError` attaches one to a local exception, and `classifyError` distinguishes recognized actionable failures from unexpected ones |
+| `src/errorAlerts.ts`, `src/reportError.tsx`, `src/runtimeError.ts` | `errorAlerts` owns the window's error queue, `reportError` submits structured failures, and `runtimeError` extracts exceptions from browser error events |
 | `src/i18n/` | Internationalization: languages and system-language matching, the typed English catalog and translated ones (`messages/`), lookup (`catalog.ts`), the language choice (`language.ts`) and the React side (`react.tsx`: `useT`, `Message`, `LanguageProvider`). Every user-facing string goes through it |
 | `src/theme.tsx` | `ThemeProvider` / `useOctoboardTheme`: the light/dark/system choice and what "system" resolves to |
-| `src/appConfig.ts` | The app-level facts from the repo-root `config/app.json` (`name`, `repositoryUrl`) |
+| `src/appConfig.ts` | The app-level facts from the repo-root `config/app.json` (`name`, `repositoryUrl`, `issueUrl`) |
 | `src/preferenceKeys.ts`, `src/persistedPreference.ts` | The `localStorage` key of every persisted preference, and `createPersistedPreference`, the guarded module-wide store behind them |
 | `src/style.css` | The Tailwind theme and the window's design tokens (breakpoint, chrome sizes and colours, the `--app-*` palette) |
 | `src/layout/` | Pane layout: the `docked` breakpoint (`useIsNarrow`), drawer and floating pane geometry and motion, pane width and visibility, the sidebar/aside toggles (`usePaneToggles.ts`), `AsideOwner` (`asideOwner.ts`: whose content the aside shows) and F6 region cycling (`useRegionCycle.ts`) |
@@ -152,7 +155,8 @@ them. Nothing enforces this.
 | `src/agents.ts`, `src/agentLaunchSettings.ts`, `src/agentFields.ts`, `src/accountChoices.ts` | The agents' names and per-agent field tables, the model and effort picker rules, the console/project dialogs' per-agent field diffing, and the pure account-picker rules |
 | `src/sessionLabel.ts`, `src/sessionColours.ts`, `src/gitStatusLabel.ts`, `src/projectFiltering.ts` | Session and git-badge wording and accessible names, the console session colours' appearance, and the sidebar project filter's pure rules |
 | `src/pathDisplay.ts`, `src/wirePath.ts`, `src/relativeTime.ts`, `src/conversationId.ts`, `src/reducedMotion.ts`, `src/imeKey.ts`, `src/avatarImage.ts` | Small shared helpers: home abbreviation and wire-path decoding for display, relative time, input-method key detection, avatar image conversion, and the conversation id and reduced-motion helpers |
-| `src/components/` | Shared building blocks used across features: window chrome (`TitleBar`, `Rail`, `ContentPanel`, `Toasts`), menus and tooltips (`ActionMenu`), status and identity marks, error and code display (`DaemonErrorMessage`), scroll-fade and list-motion helpers, and focus-handoff hooks. Imports no feature directory |
+| `src/components/` | Shared building blocks used across features: window chrome (`TitleBar`, `Rail`, `ContentPanel`, `Toasts`), menus and tooltips (`ActionMenu`), status and identity marks, error and code display (`DaemonErrorMessage`), failed-state acknowledgement and per-failure remedies (`useErrorAcknowledgement`, `ErrorGuidance`), scroll-fade and list-motion helpers, and focus-handoff hooks. Imports no feature directory |
+| `src/components/ExternalLink.tsx` | `ExternalLink` renders shared outbound anchors through the platform link capability, `ExternalLinkIcon` supplies their marker for native action menus, and `reportExternalLinkFailure` reports opener failures with a manual destination |
 | `src/sidebar/` | The sidebar: `Sidebar` (one console's sessions and projects), `FocusView.tsx` (the focus modes), rows and action menus, the project filter, new-session controls, `order.ts` (sort rules, binding-graph queries) and `sidebarView.ts` (current console and focus target) |
 | `src/archive/` | `ArchiveLayer` and `ArchiveView`: archived sessions of a project, console or console session, listed over the terminal area, with deletion |
 | `src/terminal/` | The xterm.js terminal: `TerminalController` (instance, session socket, selection, paste, dormant snapshot), `TerminalPane` (React boundary, reconnect and cover states), `TerminalEditMenu`, link handling (`terminalLinks.ts`, `linkColors.ts`, `TerminalLinkTooltip`), `emptyState.ts` and `xtermThemes.ts` |
@@ -162,4 +166,4 @@ them. Nothing enforces this.
 | `src/configuration/` | Configuration export and import: `ExportConfigurationDialog`, `ImportConfigurationDialog` (review and result steps) and the pure `importPlan.ts` |
 | `src/quota/` | Agent account plan quota: `quotaFormat.ts` (React-free wording, percent, countdown and plan formatting), `useAccountQuota` (an account's reading, aware of whether its agent is available), `QuotaMeter`, `AccountQuotaSummary` and `QuotaPlan` |
 | `src/settings/` | The settings modal: `SettingsDialog` with its sections, `useSettingsDialog` and `useMacosPermissions` |
-| `src/dialogs/` | The console, project, session, rename, confirmation and directory-picker dialogs and the daemon's two questions (trust prompt, session request) on the shared `Dialog` frame, with the shared form controls and `dialogRequest.ts` / `RequestedDialog.tsx` (dialog requests raised from menus) |
+| `src/dialogs/` | The console, project, session, rename, confirmation and directory-picker dialogs and the daemon's two questions (trust prompt, session request) on the shared `Dialog` frame, `ErrorAlerts` (the window's acknowledgement host), the shared form controls and `dialogRequest.ts` / `RequestedDialog.tsx` (dialog requests raised from menus) |

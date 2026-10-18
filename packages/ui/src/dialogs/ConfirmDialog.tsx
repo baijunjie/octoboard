@@ -33,7 +33,7 @@ export interface ConfirmDialogProps {
    * Confirm is enabled, shown in capitals. What is typed shows in capitals too, and is compared
    * ignoring case, so a script without case (Chinese) works unchanged. */
   typeToConfirm?: string;
-  /** May reject — the dialog shows the failure inline and stays open instead of closing, so the
+  /** May reject — the shared error alert reports the failure and this dialog stays open, so the
    * caller does not need its own try/catch around the request. */
   onConfirm: () => Promise<void>;
   onCancel: () => void;

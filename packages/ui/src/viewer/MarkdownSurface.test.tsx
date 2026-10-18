@@ -170,6 +170,21 @@ it("opens a link through the platform, and never navigates the viewer", async ()
   expect(region().textContent).toContain("script");
 });
 
+it("keeps a real Markdown link pending until the platform finishes opening it", async () => {
+  let finish!: () => void;
+  const openLink = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+  await open(markdownFile(), { open: openLink });
+  const anchor = region().querySelector("a")!;
+  await act(async () => anchor.click());
+  expect(openLink).toHaveBeenCalledExactlyOnceWith("https://example.com/page");
+  expect(anchor.getAttribute("aria-busy")).toBe("true");
+  await act(async () => anchor.click());
+  expect(openLink).toHaveBeenCalledTimes(1);
+  await act(async () => finish());
+  expect(anchor.hasAttribute("aria-disabled")).toBe(false);
+});
+
+
 it("draws no link where the platform cannot open one", async () => {
   await open(markdownFile());
   expect(region().querySelector("a")).toBeNull();

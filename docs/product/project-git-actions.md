@@ -10,7 +10,7 @@ branch**, and the branch badge these actions update are in `docs/product/project
 that branch. It is offered only while the project's status says the directory is a git repository (see "Project
 rows" in `docs/product/sidebar.md`). Choosing it closes the menu at once. The push is waited on until `git push` has
 exited. When the push is accepted, the window that asked shows a notice toast saying the current branch was pushed.
-A refusal is an error toast worded from the code below. Pushing does not fetch and does not fast-forward, and a
+A refusal is an error alert worded from the code below. Pushing does not fetch and does not fast-forward, and a
 pull never pushes (see "Automatically pulling repositories" in `docs/product/project-git-status.md`). A local
 branch that is behind its upstream stays behind; if the remote rejects the update, the push fails and the branch
 stays where it was.
@@ -40,7 +40,7 @@ What is pushed, when both reads succeed:
   remote, and that push records the upstream under the local branch's own name.
 
 Nothing is pushed when the push is refused. A refusal leaves the last check's error on the badge as it was and is
-reported by its error toast. Every refusal other than `unknown_project`, `not_a_git_repository` and a branch read that
+reported by its error alert. Every refusal other than `unknown_project`, `not_a_git_repository` and a branch read that
 fails comes after the branch read was published, so the badge already shows that read's branch and counts:
 
 - The project directory is not a git repository when the push runs: `not_a_git_repository`. The rule is the badge's
@@ -75,7 +75,7 @@ it also records one. The daemon then re-reads the local branch header and publis
 no fetch, so the badge's ahead count can drop. Every window showing the project sees that status. This re-read does
 not end the badge's indication of an overlapping check or pull. An error the last check left on the badge
 stays, unless that re-read fails, in which case the warning becomes the re-read's message and the branch and the counts
-stay as they were. A re-read that fails does not turn the notice into an error toast: the push was accepted.
+stay as they were. A re-read that fails does not turn the notice into an error alert: the push was accepted.
 Turning **Automatically pull repositories** on never pushes.
 
 ## Switching the local branch
@@ -93,7 +93,7 @@ Selecting another branch closes the menus and switches immediately, without conf
 own worktree, including a linked worktree, regardless of which worktree the Git pane is reviewing. It never creates
 a branch, guesses a remote branch, fetches, pushes or pulls. It does not force the switch or stash or discard local
 changes: changes Git can carry safely stay, and a conflict, a branch checked out in another worktree, or another Git
-refusal fails with an error toast. Running agent sessions do not prevent a switch; the working tree can change
+refusal fails with an error alert. Running agent sessions do not prevent a switch; the working tree can change
 underneath them. Other Git operations are not serialized with the switch.
 
 The directory must contain its own `.git` entry, as for the badge. A missing project is `unknown_project`, a
@@ -113,8 +113,8 @@ reported branch changes (see "Files and Git" in `docs/product/project-pane.md`).
 after a separator (see "Project rows" in `docs/product/sidebar.md`). It opens a destructive confirmation dialog
 explaining that staged and unstaged tracked changes will be discarded, staged new files deleted, and untracked and
 ignored files kept, and that the discard cannot be undone. Cancelling makes no restore request. Confirming waits
-for the restore; success closes the dialog and raises a notice toast. A failure stays in the dialog as an inline
-error, leaving it open.
+for the restore; success closes the dialog and raises a notice toast. A failure opens an error alert, leaving the
+confirmation available for retry after acknowledgement.
 
 Restoration covers the project's own worktree: tracked files and the index are restored to the current commit,
 `HEAD`, including tracked deletions and renames. Staged additions absent from that commit are deleted. It leaves

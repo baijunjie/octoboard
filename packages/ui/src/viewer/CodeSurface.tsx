@@ -134,10 +134,10 @@ export function CodeSurface({
       </>
     );
   }
-  const fallback = (
+  const fallback = (error: unknown) => (
     <>
       <WrapToggle />
-      <Notice tone="failed" speak={t("viewer.plain.unrenderable")} />
+      <Notice tone="failed" speak={t("viewer.plain.unrenderable")} error={error} />
       <PlainText text={text} label={label} theme={theme} />
     </>
   );
@@ -212,10 +212,10 @@ export function DiffSurface({
   const onExpansion = useCallback((next: ExpansionStatus) => setReported({ key: resetKey, read: loadBodies, status: next }), [resetKey, loadBodies]);
   const note = status && EXPANSION_NOTES[status.kind];
   const expansionNote = status?.kind === "failed" ? t("viewer.expand.failed", { reason: isolate(status.message) }) : note ? t(note) : undefined;
-  const asText = (reason: string, tone: NoticeTone, speak?: string) => (
+  const asText = (reason: string, tone: NoticeTone, speak?: string, error?: unknown) => (
     <>
       <WrapToggle />
-      <Notice tone={tone} speak={speak}>
+      <Notice tone={tone} speak={speak} error={error}>
         {reason}
       </Notice>
       <PlainText text={patch} label={label} theme={theme} />
@@ -225,7 +225,7 @@ export function DiffSurface({
   if (diffPlan(patch) === "patch") return asText(t("viewer.change.patchLarge"), "explained");
   const ending = marked.old && marked.new ? "viewer.change.noNewlineBoth" : marked.old ? "viewer.change.noNewlineOld" : marked.new ? "viewer.change.noNewlineNew" : undefined;
   return (
-    <RendererBoundary resetKey={resetKey} fallback={asText(t("viewer.change.patchFailed"), "failed", t("viewer.change.patchFailed"))}>
+    <RendererBoundary resetKey={resetKey} fallback={(error) => asText(t("viewer.change.patchFailed"), "failed", t("viewer.change.patchFailed"), error)}>
       {onLayoutChange && <LayoutToggle layout={layout} onLayoutChange={onLayoutChange} />}
       <WrapToggle />
       {ending && <Notice>{t(ending)}</Notice>}
@@ -234,7 +234,7 @@ export function DiffSurface({
           {expansionNote}
         </Notice>
       )}
-      <StatusAnnouncer text={status?.kind === "loading" ? t("viewer.expand.loading") : expansionNote} />
+      <StatusAnnouncer text={status?.kind === "loading" ? t("viewer.expand.loading") : status?.kind === "failed" ? undefined : expansionNote} />
       <CodeFrame label={label} resetKey={resetKey} theme={theme}>
         {(onDrawn) => (
           <RenderedDiff

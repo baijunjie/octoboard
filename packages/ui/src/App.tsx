@@ -1,3 +1,5 @@
+import { reportExternalLinkFailure } from "./components/ExternalLink";
+import { ActionableError } from "./errorRecovery";
 import { FadeOverflow } from "./components/FadeOverflow";
 import { GitBranch } from "lucide-react";
 import type { ActionMenuEntry } from "./components/ActionMenu";
@@ -393,7 +395,7 @@ export function App(): React.ReactElement {
   };
 
   const openRepository = (url: string) => {
-    void links?.open(url).catch((error: unknown) => toastError(errorPresentation(error as Error)));
+    void links?.open(url).catch((error: unknown) => reportExternalLinkFailure(t, url, error));
   };
 
   const openProjectDirectory = (project: Project) => {
@@ -404,7 +406,7 @@ export function App(): React.ReactElement {
     ? (project: Project) => {
       clipboard.writeText(project.name).then(
         () => toastNotice(t("sidebar.project.nameCopied")),
-        () => toastError(t("sidebar.project.copyNameFailed")),
+        () => toastError(new ActionableError(t("sidebar.project.copyNameFailed"), "clipboard")),
       );
     }
     : undefined;
@@ -413,7 +415,7 @@ export function App(): React.ReactElement {
     ? (session: Session) => {
       clipboard.writeText(session.id).then(
         () => toastNotice(t("sidebar.session.idCopied")),
-        () => toastError(t("sidebar.session.copyIdFailed")),
+        () => toastError(new ActionableError(t("sidebar.session.copyIdFailed"), "clipboard")),
       );
     }
     : undefined;

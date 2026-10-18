@@ -10,6 +10,7 @@ import { CodeToneContext } from "../components/codeTone";
 import { failureParam } from "../components/DaemonErrorMessage";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { useScrollFade } from "../components/scrollFade";
+import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
 import type { ErrorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
 import { isolate } from "../i18n/isolate";
@@ -222,6 +223,7 @@ function FileNodeRow({ node, children }: {
  * tries again) or cut short. */
 function StatusItem({ node }: { node: Extract<TreeNode, { type: "status" }> }): React.ReactElement {
   const t = useT();
+  useErrorAcknowledgement(node.status === "error" ? node.message : undefined);
   const message = node.message === undefined ? "" : errorText(node.message);
   const text =
     node.status === "loading"

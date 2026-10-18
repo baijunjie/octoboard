@@ -1,4 +1,5 @@
 import { useT } from "../i18n/react";
+import { ActionableError } from "../errorRecovery";
 import { usePlatform } from "../platform/react";
 import { useDaemon } from "../store";
 import { displayWirePath } from "../wirePath";
@@ -17,7 +18,7 @@ export function useCopyPath(): ((wirePath: string) => void) | undefined {
   return (wirePath) => {
     clipboard.writeText(displayWirePath(wirePath)).then(
       () => toastNotice(t("common.pathCopied")),
-      () => toastError(t("common.copyFailed")),
+      (cause: unknown) => toastError(new ActionableError(t("common.copyFailed"), "clipboard", { cause })),
     );
   };
 }

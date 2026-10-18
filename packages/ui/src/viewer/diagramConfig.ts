@@ -63,6 +63,13 @@ export function diagramReading(source: string): { title?: string; description?: 
   };
 }
 
+/** A parser refusal, kept separate from module loading and drawing failures. */
+export class DiagramSyntaxError extends Error {
+  constructor(error: unknown) {
+    super(error instanceof Error ? error.message : String(error), { cause: error });
+  }
+}
+
 let chain: Promise<void> = Promise.resolve();
 
 /**
@@ -73,8 +80,19 @@ export function renderDiagram(id: string, source: string, appearance: "light" | 
   const job = chain.then(async () => {
     const mermaid = (await import("mermaid")).default;
     mermaid.initialize(diagramConfig(appearance));
-    const { svg } = await mermaid.render(id, source);
-    return svg;
+    try {
+      const { svg } = await mermaid.render(id, source);
+      return svg;
+    } catch (error) {
+      // Mermaid names unknown diagram syntax; its Jison parsers attach expected tokens and
+      // the source location. Other renderer and library-loading exceptions remain unexpected.
+      const hash = error && typeof error === "object" && "hash" in error ? error.hash : undefined;
+      const syntax = error instanceof Error && error.name === "UnknownDiagramError"
+        || hash && typeof hash === "object" && "expected" in hash && Array.isArray(hash.expected)
+          && "token" in hash && typeof hash.token === "string" && "line" in hash && typeof hash.line === "number";
+      if (syntax) throw new DiagramSyntaxError(error);
+      throw error;
+    }
   });
   chain = job.then(
     () => undefined,

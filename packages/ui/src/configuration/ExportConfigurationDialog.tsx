@@ -1,3 +1,4 @@
+import { ActionableError } from "../errorRecovery";
 import { Alert, Description, Label, Radio, RadioGroup } from "@heroui/react";
 import React, { useState } from "react";
 
@@ -57,7 +58,7 @@ export function ExportConfigurationDialog({
       try {
         saved = await configurationFile.save(exportFileName(exported), `${JSON.stringify(reply.document, null, 2)}\n`);
       } catch (err) {
-        throw new Error(fileFailureText(t, err, "configuration.export.failed"), { cause: err });
+        throw new ActionableError(fileFailureText(t, err, "configuration.export.failed"), "file", { cause: err });
       }
       if (saved === undefined) return;
       toastNotice(

@@ -120,7 +120,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
     if (toastsRaised) return;
     toastsRaised = true;
     for (const { code, params, message, ...toast } of scenario.toasts ?? []) {
-      const failure = code && toast.kind === "notice" ? noticeErrorPresentation(code, params ?? {}, message) : undefined;
+      const failure = code ? noticeErrorPresentation(code, params ?? {}, message) : undefined;
       emitToast({
         ...toast,
         // Mirror the store: keep the full plain message and structured launch title separately.
@@ -186,18 +186,13 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const current = store.getState();
           const session = current.sessions.get(body.session);
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: "Unknown session" });
+          if (scenario.sessionArchiveError) return fail(scenario.sessionArchiveError);
           // Match coordinator::team over the valid fixture hierarchy: owners reach two levels.
           const childrenOf = (owner: Session) => [...current.sessions.values()].filter((child) => child.bound_to === owner.id);
           const direct = childrenOf(session);
           const team = [...direct.flatMap(childrenOf), ...direct];
           refuseLocked([session, ...team]);
           const descendants = team.filter((child) => child.status !== "archived");
-          const running = descendants.filter((child) => isLive(child.status));
-          if (running.length) return fail({
-            code: "session_has_running_sessions",
-            params: { count: String(running.length), sessions: running.map((child) => child.title).join(", "), session_ids: JSON.stringify(running.map((child) => child.id)) },
-            message: "Sessions under this session still have running processes",
-          });
           const sessions = new Map(current.sessions);
           const ended_at = Date.now();
           for (const record of [...descendants, session]) sessions.set(record.id, { ...record, status: "archived", ended_at });

@@ -42,7 +42,8 @@ export interface Preferences {
  * the engine makes it; it is what gives the stack block a length the scenario chooses. */
 export type Startup = { kind: "noAddress" } | { kind: "daemonFailed"; error: string } | { kind: "crash"; stack?: string };
 
-/** A toast the scenario raises once the app is mounted. With a `code` the text is worded from the
+/** Feedback the scenario raises once the app is mounted: errors enter the required-acknowledgement
+ * alert queue, while notices remain toasts. With a `code` the text is worded from the
  * catalog as the daemon's own errors and notices are, with `message` as the fallback for a code the
  * catalog lacks; without one `message` is shown as is, like a client-side error. */
 export interface ToastFixture {
@@ -137,6 +138,8 @@ export interface Scenario {
   agentModels?: Partial<Record<Agent, { models: AgentModel[]; unavailable?: ModelsUnavailable } | "pending">>;
   /** A refused session launch, such as a shell environment that could not be read. */
   sessionOpenError?: FixtureError;
+  /** A runtime refusal after the user confirms archiving; no session changes on failure. */
+  sessionArchiveError?: FixtureError;
   /** Native session-file inspection per session. Unlisted or missing sessions are unknown;
    * has_conversation does not establish whether files exist. Aggregate presence is present if
    * any inspected session has files, otherwise unknown if any cannot be established. */
@@ -178,6 +181,8 @@ export interface Scenario {
   /** The platform offers the desktop app's run-in-background capability, so the Settings switch for
    * it is shown; the browser platform has none. */
   backgroundRun?: boolean;
+  /** Stub external links without opening a host browser; an error models a refused desktop opener. */
+  externalLinks?: "available" | { error: string };
   configuration?: ConfigurationFixture;
   /** `"unavailable"` for a platform with no clipboard; `text` gives a private, mutable clipboard
    * for interactive copy and paste previews. Without either, the browser's clipboard stands. */

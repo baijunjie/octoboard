@@ -99,16 +99,10 @@ function DocumentSurface({
     ),
     [theme],
   );
-  const onOpenLink = useCallback(
-    (url: string) =>
-      void links?.open(url).catch((error: unknown) => {
-        console.warn("Viewer: cannot open the link", error);
-      }),
-    [links],
-  );
-  const fallback = (
+  const onOpenLink = useCallback((url: string) => links?.open(url), [links]);
+  const fallback = (error: unknown) => (
     <>
-      <Notice tone="failed" speak={t("viewer.markdown.failed")} />
+      <Notice tone="failed" speak={t("viewer.markdown.failed")} error={error} />
       <CodeSurface resetKey={resetKey} name={name} text={text} theme={theme} />
     </>
   );

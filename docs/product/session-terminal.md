@@ -39,7 +39,7 @@ returns keyboard focus to the terminal. There is no separate menu button.
 The clipboard is read only when Paste is chosen, so merely opening the menu does not request clipboard access.
 If clipboard access completes after the user switches sessions or the original session can no longer accept input,
 the paste is discarded. It is never redirected to another session. A failed clipboard read or write shows an error
-toast.
+alert.
 
 ## Output, scrollback and size
 

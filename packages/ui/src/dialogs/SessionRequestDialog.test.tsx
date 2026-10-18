@@ -113,7 +113,7 @@ it.each([
   await pressButton(label);
   const toasts = dialog.toasts();
   expect(toasts).toHaveLength(toasted);
-  if (toasted) expect(toasts[0]).toEqual(["no longer waiting", "s-1"]);
+  if (toasted) expect(toasts[0]).toEqual([notWaiting, "s-1"]);
 });
 
 // A request already on screen is not swapped under the user's pointer, neither for a trust prompt

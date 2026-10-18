@@ -6,6 +6,7 @@ import type { Key } from "react-aria-components";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { handFocusOff } from "../components/handFocusOff";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
@@ -354,6 +355,7 @@ export function ProjectBrowser({
 function RootError({ message, onRetry, title }: { title?: string; message: ErrorPresentation; onRetry: (from: Element | null) => void }): React.ReactElement {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
+  useErrorAcknowledgement(message, title ?? t("browser.error.root"));
   return (
     <div ref={ref} className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-sm">
       <ErrorAlert title={title ?? t("browser.error.root")} className="w-full max-w-lg">

@@ -4,6 +4,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
+import { ErrorAlerts } from "../dialogs/ErrorAlerts";
+import { errorAlerts } from "../errorAlerts";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
 import { DialogError, useDialogAction } from "../dialogs/Dialog";
@@ -25,6 +27,7 @@ function mount(element: React.ReactNode): HTMLElement {
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
+    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
     act(() => setLanguage(previousLanguage));
   });
   act(() => root.render(element));
@@ -38,12 +41,11 @@ it("retains the structured request failure through the dialog action and respond
     run = action.run;
     return <DialogError message={action.error} />;
   }
-  const container = mount(<Subject />);
+  mount(<><Subject /><ErrorAlerts /></>);
   const error = failure();
   await act(() => run(() => Promise.reject(error)));
-  const alert = container.querySelector('[role="alert"]');
-  expect(alert?.closest('[data-slot="alert-root"]')?.classList.contains("alert--danger")).toBe(true);
-  expect(container.querySelectorAll('[role="alert"]')).toHaveLength(1);
+  const alert = document.querySelector('[role="alertdialog"]');
+  expect(document.querySelectorAll('[role="alertdialog"]')).toHaveLength(1);
   expect(alert?.textContent).toContain("Shell environment timed out");
   expect(alert?.querySelector("h3")?.textContent).toBe("Shell environment timed out");
   expect(alert?.querySelector("code")?.textContent).toBe("/bin/zsh -l -i -c 'env -0'");
@@ -73,8 +75,8 @@ it("keeps the complete field description registered when its command uses the co
 it("uses the plain fallback for an unfamiliar code or an incomplete shell timeout", () => {
   const unknown = new DaemonRequestError("new daemon error", "future_code", params);
   const incomplete = new DaemonRequestError("incomplete daemon error", "shell_environment_timeout", { shell: "/bin/zsh" });
-  expect(errorPresentation(unknown)).toBe(unknown.message);
-  expect(errorPresentation(incomplete)).toBe(incomplete.message);
+  expect(errorPresentation(unknown)).toBe(unknown);
+  expect(errorPresentation(incomplete)).toBe(incomplete);
   const container = mount(<><DaemonErrorMessage error={unknown} /><DaemonErrorMessage error={incomplete} /></>);
   expect(container.textContent).toBe("new daemon errorincomplete daemon error");
   expect(container.querySelector("code")).toBeNull();
@@ -130,7 +132,7 @@ it("does not try to parse old or malformed running-session lists out of quoted t
   const params = { count: "2", sessions: "“One, task”, “Other”" };
   for (const extra of [{}, { session_ids: "not JSON" }, { session_ids: '["s0",5]' }, { session_ids: "[]" }] as import("../protocol").MessageParams[]) {
     const error = new DaemonRequestError("old daemon fallback", "session_has_running_sessions", { ...params, ...extra });
-    expect(errorPresentation(error)).toBe("old daemon fallback");
+    expect(errorPresentation(error)).toBe(error);
     const container = mount(<DaemonErrorMessage error={error} />);
     expect(container.textContent).toBe("old daemon fallback");
     expect(container.querySelector("[data-inline-chip]")).toBeNull();

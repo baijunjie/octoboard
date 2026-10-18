@@ -2,6 +2,7 @@ import { Archive, ArrowLeftRight, Copy, Download, Focus, Folder, FolderOpen, Fol
 
 import { switchEntries } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/ActionMenu";
+import { ExternalLinkIcon } from "../components/ExternalLinkIcon";
 import { RepositoryIcon } from "../components/RepositoryIcon";
 import { repositoryLink } from "../repositoryLink";
 import { AgentIcon } from "../components/AgentIcon";
@@ -107,7 +108,7 @@ export function projectMenu(
         { label: t("common.fileManager"), icon: Folder, onClick: () => handlers.onOpenProjectDirectory(project) },
         { label: t("common.terminal"), icon: Terminal, onClick: () => handlers.onOpenProjectTerminal(project) },
         ...(repository && handlers.onOpenRepository ? [{
-          label: repository.host, icon: <RepositoryIcon brand={repository.brand} />,
+          label: repository.host, icon: <RepositoryIcon brand={repository.brand} />, end: <ExternalLinkIcon />,
           onClick: () => handlers.onOpenRepository!(repository.url),
         }] : []),
       ],

@@ -3,6 +3,7 @@ import { act } from "react";
 import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { errorAlerts } from "../errorAlerts";
 import { DaemonRequestError } from "../daemon-client";
 import { MIXED_RESULT, REVIEW } from "../gallery/fixtures/configuration";
 import { ConfigurationFileError } from "../platform";
@@ -93,7 +94,7 @@ it("keeps the dialog on the file step, with the daemon's reason, for a document 
 it("refuses a file that is not JSON without asking the daemon", async () => {
   const mounted = await reviewing({ text: "not json" });
   expect(text()).toContain("mine.json is not a JSON file.");
-  expect(document.body.querySelector('[role="alert"] code')?.textContent).toBe("mine.json");
+  expect(document.body.querySelector('[role="alertdialog"] code')?.textContent).toBe("mine.json");
   expect(mounted.sent()).toEqual([]);
 });
 
@@ -196,7 +197,9 @@ it("names the result step in its title and takes focus to the dialog, wherever f
   act(() => close.focus());
   await act(async () => answer({ type: "configuration_imported", ...MIXED_RESULT }));
   expect(dialog.querySelector("h2")?.textContent).toBe("Import finished");
-  expect(document.activeElement).toBe(dialog);
+  expect(document.activeElement).toBe(document.querySelector('[role="alertdialog"]'));
+  act(() => errorAlerts.acknowledge());
+  expect(dialog.querySelector("h2")?.textContent).toBe("Import finished");
 });
 
 // A browser without the file input's `cancel` event never answers for a dismissed picker.

@@ -4,6 +4,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { onTestFinished, vi } from "vitest";
 
+import { ErrorAlerts } from "../dialogs/ErrorAlerts";
+import { errorAlerts } from "../errorAlerts";
 import { trackMountRefocus } from "../dialogs/dialogTestSupport";
 import type { ConfigurationFileCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
@@ -44,11 +46,12 @@ export function mountDialog(
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
+    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
   });
   act(() =>
     root.render(
       <PlatformProvider value={{ kind: "browser", configurationFile }}>
-        <DaemonProvider value={daemon}>{dialog(closed)}</DaemonProvider>
+        <DaemonProvider value={daemon}>{dialog(closed)}<ErrorAlerts daemon={daemon} /></DaemonProvider>
       </PlatformProvider>,
     ),
   );

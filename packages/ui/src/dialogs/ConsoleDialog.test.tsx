@@ -1,3 +1,4 @@
+import { errorAlerts } from "../errorAlerts";
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -253,11 +254,11 @@ it("creates with the avatar that was picked", async () => {
   expect(sent(request)).toEqual([{ type: "create_console", name: "Main", default_agent: "claude", icon: AVATAR }]);
 });
 
-it("says so at the foot of the dialog when the picked file cannot be read, and keeps the avatar", async () => {
+it("reports an unreadable avatar through the acknowledgement queue and keeps the avatar", async () => {
   vi.mocked(imageToAvatar).mockRejectedValue(new Error("not an image"));
   render(withAvatar);
   await pickFile();
-  expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("could not be read as an image");
+  expect(errorAlerts.getSnapshot().some((error) => error.message.includes("could not be read as an image"))).toBe(true);
   expect(document.body.querySelector("img")?.getAttribute("src")).toBe(AVATAR);
 });
 

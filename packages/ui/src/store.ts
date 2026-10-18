@@ -27,10 +27,8 @@ import {
 } from "./protocol";
 
 /**
- * Something to tell the user in a toast: a daemon `error` or `session_notice`, or a message with
- * nowhere inline to show it (see `toastError` and `toastNotice` below). `kind` is the only thing
- * that tells an error from a notice apart. The store does not keep them: the toast stack
- * (`Toasts.tsx`) subscribes through `Daemon.onToast` and owns what is on screen.
+ * A window notification. Errors require acknowledgement in the shared error dialog; notices
+ * remain timed toasts. The onToast name is retained for existing producers and consumers.
  */
 export interface ToastRequest {
   kind: "error" | "notice";
@@ -41,6 +39,8 @@ export interface ToastRequest {
   /** The daemon's own code and params, kept for a structured rendering of the message (a literal
    * set as code), for a notice as well as an error. Absent for a message the UI worded itself. */
   daemonError?: DaemonRequestError;
+  /** The original local exception, including its cause and platform error code. */
+  error?: unknown;
   /** The session the toast is about, so the stack can say where it is. A daemon `notice` always
    * has one; a notice the UI raises itself (`toastNotice`) has none. An `error` has one only where
    * the call site knows which session the daemon's message is about — the daemon says "this
@@ -434,10 +434,8 @@ function reducer(state: State, action: Action): State {
  * can read and subscribe to it; components use `useDaemonStore`. */
 export interface Daemon {
   store: StoreApi<State>;
-  /** Sends a request and resolves/rejects with its correlated reply. Does *not* toast on its own
-   * rejection — a request made from a dialog shows its own inline error (the better place for it),
-   * so toasting here too would show the same failure twice. A caller with nowhere inline to put an
-   * error (no open dialog) calls `toastError` itself. */
+  /** Sends a request and resolves/rejects with its correlated reply. Callers present failures,
+   * allowing field validation to remain local and execution errors to require acknowledgement. */
   request: (body: RequestBody) => Promise<Event>;
   /** `session` is passed by a caller that knows which session the message is about, so the toast
    * can name it; see `ToastRequest.session`. */
@@ -471,7 +469,11 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
 
   const client = new DaemonClient(daemonWsUrl(origin, "/ws/control"));
   const toastListeners = new Set<(toast: ToastRequest) => void>();
-  const emitToast = (toast: ToastRequest) => toastListeners.forEach((listener) => listener(toast));
+  const pendingNotifications: ToastRequest[] = [];
+  const emitToast = (toast: ToastRequest) => {
+    if (!toastListeners.size) pendingNotifications.push(toast);
+    else toastListeners.forEach((listener) => listener(toast));
+  };
 
   client.onEvents(dispatchEvents);
   client.onEvent((event) => {
@@ -480,7 +482,7 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
       // not repeat the reason; any other notice as itself.
       const failure = noticeErrorPresentation(event.code, event.params, event.message);
       emitToast({
-        kind: "notice",
+        kind: ["launch_failed", "trust_answer_failed", "queued_messages_dropped"].includes(event.code) ? "error" : "notice",
         message: daemonMessage(currentLanguage(), event.code, event.params, event.message, store.getState()),
         daemonTitle: failure ? new DaemonRequestError(event.message, `${event.code}.title`, event.params) : undefined,
         daemonError: failure ?? new DaemonRequestError(event.message, event.code, event.params),
@@ -510,12 +512,13 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
       }),
     toastError: (message, session) => {
       const presentation = typeof message === "string" ? message : errorPresentation(message);
-      emitToast({ kind: "error", message: errorText(message), session,
+      emitToast({ kind: "error", message: errorText(message), session, error: message,
         ...(typeof presentation !== "string" && { daemonError: presentation }) });
     },
     toastNotice: (message, content) => emitToast({ kind: "notice", message, content }),
     onToast: (listener) => {
       toastListeners.add(listener);
+      pendingNotifications.splice(0).forEach(listener);
       return () => void toastListeners.delete(listener);
     },
     dismissTrustPrompt: (session) => dispatch({ kind: "dismiss_trust_prompt", session }),

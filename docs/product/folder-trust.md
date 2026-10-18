@@ -95,8 +95,8 @@ Its buttons:
     waiting in other sessions of the same project, whichever agent shows them, and their prompts leave the queue;
   - *ticked* — that folder is added to the trusted folders instead, and the project's own permission is not recorded.
     If the folder can no longer be offered by the time the go-ahead is given (see "Trusted folders" below), it is
-    refused before anything is pressed: the dialog stays open and shows why, with the box still ticked, so the user
-    can untick it and go on without the folder.
+    refused before anything is pressed: an error alert explains why and the trust dialog stays open with the box still
+    ticked, so the user can untick it and go on without the folder.
 - **Not now** — also what Escape, the dialog's close button and a click outside it do. Nothing is sent and nothing is
   recorded; the confirmation stays for the user to answer in the session's terminal. The same session is asked about
   again only if the application reloads its state (a reconnect, or catching up after falling behind) while the
@@ -112,7 +112,7 @@ go-ahead is sent, so the next prompt in the queue starts unticked, and so does t
 the application reloads its state.
 
 Once the go-ahead has been given the dialog closes, whether or not the confirmation could be pressed — a confirmation
-is pressed at most once, so trying again from the dialog could not succeed. A failure is then shown as a toast about
+is pressed at most once, so trying again from the dialog could not succeed. A failure is then shown in an error alert about
 the session. Two outcomes differ: the refusal of a folder that can no longer be offered keeps the dialog open, and a
 go-ahead for a confirmation that is no longer waiting — already answered, whether from another client, in the terminal
 or by Octoboard itself — closes the dialog without any message when the box was unticked, since nothing went wrong;

@@ -4,6 +4,9 @@ import ReactDOM from "react-dom/client";
 import { App } from "./App";
 import { suppressNativeContextMenu } from "./contextMenuGuard";
 import { resolveDaemonOrigin, resolveStartupError } from "./daemon";
+import { runtimeError } from "./runtimeError";
+import { reportError } from "./reportError";
+import { ErrorAlerts } from "./dialogs/ErrorAlerts";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LanguageProvider } from "./i18n/react";
 import { useBackgroundRunSync } from "./lifecycle/useBackgroundRunSync";
@@ -16,6 +19,14 @@ import { createDaemon, DaemonProvider } from "./store";
 import { ThemeProvider } from "./theme";
 import "./focusGuard";
 import "./style.css";
+
+window.addEventListener("error", (event) => {
+  const error = runtimeError(event);
+  if (error !== undefined) reportError(error);
+});
+window.addEventListener("unhandledrejection", (event) => {
+  reportError(event.reason);
+});
 
 const rootEl = document.getElementById("root")!;
 const root = ReactDOM.createRoot(rootEl);
@@ -118,6 +129,7 @@ root.render(
             {screen()}
           </ThemeProvider>
         </ErrorBoundary>
+        <ErrorAlerts daemon={daemon} />
       </LanguageProvider>
     </PlatformProvider>
   </React.StrictMode>,

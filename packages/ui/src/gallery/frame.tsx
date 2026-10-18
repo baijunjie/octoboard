@@ -35,10 +35,11 @@ installFakeTerminal();
 // The shell's Held control: the new-session "+" buttons as they are while the shortcut modifier is down.
 const heldModifier = params.get("held") === "1" ? holdPrimaryModifier() : undefined;
 
-const [{ App }, { Toasts }, { ErrorBoundary }, { LanguageProvider }, { selectPlatform }, { PlatformProvider }, startup, store, { ThemeProvider }] =
+const [{ App }, { Toasts }, { ErrorAlerts }, { ErrorBoundary }, { LanguageProvider }, { selectPlatform }, { PlatformProvider }, startup, store, { ThemeProvider }] =
   await Promise.all([
     import("../App"),
     import("../components/Toasts"),
+    import("../dialogs/ErrorAlerts"),
     import("../ErrorBoundary"),
     import("../i18n/react"),
     import("../platform"),
@@ -81,6 +82,11 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
         request: () => Promise.resolve(false),
         openSystemSettings: () => Promise.resolve(),
       },
+    }),
+    ...(scenario?.externalLinks && {
+      links: { open: async () => {
+        if (typeof scenario.externalLinks === "object") throw new Error(scenario.externalLinks.error);
+      } },
     }),
     ...(scenario?.backgroundRun && { backgroundRun: { set: async () => {} } }),
     ...(scenario?.clipboard === "unavailable" && { clipboard: undefined }),
@@ -153,6 +159,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <ErrorBoundary>
           <ThemeProvider>{screen()}</ThemeProvider>
         </ErrorBoundary>
+        <ErrorAlerts daemon={daemon} />
       </LanguageProvider>
     </PlatformProvider>
   </React.StrictMode>,

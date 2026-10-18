@@ -412,13 +412,26 @@ the surface around it does not forbid selection. It is accepted there because th
 
 ### Standalone errors use the shared Alert
 
+Every runtime failure also opens the dedicated error alert dialog and remains there until the user presses its
+acknowledgement button. Errors never use toasts, timeouts, an outside press, Escape or a close button for dismissal.
+Use HeroUI's `AlertDialog` with its `Icon` set to `status="danger"` and a danger acknowledgement button, retaining
+the library's default visual treatment.
+The alert takes focus and announces its title and explanation through `role="alertdialog"`, without a second live
+announcement inside it. Distinct failures wait in a queue; repeated copies of a pending failure do not multiply it.
+An error above a form leaves that form available after acknowledgement, with its values and retry action intact.
+Field validation stays attached to the field and does not open an error dialog.
+
+Distinguish failures the user can resolve from unexpected failures. A recoverable failure explains the specific
+remedy, such as freeing disk space, unlocking a session or correcting a folder's access. An unexpected failure
+preserves its diagnostics, asks the user to take a screenshot and file an issue, and provides the issue entry.
+Do not ask the user to fix a likely application defect or present a known environmental problem as a bug.
+
 An error that stands on its own in a page, pane or dialog uses `ErrorAlert`, the shared HeroUI `Alert` with danger
 status, its indicator, the danger-soft background and foreground body text. Neutral absence, loading and unsupported
 content keep their state presentations. A field's validation stays in its `FieldError`, and so does a request's
 refusal that is about one field's value, with focus moved to that field; a failure attached to a row, table cell or
-rendered document stays in that content's own presentation. A dialog's own failure line scrolls itself into view, since
-on a long form it can appear below the visible part of the body.
-Toast errors use the Toast's danger variant and indicator, without nesting an Alert or a second live region inside it.
+rendered document stays in that content's own presentation. A failed page or pane may keep its explanation and recovery
+actions visible after acknowledgement; a form's execution failure is shown in the dedicated error dialog.
 Warnings use warning status, rather than the error wrapper.
 
 Keep the summary, explanation and recovery readable as separate parts when a failure needs them. A short error that
@@ -474,10 +487,31 @@ colour, including field errors and toast titles. Do not hand-colour individual l
 HeroUI's Alert parts remain the content, title and indicator primitives. Syntax-highlighted source and foreign
 renderer markup retain their own palettes.
 
-An error appearing after the surface is open has one `role="alert"` owner, supplied by `ErrorAlert`; do not put a
-second alert role on its parent or descendants. An initial startup explanation passes `announce={false}` and is
-ordinary page content. Follow "Announcing a change" for other live announcements, and keep retry and exit actions
-reachable when the error appears.
+The dedicated error dialog owns the announcement of a runtime failure; durable error content must not announce the
+same failure again. An initial startup explanation is ordinary page content. Follow "Announcing a change" for other
+live announcements, and keep retry and exit actions reachable after acknowledgement.
+
+### External links
+
+Application-authored links that leave the app use `ExternalLink` with a real destination and a visible trailing
+external-link icon. The destination remains available to keyboard users and the browser's link actions. The icon
+is decorative; the localized accessible description explains that the link opens in the browser. Browser links
+open a new tab with `noopener noreferrer`; the desktop app uses its platform link adapter. An unavailable or failed
+opener produces the dedicated actionable error alert rather than navigating the desktop window.
+
+Ordinary prose links use the shared text appearance: the surrounding font size and line height, link colour and an
+underline. A control label mentioned within copy uses the shared chip appearance at `inherit` size, without
+quotation marks. A chip that only names a separate control remains non-interactive. A chip that opens an external
+page is itself a link and includes the external icon. A footer may instead provide one external action using the
+shared button appearance, which applies HeroUI's secondary-button styles to the anchor; its reference in the body
+is a plain chip. Do not make both the reference and the separate control interactive. All appearances retain a visible keyboard focus
+ring, and a pending open keeps the label and icon visible while preventing repeated activation. Callers may not
+remove the icon or substitute arbitrary local colours, padding or typography.
+
+Native menu items that open a browser use the same external-link indicator within their menu primitive. Links
+rendered from Markdown retain the document's text and title, with the external indicator added to outbound
+destinations and the document renderer's measured link palette. Relative paths and document fragments keep their file-viewer navigation. Raw terminal output and
+foreign renderer markup retain their renderer's content model.
 
 ### A visual heading is a heading element
 

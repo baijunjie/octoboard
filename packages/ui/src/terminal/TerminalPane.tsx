@@ -3,6 +3,7 @@ import { FolderPlus, MessageSquarePlus, Plus, SquareTerminal, TriangleAlert, Unp
 import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 
 import "@xterm/xterm/css/xterm.css";
+import { reportExternalLinkFailure } from "../components/ExternalLink";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { PATH_VAR_PARAMS } from "../components/literalParams";
 import { focusTopBar } from "../components/regionFocus";
@@ -162,6 +163,7 @@ export function TerminalPane({
   // The controller is built once; what it calls on input that wakes an archived session must be
   // the latest `onResume`.
   const onResumeRef = useLatest(onResume);
+  const translateRef = useLatest(t);
 
   const handleStatusChange = useCallback((s: TermStatus) => {
     if (stableTimerRef.current) {
@@ -182,7 +184,7 @@ export function TerminalPane({
         onStatusChange: handleStatusChange,
         onPaintedChange: setPainted,
         onWake: (sessionId) => onResumeRef.current(sessionId),
-        openLink: links && ((url) => links.open(url)),
+        openLink: links && ((url) => links.open(url).catch((cause: unknown) => reportExternalLinkFailure(translateRef.current, url, cause))),
         onLinkHover: (link) => setLinkRef.current?.(link),
       },
       appliedColorThemeRef.current,

@@ -105,15 +105,20 @@ describe("boundArchivedSessions", () => {
 });
 
 describe("boundSessionsArchivedWith", () => {
-  it("keeps the interrupted sessions bound to the owner or to an interrupted one bound to it", () => {
+  it("includes running and interrupted descendants regardless of origin or an archived lead", () => {
     const sessions = [
       session("lead", "interrupted", 1, false, "s-console"),
       session("under-lead", "interrupted", 2, false, "lead"),
       session("under-lead-live", "idle", 3, false, "lead"),
       session("bound-live", "idle", 4, false, "s-console"),
       session("under-live", "interrupted", 5, false, "bound-live"),
+      session("archived-lead", "archived", 6, false, "s-console"),
+      { ...session("under-archived", "starting", 7, false, "archived-lead"), origin: "console" as const },
+      session("unbound", "working", 8),
+      session("other-owner", "working", 9, false, "elsewhere"),
+      session("old-child", "archived", 10, false, "lead"),
     ];
-    expect(boundSessionsArchivedWith(sessions, "s-console").map((s) => s.id)).toEqual(["lead", "under-lead"]);
+    expect(boundSessionsArchivedWith(sessions, "s-console").map((s) => s.id)).toEqual(["bound-live", "lead", "under-archived", "under-lead-live", "under-live", "under-lead"]);
   });
 });
 

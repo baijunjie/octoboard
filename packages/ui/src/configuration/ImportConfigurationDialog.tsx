@@ -1,6 +1,9 @@
+import { ActionableError } from "../errorRecovery";
+import { reportError } from "../reportError";
 import { Button } from "@heroui/react";
 import React, { useEffect, useRef, useState } from "react";
 
+import { errorAlerts } from "../errorAlerts";
 import { InlineChip } from "../components/InlineChip";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "../dialogs/Dialog";
 import { dialogAround } from "../dialogs/dialogElement";
@@ -40,9 +43,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   const { request } = useDaemon();
   const { configurationFile } = usePlatform();
   const { error, setError, busy, run } = useDialogAction();
-  // The name of a file that is not JSON, which its failure line sets as code.
-  const [notJson, setNotJson] = useState<string>();
-  const failure = notJson === undefined ? error : <Message id="configuration.import.notJson" params={{ name: <InlineChip monospace wrap size="inherit">{notJson}</InlineChip> }} />;
+  const failure = error;
   const { shown, attempt } = useSubmitValidation();
   const [stage, setStage] = useState<Stage>({ kind: "choose" });
   const [review, setReview] = useState<ReviewState>([]);
@@ -87,7 +88,6 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   const choose = async () => {
     if (!configurationFile || busy || waitingRef.current) return;
     setError(undefined);
-    setNotJson(undefined);
     const picker = ++pickerRef.current;
     waitingRef.current = true;
     setWaiting(true);
@@ -95,7 +95,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
     try {
       opened = await configurationFile.open();
     } catch (err) {
-      if (picker === pickerRef.current) setError(fileFailureText(t, err, "configuration.import.readFailed"));
+      if (picker === pickerRef.current) reportError(new ActionableError(fileFailureText(t, err, "configuration.import.readFailed"), "file", { cause: err }));
       return;
     } finally {
       if (picker === pickerRef.current) {
@@ -109,7 +109,11 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       try {
         document = JSON.parse(opened.text);
       } catch {
-        setNotJson(opened.name);
+        errorAlerts.report({
+          message: t("configuration.import.notJson", { name: opened.name }),
+          recovery: "configuration",
+          content: <Message id="configuration.import.notJson" params={{ name: <InlineChip monospace wrap size="inherit">{opened.name}</InlineChip> }} />,
+        });
         return;
       }
       const inspection = (await request({ type: "inspect_configuration", document })) as Inspection;
@@ -136,8 +140,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
     });
   };
 
-  // The footer's buttons stay while the body changes, and the error sits in the footer so it is
-  // seen without scrolling a long review back to its end.
+  // The footer's buttons stay while the body changes; execution failures use the shared alert.
   const reviewFooter = (
     <>
       {failure && (

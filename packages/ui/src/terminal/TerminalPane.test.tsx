@@ -3,6 +3,8 @@ import React, { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { errorAlerts } from "../errorAlerts";
+import type { PlatformAdapter } from "../platform";
 import { sessionOf } from "../gallery/fixtures/builders";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { TermStatus } from "./TerminalController";
@@ -16,9 +18,10 @@ const { FakeController } = vi.hoisted(() => {
     static last: FakeController;
     currentSessionId: string | undefined;
     currentStatus: TermStatus = "closed";
-    constructor(private callbacks: { onStatusChange: (status: TermStatus) => void }) {
+    constructor(private callbacks: { onStatusChange: (status: TermStatus) => void; openLink?: (url: string) => Promise<void> }) {
       FakeController.last = this;
     }
+    openLink(url: string): Promise<void> | undefined { return this.callbacks.openLink?.(url); }
     mount(): void {}
     inputLabel: string | undefined;
     setInputLabel(label: string): void {
@@ -59,12 +62,14 @@ vi.mock("../store", () => ({
   useDaemon: () => daemon,
   useDaemonStore: (select: (state: typeof store) => unknown) => select(store),
 }));
-vi.mock("../platform/react", () => ({ usePlatform: () => ({}) }));
+const platform = vi.hoisted(() => ({ links: undefined as PlatformAdapter["links"] }));
+vi.mock("../platform/react", () => ({ usePlatform: () => platform }));
 vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
 
 const roots: Root[] = [];
 beforeEach(() => {
   vi.useFakeTimers();
+  platform.links = undefined;
   store.snapshotEpoch = 0;
   store.connectionState = "open";
 });
@@ -72,6 +77,7 @@ afterEach(() => {
   vi.useRealTimers();
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
+  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
 });
 
 const session = sessionOf("s-1", "c-1", undefined, "Work", "working");
@@ -331,4 +337,19 @@ it("covers a starting session with its own message and attaches only once it is 
   render(root, { ...starting, status: "idle" });
   expect(controller.attaches).toBe(1);
   expect(status(container)).toBe("Loading terminal…");
+});
+
+it("reports a native terminal opener failure with the shared actionable destination fallback", async () => {
+  const cause = new Error("Browser launch failed");
+  platform.links = { open: vi.fn().mockRejectedValue(cause) };
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  render(root);
+  await act(async () => FakeController.last.openLink("https://example.com/docs"));
+  expect(platform.links.open).toHaveBeenCalledExactlyOnceWith("https://example.com/docs");
+  expect(errorAlerts.getSnapshot()[0]).toMatchObject({
+    message: "Could not open the external link.",
+    classification: { kind: "actionable", recovery: "openExternal" },
+    error: { cause },
+  });
 });

@@ -1,7 +1,7 @@
 # Toasts
 
-Failures and notices that need no answer are shown as **toasts**; which ones are, and how they name the session they
-are about, is in "Losing the daemon connection" in `docs/product/application-lifecycle.md`.
+Notices that need no answer are shown as **toasts**. Failures require acknowledgement instead; see
+"Error alerts" in `docs/product/error-alerts.md`.
 
 - **At the window's bottom right** (bottom left under a right-to-left language), or, in a window narrower than 640 px,
   **at the top, centred, just below the top bar**: there the footers of dialogs and the connection banner span the
@@ -12,9 +12,8 @@ are about, is in "Losing the daemon connection" in `docs/product/application-lif
   that corner, such as the file viewer's Previous file and Next file; a small centred dialog leaves them where they
   are. A toast slides in from the edge it sits at, and the newest is at the front.
 - A toast about a particular session is titled with where that session is — the project it runs in, or the console
-  whose console session it is — with the message under it; any other toast is just the message. An error is marked
-  as one; a notice is not.
-- **A toast dismisses itself**: a notice after about 5 seconds, an error after about 8. The countdown pauses while
+  whose console session it is — with the message under it; any other toast is just the message.
+- **A toast dismisses itself**: after about 5 seconds. The countdown pauses while
   the pointer is over the toasts or keyboard focus is inside them. Each toast also has a close button.
 - **An identical toast** — the same kind, message and session — arriving while one is still shown does not stack a
   second copy: the existing one is replaced by a fresh one at the front, its countdown started over.

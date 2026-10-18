@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 
 import { useFadeRegion, useScrollFade } from "../components/scrollFade";
+import { ActionableError } from "../errorRecovery";
 import { useT } from "../i18n/react";
 import { InlineNotice } from "./inlineNotice";
 import { Notice } from "./viewerStates";
@@ -45,21 +46,26 @@ export function FormulaView({
   overBudget: boolean;
 }): React.ReactElement {
   const t = useT();
-  const [drawn, setDrawn] = useState<{ source: string; html?: string; failed?: boolean }>();
+  const [drawn, setDrawn] = useState<{ source: string; html?: string; failure?: { error: unknown } }>();
   useEffect(() => {
     if (overBudget) return;
     let live = true;
     void import("katex")
       .then(async (katex) => {
         await import("katex/dist/katex.min.css");
-        return katex.default.renderToString(source, { ...FORMULA_OPTIONS, displayMode: display });
+        try {
+          return katex.default.renderToString(source, { ...FORMULA_OPTIONS, displayMode: display });
+        } catch (error) {
+          if (error instanceof katex.default.ParseError) throw new ActionableError(error.message, "contentSyntax", { cause: error });
+          throw error;
+        }
       })
       .then(
         (html) => {
           if (live) setDrawn({ source, html });
         },
-        () => {
-          if (live) setDrawn({ source, failed: true });
+        (error: unknown) => {
+          if (live) setDrawn({ source, failure: { error } });
         },
       );
     return () => {
@@ -69,8 +75,8 @@ export function FormulaView({
 
   const current = drawn?.source === source ? drawn : undefined;
   if (overBudget) return <FormulaFallback source={source} inline={inline} notice={t("viewer.markdown.large")} />;
-  if (current?.failed) {
-    return <FormulaFallback source={source} inline={inline} notice={t("viewer.markdown.formulaFailed")} failed />;
+  if (current?.failure) {
+    return <FormulaFallback source={source} inline={inline} notice={t("viewer.markdown.formulaFailed")} failure={current.failure} />;
   }
   if (!current?.html) return <FormulaSource source={source} inline={inline} />;
   if (!inline) return <FormulaRegion html={current.html} />;
@@ -96,18 +102,18 @@ function FormulaFallback({
   source,
   inline,
   notice,
-  failed = false,
+  failure,
 }: {
   source: string;
   inline: boolean;
   notice: string;
-  failed?: boolean;
+  failure?: { error: unknown };
 }): React.ReactElement {
   const body = <FormulaSource source={source} inline={inline} />;
   if (inline) {
     return (
       <>
-        <InlineNotice tone={failed ? "failed" : "explained"} speak={failed ? notice : undefined}>
+        <InlineNotice tone={failure ? "failed" : "explained"} speak={failure ? notice : undefined} error={failure?.error}>
           {notice}
         </InlineNotice>
         {body}
@@ -116,7 +122,7 @@ function FormulaFallback({
   }
   return (
     <div className="my-3">
-      {failed ? <Notice appearance="document" tone="failed" speak={notice} /> : <Notice appearance="document">{notice}</Notice>}
+      {failure ? <Notice appearance="document" tone="failed" speak={notice} error={failure.error} /> : <Notice appearance="document">{notice}</Notice>}
       {body}
     </div>
   );

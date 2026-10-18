@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { errorAlerts } from "../errorAlerts";
 import { Dialog, DialogError } from "./Dialog";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -404,18 +405,18 @@ it("eases the dialog's height when its content changes it, but not for its first
   expect(animate).toHaveBeenCalledWith([{ height: "200px" }, { height: "260px" }], expect.objectContaining({ duration: 200 }));
 });
 
-it("scrolls a dialog's failure line into view once it appears", async () => {
-  const scrollIntoView = vi.fn();
-  Element.prototype.scrollIntoView = scrollIntoView;
+it("reports a dialog failure to the acknowledgement queue without an inline alert", () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  onTestFinished(() => {
+  try {
+    act(() => root.render(<DialogError message="Something failed" />));
+    expect(errorAlerts.getSnapshot().some((error) => error.message === "Something failed")).toBe(true);
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  } finally {
     act(() => root.unmount());
     container.remove();
-    delete (Element.prototype as Partial<Element>).scrollIntoView;
-  });
-  act(() => root.render(<DialogError message="Something failed" />));
-  await vi.waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest", behavior: "smooth" }));
+    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+  }
 });
 
 // Having picked from a select, the user presses Enter to go ahead: it submits from a control that holds

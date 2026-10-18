@@ -162,11 +162,11 @@ shell environment could not be captured (see "The launch environment" in `docs/p
 Grok Build only, the account the session would hold pins a directory that is not an initialized Grok home (see "Agent
 config directories" in `docs/product/consoles-and-projects.md`) — the *starting* session is removed again and no
 session is left behind. For a session opened from the dialog, or with defaults (see "Opening a session with
-defaults" below), the failure is reported as a notice toast that names
+defaults" below), the failure is reported in an error alert that names
 the session and gives the reason, worded from the failure's own code in the UI's language; for a shell environment
 capture that ran out of time, the title names the session alone and the explanation is laid out beneath it — the
 command that did not finish and its time limit, the likely cause, and what to fix. Should the session's record itself
-fail to be removed, it is left *interrupted* instead, and the notice is shown all the same. For `start_session` and an
+fail to be removed, it is left *interrupted* instead, and the error alert is shown all the same. For `start_session` and an
 approved session request the failure is reported through that call instead (see "When an approval cannot be carried
 out" in `docs/product/session-requests.md` for the latter). A missing config directory does not fail a brand new
 session for the other two agents: it has no conversation to lose, so Claude Code creates the directory itself and
@@ -215,8 +215,8 @@ The session opened is the one the dialog would open if submitted untouched:
   console session's focus mode, where it is bound to that console session, as the dialog opened there binds it.
 
 It is listed as *starting* and selected, as a session opened from the dialog is, and a launch failure is reported the
-same way (see above). A refusal the dialog would show inside itself is an error toast instead. When the console
-session it would be bound to is no longer available — archived or gone — nothing is sent, and an error toast says so,
+same way (see above). A refusal is shown in an error alert. When the console
+session it would be bound to is no longer available — archived or gone — nothing is sent, and an error alert says so,
 with the same message the dialog shows in that case. Only one session opens with defaults at a time: further presses
 are ignored until the daemon has answered the previous one. If the sidebar has switched to another console by the time
 the answer arrives, the session is still opened but not selected.
@@ -320,14 +320,13 @@ sent only when the dialog is submitted from the **Resume conversation** tab; one
   therefore found only when the session's account resolves to the same config directory that terminal's agent used.
   For the default account, a login shell environment that could not be captured refuses the open as well (see "The
   launch environment" in `docs/product/launching-agents.md`).
-- Every refusal comes before anything is recorded or launched: no session appears, and the reason is shown in the
-  dialog. `open_session` also refuses an ID for a console session (`resume_for_console_session`).
-- **The refusals about the conversation are shown under the Session ID field**, not at the foot of the dialog: an ID
+- Every refusal comes before anything is recorded or launched: no session appears, and the reason is shown in an error alert or under the affected field. `open_session` also refuses an ID for a console session (`resume_for_console_session`).
+- **The refusals about the conversation are shown under the Session ID field**: an ID
   that is not a conversation ID (`resume_id_invalid`), a conversation already in a session (`conversation_in_session`,
   `conversation_outside_project`) and one not found (`conversation_to_resume_not_found`). The field is marked invalid
   and takes focus. The refusal goes when the dialog is submitted again, and as soon as the ID, the agent or the account
   is changed, since that asks about a different conversation; it is not shown on the **New conversation** tab. Any
-  other failure of the open is shown at the foot of the dialog.
+  other failure of the open is shown in an error alert.
 
 A session opened this way starts by resuming that conversation, and comes up at the agent's prompt like any session
 opened from the dialog. It **has a conversation from the moment it is opened**, not from its first turn: interrupted
@@ -380,8 +379,8 @@ Transitions:
   it at *waiting for the user* (see "What the statuses are derived from" below).
 - The process ending for any reason other than archiving — the agent exiting on its own, a crash, the application
   quitting — leaves the session *interrupted*.
-- Archiving leaves the session *archived*. Archiving an owner also archives the *interrupted* sessions under it, and
-  is refused while any session under it has a process running (see "Archiving, interruption and resuming").
+- Archiving leaves the session *archived*. User-initiated archiving of an owner also ends and archives the sessions under it;
+  agent-initiated archiving is refused while any descendant has a process running (see "Archiving, interruption and resuming").
 - Resuming an *interrupted* or *archived* session puts it in *awaiting instructions*, whichever of the two it came
   from. A resume that fails to launch leaves the session exactly where it was, archived included. Resuming a session
   whose owner is *archived* first does the same to its archived owners, the topmost first.
@@ -616,22 +615,24 @@ console session or unbound project session archiving itself, which it can do onl
 archived (see "A session archiving itself" in `docs/product/hub-orchestration.md`). Each archives that one session and
 nothing else, except that an owner archiving a lead session archives it as an owner, under the rules below.
 
-**Archiving an owner — a console session, or a project session that has started sessions — goes along its bindings,
-and is decided by whether a process is running — not by the status.** It reaches every session **under** it: the
-sessions bound to it and, for a console session, the sessions bound to a lead session bound to it (see "Lead sessions"
-in `docs/product/hub-orchestration.md`). An interrupted session has no process but is not archived, and a session at
-its prompt, at work or waiting for the user does have one.
+**Archiving an owner — a console session, or a project session that has started sessions — follows its bindings.**
+It reaches every session **under** it: the sessions bound directly to it and, for a console session, those under a
+bound lead session, including descendants of an already archived lead (see "Lead sessions" in
+`docs/product/hub-orchestration.md`). This includes sessions the user opened and later bound to the owner, as well as
+sessions started by the owner.
 
-- **While any session under it has a process running, archiving the owner is refused**, whatever that session's
-  status and at whichever level, and nothing is changed. The refusal says how many sessions it is and names them; the
-  user archives those sessions, or waits for them to finish, and tries again. A session being launched, resumed or
-  switched at that moment counts as running.
-- **With none running, archiving the owner archives the sessions under it too** — every one that is not archived yet,
-  which can only be interrupted ones — so nothing under it is left outside the archive. The confirmation says how many
-  will be archived with it.
-- Sessions that are not under it, among them sessions bound to another session of the same console, are not touched.
-- Ending an owner's process for a switch of its account is not archiving, and archives nothing (see "Switching a
-  session's account" below).
+- **The user's archive confirmation lists every unarchived session under the owner**, with its current status,
+  and says that their processes will end and they will be archived together. The list follows the current bindings
+  while the confirmation is open. Confirming ends and archives the whole group, even if descendants are starting,
+  working, waiting for the user or at their prompt. It does not require archiving them separately first.
+- **Agent tools and automatic reports retain the running-session safeguard.** If any descendant has a process
+  running, including a launch, resume or account switch in progress, archiving the owner is refused and nothing
+  changes. The refusal counts and names those sessions. With none running, the owner and its remaining unarchived
+  descendants are archived together.
+- All paths check the owner and every descendant for a lock before ending any process or archiving any session;
+  an already archived descendant's lock also blocks the operation (see "Locking a session" above).
+- Sessions outside those bindings are not touched. Ending an owner's process for an account switch archives
+  nothing (see "Switching a session's account" below).
 
 **Resuming** an interrupted session happens by selecting it, or by pressing "Resume" on its terminal's card (see
 "Interrupted, archived and dormant sessions" in `docs/product/session-terminal.md`, which also names the two ways of showing an interrupted session that do not resume it).
@@ -687,8 +688,8 @@ Confirming fixes the set of sessions to process and locks the checkbox. Sessions
 set, including on a retry. Sessions are switched one at a time; one that has been removed, archived or moved to the
 target account before its turn is skipped. A progress bar shows the number processed out of the fixed total, counting
 failed and skipped sessions as processed, and the title of the session currently being switched is shown and
-announced to assistive technology. A failure does not stop the remaining sessions: the dialog lists each failed
-session and its reason, then offers Retry for those failures alone. Successful switches are kept and never repeated
+announced to assistive technology. A failure does not stop the remaining sessions: an error alert lists each failed
+session and its reason when the pass finishes. After acknowledgement, the confirmation offers Retry for those failures alone. Successful switches are kept and never repeated
 by Retry. The confirmation closes when the pass finishes without failures.
 
 A switch ends the session's process the way archiving does, copies the session's conversation into the target

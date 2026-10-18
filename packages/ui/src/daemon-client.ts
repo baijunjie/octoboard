@@ -144,7 +144,7 @@ export class DaemonClient {
    * with no memory of them, so they can only ever be reported as failed. */
   private failPending(reason: string): void {
     for (const pending of this.pending.values()) {
-      pending.reject(new Error(reason));
+      pending.reject(new DaemonRequestError(reason, "connection_closed", {}));
     }
     this.pending.clear();
   }
@@ -229,7 +229,7 @@ export class DaemonClient {
       if (socket?.readyState === WebSocket.CLOSED && !this.reconnectTimer) {
         // The socket is dead and no retry is scheduled (the reconnect budget is spent) — queuing
         // would hang the caller forever, which a quit's `shutdown` request must never do.
-        reject(new Error(t("connection.error.connectionIsClosed")));
+        reject(new DaemonRequestError(t("connection.error.connectionIsClosed"), "connection_closed", {}));
         return;
       }
       // Still connecting, or a reconnect is scheduled: queue it, but bounded — the daemon might
@@ -241,7 +241,7 @@ export class DaemonClient {
         if (!this.pending.delete(id)) return;
         const queuedIndex = this.sendQueue.indexOf(json);
         if (queuedIndex !== -1) this.sendQueue.splice(queuedIndex, 1);
-        reject(new Error(t("connection.error.timedOut")));
+        reject(new DaemonRequestError(t("connection.error.timedOut"), "request_timed_out", {}));
       }, QUEUED_REQUEST_TIMEOUT_MS);
     });
   }

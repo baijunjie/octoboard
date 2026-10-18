@@ -11,14 +11,11 @@ import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore
 import { consoleOf, gitStatusOf, pageOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 
 describe("the fixture daemon's session archiving", () => {
-  it("refuses running descendants, then archives the dormant team and supports reopening", async () => {
+  it("archives running and interrupted descendants and supports reopening", async () => {
     const owner = sessionOf("owner", "c", undefined, "Hub", "idle");
     const lead = sessionOf("lead", "c", "p", "Lead", "interrupted", { bound_to: owner.id });
     const child = sessionOf("child", "c", "p", "Child", "idle", { bound_to: lead.id });
     const daemon = createFixtureDaemon({ id: "archive", group: "Focus mode", category: "normal", title: "", state: snapshotState({ sessions: [owner, lead, child] }) });
-    await expect(daemon.request({ type: "archive_session", session: owner.id })).rejects.toMatchObject({ code: "session_has_running_sessions", params: { session_ids: JSON.stringify([child.id]) } });
-    expect(daemon.store.getState().sessions.get(owner.id)).toEqual(owner);
-    await daemon.request({ type: "archive_session", session: child.id });
     await daemon.request({ type: "archive_session", session: owner.id });
     for (const id of [owner.id, lead.id, child.id]) expect(daemon.store.getState().sessions.get(id)).toMatchObject({ status: "archived", ended_at: expect.any(Number) });
     await daemon.request({ type: "resume_session", session: lead.id });
@@ -26,6 +23,15 @@ describe("the fixture daemon's session archiving", () => {
     expect(daemon.store.getState().sessions.get(owner.id)?.status).toBe("idle");
     expect(daemon.store.getState().sessions.get(child.id)?.status).toBe("archived");
     await expect(daemon.request({ type: "archive_session", session: "missing" })).rejects.toMatchObject({ code: "unknown_session" });
+  });
+
+  it("leaves the whole team intact when runtime archiving fails", async () => {
+    const owner = sessionOf("owner", "c", undefined, "Hub", "idle");
+    const child = sessionOf("child", "c", "p", "Child", "working", { bound_to: owner.id });
+    const error = { code: "store_io_failed", params: { detail: "Disk full" }, message: "Disk full" };
+    const daemon = createFixtureDaemon({ id: "archive-failed", group: "Archive view", category: "exceptional", title: "", state: snapshotState({ sessions: [owner, child] }), sessionArchiveError: error });
+    await expect(daemon.request({ type: "archive_session", session: owner.id })).rejects.toMatchObject(error);
+    expect([...daemon.store.getState().sessions.values()]).toEqual([owner, child]);
   });
 });
 
@@ -504,7 +510,7 @@ describe("the fixture daemon's structured notices", () => {
     vi.useFakeTimers();
     try {
       const params = { title: "Release notes", reason_code: "config_dir_unreachable", agent: "Claude Code", path: "/Users/dev/.claude-work", reason: "Permission denied" };
-      const daemon = createFixtureDaemon({ ...scenario, toasts: [{ kind: "notice", code: "launch_failed", params, message: "" }] });
+      const daemon = createFixtureDaemon({ ...scenario, toasts: [{ kind: "error", code: "launch_failed", params, message: "" }] });
       const toasts: ToastRequest[] = [];
       const unsubscribe = daemon.onToast((toast) => toasts.push(toast));
       await vi.runAllTimersAsync();

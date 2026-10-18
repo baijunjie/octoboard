@@ -1,6 +1,7 @@
 {
   "name": "Octoboard",
   "repositoryUrl": "https://github.com/baijunjie/octoboard",
+  "issueUrl": "https://github.com/baijunjie/octoboard/issues/new",
   "author": {
     "name": "BaiJunjie"
   },

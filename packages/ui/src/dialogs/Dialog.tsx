@@ -1,22 +1,23 @@
 import { AlertDialog, Button, Modal } from "@heroui/react";
 import React, { useEffect, useId, useRef, useState } from "react";
 
-import { DaemonErrorMessage, DaemonErrorTitle } from "../components/DaemonErrorMessage";
-import { ErrorAlert } from "../components/ErrorAlert";
+import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { takeMenuFocusToRestore } from "../components/ActionMenu";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 import { TitledControl } from "../components/TitledControl";
 import { useLatest } from "../components/useLatest";
-import { errorPresentation, hasShellTimeoutDetails, type ErrorPresentation } from "../errorPresentation";
+import { type ErrorPresentation } from "../errorPresentation";
 import { useT } from "../i18n/react";
-import { prefersReducedMotion } from "../reducedMotion";
+import { DaemonRequestError } from "../daemon-client";
+import { reportError } from "../reportError";
+import { errorAlerts } from "../errorAlerts";
 import { dialogAround } from "./dialogElement";
 import { useEscapeWhileTooltipOpen } from "./useEscapeWhileTooltipOpen";
 import { useHeightMotion } from "./useHeightMotion";
 import { useToastClearance } from "./useToastClearance";
 
-/** The inline error and busy state every dialog that talks to the daemon needs. The error is the
- * request's own failure, shown at the foot of the dialog; what is wrong with a single field goes to
+/** The error and busy state every dialog that talks to the daemon needs. Execution failures go to
+ * the acknowledgement queue; what is wrong with a single field goes to
  * that field's own `errorMessage` instead (see `useSubmitValidation`). `run` clears the
  * error, marks the dialog busy for the duration of `action`, and shows a rejection as the error
  * instead of letting it escape, so the dialog stays open for another try. A dialog reused for
@@ -29,13 +30,13 @@ export function useDialogAction(resetKey?: string): {
   busy: boolean;
   run: (action: () => Promise<void>) => Promise<void>;
 } {
-  const [error, setError] = useState<ErrorPresentation>();
+  const [error, setFailure] = useState<ErrorPresentation>();
   const [busy, setBusy] = useState(false);
   const [seenKey, setSeenKey] = useState(resetKey);
   const currentKey = useLatest(resetKey);
   if (seenKey !== resetKey) {
     setSeenKey(resetKey);
-    setError(undefined);
+    setFailure(undefined);
     setBusy(false);
   }
 
@@ -43,17 +44,23 @@ export function useDialogAction(resetKey?: string): {
     const startedFor = resetKey;
     const stale = () => currentKey.current !== startedFor;
     setBusy(true);
-    setError(undefined);
+    setFailure(undefined);
     try {
       await action();
     } catch (err) {
-      if (!stale()) setError(errorPresentation(err as Error));
+      if (!stale()) {
+        if (err instanceof DaemonRequestError && err.code === "config_dir_taken") setFailure(err);
+        else reportError(err as Error);
+      }
     } finally {
       if (!stale()) setBusy(false);
     }
   };
 
-  return { error, setError, busy, run };
+  return { error, setError: (message) => {
+    setFailure(undefined);
+    if (message !== undefined) reportError(message);
+  }, busy, run };
 }
 
 /** Puts keyboard focus back on the element `target` returns when `deps` change and focus has fallen to `<body>`,
@@ -84,43 +91,29 @@ export function useSubmitValidation(): {
   };
 }
 
-/** A dialog's inline failure line, for the failure of the request itself; a field's own validation
- * belongs under that field. A message the dialog words itself with markup (a file name as code) is
- * passed as an element. It sits at the foot of the body, which in a long form is out of view,
- * so it is scrolled into view when it appears or changes (smoothly, unless the system asks for
- * reduced motion); `nearest` leaves the body where it is when the line is already showing. */
-export function DialogError({ message }: { message: ErrorPresentation | React.ReactElement | undefined }): React.ReactElement | null {
-  const ref = useRef<HTMLDivElement>(null);
+/** A deterministic description of message markup, without serializing React internals. */
+function nodeText(node: unknown, seen = new Set<object>()): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (!node || typeof node !== "object" || seen.has(node)) return "";
+  seen.add(node);
+  if (React.isValidElement(node)) return nodeText(node.props, seen);
+  return Object.values(node).map((value) => nodeText(value, seen)).filter(Boolean).join(" ");
+}
+
+/** Presents an execution failure above the originating dialog, which stays available for retry. */
+export function DialogError({ message }: { message: ErrorPresentation | React.ReactElement | undefined }): null {
+  const description = !message ? undefined : typeof message === "string" ? message : React.isValidElement(message) ? nodeText(message) : (message as Error).message;
+  const latest = useLatest(message);
   useEffect(() => {
-    if (!message) return;
-    let cancelled = false;
-    let frame = requestAnimationFrame(() => {
-      // The line's arrival changes the dialog's height, which `useHeightMotion` starts easing once
-      // the browser has laid that out, a frame on. Scrolling waits for the dialog to have settled:
-      // until then its body is held at the old height, and the line is not where it will be.
-      frame = requestAnimationFrame(() => {
-        const animations = dialogAround(ref)?.getAnimations?.() ?? [];
-        void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
-          if (!cancelled) ref.current?.scrollIntoView?.({ block: "nearest", behavior: prefersReducedMotion() ? "auto" : "smooth" });
-        });
-      });
+    const content = latest.current;
+    if (!description || !content) return;
+    errorAlerts.report({
+      message: description,
+      error: content,
+      content: React.isValidElement(content) ? content : <DaemonErrorMessage error={content as ErrorPresentation} />,
     });
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(frame);
-    };
-  }, [message]);
-  return message ? (
-    <div ref={ref} className="shrink-0">
-      {React.isValidElement(message) ? (
-        <ErrorAlert>{message}</ErrorAlert>
-      ) : (
-        <ErrorAlert title={typeof message !== "string" && hasShellTimeoutDetails(message) ? <DaemonErrorTitle /> : undefined}>
-          <DaemonErrorMessage error={message} showTitle={false} />
-        </ErrorAlert>
-      )}
-    </div>
-  ) : null;
+  }, [description, latest]);
+  return null;
 }
 
 /** The children HeroUI's modal parts accept. Their typings resolve `ReactNode` against the React 18
@@ -164,8 +157,8 @@ function submitsFromChoice(e: React.KeyboardEvent<HTMLFormElement>): boolean {
 let openDialogs = 0;
 
 /**
- * The frame every dialog shares. Escape and a click outside both call `onClose` (for an `alert`
- * dialog too, which HeroUI's `AlertDialog` would otherwise make explicit-action only); the dialog is
+ * The frame every dialog shares. Unless `dismissable` is false, Escape and a click outside both
+ * call `onClose`, including an `alert` dialog; the dialog is
  * mounted only while it is open, so `isOpen` is constant. With `onSubmit` the header, body and footer sit in
  * a `<form>`, so Enter in a text field submits it — the dialog decides what "submit" means. The
  * footer is Cancel plus a submit button labelled `submitLabel`, unless the dialog brings its own
@@ -195,6 +188,7 @@ export function Dialog({
   size = "md",
   alert,
   resetKey,
+  dismissable = true,
 }: {
   /** Text, or an element for a title that needs markup of its own (a file name kept left to right). */
   title: string | React.ReactElement;
@@ -211,6 +205,8 @@ export function Dialog({
   size?: "sm" | "md" | "lg" | "wide" | "viewer";
   /** A confirmation that interrupts the user: HeroUI's `AlertDialog`, announced as an alert dialog. */
   alert?: boolean;
+  /** An error requires its acknowledgement button, with no implicit dismissal. */
+  dismissable?: boolean;
   /** Names what a dialog reused across subjects currently asks about; when it changes and focus
    * was lost with the old content, it is put back on the dialog. */
   resetKey?: string;
@@ -247,7 +243,7 @@ export function Dialog({
   useRefocusIfLost(() => dialogAround(markerRef), [resetKey]);
   useToastClearance(markerRef, footer !== null);
   useHeightMotion(markerRef);
-  useEscapeWhileTooltipOpen(() => dialogAround(markerRef), onClose);
+  useEscapeWhileTooltipOpen(() => dialogAround(markerRef), dismissable ? onClose : () => {});
 
   const Frame = alert ? AlertDialog : Modal;
   // An alert dialog is described by its whole body, so a screen reader announces what is asked
@@ -315,7 +311,7 @@ export function Dialog({
   );
 
   return (
-    <Frame.Backdrop isOpen isDismissable isKeyboardDismissDisabled={false} onOpenChange={(open) => !open && onClose()}>
+    <Frame.Backdrop isOpen isDismissable={dismissable} isKeyboardDismissDisabled={!dismissable} onOpenChange={(open) => !open && dismissable && onClose()}>
       {/* HeroUI pads the container 40px from `sm` up, which below the `docked` breakpoint leaves too
           little of a narrow window for code; the viewer asks for a 16px margin there and the 40px
           one above it. The narrow margin is a `max-docked:` utility, not an `sm:` one paired with a
@@ -339,10 +335,10 @@ export function Dialog({
           }
         >
           <span ref={markerRef} hidden />
-          <TitledControl title={t("common.close")}>
+          {dismissable && <TitledControl title={t("common.close")}>
             {/* Named explicitly so it always matches the tooltip. */}
             <Frame.CloseTrigger aria-label={t("common.close")} />
-          </TitledControl>
+          </TitledControl>}
           {onSubmit ? (
             // A key held down repeats: the press that opened the dialog (a menu item takes Enter and
             // Space on keydown) would otherwise go on to submit it before the user has read it, Enter

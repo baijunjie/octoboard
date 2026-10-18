@@ -9,6 +9,8 @@ import React from "react";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
+import type { ErrorRecovery } from "../errorRecovery";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { TintedAlert } from "../components/TintedAlert";
 import type { ErrorPresentation } from "../errorPresentation";
@@ -63,23 +65,29 @@ const TONES: Record<NoticeTone, "default" | "warning" | "danger"> = {
  * so it is spoken as well as shown: pass it as `speak`, which is the sentence and, unless
  * `children` says otherwise, the visible text too — one string, so the two cannot drift apart. Pass
  * `announced` instead where the surface already has a region speaking that sentence. Either way the
- * block itself is hidden from assistive technology, so nothing is read twice. A notice that is
+ * block itself is hidden from assistive technology, so nothing is read twice. Failures use the
+ * dedicated acknowledgement dialog instead of a status announcement. A notice that is
  * there from the first paint passes neither.
  */
 export function Notice({
   tone = "explained",
   appearance = "strip",
   speak,
+  error,
+  recovery,
   announced,
   children = speak,
 }: {
   tone?: NoticeTone;
   appearance?: "strip" | "document";
   speak?: string;
+  error?: unknown;
+  recovery?: ErrorRecovery;
   announced?: boolean;
   children?: React.ReactNode;
 }): React.ReactElement {
   const status = TONES[tone];
+  useErrorAcknowledgement(tone === "failed" ? speak ?? (typeof children === "string" ? children : undefined) : undefined, undefined, error, recovery);
   const direction = textDirection(useCurrentLanguage());
   const inDocument = appearance === "document";
   const hidden = speak !== undefined || announced === true;
@@ -97,7 +105,7 @@ export function Notice({
           <Alert.Description className={inDocument ? "break-words text-foreground leading-6" : "text-foreground"}>{children}</Alert.Description>
         </Alert.Content>
       </TintedAlert>
-      {speak !== undefined && <StatusAnnouncer text={speak} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} />}
+      {speak !== undefined && tone !== "failed" && <StatusAnnouncer text={speak} firstWriteDelayMs={FIRST_ANNOUNCEMENT_DELAY_MS} />}
     </>
   );
 }
@@ -205,6 +213,7 @@ export function Disconnected({ what }: { what: "file" | "change" }): React.React
  * with failures in the other panes and dialogs.
  */
 export function Failure({ message, title }: { message: ErrorPresentation; title: string }): React.ReactElement {
+  useErrorAcknowledgement(message, title);
   return (
     <ErrorAlert title={title} className="min-w-0 shrink-0">
       <DaemonErrorMessage error={message} showTitle={false} />

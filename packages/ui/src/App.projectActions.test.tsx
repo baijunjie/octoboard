@@ -3,6 +3,8 @@ import { act } from "react";
 import * as reactAria from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { ErrorAlerts } from "./dialogs/ErrorAlerts";
+import { errorAlerts } from "./errorAlerts";
 import { App } from "./App";
 import { setProjectBrowserMode, useProjectBrowserState } from "./browser/browserState";
 import { mountForTooltip } from "./components/tooltipTestSupport";
@@ -43,6 +45,7 @@ function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Pro
   document.documentElement.style.setProperty("--rail-width", "48px");
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
   onTestFinished(() => {
+    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
     vi.unstubAllGlobals();
     document.documentElement.style.removeProperty("--rail-width");
     document.documentElement.style.removeProperty("--breakpoint-docked");
@@ -58,7 +61,7 @@ function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Pro
   };
   const container = mountForTooltip(
     <PlatformProvider value={{ kind: "browser", clipboard, links }}>
-      <ThemeProvider><DaemonProvider value={daemon}><App /></DaemonProvider></ThemeProvider>
+      <ThemeProvider><DaemonProvider value={daemon}><App /><ErrorAlerts daemon={daemon} /></DaemonProvider></ThemeProvider>
     </PlatformProvider>,
   );
   return { container, daemon, project: projects[0] };
@@ -109,14 +112,14 @@ it.each([false, true])("reopens a hidden project's Files pane when narrow=%s", a
   expect(container.querySelector('[data-region="topbar"] [aria-label="Hide project pane"]')).not.toBeNull();
 });
 
-it("sends the project directory request and reports a failure through the normal toast", async () => {
+it("sends the project directory request and reports a failure through the shared error channel", async () => {
   const { daemon, project } = mountApp();
   vi.mocked(daemon.request).mockRejectedValueOnce(new Error("The system file manager could not be opened."));
   await openProjectMenu(project.name);
   await press("Open in");
   await press("File manager");
   expect(daemon.request).toHaveBeenCalledWith({ type: "open_project_directory", project: project.id });
-  expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith("The system file manager could not be opened.");
+  expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: "The system file manager could not be opened." }));
 });
 
 it("copies the project name unchanged and reports success", async () => {
@@ -133,7 +136,7 @@ it("reports a clipboard failure", async () => {
   const { daemon, project } = mountApp(false, clipboard);
   await openProjectMenu(project.name);
   await press("Copy project name");
-  expect(daemon.toastError).toHaveBeenCalledWith("Could not copy the project name");
+  expect(daemon.toastError).toHaveBeenCalledWith(expect.objectContaining({ message: "Could not copy the project name", recovery: "clipboard" }));
   expect(daemon.toastNotice).not.toHaveBeenCalled();
 });
 
@@ -157,7 +160,7 @@ it("reports a session ID clipboard failure", async () => {
   const { daemon } = mountApp(false, clipboard, true);
   await press(`Actions for session ${isolate("Fix bug")}`);
   await press("Copy session ID");
-  expect(daemon.toastError).toHaveBeenCalledWith("Could not copy the session ID");
+  expect(daemon.toastError).toHaveBeenCalledWith(expect.objectContaining({ message: "Could not copy the session ID", recovery: "clipboard" }));
   expect(daemon.toastNotice).not.toHaveBeenCalled();
 });
 
@@ -200,11 +203,20 @@ it("restores only the confirmed project and reports success", async () => {
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
 });
 
+it("keeps a native operation rejection string as the error diagnostic", async () => {
+  const { daemon } = mountApp();
+  vi.mocked(daemon.request).mockRejectedValueOnce("Native file manager rejected");
+  await openProjectMenu("Website");
+  await press("Open in");
+  await press("File manager");
+  expect(daemon.toastError).toHaveBeenCalledWith(expect.objectContaining({ message: "Native file manager rejected", cause: "Native file manager rejected" }));
+});
+
 it("keeps the restore confirmation open and displays a refusal", async () => {
   const { daemon } = await openRestoreConfirmation();
   vi.mocked(daemon.request).mockRejectedValueOnce(new Error("Finish the merge first."));
   await act(async () => document.querySelector('[role="alertdialog"] form')!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
-  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Finish the merge first.");
+  expect([...document.querySelectorAll('[role="alertdialog"]')].some((dialog) => dialog.textContent?.includes("Finish the merge first."))).toBe(true);
   expect(daemon.toastNotice).not.toHaveBeenCalled();
 });
 
@@ -237,5 +249,6 @@ it("opens the project repository through the platform and reports an opening fai
   await openProjectMenu(project.name);
   await press("Open in");
   await press("GitLab");
-  expect(daemon.toastError).toHaveBeenCalledWith("Browser unavailable");
+  expect(errorAlerts.getSnapshot().some((failure) => failure.message === "Could not open the external link.")).toBe(true);
+  expect(document.querySelector('[role="alertdialog"] [data-inline-chip]')?.textContent).toBe("https://gitlab.com/team/app");
 });

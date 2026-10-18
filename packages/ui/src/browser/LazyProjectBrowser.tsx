@@ -2,6 +2,7 @@ import { Button } from "@heroui/react";
 import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import { ErrorAlert } from "../components/ErrorAlert";
+import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
 import { useT } from "../i18n/react";
 import { AsidePane, type AsideLayout } from "../layout/AsidePane";
 import type { ProjectBrowser as ProjectBrowserType } from "./ProjectBrowser";
@@ -72,6 +73,7 @@ class LoadBoundary extends React.Component<
 /** The fallback, a function component because only one can read the current language. */
 function LoadFailed({ layout, onRetry }: { layout: AsideLayout; onRetry: (holdsFocus: boolean) => void }): React.ReactElement {
   const t = useT();
+  useErrorAcknowledgement(t("browser.loadFailed"));
   const retry = useRef<HTMLButtonElement>(null);
   // A render that failed with focus inside the browser took focus down with it.
   useEffect(() => {

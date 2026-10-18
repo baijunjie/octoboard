@@ -13,17 +13,17 @@ export const RenderedDiff = lazy(() => renderer().then((module) => ({ default: m
  * failing to load its module — instead of letting the failure take the viewer down. A new `resetKey`
  * gives the renderer another try. */
 export class RendererBoundary extends React.Component<
-  { resetKey: string; fallback: React.ReactNode; children: React.ReactNode },
-  { failed: boolean; key: string }
+  { resetKey: string; fallback: React.ReactNode | ((error: unknown) => React.ReactNode); children: React.ReactNode },
+  { failed: boolean; key: string; error?: unknown }
 > {
-  state = { failed: false, key: this.props.resetKey };
+  state: { failed: boolean; key: string; error?: unknown } = { failed: false, key: this.props.resetKey };
 
-  static getDerivedStateFromProps(props: { resetKey: string }, state: { key: string }): { failed: boolean; key: string } | null {
-    return props.resetKey === state.key ? null : { failed: false, key: props.resetKey };
+  static getDerivedStateFromProps(props: { resetKey: string }, state: { key: string }): { failed: boolean; key: string; error?: unknown } | null {
+    return props.resetKey === state.key ? null : { failed: false, key: props.resetKey, error: undefined };
   }
 
-  static getDerivedStateFromError(): { failed: boolean } {
-    return { failed: true };
+  static getDerivedStateFromError(error: unknown): { failed: boolean; error: unknown } {
+    return { failed: true, error };
   }
 
   componentDidCatch(error: unknown): void {
@@ -31,7 +31,8 @@ export class RendererBoundary extends React.Component<
   }
 
   render(): React.ReactNode {
-    return this.state.failed ? this.props.fallback : this.props.children;
+    if (!this.state.failed) return this.props.children;
+    return typeof this.props.fallback === "function" ? this.props.fallback(this.state.error) : this.props.fallback;
   }
 }
 

@@ -1,6 +1,7 @@
 import { Button } from "@heroui/react";
-import React, { useState } from "react";
+import React, { useEffect } from "react";
 
+import { errorAlerts } from "./errorAlerts";
 import { ContentPanel } from "./components/ContentPanel";
 import { ErrorAlert } from "./components/ErrorAlert";
 import { CodeBlock } from "./components/CodeBlock";
@@ -28,8 +29,7 @@ interface StartupScreenProps {
  */
 export function StartupScreen({ message, action }: StartupScreenProps): React.ReactElement {
   const t = useT();
-  const [quitError, setQuitError] = useState<string>();
-  const { requestQuit, canQuit } = useAppExit({ toastError: setQuitError });
+  const { requestQuit, canQuit } = useAppExit({ toastError: (message) => errorAlerts.report({ message }) });
   // Reachable from the keyboard while it scrolls, as a dialog's body is: the buttons sit at the end
   // of the content, so a long message has nothing between them and the top to take focus, and the
   // window itself never scrolls.
@@ -51,9 +51,6 @@ export function StartupScreen({ message, action }: StartupScreenProps): React.Re
                 {action && <Button onPress={action.onSelect}>{action.label}</Button>}
                 {canQuit && <Button onPress={() => void requestQuit()}>{t("common.quit")}</Button>}
               </div>
-              {/* Quitting is the only action this screen has, so a quit that fails silently would
-                  leave the user with nothing at all. */}
-              {quitError && <ErrorAlert>{quitError}</ErrorAlert>}
             </div>
           </FadedScroller>
         </div>
@@ -65,6 +62,7 @@ export function StartupScreen({ message, action }: StartupScreenProps): React.Re
 /** What the screen says when the shell passed the daemon's startup failure along as `?error=`. */
 export function DaemonFailedMessage({ error }: { error: string }): React.ReactElement {
   const t = useT();
+  useEffect(() => { errorAlerts.report({ message: error, title: t("startup.daemonFailed.title") }); }, [error, t]);
   return (
     <ErrorAlert title={t("startup.daemonFailed.title")} headingLevel={1} announce={false}>
       <CodeBlock>{error}</CodeBlock>

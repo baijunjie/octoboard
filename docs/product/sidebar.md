@@ -292,14 +292,15 @@ and **Remove project**. An item a view does not offer is left out without moving
   File manager opens the project's directory on the daemon's host (see "Opening the system file manager" below).
   Terminal opens the system terminal at that directory (see "Opening a project terminal" in
   `docs/product/project-terminal.md`). Both are offered for every project, including one that is not a git repository
-  and one whose git status has not arrived. Neither raises a success toast; a failure is an error toast.
-  The repository entry opens the recorded remote's web address in the client's browser. Public GitHub, GitLab and
+  and one whose git status has not arrived. Neither raises a success toast; a failure is an error alert.
+  The repository entry opens the recorded remote's web address in the client's browser and carries a trailing
+  external-link icon. Public GitHub, GitLab and
   Bitbucket hosts carry their brand names and icons; other hosts carry their hostname and a globe icon, including
   self-hosted installations. A missing, invalid, local or unsupported remote, or a client unable to open web links,
   leaves out the repository entry. HTTP and HTTPS remotes retain their web scheme; SSH, SCP-style, `git://`,
   `git+ssh://` and `ssh+git://` remotes use HTTPS. Credentials, query strings, fragments and a trailing `.git` are
   omitted from the opened address, as are transport ports on non-web remotes. Opening raises no success toast;
-  a failure is an error toast.
+  a failure is an error alert.
 - **Git** — a submenu, only while the project's status says its directory is a git repository, so not before the
   first status and not when the directory is not one (see "What one check does" in
   `docs/product/project-git-status.md`). It holds **Pull current branch**, then **Push current branch**, then
@@ -307,14 +308,14 @@ and **Remove project**. An item a view does not offer is left out without moving
   checks the project against its remote and fast-forwards it right now, is not waited on, and toasts nothing when it
   succeeds (see "Pulling one project by hand" in `docs/product/project-git-status.md`). Push current branch pushes
   that branch and is waited on until the push finishes; the window then shows a notice that the current branch was
-  pushed, or an error toast if the push was refused (see "Pushing the current branch" in
+  pushed, or an error alert if the push was refused (see "Pushing the current branch" in
   `docs/product/project-git-actions.md`). Switch branch opens the third-level local branch menu; see "Switching the
   local branch" in `docs/product/project-git-actions.md`. Restore file changes asks for confirmation before discarding tracked changes
   (see "Restoring file changes" in `docs/product/project-git-actions.md`).
 - **Rename** — a dialog with the name alone; an empty name is rejected.
 - **Copy project name** — copies the project's name exactly to the clipboard. Available in all the
   project-menu placements above, including right-click menus, when the platform offers a clipboard; otherwise the
-  item is absent. Success raises a notice toast; a refused copy raises an error toast.
+  item is absent. Success raises a notice toast; a refused copy raises an error alert.
 - **Project settings** — the project dialog, see "Editing a project" in `docs/product/consoles-and-projects.md`.
 - **Remove project** — see "Removing a project" in `docs/product/consoles-and-projects.md`; it asks for confirmation
   first.
@@ -335,7 +336,7 @@ control of its own: the sessions under an owner fold away with their project, li
 **File manager** under **Open in** is available for every project in all the project-menu placements above,
 independently of whether its project pane is visible, which mode it shows, and whether the directory is a Git repository. It opens
 the project's directory on the machine running the daemon, including when the client is a browser on another machine.
-It changes no session selection or pane ownership. Success raises no toast; a refusal raises an error toast with the
+It changes no session selection or pane ownership. Success raises no toast; a refusal raises an error alert with the
 reason.
 
 On macOS this asks Finder to open the directory through the system directory opener. The request waits for that
@@ -380,7 +381,7 @@ action menu offers:
 - **Copy session ID** — immediately after Rename, copies the session's ID exactly to the clipboard. Available for
   project and console sessions wherever their action menus are offered, including right-click menus, focus mode and
   nested sessions. An archived session's menu offers it after Reopen. When the platform offers no clipboard, the item
-  is absent. Success raises a notice toast; a refused copy raises an error toast.
+  is absent. Success raises a notice toast; a refused copy raises an error alert.
 - **Colour** — a console session's row only: a submenu of swatches where the user chooses the console session's colour
   (see "The binding badge" below). A project session's row has no such entry, and neither has an archived console
   session's.
@@ -480,8 +481,8 @@ the swatches are a list named by the **Colour** entry, and each swatch is announ
 generated in the interface language; the palette keeps those descriptions distinct in every offered language and
 both appearances, except that in Arabic violet and fuchsia share one, and in Korean teal shares one with cyan in the
 light appearance and with sky in the dark one. The colour is stored by the daemon with the console session, so every
-window and every client sees it and it survives a restart. A change that fails is shown as an error toast, as a
-failed **Pin** is (see `docs/product/toasts.md`). An archived console session's menu has no **Colour** entry, and a
+window and every client sees it and it survives a restart. A change that fails is shown as an error alert, as a
+failed **Pin** is (see "Error alerts" in `docs/product/error-alerts.md`). An archived console session's menu has no **Colour** entry, and a
 project session has no colour to choose.
 
 ## Rows, names and keyboard focus

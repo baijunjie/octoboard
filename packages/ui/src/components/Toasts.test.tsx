@@ -9,6 +9,8 @@ import { daemonMessage } from "../daemonMessage";
 import { noticeErrorPresentation } from "../errorPresentation";
 import { sessionOf } from "../gallery/fixtures/builders";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { ErrorAlerts } from "../dialogs/ErrorAlerts";
+import { errorAlerts } from "../errorAlerts";
 import { Toasts } from "./Toasts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -39,7 +41,7 @@ function stubWidth(width: number): void {
   }));
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); vi.unstubAllGlobals(); });
 
 // The toast region only mounts once a toast is queued, so the placement is read off a shown one.
 it("puts the toasts at the top in a window narrower than 640px and at the bottom end otherwise", () => {
@@ -95,19 +97,22 @@ it("renders a coded shell timeout with a separate title and command while plain 
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
-    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /></DaemonProvider>));
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
     const error = new DaemonRequestError("plain fallback", "shell_environment_timeout", { shell: "/bin/zsh", command: "env -0", timeout: "10s" });
     act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
-    const title = document.querySelector('[data-slot="toast-title"]');
-    const description = document.querySelector('[data-slot="toast-description"]');
-    expect(title?.textContent).toBe("Shell environment timed out");
-    expect(title?.querySelector("code")).toBeNull();
-    expect(description?.querySelector("code")?.textContent).toBe("/bin/zsh -l -i -c 'env -0'");
-    expect(description?.textContent).toContain("10s");
-    expect(description?.textContent).not.toContain("plain fallback");
-    expect(description?.querySelector("h3")).toBeNull();
+    const alert = document.querySelector('[role="alertdialog"]');
+    expect(alert?.textContent).toContain("Shell environment timed out");
+    expect(alert?.querySelector("code")?.textContent).toBe("/bin/zsh -l -i -c 'env -0'");
+    expect(alert?.textContent).toContain("10s");
+    expect(alert?.textContent).not.toContain("plain fallback");
+    expect(document.querySelector('[data-slot="toast-title"]')).toBeNull();
     act(() => deliver({ kind: "error", message: "a plain failure" }));
-    expect([...document.querySelectorAll('[data-slot="toast-title"]')].some((element) => element.textContent === "a plain failure")).toBe(true);
+    expect(errorAlerts.getSnapshot()).toHaveLength(2);
+    act(() => errorAlerts.acknowledge());
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("a plain failure");
+    act(() => errorAlerts.acknowledge());
+    act(() => deliver({ kind: "error", message: "This request is no longer waiting.", daemonError: new DaemonRequestError("", "session_request_not_waiting", {}) }));
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("This request is no longer waiting.");
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
     act(() => root.unmount());
@@ -115,7 +120,7 @@ it("renders a coded shell timeout with a separate title and command while plain 
   }
 });
 
-it("sets the path of a coded daemon message as code in the toast's title", () => {
+it("sets the path of a coded daemon error as code in its acknowledgement dialog", () => {
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
@@ -124,13 +129,13 @@ it("sets the path of a coded daemon message as code in the toast's title", () =>
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
-    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /></DaemonProvider>));
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
     const error = new DaemonRequestError("plain fallback", "path_not_found", { path: "/Users/dev/missing" });
     act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
-    const title = document.querySelector('[data-slot="toast-title"]');
-    expect(title?.querySelector("code")?.textContent).toBe("/Users/dev/missing");
-    expect(title?.textContent).toBe("/Users/dev/missing does not exist.");
-    expect(document.body.textContent?.split("does not exist.")).toHaveLength(2);
+    const alert = document.querySelector('[role="alertdialog"]');
+    expect(alert?.querySelector("code")?.textContent).toBe("/Users/dev/missing");
+    expect(alert?.textContent).toContain("/Users/dev/missing does not exist.");
+    expect(document.querySelector('[data-slot="toast-title"]')).toBeNull();
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
     act(() => root.unmount());
@@ -151,7 +156,7 @@ it("shows a coded notice under the session's location, the path as code in the d
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
-    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /></DaemonProvider>));
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
     const error = new DaemonRequestError("plain fallback", "trust_not_carried_over", { agent: "Codex", path: "/Users/dev/code", reason: "why" });
     act(() => deliver({ kind: "notice", message: error.message, daemonError: error, session: "s1" }));
     const description = document.querySelector('[data-slot="toast-description"]');
@@ -173,7 +178,7 @@ it("shows a failed launch's shell timeout once: the title names the launch, the 
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
-    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /></DaemonProvider>));
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
     // Worded as the store does: the title without the reason, since the details carry it.
     const params = { title: "Draft the notes", reason_code: "shell_environment_timeout", shell: "/bin/zsh", command: "env -0", timeout: "10s" };
     const error = noticeErrorPresentation("launch_failed", params, "fallback");
@@ -206,12 +211,12 @@ it("shows the error heading above a structured error's details when the toast is
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
-    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /></DaemonProvider>));
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
     const error = new DaemonRequestError("fallback", "shell_environment_timeout", { shell: "/bin/zsh", command: "env -0", timeout: "10s" });
     act(() => deliver({ kind: "error", message: error.message, session: "s1", daemonError: error }));
-    const description = document.querySelector('[data-slot="toast-description"]');
-    expect(description?.querySelector("h3")?.textContent).toBe("Shell environment timed out");
-    expect(description?.querySelector("code")?.textContent).toBe("/bin/zsh -l -i -c 'env -0'");
+    const alert = document.querySelector('[role="alertdialog"]');
+    expect(alert?.querySelector("h3")?.textContent).toBe("Shell environment timed out");
+    expect(alert?.querySelector("code")?.textContent).toBe("/bin/zsh -l -i -c 'env -0'");
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
     act(() => root.unmount());
@@ -228,7 +233,7 @@ it("preserves a failed launch's name and nested path, and renders rich notices f
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
-    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /></DaemonProvider>));
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
     const params = { title: "Draft", reason_code: "path_not_found", path: "/missing" };
     const message = daemonMessage("en", "launch_failed", params, "fallback", daemon.store.getState());
     act(() => deliver({ kind: "notice", message, daemonError: noticeErrorPresentation("launch_failed", params, message), daemonTitle: new DaemonRequestError(message, "launch_failed.title", params) }));

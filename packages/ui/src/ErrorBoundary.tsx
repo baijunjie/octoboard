@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useEffect } from "react";
 
+import { errorAlerts } from "./errorAlerts";
 import { ErrorAlert } from "./components/ErrorAlert";
 import { CodeBlock } from "./components/CodeBlock";
 import { FadedScroller, useFadeRegion } from "./components/scrollFade";
@@ -42,13 +43,14 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
 /** The fallback, a function component because only one can read the current language. */
 function ErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }): React.ReactElement {
   const t = useT();
+  useEffect(() => { errorAlerts.report({ message: error.message, title: t("error.crashed"), content: <CodeBlock dir="ltr" wrap={false} className="text-xs">{error.stack ?? error.message}</CodeBlock> }); }, [error, t]);
   // Reachable from the keyboard while it scrolls, as a dialog's body is: nothing else on the screen
   // would scroll the stack.
   const region = useFadeRegion({ label: t("error.stack") });
   return (
     <StartupScreen
       message={
-        <ErrorAlert title={t("error.crashed")} headingLevel={1}>
+        <ErrorAlert title={t("error.crashed")} headingLevel={1} announce={false}>
           {/* The stack is taller than the screen more often than not, so it fades at the edge it
               hides the rest behind. The ring goes on this wrapper, which draws it outside its own box, so
               it needs no room of its own. `overflow-auto` beside the fade's own `overflow-y`: a long

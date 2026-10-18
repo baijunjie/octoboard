@@ -5,7 +5,7 @@ on the machine the daemon runs on — not on the machine a browser client happen
 including one that is not a git repository and one whose git status has not arrived yet. That menu is on the
 project's row, on the focused project's header, and on a project's heading in a console session's focus mode; a
 right-click opens it too (see "Project rows" in `docs/product/sidebar.md`). Choosing it closes the menu at once.
-Nothing is toasted when the terminal has been opened. A failure is an error toast worded from the refusal below.
+Nothing is toasted when the terminal has been opened. A failure is an error alert worded from the refusal below.
 
 The terminal is not part of Octoboard's window. The request finishes once the terminal has been asked to open, not
 when the user closes it, and quitting Octoboard or the daemon does not close it.
@@ -39,7 +39,7 @@ Any other operating system has no system terminal Octoboard opens.
 
 ## Refusals
 
-The open is refused with `terminal_unavailable`, and the toast includes the reason, when:
+The open is refused with `terminal_unavailable`, and the error alert includes the reason, when:
 
 - the project directory does not exist, or is not a directory;
 - the project path is not valid Unicode;

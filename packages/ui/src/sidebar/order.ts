@@ -153,7 +153,7 @@ export function boundArchivedSessions(sessions: Session[], ownerId: string): Ses
 /** Whether archiving `session` asks the user first. One sitting at its prompt (`idle`) or with no
  * process (`interrupted`) is archived at once, since nothing is cut short; one at work or raising
  * a hand asks, and so does one with an unarchived session bound to it or to one bound to it, since
- * the archive reaches both levels (or is refused over them, which the dialog shows). */
+ * the archive reaches both levels and ends their processes too. */
 export function archiveNeedsConfirmation(sessions: Iterable<Session>, session: Session): boolean {
   if (session.status !== "idle" && session.status !== "interrupted") return true;
   // One pass, so that a one-shot iterator such as a Map's `values()` serves too.
@@ -170,14 +170,14 @@ export function archiveNeedsConfirmation(sessions: Iterable<Session>, session: S
   return unarchivedElsewhere.some((owner) => archivedChildren.has(owner));
 }
 
-/** The sessions that go into the archive with `ownerId`: the interrupted ones bound to it and
- * those bound to each of them (a lead session's own sessions, two levels under a console
- * session), which is how far archiving reaches. */
+/** The unarchived sessions bound to `ownerId` or to one bound to it. Every process in
+ * this group ends on confirmation, regardless of how the session was opened or bound. An
+ * archived lead still links its descendants to the owner. */
 export function boundSessionsArchivedWith(sessions: Session[], ownerId: string): Session[] {
-  const direct = boundSessions(sessions, ownerId).filter((s) => s.status === "interrupted");
+  const direct = boundSessions(sessions, ownerId);
   const ids = new Set(direct.map((s) => s.id));
-  const nested = sessions.filter((s) => s.bound_to && ids.has(s.bound_to) && s.status === "interrupted");
-  return [...direct, ...nested.sort(compareSessions)];
+  const nested = sessions.filter((s) => s.bound_to && ids.has(s.bound_to));
+  return [...direct, ...nested.sort(compareSessions)].filter((s) => s.status !== "archived");
 }
 
 /** The console session above `session`, which it reports to directly or through the lead session

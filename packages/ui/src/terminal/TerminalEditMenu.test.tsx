@@ -115,7 +115,10 @@ it.each(["Copy", "Paste"])("reports %s failures with localized text", async (act
   clipboard!.readText = vi.fn(async () => { throw new Error("raw system error"); });
   await open();
   await choose(action);
-  expect(toastError).toHaveBeenCalledWith(action === "Copy" ? "Could not copy the selection" : "Could not paste from the clipboard");
+  expect(toastError).toHaveBeenCalledWith(expect.objectContaining({
+    message: action === "Copy" ? "Could not copy the selection" : "Could not paste from the clipboard",
+    recovery: "clipboard",
+  }));
 });
 
 it.each([

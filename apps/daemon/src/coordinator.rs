@@ -579,7 +579,7 @@ async fn handle_inner(
         }
 
         RequestBody::ArchiveSession { session } => {
-            archive_session(state, &session)?;
+            archive_session_group(state, &session, true)?;
             Ok(None)
         }
 
@@ -2624,6 +2624,27 @@ async fn relaunch_session(
     reopen: bool,
     shell_env: Option<HashMap<String, String>>,
 ) -> Result<()> {
+    relaunch_session_with(
+        state,
+        claim,
+        id,
+        instruction,
+        reopen,
+        shell_env,
+        term::launch,
+    )
+    .await
+}
+
+async fn relaunch_session_with(
+    state: &Arc<AppState>,
+    claim: &crate::state::LaunchClaim,
+    id: &str,
+    instruction: Option<&str>,
+    reopen: bool,
+    shell_env: Option<HashMap<String, String>>,
+    launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
+) -> Result<()> {
     let mut session = state.session_record(id)?;
     if !session.status.is_dormant() {
         // The ordinary cause is a second click landing after the first relaunch already moved the
@@ -2648,19 +2669,13 @@ async fn relaunch_session(
     // until the first prompt submission, so an optimistic `working` would never be corrected.
     session.status = SessionStatus::Idle;
     session.ended_at = None;
-    if !reopen
-        && state
-            .store
-            .update_session_status_if(id, previous_status, SessionStatus::Idle)?
-            .is_none()
+    if state
+        .store
+        .update_session_lifecycle_if(id, previous_status, SessionStatus::Idle, None)?
+        .is_none()
     {
-        // Archived since it was read, which can land without the claim: an archive that landed
-        // before this point stands rather than being undone by a relaunch the user did not ask
-        // for. One landing after it is not excluded; closing that takes a claim on archiving, and
-        // a resume has always had the same gap.
         return Err(session_archived(id));
     }
-    state.store.update_session(&session)?;
 
     // Queued with every refusal above already past, so a call that never launched leaves nothing
     // behind for a later launch to deliver.
@@ -2677,7 +2692,7 @@ async fn relaunch_session(
         resume_id.as_deref(),
         // The snapshot the caller resolved something from is the one the launch must use.
         move |request| {
-            term::launch(term::LaunchRequest {
+            launch(term::LaunchRequest {
                 preresolved_shell_env: shell_env,
                 ..request
             })
@@ -2692,7 +2707,18 @@ async fn relaunch_session(
             // ended with none sighted (`trust::supervise`). Never before, since the agent may be
             // sitting on its trust or approval screen, where the paste's trailing Enter would
             // answer it.
-            state.publish_session(&state.session_record(&session.id)?);
+            let recorded = state.session_record(&session.id)?;
+            if recorded.status == SessionStatus::Archived {
+                // The archive may have landed while the launch was off the runtime, before
+                // there was a registered process for it to end.
+                if let Some(live) = state.live_session(&session.id) {
+                    stop_process(live);
+                }
+                state.revoke_mcp_tokens(&session.id);
+                state.discard_outbox(&session.id);
+                return Err(session_archived(&session.id));
+            }
+            state.publish_session(&recorded);
             Ok(())
         }
         Err(err) => {
@@ -2702,9 +2728,16 @@ async fn relaunch_session(
             // persisted that before launching; the archive is ordered and dated by it (see
             // "The archive view" in `docs/product/sidebar.md`), so a session this attempt did not
             // change would otherwise jump to the top with an incorrect archive date.
-            session.status = previous_status;
-            session.ended_at = previous_ended_at;
-            state.save_session(&session)?;
+            // Restore only this attempt's optimistic status: a newer archive, including its
+            // own end time, must survive a launch failure.
+            if let Some(restored) = state.store.update_session_lifecycle_if(
+                id,
+                SessionStatus::Idle,
+                previous_status,
+                previous_ended_at,
+            )? {
+                state.publish_session(&restored);
+            }
             state.revoke_mcp_tokens(&session.id);
             // Nothing will ever release what was queued for this relaunch, and leaving it would
             // deliver a stale instruction to whatever launch comes next.
@@ -2868,19 +2901,34 @@ async fn start_process(
 /// way leaves only a state the user could have produced by hand, never an archived owner with a
 /// session bound to it still outside the archive. A session with nothing bound to it — one with
 /// the role of a bound session, or an owner that started none — never reaches another session: the
-/// user's request, an owner's tool, a `done` report with no open items, a `delete_project` that
-/// stops sessions.
+/// owner's tool, a `done` report with no open items, a `delete_project` that stops sessions.
+/// The user's control-socket request instead explicitly ends running descendants too.
 pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<()> {
+    archive_session_group(state, id, false)
+}
+
+/// A user-confirmed archive may end every process in the group; agent tools retain the
+/// unfinished-work safeguard. Validate all locks before changing any session.
+fn archive_session_group(state: &Arc<AppState>, id: &str, stop_descendants: bool) -> Result<()> {
     let _removal = state.claim_session_removal();
     let session = state.session_record(id)?;
-    ensure_unlocked(std::iter::once(session.clone()).chain(team(state, &session)?))?;
+    let descendants = team(state, &session)?;
+    ensure_unlocked(std::iter::once(session.clone()).chain(descendants.clone()))?;
+    if stop_descendants {
+        for bound in descendants {
+            if bound.status != SessionStatus::Archived {
+                archive_record(state, &bound.id)?;
+            }
+        }
+        return archive_record(state, id);
+    }
     // "Not running" is taken to mean interrupted by exclusion: a status that is neither archived
     // nor backed by a process would be archived here without anyone having decided so. One gap is
     // left open: `begin_open` inserts the session record, `bound_to` included, before it takes
     // the launch claim, so in between a bound session reads as neither archived nor
     // process-backed. Nothing awaits in that gap, so no archive can land in it, and it is not
     // closed.
-    let (running, dormant): (Vec<Session>, Vec<Session>) = team(state, &session)?
+    let (running, dormant): (Vec<Session>, Vec<Session>) = descendants
         .into_iter()
         .filter(|bound| bound.status != SessionStatus::Archived)
         .partition(|bound| state.has_process(&bound.id));
@@ -3199,6 +3247,16 @@ pub async fn switch_session_account(
     account: Option<Option<String>>,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
 ) -> Result<()> {
+    switch_session_account_with(state, id, account, snapshot, term::launch).await
+}
+
+async fn switch_session_account_with(
+    state: &Arc<AppState>,
+    id: &str,
+    account: Option<Option<String>>,
+    snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
+    launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
+) -> Result<()> {
     let account = account.ok_or_else(|| field_required("account"))?;
     // Held until this function returns, after the come-up verdict and any revert, so nothing else
     // can launch, resume, switch or delete the session while its process is down, while the
@@ -3248,7 +3306,9 @@ pub async fn switch_session_account(
     }
     state.set_session_account(id, target_account.as_deref(), target_dir.as_deref())?;
 
-    if let Err(err) = relaunch_session(state, &claim, id, None, false, plan.shell_env).await {
+    if let Err(err) =
+        relaunch_session_with(state, &claim, id, None, false, plan.shell_env, launch).await
+    {
         put_back_on_account(state, &before);
         return Err(err);
     }
@@ -7748,6 +7808,123 @@ mod tests {
         );
     }
 
+    /// Hold the real relaunch path inside its blocking launcher while the user archives the
+    /// owner. Both a late process and a late refusal must leave that archive intact.
+    async fn archive_during_relaunch(switching: bool, succeeds: bool) {
+        use SessionStatus::{Archived, Idle, Interrupted};
+        let (state, dir) = switch_fixture("archive-during-relaunch");
+        std::fs::create_dir_all(dir.join("claude-a")).unwrap();
+        state
+            .store
+            .insert_session(&console_session("hub", Idle))
+            .unwrap();
+        state
+            .store
+            .insert_session(&bound_session("worker", Interrupted, "hub"))
+            .unwrap();
+        let (release, released) = std::sync::mpsc::channel();
+        let (started_tx, started) = tokio::sync::oneshot::channel();
+        let stand_in = succeeds.then(|| idle_stand_in("worker"));
+        let process = stand_in.as_ref().map(|live| (*live).clone());
+        let launch = move |_: term::LaunchRequest| {
+            started_tx.send(()).unwrap();
+            released
+                .recv_timeout(crate::test_support::PATIENCE)
+                .expect("release launch");
+            match process {
+                Some(session) => Ok(term::Launch {
+                    session,
+                    agent_session_id: None,
+                    notice: None,
+                }),
+                None => Err(anyhow::anyhow!("delayed launch failure")),
+            }
+        };
+        let running = tokio::spawn({
+            let state = state.clone();
+            async move {
+                if switching {
+                    switch_session_account_with(
+                        &state,
+                        "worker",
+                        Some(Some("claude-a".to_string())),
+                        || Ok(HashMap::new()),
+                        launch,
+                    )
+                    .await
+                } else {
+                    let claim = state.begin_launch("worker")?;
+                    relaunch_session_with(
+                        &state,
+                        &claim,
+                        "worker",
+                        Some("obsolete instruction"),
+                        true,
+                        None,
+                        launch,
+                    )
+                    .await
+                }
+            }
+        });
+        tokio::time::timeout(crate::test_support::PATIENCE, started)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(status_of(&state, "worker"), Some(Idle));
+        assert!(state.live_session("worker").is_none());
+        handle(
+            &state,
+            None,
+            RequestBody::ArchiveSession {
+                session: "hub".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+        let ended_at = state.session_record("worker").unwrap().ended_at;
+        release.send(()).unwrap();
+        let err = running
+            .await
+            .unwrap()
+            .expect_err("archive wins over the relaunch");
+        if succeeds {
+            assert_eq!(code_of(&err), error_code::SESSION_ARCHIVED);
+        } else {
+            assert!(err.to_string().contains("delayed launch failure"));
+        }
+        if let Some(live) = &stand_in {
+            wait_until(|| live.poll_exit()).await;
+            wait_until(|| state.live_session("worker").is_none()).await;
+        }
+        let after = state.session_record("worker").unwrap();
+        assert_eq!(after.status, Archived);
+        if !succeeds {
+            assert_eq!(
+                after.ended_at, ended_at,
+                "rollback preserves the newer archive time"
+            );
+        }
+        assert_eq!(
+            after.account_id, None,
+            "a failed switch restores the original account"
+        );
+        assert_eq!(after.config_dir, None);
+        assert_eq!(status_of(&state, "hub"), Some(Archived));
+    }
+
+    #[tokio::test]
+    async fn an_archive_during_resume_ends_a_late_process_and_survives_a_late_failure() {
+        archive_during_relaunch(false, true).await;
+        archive_during_relaunch(false, false).await;
+    }
+
+    #[tokio::test]
+    async fn an_archive_during_account_switch_ends_a_late_process_and_survives_a_late_failure() {
+        archive_during_relaunch(true, true).await;
+        archive_during_relaunch(true, false).await;
+    }
+
     /// A reopen whose launch fails leaves the session exactly as it was archived: the rollback
     /// puts its status back, and the time it was archived at is not re-stamped, so its place in
     /// the archive and the time its row reports both stay where they were.
@@ -7877,6 +8054,83 @@ mod tests {
         assert_eq!(code_of(&err), error_code::SESSION_HAS_RUNNING_SESSIONS);
         assert_eq!(status_of(&state, "hub"), Some(Idle));
         drop(claim);
+    }
+
+    /// The user's confirmed control request ends both levels, including manually bound
+    /// sessions and launches in progress. Agent-driven archives keep their separate safeguard.
+    #[tokio::test]
+    async fn user_archive_ends_running_descendants_and_preserves_other_sessions() {
+        use SessionStatus::{Archived, Idle, Interrupted, WaitingUser, Working};
+        let (state, _dir) = switch_fixture("user-archive-cascade");
+        for session in [
+            console_session("hub", Idle),
+            lead_session("lead", Working, "hub"),
+            Session {
+                origin: Origin::User,
+                ..bound_session("manual", WaitingUser, "hub")
+            },
+            bound_session("nested", Idle, "lead"),
+            bound_session("launching", Interrupted, "lead"),
+            Session {
+                ended_at: Some(5),
+                ..bound_session("old", Archived, "hub")
+            },
+            console_session("other-hub", Idle),
+            bound_session("elsewhere", Working, "other-hub"),
+            project_session("unbound", Agent::Claude, Working),
+        ] {
+            state.store.insert_session(&session).unwrap();
+        }
+        let processes: Vec<_> = ["hub", "lead", "manual", "nested", "elsewhere", "unbound"]
+            .into_iter()
+            .map(|id| {
+                let live = idle_stand_in(id);
+                state.register_live(live.clone());
+                live
+            })
+            .collect();
+        let launch = state.begin_launch("launching").unwrap();
+
+        // Preflight includes descendants before ending any process.
+        state.store.set_session_locked("nested", true).unwrap();
+        let request = || RequestBody::ArchiveSession {
+            session: "hub".to_string(),
+        };
+        let err = handle(&state, None, request()).await.unwrap_err();
+        assert_eq!(code_of(&err), error_code::SESSION_LOCKED);
+        for id in ["hub", "lead", "manual", "nested", "launching"] {
+            assert_ne!(status_of(&state, id), Some(Archived), "{id}");
+        }
+        state.store.set_session_locked("nested", false).unwrap();
+        let mut events = state.subscribe();
+        handle(&state, None, request()).await.unwrap();
+        let mut archived = Vec::new();
+        while let Ok(event) = events.try_recv() {
+            if let Event::SessionUpserted { session } = event {
+                archived.push(session.id);
+            }
+        }
+        assert_eq!(archived.last().map(String::as_str), Some("hub"));
+        let position = |id: &str| archived.iter().position(|session| session == id).unwrap();
+        assert!(position("nested") < position("lead"));
+        assert!(position("launching") < position("lead"));
+        for process in &processes[..4] {
+            wait_until(|| process.poll_exit()).await;
+        }
+        for process in &processes[4..] {
+            assert!(!process.poll_exit(), "unrelated process was ended");
+        }
+
+        for id in ["hub", "lead", "manual", "nested", "launching"] {
+            assert_eq!(status_of(&state, id), Some(Archived), "{id}");
+        }
+        for id in ["elsewhere", "unbound"] {
+            assert_eq!(status_of(&state, id), Some(Working), "{id}");
+        }
+        assert_eq!(status_of(&state, "other-hub"), Some(Idle));
+        assert_eq!(state.session_record("old").unwrap().ended_at, Some(5));
+        drop(launch);
+        drop(processes);
     }
 
     /// With no bound process running, archiving a console session archives every bound session

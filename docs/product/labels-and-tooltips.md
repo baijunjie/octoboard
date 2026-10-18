@@ -79,7 +79,7 @@ buttons, the pin buttons and the session Delete or Archive shortcuts below. Thes
   hover, reaches it. When the popover closes with the pointer resting on the "?" or the keyboard in use, the tooltip
   stays shut until focus or the pointer leaves the "?", so it does not reopen at once; closed by an outside press with
   the pointer elsewhere, nothing is held back, and the next rest on the "?" shows the tooltip;
-- the close button of every dialog, of Settings and of each toast ("Close").
+- the close button of every dismissable dialog, of Settings and of each toast ("Close").
 
 While the docked sidebar is hidden at 1168 px and wider, a console's avatar opens its tooltip on keyboard focus only:
 resting the mouse on it floats the sidebar in instead (see "Previewing a console from the rail" in

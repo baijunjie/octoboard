@@ -107,26 +107,12 @@ to close anything first to get back out of a lost connection (see "What an open 
 the restriction while a menu is open are in "Moving focus between regions with F6" in
 `docs/product/moving-focus-between-regions.md`.
 
-**Observed:** after the daemon alone was killed with `SIGTERM` while the application stayed open, the banner read
-"Disconnected from the daemon." with its Retry button up within moments (the two automatic retries fail at once against
-a daemon that is gone), together with a toast "The daemon process exited unexpectedly (exit code 0). Restart Octoboard
-to continue."
+Failures a user has to know about use the acknowledgement dialog described in "Error alerts" in
+`docs/product/error-alerts.md`, including a daemon process that exits unexpectedly, a failed report-page submission,
+and the failure of a dialog's own action. Session notices that are not failures use toasts; see `docs/product/toasts.md`.
 
-Failures a user has to know about are shown as toasts (see `docs/product/toasts.md`), and so are notices about a session
-that are not failures. Every such notice names where its session is — the project it runs in, or the console whose
-console session it is — and so does a failure that is about one particular session, since what the daemon reports refers
-to the session it is about only as "this session". A failed report-page submission is one such failure (see "Submitting
-a form back to the console session" in `docs/product/report-panel.md`). A failure raised by a dialog's own action is
-shown in that dialog instead — except in the trust dialog, which closes and reports most failures as a toast (see
-"The trust dialog" in `docs/product/folder-trust.md`).
-
-A dialog has two places to say what went wrong. **The failure of the dialog's own action** — what the daemon
-rejected, or an image the window could not read as an avatar — is a line at the foot of the dialog. When that line
-appears or changes out of sight, below the visible part of a long form, the dialog's body scrolls to bring it into
-view once the dialog has settled at its new height (see "What an open dialog, menu or popover covers" in
-`docs/product/window-layout.md`) — smoothly, or at once where the system asks for reduced motion. **What is wrong
-with one field**, such as a required field left blank, is said under that field instead, and the field is marked
-invalid. A field is never marked before the user has tried to submit: the message appears on the first attempt —
+**What is wrong with one field**, such as a required field left blank, is said under that field instead, and the field
+is marked invalid. A field is never marked before the user has tried to submit: the message appears on the first attempt —
 which sends nothing while any field is still wanting — and from then on follows what is typed, so it goes as soon as
 the field is corrected and comes back if the field is emptied again. A rejection by the daemon that is about one
 field's value is said under that field too, where the dialog knows which field it concerns: the session dialog's

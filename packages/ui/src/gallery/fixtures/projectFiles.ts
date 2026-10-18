@@ -243,7 +243,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "A project folder that cannot be read",
-    description: "The failure has a danger alert with a heading and a separate Try again control. Narrow shows the same failure after opening the project pane drawer.",
+    description: "A required error alert opens over the failed folder. After OK, the failure keeps a heading and a separate Try again control. Narrow shows the same failure after opening the project pane drawer.",
     state,
     files: {
       "": {

@@ -1,12 +1,16 @@
 import { CircleAlert, CircleCheck, CircleMinus, CircleSlash, CircleX, Info, type LucideIcon } from "lucide-react";
-import React, { useId } from "react";
+import React, { useEffect, useId } from "react";
 
+import { DaemonRequestError } from "../daemon-client";
+import { ErrorGuidance } from "../components/ErrorGuidance";
+import { errorAlerts } from "../errorAlerts";
+import { useLatest } from "../components/useLatest";
 import { AGENT_LABEL } from "../agents";
 import { InlineChip } from "../components/InlineChip";
 import { CodeToneContext } from "../components/codeTone";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
-import type { Event, ImportChoiceKind, ImportedProject } from "../protocol";
+import type { Event, ImportChoiceKind, ImportedProject, ImportFailure } from "../protocol";
 import { useFailureNode } from "./failureText";
 import { outcomeOf } from "./importPlan";
 
@@ -44,6 +48,7 @@ interface Line {
   project: string | undefined;
   status: Status;
   detail: React.ReactNode;
+  error?: ImportFailure | null;
 }
 
 /** One cell. The cell that is dropped when stacked (`empty`) is only ever the last column's, so no
@@ -102,6 +107,7 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
             project: undefined,
             status: "failed",
             detail: console.error ? failureNode(console.error) : "",
+            error: console.error,
           },
         ]
         : console.projects.length === 0
@@ -111,6 +117,7 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
       console: console.name,
       project: project.name,
       status: project.status,
+      error: project.error,
       detail:
         project.status === "created"
           ? project.via
@@ -127,6 +134,23 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
     return [...own, ...projects];
   });
   const failures = outcome.consolesFailed + outcome.projectsFailed;
+  const failureContent = useLatest({ lines, failureNode, t, failures });
+  useEffect(() => {
+    const { lines, failureNode, t, failures } = failureContent.current;
+    if (!failures && !result.settings_error) return;
+    const failed = lines.filter((line) => line.status === "failed");
+    const diagnostics = failed.map((line) => line.error ? new DaemonRequestError(line.error.message, line.error.code, line.error.params) : t("configuration.import.result.failed"));
+    const settingsError = result.settings_error && new DaemonRequestError(result.settings_error.message, result.settings_error.code, result.settings_error.params);
+    errorAlerts.report({
+      failures: [...diagnostics, ...(settingsError ? [settingsError] : [])].map((error) => ({ error })),
+      message: JSON.stringify([result.consoles.filter((console) => console.status === "failed" || console.projects.some((project) => project.status === "failed")), result.settings_error]),
+      content: <div className="flex flex-col gap-3">
+        {failures > 0 && <p>{t("configuration.import.result.failedCount", { count: failures })}</p>}
+        {failed.length > 0 && <ul className="flex flex-col gap-2">{failed.map((line, index) => <li key={index}><p dir="auto" className="font-semibold">{[line.console, line.project].filter(Boolean).join(" / ")}</p>{line.detail}<ErrorGuidance error={diagnostics[index]} /></li>)}</ul>}
+        {result.settings_error && <div><p><Message id="configuration.import.result.settings.failed" params={{ reason: failureNode(result.settings_error) }} /></p><ErrorGuidance error={settingsError} /></div>}
+      </div>,
+    });
+  }, [result, failureContent]);
   // One sentence per thing that happened, so a count and what it counts stay together; a thing
   // that did not happen has no sentence, and "nothing failed" is said once instead of by two zeros.
   const summary = [

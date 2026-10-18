@@ -225,7 +225,7 @@ is not spared: the caller carries on with its own work there, and that turn is r
 
 When an approval cannot be carried out, nothing is started and no branch is handed over, the call returns a tool
 error saying the user approved but it could not be carried out, with the reason, and the window that approved shows
-the reason as a toast about the requesting session. It is for one of these reasons:
+the reason in an error alert about the requesting session. It is for one of these reasons:
 
 - the caller's process ended before the session could be started, which gives the same error as an approval after a
   withdrawal (see "The confirmation dialog" below);
@@ -268,6 +268,6 @@ It behaves as follows:
 - **The first answer from any window wins** and closes the dialog everywhere. The dialog closes as soon as the daemon
   takes the answer, before the session has started. An answer that arrives after another window's is ignored without
   a message.
-- **An approval that comes too late** — the request was withdrawn or timed out — starts nothing, and a toast about the
+- **An approval that comes too late** — the request was withdrawn or timed out — starts nothing, and an error alert about the
   requesting session says it is no longer waiting for an answer, so the session it asked for was not started. A
   refusal that comes too late shows nothing.

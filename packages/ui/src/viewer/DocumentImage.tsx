@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 
+import type { ErrorRecovery } from "../errorRecovery";
 import { useT } from "../i18n/react";
 import { useDaemon } from "../store";
 import { RENDER_BUDGETS } from "./budgets";
@@ -7,7 +8,7 @@ import { bodyFromFileContent } from "./content";
 import { InlineNotice } from "./inlineNotice";
 import { resolveProjectAddress } from "./projectAddress";
 
-type Read = { path: string; url?: string; failed?: boolean; tooLarge?: boolean };
+type Read = { path: string; url?: string; failed?: boolean; error?: unknown; recovery?: ErrorRecovery; tooLarge?: boolean };
 
 /**
  * An image the document names. Only a path that resolves to a project file is read, and the read
@@ -49,10 +50,10 @@ export function DocumentImage({
           return;
         }
         const body = bodyFromFileContent(path, reply.file);
-        setRead(body.kind === "image" ? { path, url: body.url } : { path, failed: true });
+        setRead(body.kind === "image" ? { path, url: body.url } : { path, failed: true, recovery: "image" });
       })
-      .catch(() => {
-        if (live) setRead({ path, failed: true });
+      .catch((error: unknown) => {
+        if (live) setRead({ path, failed: true, error });
       });
     return () => {
       live = false;
@@ -60,7 +61,7 @@ export function DocumentImage({
   }, [project, path, overBudget, request]);
 
   const current = read?.path === path ? read : undefined;
-  if (current?.url) return <img src={current.url} alt={alt ?? ""} className="max-w-full h-auto" />;
+  if (current?.url) return <img src={current.url} alt={alt ?? ""} onError={() => setRead({ path: current.path, failed: true, recovery: "image" })} className="max-w-full h-auto" />;
 
   const description = alt ? <span>{alt}</span> : null;
   // The count is known as the document is drawn, so that notice is part of the content. A read
@@ -78,7 +79,7 @@ export function DocumentImage({
   return (
     <>
       {description}
-      <InlineNotice tone={current.tooLarge ? "explained" : "failed"} speak={sentence}>
+      <InlineNotice tone={current.tooLarge ? "explained" : "failed"} speak={sentence} error={current.error} recovery={current.recovery}>
         {sentence}
       </InlineNotice>
     </>

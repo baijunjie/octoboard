@@ -4,9 +4,9 @@ import React, { useRef, useState } from "react";
 import { AGENT_LABEL } from "../agents";
 import { InlineChip } from "../components/InlineChip";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
-import { ErrorAlert } from "../components/ErrorAlert";
-import { useListMotion } from "../components/useListMotion";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
+import { ErrorGuidance } from "../components/ErrorGuidance";
+import { errorAlerts } from "../errorAlerts";
 import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
@@ -40,7 +40,6 @@ export function SwitchAccountDialog({
   const [snapshot, setSnapshot] = useState<Session[]>();
   const [progress, setProgress] = useState<{ completed: number; total: number; current?: Session }>();
   const [failures, setFailures] = useState<SwitchFailure[]>([]);
-  const failuresRef = useListMotion<HTMLUListElement>();
   const completed = useRef(new Set<string>());
   const pending = useRef<Promise<void> | undefined>(undefined);
   const eligible = (candidate: Session) => candidate.console_id === session.console_id
@@ -80,6 +79,12 @@ export function SwitchAccountDialog({
       setProgress({ completed: processed, total: targets.length });
     }
     setFailures(failed);
+    if (failed.length) errorAlerts.report({
+      message: failed.map((failure) => `${failure.session.id}: ${typeof failure.error === "string" ? failure.error : failure.error.message}`).join("\n"),
+      title: t("dialog.switchAccount.failed", { count: failed.length }),
+      failures: failed.map((failure) => ({ error: failure.error })),
+      content: <ul className="flex flex-col gap-2">{failed.map((failure) => <li key={failure.session.id}><p dir="auto" className="font-semibold">{sessionDisplayTitle(t, failure.session)}</p><DaemonErrorMessage error={failure.error} /><ErrorGuidance error={failure.error} /></li>)}</ul>,
+    });
     if (failed.length === 0) onClose();
   };
 
@@ -113,18 +118,7 @@ export function SwitchAccountDialog({
               {currentText && <p className="[overflow-wrap:anywhere]">{currentText}</p>}
             </div>
           )}
-          {failures.length > 0 && (
-            <ErrorAlert title={t("dialog.switchAccount.failed", { count: failures.length })}>
-              <ul ref={failuresRef} className="relative flex flex-col gap-2">
-                {failures.map((failure) => (
-                  <li key={failure.session.id} data-list-motion={failure.session.id}>
-                    <p dir="auto" className="font-semibold">{sessionDisplayTitle(t, sessions.get(failure.session.id) ?? failure.session)}</p>
-                    <DaemonErrorMessage error={failure.error} />
-                  </li>
-                ))}
-              </ul>
-            </ErrorAlert>
-          )}
+
         </>
       }
     />

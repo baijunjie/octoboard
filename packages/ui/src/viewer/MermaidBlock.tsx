@@ -1,7 +1,8 @@
 import React, { useEffect, useId, useState } from "react";
 
 import { useFadeRegion, useScrollFade } from "../components/scrollFade";
-import { diagramReading, renderDiagram } from "./diagramConfig";
+import { ActionableError } from "../errorRecovery";
+import { DiagramSyntaxError, diagramReading, renderDiagram } from "./diagramConfig";
 import { useT } from "../i18n/react";
 import { Notice } from "./viewerStates";
 
@@ -28,7 +29,7 @@ export function MermaidBlock({
 }): React.ReactElement {
   const t = useT();
   const id = `diagram-${useId().replace(/:/g, "")}`;
-  const [drawn, setDrawn] = useState<{ source: string; theme: string; svg?: string; failed?: boolean }>();
+  const [drawn, setDrawn] = useState<{ source: string; theme: string; svg?: string; failure?: { error: unknown } }>();
   useEffect(() => {
     if (overBudget) return;
     let live = true;
@@ -36,8 +37,8 @@ export function MermaidBlock({
       (svg) => {
         if (live) setDrawn({ source, theme, svg });
       },
-      () => {
-        if (live) setDrawn({ source, theme, failed: true });
+      (error: unknown) => {
+        if (live) setDrawn({ source, theme, failure: { error: error instanceof DiagramSyntaxError ? new ActionableError(error.message, "contentSyntax", { cause: error.cause }) : error } });
       },
     );
     return () => {
@@ -59,10 +60,10 @@ export function MermaidBlock({
       </div>
     );
   }
-  if (current?.failed) {
+  if (current?.failure) {
     return (
       <div className="my-4">
-        <Notice appearance="document" tone="failed" speak={t("viewer.markdown.diagramFailed")} />
+        <Notice appearance="document" tone="failed" speak={t("viewer.markdown.diagramFailed")} error={current.failure.error} />
         {plain}
       </div>
     );

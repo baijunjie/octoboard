@@ -1279,6 +1279,32 @@ impl Store {
         Ok(session)
     }
 
+    /// Changes a launch attempt's status and end time together, only while its expected status
+    /// still holds. A later archive wins over an optimistic relaunch or its failure rollback.
+    pub fn update_session_lifecycle_if(
+        &self,
+        id: &str,
+        expected: SessionStatus,
+        status: SessionStatus,
+        ended_at: Option<i64>,
+    ) -> Result<Option<Session>> {
+        let conn = self.lock();
+        let moved = conn.execute(
+            "UPDATE sessions SET status = ?3, ended_at = ?4 WHERE id = ?1 AND status = ?2",
+            params![id, enum_to_text(&expected), enum_to_text(&status), ended_at],
+        )?;
+        if moved == 0 {
+            return Ok(None);
+        }
+        Ok(conn
+            .query_row(
+                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
+                params![id],
+                read_session,
+            )
+            .optional()?)
+    }
+
     /// Records the account a session runs under and its directory, together and by nothing else:
     /// the one place either is written after the session is created. Returns the record as it now
     /// stands, or `None` when the session is gone.

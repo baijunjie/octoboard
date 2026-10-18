@@ -3,6 +3,7 @@ import React, { useRef } from "react";
 
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
 import type { ErrorPresentation } from "../errorPresentation";
 import { useT } from "../i18n/react";
 
@@ -30,6 +31,7 @@ export function GitFailure({
 }): React.ReactElement {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
+  useErrorAcknowledgement(message, title);
   return (
     <div ref={ref} className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-sm">
       <ErrorAlert title={title} className="w-full max-w-lg">

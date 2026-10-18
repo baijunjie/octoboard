@@ -9,6 +9,10 @@ commits. Each change opens in the project pane's read-only file viewer (see
 header, switching modes and the file viewer in general are in `docs/product/project-pane.md` (see "Files and Git" and
 "The file viewer" there).
 
+Failures to load branches, list changes or compare commits open an error alert requiring acknowledgement; the
+pane retains its failure explanation and recovery controls afterwards (see "Error alerts" in
+`docs/product/error-alerts.md`).
+
 ## Reading only
 
 The Git mode reads the repository and never writes to it. It stages, unstages, commits and checks out nothing —

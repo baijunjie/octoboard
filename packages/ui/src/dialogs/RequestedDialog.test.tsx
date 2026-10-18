@@ -1,3 +1,4 @@
+import { errorAlerts } from "../errorAlerts";
 // @vitest-environment jsdom
 import { act, StrictMode } from "react";
 import { expect, it, vi } from "vitest";
@@ -161,6 +162,30 @@ async function submitDialog(): Promise<void> {
   });
 }
 
+it("lists every bound descendant before archiving and refreshes the list while open", async () => {
+  const hub = sessionOf("hub", console_.id, undefined, "Console", "idle", { role: "console" });
+  const manual = sessionOf("manual", console_.id, project.id, "Manual session", "working", { bound_to: hub.id, origin: "user" });
+  const lead = sessionOf("lead", console_.id, project.id, "Lead session", "idle", { bound_to: hub.id });
+  const nested = sessionOf("nested", console_.id, project.id, "Nested session", "waiting_user", { bound_to: lead.id });
+  const archived = sessionOf("archived", console_.id, project.id, "Archived session", "archived", { bound_to: hub.id });
+  const elsewhere = sessionOf("elsewhere", console_.id, project.id, "Unbound session", "working");
+  const onClose = vi.fn();
+  const { daemon } = mount({ kind: "archive-session", session: hub }, [hub, manual, lead, nested, archived, elsewhere], [], {
+    onClose, request: async () => ({ type: "ack" }),
+  });
+  const titles = () => [...document.querySelectorAll("[role=alertdialog] li")].map((row) => row.textContent);
+  expect(titles()).toHaveLength(3);
+  for (const title of [manual.title, lead.title, nested.title]) expect(titles().some((text) => text?.includes(title))).toBe(true);
+  expect(daemon.request).not.toHaveBeenCalled();
+  const late = sessionOf("late", console_.id, project.id, "New session", "starting", { bound_to: hub.id });
+  act(() => daemon.store.setState({ sessions: new Map([...daemon.store.getState().sessions, [late.id, late]]) }));
+  expect(titles()).toHaveLength(4);
+  expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("Their processes end.");
+  await submitDialog();
+  expect(daemon.request).toHaveBeenCalledExactlyOnceWith({ type: "archive_session", session: hub.id });
+  expect(onClose).toHaveBeenCalledOnce();
+});
+
 function checkbox(): HTMLInputElement {
   return document.body.querySelector<HTMLInputElement>('[role=alertdialog] input[type="checkbox"]')!;
 }
@@ -267,8 +292,8 @@ it("continues after a failure and retries only failed sessions without relying o
   await submitDialog();
   expect(onSwitchAccount.mock.calls).toEqual([[owner.id, account.id], [failed.id, account.id], [last.id, account.id]]);
   expect(document.body.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("3");
-  expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("Needs attention");
-  expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("Copy failed");
+  expect(errorAlerts.getSnapshot().some((error) => error.message.includes("Copy failed"))).toBe(true);
+  expect(document.body.querySelector('[role="alert"]')).toBeNull();
   expect(onClose).not.toHaveBeenCalled();
   act(() => daemon.store.setState({ sessions: new Map([...daemon.store.getState().sessions, ["late", { ...owner, id: "late" }]]) }));
   await submitDialog();

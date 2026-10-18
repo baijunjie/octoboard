@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { errorAlerts } from "../errorAlerts";
 import { MermaidBlock } from "./MermaidBlock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -20,12 +21,13 @@ vi.mock("mermaid", () => ({
 afterEach(() => {
   render.mockReset();
   initialize.mockReset();
-  document.body.replaceChildren();
+  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
 });
 
 async function mount(source: string, overBudget = false): Promise<void> {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
   act(() => root.render(<MermaidBlock source={source} overBudget={overBudget} theme="light" />));
   for (let i = 0; i < 20; i += 1) await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
 }
@@ -46,11 +48,13 @@ it("draws a diagram as an image with a text alternative, and does not follow a l
 });
 
 it("shows the source when a diagram cannot be drawn", async () => {
-  render.mockRejectedValue(new Error("nope"));
+  const error = new Error("nope");
+  render.mockRejectedValue(error);
   await mount("graph TD\nA-->B");
   expect(document.querySelector("[role=img]")).toBeNull();
   expect(document.body.textContent).toContain("This diagram could not be drawn, so its source is shown.");
   expect(document.body.textContent).toContain("graph TD");
+  expect(errorAlerts.getSnapshot()).toMatchObject([{ error, classification: { kind: "unexpected" } }]);
 });
 
 it("shows an over-budget diagram as source without drawing it", async () => {
@@ -58,4 +62,22 @@ it("shows an over-budget diagram as source without drawing it", async () => {
   expect(render).not.toHaveBeenCalled();
   expect(document.body.textContent).toContain("Shown as source because the document is large.");
   expect(document.body.textContent).toContain("graph TD");
+});
+
+it.each([
+  Object.assign(new Error("Diagram type is unknown"), { name: "UnknownDiagramError" }),
+  Object.assign(new Error("Unexpected token"), { hash: { expected: ["NODE"], token: "EOF", line: 2 } }),
+])("offers syntax recovery for a Mermaid parser failure: %s", async (error) => {
+  render.mockRejectedValue(error);
+  await mount("graph TD\nA-->");
+  expect(errorAlerts.getSnapshot()).toMatchObject([{
+    error: { cause: error }, classification: { kind: "actionable", recovery: "contentSyntax" },
+  }]);
+});
+
+it("preserves a library initialization exception as unexpected", async () => {
+  const error = new TypeError("Library initialization failed");
+  initialize.mockImplementationOnce(() => { throw error; });
+  await mount("graph TD\nA-->B");
+  expect(errorAlerts.getSnapshot()).toMatchObject([{ error, classification: { kind: "unexpected" } }]);
 });

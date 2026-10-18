@@ -6,8 +6,12 @@ const PlatformContext = createContext<PlatformAdapter | undefined>(undefined);
 
 export const PlatformProvider = PlatformContext.Provider;
 
+export function useOptionalPlatform(): PlatformAdapter | undefined {
+  return useContext(PlatformContext);
+}
+
 export function usePlatform(): PlatformAdapter {
-  const platform = useContext(PlatformContext);
+  const platform = useOptionalPlatform();
   if (!platform) throw new Error("usePlatform() called outside a PlatformProvider");
   return platform;
 }

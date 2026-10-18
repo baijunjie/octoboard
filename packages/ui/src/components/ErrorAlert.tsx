@@ -3,11 +3,11 @@ import React from "react";
 
 import { TintedAlert } from "./TintedAlert";
 
-/** A standalone failure; initial page content stays silent while later failures announce once. */
+/** Durable failure content; the dedicated error dialog owns runtime failure announcements. */
 export function ErrorAlert({
   title,
   headingLevel = 3,
-  announce = true,
+  announce = false,
   children,
   className = "",
 }: {

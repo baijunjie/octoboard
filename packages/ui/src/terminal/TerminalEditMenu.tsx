@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { ActionMenu } from "../components/ActionMenu";
 import { useLatest } from "../components/useLatest";
+import { ActionableError } from "../errorRecovery";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { useDaemon } from "../store";
@@ -34,7 +35,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
         // A permission prompt may outlive the session that asked for it.
         if (mounted.current && currentSession.current === destination && controllerRef.current === controller) controller.paste(text, destination);
       },
-      () => toastError(t("terminal.pasteFailed")),
+      (cause: unknown) => toastError(new ActionableError(t("terminal.pasteFailed"), "clipboard", { cause })),
     );
   };
   return (
@@ -51,7 +52,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
       items={[
         {
           label: t("terminal.copy"), icon: Copy, disabled: !clipboard || !selection,
-          onClick: () => { void clipboard?.writeText(selection).catch(() => toastError(t("terminal.copyFailed"))); },
+          onClick: () => { void clipboard?.writeText(selection).catch((cause: unknown) => toastError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }))); },
         },
         { label: t("terminal.paste"), icon: ClipboardPaste, disabled: !clipboard?.readText || inputSession !== sessionId, onClick: paste },
         { label: t("terminal.selectAll"), icon: TextSelect, onClick: () => controllerRef.current?.selectAll() },

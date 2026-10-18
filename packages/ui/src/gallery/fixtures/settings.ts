@@ -350,9 +350,9 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Account approval mode could not be saved",
-    description: "The error toast explains the failed save. Codex's default account keeps Follow account configuration; retrying leaves the saved selection intact.",
+    description: "The error alert requires acknowledgement of the failed save. Codex's default account keeps Follow account configuration; retrying leaves the saved selection intact.",
     state: approvalState,
-    accountApprovalError: { code: "store_io_failed", params: { detail: "Permission denied" }, message: "The account settings could not be saved: Permission denied" },
+    accountApprovalError: { code: "store_io_failed", params: { detail: "Permission denied (os error 13)" }, message: "The account settings could not be saved: Permission denied (os error 13)" },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),

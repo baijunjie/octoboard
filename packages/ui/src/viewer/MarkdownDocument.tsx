@@ -9,6 +9,7 @@ import Markdown, { type Components, type ExtraProps, type Options } from "react-
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 
+import { ExternalLink } from "../components/ExternalLink";
 import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
 import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
@@ -38,7 +39,7 @@ export interface MarkdownDocumentProps {
   /** The appearance a diagram is drawn in. */
   theme: "light" | "dark";
   /** Opens an absolute web or mail address; without it such a link is drawn as its text alone. */
-  onOpenLink?: (url: string) => void;
+  onOpenLink?: (url: string) => void | Promise<void>;
   /** Opens a project file the document links to, and a heading in it when `fragment` is set.
    * Without it a relative link is drawn as its text alone. */
   onOpenFile?: (path: string, fragment?: string) => void;
@@ -316,9 +317,9 @@ export const MarkdownDocument = memo(function MarkdownDocument({
         }
         if (address.kind === "external" && onOpenLink) {
           return (
-            <DocumentLink href={address.href} title={address.href} onActivate={() => onOpenLink(address.href)}>
+            <ExternalLink href={address.href} title={address.href} style={{ color: "var(--document-link)" }} onOpen={() => onOpenLink(address.href)}>
               {unnamed ? address.href : children}
-            </DocumentLink>
+            </ExternalLink>
           );
         }
         if (address.kind === "file" && onOpenFile && !isDirectory?.(address.path)) {

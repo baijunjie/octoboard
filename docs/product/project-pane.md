@@ -13,6 +13,9 @@ The project pane itself is read-only: there is no editing, saving, creating, ren
 nothing is staged, committed or checked out. A row can open its live file or folder in an external application
 (see "A row's actions" below).
 
+Failures to load the pane, list a folder or query files also require acknowledgement in an error alert; their durable
+explanation and retry controls remain in the pane afterwards (see "Error alerts" in `docs/product/error-alerts.md`).
+
 ## Opening a project's files
 
 - **Browse files**, in a project's action menu — on its row and by right-clicking it (see "Project
@@ -235,7 +238,7 @@ menu at the pointer** (Control-click also works in the desktop app).
   absent (a deletion) or outside the project (see "What is listed" in `docs/product/project-pane-git-mode.md`). The path
   is copied **as the window shows it**, for a human to paste: a byte of a name that is not valid UTF-8 is copied as the
   replacement character U+FFFD, the character the name is displayed with. A **toast** then confirms that the path was
-  copied; where the clipboard refuses it, an error toast says it could not be copied (see `docs/product/toasts.md`). The
+  copied; where the clipboard refuses it, an error alert says it could not be copied (see "Error alerts" in `docs/product/error-alerts.md`). The
   file viewer's header offers the same action (see "The file viewer" below).
 - **The Git mode's grouping folders and commit rows have no button**, and neither does a row that says something about a folder instead
   of listing an entry (loading, empty, unreadable, cut short; see "Rows and the keyboard" above).
@@ -259,7 +262,7 @@ menu at the pointer** (Control-click also works in the desktop app).
   Files and on uncommitted changes. A committed change then has no row button or action menu. A plain browser whose page is not a secure
   context — served over `http` from anywhere but `localhost` — has no clipboard; the packaged desktop app always does.
 
-Default application and File manager raise no success toast; failures raise an error toast with the reason. A missing
+Default application and File manager raise no success toast; failures raise an error alert with the reason. A missing
 live entry, such as a deleted file that is still absent on disk, is refused with `file_not_found`; an entry or
 symbolic-link target outside the project's directory in the worktree acted on is refused with `outside_scope`. A
 worktree that no longer exists is refused with `worktree_unavailable`. Revealing a symbolic link selects the
@@ -383,13 +386,12 @@ so a tone never rests on colour alone:
   was asked for — a read that failed, a grammar that could not be loaded, code, a diff or a document that could not be
   drawn, an image that would not decode.
 
-A notice that can appear only once the content has been drawn, which a reader would otherwise never meet, is announced
-to assistive technology, each one once: the fall back to plain text where the grammar or the drawing fails, to a
-Markdown file's source, to a plain patch where the diff could not be drawn, and to an image's own text; a diagram, a
-formula or a project image in a rendered document that cannot be shown after the document has been drawn (see "A
-Markdown file as a document" below); and what a diff says about its collapsed lines (see "Expanding the collapsed
-lines" in `docs/product/project-pane-git-change-viewer.md`). A notice that arrives with the content it describes is not
-announced on its own; it is read with the rest of the dialog. Inside a rendered document, a notice for an image or for
+A failure also opens the mandatory acknowledgement alert described in "Error alerts" in
+`docs/product/error-alerts.md`, whether it arrives with the content or after the viewer has opened. The durable notice
+and fallback stay in the viewer afterwards; they do not independently announce the same failure. This applies to
+failed file reads, rendering and decoding, including diagrams, formulas and project images in a Markdown document.
+Non-error notices that appear after the content is drawn are announced once when needed, including what a diff says
+about collapsed lines (see "Expanding the collapsed lines" in `docs/product/project-pane-git-change-viewer.md`). Inside a rendered document, a notice for an image or for
 a formula inside a paragraph sits in the paragraph rather than as the block above; it uses the same tones.
 
 **A stand-in** fills the body when there is nothing to draw at all: the empty state's own panel, centred in the body — a
@@ -410,8 +412,7 @@ what the viewer shows for
 
 **An error** fills the body when the file or change cannot be opened at all: a red block, in the same red and with the
 same glyph as a failure notice so that neither is louder than the other, headed that it could not be opened, with the
-reason under it (see "Errors" below). Assistive technology is told of it however long after the
-viewer opened it arrives.
+reason under it (see "Errors" below). The error alert announces it and requires acknowledgement.
 
 ### A Markdown file as a document
 
@@ -498,8 +499,8 @@ backslash or that cannot be decoded.
 
 **Links.** An absolute `http:`, `https:` or `mailto:` address is a link only when the window can hand it to the user's
 own browser or mail client — to a new tab, in the UI opened in a browser. Following it does not move the viewer. It
-carries that address as its tooltip and as its accessible description, and one with no text of its own reads as the
-address.
+carries a trailing external-link icon and that address as its tooltip; its accessible description says it opens
+externally. One with no text of its own reads as the address.
 
 A relative link that resolves to a project file opens that file in the viewer, replacing the file that was open. There
 is no way back to the previous document from the link itself. The link carries the path within the project as its
@@ -546,7 +547,7 @@ wider than the line, so that side can be scrolled from the keyboard. While it fi
 
 **When one cannot be drawn.** Until a diagram or a formula has been drawn, its source is what is shown, with no
 notice. One that cannot be drawn shows its source under a failure notice, and the rest of the document stays. A
-failure that appears after the document has been drawn is announced once (see "Notices and stand-ins" above). A
+failure requires acknowledgement in an error alert (see "Notices and stand-ins" above). A
 diagram or a formula past either of its limits below, and a project image past the count, are shown as source — or, for
 the image, as its alt text — under a neutral notice. That notice is part of the first paint and is not announced on
 its own.
@@ -562,7 +563,7 @@ The budget is per document:
   document is large, part of the first paint and not announced on its own. A reply larger than 4 MiB is not shown: the
   alt text and a neutral notice that the image is large, announced once, because it appears after the read. A read
   that fails — which is also what a file larger than 4 MiB does, since the read does not deliver it — or a file that
-  is not an image: the alt text and a failure notice, announced once.
+  is not an image: the alt text and a failure notice, with an error alert requiring acknowledgement.
 
 **The document always wraps** and offers no wrap control (see "Wrapping long lines" below).
 

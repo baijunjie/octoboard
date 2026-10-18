@@ -4,6 +4,7 @@ import type { QueuedToast } from "react-aria-components";
 
 import { CodeToneContext } from "./codeTone";
 import { DaemonErrorMessage, DaemonErrorTitle } from "./DaemonErrorMessage";
+import { errorAlerts } from "../errorAlerts";
 import { hasCodeParams, hasShellTimeoutDetails } from "../errorPresentation";
 import { t } from "../i18n/language";
 import { useT } from "../i18n/react";
@@ -13,10 +14,8 @@ import { TOAST_BREAKPOINT } from "./toastGeometry";
 import { TitledControl } from "./TitledControl";
 import { useLatest } from "./useLatest";
 
-/** How long a toast stays before it dismisses itself. An error gets longer: it says something went
- * wrong, where a notice only says something happened. */
+/** How long a notice stays before it dismisses itself. */
 const NOTICE_DURATION_MS = 5000;
-const ERROR_DURATION_MS = 8000;
 
 /** Matches a window at least as wide as HeroUI's toast breakpoint (its `sm:`); the narrow window is
  * the one it does not match. */
@@ -36,57 +35,9 @@ const isNarrow = () => !window.matchMedia(WIDE_QUERY).matches;
 const shownToasts = new Map<string, string>();
 
 /**
- * Surfaces the daemon's errors and notices, and what callers hand to `toastError` and
- * `toastNotice`, in HeroUI's own toast stack (`Toast.Provider` over its queue), floating over the
- * bottom end corner (above the connection banner while that is shown, see `style.css`) or, in a
- * window narrower than 640 px, over the top centre (below the top bar), so it does not move the
- * layout. An error is the danger variant; a notice, which is something the user has to know rather
- * than something that went wrong, is the accent one. The stack dismisses toasts by itself after a
- * few seconds and pauses while the pointer is over it or focus is inside it, which is what WCAG
- * 2.2.1 (timing adjustable) asks for. The stack's own Alt+T hotkey is off (`hotkey={[]}`): it would
- * swallow Option+T typed into the terminal and pull focus into the stack. The region is marked
- * `data-region="toast"`, which makes it a stop of the window's F6 cycle while a toast is shown.
- *
- * A toast that carries a session is titled with where that session is and carries the message as
- * its description: the daemon's own messages say "this session" without naming it, since it has no
- * notion of what the client calls that session, so the title is the only thing that tells the user
- * which one is meant. Every daemon notice carries one; an error carries one when its call site
- * knows which session the daemon was talking about; a notice the UI raises itself (`toastNotice`)
- * has none, and is just the message.
- *
- * An identical toast arriving while one is still shown replaces it with a fresh one at the front
- * of the stack and a restarted countdown, instead of stacking another or updating the old one in
- * place, which could sit hidden behind newer toasts.
- *
- * Dismissing keeps keyboard focus where it is: the close button does not take focus on a press,
- * and neither does a press on the toast's padding or icon (the region cancels mousedown there),
- * since a focused toast that then unmounts would drop focus to `<body>`, away from the terminal.
- * A press on the title or description is not cancelled, so the text can be selected and copied;
- * it focuses the toast, and focus is handed back as soon as the press ends with nothing selected
- * (a plain click) or right after a `copy` from inside the region, while a selection is left alone
- * so Cmd+C still reaches it. Focus goes back to the element it came from when that is still
- * connected and takes it (under a modal it is the dialog's field, since everything outside the
- * dialog, the terminal included, is inert while the toast region, a top layer, is not), else to
- * `focusTerminal`, and if the toast would still hold it (no terminal to take it), it is blurred so
- * it does not pin the toast open. Focus that leaves the region for nowhere (Escape blurs it, the
- * last focused toast exiting blurs it) is handed back the same way instead of resting on `<body>`,
- * unless it went into the report panel's iframe: that reports no `relatedTarget` either, but the
- * iframe is the active element by the time the check runs a task later. The region portals itself
- * to `<body>`, so its toast-layer z-index is not capped by a stacking context somewhere in the
- * app's tree; react-aria already keeps it out of the set made inert while a dialog or menu is open.
- *
- * In a narrow window the stack goes to the top instead: there the footers of dialogs and the
- * connection banner span the width, and the on-screen keyboard of a phone, which the terminal is
- * typed into, covers the bottom edge. A toast then slides in from above, and the newest is still at
- * the front.
- *
- * Otherwise the stack sits at the bottom end corner and moves only for what would otherwise sit
- * under it: it rides above the connection banner while that is shown, and above the footer of an
- * open dialog whose footer reaches that corner, the file viewer's Previous and Next (`style.css`,
- * `useToastClearance`). The top of the window is where the controls are — the top bar, the report
- * panel's pager, the settings dialog's end column and its close button — while the bottom end corner
- * is terminal or page content, or the settings dialog's empty padding; the smaller dialogs are
- * centred, well clear of it, and leave the stack where it is.
+ * Routes errors into the acknowledgement queue and displays notices in HeroUI's timed toast
+ * stack. Session notifications retain their location and structured daemon message. Notices
+ * keep keyboard focus where it was, remain selectable, and move clear of dialog footers.
  */
 export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.ReactElement {
   const { store, onToast } = useDaemon();
@@ -96,7 +47,16 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
       onToast((request) => {
         const { sessions, consoles, projects } = store.getState();
         const session = request.session ? sessions.get(request.session) : undefined;
-        showToast(request, session && sessionLocation(t, session, consoles, projects));
+        const location = session && sessionLocation(t, session, consoles, projects);
+        if (request.kind === "error") {
+          errorAlerts.report({
+            message: request.message,
+            session: request.session,
+            error: request.error ?? request.daemonError ?? request.message,
+            title: location ?? (request.daemonTitle ? <DaemonErrorMessage error={request.daemonTitle} /> : undefined),
+            content: request.content ?? <DaemonErrorMessage error={request.daemonError && (hasCodeParams(request.daemonError) || hasShellTimeoutDetails(request.daemonError)) ? request.daemonError : request.message} />,
+          });
+        } else showToast(request, location);
       }),
     [store, onToast],
   );
@@ -208,7 +168,7 @@ function showToast({ kind, message, session, daemonError, daemonTitle, content }
     description: location
       ? structured ? <DaemonErrorMessage error={structured} showTitle /> : body
       : (shell || named) && structured ? <DaemonErrorMessage error={structured} showTitle={false} /> : undefined,
-    timeout: kind === "error" ? ERROR_DURATION_MS : NOTICE_DURATION_MS,
+    timeout: NOTICE_DURATION_MS,
   };
 
   const existing = shownToasts.get(signature);

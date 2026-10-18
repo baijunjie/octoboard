@@ -109,7 +109,7 @@ what the field shows unedited, or to the full path it stands for, sends nothing.
 focus closes Settings and discards what was typed. It is the only exit that loses it: the close button, a press on the
 dimmed area around the dialog, and moving focus out of the field all save the typed path first. Once a send is answered
 the field shows the stored directory again, written as above. A value that is neither absolute nor starts with `~/` is
-refused with a toast and the field returns to the stored one, and a blank value goes back to `~/Projects`. The browser
+refused with an error alert and the field returns to the stored one, and a blank value goes back to `~/Projects`. The browser
 opens on the nearest existing ancestor when the directory does not exist yet (see "Browsing directories" in
 `docs/product/consoles-and-projects.md`). Where the directory applies is in "Associating a project" in the same
 document.
@@ -173,7 +173,7 @@ Every Codex account row, including the default account, has an inline approval-m
 - **Ask me** asks Codex to send approval requests to the user.
 
 The choice is saved when selected, separately from editing the account's name or directory. Choices are unavailable
-while saving; a failure is shown as a toast. It applies when a session next starts or resumes, including an account switch;
+while saving; a failure is shown in an error alert. It applies when a session next starts or resumes, including an account switch;
 a running process keeps its current reviewer. A named account's choice is independent of the default account's:
 following configuration does not inherit the default account's selector. If a session's named account was deleted,
 or it holds a pinned directory without a stored account reference, it follows that original directory's Codex

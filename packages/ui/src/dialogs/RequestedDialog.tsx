@@ -344,10 +344,8 @@ export function RequestedDialog({
         />
       );
     case "archive-session": {
-      // The sessions under an owner (bound to it, or to one bound to it) that go into the
-      // archive with it. Read live, like the running ones above. One that has a process running
-      // is not among them: the daemon refuses the archive while there is such a session, and the
-      // dialog shows that refusal.
+      // Read live: every unarchived session under this owner goes along, with running
+      // processes ended too. Sessions opened or bound while the dialog is open join the list.
       const withIt = boundSessionsArchivedWith(Array.from(sessions.values()), dialog.session.id);
       return (
         <ConfirmDialog
@@ -355,7 +353,7 @@ export function RequestedDialog({
           message={
             <>
               <p>{t("dialog.archiveSession.message")}</p>
-              {withIt.length > 0 && <SessionCallout title={t("dialog.archiveSession.bound", { count: withIt.length })} sessions={withIt} />}
+              {withIt.length > 0 && <SessionCallout title={t("dialog.archiveSession.boundAndEnded", { count: withIt.length })} sessions={withIt} />}
             </>
           }
           confirmLabel={t("dialog.archiveSession.confirm")}

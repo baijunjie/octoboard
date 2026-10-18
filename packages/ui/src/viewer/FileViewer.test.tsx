@@ -3,6 +3,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { errorAlerts } from "../errorAlerts";
 import { isolate } from "../i18n/isolate";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { ThemeProvider } from "../theme";
@@ -83,6 +84,7 @@ beforeEach(() => {
 
 afterEach(() => {
   act(() => root.unmount());
+  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
   vi.useRealTimers();
   container.remove();
 });
@@ -193,12 +195,17 @@ it("shows an SVG through an image, and as text when it cannot be decoded, never 
   expect(repositoryMarkup()).toBe(0);
 });
 
-it("announces a read failure once, with its title", () => {
+it("requires acknowledgement when a raster image cannot be decoded", () => {
+  show({ key: "broken-image", path: "broken.png", content: { state: "file", body: { kind: "image", mediaType: "image/png", url: "data:image/png;base64,broken", size: 10 } } });
+  act(() => document.querySelector("img")!.dispatchEvent(new Event("error")));
+  expect(errorAlerts.getSnapshot()).toMatchObject([{ message: "This image cannot be displayed", classification: { kind: "actionable", recovery: "image" } }]);
+});
+
+it("queues a read failure with its title and keeps recovery content silent", () => {
   show(failed);
-  const alert = document.querySelector("[role=alert]");
-  expect(alert?.textContent).toBe("Could not open this file src/a.ts is gone.");
-  expect(document.querySelectorAll("[role=alert]")).toHaveLength(1);
-  expect(alert?.querySelector("h3")?.textContent).toBe("Could not open this file");
+  expect(errorAlerts.getSnapshot()).toMatchObject([{ message: "src/a.ts is gone.", title: "Could not open this file" }]);
+  expect(dialog()?.textContent).toContain("src/a.ts is gone.");
+  expect(document.querySelectorAll("[role=alert]")).toHaveLength(0);
 });
 
 it("moves to the previous and next subject with Left and Right, as its buttons do", () => {
@@ -438,7 +445,7 @@ it("shows the raw patch when the diff cannot be rendered", async () => {
   }
 });
 
-it("speaks a notice that arrives after the viewer drew, and shows it only once", async () => {
+it("queues a rendering failure for acknowledgement without a duplicate status announcement", async () => {
   const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
   try {
@@ -449,19 +456,10 @@ it("speaks a notice that arrives after the viewer drew, and shows it only once",
     });
     await settled();
     const sentence = "Shown as a plain patch because the diff could not be rendered.";
-    // The block is hidden so the sentence is not met twice; a region of its own carries it instead,
-    // after the delay that keeps it clear of the dialog's own focus announcement.
     const block = Array.from(dialog()!.querySelectorAll("[aria-hidden=true]")).find((e) => e.textContent === sentence);
     expect(block).toBeTruthy();
     expect(Array.from(dialog()!.querySelectorAll("[role=status]")).map((e) => e.textContent)).not.toContain(sentence);
-    // Real time, because the region's own wait was started as it mounted, before any timer of this
-    // test's; the wait is the viewer's 1.5 s, which keeps the text clear of the dialog's focus move.
-    await vi.waitFor(
-      () => {
-        expect(Array.from(dialog()!.querySelectorAll("[role=status]")).map((e) => e.textContent)).toContain(sentence);
-      },
-      { timeout: 4000, interval: 50 },
-    );
+    expect(errorAlerts.getSnapshot()).toMatchObject([{ message: sentence, error: expect.objectContaining({ message: "The patch cannot be read" }), classification: { kind: "unexpected" } }]);
   } finally {
     error.mockRestore();
   }
@@ -695,6 +693,20 @@ it("opens later diffs in the layout last chosen, and stores it", async () => {
   expect(localStorage.getItem(PREFERENCE_KEYS.diffLayout)).toBe("split");
   show(modified("src/b.ts"));
   expect(layout()).toBe("split");
+});
+
+it("reports a user-triggered external Markdown link failure", async () => {
+  const error = vi.fn();
+  const cause = new Error("Browser launch failed");
+  const links = { open: vi.fn(async () => { throw cause; }) };
+  show({ key: "document-link", path: "README.md", content: { state: "file", body: { kind: "text", text: "[Documentation](https://example.com/docs)", size: 48 } } }, undefined, { links, toasts: { error, notice: vi.fn() } });
+  for (let i = 0; i < 100 && !document.querySelector('a[href="https://example.com/docs"]'); i += 1) {
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
+  }
+  await act(async () => document.querySelector<HTMLAnchorElement>('a[href="https://example.com/docs"]')!.click());
+  expect(links.open).toHaveBeenCalledExactlyOnceWith("https://example.com/docs");
+  expect(error).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual(expect.arrayContaining([expect.objectContaining({ message: "Could not open the external link.", error: expect.objectContaining({ cause }), classification: { kind: "actionable", recovery: "openExternal" } })]));
 });
 
 it("reads the stored layout, and falls back to unified for anything else", async () => {
