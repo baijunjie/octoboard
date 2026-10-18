@@ -6,7 +6,7 @@ description: Carry milestones forward from a development plan doc — from start
 # Carry out development from a development plan doc
 
 What follows only sets the principles and the boundaries that must not be crossed; judge the rest of the details yourself.
-When unsure, report back: stop, write out what needs deciding (what the options are) or what information is missing, together with what has already been found out, and let the party receiving the report (the user, or the dispatcher passing it on to the user) decide before continuing — do not decide on your own.
+When unsure, report back: stop, spell out what needs deciding (with the options) or what information is missing, together with what you have already found out, and let the recipient of the report (the user, or the dispatcher passing it on to the user) decide before going on; do not decide for yourself.
 Matters that need the user's help are reported back the same way.
 
 ## Structure of the plan doc

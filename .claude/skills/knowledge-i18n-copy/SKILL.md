@@ -22,7 +22,7 @@ Where the project's own copy conventions, glossary or design system conflict wit
 marked "default" here suit a typical consumer app; a project with a different positioning (B2B, finance and so on) may
 change them.
 
-When unsure, report back: stop, write out what needs deciding (what the options are) or what information is missing, together with what has already been found out, and let the party receiving the report (the user, or the dispatcher passing it on to the user) decide before continuing — do not decide on your own.
+When unsure, report back: stop, spell out what needs deciding (with the options) or what information is missing, together with what you have already found out, and let the recipient of the report (the user, or the dispatcher passing it on to the user) decide before going on; do not decide for yourself.
 
 ## Register per language
 

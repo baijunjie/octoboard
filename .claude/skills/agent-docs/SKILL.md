@@ -19,7 +19,7 @@ The locations in the table are the default; when the project already has its own
 - Other docs under `docs/` are maintained by the agent responsible for the corresponding task, and this skill does not touch them. Long-lived ones among them (such as topic docs — a focused writeup kept as the record of one task, e.g. research conclusions, measured baselines) are registered in the documentation index; temporary docs that are deleted once done (development plans, tickets, etc.) are not registered.
 - Content that only holds on this machine (local paths, environment values, etc.) goes into none of these categories: docs are committed with the repo, so it breaks on another machine or with multiple people.
 
-When you are unsure, report: stop, spell out what has to be decided (with the options) or what information is missing, together with what you have already established, and let the recipient of the report (the user, or the dispatcher who passes it on to the user) decide before you continue; do not decide yourself.
+When unsure, report back: stop, spell out what needs deciding (with the options) or what information is missing, together with what you have already found out, and let the recipient of the report (the user, or the dispatcher passing it on to the user) decide before going on; do not decide for yourself.
 
 ## Before starting work: read
 

@@ -5,7 +5,7 @@ description: The operating rules for developing on a branch in its own worktree 
 
 # Working a worktree branch
 
-Below, "the branch" means the branch under development in a worktree, and "the target branch" means the branch it merges back into. When unsure, report back: stop, state what needs deciding (with the options) or what information is missing, together with what you have already found out, and wait for the recipient of the report (the user, or the dispatcher passing it to the user) to decide before continuing; do not decide for yourself.
+Below, "the branch" means the branch under development in a worktree, and "the target branch" means the branch it merges back into. When unsure, report back: stop, spell out what needs deciding (with the options) or what information is missing, together with what you have already found out, and let the recipient of the report (the user, or the dispatcher passing it on to the user) decide before going on; do not decide for yourself.
 
 Where a branch merges back to and where it was cut from are read from its own git config (see "## Creating" for how they are recorded): if the target branch (`targetBranch`) cannot be read, the fork point (`forkPoint`) is missing, or the named worktree has no branch checked out (a temporary `--detach` worktree), report back in every case — do not guess from the branch name, and do not estimate one yourself to fill the gap.
 When no branch is named, use the current worktree's branch; when called from the main working copy, use it if there is exactly one worktree branch, otherwise ask the user.

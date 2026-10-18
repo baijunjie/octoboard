@@ -71,9 +71,9 @@ repeated trial — should go to a subagent wherever you can; you take only the c
 
 This section only sets what gets invoked before starting work and before delivery, in what order, and when to
 skip a step; how each step is done is up to the corresponding skill.
-When unsure, report back: stop, spell out what needs deciding (with the options) or what information is missing, together
-with what you have already found out, and let the recipient of the report (the user, or the dispatcher passing it on to
-the user) decide before going on; do not decide for yourself.
+When unsure, report back: stop, spell out what needs deciding (with the options) or what information is missing,
+together with what you have already found out, and let the recipient of the report (the user, or the dispatcher
+passing it on to the user) decide before going on; do not decide for yourself.
 
 ### Before starting work
 

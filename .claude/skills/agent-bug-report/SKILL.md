@@ -6,7 +6,7 @@ description: Turn a defect into a bug ticket and hand it off to whoever fixes it
 # Create a bug ticket
 
 Turn the defect described this time into a ticket and hand it off to whoever fixes it: what is wrong, how to reproduce it, what counts as fixed.
-When you are unsure, report back: stop, spell out what has to be decided (with the options) or what information is missing, together with what you have already established, and let the recipient of the report (the user, or the dispatcher who passes it on to the user) decide before you continue; do not decide yourself.
+When unsure, report back: stop, spell out what needs deciding (with the options) or what information is missing, together with what you have already found out, and let the recipient of the report (the user, or the dispatcher passing it on to the user) decide before going on; do not decide for yourself.
 
 - **Facts only**: the fact sections hold only what the user said and what you verified yourself; anything inferred goes under "Leads" and is marked as such; report back what is missing.
 - **Once the ticket is filed, stop — do not fix it**; if you filed it mid-development, go back to the task you were on.
