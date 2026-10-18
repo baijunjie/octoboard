@@ -1,11 +1,11 @@
 import { DaemonRequestError } from "../daemon-client";
 import { consoleAccount, inheritedAccount } from "../accountChoices";
-import { AGENT_LABEL, projectSessionAgent } from "../agents";
+import { AGENT_LABEL, isAgentUnavailable, projectSessionAgent } from "../agents";
 import { daemonMessage } from "../daemonMessage";
 import { errorPresentation, noticeErrorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
 import { currentLanguage } from "../i18n/language";
-import { DEFAULT_ACCOUNT_NAME, isLive, type BrowseEntry, type Console, type DirEntry, type Event, type RequestBody, type Session, type SessionRecordsPresence } from "../protocol";
+import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type Project, type RequestBody, type Session, type SessionRecordsPresence } from "../protocol";
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -140,6 +140,21 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
   const fail = ({ code, params, message }: FixtureError): never => {
     throw new DaemonRequestError(daemonMessage(currentLanguage(), code, params, message, store.getState()), code, params);
   };
+  /** The account a new session of `agent` launches under: the one named, or, when none is, the one
+   * the project (else the console) resolves to. */
+  const launchAccount = (owner: Console, project: Project | undefined, agent: Agent, account: string | null | undefined) => {
+    const current = store.getState();
+    const accountId = account === undefined
+      ? project ? inheritedAccount(owner, project, agent, current.settings.accounts) : consoleAccount(owner, agent, current.settings.accounts)
+      : account;
+    return current.settings.accounts.find((candidate) => candidate.id === accountId && candidate.agent === agent);
+  };
+  /** A console session's colour as the daemon assigns one: the first of the palette that no session of
+   * the console that is not archived wears (an interrupted one still holds its colour), else the first. */
+  const freshColour = (consoleId: string): ConsoleSessionColour => {
+    const used = new Set([...store.getState().sessions.values()].filter((session) => session.console_id === consoleId && session.role === "console" && session.status !== "archived").map((session) => session.colour));
+    return CONSOLE_SESSION_COLOURS.find((colour) => !used.has(colour)) ?? CONSOLE_SESSION_COLOURS[0];
+  };
   const refuseLocked = (sessions: Iterable<Session>) => {
     const locked = [...sessions].find((session) => session.locked);
     if (locked) return fail({ code: "session_locked", params: { session: locked.id }, message: "This session is locked" });
@@ -252,6 +267,54 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, updated) }));
           return { type: "ack" };
         }
+        case "hand_off_session": {
+          const current = store.getState();
+          const session = current.sessions.get(body.session);
+          if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
+          // A refusal the scenario stages: one the window could not have seen coming.
+          const staged = scenario.sessionHandoffs?.[body.session];
+          if (staged === "pending") return new Promise<Event>(() => {});
+          if (staged) return fail(staged);
+          if (session.status === "archived") return fail({ code: "session_archived", params: { session: session.id }, message: "An archived session cannot be handed off" });
+          if (session.status === "working" || session.status === "starting") return fail({ code: "session_working", params: { session: session.id }, message: "The session is in the middle of a turn" });
+          refuseLocked([session]);
+          if (body.agent === session.agent) return fail({ code: "handoff_to_same_agent", params: { session: session.id, agent: AGENT_LABEL[session.agent] }, message: "The session already runs on that agent" });
+          if (isAgentUnavailable(current.agentAvailability, body.agent)) return fail({ code: "agent_not_available", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} is not available` });
+          if (body.account != null && !current.settings.accounts.some((account) => account.id === body.account && account.agent === body.agent)) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
+          const owner = current.consoles.get(session.console_id);
+          if (!owner) return fail({ code: "unknown_console", params: { console: session.console_id }, message: `unknown console ${session.console_id}` });
+          const project = session.project_id ? current.projects.get(session.project_id) : undefined;
+          const account = launchAccount(owner, project, body.agent, body.account);
+          const ordinal = nextConsoleOrdinals.get(owner.id) ?? 1;
+          if (!project) nextConsoleOrdinals.set(owner.id, ordinal + 1);
+          // The receiving session takes the original's place; the original is archived and what it
+          // owned is bound to the new one.
+          const received: Session = {
+            id: `s-gallery-opened-${++openedSessionCount}`,
+            agent: body.agent,
+            console_id: session.console_id,
+            project_id: session.project_id,
+            host_id: session.host_id,
+            role: session.role,
+            origin: session.origin,
+            title: session.title,
+            status: "working",
+            has_conversation: false,
+            pinned: session.pinned,
+            locked: false,
+            started_at: Date.now(),
+            ...(project ? { bound_to: session.bound_to } : { ordinal, colour: freshColour(owner.id) }),
+            ...(account && { account_id: account.id, config_dir: account.config_dir }),
+            ...(body.model !== undefined && { model: body.model }),
+            ...(body.effort !== undefined && { effort: body.effort }),
+          };
+          const sessions = new Map(current.sessions);
+          for (const owned of current.sessions.values()) if (owned.bound_to === session.id) sessions.set(owned.id, { ...owned, bound_to: received.id });
+          sessions.set(session.id, { ...session, status: "archived", ended_at: Date.now() });
+          sessions.set(received.id, received);
+          store.setState({ sessions });
+          return { type: "session_opened", session: received };
+        }
         // Native path operations are acknowledged without launching anything on the host.
         case "open_project_path":
         case "reveal_project_path": {
@@ -302,10 +365,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const project = body.project_id ? current.projects.get(body.project_id) : undefined;
           if (body.project_id && !project) return fail({ code: "unknown_project", params: { project: body.project_id }, message: `unknown project ${body.project_id}` });
           const agent = body.agent ?? (project ? project.default_agent ?? projectSessionAgent(owner) : owner.default_agent);
-          const accountId = body.account === undefined
-            ? project ? inheritedAccount(owner, project, agent, current.settings.accounts) : consoleAccount(owner, agent, current.settings.accounts)
-            : body.account;
-          const account = current.settings.accounts.find((candidate) => candidate.id === accountId && candidate.agent === agent);
+          const account = launchAccount(owner, project, agent, body.account);
           const ordinal = nextConsoleOrdinals.get(owner.id) ?? 1;
           if (!project) nextConsoleOrdinals.set(owner.id, ordinal + 1);
           const session: Session = {
@@ -322,7 +382,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
             pinned: false,
             locked: false,
             started_at: Date.now(),
-            ...(project ? { bound_to: body.bound_to } : { ordinal, colour: "teal" }),
+            ...(project ? { bound_to: body.bound_to } : { ordinal, colour: freshColour(owner.id) }),
             ...(account && { account_id: account.id, config_dir: account.config_dir }),
             ...(body.model !== undefined && { model: body.model }),
             ...(body.effort !== undefined && { effort: body.effort }),
@@ -492,6 +552,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           return { type: "session_records_inspected", presence: recordsPresence(body.sessions) };
         case "inspect_session_branches": {
           if (scenario.sessionBranches === "pending") return new Promise<Event>(() => {});
+          if (scenario.sessionBranches && !Array.isArray(scenario.sessionBranches)) return fail(scenario.sessionBranches);
           const sessions = store.getState().sessions;
           const asked = new Set(body.sessions.filter((id) => sessions.has(id)));
           return { type: "session_branches_inspected", items: (scenario.sessionBranches ?? []).filter((item) => item.session !== null && asked.has(item.session)) };

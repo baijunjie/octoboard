@@ -11,6 +11,7 @@ it.each([
   ["account_name_taken", "uniqueName"], ["invalid_launch_setting", "launchSetting"],
   ["connection_closed", "connection"], ["not_a_git_repository", "repository"],
   ["session_branches_not_removed", "sessionBranches"], ["project_branches_not_determined", "projectBranches"],
+  ["session_working", "wait"], ["handoff_messages_dropped", "lostMessages"],
 ])("classifies the known domain code %s with its specific remedy", (code, recovery) => {
   const error = new DaemonRequestError("localized text", code, { session: "s1" });
   expect(errorPresentation(error)).toBe(error);

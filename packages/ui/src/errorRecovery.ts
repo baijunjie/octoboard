@@ -6,7 +6,7 @@ export type ErrorRecovery =
   | "configuration" | "image" | "clipboard" | "file" | "git" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
   | "contentSyntax" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
-  | "sessionBranches" | "projectBranches";
+  | "sessionBranches" | "projectBranches" | "lostMessages";
 
 /** A local failure whose user remedy is known without inspecting its translated message. */
 export class ActionableError extends DaemonRequestError {
@@ -30,7 +30,8 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   connection: ["git_remote_unreachable", "connection_closed", "request_timed_out"],
   unlock: ["session_locked"],
   stopSessions: ["session_has_running_sessions", "console_has_running_sessions", "project_has_running_sessions", "session_not_deletable"],
-  wait: ["session_lock_busy", "session_already_running", "session_already_starting"],
+  wait: ["session_lock_busy", "session_already_running", "session_already_starting", "session_working"],
+  lostMessages: ["handoff_messages_dropped"],
   trust: ["trust_answer_failed", "session_trust_pending", "session_waiting_for_user", "trust_directory_too_broad", "trust_path_not_absolute", "trust_home_unknown"],
   tool: ["binary_not_found", "agent_not_available", "git_unavailable"],
   shell: ["shell_environment_timeout"],

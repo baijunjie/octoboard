@@ -24,7 +24,7 @@
 
 - **Reusable capabilities**: the daemon's `switch_session_account` request and its refusals; the tool declarations
   and ownership checks of `transfer_session`, `archive_session` and `reopen_session`.
-- **Development notes**: this milestone does not depend on milestones 03–04 and can be built first. A tool added to
+- **Development notes**: this milestone does not depend on milestone 04 and can be built first. A tool added to
   an owner reaches a running session only once it is next launched.
 - **Reference docs**: `apps/daemon/PROTOCOL.md`, `docs/product/sessions.md`, `docs/product/settings.md`,
   `docs/product/hub-orchestration.md`.

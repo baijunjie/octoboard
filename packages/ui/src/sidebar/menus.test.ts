@@ -48,6 +48,30 @@ describe("the Switch account entry", () => {
   });
 });
 
+describe("the Hand off entry", () => {
+  const item = (session: Session, handlers = {} as SidebarHandlers) =>
+    sessionMenu(t, handlers, session, []).find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Hand off") as { disabled?: boolean; onClick: () => void } | undefined;
+
+  it.each([
+    ["idle", false, true],
+    ["waiting_user", false, true],
+    ["interrupted", false, true],
+    ["working", false, false],
+    ["starting", false, false],
+    ["idle", true, false],
+  ] as const)("on a %s session (locked: %s) is enabled: %s", (status, locked, enabled) => {
+    expect(item(sessionOf("s", "c", "p", "Title", status, { locked }))?.disabled ?? false).toBe(!enabled);
+  });
+
+  it("is offered for console sessions and not for an archived one, and opens the hand-off dialog", () => {
+    const hub = sessionOf("h", "c", undefined, "Hub", "idle");
+    expect(item(sessionOf("h", "c", undefined, "Hub", "archived"))).toBeUndefined();
+    const handlers = { onOpenDialog: vi.fn() } as unknown as SidebarHandlers;
+    item(hub, handlers)!.onClick();
+    expect(handlers.onOpenDialog).toHaveBeenCalledWith({ kind: "hand-off", session: hub });
+  });
+});
+
 describe("a session that is still starting", () => {
   it("offers Archive, never Delete, even when it was never used", () => {
     const starting = sessionOf("s", "c", "p", "Title", "starting");

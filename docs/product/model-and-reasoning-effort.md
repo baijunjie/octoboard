@@ -35,7 +35,8 @@ each agent does with one it cannot honour, is in "The model and reasoning effort
 ## The Advanced section
 
 The console dialog, project dialog and dialog that opens a console or project session hold an **Advanced** section,
-collapsed when the dialog opens.
+collapsed when the dialog opens. The handoff dialog holds one too, which works as the session dialog's does for the
+session that takes over (see "Handing off from the window" in `docs/product/handing-off-sessions.md`).
 
 In the project dialog and the session dialog it holds a **Model** picker and a **Reasoning effort** picker for the
 agent the dialog's agent field currently settles on, and a note saying whose sessions they apply to. In the session

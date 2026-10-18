@@ -179,7 +179,9 @@ pub enum TurnClose {
 /// becomes of the session's process. Dropping it ends the hold, and where the queue goes depends on
 /// whether the holder has named a successor ([`Self::forward_to`]): to the successor, in order,
 /// or, without one, to the session itself if it is still running and nowhere if it is not, since a
-/// session without a process takes nothing and would leave the queue stranded.
+/// session without a process takes nothing and would leave the queue stranded. A queue dropped for
+/// that is announced as `handoff_messages_dropped`: these are messages held back for a handoff, never
+/// ones part-written into a terminal, so the notice says nothing of an input line.
 pub struct OutboxHold {
     state: Arc<AppState>,
     id: String,
@@ -224,10 +226,10 @@ impl Drop for OutboxHold {
             if dropped > 0 {
                 self.state.broadcast(
                     Notice::new(
-                        notice_code::QUEUED_MESSAGES_DROPPED,
+                        notice_code::HANDOFF_MESSAGES_DROPPED,
                         format!(
-                            "{} dropped {dropped} message(s) queued for this session, which has no \
-                             process to receive them",
+                            "{} dropped {dropped} message(s) held back during a handoff for this \
+                             session, which has no process to receive them",
                             crate::APP_NAME
                         ),
                         &[],
@@ -2361,11 +2363,21 @@ mod tests {
         assert_eq!(state.outbox.len("u"), 0);
 
         // A successor with no process takes nothing either, and keeps nothing for a later resume.
+        let mut events = state.subscribe();
         let hold = state.hold_outbox("v");
         state.queue_message("v", "three");
         hold.forward_to("w");
         drop(hold);
         assert_eq!((state.outbox.len("v"), state.outbox.len("w")), (0, 0));
+        match events.try_recv().expect("a notice") {
+            Event::SessionNotice { session, code, .. } => {
+                assert_eq!(
+                    (session.as_str(), code.as_str()),
+                    ("w", "handoff_messages_dropped")
+                );
+            }
+            other => panic!("expected a notice, got {other:?}"),
+        }
 
         // Unless it is being launched: the launch will flush what is queued for it.
         state

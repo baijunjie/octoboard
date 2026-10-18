@@ -105,3 +105,21 @@ export function useProjectRemovalBranches(projectId: string, asking: boolean): I
   }, [projectId, request, asking, round]);
   return { items: latest?.items ?? [], pending: asking && latest?.round !== round, failed: !!latest?.failed };
 }
+
+/** The branches `sessionId` is responsible for, as the daemon finds them now, asked once while
+ * `enabled`. Unlike `useSessionBranches` it says when the daemon could not tell (`failed`), since a
+ * handoff's summary must not read a failure as "none". */
+export function useResponsibleBranches(sessionId: string, enabled: boolean): { items: SessionBranchItem[]; pending: boolean; failed: boolean } {
+  const { request } = useDaemon();
+  const [answer, setAnswer] = useState<{ items: SessionBranchItem[]; failed: boolean }>();
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    void request({ type: "inspect_session_branches", sessions: [sessionId] }).then(
+      (result) => active && setAnswer(result.type === "session_branches_inspected" ? { items: result.items, failed: false } : { items: [], failed: true }),
+      () => active && setAnswer({ items: [], failed: true }),
+    );
+    return () => { active = false; };
+  }, [sessionId, enabled, request]);
+  return { items: answer?.items ?? [], pending: enabled && !answer, failed: !!answer?.failed };
+}

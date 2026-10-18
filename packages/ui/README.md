@@ -75,6 +75,7 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
 - Other fields of the scenario type (`scenario.ts`) include `preferences` (what the app persists), `toasts`,
   `sessionOpenError`, `terminal: "refuse"`, `clipboard: "unavailable"` (a plain browser over insecure http),
   `externalLinks` (the external-link capability stub),
+  `sessionHandoffs` (a handoff the daemon fails or never answers, ahead of the refusals it works out from the session),
   `macosPermissions` (stubs the desktop shell's privacy grants; without it the page is a plain browser's),
   `sessionBranches` / `projectRemovalBranches` (the branches and worktrees bound to sessions, and those a project's
   removal with its folder in the Trash takes along, that the fixture daemon's inspections find; built with `branchItemOf` /

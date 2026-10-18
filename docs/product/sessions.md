@@ -22,7 +22,7 @@ title, a pin button when pinned, and selecting it resumes it when it is interrup
 interrupted session's row does. Its action menu offers **Lock**/**Unlock**, **Pin**/**Unpin**, **Rename**, **Copy session ID** when a clipboard
 is available (see "Session rows" in `docs/product/sidebar.md`), **Colour** (see "The binding badge" in
 `docs/product/sidebar.md`), **Focus mode** (see
-`docs/product/focus-mode.md`), **Switch account** and **Archive** — **Delete** in its place while the console session
+`docs/product/focus-mode.md`), **Switch account**, **Hand off** and **Archive** — **Delete** in its place while the console session
 has never been used (see "Deleting an unused session" in `docs/product/deleting-sessions.md`); there is no Resume item, for the same reason. A
 console session's title is renameable, like a project session's; its default is under **Name** in "Opening a session"
 below.
@@ -687,8 +687,8 @@ carried along; how, and what is carried, is in `docs/product/switching-session-a
 ### Handing a session off to another agent
 
 A session's work can be moved to a new session of another agent, which takes its place — its owner, its branches and
-the sessions it owns — and reads a package built from its conversation, while the original is archived; see
-`docs/product/handing-off-sessions.md`.
+the sessions it owns — and reads a package built from its conversation, while the original is archived. The user
+starts one from the session's **Hand off** menu item; see `docs/product/handing-off-sessions.md`.
 
 ### Archived sessions
 

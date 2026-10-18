@@ -147,8 +147,8 @@ export interface Scenario {
   /** The branches and worktrees bound to sessions, as `inspect_session_branches` finds them: those
    * whose `session` is among the sessions asked about and still exists. Without it none are bound,
    * so an archive or deletion shows no section about them; `"pending"` is an inspection that is never
-   * answered, so Confirm stays pending. */
-  sessionBranches?: SessionBranchItem[] | "pending";
+   * answered, so Confirm stays pending; an error is an inspection the daemon fails. */
+  sessionBranches?: SessionBranchItem[] | "pending" | FixtureError;
   /** What `inspect_project_removal` finds per project: the worktrees and branches its removal with
    * the folder in the Trash takes along, or the error the inspection fails with. A project not
    * listed has none. */
@@ -156,6 +156,11 @@ export interface Scenario {
   /** Per-session account-switch refusals or a request kept pending. Unlisted sessions switch
    * normally, updating their account and recorded configuration directory. */
   sessionAccountSwitches?: Record<string, FixtureError | "pending">;
+  /** Per-session handoff failures or a request kept pending, ahead of the refusals the fixture
+   * daemon works out from the session itself: for one the window could not have seen coming (the
+   * daemon finding a session mid-turn that the window still lists as idle). Unlisted sessions are
+   * handed off normally. */
+  sessionHandoffs?: Record<string, FixtureError | "pending">;
   /** A refusal to save a Codex account's approval mode; successful requests update settings. */
   accountApprovalError?: FixtureError;
   /** A refused request to open a project's directory in the host's file manager. The fixture

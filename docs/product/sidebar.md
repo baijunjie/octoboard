@@ -124,7 +124,7 @@ not repeated here; the rail marks it.
 
 Under the header comes the **console sessions** section: every console session of the console that is not archived,
 each as a session row (see "Session rows" below, which a console session's row otherwise follows exactly — pin, rename,
-colour, focus mode, switch account, archive), in the order of "Order of projects and sessions" below. What a console session is,
+colour, focus mode, switch account, hand off, archive), in the order of "Order of projects and sessions" below. What a console session is,
 what selecting one does, and what its row's menu offers are in "Console sessions and project sessions" in
 `docs/product/sessions.md`.
 
@@ -400,6 +400,10 @@ action menu offers:
   the directory the session recorded. The entry is present for a console session's row as well as a project session's,
   and only when the session's agent has more than one account to be on; with just the default account it is left out
   rather than shown disabled. A session in the archive has no such entry, and neither has one still starting.
+- **Hand off** — opens the handoff dialog, which moves the session's place to a new session of another agent (see
+  "Handing off from the window" in `docs/product/handing-off-sessions.md`). Present for a project session's and a
+  console session's row; an archived session has no such entry. Disabled while the session is *working* or
+  *starting*, and while it is locked.
 - **Archive** — archives the session (see "Archiving, interruption and resuming" in `docs/product/sessions.md`). A
   session at its prompt or interrupted, with no unarchived session under it, is archived at once, unless a branch or
   worktree bound to it needs the user's word (see "The confirmation" in `docs/product/branch-and-worktree-cleanup.md`);

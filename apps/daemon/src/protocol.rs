@@ -2925,6 +2925,7 @@ pub mod notice_code {
     pub const LAUNCH_FAILED: &str = "launch_failed";
     pub const CLAUDE_WORKSPACE_UNTRUSTED: &str = "claude_workspace_untrusted";
     pub const QUEUED_MESSAGES_DROPPED: &str = "queued_messages_dropped";
+    pub const HANDOFF_MESSAGES_DROPPED: &str = "handoff_messages_dropped";
     pub const TRUST_ANSWER_FAILED: &str = "trust_answer_failed";
     pub const TRUST_NOT_CARRIED_OVER: &str = "trust_not_carried_over";
 }

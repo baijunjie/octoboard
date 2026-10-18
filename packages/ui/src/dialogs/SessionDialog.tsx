@@ -1,9 +1,6 @@
 import { Tabs } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
-import { choiceGroups, choiceKey, currentChoice, findEntry, inheritedAccount, initialChoice } from "../accountChoices";
-import { AGENT_LABEL, inheritedSessionLaunch, launchWithOverrides, noAgentAvailable } from "../agents";
-import { agentIconPickerOptions } from "../components/AgentIcon";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { InlineChip } from "../components/InlineChip";
@@ -14,7 +11,7 @@ import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
-import type { Agent, Console, Project, Session } from "../protocol";
+import type { Console, Project, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { BindingBadge } from "../sidebar/BindingBadge";
 import { liveConsoleSessions } from "../sidebar/order";
@@ -23,6 +20,7 @@ import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
 import type { NewSessionBinding } from "./dialogRequest";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
+import { useLaunchChoice } from "./useLaunchChoice";
 import { openSessionRequest } from "./openSessionRequest";
 import { OptionSelect } from "./OptionSelect";
 import { TextInput } from "./TextInput";
@@ -89,13 +87,7 @@ export function SessionDialog({
   const t = useT();
   const tabScrollLabels = useTabScrollLabels();
   const { request } = useDaemon();
-  const agentAvailability = useDaemonStore((s) => s.agentAvailability);
-  const blocked = noAgentAvailable(agentAvailability);
-  const accounts = useDaemonStore((s) => s.settings.accounts);
-  const [pickedAgent, setPickedAgent] = useState<Agent>();
-  const [pickedAccounts, setPickedAccounts] = useState<Partial<Record<Agent, string | null>>>({});
   const [title, setTitle] = useState("");
-  const [launchSettings, setLaunchSettings] = useState<Partial<Record<Agent, { model?: string | null; effort?: string | null }>>>({});
   const [pickedOwner, setPickedOwner] = useState(NO_OWNER);
   const [conversation, setConversation] = useState<Conversation>("new");
   // The Name field takes focus as the dialog opens, so Enter submits at once; a field mounted by
@@ -105,18 +97,7 @@ export function SessionDialog({
   const [refusal, setRefusal] = useState<{ error: DaemonRequestError; asked: string }>();
   const { error, busy, run } = useDialogAction();
 
-  const groups = choiceGroups(accounts, agentAvailability, t("settings.accounts.defaultName"));
-  const pickedAccount = pickedAgent ? pickedAccounts[pickedAgent] : undefined;
-  const pickedEntry = groups.find((group) => group.agent === pickedAgent)?.entries.find((entry) => entry.account === pickedAccount);
-  const picked = pickedAgent ? {
-    agent: pickedAgent,
-    account: pickedEntry ? pickedEntry.account : inheritedAccount(parentConsole, project, pickedAgent, accounts),
-  } : undefined;
-  const choice = currentChoice(picked, initialChoice(parentConsole, project, accounts, agentAvailability), groups);
-  const accountEntries = groups.find((group) => group.agent === choice.agent)?.entries ?? [];
-  const overrides = launchSettings[choice.agent];
-  const inherited = inheritedSessionLaunch(parentConsole, project, choice.agent);
-  const { model, effort } = launchWithOverrides(inherited, overrides);
+  const { choice, blocked, overrides, agentOptions, setPickedAgent, account: accountField, launch } = useLaunchChoice(parentConsole, project);
 
   // The select is shown from the moment there is a console session to offer and stays mounted
   // for the rest of the dialog's life, even if the list later empties, leaving "none" alone: it is
@@ -203,21 +184,10 @@ export function SessionDialog({
       />
       <AgentAccountField
         label={t("dialog.session.agent")}
-        options={agentIconPickerOptions(t, agentAvailability, choice.agent)}
+        options={agentOptions}
         value={choice.agent}
         onChange={setPickedAgent}
-        account={accountEntries.length > 1 ? {
-          label: t("dialog.agentSettings.account", { agent: AGENT_LABEL[choice.agent] }),
-          options: accountEntries.map((entry) => ({ value: entry.key, label: entry.name, isDisabled: blocked })),
-          value: choiceKey(choice),
-          onChange: (key) => {
-            const entry = findEntry(groups, key);
-            if (entry) {
-              setPickedAgent(entry.agent);
-              setPickedAccounts((current) => ({ ...current, [entry.agent]: entry.account }));
-            }
-          },
-        } : undefined}
+        account={accountField}
       />
       {fixedOwner && (
         <div data-marquee-scope className="flex items-center gap-2 text-sm">
@@ -240,12 +210,7 @@ export function SessionDialog({
         />
       )}
       <LaunchSettingsFields
-        agent={choice.agent}
-        account={choice.account}
-        model={model}
-        effort={effort}
-        onModelChange={(value) => setLaunchSettings((current) => ({ ...current, [choice.agent]: { ...current[choice.agent], model: value } }))}
-        onEffortChange={(value) => setLaunchSettings((current) => ({ ...current, [choice.agent]: { ...current[choice.agent], effort: value } }))}
+        {...launch}
         note={t(project ? "dialog.session.launchSettingsNote" : "dialog.consoleSession.launchSettingsNote")}
         isDisabled={blocked}
       />

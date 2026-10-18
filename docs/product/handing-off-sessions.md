@@ -7,8 +7,8 @@ the original's records. Moving a session to another account of the same agent, w
 switching its account instead (see `docs/product/switching-session-accounts.md`).
 
 A handoff is made with the daemon client protocol's `hand_off_session` request, which names the session, the receiving
-agent, and optionally the receiving session's account, model and reasoning effort. There is no entry for it in the
-window and no orchestration tool for it yet.
+agent, and optionally the receiving session's account, model and reasoning effort. In the window it is made from a
+session's **Hand off** menu item (see "Handing off from the window" below). There is no orchestration tool for it yet.
 
 ## What can be handed off
 
@@ -31,6 +31,48 @@ or console as for any new session of that agent.
 
 From the moment a handoff is accepted until it ends, the original cannot be resumed, switched to another account or
 deleted.
+
+## Handing off from the window
+
+A session's action menu offers **Hand off** right after Switch account (where that is offered), before Archive, for a
+project session or a console session that is not archived, wherever that menu is offered. It is disabled while the
+session is *working* or *starting*, and while the session is locked, as Archive is.
+
+It opens the **handoff dialog**, titled with the session's name, which opens with keyboard focus on its **Hand off**
+button. It says that a new session of another agent takes over this session's place and this one is archived, and that
+the conversation does not carry over: the new session starts by reading a record of it. Then, under the heading
+**Moves to the new session**, it lists what moves:
+
+- the number of branches the session is responsible for, as the daemon's inspection of the session's branches finds
+  them when the dialog opens — a project session only, a console session having no branches. While that inspection is
+  under way the list says the branches are being checked; when it fails, the list says they could not be checked;
+- the number of sessions it owns, archived ones included;
+- its place under its owner, named, when it is bound to one.
+
+Only the lines that apply are shown. When none does, the dialog says that nothing moves — the session is responsible
+for no branches, owns no sessions and reports to no session; it never says so when the branch inspection failed. While
+the handoff request is under way the list stays as it was when it was sent.
+
+Then come the fields:
+
+- **Hand off to** — an agent picker joined to an account picker, as in the session dialog (see the **Agent** field in
+  "Opening a session" in `docs/product/sessions.md`), except that the session's own agent is never offered. It opens on
+  the agent a new session of the project (or, for a console session, of the console) would use by default (see "Which
+  agent a session uses" in `docs/product/sessions.md`) when that is another agent and available, otherwise on the first
+  available other agent, with the account resolved for that agent as for a new session.
+- The collapsed **Advanced** section — the receiving session's model and reasoning effort, showing what a new session of
+  the chosen agent and account would inherit, as in the session dialog (see "The Advanced section" in
+  `docs/product/model-and-reasoning-effort.md`). Only values the user changed are sent with the request; the rest are
+  left for the daemon to resolve.
+
+When no agent other than the session's own is available, the dialog says so, its fields are disabled and its **Hand
+off** button cannot be pressed.
+
+Pressing **Hand off** sends `hand_off_session`. When it succeeds the dialog closes and the receiving session is
+selected. A refusal or failure is shown as an error alert (see `docs/product/error-alerts.md`) and the dialog stays
+open for another try. A session in the middle of a turn or still starting (`session_working`) asks the user to wait for
+its current turn or operation to finish; a receiving agent that is the session's own (`handoff_to_same_agent`), which
+the dialog cannot send, is shown as an unexpected failure.
 
 ## The handoff package
 
@@ -114,8 +156,15 @@ moved. The held queue is kept even if the original's process ends meanwhile.
   queue is written into the original as usual.
 - Forwarded to a receiving session that is being resumed at that moment, the queue is delivered once it is up, and
   goes with it if that launch fails.
-- Where the queue ends up with a session that has no process to take it, it is dropped, and every window is notified
-  that messages queued for that session were dropped. So is a forwarded message that cannot be written.
+- Where the queue ends up with a session that has no process to take it, it is dropped. So is a forwarded message that
+  cannot be delivered to the receiving session. Either way every window is sent the `handoff_messages_dropped` notice
+  about the session the messages ended up with — the original, or the receiving session — shown as an error alert
+  saying that messages held back for a session during a handoff could not be delivered and were dropped, and asking
+  the user to open the session they were meant for, or the one that took over, check its terminal, and send again
+  anything that did not arrive. These messages were never part-written into a terminal, so the notice says nothing of
+  an input line. The exception is a forwarded message lost because the receiving session stopped taking input part way
+  through a write: that is reported as any such loss is (see `docs/product/message-delivery.md`), not again as
+  `handoff_messages_dropped`.
 
 ## When a handoff fails
 

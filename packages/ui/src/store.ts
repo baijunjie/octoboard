@@ -482,7 +482,7 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
       // not repeat the reason; any other notice as itself.
       const failure = noticeErrorPresentation(event.code, event.params, event.message);
       emitToast({
-        kind: ["launch_failed", "trust_answer_failed", "queued_messages_dropped"].includes(event.code) ? "error" : "notice",
+        kind: ["launch_failed", "trust_answer_failed", "queued_messages_dropped", "handoff_messages_dropped"].includes(event.code) ? "error" : "notice",
         message: daemonMessage(currentLanguage(), event.code, event.params, event.message, store.getState()),
         daemonTitle: failure ? new DaemonRequestError(event.message, `${event.code}.title`, event.params) : undefined,
         daemonError: failure ?? new DaemonRequestError(event.message, event.code, event.params),

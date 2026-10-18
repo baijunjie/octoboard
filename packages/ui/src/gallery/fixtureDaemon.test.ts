@@ -50,6 +50,64 @@ describe("the fixture daemon's session reopening", () => {
   });
 });
 
+describe("the fixture daemon's session handoff", () => {
+  const hub = sessionOf("hub", "c", undefined, "Hub", "idle", { colour: "pink", ordinal: 1 });
+  const lead = sessionOf("lead", "c", "p", "Lead", "idle", { bound_to: hub.id, pinned: true });
+  const child = sessionOf("child", "c", "p", "Child", "idle", { bound_to: lead.id });
+  const archivedChild = sessionOf("old", "c", "p", "Old", "archived", { bound_to: lead.id });
+  const state = snapshotState({ consoles: [consoleOf("c", "Main")], projects: [projectOf("p", "c", "Website")], sessions: [hub, lead, child, archivedChild] });
+  const scenario = { id: "handoff", group: "Sidebar sessions" as const, category: "normal" as const, title: "", state };
+
+  it("starts the receiving session in the original's place and archives the original", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    const reply = await daemon.request({ type: "hand_off_session", session: lead.id, agent: "codex" });
+    if (reply.type !== "session_opened") throw new Error("expected session_opened");
+    const sessions = daemon.store.getState().sessions;
+    expect(reply.session).toMatchObject({ agent: "codex", project_id: "p", role: "project", title: "Lead", bound_to: hub.id, pinned: true, status: "working" });
+    expect(sessions.get(lead.id)).toMatchObject({ status: "archived", bound_to: hub.id });
+    expect(sessions.get(child.id)?.bound_to).toBe(reply.session.id);
+    expect(sessions.get(archivedChild.id)?.bound_to).toBe(reply.session.id);
+  });
+
+  it("gives a console session's receiving session the next ordinal and a colour no live session wears", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    const reply = await daemon.request({ type: "hand_off_session", session: hub.id, agent: "grok" });
+    if (reply.type !== "session_opened") throw new Error("expected session_opened");
+    expect(reply.session).toMatchObject({ role: "console", ordinal: 2, colour: "red" });
+  });
+
+  it("fails a branch inspection the scenario stages, and answers the others", async () => {
+    const error = { code: "internal_error", params: { detail: "git could not be run" }, message: "git could not be run" };
+    await expect(createFixtureDaemon({ ...scenario, sessionBranches: error }).request({ type: "inspect_session_branches", sessions: [lead.id] })).rejects.toMatchObject({ code: "internal_error" });
+    await expect(createFixtureDaemon(scenario).request({ type: "inspect_session_branches", sessions: [lead.id] })).resolves.toMatchObject({ items: [] });
+  });
+
+  it("counts an interrupted console session's colour as in use but not an archived one's", async () => {
+    const interrupted = sessionOf("hub-2", "c", undefined, "Hub 2", "interrupted", { colour: "red", ordinal: 2 });
+    const archived = sessionOf("hub-3", "c", undefined, "Hub 3", "archived", { colour: "orange", ordinal: 3 });
+    const daemon = createFixtureDaemon({ ...scenario, state: snapshotState({ consoles: [consoleOf("c", "Main")], sessions: [hub, interrupted, archived] }) });
+    const reply = await daemon.request({ type: "hand_off_session", session: hub.id, agent: "codex" });
+    if (reply.type !== "session_opened") throw new Error("expected session_opened");
+    expect(reply.session.colour).toBe("orange");
+  });
+
+  it("refuses what the daemon refuses, and a failure the scenario stages first", async () => {
+    const working = sessionOf("working", "c", "p", "Working", "working");
+    const archived = sessionOf("gone", "c", "p", "Gone", "archived");
+    const locked = sessionOf("locked", "c", "p", "Locked", "idle", { locked: true });
+    const staged = { code: "session_working", params: { session: lead.id }, message: "mid-turn" };
+    const daemon = createFixtureDaemon({ ...scenario, state: snapshotState({ consoles: [consoleOf("c", "Main")], projects: [projectOf("p", "c", "Website")], sessions: [lead, working, archived, locked] }), sessionHandoffs: { [lead.id]: staged } });
+    await expect(daemon.request({ type: "hand_off_session", session: lead.id, agent: "codex" })).rejects.toMatchObject({ code: "session_working" });
+    await expect(daemon.request({ type: "hand_off_session", session: working.id, agent: "codex" })).rejects.toMatchObject({ code: "session_working" });
+    await expect(daemon.request({ type: "hand_off_session", session: archived.id, agent: "codex" })).rejects.toMatchObject({ code: "session_archived" });
+    await expect(daemon.request({ type: "hand_off_session", session: locked.id, agent: "codex" })).rejects.toMatchObject({ code: "session_locked" });
+    await expect(daemon.request({ type: "hand_off_session", session: "missing", agent: "codex" })).rejects.toMatchObject({ code: "unknown_session" });
+    const plain = createFixtureDaemon(scenario);
+    await expect(plain.request({ type: "hand_off_session", session: lead.id, agent: "claude" })).rejects.toMatchObject({ code: "handoff_to_same_agent", params: { agent: "Claude Code" } });
+    await expect(plain.request({ type: "hand_off_session", session: lead.id, agent: "codex", account: "nobody" })).rejects.toMatchObject({ code: "unknown_account" });
+  });
+});
+
 describe("the fixture daemon's system directory action", () => {
   const project = projectOf("p", "c", "Website");
   const state = snapshotState({ projects: [project] });

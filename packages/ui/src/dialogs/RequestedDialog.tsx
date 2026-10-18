@@ -18,6 +18,7 @@ import { boundArchivedSessions, boundSessionsArchivedWith, compareSessions } fro
 import { useDaemon, useDaemonStore } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ConsoleDialog } from "./ConsoleDialog";
+import { HandoffDialog } from "./HandoffDialog";
 import type { DialogRequest } from "./dialogRequest";
 import { ProjectDialog } from "./ProjectDialog";
 import { RenameDialog } from "./RenameDialog";
@@ -272,7 +273,7 @@ function DeleteArchivedDialog({
 }
 
 /** The dialog a sidebar menu asked for. `onClose` is called once the dialog is done or dismissed;
- * `onSessionOpened` receives the session a "new session" dialog started. */
+ * `onSessionOpened` receives the session a "new session" dialog started, or a handoff's receiving session. */
 export function RequestedDialog({
   dialog: requestedDialog,
   onClose,
@@ -404,6 +405,8 @@ export function RequestedDialog({
           onSwitchAccount={onSwitchAccount}
         />
       );
+    case "hand-off":
+      return <HandoffDialog session={dialog.session} onClose={onClose} onHandedOff={onSessionOpened} />;
     case "delete-session": {
       // An archived owner takes the archived sessions bound to it, and those bound to those, along.
       const withIt = boundArchivedSessions(Array.from(sessions.values()), dialog.session.id);

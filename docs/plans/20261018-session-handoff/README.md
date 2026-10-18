@@ -17,7 +17,7 @@ Octoboard's records, and only Octoboard can move them.
    plus the git state of the branches it is responsible for.
 2. A handoff operation that starts the receiving session and moves the original session's branches, sessions and
    owner binding to it, then archives the original.
-3. A **Hand off to…** entry on the session row that lets the user pick the receiving agent and account.
+3. A **Hand off** entry on the session row that lets the user pick the receiving agent and account.
 4. The same operation as an Octoboard tool, for an owner to hand off a session of its own.
 5. An Octoboard tool for an owner to switch a session of its own to another account of the same agent.
 
@@ -71,7 +71,7 @@ Octoboard's records, and only Octoboard can move them.
 
 1. 01 Handoff package (closed)
 2. 02 Handoff operation (closed)
-3. [Hand off entry in the UI](03-handoff-ui.md)
+3. 03 Hand off entry in the UI (closed)
 4. [Handoff tool for owners](04-handoff-tool.md)
 5. [Account switch tool for owners](05-account-switch-tool.md)
 

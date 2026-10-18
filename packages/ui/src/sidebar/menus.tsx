@@ -1,4 +1,4 @@
-import { Archive, ArrowLeftRight, Copy, Download, Focus, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Upload, SquareArrowOutUpRight } from "lucide-react";
+import { Archive, ArrowLeftRight, Copy, Download, Focus, Forward, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Upload, SquareArrowOutUpRight } from "lucide-react";
 
 import { switchEntries } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/ActionMenu";
@@ -172,6 +172,19 @@ function switchAccountSubmenu(
   };
 }
 
+/** "Hand off": offered for a session that is not archived. Disabled while the session is in the
+ * middle of a turn or still starting, which the daemon refuses (`session_working`), and while it
+ * is locked, as Archive is. */
+function handOffItem(t: Translate, handlers: SidebarHandlers, session: Session): ActionMenuItem {
+  return {
+    label: t("sidebar.session.handOff"),
+    icon: Forward,
+    iconClassName: "rtl:-scale-x-100",
+    onClick: () => handlers.onOpenDialog({ kind: "hand-off", session }),
+    disabled: session.locked || session.status === "working" || session.status === "starting",
+  };
+}
+
 /** Whether a session's menu offers Delete in place of Archive: it is archived already, or it has
  * never been used — no conversation on the agent's side (no turn taken, none resumed at open),
  * bound to no owner and no session bound to it — and is deleted outright. One bound to an owner
@@ -203,7 +216,7 @@ function colourSubmenu(t: Translate, handlers: SidebarHandlers, session: Session
   };
 }
 
-/** A session's actions: pin, rename, colour (a console session's), focus mode, switch account and
+/** A session's actions: pin, rename, colour (a console session's), focus mode, switch account, hand off and
  * archive; an archived session (listed in focus mode) and one never used offer deleting instead.
  * `hasBoundSessions` says whether any session is bound to this one, which makes it used. Resuming
  * an interrupted session happens on selection; an archived session offers Reopen and Delete. Shared by a
@@ -235,6 +248,7 @@ export function sessionMenu(
     ...(session.role === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
     ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
     ...(switchAccount ? [switchAccount] : []),
+    ...(archived ? [] : [handOffItem(t, handlers, session)]),
     "separator",
     offersDelete(session, hasBoundSessions)
       ? { label: t("sidebar.session.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true, disabled: session.locked }

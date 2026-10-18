@@ -84,7 +84,8 @@ export const en = {
   "error.recovery.shell": "Open your login shell in Terminal and fix slow or blocked startup commands in its configuration, then retry.",
   "error.recovery.unlock": "Open the affected session’s action menu, choose {unlock}, then retry.",
   "error.recovery.stopSessions": "Archive the running sessions listed above from their action menus, then retry this operation.",
-  "error.recovery.wait": "Wait for the current session operation to finish and check its status before retrying.",
+  "error.recovery.wait": "Wait for the session's current turn or operation to finish and check its status before retrying.",
+  "error.recovery.lostMessages": "Open the session they were meant for, or the one that took over, and check its terminal. Send again anything that did not arrive.",
   "error.recovery.trust": "Open the affected session’s terminal and answer its pending prompt. For folder trust, choose only the project’s folder, then retry.",
   "error.recovery.conversation": "Check the conversation ID and selected account. Resume the existing session when one is named above, or start a new session.",
   "error.recovery.session": "Select the current session in the sidebar. Reopen it from the archive if archived, or create a new session if it has been removed.",
@@ -219,7 +220,9 @@ export const en = {
   "daemon.session_already_running": "This session is already running.",
   "daemon.session_already_starting": "This session is already starting.",
   "daemon.session_already_on_account": "This session is on that account already.",
-  "daemon.session_archived": "An archived session cannot be switched to another account. Reopen it first.",
+  "daemon.session_archived": "An archived session cannot be switched to another account or handed off. Reopen it first.",
+  "daemon.session_working": "This session is in the middle of a turn, so it cannot be handed off yet.",
+  "daemon.handoff_to_same_agent": "A handoff moves a session to another agent, and this session already runs on {agent}.",
   "daemon.conversation_not_found":
     "No {agent} conversation of this session was found in {path}, so it cannot continue under another account.",
   "daemon.conversation_to_resume_not_found":
@@ -303,6 +306,8 @@ export const en = {
     "Claude Code has not been trusted with this directory, so this project's own {allow} permission rules are ignored until Claude Code's trust confirmation is answered. Its {deny} rules still apply, so a session is only more restrictive, never less. {appName} presses that confirmation for you once you have agreed to it.",
   "daemon.queued_messages_dropped":
     "{appName} dropped what it had queued for this session. The session's input line may be holding part of a message {appName} could not finish writing. The next message written into the session will be run together with it, so check the session before sending anything else.",
+  "daemon.handoff_messages_dropped":
+    "{appName} could not deliver messages held back for a session during a handoff, so they were dropped.",
   "daemon.launch_failed": "Could not start {title}: {reason}",
   // The same notice's title when its failure is laid out beneath it, which says the reason itself.
   "daemon.launch_failed.title": "Could not start {title}",
@@ -489,6 +494,7 @@ export const en = {
   "sidebar.session.delete": "Delete",
   "sidebar.session.switchAccount": "Switch account",
   "sidebar.session.manageAccounts": "Manage accounts…",
+  "sidebar.session.handOff": "Hand off",
   "sidebar.session.colour": "Colour",
   "sidebar.focus.enter": "Focus mode",
   "sidebar.focus.exit": "Leave focus mode",
@@ -975,6 +981,27 @@ export const en = {
     one: "{count} session could not be switched. Retry only attempts this session.",
     other: "{count} sessions could not be switched. Retry only attempts these sessions.",
   },
+  "dialog.handOff.title": "Hand off {title}",
+  "dialog.handOff.message":
+    "A new session of another agent takes over this session's place, and this session is archived. The conversation does not carry over: the new session starts by reading a record of it.",
+  "dialog.handOff.moves": "Moves to the new session",
+  "dialog.handOff.movesChecking": "Checking which branches it is responsible for…",
+  "dialog.handOff.movesBranches": {
+    one: "{count} branch it is responsible for",
+    other: "{count} branches it is responsible for",
+  },
+  "dialog.handOff.movesSessions": {
+    one: "{count} session it owns, archived ones included",
+    other: "{count} sessions it owns, archived ones included",
+  },
+  "dialog.handOff.movesBranchesFailed": "Could not check which branches it is responsible for.",
+  "dialog.handOff.movesOwner": "Its place under {owner}, the session it reports to",
+  "dialog.handOff.movesNothing": "Nothing: it is responsible for no branches, owns no sessions and reports to no session.",
+  "dialog.handOff.agent": "Hand off to",
+  "dialog.handOff.noOtherAgent": "No other agent is available to take this session over.",
+  "dialog.handOff.launchSettingsNote": "Changes apply only to the new session, including when resumed. Unchanged values follow the project settings.",
+  "dialog.handOff.consoleLaunchSettingsNote": "Changes apply only to the new session, including when resumed. Unchanged values follow the console settings.",
+  "dialog.handOff.confirm": "Hand off",
   "dialog.deleteSession.title": "Delete {title} permanently?",
   "dialog.deleteSession.message": "This deletes the session. The project's files are kept.",
   "dialog.deleteSession.confirmAll": "Delete all",
