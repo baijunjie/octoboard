@@ -22,6 +22,8 @@
 ## Notes for the developer
 
 - **Reusable capabilities**: HeroUI `Popover` and `Tabs` as used by existing filters and dialogs; pointer focus return
-  handling; the rail's existing button component.
-- **Reference docs**: `docs/product/window-layout.md`, `docs/product/labels-and-tooltips.md`,
+  handling; the rail's existing button component; the account quota summary, the availability-aware quota hook and
+  the agent tab strip of Settings' accounts section (secondary tabs, agent icon and name); the help tip for any
+  one-time explanation.
+- **Reference docs**: `docs/product/account-quotas.md`, `docs/product/window-layout.md`, `docs/product/labels-and-tooltips.md`,
   `docs/ui-accessibility.md`, `docs/product/moving-focus-between-regions.md`.

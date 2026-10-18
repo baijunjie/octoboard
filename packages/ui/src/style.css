@@ -38,6 +38,7 @@
 @import "@heroui/styles/components/chip.css" layer(components);
 @import "@heroui/styles/components/alert.css" layer(components);
 @import "@heroui/styles/components/empty-state.css" layer(components);
+@import "@heroui/styles/components/meter.css" layer(components);
 @import "@heroui/styles/components/progress-bar.css" layer(components);
 @import "@heroui/styles/components/spinner.css" layer(components);
 @import "@heroui/styles/components/toast.css" layer(components);
@@ -295,6 +296,32 @@ html {
 .dark .session-colour-dot,
 [data-theme="dark"] .session-colour-dot {
   background-color: var(--session-colour-dark);
+}
+
+/* The fill of an account quota bar (`QuotaMeter`): one colour per agent. Claude's is its brand
+   orange darkened to keep 3:1 against the meter's track, lightened on the dark track; Codex's is a
+   blue; Grok's is the foreground, as its mark is. Measured against Settings' track, `--control-fill`
+   (see `.control-fills`): Claude 3.55:1 light, 4.47:1 dark; Codex 3.65:1 light, 4.74:1 dark. */
+.quota-meter--claude {
+  --meter-fill: #c2562f;
+}
+
+.quota-meter--codex {
+  --meter-fill: #2a6df0;
+}
+
+.quota-meter--grok {
+  --meter-fill: var(--default-foreground);
+}
+
+.dark .quota-meter--claude,
+[data-theme="dark"] .quota-meter--claude {
+  --meter-fill: #e8805a;
+}
+
+.dark .quota-meter--codex,
+[data-theme="dark"] .quota-meter--codex {
+  --meter-fill: #6ea0ff;
 }
 
 /* A hairline ring of the foreground inside the dot and inside each swatch of the colour picker, so
@@ -852,7 +879,7 @@ html.pane-resizing * {
 }
 
 /* Keep keyboard focus fully visible when the tab strip scrolls beneath its edge fade. */
-.project-browser-view .tabs__list-container__scroller:has([role="tab"][data-focus-visible="true"]) {
+.tabs__list-container__scroller:has([role="tab"][data-focus-visible="true"]) {
   mask-image: none;
 }
 

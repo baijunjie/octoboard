@@ -3,6 +3,7 @@ import React, { useState } from "react";
 
 import { AGENT_DEFAULT_CONFIG_DIR, AGENT_LABEL } from "../agents";
 import { agentIconSetupOptions } from "../components/AgentIcon";
+import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { TILDE_PARAMS } from "../components/literalParams";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "../dialogs/Dialog";
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
@@ -32,7 +33,7 @@ export function AccountDialog({
   const [name, setName] = useState(editing?.name ?? "");
   const [configDir, setConfigDir] = useState(editing?.config_dir ?? "");
   const [pickingDirectory, setPickingDirectory] = useState(false);
-  const { error, busy, run } = useDialogAction();
+  const { error, setError, busy, run } = useDialogAction();
   const { shown, attempt } = useSubmitValidation();
 
   const collision = nameCollision(name, agent, accounts, t("settings.accounts.defaultName"), editing?.id);
@@ -42,6 +43,16 @@ export function AccountDialog({
       ? t("settings.accounts.nameTakenDefault", { name: isolate(collision.name), agent: AGENT_LABEL[agent] })
       : collision && t("settings.accounts.nameTaken", { name: isolate(collision.name), agent: AGENT_LABEL[agent] });
   const dirError = isAbsoluteConfigDir(configDir) ? undefined : "notAbsolute";
+  // Whether another account uses the directory is judged by the daemon, which alone knows the home
+  // directory and the default account's resolved one; its refusal is worded under the field it is
+  // about, and stands until the directory or agent is changed.
+  const dirTaken = error !== undefined && typeof error !== "string" && error.code === "config_dir_taken" ? error : undefined;
+
+  // Typing and picking both change the directory, and either one lifts the daemon's refusal of it.
+  const changeConfigDir = (value: string) => {
+    setConfigDir(value);
+    setError(undefined);
+  };
 
   const submit = () => {
     if (!attempt(nameError, dirError)) return;
@@ -75,7 +86,10 @@ export function AccountDialog({
             // its agent is installed, so every agent is listed and selectable.
             options={agentIconSetupOptions(t, agentAvailability)}
             value={agent}
-            onChange={setAgent}
+            onChange={(value) => {
+              setAgent(value);
+              setError(undefined);
+            }}
           />
         )}
         <TextInput
@@ -91,25 +105,27 @@ export function AccountDialog({
         <TextInput
           label={t("settings.accounts.configDir")}
           value={configDir}
-          onChange={setConfigDir}
+          onChange={changeConfigDir}
           dir="ltr"
           placeholder={AGENT_DEFAULT_CONFIG_DIR[agent]}
           description={agent === "grok" ? t("settings.accounts.dirHintGrok") : t("settings.accounts.dirHint")}
-          errorMessage={shown(dirError) && <Message id="settings.accounts.dirNotAbsolute" params={TILDE_PARAMS} />}
+          errorMessage={dirTaken
+            ? <DaemonErrorMessage error={dirTaken} showTitle={false} />
+            : shown(dirError) && <Message id="settings.accounts.dirNotAbsolute" params={TILDE_PARAMS} />}
           trailing={
             <Button type="button" variant="secondary" onPress={() => setPickingDirectory(true)}>
               {t("common.browse")}
             </Button>
           }
         />
-        <DialogError message={error} />
+        <DialogError message={dirTaken ? undefined : error} />
       </Dialog>
       {pickingDirectory && (
         <DirectoryPicker
           title={t("dialog.chooseDirectory")}
           initialPath={isAbsoluteConfigDir(configDir) ? configDir : "~"}
           onPick={(picked) => {
-            setConfigDir(picked);
+            changeConfigDir(picked);
             setPickingDirectory(false);
           }}
           onClose={() => setPickingDirectory(false)}

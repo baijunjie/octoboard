@@ -3,7 +3,7 @@ import { format, isMessageKey } from "./i18n/catalog";
 import { joinPhrases } from "./i18n/joinPhrases";
 import { isolate } from "./i18n/isolate";
 import type { Language } from "./i18n/languages";
-import type { MessageParams } from "./protocol";
+import { DEFAULT_ACCOUNT_NAME, type MessageParams } from "./protocol";
 import type { State } from "./store";
 
 /** The params that are record ids, and what each is shown as: the record's current name. */
@@ -57,6 +57,7 @@ export const CODE_PARAMS: Record<string, readonly string[]> = {
   no_merge_base_shallow: ["left", "right"],
   binary_not_found: ["binary", "pathVar"],
   models_binary_not_found: ["binary", "pathVar"],
+  quota_binary_not_found: ["binary", "pathVar"],
   config_dir_not_absolute: ["tilde"],
   invalid_launch_setting: ["value"],
   claude_workspace_untrusted: ["allow", "deny"],
@@ -66,6 +67,7 @@ export const CODE_PARAMS: Record<string, readonly string[]> = {
 /** Names retain the surrounding prose's typeface rather than the monospace used for paths. */
 export const NAME_PARAMS: Record<string, readonly string[]> = {
   account_name_taken: ["name"],
+  config_dir_taken: ["name"],
   project_directory_shared: ["project"],
   conversation_in_session: ["session"],
   launch_failed: ["title"],
@@ -93,6 +95,7 @@ export const UI_PARAMS: Record<string, MessageParams> = {
   config_dir_not_absolute: { tilde: "~/" },
   binary_not_found: { pathVar: "PATH" },
   models_binary_not_found: { pathVar: "PATH" },
+  quota_binary_not_found: { pathVar: "PATH" },
   claude_workspace_untrusted: { allow: "allow", deny: "deny" },
   agent_not_available: { pathVar: "PATH" },
 };
@@ -108,6 +111,10 @@ export function messageCode(code: string, params: MessageParams): string {
 export function withUiParams(code: string, params: MessageParams): MessageParams {
   return { ...UI_PARAMS[messageCode(code, params)], ...params };
 }
+
+/** The codes whose `name` may be the default account's, which the daemon names by its fixed English
+ * `DEFAULT_ACCOUNT_NAME`. */
+const DEFAULT_ACCOUNT_NAME_CODES = new Set(["account_name_taken", "config_dir_taken"]);
 
 /** A param as plain text: a record id as that record's name, anything else as it came, isolated. */
 function paramText(records: RecordNames, name: string, value: string): string {
@@ -131,6 +138,10 @@ export function daemonParams<V = never>(
 ): Record<string, string | number | V> {
   // A failed launch carries its failure's params, which take the UI's own for the failure's code.
   const all = code === "launch_failed" && params.reason_code ? withUiParams(params.reason_code, params) : withUiParams(code, params);
+  // The default account is shown by its name in the current language, as the accounts section does.
+  if (DEFAULT_ACCOUNT_NAME_CODES.has(code) && all.name === DEFAULT_ACCOUNT_NAME) {
+    all.name = format(language, "settings.accounts.defaultName", {});
+  }
   const shown: Record<string, string | number> = Object.fromEntries(
     Object.entries(all).map(([name, value]) => [name, paramText(records, name, value)]),
   );

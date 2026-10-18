@@ -11,6 +11,7 @@ import { daemonWsUrl, type DaemonOrigin } from "./daemon";
 import { sameValue } from "./sameValue";
 import {
   isLive,
+  type AccountQuota,
   type Agent,
   type AgentAvailability,
   type Console,
@@ -149,6 +150,11 @@ export interface State {
    * `agent_availability_updated` said. Always holds all three agents, each `not_determined`
    * until the daemon's one-time determination for this run lands. */
   agentAvailability: Map<Agent, AgentAvailability>;
+  /** The plan quota of every account of every available agent, as the last `snapshot` or
+   * `account_quotas_updated` said. Runtime state of the daemon, so it starts empty and is never
+   * kept anywhere else; an account with no entry is one the daemon has not reported on (see
+   * `accountQuotaOf`). */
+  accountQuotas: AccountQuota[];
   /** The daemon host's home directory as the last `snapshot` said, for showing paths under it as
    * `~/...` (see `abbreviateHome`). Null until the first snapshot, and when the daemon cannot
    * determine one. */
@@ -179,6 +185,7 @@ const initialState: State = {
   gitStatuses: new Map(),
   settings: { auto_pull_repositories: false, default_clone_dir: "", accounts: [] },
   agentAvailability: new Map(INITIAL_AGENT_AVAILABILITY.map((a) => [a.agent, a])),
+  accountQuotas: [],
   homeDir: null,
 };
 
@@ -198,6 +205,22 @@ function keepSame<T>(previous: Map<string, T>, records: T[], idOf: (record: T) =
       return [id, held !== undefined && sameValue(held, record) ? held : record];
     }),
   );
+}
+
+/** `quotas` with each entry replaced by the one `previous` already holds for its account when that
+ * is the same data: the list arrives whole after every reading, and a component showing one
+ * account must not render again for another account's reading. */
+function keepSameQuotas(previous: AccountQuota[], quotas: AccountQuota[]): AccountQuota[] {
+  return quotas.map((quota) => {
+    const held = accountQuotaOf(previous, quota.agent, quota.account);
+    return held !== undefined && sameValue(held, quota) ? held : quota;
+  });
+}
+
+/** The quota entry of an account (`null` for an agent's default account), if the daemon has
+ * reported on it. */
+export function accountQuotaOf(quotas: AccountQuota[], agent: Agent, account: string | null): AccountQuota | undefined {
+  return quotas.find((quota) => quota.agent === agent && quota.account === account);
 }
 
 function reducer(state: State, action: Action): State {
@@ -229,6 +252,7 @@ function reducer(state: State, action: Action): State {
             gitStatuses: keepSame(state.gitStatuses, event.git_statuses, (s) => s.project),
             settings: event.settings,
             agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])),
+            accountQuotas: keepSameQuotas(state.accountQuotas, event.account_quotas),
             homeDir: event.home_dir,
           };
         case "trusted_directories_updated":
@@ -394,6 +418,8 @@ function reducer(state: State, action: Action): State {
           return { ...state, settings: event.settings };
         case "agent_availability_updated":
           return { ...state, agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])) };
+        case "account_quotas_updated":
+          return { ...state, accountQuotas: keepSameQuotas(state.accountQuotas, event.account_quotas) };
         default:
           return state;
       }

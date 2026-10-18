@@ -1,11 +1,11 @@
 import { DaemonRequestError } from "../daemon-client";
 import { consoleAccount, inheritedAccount } from "../accountChoices";
-import { projectSessionAgent } from "../agents";
+import { AGENT_LABEL, projectSessionAgent } from "../agents";
 import { daemonMessage } from "../daemonMessage";
 import { errorPresentation, noticeErrorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
 import { currentLanguage } from "../i18n/language";
-import { isLive, type BrowseEntry, type Console, type DirEntry, type Event, type RequestBody, type Session, type SessionRecordsPresence } from "../protocol";
+import { DEFAULT_ACCOUNT_NAME, isLive, type BrowseEntry, type Console, type DirEntry, type Event, type RequestBody, type Session, type SessionRecordsPresence } from "../protocol";
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -21,6 +21,18 @@ import { SAMPLE_GIT } from "./fixtures/projectGit";
 const TOAST_DELAY_MS = 300;
 
 const HOME = "/Users/dev";
+
+/** A path as the daemon compares one: `~` and `~/` expanded against the home directory, `.` and
+ * `..` and repeated or trailing slashes resolved lexically, symlinks not followed. */
+function normalizedPath(path: string): string {
+  const expanded = path === "~" ? HOME : path.startsWith("~/") ? `${HOME}/${path.slice(2)}` : path;
+  const parts: string[] = [];
+  for (const part of expanded.split("/")) {
+    if (part === "..") parts.pop();
+    else if (part !== "" && part !== ".") parts.push(part);
+  }
+  return `${expanded.startsWith("/") ? "/" : ""}${parts.join("/")}`;
+}
 
 /** A text as the daemon stores one that may be left blank: trimmed, and none when nothing is left
  * (`trimmed_or_none` of `launch_settings.rs`). */
@@ -328,16 +340,10 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           let cloneDir = current.settings.default_clone_dir;
           if (body.default_clone_dir !== undefined) {
             const given = body.default_clone_dir;
-            const expanded = given === "~" ? HOME : given.startsWith("~/") ? `${HOME}/${given.slice(2)}` : given;
             if (given.trim() === "") cloneDir = `${HOME}/Projects`;
             else {
-              if (!expanded.startsWith("/")) return fail({ code: "path_not_absolute", params: { path: given }, message: `\`${given}\` is not an absolute path; give the full path or start it with \`~/\`` });
-              const parts: string[] = [];
-              for (const part of expanded.split("/")) {
-                if (part === "..") parts.pop();
-                else if (part !== "" && part !== ".") parts.push(part);
-              }
-              cloneDir = `/${parts.join("/")}`;
+              if (!given.startsWith("/") && given !== "~" && !given.startsWith("~/")) return fail({ code: "path_not_absolute", params: { path: given }, message: `\`${given}\` is not an absolute path; give the full path or start it with \`~/\`` });
+              cloneDir = normalizedPath(given);
             }
           }
           store.setState({ settings: { ...current.settings, auto_pull_repositories: body.auto_pull_repositories ?? current.settings.auto_pull_repositories, default_clone_dir: cloneDir } });
@@ -352,6 +358,24 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           store.setState({ settings: body.account === null
             ? { ...current.settings, codex_default_approval_reviewer: body.reviewer }
             : { ...current.settings, accounts: current.settings.accounts.map((account) => account.id === body.account ? { ...account, approval_reviewer: body.reviewer } : account) } });
+          return { type: "ack" };
+        }
+        case "create_account":
+        case "update_account": {
+          const current = store.getState();
+          const editing = body.type === "update_account" ? current.settings.accounts.find((account) => account.id === body.account) : undefined;
+          if (body.type === "update_account" && !editing) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
+          const agent = body.type === "create_account" ? body.agent : editing!.agent;
+          if (body.config_dir !== undefined) {
+            const dir = normalizedPath(body.config_dir.trim());
+            // The daemon refuses nothing for an update that leaves the account's own directory as it is.
+            const defaultDir = current.agentAvailability.get(agent)?.default_account_dir;
+            const owner = dir === editing?.config_dir
+              ? undefined
+              : current.settings.accounts.find((account) => account.agent === agent && account.id !== editing?.id && normalizedPath(account.config_dir) === dir)?.name
+                ?? (defaultDir != null && normalizedPath(defaultDir) === dir ? DEFAULT_ACCOUNT_NAME : undefined);
+            if (owner !== undefined) return fail({ code: "config_dir_taken", params: { agent: AGENT_LABEL[agent], name: owner }, message: `${AGENT_LABEL[agent]} account ${owner} already uses this config directory` });
+          }
           return { type: "ack" };
         }
         case "delete_account": {
@@ -372,13 +396,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           return { type: "ack" };
         }
         case "remove_trusted_directory": {
-          const expanded = body.path === "~" ? HOME : body.path.startsWith("~/") ? `${HOME}/${body.path.slice(2)}` : body.path;
-          const parts: string[] = [];
-          for (const part of expanded.split("/")) {
-            if (part === "..") parts.pop();
-            else if (part !== "" && part !== ".") parts.push(part);
-          }
-          const path = `${expanded.startsWith("/") ? "/" : ""}${parts.join("/")}`;
+          const path = normalizedPath(body.path);
           store.setState((current) => ({ trustedDirectories: current.trustedDirectories.filter((given) => given !== path) }));
           return { type: "ack" };
         }

@@ -26,6 +26,7 @@ export function TitledControl({
   children,
   placement,
   focusOnly,
+  isDisabled,
 }: {
   title: string | undefined;
   children: React.ReactElement<{ "aria-label"?: string; "aria-describedby"?: string }>;
@@ -35,11 +36,14 @@ export function TitledControl({
   placement?: "end";
   /** The tooltip opens on keyboard focus only, not on hover. */
   focusOnly?: boolean;
+  /** Holds the tooltip back, closing it if open, while the control is showing what it says some other way,
+   * such as in a popover the control opened. */
+  isDisabled?: boolean;
 }): React.ReactElement {
   if (!title) return children;
   const repeatsName = children.props["aria-label"] === title && children.props["aria-describedby"] === undefined;
   return (
-    <Tooltip trigger={focusOnly ? "focus" : undefined}>
+    <Tooltip trigger={focusOnly ? "focus" : undefined} isDisabled={isDisabled}>
       {repeatsName ? React.cloneElement(children, { "aria-describedby": "" }) : children}
       <Tooltip.Content placement={placement} className="pointer-events-none">{title}</Tooltip.Content>
     </Tooltip>

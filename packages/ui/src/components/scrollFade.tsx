@@ -116,8 +116,11 @@ export function useFadeRegion(
 
 type FadedScrollerProps = Omit<React.ComponentProps<typeof ScrollShadow>, "size" | "offset" | "visibility" | "isEnabled" | "variant" | "onVisibilityChange"> & {
   region?: FadeRegion;
-  /** Sticky headings paint above overlay fades; a mask would dim every descendant regardless of z-index. */
+  /** Sticky headings paint above overlay fades; a mask would dim every descendant regardless of z-index. The
+   * top fade follows the first element marked `data-sticky-heading` (see `useStickyHeadingFocus`). */
   stickyHeadingHeight?: number;
+  /** The surface the overlay fades fade into, with `stickyHeadingHeight`: the side panes' by default. */
+  stickySurface?: StickySurface;
 };
 
 /**
@@ -132,23 +135,42 @@ type FadedScrollerProps = Omit<React.ComponentProps<typeof ScrollShadow>, "size"
  * While the scroller overflows sideways it carries `data-scrolls-sideways`, which keeps the
  * horizontal scrollbar clear of the mask (`style.css`).
  *
- * A sidebar list with `stickyHeadingHeight` uses overlays instead: its headings paint at z-3
- * above the z-2 fades, and the top fade and scroll padding start below the heading. The wrapper
+ * A list with sticky headings (the sidebar's, the Settings agent strip) passes `stickyHeadingHeight`
+ * and uses overlays instead: its headings paint at z-3 above the z-2 fades, and the top fade and
+ * scroll padding start below the heading. The top fade follows the first element marked `data-sticky-heading`: at the
+ * scroller's edge while that one still sits further down, below it once it is pinned. The wrapper
  * supplies their shared stacking context; the measured gutter keeps the scrollbar uncovered.
  */
-export function FadedScroller({ orientation = "vertical", region, style, className, ref: forwarded, stickyHeadingHeight, ...props }: FadedScrollerProps): React.ReactElement {
+export function FadedScroller({ orientation = "vertical", region, style, className, ref: forwarded, stickyHeadingHeight, stickySurface, ...props }: FadedScrollerProps): React.ReactElement {
   const ref = useObjectRef(forwarded);
   const sideways = useScrollsSideways(ref, orientation);
   const [visibility, setVisibility] = useState<ScrollShadowVisibility>("none");
   const [gutter, setGutter] = useState(0);
+  const [topOffset, setTopOffset] = useState(stickyHeadingHeight ?? 0);
+  // Like `useScrollsSideways`, it re-runs on every commit, to pick up children React replaced.
   useEffect(() => {
     const element = ref.current;
     if (stickyHeadingHeight === undefined || !element) return;
-    const measure = () => setGutter(element.offsetWidth - element.clientWidth);
+    const place = () => {
+      const sticky = element.querySelector("[data-sticky-heading]");
+      const gap = sticky ? sticky.getBoundingClientRect().top - element.getBoundingClientRect().top : 0;
+      setTopOffset(Math.min(stickyHeadingHeight, Math.max(0, stickyHeadingHeight - gap)));
+    };
+    const measure = () => {
+      setGutter(element.offsetWidth - element.clientWidth);
+      place();
+    };
+    // The heading's place moves with a resize or a re-wrap as well as with scrolling, so what the content
+    // is made of is watched too.
     const resize = new ResizeObserver(measure);
     resize.observe(element);
+    for (const child of element.children) resize.observe(child);
+    element.addEventListener("scroll", place, { passive: true });
     measure();
-    return () => resize.disconnect();
+    return () => {
+      resize.disconnect();
+      element.removeEventListener("scroll", place);
+    };
   });
   const scroller = (
     <ScrollShadow
@@ -170,25 +192,31 @@ export function FadedScroller({ orientation = "vertical", region, style, classNa
     />
   );
   if (stickyHeadingHeight === undefined) return scroller;
-  return <StickyFadeFrame visibility={visibility} gutter={gutter} headingHeight={stickyHeadingHeight}>{scroller}</StickyFadeFrame>;
+  return <StickyFadeFrame visibility={visibility} gutter={gutter} topOffset={topOffset} surface={stickySurface}>{scroller}</StickyFadeFrame>;
 }
 
-function StickyFadeFrame({ children, visibility, gutter, headingHeight, bottomGutter = 0 }: {
+type StickySurface = "sidebar" | "overlay";
+
+/** Whole class names, for Tailwind to find: the fades' start colour is the surface the list sits on. */
+const FADE_FROM: Record<StickySurface, string> = { sidebar: "from-panel-sidebar", overlay: "from-overlay" };
+
+function StickyFadeFrame({ children, visibility, gutter, topOffset, bottomGutter = 0, surface = "sidebar" }: {
   children: React.ReactNode;
   visibility: ScrollShadowVisibility;
   gutter: number;
-  headingHeight: number;
+  topOffset: number;
   bottomGutter?: number;
+  surface?: StickySurface;
 }): React.ReactElement {
   return (
     <div className="relative isolate flex min-h-0 flex-1 flex-col">
       {children}
       {(visibility === "top" || visibility === "both") && (
-        <div aria-hidden="true" className="pointer-events-none absolute start-0 z-2 bg-linear-to-b from-panel-sidebar to-transparent"
-          style={{ top: headingHeight, height: FADE_SIZE, insetInlineEnd: gutter }} />
+        <div aria-hidden="true" className={`pointer-events-none absolute start-0 z-2 bg-linear-to-b ${FADE_FROM[surface]} to-transparent`}
+          style={{ top: topOffset, height: FADE_SIZE, insetInlineEnd: gutter }} />
       )}
       {(visibility === "bottom" || visibility === "both") && (
-        <div aria-hidden="true" className="pointer-events-none absolute bottom-0 start-0 z-2 bg-linear-to-t from-panel-sidebar to-transparent"
+        <div aria-hidden="true" className={`pointer-events-none absolute bottom-0 start-0 z-2 bg-linear-to-t ${FADE_FROM[surface]} to-transparent`}
           style={{ bottom: bottomGutter, height: FADE_SIZE, insetInlineEnd: gutter }} />
       )}
     </div>
@@ -224,7 +252,7 @@ export function useStickyScrollFade({ ref: forwarded, className, stickyHeadingHe
   });
   return {
     props: { ref, className, style: { ...scrollPadding("vertical"), scrollPaddingTop: stickyScrollPaddingTop(stickyHeadingHeight) } },
-    wrap: (children) => <StickyFadeFrame visibility={visibility} gutter={gutter} headingHeight={stickyHeadingHeight} bottomGutter={bottomGutter}>{children}</StickyFadeFrame>,
+    wrap: (children) => <StickyFadeFrame visibility={visibility} gutter={gutter} topOffset={stickyHeadingHeight} bottomGutter={bottomGutter}>{children}</StickyFadeFrame>,
   };
 }
 

@@ -22,4 +22,4 @@
 
 - **Reusable capabilities**: the existing tray menu builder, its deferred-update handling and its template-image
   handling for agent marks.
-- **Reference docs**: `docs/product/menu-bar-icon.md`, `docs/product/language.md`.
+- **Reference docs**: `docs/product/account-quotas.md`, `docs/product/menu-bar-icon.md`, `docs/product/language.md`.

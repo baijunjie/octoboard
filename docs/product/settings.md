@@ -139,16 +139,31 @@ never does and where the value is kept are in "Automatically pulling repositorie
 
 ## Agent accounts
 
-Every account, grouped by agent in the order the agents are listed elsewhere, each group headed by the agent's name and
-icon. The section says what an account is — a named config directory of an agent, where it keeps its login and
-conversation history — and that an agent has to be on the user's `PATH` for its accounts to be usable. An agent that is
-not available is headed as not installed and its accounts are marked not usable; one whose availability is not yet
-determined is headed plainly.
+Every account, grouped by agent. The section says what an account is — a named config directory of an agent, where it
+keeps its login and conversation history — and that an agent has to be on the user's `PATH` for its accounts to be
+usable.
 
-Each group starts with the agent's **default account**, said to be the setup a session runs under when nothing is
-pinned, with the directory it currently resolves to. Its name is Octoboard's own; its name and directory cannot be
+Beneath that, each agent has a tab of its own, in the order the agents are listed elsewhere, each tab showing the
+agent's icon and name; only the selected agent's accounts are shown, in its tab's panel. The agent tabs are an
+underlined strip, set apart from the list of Settings' sections, and scroll sideways when they do not fit. Once the
+section is scrolled far enough for the strip to reach the top of the section's area, at any window width, the strip
+stays pinned there, opaque, and the accounts scroll beneath it; the top fade then begins below the strip (see "The
+edge that hides content fades" in `docs/product/scrolling-surfaces.md`). Every agent keeps its tab whether or not it
+is installed. The section always opens on the first agent's tab, Claude Code, however
+it was opened. An agent that is not available has a muted line at the top of its panel saying it is not installed, and
+its accounts are marked not usable; one whose availability is not yet determined has no such line.
+
+Each agent's panel starts with the agent's **default account**, with the directory it currently resolves to. A "?"
+ends its name line, after the plan, and says in its tooltip, or in a popover once pressed, that the default account is
+the setup a session runs under when nothing is pinned. Its name is Octoboard's own; its name and directory cannot be
 edited, and it cannot be removed. The accounts the user owns follow, each with its name, its directory, an **Edit**
 button and a **Remove** button. Both kinds of directory are shown as in "How paths are shown" above.
+
+Every account of an available agent, the default account included, also shows its plan quota: the plan beside its
+name, and beneath the account's row, across its whole width, one line and bar per quota window — or, in its place,
+that the quota is still being read, is unavailable, or is out of date. Opening the section asks for a fresh reading
+of every account whose last one is due, those of every agent and not only of the tab in view; the readings already
+held are shown at once. What is read, when, and how each state looks are in `docs/product/account-quotas.md`.
 
 Every Codex account row, including the default account, has an inline approval-mode selector:
 
@@ -168,14 +183,19 @@ These choices are stored by Octoboard. An explicit reviewer overrides Codex's re
 writing its configuration files or changing its sandbox or approval policy. They remain local; see
 "What is not configuration and never travels" in `docs/product/configuration-export-and-import.md`.
 
-One **Add account** button, above the groups, serves every agent: its form asks for the agent — every agent is listed
-and can be picked, one that is not installed included and labelled as not installed, since an account may be set up
-before its agent is, unlike the agent pickers elsewhere (see "Agents that are not installed" in
+One **Add account** button, above the agent tabs, serves every agent: its form asks for the agent — every agent is
+listed and can be picked, one that is not installed included and labelled as not installed, since an account may be
+set up before its agent is, unlike the agent pickers elsewhere (see "Agents that are not installed" in
 `docs/product/consoles-and-projects.md`) — then a name and a
 directory, which can be typed or picked with the directory browser (see "Browsing directories" in
 `docs/product/consoles-and-projects.md`). Editing an account offers its name and its directory, never its agent: a
 directory belongs to one agent's layout. The directory is checked for being absolute (or starting with `~/`) and for
-nothing else: one that does not exist yet is accepted, and the form says that Octoboard does not require it to exist.
+not being already used by another account of the same agent, the default account included (the full rules are in
+"Agent config directories" in `docs/product/consoles-and-projects.md`); one that does not exist yet is accepted, and the
+form says that Octoboard does not require it to exist. A directory already in use is reported, once saving is
+attempted, under the directory field, naming the account that uses it — the default account by its name in the
+current language; the report goes away as soon as the directory is changed, typed or picked, or another agent is
+picked.
 For a Grok Build account the form adds that the directory has to be a Grok home that Grok has already been run
 against, which is checked when a session launches. Every account is named by the user, and the name is required: it is
 stored trimmed, and one left blank is refused. A name has to be unique within its agent, compared trimmed and ignoring

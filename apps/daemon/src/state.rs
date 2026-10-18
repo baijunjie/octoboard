@@ -114,6 +114,10 @@ pub struct AppState {
     /// before `session_requests`, never after. Dropped with the session's other bookkeeping.
     request_hands: Mutex<HashMap<String, SessionStatus>>,
     events: broadcast::Sender<Event>,
+    /// Held by `create_account` and `update_account` from their uniqueness checks to their write,
+    /// so two requests cannot both pass the checks and then both write. A plain mutex and never
+    /// held across an `.await`; see [`AppState::lock_account_writes`].
+    account_writes: Mutex<()>,
     /// Serializes session readback with event sends, including deletions, so a stale reader
     /// cannot announce its snapshot after a newer title or removal.
     session_publication: Mutex<()>,
@@ -214,6 +218,7 @@ impl AppState {
             agent_models: Default::default(),
             account_quotas: Default::default(),
             events,
+            account_writes: Mutex::new(()),
             session_publication: Mutex::new(()),
             session_removals: Mutex::new(0),
             shutdown: tokio::sync::Notify::new(),
@@ -257,6 +262,15 @@ impl AppState {
 
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
         self.events.subscribe()
+    }
+
+    /// The critical section of an account write that depends on what the other accounts hold (a
+    /// name or a directory that must stay unique): take it before the checks and keep the guard
+    /// until the write is done. Synchronous code only: the guard must not live across an `.await`.
+    pub fn lock_account_writes(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.account_writes
+            .lock()
+            .expect("account writes lock poisoned")
     }
 
     pub fn broadcast(&self, event: Event) {

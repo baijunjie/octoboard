@@ -3,7 +3,7 @@ import { expect, it, vi } from "vitest";
 
 import { sessionOf } from "./gallery/fixtures/builders";
 import type { Event } from "./protocol";
-import { createDaemon } from "./store";
+import { accountQuotaOf, createDaemon } from "./store";
 
 const client = vi.hoisted(() => ({
   onEvent: undefined as ((event: Event) => void) | undefined,
@@ -55,4 +55,21 @@ it("applies the events of one batch as a single update", () => {
   ]);
   expect(notified).toHaveBeenCalledTimes(1);
   expect(Array.from(daemon.store.getState().sessions.keys())).toEqual(["b"]);
+});
+
+it("replaces the account quotas with each update and keeps the entry of an account whose reading did not change", () => {
+  const daemon = createDaemon("http://localhost:1234");
+  const window = { kind: "session" as const, label: null, used_percent: 10, resets_at: null, window_minutes: 300 };
+  const first = { agent: "claude" as const, account: null, fetched_at: 1, plan: "max", windows: [window], unavailable: null };
+  const second = { ...first, agent: "codex" as const, plan: "plus" };
+  client.onEvents!([{ type: "account_quotas_updated", account_quotas: [first, second] }]);
+  const held = daemon.store.getState().accountQuotas;
+  expect(accountQuotaOf(held, "codex", null)).toBe(held[1]);
+  client.onEvents!([{ type: "account_quotas_updated", account_quotas: [first, { ...second, fetched_at: 2 }] }]);
+  const after = daemon.store.getState().accountQuotas;
+  expect(after[0]).toBe(held[0]);
+  expect(after[1]!.fetched_at).toBe(2);
+  client.onEvents!([{ type: "account_quotas_updated", account_quotas: [first] }]);
+  expect(daemon.store.getState().accountQuotas).toHaveLength(1);
+  expect(accountQuotaOf(daemon.store.getState().accountQuotas, "codex", null)).toBeUndefined();
 });

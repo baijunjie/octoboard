@@ -167,7 +167,13 @@ with nothing saved:
 - a leading `~` or `~/` is expanded to the home directory of the host the daemon runs on;
 - the result must be an absolute path;
 - it is normalized lexically — a trailing `/`, `.` components and `..` components are resolved; a symlink is kept as
-  typed.
+  typed;
+- it must not be a directory already used by another account of the same agent, or by that agent's default account —
+  by the directory the default account currently resolves to, or, until that has been determined or if it cannot be,
+  by the agent's usual default from the table above. Directories are compared after the steps above, without resolving
+  symlinks; on macOS letter case is ignored, since its default file system is case-insensitive, while elsewhere it
+  counts, and the directory is stored with the letter case it was given. Accounts of different agents may use the same
+  directory, and leaving an account's directory as it is is never refused.
 
 Existence is **not** checked: a directory that does not exist yet is accepted, and is created on first launch — by
 Claude Code itself, and by Octoboard for Codex, which refuses a missing one (Grok Build excepted, see below). What is

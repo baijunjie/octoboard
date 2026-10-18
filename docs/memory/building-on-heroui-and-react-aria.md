@@ -113,6 +113,12 @@ unit test mounts the panel on its own and never switches tabs, and neither does 
 Permissions section's "restart for this to take effect" line was first built from React state remembering the
 grant it had watched arrive, and died on the first click to another section.
 
+The panel also mounts, unmounts and is replaced in a commit that does not render the component holding it: react-aria
+renders the panel from the collection it built when the selection changes. So a hook whose owner renders the `Tabs`
+and hands a ref to an element inside a panel never sees that element arrive or go from its own effects — they run only
+on the owner's next render, which already carries that render's change. A hook that watches such an element attaches
+and detaches in a ref callback, as `useListMotion` (`packages/ui/src/components/useListMotion.ts`) does.
+
 ## An icon-only control also gets a tooltip, through `TitledControl`
 
 Every control in `packages/ui` that shows only an icon — a `CloseButton` or a menu trigger as much as a HeroUI

@@ -2564,6 +2564,11 @@ pub mod error_code {
     /// compared ignoring letter case — the default account's name takes part. `params` names
     /// `agent` and the `name` of the account it collides with.
     pub const ACCOUNT_NAME_TAKEN: &str = "account_name_taken";
+    /// A requested account config directory, once normalised, equals that of another account of
+    /// the same agent — the default account's resolved directory takes part. `params` names
+    /// `agent` and the `name` of the account using it (the default account by
+    /// [`DEFAULT_ACCOUNT_NAME`]).
+    pub const CONFIG_DIR_TAKEN: &str = "config_dir_taken";
     /// An approval of a `session_request` whose session is no longer waiting for it — the request
     /// was withdrawn or timed out — so nothing was started. `params` names the `session`.
     pub const SESSION_REQUEST_NOT_WAITING: &str = "session_request_not_waiting";

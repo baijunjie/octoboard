@@ -317,6 +317,28 @@ describe("the fixture daemon's settings and trusted folders", () => {
 });
 
 
+describe("the fixture daemon's account directories", () => {
+  const work = { id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" };
+  const state = {
+    ...snapshotState({ settings: { auto_pull_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts: [work, { ...work, id: "codex-work", agent: "codex" as const }] } }),
+    agentAvailability: new Map([["claude" as const, { agent: "claude" as const, availability: "available" as const, default_account_dir: "/Users/dev/.claude" }]]),
+  };
+  const daemon = () => createFixtureDaemon({ id: "dirs", title: "", group: "Settings", category: "normal", state });
+
+  it("refuses a directory another account of the agent or the default account uses, compared after normalising", async () => {
+    await expect(daemon().request({ type: "create_account", agent: "claude", name: "Studio", config_dir: "~/x/../.claude-work/" })).rejects.toMatchObject({ code: "config_dir_taken", params: { agent: "Claude Code", name: "Work" } });
+    await expect(daemon().request({ type: "create_account", agent: "claude", name: "Studio", config_dir: "~/.claude" })).rejects.toMatchObject({ code: "config_dir_taken", params: { agent: "Claude Code", name: "Default" } });
+    await expect(daemon().request({ type: "update_account", account: "work", config_dir: "/Users/dev/.claude" })).rejects.toMatchObject({ code: "config_dir_taken" });
+  });
+
+  it("accepts another agent's path, an account's own directory and a new one", async () => {
+    await expect(daemon().request({ type: "create_account", agent: "grok", name: "Studio", config_dir: "/Users/dev/.claude-work" })).resolves.toEqual({ type: "ack" });
+    await expect(daemon().request({ type: "update_account", account: "work", name: "Renamed", config_dir: "/Users/dev/.claude-work" })).resolves.toEqual({ type: "ack" });
+    await expect(daemon().request({ type: "create_account", agent: "claude", name: "Studio", config_dir: "/Users/dev/.claude-studio" })).resolves.toEqual({ type: "ack" });
+  });
+});
+
+
 describe("the fixture daemon's account switches", () => {
   const work = { id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" };
   const session = sessionOf("s", "c", "p", "Release", "working", { model: "opus", effort: "high", bound_to: "hub" });

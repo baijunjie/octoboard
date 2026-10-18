@@ -3,20 +3,30 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import type { Agent, AgentAvailability } from "../protocol";
+import { DaemonRequestError } from "../daemon-client";
+import type { Account, Agent, AgentAvailability, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { AccountDialog } from "./AccountDialog";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-it("lists every agent as selectable when adding, naming the ones known to be missing", async () => {
+// The picker's own listing is not under test; a button stands in for choosing a directory in it.
+vi.mock("../dialogs/DirectoryPicker", () => ({
+  DirectoryPicker: ({ onPick }: { onPick: (path: string) => void }) => (
+    <button type="button" onClick={() => onPick("/home/dev/.claude-picked")}>Pick</button>
+  ),
+}));
+
+const work: Account = { id: "a-work", agent: "claude", name: "Work", config_dir: "/home/dev/.claude-work" };
+
+function render(
+  editing: Account | undefined,
+  request: (body: RequestBody) => Promise<unknown>,
+  agentAvailability = new Map<Agent, AgentAvailability>(),
+) {
   const daemon: Daemon = {
-    store: createStateStore({
-      agentAvailability: new Map(
-        (["claude", "codex", "grok"] as Agent[]).map((agent): [Agent, AgentAvailability] => [agent, { agent, availability: agent === "codex" ? "unavailable" : "available" }]),
-      ),
-    }),
-    request: vi.fn(),
+    store: createStateStore({ settings: { auto_pull_repositories: false, default_clone_dir: "", accounts: [work] }, agentAvailability }),
+    request: vi.fn(request) as Daemon["request"],
     toastError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
@@ -30,9 +40,69 @@ it("lists every agent as selectable when adding, naming the ones known to be mis
     act(() => root.unmount());
     container.remove();
   });
-  act(() => root.render(<DaemonProvider value={daemon}><AccountDialog onClose={() => {}} /></DaemonProvider>));
+  act(() =>
+    root.render(
+      <DaemonProvider value={daemon}>
+        <AccountDialog account={editing} onClose={() => {}} />
+      </DaemonProvider>,
+    ),
+  );
+}
+
+const input = (label: string) =>
+  Array.from(document.body.querySelectorAll<HTMLInputElement>("input")).find((el) => el.labels?.[0]?.textContent === label)!;
+
+function type(label: string, value: string) {
+  const field = input(label);
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, value);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+const submit = () =>
+  act(async () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Save")!.click());
+
+it("lists every agent as selectable when adding, naming the ones known to be missing", async () => {
+  render(undefined, () => Promise.resolve(), new Map(
+    (["claude", "codex", "grok"] as Agent[]).map((agent): [Agent, AgentAvailability] => [agent, { agent, availability: agent === "codex" ? "unavailable" : "available" }]),
+  ));
   await act(async () => document.body.querySelector<HTMLElement>('[data-slot="select-trigger"]')!.click());
   const options = Array.from(document.body.querySelectorAll('[role="option"]'));
   expect(options.map((o) => o.textContent)).toEqual(["Claude Code", "Codex (not installed)", "Grok Build"]);
   expect(options.some((o) => o.hasAttribute("data-disabled") || o.getAttribute("aria-disabled") === "true")).toBe(false);
+});
+
+const taken = () =>
+  new DaemonRequestError("taken", "config_dir_taken", { agent: "Claude Code", name: "Work" });
+
+it("words a refused directory under the directory field, not as the dialog's failure line", async () => {
+  render(work, () => Promise.reject(taken()));
+  type("Config directory", "/home/dev/.claude-other");
+  await submit();
+  const field = input("Config directory");
+  expect(field.getAttribute("aria-invalid")).toBe("true");
+  const message = document.body.textContent ?? "";
+  expect(message.match(/already uses this config directory/g)).toHaveLength(1);
+});
+
+it("lifts the directory's refusal once the directory is edited", async () => {
+  render(work, () => Promise.reject(taken()));
+  type("Config directory", "/home/dev/.claude-other");
+  await submit();
+  type("Config directory", "/home/dev/.claude-another");
+  expect(input("Config directory").getAttribute("aria-invalid")).not.toBe("true");
+  expect(document.body.textContent).not.toContain("already uses this config directory");
+});
+
+it("lifts the directory's refusal when a directory is picked", async () => {
+  render(work, () => Promise.reject(taken()));
+  type("Config directory", "/home/dev/.claude-other");
+  await submit();
+  expect(document.body.textContent).toContain("already uses this config directory");
+  const press = (text: string) => act(async () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === text)!.click());
+  await press("Browse");
+  await press("Pick");
+  expect(input("Config directory").value).toBe("/home/dev/.claude-picked");
+  expect(document.body.textContent).not.toContain("already uses this config directory");
 });

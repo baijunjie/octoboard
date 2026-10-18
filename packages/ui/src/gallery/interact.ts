@@ -29,6 +29,14 @@ function withoutIsolates(text: string): string {
   return text.replace(/[\u2066-\u2069]/g, "");
 }
 
+/** The name a region or panel is given by `aria-labelledby` (the text of the element it names) or `aria-label`, with
+ * bidi isolates removed and trimmed; `undefined` where it has neither. */
+function labelledNameOf(doc: Document, element: Element): string | undefined {
+  const label = element.getAttribute("aria-labelledby");
+  const name = label ? doc.getElementById(label)?.textContent : element.getAttribute("aria-label");
+  return name == null ? undefined : withoutIsolates(name).trim();
+}
+
 /** An exact name or a test of the name. There is no pattern: a pattern is written in one human
  * language and matches nothing in the others, and a name that is not copy (a branch, a file) is a
  * string or a test of its own. */
@@ -102,6 +110,11 @@ export interface Ui {
   tabToRegion: (name: Matcher) => Promise<void>;
   /** Scrolls a named grid or tree to a settled offset without moving keyboard focus. */
   scrollCollection: (name: Matcher, top: number) => Promise<void>;
+  /** Scrolls the tab panel named `name` (a Settings section, by its tab's name) to a settled offset without moving
+   * keyboard focus: the first element inside it that scrolls vertically, the section's own scroller. An offset past
+   * the end is clamped, and content that fits is left where it is, so a window wide or tall enough to hold the
+   * section needs no other handling. */
+  scrollPanel: (name: Matcher, top: number) => Promise<void>;
   /** Moves the pointer onto the indicator inside the first control named `host`, waiting for the
    * control to appear, and leaves it there, for the tooltip that shows only while the pointer is
    * on it. It returns once the app's tooltip delay has passed and the tooltip is up. The indicator
@@ -396,9 +409,8 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     async tabToRegion(matcher) {
       for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
         const region = Array.from(doc.querySelectorAll<HTMLElement>("[role=region][tabindex]")).find((element) => {
-          const label = element.getAttribute("aria-labelledby");
-          const name = label ? doc.getElementById(label)?.textContent : element.getAttribute("aria-label");
-          return name != null && matches(matcher, name.trim());
+          const name = labelledNameOf(doc, element);
+          return name != null && matches(matcher, name);
         });
         if (region) {
           // react-aria reads what the focus came from off the last key event, so Tab is sent first.
@@ -417,6 +429,20 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
         `No collection named ${String(matcher)} to scroll`,
       );
       collection.scrollTo({ top, behavior: "instant" });
+      await wait(300);
+    },
+    async scrollPanel(matcher, top) {
+      const scroller = await waitFor(() => {
+        const panel = Array.from(doc.querySelectorAll<HTMLElement>("[role=tabpanel]")).find((element) => {
+          const name = labelledNameOf(doc, element);
+          return name != null && matches(matcher, name);
+        });
+        return panel && Array.from(panel.querySelectorAll<HTMLElement>("*")).find((element) => {
+          const overflow = (doc.defaultView ?? window).getComputedStyle(element).overflowY;
+          return overflow === "auto" || overflow === "scroll";
+        });
+      }, `No tab panel named ${String(matcher)} with a vertical scroller to scroll: check the name`);
+      scroller.scrollTo({ top, behavior: "instant" });
       await wait(300);
     },
     async type(text) {

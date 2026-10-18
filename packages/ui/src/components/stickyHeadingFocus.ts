@@ -21,9 +21,11 @@ const FOCUS_SCROLL_HOLD_MS = 150;
  *   from that event for a moment, undoing whatever scrolls them. The hold ends as soon as focus
  *   leaves the heading, so the next control's reveal is left alone.
  *
- * The props go on the sticky element; its own classes are joined with `className`.
+ * The props go on the sticky element; its own classes are joined with `className`. They mark it as the
+ * heading (`data-sticky-heading`), which `FadedScroller` places its top fade by.
  */
 export function useStickyHeadingFocus(headingHeight: number): {
+  "data-sticky-heading": "";
   className: string;
   style: CSSProperties;
   onFocusCapture: (event: React.FocusEvent<HTMLElement>) => void;
@@ -36,6 +38,7 @@ export function useStickyHeadingFocus(headingHeight: number): {
     hold.current = null;
   };
   return {
+    "data-sticky-heading": "",
     className: "[&_*]:[scroll-margin-block:calc(-1*var(--sticky-heading-shift))_var(--sticky-heading-shift)]",
     style: { "--sticky-heading-shift": `${stickyScrollPaddingTop(headingHeight)}px` } as CSSProperties,
     onFocusCapture: (event) => {

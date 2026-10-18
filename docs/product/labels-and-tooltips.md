@@ -1,6 +1,7 @@
 # Labels and tooltips
 
-How the window's controls and names are labelled where their text does not fit or is not shown.
+How the window's controls and names are labelled where their text does not fit or is not shown, and which
+explanations are kept out of the visible text.
 
 ## How a tooltip behaves
 
@@ -70,6 +71,14 @@ buttons, the pin buttons and the session Delete or Archive shortcuts below. Thes
 - the two controls of the console dialog's Avatar field (see "Avatar" in
   `docs/product/consoles-and-projects.md`) — the round control itself, named for choosing an image while it is empty
   and for replacing it once one is picked, and the delete button over its corner, named for removing the image;
+- the "?" help tip, a small muted icon button that takes an explanation out of a row's visible text: its tooltip is the
+  explanation, and the name announced for it says what it explains ("About the default account"), so the explanation
+  is the control's description while the tooltip is open. Pressing it (a click, a tap, Enter or Space) opens the same
+  explanation in a popover instead, which holds the tooltip back while it is open, stays until an outside press,
+  Escape or another press of the "?" closes it, and gives focus back to the "?" — the way a touch screen, which has no
+  hover, reaches it. When the popover closes with the pointer resting on the "?" or the keyboard in use, the tooltip
+  stays shut until focus or the pointer leaves the "?", so it does not reopen at once; closed by an outside press with
+  the pointer elsewhere, nothing is held back, and the next rest on the "?" shows the tooltip;
 - the close button of every dialog, of Settings and of each toast ("Close").
 
 While the docked sidebar is hidden at 1168 px and wider, a console's avatar opens its tooltip on keyboard focus only:
@@ -77,6 +86,21 @@ resting the mouse on it floats the sidebar in instead (see "Previewing a console
 `docs/product/sidebar.md`). That card names the console at its top but not what is going on in it, so **a mouse user
 with the docked sidebar hidden never reads the avatar's tooltip**; what is going on is then read from the sessions the
 card lists, each with its own status glyph and that glyph's tooltip (see "Tooltips on indicators" below).
+
+## Explanations in help tips
+
+An explanation that only needs to be read once, and that is not needed on screen while operating what it explains,
+goes into a "?" help tip rather than a line of text of its own (for how the help tip behaves see "Tooltips on
+icon-only controls" above). What stays in the visible text instead:
+
+- status and warnings — an agent that is not installed, an account that is not usable, an error;
+- the consequences and timing the user has to weigh before acting — when a change takes effect, an extra cost, what
+  is lost;
+- what the user needs to read while operating the control — a format, a limit, the meaning of the current value.
+
+The help tip sits at the very end of the line it explains, after the label and anything else on that line, such as
+an account's plan. It is used on the default account's row in Settings (see "Agent accounts" in
+`docs/product/settings.md`).
 
 ## Two-state icon toggles
 

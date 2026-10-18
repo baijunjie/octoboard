@@ -303,6 +303,25 @@ visible text may differ from where it leads. Nothing else carries the target, bu
 reaches no assistive technology (xterm.js keeps its rows `aria-hidden` and runs without its screen-reader mode), so the
 tooltip withholds nothing the text around it would otherwise give.
 
+### A help tip: an explanation behind a "?"
+
+An explanation moved off the screen into a "?" uses `HelpTip` (`packages/ui/src/components/HelpTip.tsx`), never a
+tooltip on a bare glyph: it is the one control whose only job is what it says, so it has to be reachable every way the
+text it replaced was.
+
+- It is a tab stop with an accessible name of its own ("About the default account"), not the explanation itself, so
+  the name stays short and the explanation reaches assistive technology as a description while its tooltip is open.
+- Hover and keyboard focus open the tooltip; a press — click, tap, Enter or Space — opens the same text in a named
+  popover dialog that holds focus and returns it to the "?" when Escape, an outside press or another press closes it.
+  This press is what reaches the explanation on touch, where no tooltip opens.
+- The tooltip is held back while the popover is open, and after it closes for as long as the tooltip would otherwise
+  reopen at once (focus returned from the keyboard, or the pointer still on the "?"). Without that, the explanation
+  just dismissed comes straight back, and the next Escape closes the dialog around it instead.
+
+What it does not give: the explanation is not part of the surrounding row's accessible name, so a screen reader hears
+it only on reaching the "?". That is why only an explanation a user needs once moves there; a status, a warning or
+anything needed while operating a control stays visible text.
+
 ### Hover marquees belong to one text label
 
 A clipped name, heading or detail scrolls only while the pointer is over its own text region. Independent labels

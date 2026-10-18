@@ -10,7 +10,7 @@ import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen"
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import { useIsNarrow } from "../layout/breakpoint";
-import { AgentAccountsSection } from "./AgentAccountsSection";
+import { AgentAccountsSection, AGENT_STRIP_HEIGHT } from "./AgentAccountsSection";
 import { ConfigurationSection } from "./ConfigurationSection";
 import { GeneralSection } from "./GeneralSection";
 import { GitSection } from "./GitSection";
@@ -19,25 +19,40 @@ import { PermissionsSection } from "./PermissionsSection";
 import { SettingsFocusContext } from "./useSectionRefocus";
 import { TrustedFoldersSection } from "./TrustedFoldersSection";
 
+interface Section {
+  id: string;
+  label: PlainMessageKey;
+  Icon: LucideIcon;
+  Content: () => React.ReactElement;
+  /** The height of a heading the section pins to the top of its scroller, if it has one. */
+  stickyHeadingHeight?: number;
+}
+
 const SECTIONS = [
   { id: "general", label: "settings.section.general", Icon: Settings2, Content: GeneralSection },
   { id: "git", label: "settings.section.git", Icon: GitBranch, Content: GitSection },
-  { id: "accounts", label: "settings.section.accounts", Icon: KeyRound, Content: AgentAccountsSection },
+  { id: "accounts", label: "settings.section.accounts", Icon: KeyRound, Content: AgentAccountsSection, stickyHeadingHeight: AGENT_STRIP_HEIGHT },
   { id: "trusted-folders", label: "settings.section.trustedFolders", Icon: FolderCheck, Content: TrustedFoldersSection },
   { id: "permissions", label: "settings.section.permissions", Icon: ShieldCheck, Content: PermissionsSection },
   { id: "notifications", label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
   { id: "configuration", label: "settings.section.configuration", Icon: FileCog, Content: ConfigurationSection },
-] as const satisfies readonly { id: string; label: PlainMessageKey; Icon: LucideIcon; Content: () => React.ReactElement }[];
+] as const satisfies readonly Section[];
 
 export type SettingsSectionId = (typeof SECTIONS)[number]["id"];
 
 /** A section's panel. The section scrolls on its own inside the dialog and fades at the edge it can
  * still be scrolled towards, as the body of a `Dialog` does. The scroller sits inside the panel, not
- * on it, because the panel has an exit transition. */
-function SectionPanel({ id, children }: { id: string; children: React.ReactNode }): React.ReactElement {
+ * on it, because the panel has an exit transition. Its vertical padding is `--section-padding`, which
+ * a sticky heading takes negated as its `top` to pin flush with the scroller's edge rather than the
+ * padding's; `stickyHeadingHeight` is the height of such a heading (see `FadedScroller`). */
+function SectionPanel({ id, stickyHeadingHeight, children }: { id: string; stickyHeadingHeight?: number; children: React.ReactNode }): React.ReactElement {
   return (
     <Tabs.Panel id={id} className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <FadedScroller className="min-h-0 flex-1 px-4 py-4 docked:px-8 docked:py-6">{children}</FadedScroller>
+      <FadedScroller
+        stickyHeadingHeight={stickyHeadingHeight}
+        stickySurface="overlay"
+        className="min-h-0 flex-1 px-4 py-(--section-padding) [--section-padding:calc(var(--spacing)*4)] docked:px-8 docked:[--section-padding:calc(var(--spacing)*6)]"
+      >{children}</FadedScroller>
     </Tabs.Panel>
   );
 }
@@ -113,7 +128,7 @@ export function SettingsDialog({
             orientation={isNarrow ? "horizontal" : "vertical"}
             selectedKey={sectionId}
             onSelectionChange={(key) => setSectionId(String(key))}
-            className="min-w-0 flex-1"
+            className="min-h-0 min-w-0 flex-1"
           >
             {/* A direct child of `Tabs`, as HeroUI's styling of it expects; it is the section column
                 itself, with no rule between it and the section. Narrow, it is the row along the top
@@ -142,8 +157,8 @@ export function SettingsDialog({
                 ))}
               </Tabs.List>
             </Tabs.ListContainer>
-            {SECTIONS.map(({ id, label, Content }) => (
-              <SectionPanel key={id} id={id}>
+            {SECTIONS.map(({ id, label, Content, ...section }) => (
+              <SectionPanel key={id} id={id} stickyHeadingHeight={"stickyHeadingHeight" in section ? section.stickyHeadingHeight : undefined}>
                 <h2 className="pb-2 text-xl font-semibold">{t(label)}</h2>
                 <SettingsFocusContext.Provider value={focusTarget}>
                   <Content />

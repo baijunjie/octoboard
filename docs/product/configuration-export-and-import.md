@@ -139,7 +139,8 @@ than configuration, and are in no document. Neither is the default clone directo
 machine's own to choose, and an import places what it clones under it (see "Default clone directory" in
 `docs/product/settings.md`). No console and no project carries its stored id.
 Codex account approval modes, including the default account's, also stay local: exports omit them and imports leave
-the importing machine's choices unchanged.
+the importing machine's choices unchanged. Account quota readings are not stored at all and are in no document either
+(see "How a quota is read" in `docs/product/account-quotas.md`).
 
 ### The application setting a full export carries
 

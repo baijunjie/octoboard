@@ -4,6 +4,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 
 ## Product
 
+- [Account quotas](product/account-quotas.md) — each agent account's plan quota: which accounts have one, how it is
+  read through the agent's own CLI and when, the windows per agent and their labels, how a quota is shown, the
+  reading / unavailable / out-of-date states and their reasons, and what a reading leaves in the account's directory.
 - [Collection motion](product/collection-motion.md) — entry, exit and position transitions for dynamic collections, including
   horizontal and wrapping items, virtualized rows, keyboard focus and reduced motion.
 - [Consoles and projects](product/consoles-and-projects.md) — consoles, their working directory, agent defaults and

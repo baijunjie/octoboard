@@ -53,6 +53,26 @@ it("tabToRegion fails where no region has the name, as in a window tall enough f
   await done;
 });
 
+it("scrollPanel scrolls the scroller inside the tab panel its tab names", async () => {
+  document.body.innerHTML = "<div role=\"tab\" id=\"tab\">Agent accounts</div><div role=\"tabpanel\" aria-labelledby=\"tab\"><div id=\"scroller\" style=\"overflow-y:auto\"></div></div>";
+  const scroller = document.getElementById("scroller")!;
+  Object.defineProperty(scroller, "scrollHeight", { value: 900 });
+  Object.defineProperty(scroller, "clientHeight", { value: 400 });
+  const scrolled: ScrollToOptions[] = [];
+  scroller.scrollTo = ((options: ScrollToOptions) => { scrolled.push(options); }) as typeof scroller.scrollTo;
+  const done = createUi(document, "en").scrollPanel("Agent accounts", 420);
+  await vi.advanceTimersByTimeAsync(500);
+  await done;
+  expect(scrolled).toEqual([{ top: 420, behavior: "instant" }]);
+});
+
+it("scrollPanel fails where no panel of that name has a vertical scroller", async () => {
+  document.body.innerHTML = "<div role=\"tab\" id=\"tab\">Agent accounts</div><div role=\"tabpanel\" aria-labelledby=\"tab\"><div></div></div>";
+  const done = expect(createUi(document, "en").scrollPanel("Agent accounts", 420)).rejects.toThrow(/No tab panel named/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await done;
+});
+
 it("press takes the control inside a band of the same name, not the band", async () => {
   document.body.innerHTML = "<div role=\"row\" id=\"band\"><button id=\"fold\">Staged15</button></div>";
   const pressed: string[] = [];

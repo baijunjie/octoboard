@@ -85,3 +85,13 @@ it("localizes structured running-session lists using live titles without parsing
   expect(message).not.toContain("legacy fallback");
   expect(daemonMessage("en", "session_has_running_sessions", { ...params, session_ids: "bad" }, "fallback", records)).toContain("legacy fallback");
 });
+
+it.each([
+  ["account_name_taken", "Claude Code 已有名为 ⁨默认⁩ 的账户。"],
+  ["config_dir_taken", "Claude Code 的账户 ⁨默认⁩ 已在使用此配置目录。"],
+] as const)("words the default account in a %s message by its name in the current language", (code, zh) => {
+  const params = { agent: "Claude Code", name: "Default" };
+  expect(daemonMessage("zh-Hans", code, params, "x", records)).toBe(zh.replace("Claude Code", isolate("Claude Code")));
+  expect(daemonMessage("en", code, params, "x", records)).toContain(isolate("Default"));
+  expect(daemonMessage("zh-Hans", code, { ...params, name: "Work" }, "x", records)).toContain(isolate("Work"));
+});

@@ -84,8 +84,10 @@ const clickButton = (text: string | ((b: HTMLButtonElement) => boolean)) =>
   click(buttons().find((b) => (typeof text === "string" ? b.textContent === text : text(b))));
 const choose = (option: string) =>
   click(Array.from(document.body.querySelectorAll('[role="option"]')).find((o) => o.textContent === option));
-/** What the form sent apart from its questions about models. */
-const sent = (request: ReturnType<typeof render>) => request.mock.calls.map((call) => call[0]).filter((body) => body.type !== "list_agent_models");
+/** What the form sent apart from its questions about models and the quota refresh Settings' Agent accounts section
+ * asks for when it opens over the dialog. */
+const sent = (request: ReturnType<typeof render>) =>
+  request.mock.calls.map((call) => call[0]).filter((body) => body.type !== "list_agent_models" && body.type !== "refresh_account_quotas");
 const asked = (request: ReturnType<typeof render>) => request.mock.calls.map((call) => call[0]).filter((body) => body.type === "list_agent_models");
 
 function type(label: string, value: string) {

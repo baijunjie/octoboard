@@ -14,6 +14,11 @@ export type SessionStatus = "starting" | "working" | "waiting_user" | "idle" | "
 export type HostKind = "local" | "ssh";
 export type ProjectSource = "local" | "parent" | "git";
 
+/** The name the daemon gives the default account in a coded message, and compares account names
+ * against; mirrors the daemon's `protocol::DEFAULT_ACCOUNT_NAME`. Never shown as is: the UI words
+ * the default account in the current language. */
+export const DEFAULT_ACCOUNT_NAME = "Default";
+
 /** A console session's badge colour (`Session.colour`): one of a fixed palette of sixteen, in hue
  * order around the colour wheel and then the muted ones, assigned on creation and changed
  * afterwards only by the user. The ids are never shown: the user sees the colour, not a name. What

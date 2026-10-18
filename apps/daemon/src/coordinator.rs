@@ -3803,6 +3803,69 @@ fn check_account_name_unique(
     Ok(())
 }
 
+/// The comparison key for an account directory collision. The stored text stays as typed; only
+/// the key folds case on macOS, whose default file system is case-insensitive, so `~/.Claude` and
+/// `~/.claude` read as one directory there. Other platforms compare byte for byte. Unicode
+/// normalisation is not folded: no crate for it is in the dependency tree.
+fn account_dir_key(dir: &str) -> String {
+    if cfg!(target_os = "macos") {
+        dir.to_lowercase()
+    } else {
+        dir.to_string()
+    }
+}
+
+/// The name of the account whose directory is `dir` (as [`normalize_account_dir`] stores it)
+/// within `agent`, if any. The default account takes part under
+/// [`crate::protocol::DEFAULT_ACCOUNT_NAME`], by the directory the daemon resolved when it
+/// determined availability; until then, and for the whole run if that never succeeds, by the
+/// conventional one the adapter falls back to when nothing overrides it (`~/.claude`, `~/.codex`,
+/// `~/.grok`). Both go through the same expansion and lexical normalisation as `dir`. Symlinks are
+/// not followed. `exclude_id` lets an update compare against every *other* account.
+fn colliding_account_dir(
+    state: &Arc<AppState>,
+    agent: Agent,
+    dir: &str,
+    exclude_id: Option<&str>,
+) -> Result<Option<String>> {
+    let key = account_dir_key(dir);
+    for existing in state.store.list_accounts()? {
+        if existing.agent == agent
+            && Some(existing.id.as_str()) != exclude_id
+            && account_dir_key(&existing.config_dir) == key
+        {
+            return Ok(Some(existing.name));
+        }
+    }
+    let default_dir = match state.agent_availability_of(agent).default_account_dir {
+        Some(resolved) => hostfs::expand(&resolved),
+        None => adapter::default_account_dir(agent, &HashMap::new()),
+    };
+    let default_dir = hostfs::lexically_normalise(&default_dir);
+    Ok((account_dir_key(&default_dir.to_string_lossy()) == key)
+        .then(|| crate::protocol::DEFAULT_ACCOUNT_NAME.to_string()))
+}
+
+/// Refuses a directory another account of the agent already uses, naming that account.
+fn check_account_dir_unique(
+    state: &Arc<AppState>,
+    agent: Agent,
+    dir: &str,
+    exclude_id: Option<&str>,
+) -> Result<()> {
+    if let Some(existing) = colliding_account_dir(state, agent, dir, exclude_id)? {
+        return Err(CodedError::raised(
+            error_code::CONFIG_DIR_TAKEN,
+            format!(
+                "the directory `{dir}` is already used by `{existing}` for {}",
+                agent.label()
+            ),
+            &[("agent", agent.label()), ("name", &existing)],
+        ));
+    }
+    Ok(())
+}
+
 /// A name as stored: trimmed, and refused if that leaves nothing.
 fn normalize_account_name(name: &str) -> Result<String> {
     let trimmed = name.trim();
@@ -3872,7 +3935,6 @@ fn create_account(
     config_dir: String,
 ) -> Result<()> {
     let name = normalize_account_name(&name)?;
-    check_account_name_unique(state, agent, &name, None)?;
     let config_dir = normalize_account_dir(agent, &config_dir)?;
     let account = Account {
         id: Uuid::new_v4().to_string(),
@@ -3881,7 +3943,13 @@ fn create_account(
         config_dir,
         approval_reviewer: None,
     };
-    state.store.insert_account(&account)?;
+    {
+        // The checks and the insert are one step: another create or update cannot slip between.
+        let _writes = state.lock_account_writes();
+        check_account_name_unique(state, agent, &account.name, None)?;
+        check_account_dir_unique(state, agent, &account.config_dir, None)?;
+        state.store.insert_account(&account)?;
+    }
     broadcast_settings(state)?;
     Ok(())
 }
@@ -3892,32 +3960,39 @@ fn update_account(
     name: Option<String>,
     config_dir: Option<String>,
 ) -> Result<()> {
-    let mut account = state
-        .store
-        .get_account(id)?
-        .ok_or_else(|| CodedError::unknown_account(id))?;
-    let mut changed = false;
-    let mut dir_changed = false;
-    if let Some(name) = name {
-        let name = normalize_account_name(&name)?;
-        if name != account.name {
-            check_account_name_unique(state, account.agent, &name, Some(id))?;
-            account.name = name;
-            changed = true;
+    let dir_changed = {
+        // Reading the account, the checks and the write are one step: another create or update
+        // cannot slip between them.
+        let _writes = state.lock_account_writes();
+        let mut account = state
+            .store
+            .get_account(id)?
+            .ok_or_else(|| CodedError::unknown_account(id))?;
+        let mut changed = false;
+        let mut dir_changed = false;
+        if let Some(name) = name {
+            let name = normalize_account_name(&name)?;
+            if name != account.name {
+                check_account_name_unique(state, account.agent, &name, Some(id))?;
+                account.name = name;
+                changed = true;
+            }
         }
-    }
-    if let Some(dir) = config_dir {
-        let dir = normalize_account_dir(account.agent, &dir)?;
-        if dir != account.config_dir {
-            account.config_dir = dir;
-            changed = true;
-            dir_changed = true;
+        if let Some(dir) = config_dir {
+            let dir = normalize_account_dir(account.agent, &dir)?;
+            if dir != account.config_dir {
+                check_account_dir_unique(state, account.agent, &dir, Some(id))?;
+                account.config_dir = dir;
+                changed = true;
+                dir_changed = true;
+            }
         }
-    }
-    if !changed {
-        return Ok(());
-    }
-    state.store.update_account(&account)?;
+        if !changed {
+            return Ok(());
+        }
+        state.store.update_account(&account)?;
+        dir_changed
+    };
     // A reading belongs to the directory it was taken under; a rename leaves it valid.
     if dir_changed {
         state.account_quotas.forget_account(state, id);
@@ -5481,6 +5556,208 @@ mod tests {
         .await
         .expect("a different agent, so no collision");
         assert_eq!(state.store.list_accounts().unwrap().len(), 2);
+    }
+
+    /// A directory another account of the agent already uses is refused on create and on update,
+    /// however it is written (`~/`, a trailing slash, `./`), naming that account; the default
+    /// account's resolved directory counts as taken; an account may keep its own directory; and
+    /// another agent may use the same path.
+    #[tokio::test]
+    async fn a_taken_account_directory_is_refused_within_its_agent_only() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-account-dir-collision");
+        let home = crate::paths::home_dir();
+        let home_dir = home.to_string_lossy().into_owned();
+        // Before availability is determined, the conventional default directory takes part.
+        let before = handle(
+            &state,
+            None,
+            create_account_request(Agent::Codex, "Early", "~/.codex/"),
+        )
+        .await
+        .expect_err("the conventional default directory is taken");
+        let coded = before.downcast_ref::<CodedError>().expect("coded");
+        assert_eq!(coded.code, error_code::CONFIG_DIR_TAKEN);
+        assert_eq!(
+            coded.params.get("name").map(String::as_str),
+            Some("Default")
+        );
+        state.set_agent_availability(vec![crate::protocol::AgentAvailability {
+            agent: Agent::Claude,
+            availability: Availability::Available,
+            default_account_dir: Some(format!("{home_dir}/.claude")),
+        }]);
+        handle(
+            &state,
+            None,
+            create_account_request(Agent::Claude, "Work", "/home/u/.claude-work"),
+        )
+        .await
+        .expect("created");
+        handle(
+            &state,
+            None,
+            create_account_request(Agent::Claude, "Home", "~/.claude-home"),
+        )
+        .await
+        .expect("created");
+
+        let taken_by = |err: anyhow::Error| {
+            let coded = err.downcast_ref::<CodedError>().expect("coded");
+            assert_eq!(coded.code, error_code::CONFIG_DIR_TAKEN);
+            assert_eq!(
+                coded.params.get("agent").map(String::as_str),
+                Some("Claude Code")
+            );
+            coded.params.get("name").cloned().expect("name")
+        };
+        for (dir, owner) in [
+            ("/home/u/.claude-work", "Work"),
+            ("/home/u/.claude-work/", "Work"),
+            ("  /home/u/./.claude-work  ", "Work"),
+            ("/home/u/x/../.claude-work", "Work"),
+            ("~/.claude-home", "Home"),
+            (&format!("{home_dir}/.claude-home"), "Home"),
+            ("~/.claude", "Default"),
+            ("~/.claude/", "Default"),
+        ] {
+            let err = handle(
+                &state,
+                None,
+                create_account_request(Agent::Claude, "New", dir),
+            )
+            .await
+            .expect_err(dir);
+            assert_eq!(taken_by(err), owner, "{dir}");
+        }
+        assert_eq!(state.store.list_accounts().unwrap().len(), 2);
+
+        // Another agent may use the same path.
+        handle(
+            &state,
+            None,
+            create_account_request(Agent::Codex, "Work", "/home/u/.claude-work"),
+        )
+        .await
+        .expect("a different agent, so no collision");
+
+        // An update into a taken directory is refused; keeping its own directory is not.
+        let accounts = state.store.list_accounts().unwrap();
+        let work = accounts
+            .iter()
+            .find(|a| a.agent == Agent::Claude && a.name == "Work")
+            .unwrap();
+        for dir in ["~/.claude-home", "~/.claude"] {
+            let err = handle(
+                &state,
+                None,
+                RequestBody::UpdateAccount {
+                    account: work.id.clone(),
+                    name: None,
+                    config_dir: Some(dir.to_string()),
+                },
+            )
+            .await
+            .expect_err(dir);
+            taken_by(err);
+        }
+        handle(
+            &state,
+            None,
+            RequestBody::UpdateAccount {
+                account: work.id.clone(),
+                name: Some("Work 2".to_string()),
+                config_dir: Some("/home/u/.claude-work/".to_string()),
+            },
+        )
+        .await
+        .expect("its own directory is not a collision");
+        assert_eq!(
+            state.store.get_account(&work.id).unwrap().unwrap().name,
+            "Work 2"
+        );
+    }
+
+    /// Two creates racing on one name, and on one directory, let exactly one through: the checks
+    /// and the insert are a single critical section. The names differ in a non-ASCII letter's case
+    /// on purpose: the table's `LOWER` index folds ASCII only, so a plain "Work"/"work" pair would
+    /// be caught by it even without the lock, and only the coordinator's check under the lock
+    /// catches this one. Threads are released together by a barrier
+    /// and each runs the synchronous `create_account` directly, as concurrent requests on the
+    /// runtime's worker threads do.
+    #[test]
+    fn racing_account_creates_let_exactly_one_through() {
+        for (first, second) in [
+            (
+                ("Équipe", "/home/u/.claude-a"),
+                ("équipe", "/home/u/.claude-b"),
+            ),
+            (
+                ("Work", "/home/u/.claude-c"),
+                ("Other", "/home/u/.claude-c/"),
+            ),
+        ] {
+            for round in 0..20 {
+                let (state, _dir) =
+                    crate::test_support::app_state("coordinator-account-create-race");
+                let barrier = std::sync::Barrier::new(2);
+                let results: Vec<Result<()>> = std::thread::scope(|scope| {
+                    [first, second]
+                        .map(|(name, dir)| {
+                            let (state, barrier) = (&state, &barrier);
+                            scope.spawn(move || {
+                                barrier.wait();
+                                create_account(
+                                    state,
+                                    Agent::Claude,
+                                    name.to_string(),
+                                    dir.to_string(),
+                                )
+                            })
+                        })
+                        .into_iter()
+                        .map(|handle| handle.join().expect("no panic"))
+                        .collect()
+                });
+                assert_eq!(
+                    results.iter().filter(|result| result.is_ok()).count(),
+                    1,
+                    "round {round}: {results:?}"
+                );
+                assert_eq!(state.store.list_accounts().unwrap().len(), 1);
+            }
+        }
+    }
+
+    /// On macOS the directory comparison folds case, on other platforms it is byte-exact; the
+    /// stored text stays as typed either way.
+    #[tokio::test]
+    async fn account_directories_fold_case_only_on_macos() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-account-dir-case");
+        handle(
+            &state,
+            None,
+            create_account_request(Agent::Claude, "Work", "/home/u/.Claude-Work"),
+        )
+        .await
+        .expect("created");
+        let second = handle(
+            &state,
+            None,
+            create_account_request(Agent::Claude, "Other", "/home/u/.claude-work"),
+        )
+        .await;
+        if cfg!(target_os = "macos") {
+            let coded = second.expect_err("same directory on a case-insensitive file system");
+            let coded = coded.downcast_ref::<CodedError>().expect("coded");
+            assert_eq!(coded.code, error_code::CONFIG_DIR_TAKEN);
+        } else {
+            second.expect("a different directory on a case-sensitive file system");
+        }
+        assert_eq!(
+            state.store.list_accounts().unwrap()[0].config_dir,
+            "/home/u/.Claude-Work",
+            "stored as typed"
+        );
     }
 
     /// `list_agent_models` answers with the request echoed (Claude Code's list needs no

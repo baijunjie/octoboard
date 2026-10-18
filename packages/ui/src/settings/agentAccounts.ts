@@ -1,4 +1,4 @@
-import type { Account, Agent } from "../protocol";
+import { DEFAULT_ACCOUNT_NAME, type Account, type Agent } from "../protocol";
 
 /** Whether `path` is one the daemon accepts as a config directory: absolute, or starting with
  * `~/` (or just `~`), which it expands. Only the shape is judged — whether the directory exists
@@ -7,8 +7,6 @@ export function isAbsoluteConfigDir(path: string): boolean {
   const trimmed = path.trim();
   return trimmed.startsWith("/") || trimmed === "~" || trimmed.startsWith("~/");
 }
-
-const DEFAULT_ACCOUNT_KEY = "Default";
 
 /** What a typed account name collides with: another account of the same agent (by its stored
  * name) or the agent's default account. */
@@ -36,7 +34,7 @@ export function nameCollision(
   if (key === nameKey(defaultName)) return { kind: "default", name: defaultName };
   // The daemon reserves this English word as its language-independent comparison key for the
   // default account, not as display text; checking it here reports that collision in place too.
-  if (key === nameKey(DEFAULT_ACCOUNT_KEY)) return { kind: "default", name: defaultName };
+  if (key === nameKey(DEFAULT_ACCOUNT_NAME)) return { kind: "default", name: defaultName };
   const taken = accounts.find((a) => a.agent === agent && a.id !== editing && nameKey(a.name) === key);
   return taken && { kind: "account", name: taken.name };
 }

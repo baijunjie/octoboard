@@ -36,9 +36,12 @@ Which API a site takes follows from its scroller:
   `stickyHeadingHeight` instead. Both take the heading height; the module supplies the fade size and matching scroll
   padding.
   That padding covers the heading too, so a control inside a pinned heading scrolls the list on every focus move
-  unless exempted. Under a `FadedScroller` with `stickyHeadingHeight`, the sticky element takes
-  `useStickyHeadingFocus` (`packages/ui/src/components/stickyHeadingFocus.ts`); `StickySectionHeading` in
-  `packages/ui/src/sidebar/rows.tsx` already does, so a heading built from it needs nothing more.
+  unless exempted. Under a `FadedScroller` with `stickyHeadingHeight`, the sticky element spreads the props of
+  `useStickyHeadingFocus` (`packages/ui/src/components/stickyHeadingFocus.ts`) — they also mark it
+  `data-sticky-heading`, which is how the scroller finds the heading to place its top fade by, so a sticky element
+  built without them leaves that fade in the wrong place as well. `StickySectionHeading` in
+  `packages/ui/src/sidebar/rows.tsx` already does, so a heading built from it needs nothing more. The overlay fades
+  default to the side panes' colour; a `FadedScroller` on any other surface passes `stickySurface`.
 
 Sticky-heading surfaces use overlay fades (the "What both views show" section of `docs/product/focus-mode.md` and
 the "Folding a section" section of `docs/product/project-pane-git-mode.md`); other surfaces apply the fade as a

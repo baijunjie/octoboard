@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import { prefersReducedMotion } from "../reducedMotion";
 
@@ -241,16 +241,57 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
   };
 }
 
+interface ListFollower<T extends HTMLElement> {
+  ref: ((list: T | null) => void) & { current: T | null };
+  /** After each render of the owner: takes the latest options and records any change of the rows. */
+  rendered: (options: ListMotionOptions) => void;
+  stop: () => void;
+}
+
+/** The list can mount, unmount or be replaced in a commit that does not render the hook's owner: a
+ * react-aria collection renders its parts from the collection it built, so a tab panel's list appears
+ * when the selection changes, not when the component that holds it renders. The ref callback follows the
+ * list itself and takes its starting layout as it attaches; an effect would notice only on the owner's
+ * next render, which already carries that render's change, so the first removal or addition would go
+ * unanimated. The ref also carries `current` for callers that read the list. */
+function followList<T extends HTMLElement>(initial: ListMotionOptions): ListFollower<T> {
+  let options = initial;
+  let watch: ListWatch | null = null;
+  const attach = () => {
+    const list = ref.current;
+    if (watch?.list === list) return;
+    watch?.stop();
+    watch = list ? watchList(list, options) : null;
+  };
+  const ref = Object.assign((list: T | null) => {
+    ref.current = list;
+    attach();
+    watch?.rendered();
+  }, { current: null as T | null });
+  return {
+    ref,
+    rendered(next) {
+      options = next;
+      // Restarts a watcher stopped by a change of options.
+      attach();
+      watch?.rendered();
+    },
+    stop() {
+      watch?.stop();
+      watch = null;
+    },
+  };
+}
+
 /** Keyed rows enter, leave and slide to their new positions in either axis. Removed controls
  * leave only inert visual copies; actions and focus handoffs take effect immediately. Virtual
  * collections animate surviving rows only, never newly rendered or recycled identities. */
 export function useListMotion<T extends HTMLElement>({ descendants = false, virtualized = false }: ListMotionOptions = {}): React.RefObject<T | null> {
-  const ref = useRef<T>(null);
-  const watch = useRef<ListWatch | null>(null);
+  const [motion] = useState(() => followList<T>({ descendants, virtualized }));
   const focused = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     const onFocus = (event: FocusEvent) => {
-      focused.current = event.target instanceof HTMLElement && ref.current?.contains(event.target) ? event.target : null;
+      focused.current = event.target instanceof HTMLElement && motion.ref.current?.contains(event.target) ? event.target : null;
     };
     const pending = new Set<ReturnType<typeof setTimeout>>();
     const onBlur = (event: FocusEvent) => {
@@ -270,19 +311,14 @@ export function useListMotion<T extends HTMLElement>({ descendants = false, virt
       document.removeEventListener("focusin", onFocus);
       document.removeEventListener("focusout", onBlur);
       for (const timer of pending) clearTimeout(timer);
-      watch.current?.stop();
-      watch.current = null;
+      motion.stop();
     };
-  }, [virtualized]);
+  }, [motion, virtualized]);
   useLayoutEffect(() => {
-    const list = ref.current;
-    if (watch.current?.list !== list) {
-      watch.current?.stop();
-      watch.current = list ? watchList(list, { descendants, virtualized }) : null;
-    }
-    watch.current?.rendered();
+    motion.rendered({ descendants, virtualized });
+    const list = motion.ref.current;
     const lost = focused.current;
     if (!virtualized && lost?.isConnected && list?.contains(lost) && document.activeElement === document.body) lost.focus({ preventScroll: true });
   });
-  return ref;
+  return motion.ref;
 }

@@ -1,4 +1,4 @@
-import type { Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionStatus, Settings } from "../../protocol";
+import type { AccountQuota, Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionStatus, Settings } from "../../protocol";
 import type { SessionRequest, State, TrustPrompt } from "../../store";
 
 const NOW = Date.now();
@@ -6,6 +6,11 @@ const NOW = Date.now();
 /** An instant `minutes` before the page loaded, in the milliseconds the protocol uses. */
 export function minutesAgo(minutes: number): number {
   return NOW - minutes * 60_000;
+}
+
+/** An instant `minutes` after the page loaded: a reset time or deadline that is still ahead. */
+export function minutesFromNow(minutes: number): number {
+  return NOW + minutes * 60_000;
 }
 
 /** A text file's content as the daemon reads it. */
@@ -101,6 +106,7 @@ export function snapshotState(parts: {
   connectionState?: State["connectionState"];
   gitStatuses?: GitStatus[];
   settings?: Settings;
+  accountQuotas?: AccountQuota[];
 }): Partial<State> {
   return {
     connectionState: parts.connectionState ?? "open",
@@ -115,6 +121,7 @@ export function snapshotState(parts: {
     sessionRequests: parts.sessionRequests ?? [],
     gitStatuses: new Map((parts.gitStatuses ?? []).map((g) => [g.project, g])),
     settings: parts.settings ?? { auto_pull_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts: [] },
+    accountQuotas: parts.accountQuotas ?? [],
     homeDir: "/Users/dev",
   };
 }

@@ -169,6 +169,34 @@ it("animates the first update of a list mounted by a child's popup state", async
   expect(animate.mock.calls[1][0]).toEqual([{ translate: "0px 40px" }, { translate: "0px 0px" }]);
 });
 
+it("follows a list its owner holds but another component shows and replaces, as a collection renders its panels", async () => {
+  function Shown({ panels }: { panels: React.ReactNode[] }) {
+    const [shown, setShown] = useState(0);
+    return <>{panels.map((_, index) => <button key={index} data-show={index} onClick={() => setShown(index)} />)}{panels[shown]}</>;
+  }
+  function Owner({ keys }: { keys: string[] }) {
+    const ref = useListMotion<HTMLDivElement>();
+    return <Shown panels={[null, <div key="first" ref={ref}>{keys.map((key) => <button key={key} data-list-motion={key}>{key}</button>)}</div>, <div key="second" />]} />;
+  }
+  const host = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => { act(() => root.unmount()); host.remove(); });
+  act(() => root.render(<Owner keys={["a", "b"]} />));
+  const show = (index: number) => act(() => host.querySelector<HTMLButtonElement>(`[data-show="${index}"]`)!.click());
+  show(1);
+  await act(async () => {});
+  act(() => root.render(<Owner keys={["b"]} />));
+  expect(host.querySelectorAll("[data-list-motion-ghost]")).toHaveLength(1);
+  // The list that goes away takes its departing copies with it; its replacement starts with none.
+  show(2);
+  show(1);
+  expect(host.querySelector("[data-list-motion-ghost]")).toBeNull();
+  const calls = animate.mock.calls.length;
+  await act(async () => {});
+  act(() => root.render(<Owner keys={["a", "b"]} />));
+  expect(animate).toHaveBeenCalledTimes(calls + 1);
+});
+
 it("enters and exits alongside layout movement without retaining removed controls", () => {
   points = { a: [0, 0], b: [0, 40] };
   const list = mount(["a", "b"]);

@@ -22,7 +22,9 @@ alone, are in "The surfaces that fade" below.
   scrolls both ways included, which lies inside the fade's band for its whole length.
 - In focus mode's lists and the Git mode's change lists, the top fade begins below the section heading; see
   "What both views show" in `docs/product/focus-mode.md` and "Folding a section" in
-  `docs/product/project-pane-git-mode.md` for the headings' scrolling behavior.
+  `docs/product/project-pane-git-mode.md` for the headings' scrolling behavior. In Settings' Agent accounts section it
+  begins below the agent tab strip once the strip is pinned at the top (see "Agent accounts" in
+  `docs/product/settings.md`).
 - Only the **top and bottom** edges fade, apart from the strips that scroll sideways and fade at their sideways
   edges: focus mode's strip of console session chips (see "The switch strip" in `docs/product/focus-mode.md`) and a
   strip of tabs. The file viewer's long lines, read by scrolling sideways while
@@ -98,10 +100,11 @@ covers. These are:
 **Keyboard focus does not land under a fade**: a row, a control or a region scrolled into view stops 24 px short of
 the edge, clear of the fade, rather than arriving underneath. In focus mode's lists and the Git mode's change lists
 that space is measured below the section heading (see "What both views show" in `docs/product/focus-mode.md` and
-"Folding a section" in `docs/product/project-pane-git-mode.md`). A strip of tabs is the exception, as above.
+"Folding a section" in `docs/product/project-pane-git-mode.md`), and in Settings' Agent accounts section below the
+agent tab strip. A strip of tabs is the exception, as above.
 
-**A control in a section heading pinned at the top is not scrolled to**: in the sidebar and in focus mode, a
-heading that stays at the top of its list is in view already, so moving keyboard focus among its controls — the
-project filter's button, Collapse all projects, focus mode's switch — leaves the
-list where it is. Moving on from the heading to a row still scrolls that row into view, below the heading and the
-fade. A heading not yet at the top, further down the list, is scrolled into view as anything else is.
+**A control in a section heading pinned at the top is not scrolled to**: in the sidebar, in focus mode and in
+Settings' Agent accounts section, a heading that stays at the top of its list is in view already, so moving keyboard
+focus among its controls — the project filter's button, Collapse all projects, focus mode's switch, the agent tabs —
+leaves the list where it is. Moving on from the heading to a row still scrolls that row into view, below the heading
+and the fade. A heading not yet at the top, further down the list, is scrolled into view as anything else is.
