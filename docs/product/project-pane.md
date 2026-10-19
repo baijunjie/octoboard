@@ -79,7 +79,18 @@ successful project-menu branch switch (see "Switching the local branch" in `docs
 ### What is listed
 
 Everything in the project's directory is listed — dot files, and files a `.gitignore` names (an agent's build output
-and installed dependencies included) — except Git's own metadata: an entry named `.git` is left out at any depth.
+and installed dependencies included) — except the following names, which are left out at any depth, a folder with
+everything in it:
+
+- Git's own metadata: `.git`;
+- the files an operating system leaves in folders: `.DS_Store`, `.AppleDouble`, `.Spotlight-V100`, `.Trashes`,
+  `.fseventsd`, `.TemporaryItems`, `Thumbs.db`, `desktop.ini`, and any name starting with `._` (the AppleDouble files
+  macOS writes beside files).
+
+Apart from the `._` prefix, names are matched whole and ignoring the case of the letters A–Z only, so `Desktop.ini`,
+`.ds_store` and `.GIT` are left out too, while a name differing in any other character is listed. The list is fixed; no setting changes it. A folder holding only
+left-out entries shows as empty.
+
 Folders start collapsed and each is read only when it is first shown, so a large folder costs nothing until it is
 expanded.
 
@@ -157,7 +168,8 @@ restores the unfiltered tree.
 
 - Only the **file name**, the last part of its path, is matched, by containment, ignoring case and whitespace around
   the query. Folder names and file contents are not searched. An empty query is no filter: the ordinary tree is shown.
-- Dot files and ignored files are included. Entries named `.git` are excluded at every depth. Symbolic links to files
+- Dot files and ignored files are included. The names "What is listed" above leaves out are excluded at every depth,
+  with everything beneath them. Symbolic links to files
   inside the project can match under the link's own name; symbolic links to directories are not traversed, and links
   outside the project are excluded.
 - Results follow the tree's path order: directory branches before files at each level, with names compared

@@ -12,10 +12,31 @@ export type DirListing =
   | { state: "loaded"; entries: BrowseEntry[]; complete: boolean; refreshing: boolean }
   | { state: "error"; message: ErrorPresentation };
 
-/** Names the tree leaves out: Git's own metadata, never project content. Everything else is listed,
- * ignored files included, since the daemon reports no ignore rules and an agent's build output is
- * often exactly what the user wants to look at. */
-const HIDDEN_NAMES = new Set([".git"]);
+/** Names the tree leaves out: Git's own metadata and the files an operating system leaves in any
+ * folder it shows, never project content. Everything else is listed, ignored files included, since
+ * the daemon reports no ignore rules and an agent's build output is often exactly what the user
+ * wants to look at. The list is stated in docs/product/project-pane.md's "What is listed" section.
+ * Kept in lowercase, the form `isHiddenName` folds a name to before looking it up. */
+const HIDDEN_NAMES = new Set([
+  ".git",
+  ".ds_store",
+  ".appledouble",
+  ".spotlight-v100",
+  ".trashes",
+  ".fseventsd",
+  ".temporaryitems",
+  "thumbs.db",
+  "desktop.ini",
+]);
+
+/** Whether the tree leaves out an entry of this name, ignoring ASCII case: the systems that write
+ * these files do not keep to one spelling (Windows writes `Desktop.ini` too). Only ASCII letters are
+ * folded, so a name with some other character that lowercases to one of them is still listed. `._`
+ * starts the AppleDouble files macOS writes beside each file on a volume that cannot hold its
+ * metadata. */
+function isHiddenName(name: string): boolean {
+  return HIDDEN_NAMES.has(name.replace(/[A-Z]/g, (letter) => letter.toLowerCase())) || name.startsWith("._");
+}
 
 /** Whether an entry opens as a directory: one, or a link to one inside the project. */
 export function isDirectory(entry: BrowseEntry): boolean {
@@ -38,7 +59,7 @@ function compareEntries(a: BrowseEntry, b: BrowseEntry): number {
 
 /** A listing's entries as the tree shows them: the hidden names left out, in tree order. */
 export function treeEntries(entries: BrowseEntry[]): BrowseEntry[] {
-  return entries.filter((entry) => !HIDDEN_NAMES.has(entry.name)).sort(compareEntries);
+  return entries.filter((entry) => !isHiddenName(entry.name)).sort(compareEntries);
 }
 
 /** The wire path of `name` inside the directory at `dir` (empty for the project's own). */

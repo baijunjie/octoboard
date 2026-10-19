@@ -1150,8 +1150,10 @@ could not be read, which is then left out.
 #### Searching file names
 
 `search_project_files` searches the project's own directory and all real subdirectories, including hidden and
-ignored entries, excluding every entry named `.git`. It matches only the basename, read as UTF-8 with replacement
-characters, against the trimmed query using Unicode lowercase on both. An empty or whitespace-only query matches
+ignored entries, excluding every entry, with all beneath it, whose name is one of those `docs/product/project-pane.md`'s
+"What is listed" section leaves out (`.git` and the files an operating system leaves in folders, such as `.DS_Store`).
+It matches only the basename, read as UTF-8 with replacement characters, against the trimmed query using Unicode
+lowercase on both. An empty or whitespace-only query matches
 all files, with the same traversal and result budgets. Returned paths retain their canonical wire encoding; their
 byte order is the result order.
 

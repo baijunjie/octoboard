@@ -357,8 +357,9 @@ pub struct FileMatches {
     pub complete: bool,
 }
 
-/// Searches every real subdirectory, including ignored and hidden entries. Directory symlinks
-/// are never traversed; file symlinks are included only when their targets stay in the scope.
+/// Searches every real subdirectory, including ignored and hidden entries, apart from the names
+/// [`is_left_out`] leaves out. Directory symlinks are never traversed; file symlinks are included
+/// only when their targets stay in the scope.
 pub fn search_files(scope: &Path, query: &str, cancel: &AtomicBool) -> Result<FileMatches> {
     search_bounded(
         scope,
@@ -423,7 +424,7 @@ fn search_bounded(
             break;
         }
         visited += 1;
-        if raw == b".git" {
+        if is_left_out(&raw) {
             continue;
         }
         let Some(stat) = reader.stat(&raw) else {
@@ -472,6 +473,30 @@ fn search_bounded(
     }
     result.paths.sort();
     Ok(result)
+}
+
+/// Whether a search leaves out an entry of this name, with all beneath it: Git's own metadata and
+/// the files an operating system leaves in any folder it shows, never project content. `._` starts
+/// the AppleDouble files macOS writes beside each file on a volume that cannot hold its metadata.
+/// ASCII case is ignored, since the systems that write these files do not keep to one spelling
+/// (Windows writes `Desktop.ini` too). The list is stated in docs/product/project-pane.md's "What
+/// is listed" section.
+fn is_left_out(name: &[u8]) -> bool {
+    const NAMES: [&[u8]; 9] = [
+        b".git",
+        b".DS_Store",
+        b".AppleDouble",
+        b".Spotlight-V100",
+        b".Trashes",
+        b".fseventsd",
+        b".TemporaryItems",
+        b"Thumbs.db",
+        b"desktop.ini",
+    ];
+    NAMES
+        .iter()
+        .any(|left_out| left_out.eq_ignore_ascii_case(name))
+        || name.starts_with(b"._")
 }
 
 /// Reads the entries of an open directory through its descriptor, so what is listed is the
@@ -740,6 +765,28 @@ mod tests {
         expected.push(".gitignore".into());
         expected.sort();
         assert_eq!(all.paths, expected);
+    }
+
+    #[test]
+    fn search_leaves_out_the_files_an_operating_system_leaves_in_a_folder() {
+        let scope = ScratchDir::new("file-search-system");
+        let scope = fs::canonicalize(&*scope).unwrap();
+        fs::create_dir_all(scope.join("src/.Spotlight-V100")).unwrap();
+        for path in [
+            "src/.DS_Store",
+            "src/._notes.md",
+            "src/Thumbs.db",
+            "src/Desktop.ini",
+            ".ds_store",
+            "src/.Spotlight-V100/store.db",
+            "src/notes.md",
+            ".env",
+        ] {
+            fs::write(scope.join(path), b"").unwrap();
+        }
+        let found = search_files(&scope, "", &never()).unwrap();
+        assert!(found.complete);
+        assert_eq!(found.paths, [".env", "src/notes.md"]);
     }
 
     #[test]

@@ -21,6 +21,13 @@ describe("treeEntries", () => {
     );
     expect(names).toEqual(["lib", "src", "a.md", "b.txt", "Item 2", "item 10"]);
   });
+
+  it("leaves out the files an operating system leaves in a folder, in any ASCII case", () => {
+    const names = treeEntries([file(".DS_Store"), file("._notes.md"), file("Thumbs.db"), file("Desktop.ini"), file(".ds_store"), dir(".Spotlight-V100"), file("des\u212Atop.ini"), file("notes.md"), file(".env")]).map(
+      (e) => e.name,
+    );
+    expect(names).toEqual([".env", "des\u212Atop.ini", "notes.md"]);
+  });
 });
 
 describe("buildTree", () => {

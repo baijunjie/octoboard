@@ -22,6 +22,27 @@ const TOAST_DELAY_MS = 300;
 
 const HOME = "/Users/dev";
 
+/** The names the real daemon's file name search skips at every depth, with everything beneath them:
+ * Git's metadata and the files an operating system leaves in a folder, matched ignoring ASCII case
+ * (stored folded), and `._` starts AppleDouble. */
+const LEFT_OUT_NAMES = new Set([
+  ".git",
+  ".ds_store",
+  ".appledouble",
+  ".spotlight-v100",
+  ".trashes",
+  ".fseventsd",
+  ".temporaryitems",
+  "thumbs.db",
+  "desktop.ini",
+]);
+
+/** Only A to Z are folded, as the daemon's `eq_ignore_ascii_case` does; `toLowerCase` would also fold
+ * characters like the Kelvin sign into a letter. */
+function isLeftOut(name: string): boolean {
+  return LEFT_OUT_NAMES.has(name.replace(/[A-Z]/g, (letter) => letter.toLowerCase())) || name.startsWith("._");
+}
+
 /** A path as the daemon compares one: `~` and `~/` expanded against the home directory, `.` and
  * `..` and repeated or trailing slashes resolved lexically, symlinks not followed. */
 function normalizedPath(path: string): string {
@@ -475,7 +496,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
         case "search_project_files": {
           const query = body.query.trim().toLowerCase();
           const paths = Object.entries(projectFiles(body.project))
-            .filter(([path, file]) => !("dir" in file) && !path.split("/").includes(".git") && path.slice(path.lastIndexOf("/") + 1).toLowerCase().includes(query))
+            .filter(([path, file]) => !("dir" in file) && !path.split("/").some(isLeftOut) && path.slice(path.lastIndexOf("/") + 1).toLowerCase().includes(query))
             .map(([path]) => path)
             .sort();
           return { type: "project_file_matches", project: body.project, query: body.query, paths, complete: true };

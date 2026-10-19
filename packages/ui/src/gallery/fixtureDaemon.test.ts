@@ -178,6 +178,35 @@ describe("the fixture daemon's project file trees", () => {
     });
   });
 
+  it("leaves the system files, in any ASCII case, and everything beneath a left-out directory out of a search", async () => {
+    const daemon = createFixtureDaemon({
+      id: "project-search-left-out", group: "Project pane: files", category: "normal", title: "",
+      files: {
+        "": { dir: true },
+        "server.ts": { text: "" },
+        "._server.ts": { text: "" },
+        ".DS_Store": { text: "" },
+        "server.desktop.ini": { text: "" },
+        "desktop.ini": { text: "" },
+        "Desktop.ini": { text: "" },
+        "src": { dir: true },
+        "src/.DS_Store": { text: "" },
+        "src/._server-copy.ts": { text: "" },
+        "src/Thumbs.db": { text: "" },
+        ".Trashes": { dir: true },
+        ".Trashes/server.bak": { text: "" },
+        "src/.AppleDouble": { dir: true },
+        "src/.AppleDouble/server.ts": { text: "" },
+        "src/.APPLEDOUBLE": { dir: true },
+        "src/.APPLEDOUBLE/server.ts": { text: "" },
+        "des\u212Atop.ini": { text: "" },
+      },
+    });
+    await expect(daemon.request({ type: "search_project_files", project: "web", query: "" })).resolves.toMatchObject({
+      paths: ["des\u212Atop.ini", "server.desktop.ini", "server.ts"], complete: true,
+    });
+  });
+
   it("uses each project's tree for listings and reads, retaining the shared fallback", async () => {
     const daemon = createFixtureDaemon({
       id: "project-trees", group: "Project pane: files", category: "normal", title: "",
