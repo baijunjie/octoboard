@@ -5,6 +5,7 @@ import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Account, AccountQuota, Agent, QuotaWindow, Session, SessionStatus } from "../protocol";
+import { iconKeysOf } from "./statusItemIcons";
 import { buildStatusItemMenu, MAX_PER_SECTION } from "./statusItemMenu";
 import type { StatusItemQuotaSource } from "./statusItemQuota";
 
@@ -125,6 +126,16 @@ describe("buildStatusItemMenu quota submenus", () => {
   it("has one submenu per available agent, in the agents' usual order", () => {
     const menu = menuOf([], source({ agentAvailability: available("grok", "claude") }));
     expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["Claude quota", "Grok quota"]);
+  });
+
+  it("names each submenu's mark by the key a session line of that agent uses", () => {
+    const menu = menuOf([], source({ agentAvailability: available("grok", "claude") }));
+    expect(menu.submenus.map((submenu) => submenu.icon)).toEqual(["agent:claude", "agent:grok"]);
+  });
+
+  it("draws the submenus' marks", () => {
+    const menu = menuOf([], source({ agentAvailability: available("grok", "claude") }));
+    expect([...iconKeysOf(menu)]).toEqual(expect.arrayContaining(["agent:claude", "agent:grok"]));
   });
 
   it("lists an account's plan, then a row per window with its fraction, agent and whole line", () => {

@@ -33,14 +33,17 @@ From top to bottom:
    status with the number of sessions in it: **Waiting for you (n)**, then **Working (n)**, then **Awaiting
    instructions (n)**. A group with no session is left out. Sessions still starting, interrupted and archived
    sessions are never listed.
-   - **Headings.** A heading is bold system text at the menu font's size, in the secondary text colour, with its
-     status glyph to the left of the text. It is not dimmed the way a menu line that cannot be chosen is, never
-     highlights under the pointer, and is read by assistive technology as one static text, the heading's words.
+   - **Headings.** A heading is system text at the menu font's size, regular weight, in the secondary text
+     colour, with its status glyph to the left of the text. It is not dimmed the way a menu line that cannot be
+     chosen is, never highlights under the pointer, and is read by assistive technology once, as its menu item, the
+     heading's words.
    - **Pictures.** Each heading has a still glyph for its status — the accent dot for working, the waving hand for
      waiting for you, the speech bubble for awaiting instructions — and each session line has the mark of its agent
      (Claude Code, Codex, Grok), as the sidebar draws them. The menu cannot animate, so the working dot does not pulse.
      The marks the sidebar draws in the text colour (Codex, Grok) are template images here, which macOS tints to suit a
-     light or dark menu; the other pictures keep their own colours, chosen to read on both. The "N more…" line has none.
+     light or dark menu; the other pictures keep their own colours, chosen to read on both. The "N more…" line has
+     none. Each quota submenu's opening line (below) carries the mark of its agent in the same way; the title is what
+     is read, the mark adds nothing to it.
    - Within a group, sessions come in the order the sidebar lists them: console by console in the order the consoles
      were created, its console sessions before its projects' sessions, both in the sidebar's own order (see "Order of
      projects and sessions" in `docs/product/sidebar.md`). Every console is included, not only the one the sidebar
@@ -60,26 +63,27 @@ From top to bottom:
    `docs/product/account-quotas.md`). An agent that is not available, or whose availability is not yet determined,
    has none. The submenus are set off from the sessions and from Open Octoboard by separators. Inside a submenu,
    nothing can be chosen:
-   - each account is a header line, bold in the secondary text colour, with its name, **Default** for the agent's
-     default account, and its plan after a dot where the agent names one ("Default · Max"), the default account first
-     and then the accounts the user owns, each set off by a separator;
+   - each account is a header line, at the small size of a section header, regular weight, in the secondary text
+     colour, with its name, **Default** for the agent's default account, and its plan after a dot where the agent
+     names one ("Default · Max"), the default account first and then the accounts the user owns, each set off by a
+     separator;
    - under the header, each window is one row: its name on the left ("5-hour"), "N% remaining · resets in
      <countdown>" ("82% remaining · resets in 1h 57m", "resets now" once the time has passed, no countdown for a
      window with no reset time) right-aligned in the secondary text colour, and a bar of what remains directly
      below, on a translucent grey track. The bar is orange for Claude Code and blue for Codex, each one fixed colour
      whether the menu is light or dark (their contrast against the track is not measured), and the text colour for
      Grok Build. A row whose text needs more room than the submenu's usual width widens the submenu rather than
-     being cut short. A row is read by assistive technology as one phrase ("5-hour 82% remaining · resets in
-     1h 57m");
+     being cut short. A row is read by assistive technology once, as one phrase ("5-hour 82% remaining · resets in
+     1h 57m"), by its menu item alone: neither the name, the detail nor the bar is read on its own;
    - a row, a header and a note are not dimmed the way a menu line that cannot be chosen is: the window's name is at
      full strength, and none ever highlights under the pointer. Their text and the bar's track take the system's
      colours for the menu they are drawn in, light or dark. A header and a note are each read by assistive
-     technology as one static text, their words;
+     technology once, as their menu item, their words;
    - an account never read shows **Reading quota…** in place of windows, and an account with no windows to show
-     shows **Quota unavailable**, a note in the secondary text colour at regular weight — the weight is what sets a
-     note apart from a header — and without the reason. That includes an entry that has no windows and no failure to
-     explain, which Settings and the rail show nothing for. One whose latest reading failed after a good one keeps
-     its last windows under a note "Out of date: last read 12 minutes ago", without the reason either.
+     shows **Quota unavailable**, a note in the secondary text colour at the menu font's size, and without the
+     reason. That includes an entry that has no windows and no failure to explain, which Settings and the rail show
+     nothing for. One whose latest reading failed after a good one keeps its last windows under a note "Out of date:
+     last read 12 minutes ago", without the reason either.
 
    Countdowns and the age of an out-of-date reading are as of the last time the menu was updated, which a change of
    the sessions, consoles, projects, accounts, agents' availability, quotas or the UI's language causes, not the
@@ -124,7 +128,10 @@ session selected; and Open Octoboard. What was seen of Quit Octoboard is under "
 `docs/product/application-lifecycle.md`. Also observed, with a quota submenu popped up natively over a light-looking
 desktop (not opened from the icon's own menu): a Codex account's two window rows with the name at full strength, the
 detail right-aligned in grey and a bar whose fill is the remaining share (72% over a gray track), a Grok Build row at
-0% as a bare rounded track, and a note under an account with no quota.
+0% as a bare rounded track, and a note under an account with no quota. After the texts were drawn rather than set in
+text fields, a Claude Code account's window rows were seen again, again in a submenu popped up natively, with the
+same look and size, and read once each by assistive technology, as a menu item whose title is the whole phrase. How
+the current build renders the texts (their inset and vibrancy) has still to be seen live.
 
 **Not yet observed** in the packaged application: the headings as described above — the sessions' groups' headings,
 **No sessions running**, and the account headers in a submenu — and whether a heading's glyph and text line up with
@@ -132,8 +139,7 @@ the pictures and text of the session lines below it; the pictures in the menu (t
 headings' status glyphs), in a light and in a dark menu; the quota submenus opened from the icon's own menu; a Claude
 Code account's quota in a submenu; opening the menu asking for a refresh of the quotas; any quota row in a dark menu,
 and a menu changing between light and dark while the app runs; a row never highlighting under the pointer; a row
-widened by a long window name; assistive technology reading a row once, as one phrase; and a left click opening the
-menu.
+widened by a long window name; the agent marks on the submenus' opening lines; and a left click opening the menu.
 
 **Observed caveat:** for about the first 0.6 seconds after closing the window from native fullscreen, a click on the
 icon is lost — a right click does not even open the menu — apparently swallowed by macOS during its exit from

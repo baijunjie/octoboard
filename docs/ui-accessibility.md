@@ -446,10 +446,16 @@ the surface around it does not forbid selection. It is accepted there because th
 
 ### An information line in a native menu
 
-A line of the menu bar icon's menu that only shows information (a quota window) is a custom row, not a disabled menu
-item: AppKit dims a disabled item's text whatever colour it names, so the row draws its own text in the system's
-label colours. To assistive technology the row is one static-text element carrying the whole phrase ("5-hour 82%
-remaining · resets in 1h 57m"); its text pieces and its bar are not elements of their own.
+A line of the menu bar icon's menu that only shows information (a heading, an account's header, a note, a quota
+window) is a menu item with a view of its own, not a plain disabled item: AppKit dims a disabled item's text whatever
+colour it names, so the view draws its own text in the system's label colours, and it never highlights.
+
+The menu item is the one accessibility element: its title is the whole phrase, read once ("5-hour 82% remaining · resets
+in 1h 57m"), and it stays a disabled menu item, so assistive technology reports it as dimmed. Nothing inside the view is
+an element: the view, its texts, its bar and a heading's picture are all marked non-element, and the texts are drawn by
+a view rather than set in `NSTextField`s, since marking a text field non-element leaves its cell exposed as a static
+text of its own. The view takes no role or label and the item keeps its title, or the phrase would be exposed twice, or
+the line would have no title for menu search.
 
 ### Standalone errors use the shared Alert
 

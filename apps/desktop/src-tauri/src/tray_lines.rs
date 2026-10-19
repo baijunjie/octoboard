@@ -2,21 +2,27 @@
 //! which AppKit draws in the disabled grey and which a title colour cannot change; a menu item
 //! with a view of its own is not dimmed and never highlights. So once muda has built the menu
 //! (`finish_menu` in `tray.rs`, after every rebuild), the lines that cannot be chosen become
-//! views: a session section's heading (`heading_row`) is its picture and its text in bold
-//! secondary colour; in a submenu (`dress_submenu`) an account's header is one line of the same,
-//! a note one line of regular secondary text, and a window's row is its name and its detail
-//! (right-aligned, secondary colour) over a bar the shell draws.
+//! views: a session section's heading (`heading_row`) is its picture and its text in the
+//! secondary colour; in a submenu (`dress_submenu`) an account's header is one line of the same in
+//! the small size of a section header, a note one line at the menu's size, and a window's row
+//! is its name and its detail (right-aligned, secondary colour) over a bar the shell draws.
+//!
+//! A row is read by assistive technology as its menu item alone: the item keeps the whole phrase
+//! as its title, and nothing inside the row is an accessibility element. The texts are therefore
+//! drawn (`RowText`), not `NSTextField`s, whose cells stay exposed as static texts of their own
+//! whatever the field is marked as.
 //!
 //! Every colour is a dynamic system colour, resolved as the view is drawn, so a menu follows the
 //! light or dark look it is shown in, and a switch between them while it is open.
 
 use objc2::rc::Retained;
-use objc2::{define_class, msg_send, DefinedClass, MainThreadMarker, MainThreadOnly};
+use objc2::runtime::AnyObject;
+use objc2::{define_class, msg_send, DefinedClass, MainThreadMarker, MainThreadOnly, Message};
 use objc2_app_kit::{
-    NSAccessibility, NSAccessibilityStaticTextRole, NSAutoresizingMaskOptions, NSBezierPath,
-    NSColor, NSFont, NSImage, NSImageView, NSMenu, NSTextField, NSView,
+    NSAccessibility, NSAutoresizingMaskOptions, NSBezierPath, NSColor, NSFont, NSFontAttributeName,
+    NSForegroundColorAttributeName, NSImage, NSImageView, NSMenu, NSStringDrawing, NSView,
 };
-use objc2_foundation::{NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
+use objc2_foundation::{NSDictionary, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
 
 use crate::tray::{AgentKind, SubmenuItem};
 
@@ -32,6 +38,9 @@ const TEXT_TOP: f64 = 4.0;
 const TEXT_TO_BAR: f64 = 5.0;
 const BAR_BOTTOM: f64 = 7.0;
 const BAR_HEIGHT: f64 = 6.0;
+/// The space between a row text's frame and its text, left and right: the inset a text field's
+/// cell has, so the texts sit where they did as fields.
+const TEXT_INSET: f64 = 2.0;
 /// The space above and below the single line of a note or an account's header.
 const LINE_PAD: f64 = 4.0;
 /// The space above and below a session section's heading, meant to make it, with its picture, as
@@ -100,26 +109,84 @@ fn rect(x: f64, y: f64, width: f64, height: f64) -> NSRect {
     NSRect::new(NSPoint::new(x, y), NSSize::new(width, height))
 }
 
-/// A text of a row in the menu's font (bold when `bold`, at the menu font's size) and the colour
-/// given, sized to fit and not read out on its own: its row is read as a whole.
-fn text(
-    string: &str,
-    colour: &NSColor,
-    bold: bool,
-    mtm: MainThreadMarker,
-) -> Retained<NSTextField> {
-    let field = NSTextField::labelWithString(&NSString::from_str(string), mtm);
-    let font = NSFont::menuFontOfSize(0.0);
-    let font = if bold {
-        NSFont::boldSystemFontOfSize(font.pointSize())
-    } else {
-        font
-    };
-    field.setFont(Some(&font));
-    field.setTextColor(Some(colour));
-    field.sizeToFit();
-    field.setAccessibilityElement(false);
-    field
+struct TextIvars {
+    string: Retained<NSString>,
+    /// The font and colour, as the attributes the string is measured and drawn with.
+    attributes: Retained<NSDictionary<NSString, AnyObject>>,
+}
+
+define_class!(
+    // SAFETY: `NSView` has no subclassing requirements beyond those `drawRect:` meets, and
+    // `RowText` implements no `Drop`.
+    #[unsafe(super(NSView))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "OctoboardRowText"]
+    #[ivars = TextIvars]
+    struct RowText;
+
+    impl RowText {
+        /// The string, in the font and the colour it was made with; the colour is dynamic, so it
+        /// is resolved here, for the appearance the text is drawn in.
+        #[unsafe(method(drawRect:))]
+        fn draw_rect(&self, _dirty: NSRect) {
+            let ivars = self.ivars();
+            let origin = NSPoint::new(TEXT_INSET, 0.0);
+            // SAFETY: the attributes hold an `NSFont` and an `NSColor` under the keys for them.
+            unsafe {
+                ivars
+                    .string
+                    .drawAtPoint_withAttributes(origin, Some(&ivars.attributes));
+            }
+        }
+
+        /// Like a text field's label, the text takes part in the menu's vibrancy, so the
+        /// secondary colour blends with the menu's background as the system's own lines do.
+        #[unsafe(method(allowsVibrancy))]
+        fn allows_vibrancy(&self) -> bool {
+            true
+        }
+    }
+
+    // SAFETY: `NSObjectProtocol` has no safety requirements.
+    unsafe impl NSObjectProtocol for RowText {}
+);
+
+impl RowText {
+    /// A text in the `colour` given, in the menu's font at its size, or `small` in the system
+    /// font at the small size a section header has; sized to fit with the inset a text field's
+    /// cell had, and not an accessibility element: its row is read as a whole, as its menu item.
+    fn new(string: &str, colour: &NSColor, small: bool, mtm: MainThreadMarker) -> Retained<Self> {
+        let font = if small {
+            NSFont::systemFontOfSize(NSFont::smallSystemFontSize())
+        } else {
+            NSFont::menuFontOfSize(0.0)
+        };
+        // SAFETY: the keys are the constants AppKit defines, read on the main thread, and the
+        // objects are the font and the colour they take.
+        let attributes = unsafe {
+            NSDictionary::from_retained_objects(
+                &[NSFontAttributeName, NSForegroundColorAttributeName],
+                &[
+                    Retained::cast_unchecked::<AnyObject>(font),
+                    Retained::cast_unchecked::<AnyObject>(colour.retain()),
+                ],
+            )
+        };
+        let string = NSString::from_str(string);
+        // SAFETY: the attributes are the font and the colour, as above.
+        let size = unsafe { string.sizeWithAttributes(Some(&attributes)) };
+        let frame = rect(
+            0.0,
+            0.0,
+            size.width.ceil() + TEXT_INSET * 2.0,
+            size.height.ceil(),
+        );
+        let this = Self::alloc(mtm).set_ivars(TextIvars { string, attributes });
+        // SAFETY: `initWithFrame:` is `NSView`'s designated initialiser.
+        let text: Retained<Self> = unsafe { msg_send![super(this), initWithFrame: frame] };
+        text.setAccessibilityElement(false);
+        text
+    }
 }
 
 /// The colour of an agent's bar fill: mid-tones of the colours the app uses for the same bars
@@ -133,15 +200,14 @@ fn fill_colour(agent: AgentKind) -> Retained<NSColor> {
     }
 }
 
-/// The view of a row, `width` wide at least, read as `label` by assistive technology.
-fn row_view(width: f64, height: f64, label: &str, mtm: MainThreadMarker) -> Retained<NSView> {
+/// The view of a row, `width` wide at least. It is not an accessibility element, and nothing in
+/// it is: the row is read as its menu item, whose title is the whole phrase. Were the view the
+/// element instead, the item's title would be read too, so the phrase would be exposed twice;
+/// were the item's title cleared, the line would have no title to a menu search.
+fn row_view(width: f64, height: f64, mtm: MainThreadMarker) -> Retained<NSView> {
     let row = NSView::initWithFrame(NSView::alloc(mtm), rect(0.0, 0.0, width, height));
     row.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable);
-    row.setAccessibilityElement(true);
-    // Static text, read as its whole phrase: the view stands for the line, not its title.
-    // SAFETY: a constant string AppKit defines, read on the main thread.
-    row.setAccessibilityRole(Some(unsafe { NSAccessibilityStaticTextRole }));
-    row.setAccessibilityLabel(Some(&NSString::from_str(label)));
+    row.setAccessibilityElement(false);
     row
 }
 
@@ -150,18 +216,17 @@ fn row_view(width: f64, height: f64, label: &str, mtm: MainThreadMarker) -> Reta
 fn window_row(
     name: &str,
     detail: &str,
-    label: &str,
     fraction: f64,
     agent: AgentKind,
     mtm: MainThreadMarker,
 ) -> Retained<NSView> {
-    let name = text(name, &NSColor::labelColor(), false, mtm);
-    let detail = text(detail, &NSColor::secondaryLabelColor(), false, mtm);
+    let name = RowText::new(name, &NSColor::labelColor(), false, mtm);
+    let detail = RowText::new(detail, &NSColor::secondaryLabelColor(), false, mtm);
     let (name_size, detail_size) = (name.frame().size, detail.frame().size);
     let width = (INSET * 2.0 + name_size.width + GAP + detail_size.width).max(MIN_WIDTH);
     let line = name_size.height.max(detail_size.height);
     let height = TEXT_TOP + line + TEXT_TO_BAR + BAR_HEIGHT + BAR_BOTTOM;
-    let row = row_view(width, height, label, mtm);
+    let row = row_view(width, height, mtm);
 
     let y = height - TEXT_TOP - line;
     name.setFrameOrigin(NSPoint::new(INSET, y));
@@ -181,22 +246,12 @@ fn window_row(
     row
 }
 
-/// A note's row: one line of secondary text.
-fn note_row(note: &str, mtm: MainThreadMarker) -> Retained<NSView> {
-    single_line_row(note, false, mtm)
-}
-
-/// An account's header: a note's row in bold.
-fn account_row(title: &str, mtm: MainThreadMarker) -> Retained<NSView> {
-    single_line_row(title, true, mtm)
-}
-
-/// One line of secondary text, regular or bold, read as that line.
-fn single_line_row(string: &str, bold: bool, mtm: MainThreadMarker) -> Retained<NSView> {
-    let line_text = text(string, &NSColor::secondaryLabelColor(), bold, mtm);
+/// One line of secondary text: a note, or, `small`, an account's header.
+fn single_line_row(string: &str, small: bool, mtm: MainThreadMarker) -> Retained<NSView> {
+    let line_text = RowText::new(string, &NSColor::secondaryLabelColor(), small, mtm);
     let size = line_text.frame().size;
     let width = (INSET * 2.0 + size.width).max(MIN_WIDTH);
-    let row = row_view(width, size.height + LINE_PAD * 2.0, string, mtm);
+    let row = row_view(width, size.height + LINE_PAD * 2.0, mtm);
     line_text.setFrameOrigin(NSPoint::new(INSET, LINE_PAD));
     row.addSubview(&line_text);
     row
@@ -204,14 +259,14 @@ fn single_line_row(string: &str, bold: bool, mtm: MainThreadMarker) -> Retained<
 
 /// The row of a session section's heading: its `picture` (the one its menu item shows, so it
 /// keeps whether it is a template image) where a standard item's picture sits, and its text in
-/// the bold secondary colour after it. The row is as wide as its content, so it does not widen
-/// the menu, and grows with it.
+/// the secondary colour after it. The row is as wide as its content, so it does not widen the menu,
+/// and grows with it.
 pub fn heading_row(
     heading: &str,
     picture: Option<&NSImage>,
     mtm: MainThreadMarker,
 ) -> Retained<NSView> {
-    let heading_text = text(heading, &NSColor::secondaryLabelColor(), true, mtm);
+    let heading_text = RowText::new(heading, &NSColor::secondaryLabelColor(), false, mtm);
     let text_size = heading_text.frame().size;
     let picture = picture.map(|image| NSImageView::imageViewWithImage(image, mtm));
     let picture_size = picture
@@ -223,9 +278,12 @@ pub fn heading_row(
     };
     let line = text_size.height.max(picture_size.height);
     let height = line + HEADING_PAD * 2.0;
-    let row = row_view(text_x + text_size.width + INSET, height, heading, mtm);
+    let row = row_view(text_x + text_size.width + INSET, height, mtm);
     if let Some(view) = picture {
         view.setAccessibilityElement(false);
+        if let Some(cell) = view.cell() {
+            cell.setAccessibilityElement(false);
+        }
         view.setFrameOrigin(NSPoint::new(INSET, (height - picture_size.height) / 2.0));
         row.addSubview(&view);
     }
@@ -240,17 +298,15 @@ pub fn dress_submenu(menu: &NSMenu, items: &[SubmenuItem], mtm: MainThreadMarker
     for (item, model) in menu.itemArray().iter().zip(items) {
         match model {
             SubmenuItem::Separator => {}
-            SubmenuItem::Header { title } => item.setView(Some(&account_row(title, mtm))),
-            SubmenuItem::Note { text } => item.setView(Some(&note_row(text, mtm))),
+            SubmenuItem::Header { title } => item.setView(Some(&single_line_row(title, true, mtm))),
+            SubmenuItem::Note { text } => item.setView(Some(&single_line_row(text, false, mtm))),
             SubmenuItem::Window {
                 name,
                 detail,
-                label,
                 fraction,
                 agent,
-            } => item.setView(Some(&window_row(
-                name, detail, label, *fraction, *agent, mtm,
-            ))),
+                ..
+            } => item.setView(Some(&window_row(name, detail, *fraction, *agent, mtm))),
         }
     }
 }

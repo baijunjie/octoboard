@@ -88,10 +88,19 @@ async function iconOf(key: string): Promise<StatusItemIcon | undefined> {
   }
 }
 
+/** The keys of the pictures the menu's lines name, each once: the sessions' and headings', and the
+ * submenus' marks. */
+export function iconKeysOf(draft: StatusItemMenuDraft): Set<string | undefined> {
+  return new Set([
+    ...draft.sections.flatMap((section) => [section.icon, ...section.items.map((item) => item.icon)]),
+    ...draft.submenus.map((submenu) => submenu.icon),
+  ]);
+}
+
 /** The menu with the pictures its lines name, each key drawn once for the life of the page. A key
  * that cannot be drawn is left out, and its line is shown without a picture. */
 export async function withIcons(draft: StatusItemMenuDraft): Promise<StatusItemMenu> {
-  const keys = new Set(draft.sections.flatMap((section) => [section.icon, ...section.items.map((item) => item.icon)]));
+  const keys = iconKeysOf(draft);
   const icons: StatusItemMenu["icons"] = {};
   await Promise.all(
     [...keys].map(async (key) => {

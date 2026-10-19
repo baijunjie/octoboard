@@ -66,7 +66,7 @@ The shell defines eleven Tauri IPC commands, permitted through `src-tauri/capabi
 - `frontend_exit_heartbeat` — marks the webview as the one handling the exit flow, and is re-invoked on every quit gesture.
 - `confirm_quit` — marks a pending quit as user-confirmed and exits.
 - `set_menu_labels` (`menu.rs`) — takes the menu's labels from the UI and rebuilds the native menu bar.
-- `set_tray_menu` (`tray.rs`) — takes the menu bar icon's menu (worded lines, session ids, quota submenus of headers, window rows and notes, picture keys, and the `attention` flag that raises the icon's hand) from the UI.
+- `set_tray_menu` (`tray.rs`) — takes the menu bar icon's menu (worded lines, session ids, quota submenus of headers, window rows and notes, picture keys (the submenus' opening lines carry an agent mark too), and the `attention` flag that raises the icon's hand) from the UI.
 - `set_run_in_background` (`background.rs`) — the UI's choice of whether closing the window keeps the app running.
 - `bring_to_front` (`background.rs`) — shows, restores and activates the window.
 - `macos_permissions_status`, `macos_request_permission`, `macos_open_privacy_settings` (`permissions.rs`) — read, request

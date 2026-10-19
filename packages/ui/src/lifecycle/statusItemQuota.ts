@@ -7,6 +7,7 @@ import type { Account, AccountQuota, Agent, AgentAvailability } from "../protoco
 import { planLabel, quotaResetsIn, quotaWindowLabel, remainingPercent } from "../quota/quotaFormat";
 import { formatRelativeTime } from "../relativeTime";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
+import { agentIconKey } from "./statusItemIconKeys";
 
 /** What the quota submenus are built from. */
 export interface StatusItemQuotaSource {
@@ -59,6 +60,6 @@ export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource):
       ...(index > 0 ? [{ kind: "separator" as const }] : []),
       ...accountLines(t, source, agent, account),
     ]);
-    return [{ title: t("statusItem.quota", { agent: AGENT_SHORT_NAME[agent] }), items }];
+    return [{ title: t("statusItem.quota", { agent: AGENT_SHORT_NAME[agent] }), icon: agentIconKey(agent), items }];
   });
 }

@@ -99,6 +99,9 @@ struct TraySection {
 #[derive(Clone, Deserialize)]
 pub struct TraySubmenu {
     title: String,
+    /// The picture beside the title, such as the agent's mark: a key of `icons`.
+    #[serde(default)]
+    icon: Option<String>,
     pub items: Vec<SubmenuItem>,
 }
 
@@ -124,8 +127,8 @@ pub enum AgentKind {
 
 /// What a submenu holds, none of it choosable: an account's header, a quota window's row with
 /// the bar the shell draws (`fraction` of it filled, in the colour of `agent`), a note, and the
-/// rules between accounts. `label` is a window's whole line as one phrase, for assistive
-/// technology.
+/// rules between accounts. `label` is a window's whole line as one phrase: its menu item's title,
+/// which is what assistive technology reads.
 #[derive(Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum SubmenuItem {
@@ -146,8 +149,8 @@ pub enum SubmenuItem {
 }
 
 impl SubmenuItem {
-    /// The text the item reads as in a menu that cannot draw it as a row: the title the shell
-    /// first gives its line, which is also what stays where a row is not made.
+    /// The title the shell gives the item of its line: what it reads as in a menu that cannot
+    /// draw it as a row, and what assistive technology reads for every row drawn.
     fn text(&self) -> Option<&str> {
         match self {
             Self::Header { title } => Some(title),
@@ -344,8 +347,8 @@ fn is_tray_menu(app: &AppHandle, notification: &objc2_foundation::NSNotification
 /// on the pictures of its lines that have it, whose items (separators aside) are the lines
 /// `build_menu` made, in the order `finish_order` gives; gives the lines that are a section's
 /// heading their row, with the picture just made a template where it is one; then dresses each
-/// submenu's lines as the rows they stand for (`dress_submenu`). A replaced menu is never
-/// touched by mistake, as this runs right after it is set.
+/// submenu's lines as the rows they stand for (`dress_submenu`). A replaced menu is never touched
+/// by mistake, as this runs right after it is set.
 #[cfg(target_os = "macos")]
 fn finish_menu(
     tray: &tauri::tray::TrayIcon,
@@ -468,7 +471,7 @@ struct LineFinish {
 }
 
 /// For each line of the menu `build_menu` makes, in order: the sessions' lines, then each
-/// submenu's opening line (which has no picture), then Open and Quit. Separators are not lines,
+/// submenu's opening line (with its agent's mark), then Open and Quit. Separators are not lines,
 /// and a submenu's own lines have no pictures.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn finish_order(menu: &TrayMenu) -> Vec<LineFinish> {
@@ -487,7 +490,10 @@ fn finish_order(menu: &TrayMenu) -> Vec<LineFinish> {
             heading: None,
         }));
     }
-    lines.extend(menu.submenus.iter().map(|_| plain()));
+    lines.extend(menu.submenus.iter().map(|submenu| LineFinish {
+        template: is_template(menu, submenu.icon.as_deref()),
+        heading: None,
+    }));
     lines.extend([plain(), plain()]);
     lines
 }
@@ -510,8 +516,12 @@ fn build_menu(app: &AppHandle, menu: &TrayMenu) -> tauri::Result<Menu<Wry>> {
     }
     for submenu in &menu.submenus {
         let mut lines = SubmenuBuilder::new(app, literal(&submenu.title));
-        // Plain disabled items, which `dress_submenu` gives a view once the menu is built; they are
-        // what a line reads as where that is not done.
+        if let Some(icon) = icon_of(menu, submenu.icon.as_deref()) {
+            lines = lines.submenu_icon(icon);
+        }
+        // Plain disabled items, which `dress_submenu` gives a view once the menu is built; their
+        // title is what a line reads as where that is not done, and what assistive technology
+        // reads for every row drawn.
         for item in &submenu.items {
             lines = match item.text() {
                 Some(text) => lines.item(&line(app, menu, None, text, None)?),
@@ -622,7 +632,7 @@ mod tests {
             ]}
         ],
         "submenus": [
-            {"title": "Codex quota", "items": [
+            {"title": "Codex quota", "icon": "codex", "items": [
                 {"kind": "header", "title": "Default · Plus"},
                 {"kind": "window", "name": "5-hour", "detail": "82% remaining · resets in 1h",
                  "label": "5-hour 82% remaining · resets in 1h", "fraction": 0.82, "agent": "codex"},
@@ -630,10 +640,11 @@ mod tests {
                 {"kind": "header", "title": "Work"},
                 {"kind": "note", "text": "Quota unavailable"}
             ]},
-            {"title": "Grok quota", "items": [{"kind": "note", "text": "Reading quota…"}]}
+            {"title": "Grok quota", "icon": "grok", "items": [{"kind": "note", "text": "Reading quota…"}]}
         ],
         "icons": {
             "status": {"png": "", "template": false},
+            "grok": {"png": "", "template": false},
             "codex": {"png": "", "template": true}
         },
         "open": "Open",
@@ -664,6 +675,21 @@ mod tests {
                 Some("Work"),
                 Some("Quota unavailable"),
             ]
+        );
+    }
+
+    #[test]
+    fn a_submenu_opener_is_finished_as_a_template_when_its_picture_is_one() {
+        let menu = parsed(WITH_SUBMENUS);
+        // The heading, the Codex session and "1 more…", then the Codex and Grok openers, then Open
+        // and Quit.
+        let templates: Vec<_> = finish_order(&menu)
+            .into_iter()
+            .map(|line| line.template)
+            .collect();
+        assert_eq!(
+            templates,
+            vec![false, true, false, true, false, false, false]
         );
     }
 

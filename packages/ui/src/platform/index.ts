@@ -177,6 +177,9 @@ export interface StatusItemEntry {
 /** A submenu, opened from a line of the menu itself, whose lines cannot be chosen. */
 export interface StatusItemSubmenu {
   title: string;
+  /** The key of the picture beside the title, such as the agent's mark; none for no picture. It is
+   * decoration: the title is what is read. */
+  icon?: string;
   items: StatusItemSubmenuItem[];
 }
 
