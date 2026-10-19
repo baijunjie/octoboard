@@ -195,7 +195,6 @@ export function ConsoleDialog({
           values={fields}
           onChange={(field, value) => setFields({ ...fields, [field]: value })}
           onManageAccounts={() => setManagingAccounts(true)}
-          managingAccounts={managingAccounts}
         />
         {/* What is inside is the console's own: its sessions' launch settings and its instructions. */}
         <ConsoleLaunchFields

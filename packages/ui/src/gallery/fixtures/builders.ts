@@ -139,7 +139,7 @@ export function snapshotState(parts: {
     trustedDirectories: parts.trustedDirectories ?? [],
     sessionRequests: parts.sessionRequests ?? [],
     gitStatuses: new Map((parts.gitStatuses ?? []).map((g) => [g.project, g])),
-    settings: parts.settings ?? { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", accounts: [] },
+    settings: parts.settings ?? { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/Users/dev/Projects", accounts: [] },
     accountQuotas: parts.accountQuotas ?? [],
     homeDir: "/Users/dev",
   };

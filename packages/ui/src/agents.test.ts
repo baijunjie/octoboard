@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { accountsByAgent, agentPickerOptions, noAgentAvailable, projectSessionAgent, selectableAgent } from "./agents";
+import { accountsByAgent, defaultAccountName, agentPickerOptions, noAgentAvailable, projectSessionAgent, selectableAgent } from "./agents";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
 import type { Account, Agent, AgentAvailability } from "./protocol";
@@ -93,5 +93,14 @@ describe("accountsByAgent", () => {
       ["codex", []],
       ["grok", ["1"]],
     ]);
+  });
+});
+
+describe("defaultAccountName", () => {
+  it("is the name the user gave the agent's default account, else the language's word for it", () => {
+    expect(defaultAccountName(t, undefined, "claude")).toBe("Default");
+    expect(defaultAccountName(t, { codex: "Personal" }, "claude")).toBe("Default");
+    expect(defaultAccountName(t, { claude: "  Personal " }, "claude")).toBe("Personal");
+    expect(defaultAccountName(t, { claude: "  " }, "claude")).toBe("Default");
   });
 });

@@ -10,6 +10,11 @@
 //! stretched for an account that keeps failing, so a client that asks on every open costs
 //! nothing. A reading that fails over one that had windows keeps those windows, with the reason
 //! set beside them.
+//!
+//! An account whose configuration directory is missing or that is not signed in is a state of the
+//! account, not a failure: it is reported as its own [`QuotaUnavailable`] code, drops the windows
+//! it held, is not backed off, and is read again at once when its login ends
+//! ([`AccountQuotas::make_due`]).
 
 mod probe;
 
@@ -26,7 +31,8 @@ use crate::protocol::{
     QuotaUnavailable,
 };
 use crate::state::AppState;
-use probe::{probe, PROBE_TIMEOUT};
+pub(crate) use probe::CODEX_APP_SERVER_ARGS;
+use probe::{config_dir_missing, probe, PROBE_TIMEOUT};
 
 /// How old an account's last attempt must be before it is read again.
 const POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
@@ -60,6 +66,8 @@ struct Entry {
     attempted: Instant,
     /// Consecutive attempts that ended unavailable.
     failures: u32,
+    /// Read again at the next refresh whatever the wait: set by [`AccountQuotas::make_due`].
+    due: bool,
 }
 
 #[derive(Default)]
@@ -158,7 +166,8 @@ impl AccountQuotas {
     }
 
     /// A claim on each of `selected` that is due at `now` and not already running. Due is: never
-    /// read, or last attempted longer ago than [`wait_after`] its consecutive failures.
+    /// read, made due by [`AccountQuotas::make_due`], or last attempted longer ago than
+    /// [`wait_after`] its consecutive failures.
     #[cfg(test)]
     fn claim_due(&self, selected: Vec<Key>, now: Instant) -> Vec<Claim> {
         self.claim_due_locked(&mut self.lock(), selected, now)
@@ -171,7 +180,8 @@ impl AccountQuotas {
                 continue;
             }
             let is_due = inner.entries.get(&key).is_none_or(|entry| {
-                now.saturating_duration_since(entry.attempted) >= wait_after(entry.failures)
+                entry.due
+                    || now.saturating_duration_since(entry.attempted) >= wait_after(entry.failures)
             });
             if is_due {
                 claims.push(self.claim_locked(inner, key));
@@ -190,12 +200,16 @@ impl AccountQuotas {
             }
             inner.in_flight.remove(&claim.key);
             let previous = inner.entries.get(&claim.key);
-            let failures = if quota.unavailable.is_some() {
+            let failed = quota
+                .unavailable
+                .as_ref()
+                .filter(|u| !is_account_state(&u.code));
+            let failures = if failed.is_some() {
                 previous.map_or(0, |entry| entry.failures).saturating_add(1)
             } else {
                 0
             };
-            if let (Some(unavailable), Some(previous)) = (&quota.unavailable, previous) {
+            if let (Some(unavailable), Some(previous)) = (failed, previous) {
                 if !previous.quota.windows.is_empty() {
                     quota = AccountQuota {
                         unavailable: Some(unavailable.clone()),
@@ -209,6 +223,7 @@ impl AccountQuotas {
                     quota,
                     attempted: Instant::now(),
                     failures,
+                    due: false,
                 },
             );
             true
@@ -239,8 +254,17 @@ impl AccountQuotas {
                 quota: quota.clone(),
                 attempted: Instant::now(),
                 failures: 0,
+                due: false,
             },
         );
+    }
+
+    /// Whether the held reading of the account is marked due.
+    #[cfg(test)]
+    pub fn is_due_for_test(&self, agent: Agent, account: Option<&str>) -> bool {
+        self.lock().entries.iter().any(|(key, entry)| {
+            key.agent == agent && key.account.as_deref() == account && entry.due
+        })
     }
 
     /// What `scope` selects among the accounts worth reading, claimed if due. The accounts are
@@ -274,6 +298,18 @@ impl AccountQuotas {
         Ok(self.claim_due_locked(&mut inner, selected, now))
     }
 
+    /// Makes the account's reading due and drops any probe running for it, so that the next
+    /// refresh reads it at once and a probe begun before a login ended cannot put its not-signed-in
+    /// reading back over the new one. `account` is an account id, `None` for the default account.
+    pub fn make_due(&self, agent: Agent, account: Option<&str>) {
+        let mut inner = self.lock();
+        let is_it = |key: &Key| key.agent == agent && key.account.as_deref() == account;
+        inner.in_flight.retain(|key, _| !is_it(key));
+        for (_, entry) in inner.entries.iter_mut().filter(|(key, _)| is_it(key)) {
+            entry.due = true;
+        }
+    }
+
     /// Drops what is held for the account `id`, and any probe running for it, so that a probe
     /// begun under the old directory cannot put its reading back.
     pub fn forget_account(&self, state: &AppState, id: &str) {
@@ -288,6 +324,11 @@ impl AccountQuotas {
             inner.entries.len() != before
         });
     }
+}
+
+/// Whether `code` is one of an account's states rather than a failure to read it.
+fn is_account_state(code: &str) -> bool {
+    code == self::code::CONFIG_DIR_MISSING || code == self::code::NOT_SIGNED_IN
 }
 
 /// Drops every reading, and every probe in flight, whose key is not in `wanted`; true when a
@@ -407,6 +448,16 @@ fn read(
     key: &Key,
     shell: &(dyn Fn() -> anyhow::Result<HashMap<String, String>> + Send + Sync),
 ) -> AccountQuota {
+    // Looked for before anything is run: Claude Code and Grok Build would create the directory,
+    // empty, and then call the account not signed in, and a poll would keep bringing back one a
+    // user deleted. Only `NotFound` says it is gone: a directory that cannot be looked at, or a
+    // regular file in its place, is left to the CLI to report. The default account pins nothing,
+    // so Codex's own refusal of a missing home is what tells that case (see `probe`).
+    if let Some(dir) = key.config_dir.as_deref().filter(|dir| {
+        matches!(std::fs::metadata(dir), Err(err) if err.kind() == std::io::ErrorKind::NotFound)
+    }) {
+        return unavailable_quota(key, config_dir_missing(key.agent, dir));
+    }
     let result = match shell() {
         Ok(shell_env) => probe(
             key.agent,
@@ -451,6 +502,26 @@ fn unavailable_quota(key: &Key, unavailable: QuotaUnavailable) -> AccountQuota {
 mod tests {
     use super::*;
     use crate::protocol::{QuotaWindow, QuotaWindowKind};
+
+    #[test]
+    fn an_account_made_due_is_claimed_at_once_whatever_the_clock_says() {
+        let state = crate::test_support::app_state("quota-make-due").0;
+        let quotas = &state.account_quotas;
+        let codex = key(Agent::Codex, Some("a"));
+        quotas.recorded(
+            &state,
+            codex.clone(),
+            unavailable_quota(
+                &codex,
+                QuotaUnavailable::new(code::COMMAND_FAILED, "failed", &[]),
+            ),
+        );
+        // It was just read, and failed, so it waits.
+        let now = Instant::now();
+        assert!(quotas.claim_due(vec![codex.clone()], now).is_empty());
+        quotas.make_due(Agent::Codex, Some("a"));
+        assert_eq!(quotas.claim_due(vec![codex.clone()], now).len(), 1);
+    }
 
     #[test]
     fn the_wait_before_another_attempt_doubles_with_failures_up_to_a_cap() {
@@ -639,6 +710,153 @@ mod tests {
         assert_eq!(held[0].account, None);
     }
 
+    #[test]
+    fn an_account_state_drops_stale_windows_is_not_backed_off_and_a_login_makes_it_due() {
+        let (state, _dir) = crate::test_support::app_state("quota-account-state");
+        let key = key(Agent::Codex, Some("a"));
+        let good = AccountQuota {
+            fetched_at: 7,
+            windows: vec![QuotaWindow {
+                kind: QuotaWindowKind::Session,
+                label: None,
+                used_percent: 15.0,
+                resets_at: None,
+                window_minutes: None,
+            }],
+            ..quota_of(&key, false)
+        };
+        let signed_out = AccountQuota {
+            unavailable: Some(QuotaUnavailable::new(
+                code::NOT_SIGNED_IN,
+                "no",
+                &[("agent", "Codex")],
+            )),
+            ..quota_of(&key, false)
+        };
+        state.account_quotas.recorded(&state, key.clone(), good);
+        state
+            .account_quotas
+            .recorded(&state, key.clone(), signed_out.clone());
+        // Unlike a failure, the account's state replaces what it held.
+        let held = state.account_quotas.list();
+        assert!(held[0].windows.is_empty());
+        assert_eq!(
+            held[0].unavailable.as_ref().map(|u| u.code.as_str()),
+            Some(code::NOT_SIGNED_IN)
+        );
+        // And is read again after the ordinary interval, however long it has been so.
+        state
+            .account_quotas
+            .recorded(&state, key.clone(), signed_out);
+        let later = Instant::now() + POLL_INTERVAL + Duration::from_secs(1);
+        assert_eq!(
+            state
+                .account_quotas
+                .claim_due(vec![key.clone()], later)
+                .len(),
+            1
+        );
+
+        // A login that ended makes it due at once, and a probe running meanwhile is discarded.
+        let running = state
+            .account_quotas
+            .claim_due(vec![key.clone()], Instant::now() + POLL_INTERVAL * 100);
+        assert_eq!(running.len(), 1);
+        state.account_quotas.make_due(Agent::Codex, Some("a"));
+        let again = state
+            .account_quotas
+            .claim_due(vec![key.clone()], Instant::now());
+        assert_eq!(again.len(), 1);
+        state.account_quotas.finish(
+            &state,
+            running.into_iter().next().unwrap(),
+            quota_of(&key, false),
+        );
+        assert!(state.account_quotas.list()[0].unavailable.is_some());
+    }
+
+    /// A missing directory is reported without running anything, and read for real once it exists.
+    #[tokio::test]
+    async fn a_missing_config_directory_is_a_state_found_before_the_cli_is_run() {
+        let (state, dir) = crate::test_support::app_state("quota-missing-dir");
+        let bin = dir.join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        std::fs::write(
+            bin.join("codex.reply"),
+            include_str!("../../testdata/codex_rate_limits_reply.json"),
+        )
+        .unwrap();
+        let env = crate::test_support::fake_agent(
+            &bin,
+            "codex",
+            &format!(
+                "echo run >> '{d}/runs'\nwhile read line; do case \"$line\" in *rateLimits*) cat '{d}/codex.reply';; esac; done",
+                d = bin.display()
+            ),
+        );
+        let shell: ShellSource = Arc::new(move || Ok(env.clone()));
+        state.set_agent_availability(vec![crate::protocol::AgentAvailability {
+            agent: Agent::Codex,
+            availability: Availability::Available,
+            default_account_dir: None,
+        }]);
+        let config_dir = dir.join("codex-work");
+        let account = crate::protocol::Account {
+            id: "work".to_string(),
+            agent: Agent::Codex,
+            name: "Work".to_string(),
+            config_dir: config_dir.to_string_lossy().into_owned(),
+            approval_reviewer: None,
+            approval_mode: None,
+        };
+        state.store.insert_account(&account).unwrap();
+        let scope = Scope {
+            agent: Some(Agent::Codex),
+            account: Some("work".to_string()),
+        };
+
+        refresh_with(&state, &scope, shell.clone()).await;
+        let held = state.account_quotas.list();
+        let unavailable = held[0].unavailable.as_ref().expect("a state");
+        assert_eq!(unavailable.code, code::CONFIG_DIR_MISSING);
+        assert_eq!(
+            unavailable.params.get("dir").map(String::as_str),
+            config_dir.to_str()
+        );
+        assert!(!bin.join("runs").exists());
+        assert!(!config_dir.exists());
+
+        std::fs::create_dir(&config_dir).unwrap();
+        state.account_quotas.make_due(Agent::Codex, Some("work"));
+        refresh_with(&state, &scope, shell).await;
+        assert!(state.account_quotas.list()[0].unavailable.is_none());
+        assert!(bin.join("runs").exists());
+    }
+
+    #[test]
+    fn a_directory_that_cannot_be_judged_missing_is_left_to_the_cli() {
+        let dir = crate::test_support::ScratchDir::new("quota-dir-is-a-file");
+        let bin = dir.join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let env = crate::test_support::fake_agent(
+            &bin,
+            "codex",
+            &format!("echo run >> '{}/runs'; exit 1", bin.display()),
+        );
+        // A regular file where the directory should be is not `NotFound`.
+        let file = dir.join("not-a-dir");
+        std::fs::write(&file, "x").unwrap();
+        let key = Key {
+            agent: Agent::Codex,
+            account: Some("a".to_string()),
+            config_dir: Some(file.to_string_lossy().into_owned()),
+        };
+        let shell = move || Ok(env.clone());
+        let quota = read(&key, &shell);
+        assert_ne!(quota.unavailable.unwrap().code, code::CONFIG_DIR_MISSING);
+        assert!(bin.join("runs").exists());
+    }
+
     /// Runs `refresh_with` over fake Codex and Grok CLIs that count their runs under `dir`.
     #[tokio::test]
     async fn a_refresh_reads_what_its_scope_selects_once_and_announces_each_reading() {
@@ -678,11 +896,13 @@ mod tests {
                 })
                 .collect(),
         );
+        let codex_work = dir.join("codex-work");
+        std::fs::create_dir(&codex_work).unwrap();
         let account = crate::protocol::Account {
             id: "work".to_string(),
             agent: Agent::Codex,
             name: "Work".to_string(),
-            config_dir: dir.join("codex-work").to_string_lossy().into_owned(),
+            config_dir: codex_work.to_string_lossy().into_owned(),
             approval_reviewer: None,
             approval_mode: None,
         };

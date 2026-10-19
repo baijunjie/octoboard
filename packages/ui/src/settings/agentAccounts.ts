@@ -9,8 +9,9 @@ export function isAbsoluteConfigDir(path: string): boolean {
 }
 
 /** What a typed account name collides with: another account of the same agent (by its stored
- * name) or the agent's default account. */
-export type NameCollision = { kind: "account"; name: string } | { kind: "default"; name: string };
+ * name), the agent's default account under the name it is shown by, or the word the daemon reserves for the default
+ * account, which `name` then is as typed. */
+export type NameCollision = { kind: "account"; name: string } | { kind: "default"; name: string } | { kind: "reserved"; name: string };
 
 /** `toLowerCase()` and not a locale-aware variant, deliberately: it has to match the daemon's
  * locale-independent `to_lowercase()`, and a locale-aware one would diverge under tr-TR. */
@@ -22,19 +23,23 @@ function nameKey(name: string): string {
  * case-insensitively as the daemon does. The default account takes part under `defaultName`, its
  * name in the current language: the daemon only knows it by a fixed English key, so a name that
  * collides only in this language has to be caught here. `editing` is the account being edited,
- * which does not collide with itself. */
+ * which does not collide with itself. `defaultName` is `null` when the default account's own name is being
+ * edited: it only collides with the accounts then, not with itself. */
 export function nameCollision(
   typed: string,
   agent: Agent,
   accounts: Account[],
-  defaultName: string,
+  defaultName: string | null,
   editing?: string,
 ): NameCollision | undefined {
   const key = nameKey(typed);
-  if (key === nameKey(defaultName)) return { kind: "default", name: defaultName };
-  // The daemon reserves this English word as its language-independent comparison key for the
-  // default account, not as display text; checking it here reports that collision in place too.
-  if (key === nameKey(DEFAULT_ACCOUNT_NAME)) return { kind: "default", name: defaultName };
+  if (defaultName !== null) {
+    if (key === nameKey(defaultName)) return { kind: "default", name: defaultName };
+    // The daemon reserves this English word as its language-independent comparison key for the
+    // default account, not as display text; checking it here reports that collision in place too, naming the word
+    // typed, since the default account may be shown under another name.
+    if (key === nameKey(DEFAULT_ACCOUNT_NAME)) return { kind: "reserved", name: typed.trim() };
+  }
   const taken = accounts.find((a) => a.agent === agent && a.id !== editing && nameKey(a.name) === key);
   return taken && { kind: "account", name: taken.name };
 }

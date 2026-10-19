@@ -86,9 +86,9 @@ From top to bottom:
    has none. The submenus are set off from the sessions and from Open Octoboard by separators. Inside a submenu,
    nothing can be chosen:
    - each account is a header line, at the small size of a section header, regular weight, in the secondary text
-     colour, with its name, **Default** for the agent's default account, and its plan after a dot where the agent
-     names one ("Default · Max"), the default account first and then the accounts the user owns, each set off by a
-     separator;
+     colour, with its name — for the agent's default account the name the user gave it, else **Default** (see "The
+     default account" in `docs/product/agent-accounts.md`) — and its plan after a dot where the agent names one
+     ("Default · Max"), the default account first and then the accounts the user owns, each set off by a separator;
    - under the header, each window is one row: its name on the left ("5-hour"), "N% remaining · resets in
      <countdown>" ("82% remaining · resets in 1h 57m", "resets now" once the time has passed, no countdown for a
      window with no reset time) right-aligned in the secondary text colour, and a bar of what remains directly
@@ -104,8 +104,9 @@ From top to bottom:
    - an account never read shows **Reading quota…** in place of windows, and an account with no windows to show
      shows **Quota unavailable**, a note in the secondary text colour at the menu font's size, and without the
      reason. That includes an entry that has no windows and no failure to explain, which Settings and the rail show
-     nothing for. One whose latest reading failed after a good one keeps its last windows under a note "Out of date:
-     last read 12 minutes ago", without the reason either.
+     nothing for. An account that is not logged in (see "Quota states" in `docs/product/account-quotas.md`) shows the
+     note **Not logged in** instead. One whose latest reading failed after a good one keeps its last windows under a
+     note "Out of date: last read 12 minutes ago", without the reason either.
 
    Each submenu's opening line can show an **outlined remaining-quota bar** at its right, before the submenu arrow.
    It uses that agent's account configured for the **current console**, independently of the selected session that

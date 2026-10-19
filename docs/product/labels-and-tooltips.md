@@ -20,7 +20,10 @@ carries it — a control, an indicator or a label too long for its space:
 - A tooltip on clipped text or a change row's status letter closes on any pointer press or key press in the window,
   even while waiting to open. It stays closed until the pointer leaves and returns, including when the press opens
   a dialog without moving the pointer. The tooltip showing an OSC 8 hyperlink's target in a session's terminal also
-  closes on any pointer press or key press (see "Links in the output" in `docs/product/session-terminal.md`).
+  closes on any pointer press or key press (see "Links in the output" in `docs/product/session-terminal.md`). So does
+  the tooltip on the tab of an added agent that is not installed, in Settings, Escape included, and it stays closed
+  until the pointer is off the tab and the tab has lost keyboard focus, or until keyboard focus arrives on the tab
+  again (see "Tooltips on indicators" below).
 - Text too long for the tooltip's width **wraps at word boundaries**. A single run with no boundary in it — a path, a
   long branch name — is broken within rather than widening the tooltip. A script written without spaces wraps between
   its characters, which is its word boundary.
@@ -51,10 +54,11 @@ application buttons below. These are:
   button or keyboard focus on it — Escape after a keyboard pin returns focus there — the tooltip stays shut until
   focus or the pointer leaves the button; closed by a press elsewhere, nothing is held back;
 - the ⋮ button that opens an action menu — a sidebar row's, the console's in the sidebar's header, the project's in
-  focus mode, and a file or folder's in the Files mode's tree or a file's in the Git mode's change list (see "A
-  row's actions" in `docs/product/project-pane.md`). Its tooltip is a short "More actions", while the name announced
-  for it also names what it belongs to ("Actions for session …", "Actions for file …" and the like), so that each ⋮
-  can be told apart;
+  focus mode, a file or folder's in the Files mode's tree or a file's in the Git mode's change list (see "A
+  row's actions" in `docs/product/project-pane.md`), and, in Settings' Agent accounts section, an account's and the
+  More actions button at the end of the agent strip (see `docs/product/agent-accounts.md`). Its tooltip is a short
+  "More actions", while the name announced for it also names what it belongs to ("Actions for session …", "Actions
+  for file …" and the like), so that each ⋮ can be told apart;
 - the sidebar's other icon buttons — a project's **+** (New session), wherever it appears, the Projects heading's
   Filter projects / Clear filter button (see "Filtering the project list" in `docs/product/sidebar.md`) and its
   button to expand projects with unarchived sessions or collapse all projects (see "Expanding and collapsing the
@@ -86,6 +90,8 @@ application buttons below. These are:
 - the two controls of the console dialog's Avatar field (see "Avatar" in
   `docs/product/consoles.md`) — the round control itself, named for choosing an image while it is empty
   and for replacing it once one is picked, and the delete button over its corner, named for removing the image;
+- the console dialog's Manage accounts button, beside the title of its Agent default accounts section (see "Agent
+  config directories" in `docs/product/consoles.md`);
 - the "?" help tip, a small muted icon button that takes an explanation out of the visible text (see "Explanations in
   help tips" below): its tooltip is the explanation — plain text, or text with literals such as file names set apart
   as chips — and the name announced for it says what it explains ("About automatic pulling"), so the explanation
@@ -122,6 +128,13 @@ Every other helping description stays visible, even one that only needs reading 
 field or a setting row, the note at the foot of a form, a section's lead paragraph, status and warnings, and the
 consequences and timing of an action.
 
+One status is a deliberate exception: an added agent that is not installed, in Settings' Agent accounts section. The
+status itself stays visible, as a warning glyph after the agent's name on its tab, and each account the user owns of
+that agent still says visibly that it is not usable; only the glyph's explanation — that the agent is not installed and
+its accounts are not usable until it is on `PATH` — sits in a tooltip on the tab, which opens on hover and on keyboard
+focus (see "Tooltips on indicators" below, and "The agent strip" in `docs/product/agent-accounts.md`). An agent that is
+not added has no tab and so no such status. That tooltip is not a "?" help tip.
+
 An explanation can be split: the part of either kind above goes into the help tip, and the rest stays visible. The help
 tip sits at the end of the line it explains, beside the label rather than inside it, so the name announced for that
 label or field does not include it. A section heading carries no help tip.
@@ -134,7 +147,8 @@ Help tips are used in three places:
   "Detect from files" looks for in each repository and what happens to one it cannot decide on (see "The project's
   default agent" in `docs/product/projects.md`);
 - each agent's **default account** in Settings' Agent accounts section, at the end of its name line: that it is the
-  setup a session runs under when no account is pinned (see "Agent accounts" in `docs/product/settings.md`).
+  setup a session runs under when no account is pinned (see "The default account" in
+  `docs/product/agent-accounts.md`).
 
 ## Two-state icon toggles
 
@@ -230,6 +244,15 @@ These are:
   the status in the same word the file viewer's header carries as the tag of an opened change, and is on the letter
   itself rather than on the row around it, the name and the detail beside it keeping their own tooltips (see "Rows
   and the keyboard" in `docs/product/project-pane-git-change-list.md`).
+
+The warning glyph after the name of an added agent that is not installed, on its tab in Settings' Agent accounts
+section, is a mark too, but not one of these: its tooltip belongs to the tab around it, which is a control, and is
+placed against the tab rather than the glyph. It opens while the pointer is anywhere on the tab and while the tab has
+keyboard focus, but not when a mouse press is what focuses the tab. On keyboard focus it shows once the strip and the section have stopped scrolling
+the tab into view, since a scroll under an open tooltip closes it; a press or a key before then cancels it. For how a
+press or a key closes it see "How a tooltip behaves" above. Nothing links the tooltip to the tab for assistive
+technology: the tab's accessible name says the agent is not installed, and the line under each of the agent's own
+accounts says they are not usable (see "The agent strip" in `docs/product/agent-accounts.md`).
 
 ## Names too long for their space
 

@@ -47,6 +47,7 @@ function ConfirmWarning({ title, sessions, lines = [] }: { title?: string; sessi
   const t = useT();
   const sessionsRef = useListMotion<HTMLUListElement>();
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const linesRef = useListMotion<HTMLDivElement>();
   if (!title && lines.length === 0) return null;
   return (
@@ -61,9 +62,9 @@ function ConfirmWarning({ title, sessions, lines = [] }: { title?: string; sessi
             {sessions.map((session) => (
               <li key={session.id} data-list-motion={session.id} className="flex min-w-0 items-center gap-2">
                 {session.status !== "archived" && <StatusIcon status={sessionStatusKind(session)} withTooltip />}
-                <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts)} />
+                <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts, defaultNames)} />
                 {/* The icon is decorative, and nothing else here names the agent. */}
-                <span className="sr-only">{sessionAgentLabel(t, session, accounts)}</span>
+                <span className="sr-only">{sessionAgentLabel(t, session, accounts, defaultNames)}</span>
                 <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={sessionDisplayTitle(t, session)}>
                   {sessionDisplayTitle(t, session)}
                 </FadeOverflow>

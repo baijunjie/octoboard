@@ -4,7 +4,7 @@ import { expect, it, vi } from "vitest";
 import { sessionOf } from "./gallery/fixtures/builders";
 import type { Event } from "./protocol";
 import { accountQuotaOf } from "./quota/accountQuotaOf";
-import { createDaemon } from "./store";
+import { createDaemon, dismissAccountLogin, trackAccountLogin } from "./store";
 
 const client = vi.hoisted(() => ({
   onEvent: undefined as ((event: Event) => void) | undefined,
@@ -56,6 +56,53 @@ it("applies the events of one batch as a single update", () => {
   ]);
   expect(notified).toHaveBeenCalledTimes(1);
   expect(Array.from(daemon.store.getState().sessions.keys())).toEqual(["b"]);
+});
+
+it("keeps one login per account from its updates and replaces them all with a snapshot's", () => {
+  const daemon = createDaemon("http://localhost:1234");
+  const login = { agent: "grok" as const, account: null, status: "waiting" as const, authorization_url: "https://x", device_code: "ABCD-1234", opened_by_agent: true, failure: null };
+  client.onEvents!([{ type: "account_login_updated", login: { ...login, status: "starting", device_code: null } }]);
+  client.onEvents!([{ type: "account_login_updated", login: { ...login, account: "a" } }]);
+  client.onEvents!([{ type: "account_login_updated", login }]);
+  const held = daemon.store.getState().accountLogins;
+  expect(held.map((entry) => [entry.account, entry.status])).toEqual([["a", "waiting"], [null, "waiting"]]);
+  client.onEvents!([{ type: "account_login_updated", login: { ...login, status: "succeeded" } }]);
+  expect(daemon.store.getState().accountLogins.find((entry) => entry.account === null)?.status).toBe("succeeded");
+});
+
+it("drops an ended login the user dismissed, and only that one, so it does not come back when the row mounts again", () => {
+  const daemon = createDaemon("http://localhost:1234");
+  const login = { agent: "claude" as const, account: "a", status: "failed" as const, authorization_url: null, device_code: null, opened_by_agent: false, failure: null };
+  client.onEvents!([{ type: "account_login_updated", login }]);
+  const held = daemon.store.getState().accountLogins[0]!;
+  // The account's next login is a new object, which a dismissal of the earlier one must not take with it.
+  client.onEvents!([{ type: "account_login_updated", login: { ...login, status: "starting" } }]);
+  dismissAccountLogin(daemon.store, held);
+  expect(daemon.store.getState().accountLogins.map((entry) => entry.status)).toEqual(["starting"]);
+  dismissAccountLogin(daemon.store, daemon.store.getState().accountLogins[0]!);
+  expect(daemon.store.getState().accountLogins).toEqual([]);
+});
+
+it("remembers the logins this window started until they end, and forgets those a snapshot no longer lists", () => {
+  const daemon = createDaemon("http://localhost:1234");
+  const login = { agent: "grok" as const, account: null, status: "waiting" as const, authorization_url: "https://x", device_code: null, opened_by_agent: false, failure: null };
+  trackAccountLogin(daemon.store, "grok", null, true);
+  trackAccountLogin(daemon.store, "grok", "a", true);
+  trackAccountLogin(daemon.store, "grok", "a", true);
+  expect(daemon.store.getState().loginsStartedHere).toEqual(["grok:", "grok:a"]);
+  client.onEvents!([{ type: "account_login_updated", login }]);
+  expect(daemon.store.getState().loginsStartedHere).toEqual(["grok:", "grok:a"]);
+  client.onEvents!([{ type: "account_login_updated", login: { ...login, status: "succeeded" } }]);
+  expect(daemon.store.getState().loginsStartedHere).toEqual(["grok:a"]);
+  trackAccountLogin(daemon.store, "grok", "a", false);
+  expect(daemon.store.getState().loginsStartedHere).toEqual([]);
+  trackAccountLogin(daemon.store, "grok", null, true);
+  const snapshot = {
+    type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
+    agent_availability: [], account_quotas: [], account_logins: [{ ...login, account: "b" }], home_dir: null,
+  } as unknown as Event;
+  client.onEvents!([snapshot]);
+  expect(daemon.store.getState().loginsStartedHere).toEqual([]);
 });
 
 it("replaces the account quotas with each update and keeps the entry of an account whose reading did not change", () => {

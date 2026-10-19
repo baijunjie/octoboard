@@ -50,7 +50,7 @@ The call returns:
 | `session` | The switched session's id. |
 | `agent` | Its agent. |
 | `account` | The account it is now on: the account's id, or `default` for the default account. |
-| `account_name` | That account's name; `Default` for the default account. |
+| `account_name` | That account's name; for the default account the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). |
 | `note` | Prose naming the account and agent the session is now on, saying that it is back awaiting instructions with any turn in progress cut off and is to be sent its next step with `send_message`, and, for a session that had no conversation yet, that it starts fresh there. |
 
 Refused, with the reason in prose (as a tool error) and nothing changed:

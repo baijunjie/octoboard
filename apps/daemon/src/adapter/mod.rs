@@ -251,16 +251,37 @@ pub fn account_command(
     config_dir: Option<&Path>,
     args: &[&str],
 ) -> Result<std::process::Command, &'static str> {
+    let binary = resolve_account_binary(agent, shell_env)?;
+    Ok(account_command_of(
+        &binary, agent, shell_env, config_dir, args,
+    ))
+}
+
+/// Where `agent`'s binary resolves on `shell_env`'s `PATH`; `Err` carries the binary's name.
+pub fn resolve_account_binary(
+    agent: Agent,
+    shell_env: &HashMap<String, String>,
+) -> Result<String, &'static str> {
     let binary_name = adapter_for(agent).binary();
-    let binary =
-        crate::env_shell::resolve_binary(binary_name, shell_env).map_err(|_| binary_name)?;
+    crate::env_shell::resolve_binary(binary_name, shell_env).map_err(|_| binary_name)
+}
+
+/// [`account_command`] over a `binary` already resolved by [`resolve_account_binary`], for a caller
+/// that makes several commands and wants them all to run the one it found.
+pub fn account_command_of(
+    binary: &str,
+    agent: Agent,
+    shell_env: &HashMap<String, String>,
+    config_dir: Option<&Path>,
+    args: &[&str],
+) -> std::process::Command {
     let mut command = std::process::Command::new(binary);
     command.args(args).env_clear().envs(shell_env);
     if let Some(dir) = config_dir {
         command.env(config_dir_var(agent), dir);
     }
     command.current_dir(crate::paths::home_dir());
-    Ok(command)
+    command
 }
 
 #[derive(Default)]

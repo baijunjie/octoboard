@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { Button } from "@heroui/react";
-import { act } from "react";
+import React, { act } from "react";
+import { useHover } from "react-aria";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { change, changeViewFixture, mountRows } from "../browser/browserTestSupport";
@@ -8,6 +9,7 @@ import { ChangeList } from "../browser/ChangeList";
 import { changeItems } from "../browser/changes";
 import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentIcon } from "../components/AgentIcon";
+import { AnchoredTooltip } from "../components/AnchoredTooltip";
 import { SessionUsageLabel } from "../components/SessionMetadata";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
@@ -541,4 +543,50 @@ it("hoverFilterConditions fails for a filter that fits the heading's line", asyn
   await vi.advanceTimersByTimeAsync(9000);
   await done;
   runOut();
+});
+
+/** A tab whose tooltip is the anchored shape, which the tab's own hover opens, beside one with none. */
+function TabWithTip(): React.ReactElement {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const { hoverProps, isHovered } = useHover({});
+  return (
+    <div role="tab" aria-label="Codex (not installed)" ref={ref} {...hoverProps}>
+      Codex
+      <AnchoredTooltip tooltip="Codex is not installed." anchor={ref} hovered={isHovered} />
+    </div>
+  );
+}
+
+function mountTabs(): void {
+  mountForTooltip(
+    <div role="tablist">
+      <div role="tab" aria-label="Claude Code">Claude Code</div>
+      <TabWithTip />
+    </div>,
+  );
+}
+
+it("hoverAnchored puts up the tooltip of the control it names", async () => {
+  mountTabs();
+  await settledLive(createUi(document, "en").hoverAnchored("Codex (not installed)", "Codex is not installed."));
+  expect(openTooltip()?.textContent).toBe("Codex is not installed.");
+  release(document.querySelector('[aria-label="Codex (not installed)"]')!);
+});
+
+it("hoverAnchored fails for a control with no tooltip", async () => {
+  mountTabs();
+  const done = expect(createUi(document, "en").hoverAnchored("Claude Code", "Codex is not installed.")).rejects.toThrow(/has no tooltip "Codex is not installed\.": its anchored tooltip is none/);
+  await vi.advanceTimersByTimeAsync(9000);
+  await done;
+  expect(openTooltip()).toBeNull();
+});
+
+it("hoverAnchored fails where the tooltip that opens is not the one named", async () => {
+  mountTabs();
+  const done = expect(createUi(document, "en").hoverAnchored("Codex (not installed)", "Grok is not installed.")).rejects.toThrow(
+    /has no tooltip "Grok is not installed\.": its anchored tooltip is "Codex is not installed\."/,
+  );
+  await vi.advanceTimersByTimeAsync(3000);
+  await done;
+  release(document.querySelector('[aria-label="Codex (not installed)"]')!);
 });

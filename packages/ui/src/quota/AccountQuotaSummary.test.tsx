@@ -96,6 +96,14 @@ it("says why an account that was never read has no quota", () => {
   expect(container.querySelector('[data-slot="meter"]')).toBeNull();
 });
 
+it("tells an account that is not signed in, or whose directory is missing, to log in and not that reading failed", () => {
+  for (const code of ["quota_not_signed_in", "quota_config_dir_missing"]) {
+    const unavailable = { code, params: { agent: "Claude Code", dir: "/home/dev/.claude-work" }, message: "raw text" };
+    const container = mount(<AccountQuotaSummary quota={quota({ windows: [], unavailable })} />);
+    expect(container.textContent).toBe("Not logged in yet. Log in to use this account.");
+  }
+});
+
 it("sets the binary and its path variable apart as code in a missing-binary failure", () => {
   const unavailable = { code: "quota_binary_not_found", params: { binary: "claude" }, message: "not found" };
   const container = mount(<AccountQuotaSummary quota={quota({ windows: [], unavailable })} />);

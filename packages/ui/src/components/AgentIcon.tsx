@@ -26,8 +26,8 @@ export function AgentIcon({ agent, className = "size-4", tooltip }: { agent: Age
 }
 
 /** `agentSetupOptions`, with each agent's mark. */
-export function agentIconSetupOptions(t: Translate, agentAvailability: Map<Agent, AgentAvailability>) {
-  return agentSetupOptions(t, agentAvailability).map((option) => ({ ...option, icon: <AgentIcon agent={option.value} /> }));
+export function agentIconSetupOptions(t: Translate, agentAvailability: Map<Agent, AgentAvailability>, listed: Agent[]) {
+  return agentSetupOptions(t, agentAvailability, listed).map((option) => ({ ...option, icon: <AgentIcon agent={option.value} /> }));
 }
 
 /** `agentPickerOptions`, with each agent's mark. */

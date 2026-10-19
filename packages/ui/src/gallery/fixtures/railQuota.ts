@@ -1,4 +1,4 @@
-import type { Account, Agent, AgentAvailability, AccountQuota } from "../../protocol";
+import type { Account, Agent, AgentAvailability, AccountQuota, Settings } from "../../protocol";
 import type { Scenario } from "../scenario";
 import { SAMPLE, minutesAgo, snapshotState } from "./builders";
 import { quotaFailure, quotaOf, quotaWindow } from "./quotas";
@@ -12,13 +12,13 @@ const LONG_NAME = "Acme Corporation internal platform research and billing";
 
 /** The window under the rail's quota entry: the sample console, and the accounts the panel lists. Claude Code and
  * Codex are available, so each has a tab; Grok Build is not installed and has none. */
-function railQuotaState(accounts: Account[], accountQuotas: AccountQuota[], available: Agent[] = ["claude", "codex"]) {
+function railQuotaState(accounts: Account[], accountQuotas: AccountQuota[], available: Agent[] = ["claude", "codex"], defaultNames?: Settings["default_account_names"]) {
   return {
     ...snapshotState({
       consoles: [console_],
       projects: [web, api],
       sessions,
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", accounts },
+      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: available, default_clone_dir: "/Users/dev/Projects", accounts, default_account_names: defaultNames },
       accountQuotas,
     }),
     agentAvailability: new Map<Agent, AgentAvailability>(
@@ -39,8 +39,8 @@ const codexAccounts: Account[] = [
   { id: "a-codex-auto", agent: "codex", name: "Automation", config_dir: "/Users/dev/.codex-automation" },
 ];
 
-/** Every account of both tabs read: Claude Code's default account with three windows, Work spent and an account with a
- * clipped name; Codex's default account, Personal, and Automation, which has no plan. */
+/** Every account of both tabs read: Claude Code's default account, which the user has named, with three windows, Work
+ * spent and an account with a clipped name; Codex's default account, Personal, and Automation, which has no plan. */
 const readState = railQuotaState([...claudeAccounts, ...codexAccounts], [
   quotaOf("claude", null, "max", [
     quotaWindow("weekly_model", 0, null, "Fable"),
@@ -52,7 +52,7 @@ const readState = railQuotaState([...claudeAccounts, ...codexAccounts], [
   quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60 + 2 * 60)]),
   quotaOf("codex", "a-codex", "pro", [quotaWindow("session", 12, 285), quotaWindow("weekly", 40, 24 * 60 + 90)]),
   quotaOf("codex", "a-codex-auto", null, [quotaWindow("session", 3, 295), quotaWindow("weekly", 9, 6 * 24 * 60)]),
-]);
+], ["claude", "codex"], { claude: "Studio laptop" });
 
 /** Claude Code's accounts that give no whole reading: the default account never read (its attempt timed out), Work
  * with windows from twelve minutes ago and a failed newer attempt, and Client with no entry yet. */
@@ -67,6 +67,20 @@ const unreadState = railQuotaState(
       fetched_at: minutesAgo(12),
       unavailable: quotaFailure("quota_command_failed", { agent: "Claude Code", detail: "exit status 1: Error: not logged in" }, "Claude Code could not report its quota: exit status 1: Error: not logged in"),
     }),
+  ],
+);
+
+/** Claude Code's accounts that were never signed in: Work has a configuration directory without credentials, Client's
+ * directory does not exist yet, and the default account is read. */
+const notSignedInState = railQuotaState(
+  [
+    { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
+    { id: "a-client", agent: "claude", name: "Client", config_dir: "/Users/dev/.claude-client" },
+  ],
+  [
+    quotaOf("claude", null, "max", [quotaWindow("session", 18, 117), quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60)]),
+    quotaOf("claude", "a-work", null, [], { unavailable: quotaFailure("quota_not_signed_in", { agent: "Claude Code" }, "Claude Code is not signed in: Error: not logged in") }),
+    quotaOf("claude", "a-client", null, [], { unavailable: quotaFailure("quota_config_dir_missing", { agent: "Claude Code", dir: "/Users/dev/.claude-client" }, "The config directory does not exist") }),
   ],
 );
 
@@ -125,7 +139,7 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail quota panel, floated in by hovering",
-    description: "No session is selected, so the quota button has no mini bar. The panel floats in beside it, above Settings, after the pointer rests on it, with the button marked open and no tooltip. Claude Code's default account lists five-hour quota first, weekly next and Fable last. Work (spent) follows, then an account whose clipped name fades out before its plan chip. Manage accounts is at the bottom.",
+    description: "No session is selected, so the quota button has no mini bar. The panel floats in beside it, above Settings, after the pointer rests on it, with the button marked open and no tooltip. Claude Code's default account, under the name the user gave it (Studio laptop), lists five-hour quota first, weekly next and Fable last. Work (spent) follows, then an account whose clipped name fades out before its plan chip. Manage accounts is at the bottom.",
     state: readState,
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
@@ -194,5 +208,14 @@ export const railQuotaScenarios: Scenario[] = [
       (ui) => ui.press(ui.session("Hub")),
       (ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota")),
     ],
+  },
+  {
+    id: "rail-quota-not-signed-in",
+    group: GROUP,
+    category: "normal",
+    title: "Rail quota panel, accounts not logged in yet",
+    description: "Work (never logged in) and Client (whose config directory does not exist yet) both read \"Not logged in yet. Log in to use this account.\" in place of a quota and a raw CLI error; the default account above them has its windows.",
+    state: notSignedInState,
+    steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
 ];

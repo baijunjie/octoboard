@@ -12,6 +12,7 @@ import { accountQuotaOf } from "./quota/accountQuotaOf";
 import { sameValue } from "./sameValue";
 import {
   isLive,
+  type AccountLogin,
   type AccountQuota,
   type Agent,
   type AgentAvailability,
@@ -156,6 +157,14 @@ export interface State {
    * kept anywhere else; an account with no entry is one the daemon has not reported on (see
    * `accountQuotaOf`). */
   accountQuotas: AccountQuota[];
+  /** The login of each account that has one running or just ended, as the last `snapshot` (running ones only) or
+   * `account_login_updated` said; an ended login stays until the account's next login, a snapshot, or the user
+   * dismissing it (see `dismissAccountLogin`). */
+  accountLogins: AccountLogin[];
+  /** The logins this window started whose authorization page it has not opened yet, as `accountLoginKey`s: the
+   * page is opened by the window that asked for the login, not by every window watching it. An entry goes when the
+   * page has been opened or the login ends. Client state, which the daemon knows nothing of. */
+  loginsStartedHere: string[];
   /** The daemon host's home directory as the last `snapshot` said, for showing paths under it as
    * `~/...` (see `abbreviateHome`). Null until the first snapshot, and when the daemon cannot
    * determine one. */
@@ -171,7 +180,9 @@ const INITIAL_AGENT_AVAILABILITY: AgentAvailability[] = (["claude", "codex", "gr
 type Action =
   | { kind: "connection"; state: ConnectionState }
   | { kind: "event"; event: Event }
-  | { kind: "dismiss_trust_prompt"; session: string };
+  | { kind: "dismiss_trust_prompt"; session: string }
+  | { kind: "track_account_login"; key: string; tracked: boolean }
+  | { kind: "dismiss_account_login"; login: AccountLogin };
 
 const initialState: State = {
   connectionState: "connecting",
@@ -184,9 +195,11 @@ const initialState: State = {
   trustedDirectories: [],
   sessionRequests: [],
   gitStatuses: new Map(),
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "", accounts: [] },
+  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", accounts: [] },
   agentAvailability: new Map(INITIAL_AGENT_AVAILABILITY.map((a) => [a.agent, a])),
   accountQuotas: [],
+  accountLogins: [],
+  loginsStartedHere: [],
   homeDir: null,
 };
 
@@ -218,12 +231,36 @@ function keepSameQuotas(previous: AccountQuota[], quotas: AccountQuota[]): Accou
   });
 }
 
+/** What names an account's login among the logins: its agent and account (`null` for the agent's default account). */
+export function accountLoginKey(agent: Agent, account: string | null): string {
+  return `${agent}:${account ?? ""}`;
+}
+
+/** Notes that this window is starting the login of an account, so that it opens the authorization page when it
+ * comes (`tracked`), or that it is not any more: the page has been opened, or the request was refused. */
+export function trackAccountLogin(store: StoreApi<State>, agent: Agent, account: string | null, tracked: boolean): void {
+  store.setState((state) => reducer(state, { kind: "track_account_login", key: accountLoginKey(agent, account), tracked }));
+}
+
+/** Drops an ended login from the state, once the user has seen its outcome or it has cleared itself. Does nothing
+ * when the login is not the one held, since the account's next login is a new object. */
+export function dismissAccountLogin(store: StoreApi<State>, login: AccountLogin): void {
+  store.setState((state) => reducer(state, { kind: "dismiss_account_login", login }));
+}
+
 function reducer(state: State, action: Action): State {
   switch (action.kind) {
     case "connection":
       return { ...state, connectionState: action.state };
     case "dismiss_trust_prompt":
       return { ...state, trustPrompts: state.trustPrompts.filter((p) => p.session !== action.session) };
+    case "track_account_login": {
+      const held = state.loginsStartedHere.includes(action.key);
+      if (held === action.tracked) return state;
+      return { ...state, loginsStartedHere: action.tracked ? [...state.loginsStartedHere, action.key] : state.loginsStartedHere.filter((key) => key !== action.key) };
+    }
+    case "dismiss_account_login":
+      return state.accountLogins.includes(action.login) ? { ...state, accountLogins: state.accountLogins.filter((held) => held !== action.login) } : state;
     case "event": {
       const event = action.event;
       switch (event.type) {
@@ -248,6 +285,8 @@ function reducer(state: State, action: Action): State {
             settings: event.settings,
             agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])),
             accountQuotas: keepSameQuotas(state.accountQuotas, event.account_quotas),
+            accountLogins: event.account_logins,
+            loginsStartedHere: state.loginsStartedHere.filter((key) => event.account_logins.some((login) => accountLoginKey(login.agent, login.account) === key)),
             homeDir: event.home_dir,
           };
         case "trusted_directories_updated":
@@ -415,6 +454,17 @@ function reducer(state: State, action: Action): State {
           return { ...state, agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])) };
         case "account_quotas_updated":
           return { ...state, accountQuotas: keepSameQuotas(state.accountQuotas, event.account_quotas) };
+        case "account_login_updated": {
+          const { login } = event;
+          const others = state.accountLogins.filter((held) => held.agent !== login.agent || held.account !== login.account);
+          const key = accountLoginKey(login.agent, login.account);
+          const running = login.status === "starting" || login.status === "waiting";
+          return {
+            ...state,
+            accountLogins: [...others, login],
+            loginsStartedHere: running ? state.loginsStartedHere : state.loginsStartedHere.filter((held) => held !== key),
+          };
+        }
         default:
           return state;
       }

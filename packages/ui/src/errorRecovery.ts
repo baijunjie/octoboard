@@ -6,7 +6,7 @@ export type ErrorRecovery =
   | "configuration" | "image" | "clipboard" | "file" | "git" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
   | "contentSyntax" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
-  | "sessionBranches" | "projectBranches" | "lostMessages" | "unresumable" | "unarchive";
+  | "sessionBranches" | "projectBranches" | "lostMessages" | "unresumable" | "unarchive" | "availability" | "addedAgents";
 
 /** A local failure whose user remedy is known without inspecting its translated message. */
 export class ActionableError extends DaemonRequestError {
@@ -33,7 +33,9 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   wait: ["session_lock_busy", "session_already_running", "session_already_starting", "session_working"],
   lostMessages: ["handoff_messages_dropped"],
   trust: ["trust_answer_failed", "session_trust_pending", "session_waiting_for_user", "trust_directory_too_broad", "trust_path_not_absolute", "trust_home_unknown"],
-  tool: ["binary_not_found", "agent_not_available", "git_unavailable"],
+  tool: ["binary_not_found", "agent_not_available", "agent_not_installed", "git_unavailable"],
+  availability: ["agent_availability_pending", "added_agents_undecided"],
+  addedAgents: ["agent_already_added", "agent_order_invalid"],
   shell: ["shell_environment_timeout"],
   account: ["unknown_account", "grok_home_not_initialized"],
   unresumable: ["conversation_unresumable"],

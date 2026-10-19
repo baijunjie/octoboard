@@ -10,6 +10,7 @@ import {
   AGENT_PROJECT_EFFORT_FIELD,
   AGENT_PROJECT_MODEL_FIELD,
   consoleProjectLaunch,
+  defaultAccountName,
   projectSessionAgent,
 } from "../agents";
 import { agentIconPickerOptions, AgentIcon } from "../components/AgentIcon";
@@ -77,6 +78,7 @@ export function ProjectDialog({
   const consoleAgent = owner && projectSessionAgent(owner);
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const [source, setSource] = useState<ProjectSource>(editing?.source ?? "local");
   const defaultCloneDir = useDaemonStore((s) => s.settings.default_clone_dir);
   // The clone directory is kept apart from the other sources' directory, so switching the source
@@ -332,10 +334,10 @@ export function ProjectDialog({
                   {
                     value: accountValue(INHERIT),
                     label: t("dialog.project.accountInherit", {
-                      account: ownAccounts.find((account) => account.id === consoleAccountId)?.name ?? t("settings.accounts.defaultName"),
+                      account: ownAccounts.find((account) => account.id === consoleAccountId)?.name ?? defaultAccountName(t, defaultNames, agent),
                     }),
                   },
-                  { value: accountValue({ kind: "default" }), label: t("settings.accounts.defaultName") },
+                  { value: accountValue({ kind: "default" }), label: defaultAccountName(t, defaultNames, agent) },
                   ...ownAccounts.map((account) => ({ value: accountValue({ kind: "account", id: account.id }), label: account.name })),
                 ],
                 value: accountValue(picked),

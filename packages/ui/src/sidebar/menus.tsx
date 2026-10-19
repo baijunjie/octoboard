@@ -8,7 +8,7 @@ import { repositoryLink } from "../repositoryLink";
 import { AgentIcon } from "../components/AgentIcon";
 import { PathText } from "../components/PathText";
 import type { Translate } from "../i18n/catalog";
-import type { Account, Console, Project, Session } from "../protocol";
+import type { Account, Console, Project, Session, Settings } from "../protocol";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { FocusShortcutKbd } from "./focusShortcut";
 import { archivePreviewSessions, isUnusedSession } from "./order";
@@ -146,8 +146,9 @@ function switchAccountSubmenu(
   handlers: SidebarHandlers,
   session: Session,
   accounts: Account[],
+  defaultNames: Settings["default_account_names"],
 ): ActionMenuSubmenu | undefined {
-  const entries = switchEntries(session, accounts, t);
+  const entries = switchEntries(session, accounts, t, defaultNames);
   if (entries.length < 2) return undefined;
   return {
     label: t("sidebar.session.switchAccount"),
@@ -224,12 +225,13 @@ export function sessionMenu(
   handlers: SidebarHandlers,
   session: Session,
   accounts: Account[],
+  defaultNames: Settings["default_account_names"],
   { placement = "list", hasBoundSessions = false }: { placement?: MenuPlacement; hasBoundSessions?: boolean } = {},
 ): ActionMenuEntry[] {
   const focused = placement === "focused";
   const archived = session.status === "archived";
   // The daemon refuses to switch the account of a session that is still starting.
-  const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts);
+  const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames);
   const focusable = session.role === "console" && !archived && !focused;
   return [
     ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),

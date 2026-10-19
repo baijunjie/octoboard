@@ -5,10 +5,10 @@ settings fill the right under the section's heading, one row per setting: on the
 it saying what it does — a trusted folder's row has its path alone — and on the right its control. Under a right-to-left
 language the sides swap (see "Right-to-left layout" in `docs/product/window-layout.md`). A section that explains itself
 as a whole does so in a paragraph under its heading, and no section heading has a "?" help tip; help tips are on one
-row in "Git" and on each agent's default account in "Agent accounts" below (see "Explanations in help tips" in
-`docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **Git**, **Agent accounts**,
-**Trusted folders**, **Permissions**, **Notifications** and **Configuration**; the dialog opens on General unless it
-was asked to open on another section.
+row in "Git" and on each agent's default account in Agent accounts (see "The default account" in
+`docs/product/agent-accounts.md`, and "Explanations in help tips" in `docs/product/labels-and-tooltips.md`). The
+sections, in order, are **General**, **Git**, **Agent accounts**, **Trusted folders**, **Permissions**,
+**Notifications** and **Configuration**; the dialog opens on General unless it was asked to open on another section.
 
 A console session can read the default clone directory, the automatic pulling of repositories, the automatic deletion of
 archived sessions whose conversation is gone, the agent accounts (without their directories) and the trusted folders,
@@ -36,8 +36,9 @@ section marked. Opening Settings puts keyboard focus on the selected section's t
 the arrow keys move to the previous or next section and show it at once, wrapping around at either end, and Tab from the
 list moves on into the section's settings. In the row along the top only Left and Right move, mirrored under a
 right-to-left language; in the vertical list Up and Down do too. When a control holding keyboard focus disappears from a
-section — a trusted folder's or an account's Remove button, which goes with its folder or account once the removal is
-confirmed, the Notifications Enable button once the browser has answered, or a Permissions row's button, which goes once
+section — a trusted folder's Remove button or an account's actions menu, which goes with its folder or account once
+the removal is confirmed, an agent's tab once the agent's removal is confirmed, the Notifications Enable button once
+the browser has answered, or a Permissions row's button, which goes once
 the permission is granted or its request has been answered — focus goes back to the selected section's tab rather than
 leaving the dialog.
 
@@ -51,15 +52,15 @@ Settings opens from:
   open, and while another dialog or an action menu — a row's or a header's, its submenus included — is open;
 - a session row's **Switch account** submenu, whose last entry, **Manage accounts…**, opens it on the Agent accounts
   section instead of the first (see "Session rows" in `docs/product/sidebar.md`);
-- the **Manage accounts…** button in the console dialog's Agent accounts table, which opens it on the Agent accounts
-  section above the console dialog, left open beneath it (see "Agent config directories" in
+- the **Manage accounts** button beside the title of the console dialog's Agent default accounts section, which opens
+  it on the Agent accounts section above the console dialog, left open beneath it (see "Agent config directories" in
   `docs/product/consoles.md`);
 - the **Manage accounts…** button in the rail's account quota panel, which closes the panel and opens it on the Agent
   accounts section (see "The account quota panel on the rail" in `docs/product/account-quotas.md`).
 
 Settings closes on `Escape`, on its close button, and on a press on the dimmed area around it. Closing it puts
-keyboard focus back on the selected session's terminal, or, when it was opened from the console dialog, on the row of
-the console dialog's Agent accounts table it was opened from.
+keyboard focus back on the selected session's terminal, or, when it was opened from the console dialog, on the
+console dialog's Manage accounts button.
 
 While Settings is open everything under it stays as it was, the terminal included, and its size does not change.
 
@@ -159,90 +160,9 @@ never does and where the value is kept are in "Automatically pulling repositorie
 
 ## Agent accounts
 
-Every account, grouped by agent. The section opens with a paragraph saying what an account is — a named config
-directory of an agent, where it keeps its login and conversation history — and that an agent has to be on the user's
-`PATH` for its accounts to be usable.
-
-Below that paragraph and the **Add account** button, each agent has a tab of its own, in the order the agents are listed
-elsewhere, each tab showing the agent's icon and name; only the selected agent's accounts are shown, in its tab's panel.
-The agent tabs are an underlined strip, set apart from the list of Settings' sections, and scroll sideways when they do
-not fit. Once the section is scrolled far enough for the strip to reach the top of the section's area, at any window
-width, the strip stays pinned there, opaque, and the accounts scroll beneath it; the top fade then begins below the
-strip (see "The edge that hides content fades" in `docs/product/scrolling-surfaces.md`). Every agent keeps its tab
-whether or not it is installed. The section always opens on the first agent's tab, Claude Code, however it was opened.
-An agent that is not available has a muted line at the top of its panel saying it is not installed, and its accounts are
-marked not usable; one whose availability is not yet determined has no such line.
-
-Each agent's panel starts with the agent's **default account**, with the directory it currently resolves to. A "?"
-ends its name line, after the plan, and says in its tooltip, or in a popover once pressed, that the default account is
-the setup a session runs under when no account is pinned. Its name is Octoboard's own; its name and directory cannot be
-edited, and it cannot be removed. The accounts the user owns follow, each with its name, its directory, an **Edit**
-button and a **Remove** button. Both kinds of directory are shown as in "How paths are shown" above.
-
-Every account of an available agent, the default account included, also shows its plan quota: the plan beside its
-name, and beneath the account's row, across its whole width, one line and bar per quota window — or, in its place,
-that the quota is still being read, is unavailable, or is out of date. Opening the section asks for a fresh reading
-of every account whose last one is due, those of every agent and not only of the tab in view; the readings already
-held are shown at once. What is read, when, and how each state looks are in `docs/product/account-quotas.md`.
-
-Every Codex account row, including the default account, has an inline approval-mode selector:
-
-- **Follow account configuration** leaves the reviewer to that account's Codex configuration. This is the initial
-  choice for both new and existing accounts; automatic review is never enabled just by adding an account.
-- **Automatic review** asks Codex to review approval requests itself and may use additional tokens.
-- **Ask me** asks Codex to send approval requests to the user.
-
-The choice is saved when selected, separately from editing the account's name or directory. Choices are unavailable
-while saving; a failure is shown in an error alert. It applies when a session next starts or resumes, including an account switch;
-a running process keeps its current reviewer. A named account's choice is independent of the default account's:
-following configuration does not inherit the default account's selector. If a session's named account was deleted,
-or it holds a pinned directory without a stored account reference, it follows that original directory's Codex
-configuration instead of adopting the default account's choice. Grok Build has no such selector.
-
-These choices are stored by Octoboard. An explicit reviewer overrides Codex's reviewer for that launch without
-writing its configuration files or changing its sandbox or approval policy. They remain local; see
-"What is not configuration and never travels" in `docs/product/configuration-export-and-import.md`.
-
-Every Claude Code account row, including the default account, has the same kind of selector with Claude Code's four
-choices:
-
-- **Follow account configuration** passes nothing, so the account's own `settings.json` decides. This is the initial
-  choice for new and existing accounts.
-- **Automatic** launches Claude Code in its auto mode, where a classifier approves what it judges safe and blocks the
-  rest. Whether auto mode is available to the account, which depends on its plan among other things, is Claude Code's
-  own decision; Octoboard only asks for it.
-- **Ask me** launches Claude Code so that every tool call not already allowed asks the user.
-- **Approve everything** launches Claude Code so that every tool runs without asking.
-
-The choice is saved and applies exactly as Codex's does, a resume and an account switch included, and it stays local
-too. **Approve everything** is saved only once the user accepts a destructive confirmation that names the account (or
-the default account) and warns that Claude Code will run every tool in that account's sessions without asking,
-commands that change or delete files included; its confirm button carries the choice's own name. Cancelling, Escape
-included, leaves the choice as it was. If the save fails, the error is shown in the confirmation, which stays open, and
-the choice stays unchanged. Because the user has agreed there, Claude Code's own blocking warning for that mode never
-appears (see "Per-agent specifics a user will notice" in `docs/product/launching-agents.md`).
-
-One **Add account** button, above the agent tabs, serves every agent: its form asks for the agent, starting on the agent
-of the tab in view — every agent is listed and can be picked, one that is not installed included and labelled as not
-installed, since an account may be set up before its agent is, unlike the agent pickers elsewhere (see "Agents that are
-not installed" in `docs/product/consoles.md`) — then a name and a directory, which can be typed or picked with the
-directory browser (see "Browsing directories" in `docs/product/projects.md`). Editing an account offers its name and its
-directory, never its agent: a directory belongs to one agent's layout. The directory is checked for being absolute (or
-starting with `~/`) and for not being already used by another account of the same agent, the default account included
-(the full rules are in "Agent config directories" in `docs/product/consoles.md`); one that does not exist yet is
-accepted, and the form says that Octoboard does not require it to exist. A directory already in use is reported, once
-saving is attempted, under the directory field, naming the account that uses it — the default account by its name in the
-current language; the report goes away as soon as the directory is changed, typed or picked, or another agent is picked.
-For a Grok Build account the form adds that the directory has to be a Grok home that Grok has already been run against,
-which is checked when a session launches. Every account is named by the user, and the name is required: it is stored
-trimmed, and one left blank is refused. A name has to be unique within its agent, compared trimmed and ignoring letter
-case; accounts of different agents may share a name. A name already taken by another account of the same agent, or by
-the default account — its name in the current language, and the English word "Default", which is reserved in every
-language — is reported under the name field. Removing an account asks first and says that consoles referring to it go
-back to the agent's default account and that sessions already open are not affected. A project referring to it is put
-back to inheriting its console's reference at the same time (see "The project's account, model and reasoning effort" in
-`docs/product/projects.md`). What an account is and how consoles, projects and sessions use one are in "Agent config
-directories" in `docs/product/consoles.md`.
+The agents the user has added and every account of each, grouped by agent, with the means to add, reorder and remove
+agents, to add, edit, rename and remove accounts, to sign an account in, and each account's approval mode and plan
+quota. What the section shows and offers is in `docs/product/agent-accounts.md`.
 
 ## Trusted folders
 

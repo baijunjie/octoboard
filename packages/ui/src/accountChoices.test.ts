@@ -19,7 +19,7 @@ const accounts = [account("w", "claude", "Work"), account("c", "codex", "Codex w
 
 describe("choiceGroups", () => {
   it("puts the default account first in every agent's group, the stored accounts after it", () => {
-    const groups = choiceGroups(accounts, availability({}), "Default");
+    const groups = choiceGroups(accounts, availability({}), () => "Default");
     expect(groups.map((g) => [g.agent, g.entries.map((e) => e.name)])).toEqual([
       ["claude", ["Default", "Work"]],
       ["codex", ["Default", "Codex work"]],
@@ -28,7 +28,7 @@ describe("choiceGroups", () => {
   });
 
   it("holds the default account alone for every agent on a first-ever start", () => {
-    for (const group of choiceGroups([], availability({}), "Default")) {
+    for (const group of choiceGroups([], availability({}), () => "Default")) {
       expect(group.entries.map((e) => e.account)).toEqual([null]);
     }
   });
@@ -38,7 +38,7 @@ describe("choiceGroups", () => {
     ["available", "available", true],
     ["unavailable", "unavailable", false],
   ] as const)("leaves a group selectable unless its agent is known to be missing (%s)", (_, state, selectable) => {
-    expect(choiceGroups(accounts, availability({ claude: state }), "Default")[0].selectable).toBe(selectable);
+    expect(choiceGroups(accounts, availability({ claude: state }), () => "Default")[0].selectable).toBe(selectable);
   });
 });
 
@@ -143,11 +143,11 @@ describe("currentChoice", () => {
     ["the user's pick", {}, picked],
     ["the initial entry when the pick's agent has since been found missing", { codex: "unavailable" }, initial],
   ] as const)("shows %s", (_, states, expected) => {
-    expect(currentChoice(picked, initial, choiceGroups(accounts, availability(states), "Default"))).toEqual(expected);
+    expect(currentChoice(picked, initial, choiceGroups(accounts, availability(states), () => "Default"))).toEqual(expected);
   });
 
   it("shows the initial entry when the pick's account is no longer stored, or there is no pick", () => {
-    const groups = choiceGroups([], availability({}), "Default");
+    const groups = choiceGroups([], availability({}), () => "Default");
     expect(currentChoice(picked, initial, groups)).toEqual(initial);
     expect(currentChoice(undefined, initial, groups)).toEqual(initial);
   });
@@ -171,6 +171,6 @@ describe("switchEntries", () => {
     ["a removed account that recorded no directory as nothing to name", { account_id: "gone" }, ["Default", "Work"]],
     ["only the session's own agent's accounts", { agent: "grok" }, ["Default (current)"]],
   ] as const)("lists %s", (_, extra, expected) => {
-    expect(summary(switchEntries(session(extra), accounts, t))).toEqual(expected);
+    expect(summary(switchEntries(session(extra), accounts, t, undefined))).toEqual(expected);
   });
 });

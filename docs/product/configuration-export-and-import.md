@@ -147,9 +147,10 @@ and folder trust — a project's trust permission and the trusted folders alike 
 configuration, and are in no document. Neither is the default clone directory: that one is the importing machine's own
 to choose, and an import places what it clones under it (see "Default clone directory" in `docs/product/settings.md`).
 No console and no project carries its stored id. Codex and Claude Code account approval modes, including the default
-accounts', also stay local: exports omit them and imports leave the importing machine's choices unchanged. Account quota
-readings are not stored at all and are in no document either (see "How a quota is read" in
-`docs/product/account-quotas.md`).
+accounts', also stay local: exports omit them and imports leave the importing machine's choices unchanged. So do the
+list of added agents and the names the user gave the default accounts (see "Added agents" and "The default account" in
+`docs/product/agent-accounts.md`). Account quota readings are not stored at all and are in no document either (see
+"How a quota is read" in `docs/product/account-quotas.md`).
 
 ### The application settings a full export carries
 
@@ -221,9 +222,10 @@ that project.
 
 Every account reference of the document is bound to the account of the daemon's host that has the same name and belongs
 to the agent whose setting the reference sits in, matched **ignoring letter case** — which is how account names are
-unique within an agent in the first place (see "Agent accounts" in `docs/product/settings.md`). A reference that matches
-no account falls back to that agent's **default account**, pinned rather than left inheriting, and every such fallback
-is listed one by one: the inspection says which references would fall back, the result of an import which ones did.
+unique within an agent in the first place (see "Adding, editing and removing an account" in
+`docs/product/agent-accounts.md`). A reference that matches no account falls back to that agent's **default
+account**, pinned rather than left inheriting, and every such fallback is listed one by one: the inspection says
+which references would fall back, the result of an import which ones did.
 
 ### What applying does
 

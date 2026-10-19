@@ -3,8 +3,9 @@
 Per-agent facts about the three agent CLIs Octoboard launches: the hook events, what their payloads carry, what the
 payloads can and cannot be correlated on, what a failing hook costs, how a project's own configuration layers around an
 injected one, the mechanism and conditions for injecting Octoboard into each, what it takes to move a session's
-conversation into another config directory, what happens when two accounts share a session directory, and how to ask
-each one how much of its plan quota is left.
+conversation into another config directory, how each signs in a config directory without a terminal and what it
+answers before that, what happens when two accounts share a session directory, and how to ask each one how much of
+its plan quota is left.
 
 Established against **Claude Code 2.1.274**, **Codex 0.160.0** and **Grok Build 1.0.46**; what the Claude Code section
 says about a declined prompt was measured on **2.1.286** as well, and held identically on both. What "Moving a
@@ -21,7 +22,8 @@ first measured on that build. What "Plan quota" says was measured on **Claude Co
 What "Sharing a session directory between accounts" says, and the "Codex, history segments" and "Under a different
 account" notes under "Moving a conversation to another config directory", were measured on 2026-10-19 on **Claude Code
 2.1.302**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Codex resume from aged rollouts" says was measured on
-**Codex 0.162.1**. All three rewrite their hook surface, their payload fields, their configuration layering and their
+**Codex 0.162.1**. What "Signing in a config directory without a terminal" says was measured on 2026-10-19 on **Claude
+Code 2.1.303**, **Codex 0.162.1** and **Grok Build 1.0.62**. All three rewrite their hook surface, their payload fields, their configuration layering and their
 on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
 
 How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks.rs`; the product behavior
@@ -771,11 +773,141 @@ Build 1.0.46).
 
 Claude Code was measured to create a config directory that does not exist yet. Codex 0.161.0 does not: it exits with
 `CODEX_HOME points to "<dir>", but that path does not exist`, so the daemon creates a pinned Codex directory itself
-before launching.
+before launching. Which commands create it, and what each one answers before a login, is under "Signing in a config
+directory without a terminal" below.
 
 **The trap a verification has to rule out** is an agent that resumes *successfully* into an empty conversation. None of
 the three did that here, each refusing distinctly, but a future version could introduce it and it would look like a
 successful switch.
+
+## Signing in a config directory without a terminal
+
+Measured on 2026-10-19 with **Claude Code 2.1.303**, **Codex 0.162.1** and **Grok Build 1.0.62**, each against scratch
+config directories that either did not exist or had just been created empty. Each command ran the way the daemon runs
+an account command: the agent's directory variable set, the working directory the home directory, stdin `/dev/null` or
+a pipe, stdout and stderr piped, no terminal. No login was meant to be completed. Each was started, its output read,
+and the process killed; one Grok Build login completed on its own (see below).
+
+**All three sign in without a terminal**, and none needs anything written to its stdin:
+
+| | Claude Code | Codex | Grok Build |
+|---|---|---|---|
+| Command | `claude auth login` | `codex app-server` with `account/login/start`, or `codex login [--device-auth]` | `grok login` |
+| Flow | OAuth with a loopback callback, plus a manual URL whose code is pasted back | OAuth with a loopback callback, or a device code | device code |
+| Where the URL is | handed to `$BROWSER`; a second, manual URL on stdout | the JSON-RPC reply; the CLI prints it | stderr |
+| Opens a browser itself | through `$BROWSER`, else `open` on `PATH`, so it can be replaced | `app-server`: no. `codex login`: yes, nothing found to stop it. `--device-auth`: no | yes, nothing found to stop it |
+| A directory that does not exist | created | refused, exit 1 | created |
+| Done | exit 0, `Login successful.` (from the executable) | `account/login/completed` with `success: true` (from the schema) | exit 0, `✓ Signed in as <email>` on stderr |
+
+- **Claude Code** (`claude auth login`; `--console` and `--sso` were not tried) prints on stdout `Opening browser to sign
+  in…`, then `If the browser didn't open, visit: <url>`, then `Paste code here if prompted > ` with no newline. It
+  listens on `127.0.0.1` at an ephemeral port (53228 in one run) and hands the browser a URL of its own, `https://claude.com/cai/oauth/authorize?code=true&client_id=…&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A<port>%2Fcallback&scope=…&code_challenge=…&code_challenge_method=S256&state=…`.
+  The browser is run as `$BROWSER <url>` when `BROWSER` is set, and otherwise as `open <url>` looked up on `PATH`. Both
+  were replaced by scripts that only recorded their argument, and no LaunchServices launch came from the process. So
+  the URL Octoboard should open is the one handed to `BROWSER`, captured by a `BROWSER` that reports it back, and the
+  loopback callback then finishes the login with nothing pasted. The URL on stdout is a different one: its
+  `redirect_uri` is `https://platform.claude.com/oauth/code/callback`, the page that shows the user a code to paste.
+  The paste does work without a terminal: `notarealcode#notarealstate` written to a piped stdin was taken and sent,
+  and the command answered `Login failed: Request failed with status code 400` on stderr and exited 1 within a second.
+  An empty stdin (`/dev/null`, or a pipe held open) does not end the wait. SIGTERM ends it with exit 143. It created a
+  config directory that did not exist (`.claude.json` and `backups/`) before any sign-in. On success the credential
+  goes to the Keychain item named under "A second config directory is a second login" above, and the account record
+  to `.claude.json`. Both, and the `Login successful.` line, come from the executable and the earlier
+  measurements, not from a completed login here. `claude auth status` reporting `loggedIn: true` afterwards is the
+  check to make.
+- **Codex** has three ways in, and the app server is the one made for a front end. `codex app-server` (the same command
+  and flags as the quota probe) takes `account/login/start` after `initialize`:
+  - `{"type":"chatgpt"}` replies at once with `{"type":"chatgpt","loginId":"<uuid>","authUrl":"https://auth.openai.com/oauth/authorize?…&redirect_uri=http%3A%2F%2F127.0.0.1%3A1455%2Fauth%2Fcallback&…"}`
+    and listens on `127.0.0.1:1455`. It opens no browser: no LaunchServices launch came from the process, and nothing
+    was run through `BROWSER` or `open`. With 1455 already held by another process, the reply took about four seconds
+    and named port 1457, where it listened instead. Whether the authorization server accepts that port was not
+    tried, so two logins at once are a risk.
+  - `{"type":"chatgptDeviceCode"}` replies with `{"type":"chatgptDeviceCode","loginId":…,"verificationUrl":"https://auth.openai.com/codex/device","userCode":"<4 characters>-<5 characters>"}`,
+    with no listener and no browser.
+  - `account/login/cancel` with the `loginId` answers `{"status":"canceled"}`, followed by the notification
+    `account/login/completed` with `{"loginId":…,"success":false,"error":"Login was not completed"}` (`"Login server
+    error: Login was not completed"` for the browser flow). The schema
+    (`codex app-server generate-json-schema`, `v2/AccountLoginCompletedNotification.json`) has the same notification
+    carry `success: true` on a completed login, and `account/updated` follows a change of account. That is the signal
+    to wait for, then `account/read` to confirm; a completed login was not observed.
+
+  The CLI does the same from a shell. `codex login` prints on stderr `Starting local login server on
+  http://localhost:1455.`, `If your browser did not open, navigate to this URL to authenticate:`, the URL (redirect
+  `http://127.0.0.1:1455/auth/callback`) and ``On a remote or headless machine? Use `codex login --device-auth`
+  instead.`` It opened the browser itself through LaunchServices, with `BROWSER` set and a recording `open` first on
+  `PATH`, so it would put up a page Octoboard did not ask for. `codex login --device-auth` prints on **stdout** the
+  link `https://auth.openai.com/codex/device`, `Enter this one-time code (expires in 15 minutes)` and the code, with ANSI
+  colour escapes even into a pipe, and opens nothing and listens on nothing. Both died on SIGTERM. Neither creates a
+  missing `CODEX_HOME`: both exit 1 with `Error loading configuration: CODEX_HOME points to "<dir>", but that path does
+  not exist`. On success Codex writes `auth.json` into the home. That rests on the earlier measurement of a copied
+  `auth.json` under "A second config directory is a second login" above. Whether the `cli_auth_credentials_store`
+  setting could send it elsewhere was not examined.
+- **Grok Build** (`grok login`, with no flag) printed on **stderr** `To sign in, open this URL in your browser:`,
+  `https://accounts.x.ai/oauth2/device?user_code=<4 characters>-<4 characters>`, `Confirm this code in your browser:`,
+  the code, and `Waiting for authorization...`, about a second after it started. Its debug log says the device flow was
+  chosen by a login configuration fetched from the server (`resolved interactive transport transport="device"
+  source=remote`), so the default could change without an upgrade; `--device-auth` asks for it explicitly, and
+  `--oauth` was not tried. It listens on nothing. **It opens the browser itself through LaunchServices** (the system
+  log showed `LAUNCH: Asking CSUI to launch 1 items` from the process in both runs it was watched in), with `BROWSER`
+  set and a recording `open` first on `PATH`; `GROK_TEST_OPEN_URL_FILE`, a name in the executable, did not stop it either. So Octoboard
+  cannot be the only one to open the page. It created a `GROK_HOME` that did not exist (`agent_id`, `docs/`, `logs/`).
+  In the first run, nothing on the machine knowingly approved the code. The login still completed 5.4 seconds after the
+  URL appeared: the browser it opened was already signed in to x.ai, and whether a person clicked through is not
+  known. It wrote `auth.json` into the scratch home, printed `✓ Signed in as <email>` on stderr and exited 0. So
+  completion is exit 0, with `auth.json` present in `GROK_HOME`. Killed while waiting, it died on SIGTERM.
+
+**How long each waits**, left running with nobody to authorize:
+
+- **Claude Code** was still waiting, its loopback port still listening, when it was killed after 610 seconds. So it
+  has no timeout of ten minutes or less, and the daemon has to set its own.
+- **Codex's app server** gave up the browser flow at 600 seconds with `account/login/completed`
+  `{"success":false,"error":"Login timed out"}`. The process stayed up, and an `account/login/cancel` afterwards
+  answered `{"status":"notFound"}`. The device-code flow says its code expires in 15 minutes; neither it nor
+  `codex login` was left running to the end.
+- **Grok Build** was not left waiting, as every run opened a browser page. How long it waits is unknown.
+
+**Before a login, on the quota path.** The same probes as in "Plan quota" below, against a directory that does not
+exist and one created empty:
+
+- **Claude Code does not tell the two apart, and recreates a missing directory.** Both the probe and `claude auth status`
+  create the directory (`.claude.json`, `backups/`, and for the probe `plugins/` and `sessions/`) and then answer as
+  for an empty one. The probe's `get_usage` succeeds, with
+  `{"subscription_type":null,"rate_limits_available":false,"rate_limits":null,"behaviors":null,"session":{…}}`. That
+  is presumably what an account without a subscription answers as well (not measured), so it does not say "not signed
+  in" alone. The `initialize` reply in the same exchange does: its `account` is `{"tokenSource":"none","apiProvider":"firstParty"}`.
+  Read from the executable, not measured against a signed-in directory: a subscription login replaces `tokenSource`
+  with `subscriptionType` (with `email` and `organization`), and an API key adds `apiKeySource`. `claude auth status` (JSON by
+  default) prints on stdout `{"loggedIn":false,"authMethod":"none","apiProvider":"firstParty",…,"configDirectory":"<dir>"}`
+  and exits **1**; `--text` prints `Not logged in. Run claude auth login to authenticate.`, exit 1. The probe and
+  `claude auth status` each answered in under half a second. The probe also writes `Ignoring <n> permissions.allow entries from
+  .claude/settings.json: this workspace has not been trusted…` to stderr, because the home directory it runs in holds
+  `~/.claude/settings.json` as a project file and the fresh directory has no trust record for it. That is noise, not
+  an error.
+- **Codex** keeps the two distinct. With the directory missing, `codex app-server` writes nothing on stdout and exits
+  1 within a tenth of a second, its stderr ending in `Error:` and `CODEX_HOME points to "<dir>", but that path does
+  not exist`, after a `WARNING: proceeding, even though we could not create PATH aliases: …` line naming the same
+  path. It does not create the directory. Empty, it starts, and `account/rateLimits/read` answers `{"error":{"code":-32600,"message":"codex account authentication required to read
+  rate limits"},"id":2}`. The code alone is JSON-RPC's generic invalid request, so it is the message that marks the
+  case. `account/read` (params `{}`) is the structured answer:
+  `{"result":{"account":null,"requiresOpenaiAuth":true,"workspaceRouting":null}}`, where a signed-in home has
+  `account` set to `{"type":"chatgpt","email","planType"}` or `{"type":"apiKey"}` (per the schema). `codex login status` prints
+  `Not logged in` on stderr and exits 1 for the empty home, and `Error loading configuration: CODEX_HOME points to …`
+  with exit 1 for the missing one. The empty home is not left empty: the app server writes its databases, `skills/`
+  and `installation_id` into it.
+- **Grok Build does not tell the two apart, and creates a missing directory.** `grok agent --no-leader stdio` creates
+  it (`config.toml`, `README.md`, `docs/`, `logs/`, `sessions/` and lock files) and then answers `_x.ai/billing`
+  for either with `{"jsonrpc":"2.0","id":2,"error":{"code":-32000,"message":"Authentication
+  required","data":"Authentication required to fetch billing data"}}`. The `initialize` reply in a home with no login
+  has `agentCapabilities.auth` `{}`, `authMethods` `[{"id":"grok.com","name":"Grok","description":"Sign in with
+  Grok"}]` and `_meta.defaultAuthMethodId` `null`. What those fields hold once signed in was not measured, so they are
+  not yet a signal.
+
+So "the directory is missing" can only be told reliably by looking for the directory before the probe runs. Codex is
+the only one that refuses a missing directory; Claude Code and Grok Build quietly recreate it, empty, and then report
+it as not signed in. "Not signed in" has a stable marker for each: Claude Code's `account.tokenSource` of `"none"` in the
+`initialize` reply, or `claude auth status` exiting 1 with `loggedIn: false`; Codex's `account/read` with `account:
+null`, or the `authentication required` message; Grok Build's `-32000` `Authentication required` error. Each of these
+markers comes from one build, so a reply that matches none of them should still be shown as a plain failure.
 
 ## Sharing a session directory between accounts
 
@@ -994,7 +1126,9 @@ request has `"subtype":"error"` and an `"error"` string. In `response.response`:
   one at 100%), plus `extra_usage`, `spend` and `seven_day_breakdown`. None of them is a quota window to show.
 
 An account with no subscription is expected to report `rate_limits_available: false` or a `null` `rate_limits`; that
-was not measured, as no such account was at hand.
+was not measured, as no such account was at hand. A directory with no login answers with exactly that shape (Claude
+Code 2.1.303), so the reply alone cannot tell the two apart. What each agent answers when its directory is missing or
+not signed in is under "Signing in a config directory without a terminal" above.
 
 **Codex**:
 

@@ -37,7 +37,8 @@ is. Each value is:
 - for a console: `default` or `null` (the agent's default account), or an account of that agent by id or by name.
 
 A name is looked up among that agent's own accounts, compared as account names are (trimmed and ignoring letter case,
-see "Agent accounts" in `docs/product/settings.md`). An account of another agent is refused as an unknown account.
+see "Adding, editing and removing an account" in `docs/product/agent-accounts.md`). An account of another agent is
+refused as an unknown account.
 Results always name an account by its id, and say `inherit` or `default` for the other states. The three states a
 project's account can be in are in "The project's account, model and reasoning effort" in
 `docs/product/projects.md`.
@@ -137,7 +138,7 @@ working directory. Neither the avatar itself nor the console's console session i
 | `auto_pull_repositories` | Whether projects behind their upstream are pulled (fast-forwarded) on their own (see "Automatically pulling repositories" in `docs/product/project-git-status.md`). |
 | `auto_delete_unresumable_archives` | Whether archived sessions whose conversation is gone are deleted on their own (see "Deleting archived sessions whose conversation is gone" in `docs/product/deleting-sessions.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
-| `accounts` | Every account, each with `id`, `agent`, `name` and `default`. Each agent's default account is listed first among that agent's, with the id `default`. An account's directory is never given. |
+| `accounts` | Every account, each with `id`, `agent`, `name` and `default`. Each agent's default account is listed first among that agent's, with the id `default` and, as its `name`, the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). An account's directory is never given. |
 | `trusted_directories` | The trusted folders (see "Trusted folders" in `docs/product/folder-trust.md`). Read-only. |
 
 `update_settings` takes `auto_pull_repositories`, `auto_delete_unresumable_archives` and `default_clone_dir`, under

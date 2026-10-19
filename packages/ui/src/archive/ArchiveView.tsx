@@ -15,7 +15,7 @@ import type { DialogRequest } from "../dialogs/dialogRequest";
 import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen";
 import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
-import type { Account, Console, Project, Session } from "../protocol";
+import type { Account, Console, Project, Session, Settings } from "../protocol";
 import { sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
 import { archivedSessionRows, boundArchivedSessions } from "../sidebar/order";
 import { NESTED_ROW_CLASS, TreeRow } from "../sidebar/rows";
@@ -46,6 +46,7 @@ export function ArchiveView({
   boundTo,
   sessions,
   accounts,
+  defaultNames,
   selectedSessionId,
   onSelect,
   onReopen,
@@ -67,6 +68,8 @@ export function ArchiveView({
   sessions: Session[];
   /** Every stored account, to name the one each row's session ran under. */
   accounts: Account[];
+  /** The names the user gave the default accounts, by agent. */
+  defaultNames: Settings["default_account_names"];
   /** The selected session, whose row is marked. */
   selectedSessionId?: string;
   /** Selects a row's session, whose saved terminal then shows read-only in place of the view; the
@@ -195,6 +198,7 @@ export function ArchiveView({
                   session={session}
                   under={under}
                   accounts={accounts}
+                  defaultNames={defaultNames}
                   selected={session.id === selectedSessionId}
                   onSelect={onSelect}
                   onReopen={onReopen}
@@ -222,6 +226,7 @@ function ArchiveRow({
   session,
   under,
   accounts,
+  defaultNames,
   selected,
   onSelect,
   onReopen,
@@ -230,6 +235,7 @@ function ArchiveRow({
   session: Session;
   under?: Session;
   accounts: Account[];
+  defaultNames: Settings["default_account_names"];
   selected: boolean;
   onSelect: (session: Session) => void;
   onReopen: (session: Session) => void;
@@ -242,13 +248,13 @@ function ArchiveRow({
   const usage = hasVisibleUsage(session.usage);
   return (
     <TreeRow
-      ariaLabel={sessionAriaLabel(t, language, session, accounts, under)}
+      ariaLabel={sessionAriaLabel(t, language, session, accounts, under, defaultNames)}
       describedBy={usage ? `${usageId} ${datesId}` : datesId}
       selected={selected}
       onActivate={() => onSelect(session)}
       className="min-h-12 flex-wrap items-center gap-x-3 gap-y-1 px-2 py-2"
     >
-      <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts)} />
+      <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts, defaultNames)} />
       <div className="min-w-24 flex-1">
         <FadeOverflow dir="auto" className="text-sm" titleWhenClipped={sessionDisplayTitle(t, session)}>
           {sessionDisplayTitle(t, session)}

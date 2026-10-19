@@ -22,7 +22,7 @@ const hub4 = sessionOf("s-console-4", console_.id, undefined, "Release notes", "
 const settings = {
   auto_pull_repositories: false,
   auto_delete_unresumable_archives: true,
-  default_clone_dir: "/Users/dev/Projects",
+  added_agents: [], default_clone_dir: "/Users/dev/Projects",
   accounts: [{ id: "a-work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }],
 };
 

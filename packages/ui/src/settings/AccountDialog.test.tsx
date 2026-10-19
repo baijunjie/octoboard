@@ -23,9 +23,11 @@ function render(
   editing: Account | undefined,
   request: (body: RequestBody) => Promise<unknown>,
   agentAvailability = new Map<Agent, AgentAvailability>(),
+  addedAgents: Agent[] | null = null,
+  renameDefault = false,
 ) {
   const daemon: Daemon = {
-    store: createStateStore({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "", accounts: [work] }, agentAvailability }),
+    store: createStateStore({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: addedAgents, default_clone_dir: "", accounts: [work] }, agentAvailability }),
     request: vi.fn(request) as Daemon["request"],
     toastError: vi.fn(),
     toastNotice: vi.fn(),
@@ -43,7 +45,7 @@ function render(
   act(() =>
     root.render(
       <DaemonProvider value={daemon}>
-        <AccountDialog account={editing} agent="claude" onClose={() => {}} />
+        <AccountDialog account={editing} agent="claude" renameDefault={renameDefault} onClose={() => {}} />
       </DaemonProvider>,
     ),
   );
@@ -63,14 +65,22 @@ function type(label: string, value: string) {
 const submit = () =>
   act(async () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Save")!.click());
 
-it("lists every agent as selectable when adding, naming the ones known to be missing", async () => {
-  render(undefined, () => Promise.resolve(), new Map(
-    (["claude", "codex", "grok"] as Agent[]).map((agent): [Agent, AgentAvailability] => [agent, { agent, availability: agent === "codex" ? "unavailable" : "available" }]),
-  ));
+const availabilityOf = (unavailable: Agent) => new Map(
+  (["claude", "codex", "grok"] as Agent[]).map((agent): [Agent, AgentAvailability] => [agent, { agent, availability: agent === unavailable ? "unavailable" : "available" }]),
+);
+
+it("lists every added agent as selectable when adding, naming the ones known to be missing", async () => {
+  render(undefined, () => Promise.resolve(), availabilityOf("codex"));
   await act(async () => document.body.querySelector<HTMLElement>('[data-slot="select-trigger"]')!.click());
   const options = Array.from(document.body.querySelectorAll('[role="option"]'));
   expect(options.map((o) => o.textContent)).toEqual(["Claude Code", "Codex (not installed)", "Grok Build"]);
   expect(options.some((o) => o.hasAttribute("data-disabled") || o.getAttribute("aria-disabled") === "true")).toBe(false);
+});
+
+it("lists only the added agents, in the list's order", async () => {
+  render(undefined, () => Promise.resolve(), availabilityOf("codex"), ["grok", "codex"]);
+  await act(async () => document.body.querySelector<HTMLElement>('[data-slot="select-trigger"]')!.click());
+  expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).toEqual(["Grok Build", "Codex (not installed)"]);
 });
 
 const taken = () =>
@@ -116,4 +126,14 @@ it("shows the config directory hint as a visible description", () => {
 it("adds the Grok home note to the config directory hint for Grok", () => {
   render({ ...work, agent: "grok" as const }, () => Promise.resolve());
   expect(document.body.textContent).toContain("but sessions only keep their login and conversation");
+});
+
+it("fixes the agent when renaming a default account, so no other agent's default can be renamed", async () => {
+  const request = vi.fn(() => Promise.resolve());
+  render(undefined, request, new Map(), null, true);
+  expect(document.body.textContent).not.toContain("Agent");
+  expect(document.body.querySelector("[role=listbox], [role=combobox], select")).toBeNull();
+  type("Name", "Main");
+  await submit();
+  expect(request).toHaveBeenCalledWith({ type: "set_default_account_name", agent: "claude", name: "Main" });
 });

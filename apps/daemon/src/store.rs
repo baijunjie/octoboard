@@ -40,6 +40,18 @@ const SETTINGS_ID: &str = "singleton";
 /// Where a clone goes while the user has not chosen a directory.
 const BUILT_IN_CLONE_DIR: &str = "~/Projects";
 
+/// What `Store::reorder_added_agents` did.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ReorderOutcome {
+    /// The list has not been decided, so there is nothing to put in order.
+    Undecided,
+    /// The order is not a permutation of the list: an agent is missing, repeated or not added.
+    NotAPermutation,
+    /// The list already had this order.
+    Unchanged,
+    Reordered,
+}
+
 pub struct Store {
     conn: Mutex<Connection>,
 }
@@ -250,7 +262,11 @@ impl Store {
                 auto_pull_repositories INTEGER NOT NULL DEFAULT 0,
                 auto_delete_unresumable_archives INTEGER NOT NULL DEFAULT 1,
                 -- NULL until the user sets one; see `Store::default_clone_dir`.
-                default_clone_dir      TEXT
+                default_clone_dir      TEXT,
+                -- NULL until the list is first decided; see `Store::added_agents`.
+                added_agents           TEXT,
+                -- NULL until the user names a default account; see `Store::default_account_names`.
+                default_account_names  TEXT
             );
             "#,
         )?;
@@ -321,6 +337,15 @@ impl Store {
         tx.commit()?;
         if !column_exists(&conn, "settings", "default_clone_dir")? {
             conn.execute("ALTER TABLE settings ADD COLUMN default_clone_dir TEXT", [])?;
+        }
+        if !column_exists(&conn, "settings", "added_agents")? {
+            conn.execute("ALTER TABLE settings ADD COLUMN added_agents TEXT", [])?;
+        }
+        if !column_exists(&conn, "settings", "default_account_names")? {
+            conn.execute(
+                "ALTER TABLE settings ADD COLUMN default_account_names TEXT",
+                [],
+            )?;
         }
         if !column_exists(&conn, "settings", "auto_delete_unresumable_archives")? {
             conn.execute(
@@ -950,9 +975,47 @@ impl Store {
             auto_delete_unresumable_archives: self.auto_delete_unresumable_archives()?,
             default_clone_dir: self.default_clone_dir()?,
             accounts: self.list_accounts()?,
+            added_agents: self.added_agents()?,
             codex_default_approval_reviewer: self.codex_default_approval_reviewer()?,
             claude_default_approval_mode: self.claude_default_approval_mode()?,
+            default_account_names: self.default_account_names()?,
         })
+    }
+
+    /// The names the user gave the agents' default accounts, by the agent's wire name. A value that
+    /// is not a JSON object of strings reads as no names.
+    pub fn default_account_names(&self) -> Result<std::collections::BTreeMap<String, String>> {
+        read_default_account_names(&self.lock())
+    }
+
+    /// The name of `agent`'s default account: the user's own, else the daemon's word for it.
+    pub fn default_account_name(&self, agent: Agent) -> Result<String> {
+        Ok(
+            crate::protocol::default_account_name_in(&self.default_account_names()?, agent)
+                .to_string(),
+        )
+    }
+
+    /// Names the agent's default account, or clears the name with `None`. The read and the write
+    /// are one step under the store's lock. Whether the stored names changed.
+    pub fn set_default_account_name(&self, agent: Agent, name: Option<&str>) -> Result<bool> {
+        let conn = self.lock();
+        let mut names = read_default_account_names(&conn)?;
+        let before = names.clone();
+        match name {
+            Some(name) => names.insert(agent.wire_name().to_string(), name.to_string()),
+            None => names.remove(agent.wire_name()),
+        };
+        if names == before {
+            return Ok(false);
+        }
+        let stored = (!names.is_empty())
+            .then(|| serde_json::to_string(&names).expect("a map of strings serializes to JSON"));
+        conn.execute(
+            "UPDATE settings SET default_account_names = ?2 WHERE id = ?1",
+            params![SETTINGS_ID, stored],
+        )?;
+        Ok(true)
     }
 
     pub fn codex_default_approval_reviewer(&self) -> Result<Option<ApprovalReviewer>> {
@@ -1065,6 +1128,78 @@ impl Store {
             "UPDATE settings SET default_clone_dir = ?2 WHERE id = ?1",
             params![SETTINGS_ID, value],
         )?;
+        Ok(true)
+    }
+
+    /// The agents the user has added, in the order the user set (a newly added agent goes last); `None` while the list has never
+    /// been decided (a database from before the list existed, or a fresh one, until
+    /// `availability::fill_added_agents` fills it). A list saved empty on purpose is `Some` of
+    /// nothing, which is what tells the two apart.
+    pub fn added_agents(&self) -> Result<Option<Vec<Agent>>> {
+        read_added_agents(&self.lock())
+    }
+
+    /// Stores the list only while it is still undecided (unset, or unreadable), so a list the user
+    /// has since edited is never overwritten. Whether it was stored. The read and the write are
+    /// one step under the store's lock.
+    pub fn set_added_agents_if_undecided(&self, agents: &[Agent]) -> Result<bool> {
+        let conn = self.lock();
+        if read_added_agents(&conn)?.is_some() {
+            return Ok(false);
+        }
+        write_added_agents(&conn, agents)?;
+        Ok(true)
+    }
+
+    /// Appends the agent to a decided list. Whether it was appended: `false` when it was already
+    /// there. Refused with an error while the list is undecided, since appending would decide it
+    /// as just this agent; the caller fills it first. The read and the write are one step under
+    /// the store's lock.
+    pub fn add_added_agent(&self, agent: Agent) -> Result<bool> {
+        let conn = self.lock();
+        let mut agents = read_added_agents(&conn)?
+            .ok_or_else(|| anyhow::anyhow!("the added agents are not decided yet"))?;
+        if agents.contains(&agent) {
+            return Ok(false);
+        }
+        agents.push(agent);
+        write_added_agents(&conn, &agents)?;
+        Ok(true)
+    }
+
+    /// Puts a decided list in the given order, and says what came of it. The read and the write are
+    /// one step under the store's lock.
+    pub fn reorder_added_agents(&self, order: &[Agent]) -> Result<ReorderOutcome> {
+        let conn = self.lock();
+        let Some(current) = read_added_agents(&conn)? else {
+            return Ok(ReorderOutcome::Undecided);
+        };
+        let mut sorted_current = current.clone();
+        let mut sorted_order = order.to_vec();
+        sorted_current.sort_by_key(|agent| agent.wire_name());
+        sorted_order.sort_by_key(|agent| agent.wire_name());
+        if sorted_current != sorted_order {
+            return Ok(ReorderOutcome::NotAPermutation);
+        }
+        if current == order {
+            return Ok(ReorderOutcome::Unchanged);
+        }
+        write_added_agents(&conn, order)?;
+        Ok(ReorderOutcome::Reordered)
+    }
+
+    /// Takes the agent off the list, leaving its accounts alone. Whether it was on it. Refused with
+    /// an error while the list is undecided, as `add_added_agent` is.
+    pub fn remove_added_agent(&self, agent: Agent) -> Result<bool> {
+        let conn = self.lock();
+        let mut agents = read_added_agents(&conn)?
+            .ok_or_else(|| anyhow::anyhow!("the added agents are not decided yet"))?;
+        let before = agents.len();
+        agents.retain(|added| *added != agent);
+        if agents.len() == before {
+            return Ok(false);
+        }
+        write_added_agents(&conn, &agents)?;
         Ok(true)
     }
 
@@ -1844,7 +1979,7 @@ const CURRENT_SHAPE_COLUMNS: [(&str, &str); 3] = [
 /// (see [`CONSOLE_SESSION_LAUNCH_COLUMNS`] and [`PROJECT_SETTING_COLUMNS`]).
 ///
 /// The old file is renamed rather than deleted, so a user who needs what was in it still has it on
-/// disk; see "the files Octoboard keeps under `~/.octoboard`" in
+/// disk; see "Files Octoboard owns" in
 /// `docs/product/application-lifecycle.md`.
 fn supersede_if_outdated(path: &Path) -> Result<()> {
     {
@@ -2212,12 +2347,55 @@ fn enum_to_text<T: Serialize>(value: &T) -> String {
         .expect("protocol enums serialize to a JSON string")
 }
 
+fn added_agents_to_text(agents: &[Agent]) -> String {
+    serde_json::to_string(agents).expect("a list of agents serializes to JSON")
+}
+
+/// The stored default account names; a value that is not a JSON object of strings reads as none.
+fn read_default_account_names(
+    conn: &Connection,
+) -> Result<std::collections::BTreeMap<String, String>> {
+    let text: Option<String> = conn.query_row(
+        "SELECT default_account_names FROM settings WHERE id = ?1",
+        params![SETTINGS_ID],
+        |row| row.get(0),
+    )?;
+    Ok(text
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default())
+}
+
+/// A malformed value reads as an undecided list, with a warning, so the next fill replaces it. The
+/// daemon is the only writer, so this can only mean a hand-edited database, or one written by a later version.
+fn read_added_agents(conn: &Connection) -> Result<Option<Vec<Agent>>> {
+    let text: Option<String> = conn.query_row(
+        "SELECT added_agents FROM settings WHERE id = ?1",
+        params![SETTINGS_ID],
+        |row| row.get(0),
+    )?;
+    Ok(text.and_then(|text| match serde_json::from_str(&text) {
+        Ok(agents) => Some(agents),
+        Err(err) => {
+            tracing::warn!(%err, "the added agents are not a JSON array of agents; reading the list as undecided");
+            None
+        }
+    }))
+}
+
+fn write_added_agents(conn: &Connection, agents: &[Agent]) -> Result<()> {
+    conn.execute(
+        "UPDATE settings SET added_agents = ?2 WHERE id = ?1",
+        params![SETTINGS_ID, added_agents_to_text(agents)],
+    )?;
+    Ok(())
+}
+
 fn tags_to_text(tags: &[String]) -> String {
     serde_json::to_string(tags).expect("a list of strings serializes to JSON")
 }
 
 /// A malformed value reads as no tags, with a warning, rather than failing the whole project read.
-/// The daemon is the only writer, so this can only mean a hand-edited database.
+/// The daemon is the only writer, so this can only mean a hand-edited database, or one written by a later version.
 fn tags_from_text(project_id: &str, text: &str) -> Vec<String> {
     serde_json::from_str(text).unwrap_or_else(|err| {
         tracing::warn!(project = %project_id, %err, "a project's tags are not a JSON array of strings; reading it as untagged");
@@ -3458,6 +3636,67 @@ mod tests {
             let console = store.get_console(id).unwrap().unwrap();
             assert_eq!(console.claude_account_id, None);
         }
+    }
+
+    /// The added agents are undecided on a fresh database and on one from before the column
+    /// existed, survive a restart once decided, and a list saved empty is still decided.
+    #[test]
+    fn added_agents_are_undecided_until_filled_and_survive_a_restart() {
+        let path = temp_db("added-agents");
+        let store = Store::open(&path).unwrap();
+        assert_eq!(store.added_agents().unwrap(), None);
+        assert_eq!(store.get_settings().unwrap().added_agents, None);
+        {
+            let conn = store.lock();
+            conn.execute("ALTER TABLE settings DROP COLUMN added_agents", [])
+                .unwrap();
+        }
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert_eq!(store.added_agents().unwrap(), None, "an upgraded database");
+
+        assert!(store
+            .set_added_agents_if_undecided(&[Agent::Codex, Agent::Claude])
+            .unwrap());
+        assert!(
+            !store.set_added_agents_if_undecided(&[Agent::Grok]).unwrap(),
+            "decided"
+        );
+        assert!(store.add_added_agent(Agent::Grok).unwrap());
+        assert!(!store.add_added_agent(Agent::Grok).unwrap());
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert_eq!(
+            store.get_settings().unwrap().added_agents,
+            Some(vec![Agent::Codex, Agent::Claude, Agent::Grok])
+        );
+
+        for agent in Agent::ALL {
+            store.remove_added_agent(agent).unwrap();
+        }
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert_eq!(store.added_agents().unwrap(), Some(vec![]));
+        assert!(!store.set_added_agents_if_undecided(&Agent::ALL).unwrap());
+    }
+
+    /// A stored value that does not read as a list counts as undecided, so the fill replaces it,
+    /// and an append is refused rather than deciding the list as just that agent.
+    #[test]
+    fn a_malformed_added_agents_value_is_filled_and_not_appended_to() {
+        let path = temp_db("added-agents-malformed");
+        let store = Store::open(&path).unwrap();
+        store
+            .lock()
+            .execute("UPDATE settings SET added_agents = 'not json'", [])
+            .unwrap();
+        assert_eq!(store.added_agents().unwrap(), None);
+        assert!(store.add_added_agent(Agent::Claude).is_err());
+
+        assert!(store
+            .set_added_agents_if_undecided(&[Agent::Codex])
+            .unwrap());
+        assert_eq!(store.added_agents().unwrap(), Some(vec![Agent::Codex]));
     }
 
     #[test]

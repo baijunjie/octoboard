@@ -5,11 +5,18 @@
 //! credential helper, or an organization's gateway, and in none of those cases does the config
 //! directory show it either way. Both are derived from one login-shell snapshot, the same kind a
 //! launch takes, and carried as derived state of its own on `AppState` rather than a field of the
-//! stored `Settings`, which is written only by the user's own updates.
+//! stored `Settings`, which is written only by the user's own updates (and, once, by the fill of
+//! the added agents described below).
 //!
 //! This creates no account: the default account exists for every agent by construction, and
 //! nothing here mints, stores or removes a row — only what each agent's own `AgentAvailability`
 //! shows is computed.
+//!
+//! The list of added agents is decided here too, once, as soon as availability is: it is filled with
+//! the agents that are available plus those that have accounts, and never while any agent is still
+//! `NotDetermined`, since an installed agent would be left off it. A run whose snapshot does not
+//! complete therefore leaves the list undecided (clients see `null`) and tries again at the next
+//! start; `add_agent` is refused meanwhile, so nothing takes the list over before it is filled.
 //!
 //! A snapshot that does not complete — any of the three failure modes `env_shell::snapshot`
 //! reports — leaves every agent exactly as it started, `NotDetermined`, rather than failing the
@@ -33,15 +40,54 @@ pub fn spawn_determine(state: Arc<AppState>) {
 }
 
 /// Applies the outcome of one login-shell snapshot attempt. On success, publishes what it
-/// determined; on any of `env_shell::snapshot`'s three ways to fail — a timeout, a non-zero exit,
-/// or a clean exit with an incomplete dump — does nothing at all: `AppState`'s agent availability
-/// stays exactly as it started (every agent `NotDetermined`) and nothing is broadcast, since
-/// nothing changed. Split out from `spawn_determine` so the no-op side of that branch is testable
+/// determined and then fills the added agents (see [`fill_added_agents`]); on any of
+/// `env_shell::snapshot`'s three ways to fail — a timeout, a non-zero exit, or a clean exit with an
+/// incomplete dump — does nothing at all: `AppState`'s agent availability stays exactly as it
+/// started (every agent `NotDetermined`) and nothing is broadcast, since nothing changed. Split out from `spawn_determine` so the no-op side of that branch is testable
 /// without a real shell.
 fn apply_snapshot(state: &AppState, outcome: Result<HashMap<String, String>>) {
     if let Ok(shell_env) = outcome {
         state.set_agent_availability(determine(&shell_env));
+        if let Err(err) = fill_added_agents(state) {
+            tracing::warn!(%err, "could not fill the added agents");
+        }
     }
+}
+
+/// Fills the added agents once with the agents that are available plus those that have accounts,
+/// in `Agent::ALL` order, and broadcasts the settings when it did. Does nothing while any agent's
+/// availability is undetermined or once the list has been decided — a list the user saved empty
+/// stays empty. A fresh install has no accounts, so the same rule gives it the available agents.
+pub fn fill_added_agents(state: &AppState) -> Result<()> {
+    let availability = state.agent_availability();
+    if availability
+        .iter()
+        .any(|entry| entry.availability == Availability::NotDetermined)
+    {
+        return Ok(());
+    }
+    if state.store.added_agents()?.is_some() {
+        return Ok(());
+    }
+    let filled = {
+        // The read of the accounts and the write are one step: an account created in between would
+        // otherwise be missed.
+        let _writes = state.lock_account_writes();
+        let accounts = state.store.list_accounts()?;
+        let agents: Vec<Agent> = availability
+            .iter()
+            .filter(|entry| {
+                entry.availability == Availability::Available
+                    || accounts.iter().any(|account| account.agent == entry.agent)
+            })
+            .map(|entry| entry.agent)
+            .collect();
+        state.store.set_added_agents_if_undecided(&agents)?
+    };
+    if filled {
+        crate::coordinator::broadcast_settings(state)?;
+    }
+    Ok(())
 }
 
 /// Pure over an already-captured shell snapshot, so the three outcomes — available, unavailable,
@@ -73,6 +119,7 @@ fn determine(shell_env: &HashMap<String, String>) -> Vec<AgentAvailability> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::Event;
 
     /// A binary on `PATH` is available, and a directory variable it exports wins over the agent's
     /// own default — Claude Code's reading of `CLAUDE_CONFIG_DIR`, generalised across all three.
@@ -211,5 +258,113 @@ mod tests {
                 Availability::Unavailable
             );
         }
+    }
+
+    fn set_availability(state: &AppState, availability: [Availability; 3]) {
+        state.set_agent_availability(
+            Agent::ALL
+                .into_iter()
+                .zip(availability)
+                .map(|(agent, availability)| AgentAvailability {
+                    agent,
+                    availability,
+                    default_account_dir: None,
+                })
+                .collect(),
+        );
+    }
+
+    fn seed_account(state: &AppState, agent: Agent) {
+        state
+            .store
+            .insert_account(&crate::protocol::Account {
+                id: format!("account-{agent:?}"),
+                agent,
+                name: format!("{agent:?} login"),
+                config_dir: format!("/accounts/{agent:?}"),
+                approval_reviewer: None,
+                approval_mode: None,
+            })
+            .unwrap();
+    }
+
+    /// An upgrade fills the list with the available agents plus those that have accounts, in the
+    /// agents' own order, and tells clients.
+    #[test]
+    fn the_upgrade_fill_is_the_available_agents_and_those_with_accounts() {
+        let (state, _dir) = crate::test_support::app_state("availability-upgrade-fill");
+        seed_account(&state, Agent::Codex);
+        let mut events = state.subscribe();
+        set_availability(
+            &state,
+            [
+                Availability::Available,
+                Availability::Unavailable,
+                Availability::Unavailable,
+            ],
+        );
+        assert_eq!(state.store.added_agents().unwrap(), None);
+
+        fill_added_agents(&state).unwrap();
+
+        assert_eq!(
+            state.store.added_agents().unwrap(),
+            Some(vec![Agent::Claude, Agent::Codex])
+        );
+        let mut announced = false;
+        while let Ok(event) = events.try_recv() {
+            announced |= matches!(
+                event,
+                Event::SettingsUpdated { settings }
+                    if settings.added_agents == Some(vec![Agent::Claude, Agent::Codex])
+            );
+        }
+        assert!(announced, "the fill must broadcast the settings");
+    }
+
+    /// A list the user emptied is decided, so a later fill leaves it empty.
+    #[test]
+    fn a_list_saved_empty_stays_empty() {
+        let (state, _dir) = crate::test_support::app_state("availability-empty-stays");
+        state.store.set_added_agents_if_undecided(&[]).unwrap();
+        seed_account(&state, Agent::Claude);
+        set_availability(&state, [Availability::Available; 3]);
+
+        fill_added_agents(&state).unwrap();
+
+        assert_eq!(state.store.added_agents().unwrap(), Some(vec![]));
+    }
+
+    /// While any agent is undetermined the fill waits, rather than reading "not yet known" as "not
+    /// installed" and leaving an installed agent off the list.
+    #[test]
+    fn the_fill_waits_for_availability_to_be_determined() {
+        let (state, _dir) = crate::test_support::app_state("availability-fill-waits");
+        let mut events = state.subscribe();
+
+        fill_added_agents(&state).unwrap();
+
+        assert_eq!(state.store.added_agents().unwrap(), None);
+        assert!(
+            events.try_recv().is_err(),
+            "nothing changed, so nothing is sent"
+        );
+    }
+
+    /// The fill follows a completed snapshot, and only that: it is the snapshot landing that
+    /// settles availability.
+    #[test]
+    fn a_completed_snapshot_fills_the_added_agents() {
+        let (state, _dir) = crate::test_support::app_state("availability-snapshot-fills");
+        seed_account(&state, Agent::Grok);
+        let mut env = HashMap::new();
+        env.insert("PATH".to_string(), String::new());
+        env.insert("HOME".to_string(), "/snapshot-home".to_string());
+
+        apply_snapshot(&state, Err(anyhow::anyhow!("timed out")));
+        assert_eq!(state.store.added_agents().unwrap(), None);
+
+        apply_snapshot(&state, Ok(env));
+        assert_eq!(state.store.added_agents().unwrap(), Some(vec![Agent::Grok]));
     }
 }

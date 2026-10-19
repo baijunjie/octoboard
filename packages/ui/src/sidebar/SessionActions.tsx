@@ -36,6 +36,7 @@ export function SessionActions({
   placement?: MenuPlacement;
 }): React.ReactElement {
   const t = useT();
+  const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   // Only what is bound to the session can ask for more than its status does, and that is all in its
   // console, so a row reads its console's sessions alone, and none when nothing is bound to it.
   const atOnce = useDaemonStore((s) => {
@@ -61,7 +62,7 @@ export function SessionActions({
           />
         </div>
       )}
-      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={sessionMenu(t, handlers, session, accounts, { placement, hasBoundSessions })} contextTargetRef={rowRef} />
+      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={sessionMenu(t, handlers, session, accounts, defaultNames, { placement, hasBoundSessions })} contextTargetRef={rowRef} />
     </>
   );
 }

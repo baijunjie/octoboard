@@ -578,13 +578,14 @@ const SessionCard = memo(function SessionCard({
   const language = useCurrentLanguage();
   const now = useNow();
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const hasBound = useHasBoundSessions(session.id);
   const rowRef = useRef<HTMLDivElement>(null);
   const inherited = useDaemonStoreEqual((s) => inheritedLaunch(session, s.consoles, s.projects));
   const modelLabel = sessionModelLabel(t, session.agent, sessionModelEffort(session, inherited));
   // The row is one button, so the model line beside the agent's mark reaches assistive technology
   // only through the row's name, where it comes last.
-  const name = [sessionAriaLabel(t, language, session, accounts, under ?? consoleOwner)];
+  const name = [sessionAriaLabel(t, language, session, accounts, under ?? consoleOwner, defaultNames)];
   if (under && consoleOwner) name.push(t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, consoleOwner)) }));
   const showPin = session.pinned && !own;
   // A console session's card shows its own colour; a project session's shows its console owner's.
@@ -615,7 +616,7 @@ const SessionCard = memo(function SessionCard({
         </FadeOverflow>
       </div>
       <RowIconLine
-        icon={<AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts)} />}
+        icon={<AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts, defaultNames)} />}
         className="text-xs text-app-muted"
       >
         <FadeOverflow
@@ -648,16 +649,17 @@ function ArchivedRow({
   const t = useT();
   const language = useCurrentLanguage();
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const rowRef = useRef<HTMLDivElement>(null);
   return (
     <TreeRow
       ref={rowRef}
       describedBy={hasVisibleUsage(session.usage) ? metadataId : undefined}
-      ariaLabel={sessionAriaLabel(t, language, session, accounts)}
+      ariaLabel={sessionAriaLabel(t, language, session, accounts, undefined, defaultNames)}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
     >
-      <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts)} />
+      <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts, defaultNames)} />
       <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0 flex-1">
         <span className="text-app-muted">{sessionDisplayTitle(t, session)}</span>
       </RowLabel>

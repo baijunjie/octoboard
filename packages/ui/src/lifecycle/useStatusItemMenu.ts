@@ -51,7 +51,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         consoleMap: consoles,
         projectMap: projects,
         // Countdowns are as of this push; the menu is not rebuilt for the clock alone.
-        quota: { language, now: Date.now(), accounts: settings.accounts, agentAvailability, accountQuotas },
+        quota: { language, now: Date.now(), accounts: settings.accounts, defaultAccountNames: settings.default_account_names, agentAvailability, accountQuotas },
       });
       const serialized = JSON.stringify(draft);
       if (serialized === lastSentRef.current) return;
@@ -71,6 +71,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         state.projects !== previous.projects ||
         state.sessions !== previous.sessions ||
         state.settings.accounts !== previous.settings.accounts ||
+        state.settings.default_account_names !== previous.settings.default_account_names ||
         state.agentAvailability !== previous.agentAvailability ||
         state.accountQuotas !== previous.accountQuotas
       ) {

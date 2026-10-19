@@ -23,8 +23,8 @@ alone, are in "The surfaces that fade" below.
 - In focus mode's lists and the Git mode's change lists, the top fade begins below the section heading; see
   "What both views show" in `docs/product/focus-mode.md` and "Folding a section" in
   `docs/product/project-pane-git-change-list.md` for the headings' scrolling behavior. In Settings' Agent accounts section it
-  begins below the agent tab strip once the strip is pinned at the top (see "Agent accounts" in
-  `docs/product/settings.md`).
+  begins below the agent tab strip once the strip is pinned at the top (see "The agent strip" in
+  `docs/product/agent-accounts.md`).
 - Only the **top and bottom** edges fade, apart from the strips that scroll sideways and fade at their sideways
   edges: focus mode's strip of console session chips (see "The switch strip" in `docs/product/focus-mode.md`) and a
   strip of tabs. The file viewer's long lines, read by scrolling sideways while

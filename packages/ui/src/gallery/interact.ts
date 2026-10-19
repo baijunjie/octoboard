@@ -184,8 +184,12 @@ export interface Ui {
    * no pane floats in, which also catches a toggle whose pane is docked. */
   floatPane: (toggle: Matcher) => Promise<void>;
   /** Moves the pointer onto the first control named `host` and leaves it there, as `hoverIndicator`
-   * does, for a control whose tooltip is anchored to it rather than linked to it (a resize handle's),
-   * so its name says nothing of the tooltip. It fails unless the tooltip that opens reads `tooltip`. */
+   * does, for a control whose tooltip is anchored to it rather than linked to it (a resize handle's,
+   * or an agent tab's that is not installed), mounted only while the pointer is on the control and
+   * portalled out of it, so its name says nothing of the tooltip and it is found by its
+   * `data-anchored-tooltip` mark. It fails unless the tooltip that opens reads `tooltip`, which also
+   * catches a control drawn without a tooltip (nothing opens) and another control's tooltip. `tooltip`
+   * is the text as the window shows it, with a chip's text in place. */
   hoverAnchored: (host: Matcher, tooltip: string) => Promise<void>;
   /** Moves the pointer onto the status letter of the change row named `row` and leaves it there, as
    * `hoverIndicator` does, for the tooltip that names `status`. The letter is `aria-hidden` and its
@@ -582,9 +586,14 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async hoverAnchored(host, tooltip) {
       await hover(() => find(host), `Nothing to hover matching ${String(host)}`);
-      const shown = withoutIsolates(doc.querySelector("[data-anchored-tooltip]")?.textContent ?? "").trim();
+      const shown = withoutIsolates(
+        await waitFor(
+          () => doc.querySelector("[data-anchored-tooltip]")?.textContent ?? undefined,
+          `The control matching ${String(host)} has no tooltip "${tooltip}": its anchored tooltip is none`,
+        ),
+      ).trim();
       if (shown !== tooltip) {
-        throw new Error(`The control matching ${String(host)} has no tooltip "${tooltip}": its anchored tooltip is ${shown ? `"${shown}"` : "none"}`);
+        throw new Error(`The control matching ${String(host)} has no tooltip "${tooltip}": its anchored tooltip is "${shown}"`);
       }
     },
     async floatPane(toggle) {

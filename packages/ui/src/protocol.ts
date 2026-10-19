@@ -416,7 +416,9 @@ export interface QuotaWindow {
 
 /** Why an account's quota has no windows, as a coded message worded like an `error`. Codes:
  * `quota_binary_not_found`, `quota_shell_environment_failed`, `quota_timed_out`,
- * `quota_command_failed`, `quota_unreadable_reply`, `quota_no_windows`. */
+ * `quota_command_failed`, `quota_unreadable_reply`, `quota_no_windows`, and the two account states
+ * `quota_config_dir_missing` (params `agent`, `dir`) and `quota_not_signed_in` (param `agent`), which are
+ * not failures: the account is simply not signed in yet, and logging in fixes both. */
 export interface QuotaUnavailable {
   code: string;
   params: Record<string, string>;
@@ -440,6 +442,35 @@ export interface AccountQuota {
   unavailable: QuotaUnavailable | null;
 }
 
+/** Where an account's login is. */
+export type LoginStatus = "starting" | "waiting" | "succeeded" | "failed" | "cancelled" | "timed_out";
+
+/** Why a login failed, as a coded message worded like an `error`. Codes: `login_failed` (params `agent`,
+ * `detail`), `login_not_confirmed` (param `agent`). */
+export interface LoginFailure {
+  code: string;
+  params: Record<string, string>;
+  message: string;
+}
+
+/** An account's login as the daemon last saw it, broadcast by `account_login_updated` and, while it has not
+ * ended, replayed in `snapshot`. Runtime state of the daemon, never stored. */
+export interface AccountLogin {
+  agent: Agent;
+  /** The account's id; null for the agent's default account. */
+  account: string | null;
+  status: LoginStatus;
+  /** The page to authorize on, once the CLI has given it. */
+  authorization_url: string | null;
+  /** The code to confirm on that page, for a device-code flow (Grok Build). */
+  device_code: string | null;
+  /** The agent's CLI opens the page itself and cannot be stopped from it (Grok Build): the client must not
+   * open it again, only offer to reopen it. */
+  opened_by_agent: boolean;
+  /** Why a `failed` login failed. */
+  failure: LoginFailure | null;
+}
+
 /** The app-wide settings the daemon stores; it is a record so it can grow. */
 export interface Settings {
   /** Off (the default): the periodic check still runs `git fetch` so ahead/behind stays accurate,
@@ -456,10 +487,17 @@ export interface Settings {
   /** Every account of every agent, application-wide. The default account of each agent is not
    * among these — it is the state of pinning nothing, not a row. */
   accounts: Account[];
+  /** The agents the user has added, in the order the user set; a newly added agent goes last. `null` while the daemon has not
+   * yet decided the list (it waits for the agents' availability, and a failed shell snapshot
+   * leaves it so for the run); an empty array is a user who removed them all. */
+  added_agents: Agent[] | null;
   /** The Codex default account; absent or null follows its own configuration. */
   codex_default_approval_reviewer?: ApprovalReviewer | null;
   /** The Claude Code default account; absent or null follows its own configuration. */
   claude_default_approval_mode?: ClaudeApprovalMode | null;
+  /** The name the user gave an agent's default account, by agent; an agent without an entry shows the client's own
+   * word for it. Absent from a daemon that predates it. */
+  default_account_names?: Partial<Record<Agent, string>>;
 }
 
 /** An account reference of a configuration document: the account's name alone, since the agent is
@@ -1069,6 +1107,14 @@ export type RequestBody =
    * account, neither covers every account of every available agent. An `account` that does not
    * exist or belongs to another `agent` is refused with `unknown_account`. */
   | { type: "refresh_account_quotas"; agent?: Agent; account?: string }
+  /** Signs an account in with its agent's CLI run in the background (`account` omitted or null is the agent's
+   * default account). Answered with `ack` once the CLI has started; progress and outcome follow as
+   * `account_login_updated`. Refused with `unknown_account`, `agent_not_available`, `shell_environment_timeout`,
+   * `binary_not_found`, `login_already_running` and, for a second Codex account at once, `login_codex_busy`. A success re-reads the
+   * account's quota. */
+  | { type: "start_account_login"; agent: Agent; account?: string | null }
+  /** Ends a login that is running; refused with `login_not_running` when there is none. */
+  | { type: "cancel_account_login"; agent: Agent; account?: string | null }
   /** Answered with `ack` at once; the statuses arrive as `project_git_status` broadcasts as each
    * project finishes. Every project of `console` is checked, concurrently. A project whose check
    * is already in flight is not started again, so a client polling faster than the checks finish,
@@ -1116,6 +1162,23 @@ export type RequestBody =
    * agent's default account, then removes the account. Broadcasts `settings_updated`, and a
    * `console_upserted` for every console whose reference was cleared. */
   | { type: "delete_account"; account: string }
+  /** Puts an agent at the end of `Settings.added_agents`. Refused with `agent_already_added`, with
+   * `agent_not_installed` when it has been determined not installed, and with
+   * `agent_availability_pending` while that is not yet determined. Broadcasts `settings_updated`. */
+  | { type: "add_agent"; agent: Agent }
+  /** Puts `Settings.added_agents` in the given order, which must name exactly the added agents,
+   * each once (`agent_order_invalid` otherwise). An undecided list is first filled, and refused
+   * with `added_agents_undecided` while it stays undecided. Broadcasts no `settings_updated` of its
+   * own unless the order changed. */
+  | { type: "reorder_agents"; agents: Agent[] }
+  /** Takes an agent off `Settings.added_agents`; its accounts are kept. An undecided list is first
+   * filled, and refused with `added_agents_undecided` while it stays undecided. Broadcasts no
+   * `settings_updated` of its own unless the list changed. */
+  | { type: "remove_agent"; agent: Agent }
+  /** Names an agent's default account; a blank name, or "Default" in any letter case, clears it back to the
+   * client's own word. Refused with `account_name_taken` when another account of the agent has the
+   * name. */
+  | { type: "set_default_account_name"; agent: Agent; name: string }
   | { type: "set_account_approval_reviewer"; account: string | null; reviewer: ApprovalReviewer | null }
   | { type: "set_account_approval_mode"; account: string | null; mode: ClaudeApprovalMode | null }
   /** The browse requests (see "Browsing a project" in `apps/daemon/PROTOCOL.md`), answered with
@@ -1234,6 +1297,8 @@ export type Event =
     /** The plan quota last read for each account of every available agent, the default account
        * included; empty until the first readings land. */
     account_quotas: AccountQuota[];
+    /** The logins that have started and not ended; empty when none is running. */
+    account_logins: AccountLogin[];
     /** The daemon host's home directory — not the browser's, the two may be on different
        * machines — so a path under it can be shown as `~/...`. Null when the daemon cannot
        * determine one. */
@@ -1245,6 +1310,8 @@ export type Event =
   | { type: "agent_availability_updated"; agent_availability: AgentAvailability[] }
   /** A quota reading finished, or an account's was dropped: the whole list. */
   | { type: "account_quotas_updated"; account_quotas: AccountQuota[] }
+  /** An account's login started, moved on or ended: its whole state. An ended login is only announced here. */
+  | { type: "account_login_updated"; login: AccountLogin }
   /** The whole list of trusted directories, sent when it changes. */
   | { type: "trusted_directories_updated"; trusted_directories: string[] }
   | { type: "console_upserted"; console: Console }

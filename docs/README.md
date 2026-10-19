@@ -222,6 +222,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   clone directory and, in the macOS application alone, keeping Octoboard running in the background), Git, Agent
   accounts, Trusted folders, Permissions, Notifications and Configuration (exporting and importing the configuration
   document, where the window can save and open files) sections.
+- [Agent accounts](product/agent-accounts.md) — Settings' Agent accounts section: the added agents list (how it is
+  first filled, the undecided state, where it applies), the agent strip and its not-installed warning, Add agent,
+  reordering and removing an agent, the empty state, the default account and renaming it, owned accounts and their
+  actions menu, approval modes, adding, editing and removing an account, and logging an account in.
 - [Language](product/language.md) — the 17 offered languages and why they are ordered by tag, English as the fallback,
   the default picked from the system's languages on the first launch and kept from then on, the language chosen in
   Settings, how the system's languages map onto the list, what follows the current language and what does not (report

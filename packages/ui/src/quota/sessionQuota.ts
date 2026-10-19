@@ -1,7 +1,7 @@
-import { AGENT_LABEL } from "../agents";
+import { AGENT_LABEL, defaultAccountName } from "../agents";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import type { Account, AccountQuota, Agent, AgentAvailability, QuotaWindow, Session } from "../protocol";
+import type { Account, AccountQuota, Agent, AgentAvailability, QuotaWindow, Session, Settings } from "../protocol";
 import { accountQuotaOf } from "./accountQuotaOf";
 import { primaryQuotaWindow, quotaHeadline } from "./quotaFormat";
 
@@ -25,11 +25,18 @@ export function sessionQuotaWindowOf(session: Session | undefined, source: Sessi
   return quota && !quota.unavailable ? primaryQuotaWindow(quota.windows) : undefined;
 }
 
-/** The same account and window identification for quota indicators on the rail and native menus. */
-export function accountQuotaLabel(t: Translate, agent: Agent, accountName: string | undefined, window: QuotaWindow): string {
+/** The same account and window identification for quota indicators on the rail and native menus. With no
+ * `accountName` it is the agent's default account, under the name the user gave it in `defaultNames`, if any. */
+export function accountQuotaLabel(
+  t: Translate,
+  agent: Agent,
+  accountName: string | undefined,
+  window: QuotaWindow,
+  defaultNames: Settings["default_account_names"],
+): string {
   return t("rail.quota.selected", {
     agent: AGENT_LABEL[agent],
-    account: isolate(accountName ?? t("settings.accounts.defaultName")),
+    account: isolate(accountName ?? defaultAccountName(t, defaultNames, agent)),
     quota: quotaHeadline(t, window),
   });
 }

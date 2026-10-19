@@ -27,7 +27,7 @@ const hubOwned = [
 const settings = {
   auto_pull_repositories: false,
   auto_delete_unresumable_archives: true,
-  default_clone_dir: "/Users/dev/Projects",
+  added_agents: [], default_clone_dir: "/Users/dev/Projects",
   accounts: [
     { id: "a-codex-work", agent: "codex" as const, name: "Work account", config_dir: "/Users/dev/.codex-work" },
     { id: "a-codex-personal", agent: "codex" as const, name: "Personal account", config_dir: "/Users/dev/.codex-personal" },

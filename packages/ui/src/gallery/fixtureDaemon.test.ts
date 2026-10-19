@@ -246,7 +246,7 @@ describe("the fixture daemon's session creation", () => {
     const project = projectOf("p", owner.id, "Website");
     const existing = sessionOf("hub", owner.id, undefined, "Renamed release coordinator", "archived", { ordinal: 6 });
     const accounts = [{ id: "work", agent: "codex" as const, name: "Work", config_dir: "/Users/dev/.codex-work" }];
-    const daemon = createFixtureDaemon({ id: "open", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ consoles: [owner], projects: [project], sessions: [existing], settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", accounts } }) });
+    const daemon = createFixtureDaemon({ id: "open", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ consoles: [owner], projects: [project], sessions: [existing], settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts } }) });
     const preview = { type: "preview_console_session_title" as const, console: owner.id };
     for (let read = 0; read < 2; read++) {
       await expect(daemon.request(preview)).resolves.toEqual({ type: "console_session_title", console: owner.id, title: owner.name });
@@ -397,13 +397,13 @@ describe("the fixture daemon's deletion of archived sessions", () => {
 describe("the fixture daemon's settings and trusted folders", () => {
   it("applies a settings request atomically, preserves accounts, and reaches an empty trust list by removal", async () => {
     const accounts = [{ id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }];
-    const daemon = createFixtureDaemon({ id: "settings-contract", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", accounts }, trustedDirectories: ["/Users/dev/code"] }) });
+    const daemon = createFixtureDaemon({ id: "settings-contract", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts }, trustedDirectories: ["/Users/dev/code"] }) });
     await expect(daemon.request({ type: "update_settings", auto_pull_repositories: true, default_clone_dir: "relative" })).rejects.toThrow();
     expect(daemon.store.getState().settings.auto_pull_repositories).toBe(false);
     await daemon.request({ type: "update_settings", auto_pull_repositories: true, default_clone_dir: "~/work/../repos" });
-    expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: true, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/repos", accounts });
+    expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: true, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/repos", accounts });
     await daemon.request({ type: "update_settings", auto_pull_repositories: false, default_clone_dir: " " });
-    expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", accounts });
+    expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts });
     await daemon.request({ type: "update_settings", auto_delete_unresumable_archives: false });
     expect(daemon.store.getState().settings.auto_delete_unresumable_archives).toBe(false);
     await daemon.request({ type: "remove_trusted_directory", path: "~/work/../code" });
@@ -415,7 +415,7 @@ describe("the fixture daemon's settings and trusted folders", () => {
 describe("the fixture daemon's account directories", () => {
   const work = { id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" };
   const state = {
-    ...snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", accounts: [work, { ...work, id: "codex-work", agent: "codex" as const }] } }),
+    ...snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts: [work, { ...work, id: "codex-work", agent: "codex" as const }] } }),
     agentAvailability: new Map([["claude" as const, { agent: "claude" as const, availability: "available" as const, default_account_dir: "/Users/dev/.claude" }]]),
   };
   const daemon = () => createFixtureDaemon({ id: "dirs", title: "", group: "Settings", category: "normal", state });
@@ -437,7 +437,7 @@ describe("the fixture daemon's account directories", () => {
 describe("the fixture daemon's account switches", () => {
   const work = { id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" };
   const session = sessionOf("s", "c", "p", "Release", "working", { model: "opus", effort: "high", bound_to: "hub" });
-  const state = snapshotState({ sessions: [session, { ...session, id: "archived", status: "archived" }], settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", accounts: [work, { ...work, id: "codex", agent: "codex" }] } });
+  const state = snapshotState({ sessions: [session, { ...session, id: "archived", status: "archived" }], settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts: [work, { ...work, id: "codex", agent: "codex" }] } });
   const scenario = { id: "switch", title: "", group: "Sidebar sessions" as const, category: "normal" as const, state };
 
   it("records the new account while keeping session launch settings, and clears it for the default account", async () => {
@@ -674,7 +674,7 @@ describe("the fixture daemon's settings and rail removals", () => {
     const console_ = consoleOf("c", "Main", { claude_account_id: account.id });
     const project = projectOf("p", console_.id, "Website", { claude_account_id: { kind: "account", id: account.id }, codex_account_id: { kind: "default" } });
     const session = sessionOf("s", console_.id, project.id, "Work", "idle", { account_id: account.id, config_dir: account.config_dir });
-    const daemon = createFixtureDaemon({ id: "account-removal", group: "Settings", category: "normal", title: "", state: { ...snapshotState({ consoles: [console_], projects: [project], sessions: [session] }), settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "", accounts: [account] } } });
+    const daemon = createFixtureDaemon({ id: "account-removal", group: "Settings", category: "normal", title: "", state: { ...snapshotState({ consoles: [console_], projects: [project], sessions: [session] }), settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", accounts: [account] } } });
     await daemon.request({ type: "delete_account", account: account.id });
     const current = daemon.store.getState();
     expect(current.settings.accounts).toEqual([]);
@@ -709,7 +709,7 @@ describe("the fixture daemon's account approval modes", () => {
     { id: "codex", agent: "codex" as const, name: "Build", config_dir: "/Users/dev/.codex-build" },
     { id: "claude", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" },
   ];
-  const scenario = { id: "account-approval", group: "Settings" as const, category: "normal" as const, title: "", state: snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", accounts } }) };
+  const scenario = { id: "account-approval", group: "Settings" as const, category: "normal" as const, title: "", state: snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts } }) };
 
   it("saves and clears default and custom modes independently without changing other settings", async () => {
     const daemon = createFixtureDaemon(scenario);
@@ -813,5 +813,112 @@ describe("the fixture daemon's path link probe", () => {
     await expect(daemon.request({ type: "read_project_file", project: project.id, path: "bin/tool" })).resolves.toMatchObject({ file: { kind: "binary", size: 2048, media_type: null } });
     await expect(daemon.request({ type: "read_project_file", project: project.id, worktree: "wt-side", path: "a.ts" })).resolves.toMatchObject({ worktree: "wt-side", file: { text: "const a = 2;\n" } });
     await expect(daemon.request({ type: "read_project_file", project: project.id, worktree: "wt-gone", path: "a.ts" })).rejects.toMatchObject({ code: "file_not_found" });
+  });
+});
+
+describe("the fixture daemon's added agents", () => {
+  const settings = { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", accounts: [] };
+  const daemonWith = (added: ("claude" | "codex" | "grok")[] | null, availability: [("claude" | "codex" | "grok"), "available" | "unavailable" | "not_determined"][]) => {
+    const daemon = createFixtureDaemon({ id: "added-agents", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: { ...settings, added_agents: added } }) });
+    daemon.store.setState({ agentAvailability: new Map(availability.map(([agent, state]) => [agent, { agent, availability: state }])) });
+    return daemon;
+  };
+  const added = (daemon: ReturnType<typeof daemonWith>) => daemon.store.getState().settings.added_agents;
+
+  it("adds an installed agent at the end and refuses one that is added, not installed or not determined", async () => {
+    const daemon = daemonWith(["claude"], [["claude", "available"], ["codex", "available"], ["grok", "unavailable"]]);
+    await daemon.request({ type: "add_agent", agent: "codex" });
+    expect(added(daemon)).toEqual(["claude", "codex"]);
+    await expect(daemon.request({ type: "add_agent", agent: "codex" })).rejects.toMatchObject({ code: "agent_already_added" });
+    await expect(daemon.request({ type: "add_agent", agent: "grok" })).rejects.toMatchObject({ code: "agent_not_installed" });
+    daemon.store.setState({ agentAvailability: new Map() });
+    await expect(daemon.request({ type: "add_agent", agent: "grok" })).rejects.toMatchObject({ code: "agent_availability_pending" });
+    expect(added(daemon)).toEqual(["claude", "codex"]);
+  });
+
+  it("removes an agent, answering one that is not added with an acknowledgement", async () => {
+    const daemon = daemonWith(["claude", "codex"], []);
+    await daemon.request({ type: "remove_agent", agent: "claude" });
+    await daemon.request({ type: "remove_agent", agent: "grok" });
+    expect(added(daemon)).toEqual(["codex"]);
+  });
+
+  it("takes a full new order, refusing one that is not a permutation of the added agents", async () => {
+    const daemon = daemonWith(["claude", "codex", "grok"], []);
+    await daemon.request({ type: "reorder_agents", agents: ["grok", "claude", "codex"] });
+    expect(added(daemon)).toEqual(["grok", "claude", "codex"]);
+    for (const agents of [["claude"], ["claude", "claude", "codex"], ["claude", "codex", "grok", "grok"]] as const) {
+      await expect(daemon.request({ type: "reorder_agents", agents: [...agents] })).rejects.toMatchObject({ code: "agent_order_invalid" });
+    }
+    expect(added(daemon)).toEqual(["grok", "claude", "codex"]);
+  });
+
+  it("refuses every change to the list with the error a scenario names, leaving the list as it was", async () => {
+    const refusal = { code: "agent_order_invalid", params: {}, message: "the new order must name each added agent exactly once" };
+    const daemon = createFixtureDaemon({ id: "added-agents-refused", group: "Settings", category: "normal", title: "", agentListError: refusal, state: snapshotState({ settings: { ...settings, added_agents: ["claude", "codex"] } }) });
+    daemon.store.setState({ agentAvailability: new Map([["grok" as const, { agent: "grok" as const, availability: "available" as const }]]) });
+    const bodies: Parameters<typeof daemon.request>[0][] = [{ type: "add_agent", agent: "grok" }, { type: "remove_agent", agent: "claude" }, { type: "reorder_agents", agents: ["codex", "claude"] }];
+    for (const body of bodies) {
+      await expect(daemon.request(body)).rejects.toMatchObject({ code: "agent_order_invalid" });
+    }
+    expect(added(daemon)).toEqual(["claude", "codex"]);
+  });
+
+  it("refuses to remove or reorder while the list is undecided", async () => {
+    const daemon = daemonWith(null, []);
+    await expect(daemon.request({ type: "remove_agent", agent: "claude" })).rejects.toMatchObject({ code: "added_agents_undecided" });
+    await expect(daemon.request({ type: "reorder_agents", agents: ["claude"] })).rejects.toMatchObject({ code: "added_agents_undecided" });
+    expect(added(daemon)).toBeNull();
+  });
+});
+
+describe("the fixture daemon's account login and default account name", () => {
+  const settings = { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", added_agents: ["claude", "grok"] as ("claude" | "grok")[], accounts: [{ id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }] };
+  const daemonWith = (outcome?: "succeeded" | "failed" | "timed_out") => createFixtureDaemon({ id: "login", group: "Settings", category: "normal", title: "", state: snapshotState({ settings }), loginOutcome: outcome });
+  const login = (daemon: ReturnType<typeof daemonWith>, agent: string, account: string | null) =>
+    daemon.store.getState().accountLogins.find((held) => held.agent === agent && held.account === account);
+
+  it("walks a login from starting to waiting with its page, Grok Build's with the device code the agent shows itself", async () => {
+    vi.useFakeTimers();
+    try {
+      const daemon = daemonWith();
+      await daemon.request({ type: "start_account_login", agent: "claude", account: "work" });
+      expect(login(daemon, "claude", "work")?.status).toBe("starting");
+      await expect(daemon.request({ type: "start_account_login", agent: "claude", account: "work" })).rejects.toMatchObject({ code: "login_already_running" });
+      await daemon.request({ type: "start_account_login", agent: "grok" });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(login(daemon, "claude", "work")).toMatchObject({ status: "waiting", opened_by_agent: false, device_code: null });
+      expect(login(daemon, "grok", null)).toMatchObject({ status: "waiting", opened_by_agent: true, device_code: "ABCD-1234" });
+      await daemon.request({ type: "cancel_account_login", agent: "claude", account: "work" });
+      expect(login(daemon, "claude", "work")?.status).toBe("cancelled");
+      await expect(daemon.request({ type: "cancel_account_login", agent: "claude", account: "work" })).rejects.toMatchObject({ code: "login_not_running" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ends a login as the scenario says", async () => {
+    vi.useFakeTimers();
+    try {
+      const daemon = daemonWith("failed");
+      await daemon.request({ type: "start_account_login", agent: "claude" });
+      await vi.advanceTimersByTimeAsync(500);
+      expect(login(daemon, "claude", null)).toMatchObject({ status: "failed", failure: { code: "login_failed" } });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("names and unnames the default account, refusing a name an account of the agent has, both ways", async () => {
+    const daemon = daemonWith();
+    await expect(daemon.request({ type: "set_default_account_name", agent: "claude", name: " work " })).rejects.toMatchObject({ code: "account_name_taken" });
+    await daemon.request({ type: "set_default_account_name", agent: "claude", name: " Personal " });
+    await daemon.request({ type: "set_default_account_name", agent: "grok", name: "Work" });
+    expect(daemon.store.getState().settings.default_account_names).toEqual({ claude: "Personal", grok: "Work" });
+    await expect(daemon.request({ type: "create_account", agent: "claude", name: "personal", config_dir: "/Users/dev/.p" })).rejects.toMatchObject({ code: "account_name_taken" });
+    await daemon.request({ type: "set_default_account_name", agent: "claude", name: "" });
+    expect(daemon.store.getState().settings.default_account_names).toEqual({ grok: "Work" });
+    await daemon.request({ type: "set_default_account_name", agent: "grok", name: " DEFAULT " });
+    expect(daemon.store.getState().settings.default_account_names).toEqual({});
   });
 });

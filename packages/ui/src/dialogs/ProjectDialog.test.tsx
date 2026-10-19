@@ -40,7 +40,7 @@ function render(
       agentAvailability: new Map(
         (["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined" }]),
       ),
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "", accounts },
+      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", accounts },
     }),
     request: (body) => new Promise((resolve, reject) => pending.push({ body, resolve, reject })),
     toastError: vi.fn(),

@@ -55,6 +55,7 @@ import { PANEL_ENTRIES } from "./panels/panelRegistry";
 import { RightPane } from "./panels/RightPane";
 import { openPanel, OWNER_KINDS, panelId, panelRegion, shownKinds, shownPanelRegions, toggleKind, visibleKinds, type PanelKind } from "./panels/stackState";
 import { usePanelStacks } from "./panels/usePanelStacks";
+import { LoginPageOpener } from "./settings/AccountLogin";
 import { SettingsDialog } from "./settings/SettingsDialog";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
 import { belongsToFocus, focusAfterSelect, focusFor, focusKey, KEY_SWITCH_SELECTION, resolveFocus, shortcutOutcome } from "./sidebar/focus";
@@ -87,6 +88,7 @@ export function App(): React.ReactElement {
   const projects = useDaemonStore((s) => s.projects);
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const defaultAccountNames = useDaemonStore((s) => s.settings.default_account_names);
   // Keeps Settings out of the way of the question's dialog.
   const questionPending = usePendingQuestion();
   const [selectedSessionId, setSelectedSessionIdState] = useState<string>();
@@ -875,6 +877,7 @@ export function App(): React.ReactElement {
                       boundTo: archiveBoundTo,
                       sessions: archiveSessions,
                       accounts,
+                      defaultNames: defaultAccountNames,
                       selectedSessionId,
                       onSelect: stableSelectSession,
                       onReopen: stableReopenSession,
@@ -939,6 +942,8 @@ export function App(): React.ReactElement {
           )}
         </ContentPanel>
       </div>
+      {/* A login started in Settings opens its authorization page for as long as the window lives, Settings open or not. */}
+      <LoginPageOpener />
       <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />
       {settingsOpen && <SettingsDialog initialSection={settingsSection} onClose={closeSettings} />}
       {dialogRequest && (

@@ -1,6 +1,6 @@
-import { accountsByAgent, AGENT_ACCOUNT_FIELD, isAgentUnavailable, projectSessionAgent, selectableAgent } from "./agents";
+import { accountsByAgent, AGENT_ACCOUNT_FIELD, defaultAccountName, isAgentUnavailable, projectSessionAgent, selectableAgent } from "./agents";
 import type { Translate } from "./i18n/catalog";
-import type { Account, Agent, AgentAvailability, Console, Project, ProjectAccount, Session } from "./protocol";
+import type { Account, Agent, AgentAvailability, Console, Project, ProjectAccount, Session, Settings } from "./protocol";
 import { sessionAccountName } from "./sessionLabel";
 
 /** An account of one agent as a picker settles it; `null` is the agent's default account, the
@@ -35,13 +35,13 @@ export function choiceKey({ agent, account }: AccountChoice): string {
 export function choiceGroups(
   accounts: Account[],
   agentAvailability: Map<Agent, AgentAvailability>,
-  defaultName: string,
+  defaultName: (agent: Agent) => string,
 ): ChoiceGroup[] {
   return accountsByAgent(accounts).map(({ agent, accounts: owned }) => ({
     agent,
     selectable: !isAgentUnavailable(agentAvailability, agent),
     entries: [
-      { account: null, name: defaultName },
+      { account: null, name: defaultName(agent) },
       ...owned.map((account) => ({ account: account.id, name: account.name })),
     ].map((entry) => ({ ...entry, key: choiceKey({ agent, account: entry.account }) })),
   }));
@@ -137,14 +137,14 @@ export interface SwitchEntry {
  * recorded), so the menu still says where the session is; with no directory recorded there is
  * nothing to name it by and it is left out. The submenu is offered only when there is somewhere to
  * go, that is with more than one entry. */
-export function switchEntries(session: Session, accounts: Account[], t: Translate): SwitchEntry[] {
+export function switchEntries(session: Session, accounts: Account[], t: Translate, defaultNames: Settings["default_account_names"]): SwitchEntry[] {
   const owned = accountsByAgent(accounts).find((group) => group.agent === session.agent)?.accounts ?? [];
   const entries = [
-    { account: null, name: t("settings.accounts.defaultName"), isPath: false },
+    { account: null, name: defaultAccountName(t, defaultNames, session.agent), isPath: false },
     ...owned.map((account) => ({ account: account.id, name: account.name, isPath: false })),
   ];
   const removed = session.account_id && !owned.some((account) => account.id === session.account_id);
-  const removedName = removed ? sessionAccountName(t, session, accounts) : undefined;
+  const removedName = removed ? sessionAccountName(t, session, accounts, defaultNames) : undefined;
   if (session.account_id && removedName !== undefined) {
     entries.push({ account: session.account_id, name: removedName, isPath: true });
   }

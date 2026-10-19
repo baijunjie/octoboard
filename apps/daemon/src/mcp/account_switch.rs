@@ -11,7 +11,7 @@ use anyhow::Result;
 use serde_json::{json, Map, Value};
 
 use crate::coordinator;
-use crate::protocol::{Session, DEFAULT_ACCOUNT_NAME};
+use crate::protocol::Session;
 use crate::state::AppState;
 
 use super::args::required_str;
@@ -53,7 +53,10 @@ pub(super) async fn switch_session_account(
                 .map_or_else(|| id.clone(), |account| account.name);
             (id, name)
         }
-        None => ("default".to_string(), DEFAULT_ACCOUNT_NAME.to_string()),
+        None => (
+            "default".to_string(),
+            state.store.default_account_name(moved.agent)?,
+        ),
     };
     let mut note = format!(
         "`{}` is now on the {} account `{name}`. It is back awaiting instructions: a turn it was \
@@ -77,7 +80,7 @@ pub(super) async fn switch_session_account(
 mod tests {
     use super::*;
     use crate::mcp::exec::tests::{arguments, peer_state, shared_console_state};
-    use crate::protocol::{Account, Agent};
+    use crate::protocol::{Account, Agent, DEFAULT_ACCOUNT_NAME};
     use crate::test_support::{
         heard_after_marker, running, stand_in_launch, Launched, ScratchDir, StandIn,
     };

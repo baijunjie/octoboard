@@ -376,8 +376,9 @@ own row carries no *binding* badge — what it shows there instead is its own co
 Selecting a row resumes it when it is interrupted; no menu item does that. The row shows its agent as an icon alone;
 wherever the agent is named in visible session metadata, its name appears without an account suffix. The agent's
 icon names the agent and the account the session runs under in its tooltip, the account in parentheses after the
-agent ("Claude Code (Work)"): the account's name, **Default** for the agent's default account, or, for a removed
-account, the directory the session recorded. A removed account that recorded no directory leaves the agent's name
+agent ("Claude Code (Work)"): the account's name, the default account's name for the agent's default account (the
+name the user gave it, else **Default**; see "The default account" in `docs/product/agent-accounts.md`), or, for a
+removed account, the directory the session recorded. A removed account that recorded no directory leaves the agent's name
 alone. The tooltip shows on pointer hover only, and the icon adds no tab stop. It is also available on focus mode's
 session cards and archived rows (see `docs/product/focus-mode.md`), the archive view's rows (see "The archive view" below),
 and sessions listed in a confirmation. Session rows, focus mode cards and the archive view's rows retain the account in

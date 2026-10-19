@@ -73,7 +73,7 @@ it("updates the native icon on session selection, quota changes and cleared sele
   });
   const { store, select } = mount(statusItem, vi.fn(), {
     sessions: new Map([[codex.id, codex], [claude.id, claude]]),
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "", accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/work" }] },
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "", accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/work" }] },
     agentAvailability: new Map([["codex", { agent: "codex", availability: "available" }], ["claude", { agent: "claude", availability: "available" }]]),
     accountQuotas: [reading("codex", null, 100), reading("claude", "work", 35)],
   });
@@ -117,7 +117,7 @@ it("shows each submenu's current-console default account and follows console swi
   const quotas = [reading("claude", "work-account", 35), reading("claude", null, 0), reading("codex", null, 100)];
   const { store, select } = mount(statusItem, vi.fn(), {
     consoles: new Map([[work.id, work], [personal.id, personal]]),
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "", accounts: [{ id: "work-account", agent: "claude", name: "Team", config_dir: "/team" }] },
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "", accounts: [{ id: "work-account", agent: "claude", name: "Team", config_dir: "/team" }] },
     agentAvailability: new Map([["codex", { agent: "codex", availability: "available" }], ["claude", { agent: "claude", availability: "available" }]]),
     accountQuotas: quotas,
   });

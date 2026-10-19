@@ -5,7 +5,7 @@ import { daemonMessage } from "../daemonMessage";
 import { errorPresentation, noticeErrorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
 import { currentLanguage } from "../i18n/language";
-import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type RequestBody, type Session, type SessionRecordsPresence } from "../protocol";
+import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, type AccountLogin, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type RequestBody, type Session, type SessionRecordsPresence } from "../protocol";
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -21,6 +21,9 @@ import { SAMPLE_GIT } from "./fixtures/projectGit";
 const TOAST_DELAY_MS = 300;
 
 const HOME = "/Users/dev";
+
+/** What the CLI said when a login the scenario ends as `failed` did not go through. */
+const LOGIN_FAILURE_DETAIL = "Login failed: Request failed with status code 400";
 
 /** The names the real daemon's file name search skips at every depth, with everything beneath them:
  * Git's metadata and the files an operating system leaves in a folder, matched ignoring ASCII case
@@ -449,12 +452,64 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
             : { ...current.settings, accounts: current.settings.accounts.map((account) => account.id === body.account ? { ...account, approval_mode: body.mode } : account) } });
           return { type: "ack" };
         }
+        case "set_default_account_name": {
+          const current = store.getState();
+          const name = body.name.trim();
+          const taken = name && current.settings.accounts.find((account) => account.agent === body.agent && account.name.trim().toLowerCase() === name.toLowerCase());
+          if (taken) return fail({ code: "account_name_taken", params: { agent: AGENT_LABEL[body.agent], name: taken.name }, message: `${AGENT_LABEL[body.agent]} already has an account named ${taken.name}` });
+          const { [body.agent]: _, ...others } = current.settings.default_account_names ?? {};
+          // A blank name, or the reserved word in any letter case, clears the custom name.
+          const clears = !name || name.toLowerCase() === DEFAULT_ACCOUNT_NAME.toLowerCase();
+          store.setState({ settings: { ...current.settings, default_account_names: clears ? others : { ...others, [body.agent]: name } } });
+          return { type: "ack" };
+        }
+        case "start_account_login": {
+          const current = store.getState();
+          if (scenario.loginStartError) return fail(scenario.loginStartError);
+          if (current.accountLogins.some((login) => login.agent === body.agent && login.account === (body.account ?? null) && (login.status === "starting" || login.status === "waiting"))) {
+            return fail({ code: "login_already_running", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} is already being signed in for this account` });
+          }
+          const account = body.account ?? null;
+          const publish = (login: Partial<AccountLogin>) => store.setState((state) => ({
+            accountLogins: [
+              ...state.accountLogins.filter((held) => held.agent !== body.agent || held.account !== account),
+              { agent: body.agent, account, status: "starting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null, ...login },
+            ],
+          }));
+          publish({});
+          // What the CLIs hand back: Claude Code and Codex a page to authorize on, Grok Build its device page and code.
+          const grok = body.agent === "grok";
+          const page = grok ? "https://accounts.x.ai/oauth2/device?user_code=ABCD-1234" : "https://auth.example.com/authorize";
+          const waiting = { status: "waiting" as const, authorization_url: page, device_code: grok ? "ABCD-1234" : null, opened_by_agent: grok };
+          setTimeout(() => {
+            publish(waiting);
+            if (!scenario.loginOutcome) return;
+            setTimeout(() => {
+              const outcome = scenario.loginOutcome!;
+              publish(outcome === "failed"
+                ? { status: "failed", failure: { code: "login_failed", params: { agent: AGENT_LABEL[body.agent], detail: LOGIN_FAILURE_DETAIL }, message: `${AGENT_LABEL[body.agent]} reported: ${LOGIN_FAILURE_DETAIL}` } }
+                : { status: outcome });
+            }, 300);
+          }, 50);
+          return { type: "ack" };
+        }
+        case "cancel_account_login": {
+          const account = body.account ?? null;
+          const running = store.getState().accountLogins.find((login) => login.agent === body.agent && login.account === account && (login.status === "starting" || login.status === "waiting"));
+          if (!running) return fail({ code: "login_not_running", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} is not being signed in for this account` });
+          store.setState((state) => ({ accountLogins: state.accountLogins.map((login) => login === running ? { ...login, status: "cancelled", authorization_url: null, device_code: null } : login) }));
+          return { type: "ack" };
+        }
         case "create_account":
         case "update_account": {
           const current = store.getState();
           const editing = body.type === "update_account" ? current.settings.accounts.find((account) => account.id === body.account) : undefined;
           if (body.type === "update_account" && !editing) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
           const agent = body.type === "create_account" ? body.agent : editing!.agent;
+          const customDefault = current.settings.default_account_names?.[agent];
+          if (body.name !== undefined && customDefault && body.name.trim().toLowerCase() === customDefault.toLowerCase()) {
+            return fail({ code: "account_name_taken", params: { agent: AGENT_LABEL[agent], name: customDefault }, message: `${AGENT_LABEL[agent]} already has an account named ${customDefault}` });
+          }
           if (body.config_dir !== undefined) {
             const dir = normalizedPath(body.config_dir.trim());
             // The daemon refuses nothing for an update that leaves the account's own directory as it is.
@@ -482,6 +537,33 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
             return [id, updated];
           }));
           store.setState({ consoles, projects, settings: { ...current.settings, accounts: current.settings.accounts.filter((account) => account.id !== body.account) } });
+          return { type: "ack" };
+        }
+        case "add_agent": {
+          if (scenario.agentListError) return fail(scenario.agentListError);
+          const current = store.getState();
+          const added = current.settings.added_agents;
+          const state = current.agentAvailability.get(body.agent)?.availability;
+          if (state === "unavailable") return fail({ code: "agent_not_installed", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} is not installed on this machine` });
+          if (state !== "available") return fail({ code: "agent_availability_pending", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} cannot be added until it is known which agents are installed` });
+          if (added?.includes(body.agent)) return fail({ code: "agent_already_added", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} is already added` });
+          store.setState({ settings: { ...current.settings, added_agents: [...(added ?? []), body.agent] } });
+          return { type: "ack" };
+        }
+        case "remove_agent":
+        case "reorder_agents": {
+          if (scenario.agentListError) return fail(scenario.agentListError);
+          const current = store.getState();
+          const added = current.settings.added_agents;
+          if (added === null) return fail({ code: "added_agents_undecided", params: {}, message: "the added agents cannot be changed until it is known which agents are installed" });
+          if (body.type === "remove_agent") {
+            if (added.includes(body.agent)) store.setState({ settings: { ...current.settings, added_agents: added.filter((agent) => agent !== body.agent) } });
+          } else {
+            if (body.agents.length !== added.length || !added.every((agent) => body.agents.filter((given) => given === agent).length === 1)) {
+              return fail({ code: "agent_order_invalid", params: {}, message: "the new order must name each added agent exactly once" });
+            }
+            store.setState({ settings: { ...current.settings, added_agents: body.agents } });
+          }
           return { type: "ack" };
         }
         case "remove_trusted_directory": {

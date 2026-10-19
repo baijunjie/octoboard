@@ -13,7 +13,7 @@ const openIn = (menu: ActionMenuEntry[]) => menu.find((entry) => typeof entry ==
 const account = (id: string, agent: Account["agent"]): Account => ({ id, agent, name: id, config_dir: `/home/${id}` });
 
 function submenu(session: Session, accounts: Account[], handlers = {} as SidebarHandlers) {
-  const entry = sessionMenu(t, handlers, session, accounts).find((candidate) => typeof candidate === "object" && "items" in candidate);
+  const entry = sessionMenu(t, handlers, session, accounts, undefined).find((candidate) => typeof candidate === "object" && "items" in candidate);
   return entry && typeof entry === "object" && "items" in entry ? entry : undefined;
 }
 
@@ -50,7 +50,7 @@ describe("the Switch account entry", () => {
 
 describe("the Hand off entry", () => {
   const item = (session: Session, handlers = {} as SidebarHandlers) =>
-    sessionMenu(t, handlers, session, []).find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Hand off") as { disabled?: boolean; onClick: () => void } | undefined;
+    sessionMenu(t, handlers, session, [], undefined).find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Hand off") as { disabled?: boolean; onClick: () => void } | undefined;
 
   it.each([
     ["idle", false, true],
@@ -75,7 +75,7 @@ describe("the Hand off entry", () => {
 describe("a session that is still starting", () => {
   it("offers Archive, never Delete, even when it was never used", () => {
     const starting = sessionOf("s", "c", "p", "Title", "starting");
-    const labels = sessionMenu(t, {} as SidebarHandlers, starting, []).map((entry) => (entry === "separator" ? entry : entry.label));
+    const labels = sessionMenu(t, {} as SidebarHandlers, starting, [], undefined).map((entry) => (entry === "separator" ? entry : entry.label));
     expect(labels).toContain("Archive");
     expect(labels).not.toContain("Delete");
   });
@@ -83,7 +83,7 @@ describe("a session that is still starting", () => {
 
 describe("the Colour entry", () => {
   const hub = sessionOf("h", "c", undefined, "Hub", "idle", { colour: "cyan" });
-  const entry = (session: Session, handlers = {} as SidebarHandlers) => sessionMenu(t, handlers, session, []).find((candidate) => typeof candidate === "object" && candidate.label === "Colour");
+  const entry = (session: Session, handlers = {} as SidebarHandlers) => sessionMenu(t, handlers, session, [], undefined).find((candidate) => typeof candidate === "object" && candidate.label === "Colour");
 
   it.each([
     ["a console session's row", hub, true],
@@ -107,7 +107,7 @@ describe("the Colour entry", () => {
 describe("the Focus mode entry", () => {
   const hub = sessionOf("h", "c", undefined, "Hub", "idle");
   const labels = (session: Session, placement: MenuPlacement = "list") =>
-    sessionMenu(t, {} as SidebarHandlers, session, [], { placement }).flatMap((entry) => (typeof entry === "object" ? [entry.label] : []));
+    sessionMenu(t, {} as SidebarHandlers, session, [], undefined, { placement }).flatMap((entry) => (typeof entry === "object" ? [entry.label] : []));
 
   it.each([
     ["a console session's row", hub, "list", true],
@@ -120,7 +120,7 @@ describe("the Focus mode entry", () => {
 
   it("enters the console session's focus mode", () => {
     const handlers = { onFocus: vi.fn() } as unknown as SidebarHandlers;
-    const entry = sessionMenu(t, handlers, hub, []).find((candidate) => typeof candidate === "object" && candidate.label === "Focus mode");
+    const entry = sessionMenu(t, handlers, hub, [], undefined).find((candidate) => typeof candidate === "object" && candidate.label === "Focus mode");
     (entry as { onClick: () => void }).onClick();
     expect(handlers.onFocus).toHaveBeenCalledWith({ consoleSession: hub });
   });
@@ -128,7 +128,7 @@ describe("the Focus mode entry", () => {
 
 describe("the Archive and Delete entries", () => {
   const entry = (session: Session, hasBoundSessions = false) =>
-    sessionMenu(t, {} as SidebarHandlers, session, [], { hasBoundSessions }).flatMap((item) => (typeof item === "object" && ["Archive", "Delete"].includes(item.label) ? [item.label] : []));
+    sessionMenu(t, {} as SidebarHandlers, session, [], undefined, { hasBoundSessions }).flatMap((item) => (typeof item === "object" && ["Archive", "Delete"].includes(item.label) ? [item.label] : []));
   const session = (extra: Partial<Session>) => sessionOf("s", "c", "p", "Title", "idle", extra);
 
   it.each([
@@ -235,7 +235,7 @@ describe("a console session's Pin entry", () => {
   const hub = sessionOf("h", "c", undefined, "Hub", "idle");
   it("is left out of its own focus mode's menu only", () => {
     const pin = (placement: MenuPlacement) =>
-      sessionMenu(t, {} as SidebarHandlers, hub, [], { placement }).some((entry) => typeof entry === "object" && (entry.label === "Pin" || entry.label === "Unpin"));
+      sessionMenu(t, {} as SidebarHandlers, hub, [], undefined, { placement }).some((entry) => typeof entry === "object" && (entry.label === "Pin" || entry.label === "Unpin"));
     expect([pin("list"), pin("focused")]).toEqual([true, false]);
   });
 });
@@ -301,7 +301,7 @@ describe("the Copy session ID entry", () => {
   ] as const)("copies a %s session while %s in the %s menu", (role, status, placement) => {
     const session = sessionOf("session-id", "c", role === "project" ? "p" : undefined, "Title", status);
     const handlers = { onCopySessionId: vi.fn() } as unknown as SidebarHandlers;
-    const menu = sessionMenu(t, handlers, session, [], { placement });
+    const menu = sessionMenu(t, handlers, session, [], undefined, { placement });
     const labels = menu.map((entry) => entry === "separator" ? entry : entry.label);
     if (status !== "archived") expect(labels.indexOf("Copy session ID")).toBe(labels.indexOf("Rename") + 1);
     const entry = menu.find((item) => typeof item === "object" && item.label === "Copy session ID");
@@ -313,7 +313,7 @@ describe("the Copy session ID entry", () => {
 it("keeps a locked live session protected and offers unlocking", () => {
   const session = sessionOf("locked", "c", "p", "Protected", "idle", { locked: true });
   const handlers = { onSetLocked: vi.fn() } as unknown as SidebarHandlers;
-  const items = sessionMenu(t, handlers, session, []);
+  const items = sessionMenu(t, handlers, session, [], undefined);
   const unlock = items.find((item) => typeof item !== "string" && item.label === "Unlock");
   const removal = items.find((item) => typeof item !== "string" && ["Archive", "Delete"].includes(item.label));
   expect(removal).toMatchObject({ disabled: true });
@@ -324,7 +324,7 @@ it("keeps a locked live session protected and offers unlocking", () => {
 
 it.each([false, true])("offers no lock controls on archived sessions, locked=%s", (locked) => {
   const session = sessionOf("archived", "c", "p", "Archived", "archived", { locked });
-  const labels = sessionMenu(t, {} as SidebarHandlers, session, []).flatMap((item) => typeof item === "object" ? [item.label] : []);
+  const labels = sessionMenu(t, {} as SidebarHandlers, session, [], undefined).flatMap((item) => typeof item === "object" ? [item.label] : []);
   expect(labels).not.toContain("Lock");
   expect(labels).not.toContain("Unlock");
   expect(labels).toContain("Reopen");

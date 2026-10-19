@@ -8,7 +8,7 @@ import type { QuotaUnavailable } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
 import { useNow } from "../useNow";
 import { QuotaMeter } from "./QuotaMeter";
-import { orderedQuotaWindows, planLabel } from "./quotaFormat";
+import { isLoggedIn, isNotLoggedIn, orderedQuotaWindows, planLabel } from "./quotaFormat";
 import type { QuotaReading } from "./useAccountQuota";
 
 const NO_RECORDS = { consoles: new Map(), projects: new Map(), sessions: new Map() };
@@ -28,13 +28,27 @@ export function QuotaPlan({ quota }: { quota: QuotaReading }): React.ReactElemen
   return <InlineChip className="shrink-0">{planLabel(quota.plan)}</InlineChip>;
 }
 
-/** The line naming an account: its `name`, its plan chip when the agent names one, and a `help` tip
- * that ends the line. */
-export function AccountNameLine({ name, quota, help }: { name: React.ReactNode; quota: QuotaReading; help?: React.ReactNode }): React.ReactElement {
+/** The badge of an account's login: logged in, or not logged in yet; nothing while the state is not known (a reading
+ * still to come, or one that failed for another reason). It carries its state in words and a dot, not in colour alone. */
+function LoginStateBadge({ quota }: { quota: QuotaReading }): React.ReactElement | null {
+  const t = useT();
+  const loggedIn = isLoggedIn(quota);
+  if (!loggedIn && !(typeof quota === "object" && isNotLoggedIn(quota.unavailable))) return null;
+  return (
+    <InlineChip color={loggedIn ? "success" : "warning"} className="shrink-0" startContent={<span aria-hidden="true" className="size-1.5 rounded-full bg-current" />}>
+      {t(loggedIn ? "settings.accounts.loggedIn" : "settings.accounts.notLoggedIn")}
+    </InlineChip>
+  );
+}
+
+/** The line naming an account: its `name`, its plan chip when the agent names one, with `showLoginState` a badge
+ * for an account known to be logged in or not, and a `help` tip that ends the line. */
+export function AccountNameLine({ name, quota, help, showLoginState = false }: { name: React.ReactNode; quota: QuotaReading; help?: React.ReactNode; showLoginState?: boolean }): React.ReactElement {
   return (
     <div className="flex items-center gap-2 text-sm font-medium">
       <div className="min-w-0">{name}</div>
       <QuotaPlan quota={quota} />
+      {showLoginState && <LoginStateBadge quota={quota} />}
       {help}
     </div>
   );
@@ -60,6 +74,10 @@ export function AccountQuotaSummary({ quota, single }: {
   if (!quota) return null;
   const { windows, unavailable } = quota;
   if (windows.length === 0) {
+    // An account that is not logged in is a state, not a failure: the line says what to do and nothing else.
+    if (isNotLoggedIn(unavailable)) {
+      return <div className="text-sm text-app-muted"><QuotaFailure unavailable={unavailable} /></div>;
+    }
     return unavailable && (
       <div className="text-sm text-app-muted">
         <div className="font-medium">{t("quota.unavailable")}</div>

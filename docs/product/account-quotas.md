@@ -2,7 +2,7 @@
 
 How much of an account's plan quota is left: the plan an account is on, and for each of the plan's usage windows how
 much remains and when it resets. Octoboard shows it for every account of an agent — the agent's default account and
-every account the user owns (see "Agent accounts" in `docs/product/settings.md`) — for Claude Code, Codex and Grok
+every account the user owns (see `docs/product/agent-accounts.md`) — for Claude Code, Codex and Grok
 Build alike. It is shown in Settings' **Agent accounts** section, in the rail's account quota panel (see "The
 account quota panel on the rail" below), in a single-window indicator for the selected session (see "The selected
 session's quota indicator" below) and, in the macOS application, on the menu bar icon and in its quota submenus
@@ -24,6 +24,12 @@ the default account). The CLI looks after its own sign-in, Keychain access and t
 credential and never contacts a service of its own. The agents mark this way of asking as experimental, so a reading
 that fails or cannot be understood only makes that account's quota unavailable and affects nothing else.
 
+An account whose directory does not exist is not run at all: it is reported as not logged in (see "Quota states"
+below), and reading its quota never creates the directory, so one the user deleted stays deleted. The default account
+names no directory of its own; for the default Codex account the same state comes from Codex's own refusal of a home
+that does not exist. An account whose directory exists but that the agent reports as not signed in is reported as not
+logged in too. Neither is a failed reading.
+
 Readings live in the daemon's memory only. They are never stored, are not part of the application settings a console
 session can read, and are never exported with the configuration (see "What is not configuration and never travels"
 in `docs/product/configuration-export-and-import.md`), so after the daemon restarts every account starts unread
@@ -33,8 +39,12 @@ again.
 
 - **In the background**, every account is read about every **5 minutes** while the daemon runs. An account whose
   reading fails is tried again after 10, then 20, then 40 minutes, and every 40 minutes after that, until a reading
-  succeeds and the interval goes back to 5 minutes.
+  succeeds and the interval goes back to 5 minutes. An account that is not logged in is not a failure, and stays on
+  the 5-minute interval.
 - **A new account**, or an agent found available after the daemon started, is read within about 15 seconds.
+- **When an account's login ends** (see "Logging an account in" in `docs/product/agent-accounts.md`), its quota is
+  read again whatever the interval: at once after a successful login, and within about 15 seconds after any other
+  end.
 - **Opening the Agent accounts section** of Settings asks for a fresh reading of the accounts whose last attempt is
   older than the interval above; accounts read more recently keep their reading, so opening the section repeatedly
   starts nothing extra. The readings already held are shown at once either way.
@@ -69,7 +79,8 @@ these windows are shown: extra usage, spend, credit balances and pace estimates 
 ## How an account's quota is shown
 
 In Settings and in the rail's panel, the account's plan sits beside its name as a small chip, absent when the agent
-does not name one. Beneath the account each window has:
+does not name one; in Settings a badge saying whether the account is logged in follows it (see "The accounts the user
+owns" in `docs/product/agent-accounts.md`). Beneath the account each window has:
 
 - a line reading "<window> N% remaining", where N is what remains of the window as a whole percent from 0 to 100 (a
   window the agent reports as more than fully used shows 0%);
@@ -98,6 +109,7 @@ This is what Settings and the rail's panel show; the menu bar icon's menu differ
 | Read | The plan and the windows. |
 | Never read successfully, and the last reading failed | "Quota unavailable" and the reason (see "Why a quota is unavailable" below). |
 | Read before, but the latest reading failed | The last good plan and windows stay, with a line above them saying they are out of date and how long ago they were last read ("last read 12 minutes ago"), and the reason the newer reading failed. The next successful reading clears it. |
+| Not logged in: its directory does not exist, or the agent says it is not signed in there | Any windows read before are dropped, and the agent's own message is not shown. In the rail's panel, a single line saying the account is not logged in yet and pointing to logging in to use it stands in place of the windows. In Settings nothing stands beneath the account; its **Not logged in** badge says so (see "The accounts the user owns" in `docs/product/agent-accounts.md`). |
 
 ## Why a quota is unavailable
 
@@ -164,10 +176,11 @@ the accounts' quotas without opening Settings.
 
 ### What the panel shows
 
-- **One tab per available agent**, in the order the agents are listed elsewhere, each showing the agent's icon and
-  name. An agent that is not available, or whose availability is not yet determined, has no tab. Each opening starts
+- **One tab per available agent**, in the order Claude Code, Codex, Grok Build whether or not the agent is added (see
+  "Added agents" in `docs/product/agent-accounts.md`), each showing the agent's icon and name. An agent that is not available, or whose availability is not yet determined, has no tab. Each opening starts
   on the first agent's tab.
-- **The selected agent's accounts**: its default account, named "Default", then the accounts the user owns. Each shows
+- **The selected agent's accounts**: its default account, under the name the user gave it or else "Default" (see "The
+  default account" in `docs/product/agent-accounts.md`), then the accounts the user owns. Each shows
   its name, its plan chip and its quota beneath, in the states of "Quota states" above, as "How an account's quota is
   shown" above describes. A name too long for its space fades as in "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`. The panel shows no directories and offers nothing to edit.

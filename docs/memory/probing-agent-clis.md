@@ -223,6 +223,22 @@ its own — a pasted line's trailing CR included — ends the session instead.
 When several probes run concurrently, each needs its own distinct scratch directory, and expect to see the other
 probes' trust entries and session records — that residue is not evidence of a defect.
 
+## Ask the user before a probe runs a login flow that can open their browser
+
+Applies to any probe of an agent's sign-in — `claude auth login`, `codex login`, `grok login` — including one against a
+scratch config directory. The scratch directory isolates only the credential written on disk; the authorisation runs in
+the user's own default browser, which is usually already signed in to the vendor, so the flow can complete against
+their real account with nobody approving it (a Grok Build login did, in about five seconds), leave a server-side session
+that deleting the scratch credential does not revoke, and put pages up on their screen.
+
+So ask first, naming the agents and saying that pages will open, and leave the probe undone if the answer is no. Without
+that, read the authorisation URL only through routes that open nothing: Claude Code with `BROWSER` set to a script that
+records its argument; Codex through `codex app-server`'s `account/login/start` or `codex login --device-auth`. Grok
+Build and plain `codex login` open the browser themselves and nothing found stops them (`docs/agent-cli-reference.md`,
+"Signing in a config directory without a terminal"), so they have no such route. A login that has to complete is done
+by the user, against an account they choose. If one completes anyway, tell the user which account it signed in, so they
+can revoke the session on the vendor's side.
+
 ## A probe that goes through the daemon runs against the user's live Octoboard data unless its `HOME` is a throwaway one
 
 The daemon derives its data directory, its database and its single-instance lock from `$HOME`, and writes its port file

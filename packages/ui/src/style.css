@@ -960,6 +960,12 @@ html.pane-resizing * {
   mask-image: none;
 }
 
+/* A strip with a control flush with its end (`AgentTabList`'s `trailing`) moves HeroUI's scroll-forward chevron
+   to just before it. Unlayered, so it wins over HeroUI's rule in `@layer components`. */
+.tabs__list-container[data-trailing-control] > .tabs__list-container__scroll-next {
+  inset-inline-end: 1.75rem;
+}
+
 .project-browser-switch:dir(rtl) {
   --project-browser-shift: -10px;
 }

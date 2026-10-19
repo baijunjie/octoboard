@@ -1,11 +1,11 @@
 import { consoleAccount } from "../accountChoices";
-import { AGENT_OPTIONS, AGENT_SHORT_NAME, accountsByAgent } from "../agents";
+import { AGENT_OPTIONS, AGENT_SHORT_NAME, accountsByAgent, defaultAccountName } from "../agents";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
 import type { StatusItemSubmenu, StatusItemSubmenuItem } from "../platform";
-import type { Account, AccountQuota, Agent, AgentAvailability, Console } from "../protocol";
-import { orderedQuotaWindows, primaryQuotaWindow, planLabel, quotaResetsIn, quotaWindowLabel, remainingPercent } from "../quota/quotaFormat";
+import type { Account, AccountQuota, Agent, AgentAvailability, Console, Settings } from "../protocol";
+import { isNotLoggedIn, orderedQuotaWindows, primaryQuotaWindow, planLabel, quotaResetsIn, quotaWindowLabel, remainingPercent } from "../quota/quotaFormat";
 import { formatRelativeTime } from "../relativeTime";
 import { accountQuotaLabel } from "../quota/sessionQuota";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
@@ -17,6 +17,8 @@ export interface StatusItemQuotaSource {
   /** The moment the countdowns and the age of an out-of-date reading are counted from. */
   now: number;
   accounts: Account[];
+  /** The names the user gave the default accounts, by agent. */
+  defaultAccountNames?: Settings["default_account_names"];
   agentAvailability: Map<Agent, AgentAvailability>;
   accountQuotas: AccountQuota[];
 }
@@ -24,13 +26,14 @@ export interface StatusItemQuotaSource {
 /** One account's lines: its header with the plan, then per window a row (the shell draws its bar),
  * or a single note when there is nothing current to show. */
 function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent, account: Account | null): StatusItemSubmenuItem[] {
-  const name = account ? isolate(account.name) : t("settings.accounts.defaultName");
+  const name = account ? isolate(account.name) : defaultAccountName(t, source.defaultAccountNames, agent);
   const quota = accountQuotaOf(source.accountQuotas, agent, account?.id ?? null);
   const title = quota?.plan ? t("statusItem.quota.account", { account: name, plan: planLabel(quota.plan) }) : name;
   const lines: StatusItemSubmenuItem[] = [{ kind: "header", title }];
   if (!quota) return [...lines, { kind: "note", text: t("quota.loading") }];
-  // An entry with no windows is unavailable whether or not it says why, which the menu does not.
-  if (quota.windows.length === 0) return [...lines, { kind: "note", text: t("quota.unavailable") }];
+  // An entry with no windows is unavailable whether or not it says why, which the menu does not, except for an
+  // account that is not logged in: a state to be told in a word, not a failure.
+  if (quota.windows.length === 0) return [...lines, { kind: "note", text: t(isNotLoggedIn(quota.unavailable) ? "statusItem.quota.notLoggedIn" : "quota.unavailable") }];
   if (quota.unavailable) lines.push({ kind: "note", text: t("quota.stale", { age: formatRelativeTime(source.language, quota.fetched_at, source.now) }) });
   for (const window of orderedQuotaWindows(quota.windows)) {
     const resets = quotaResetsIn(t, window, source.now);
@@ -71,7 +74,7 @@ export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, 
       icon: agentIconKey(agent),
       ...(window ? {
         quota_remaining: remainingPercent(window),
-        quota_label: accountQuotaLabel(t, agent, accountName, window),
+        quota_label: accountQuotaLabel(t, agent, accountName, window, source.defaultAccountNames),
       } : {}),
       items,
     }];

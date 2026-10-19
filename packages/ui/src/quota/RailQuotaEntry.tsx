@@ -3,7 +3,7 @@ import { Gauge } from "lucide-react";
 import React, { useEffect, useId, useRef, useState } from "react";
 import { useFocusVisible, type PressEvent } from "react-aria";
 
-import { accountsByAgent } from "../agents";
+import { accountsByAgent, defaultAccountName } from "../agents";
 import { AgentTabList } from "../components/AgentTabList";
 import { ChromeButton } from "../components/ChromeButton";
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -55,6 +55,7 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
     accounts: s.settings.accounts, agentAvailability: s.agentAvailability, accountQuotas: s.accountQuotas,
   }));
   const account = useDaemonStore((s) => s.settings.accounts.find((account) => account.id === session?.account_id));
+  const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const [hovered, setHovered] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [keyboardPinned, setKeyboardPinned] = useState(false);
@@ -69,7 +70,7 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   const openTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const label = session && window ? accountQuotaLabel(t, session.agent, account?.name, window) : t("rail.quota");
+  const label = session && window ? accountQuotaLabel(t, session.agent, account?.name, window, defaultNames) : t("rail.quota");
 
   const clearTimers = () => {
     clearTimeout(openTimer.current);
@@ -290,6 +291,7 @@ function QuotaPanel({ focusSelectedTab, onOpenAccounts }: { focusSelectedTab: bo
  * in WebKit. */
 function AgentPanel({ agent, owned }: { agent: Agent; owned: Account[] }): React.ReactElement {
   const t = useT();
+  const defaultName = defaultAccountName(t, useDaemonStore((s) => s.settings.default_account_names), agent);
   const region = useFadeRegion({ label: t("rail.quota.accounts") });
   return (
     <Tabs.Panel
@@ -305,7 +307,7 @@ function AgentPanel({ agent, owned }: { agent: Agent; owned: Account[] }): React
       <div className={region.focused ? "ring-2 ring-inset ring-app-focus" : ""}>
         <FadedScroller region={region} className="max-h-[min(24rem,60vh)]">
           <div className="flex flex-col px-4">
-            <QuotaAccount agent={agent} account={null} name={t("settings.accounts.defaultName")} />
+            <QuotaAccount agent={agent} account={null} name={defaultName} />
             {owned.map((account) => (
               <QuotaAccount
                 key={account.id}

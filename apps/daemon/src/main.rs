@@ -4,6 +4,7 @@
 //! `apps/daemon/PROTOCOL.md`.
 
 mod access;
+mod account_login;
 mod account_quotas;
 mod adapter;
 mod agent_models;
@@ -282,6 +283,7 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
         result = serve => {
             if let Err(err) = result {
                 tracing::error!(%err, "the server stopped with an error");
+                state.account_logins.stop_all().await;
                 state.stop_all_sessions().await;
                 return Err(err.into());
             }
@@ -296,6 +298,7 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
 
     // Every agent process is the daemon's child, so none of them may outlive it. Each is left
     // interrupted, which is the status a click resumes from.
+    state.account_logins.stop_all().await;
     state.stop_all_sessions().await;
     remove_port_file();
     Ok(())

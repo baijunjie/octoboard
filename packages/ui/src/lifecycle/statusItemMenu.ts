@@ -54,7 +54,7 @@ export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource):
   return {
     ...(selected && window ? {
       quota_remaining: remainingPercent(window),
-      quota_label: accountQuotaLabel(t, selected.agent, accountName, window),
+      quota_label: accountQuotaLabel(t, selected.agent, accountName, window, quota.defaultAccountNames),
     } : {}),
     sections: sections.length > 0 ? sections : [{ heading: t("statusItem.noSessions"), items: [] }],
     submenus: buildQuotaSubmenus(t, quota, consoleMap.get(source.currentConsoleId ?? "")),

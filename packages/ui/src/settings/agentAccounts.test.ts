@@ -40,8 +40,12 @@ describe("nameCollision", () => {
 
   it("counts the default account's name in the current language as taken", () => {
     expect(nameCollision(" 默认 ", "claude", accounts, "默认")).toEqual({ kind: "default", name: "默认" });
-    expect(nameCollision("default", "claude", accounts, "默认")).toEqual({ kind: "default", name: "默认" });
     expect(nameCollision("Varsayılan", "codex", accounts, "varsayılan")).toEqual({ kind: "default", name: "varsayılan" });
+  });
+
+  it("reports the reserved word as typed when the default account is shown under another name", () => {
+    expect(nameCollision(" default ", "claude", accounts, "Personal")).toEqual({ kind: "reserved", name: "default" });
+    expect(nameCollision("Personal", "claude", accounts, "Personal")).toEqual({ kind: "default", name: "Personal" });
   });
 
   it("does not let the account being edited collide with itself", () => {

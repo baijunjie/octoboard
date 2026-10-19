@@ -12,6 +12,7 @@ import type {
   ConsoleProjectModelField,
   ProjectEffortField,
   ProjectModelField,
+  Settings,
 } from "./protocol";
 
 /** Display labels for the three supported agents (see "Rows, names and keyboard focus" in
@@ -28,6 +29,13 @@ export const AGENT_SHORT_NAME: Record<Agent, string> = {
   claude: "Claude",
   codex: "Codex",
   grok: "Grok",
+};
+
+/** Where each agent's own instructions for installing it are: the agent's vendor's page, never ours. */
+export const AGENT_INSTALL_URL: Record<Agent, string> = {
+  claude: "https://code.claude.com/docs/en/setup",
+  codex: "https://github.com/openai/codex",
+  grok: "https://docs.x.ai/build/overview",
 };
 
 export const AGENT_OPTIONS: { value: Agent; label: string }[] = (Object.keys(AGENT_LABEL) as Agent[]).map(
@@ -190,22 +198,38 @@ export function projectSessionAgent(owner: Pick<Console, "default_agent" | "proj
   return owner.project_session_agent ?? owner.default_agent;
 }
 
+/** The agents Settings lists and an account may be set up for: the added ones in their order, or every agent while
+ * the daemon has not decided the list (`added_agents` is `null`), which must not be read as "none added". */
+export function listedAgents(added: Agent[] | null): Agent[] {
+  return added ?? AGENT_OPTIONS.map((option) => option.value);
+}
+
 /** The options of a picker that is not about using an agent but about setting one up (an account
- * may be added before its agent is installed): every agent, selectable, with those known to be
- * missing named as not installed. */
+ * may be set up before its agent is installed): the `listed` agents in their order, selectable, with those known
+ * to be missing named as not installed. */
 export function agentSetupOptions(
   t: Translate,
   agentAvailability: Map<Agent, AgentAvailability>,
+  listed: Agent[],
 ): { value: Agent; label: string }[] {
-  return AGENT_OPTIONS.map((option) =>
-    isAgentUnavailable(agentAvailability, option.value)
-      ? { value: option.value, label: t("agents.notInstalled", { agent: option.label }) }
-      : option,
-  );
+  return listed.map((agent) => {
+    const option = { value: agent, label: AGENT_LABEL[agent] };
+    return isAgentUnavailable(agentAvailability, agent) ? { ...option, label: t("agents.notInstalled", { agent: option.label }) } : option;
+  });
 }
 
 /** The accounts grouped by agent, in the order the agents are listed elsewhere, each agent present
  * even with no account of its own; within an agent the accounts keep the order they are stored in. */
 export function accountsByAgent(accounts: Account[]): { agent: Agent; accounts: Account[] }[] {
   return AGENT_OPTIONS.map(({ value }) => ({ agent: value, accounts: accounts.filter((a) => a.agent === value) }));
+}
+
+/** The name an agent's default account is shown under: the one the user gave it, else the current language's word. */
+export function defaultAccountName(t: Translate, names: Settings["default_account_names"], agent: Agent): string {
+  return isDefaultAccountRenamed(names, agent) ? names![agent]!.trim() : t("settings.accounts.defaultName");
+}
+
+/** Whether the user has given an agent's default account a name of its own. */
+export function isDefaultAccountRenamed(names: Settings["default_account_names"], agent: Agent): boolean {
+  return !!names?.[agent]?.trim();
 }

@@ -40,17 +40,17 @@ const layout = {
 };
 const state = snapshotState({
   ...layout,
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 const autoPulling = snapshotState({
   ...layout,
-  settings: { auto_pull_repositories: true, auto_delete_unresumable_archives: true, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { auto_pull_repositories: true, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 const noConsoleState = snapshotState({
   consoles: [],
   projects: [],
   sessions: [],
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 
 const openSettings = (ui: Ui) => ui.press(ui.t("rail.settings"));

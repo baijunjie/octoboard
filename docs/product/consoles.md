@@ -13,7 +13,7 @@ A console carries:
 | Name | the user, required | Free text. |
 | Default agent for console sessions | the user, required | The agent a console session runs when none is chosen for it. |
 | Default agent for project sessions | the user, optional | The agent a project session runs when neither the session nor its project names one; unset, it is the default agent for console sessions. |
-| Agent accounts | the user, optional | One per agent: the account that agent's sessions in this console run under, the agent's default account when none is picked; see "Agent config directories" below. |
+| Agent default accounts | the user, optional | One per agent: the account that agent's sessions in this console run under, the agent's default account when none is picked; see "Agent config directories" below. |
 | Console session model and reasoning effort | the user, optional | One pair of defaults per agent for the console's console sessions, the agent's own default when unset; session overrides and inheritance are in `docs/product/model-and-reasoning-effort.md`. |
 | Project session model and reasoning effort | the user, optional | One pair per agent for the console's project sessions, each value taken by a project session whose project and own choice leave it unset; the agent's own default when unset. See `docs/product/model-and-reasoning-effort.md`. |
 | Avatar | the user, optional | A custom image shown in place of the default avatar, in a circle; see "Avatar" below. |
@@ -47,11 +47,11 @@ login shell `PATH`. Every agent picker — the console dialog's two Default agen
 agent field and the session dialog's Agent field — leaves such an agent out, with one exception: the value the picker
 currently holds. An agent already stored or chosen that is not installed stays shown and selected, labelled as not
 installed, and cannot be picked again; it drops out of the list as soon as the picker moves to another entry. Before
-availability has been determined, every agent is listed and can be picked. The console dialog's Agent accounts table
-follows the same rule (see "Agent config directories" below).
+availability has been determined, every agent is listed and can be picked. The console dialog's Agent default accounts
+section follows the same rule (see "Agent config directories" below).
 
-Settings' Add account form is the deliberate exception, and lists every agent (see "Agent accounts" in
-`docs/product/settings.md`).
+Settings' Add account form is the deliberate exception, and lists every added agent, installed or not (see "Adding,
+editing and removing an account" in `docs/product/agent-accounts.md`).
 
 ## Avatar
 
@@ -117,19 +117,20 @@ Each agent's config directory is where that agent keeps its own configuration, l
 How each agent is pointed at its directory is in "The launch environment" and "Per-agent specifics a user will notice"
 in `docs/product/launching-agents.md`.
 
-The console dialog sets them in its **Agent accounts** table, one row per agent, each headed by the agent's icon and
-name, apart from the Default agent group: every agent's account is shown and set there, whichever agents the console's
-sessions default to. A note under it says that every session of an agent in the console uses that agent's account
-here, unless a project or the session picks another. The agents' names share one column, their controls starting in
-line beside them; in a narrow window each name sits above its control.
+The console dialog sets them in its **Agent default accounts** section, one row per agent, each headed by the agent's
+icon and name, apart from the Default agent group: every agent's account is shown and set there, whichever agents the
+console's sessions default to. A note under the section's title says that every session of an agent in the console
+uses that agent's account here, unless a project or the session picks another. The agents' names share one column,
+their controls starting in line beside them; in a narrow window each name sits above its control.
 
-- An agent with accounts of its own has a picker of them in its row, its default account first, at most 320 px wide
-  rather than spanning the row.
-- An agent with none says **Default account** as plain text, followed straight after by a **Manage accounts…** button,
-  which wraps under the text where the row is too narrow for both. The button opens
+- Every agent's row has a picker of its accounts, the default account first, at most 320 px wide rather than spanning
+  the row. An agent with no account of its own still has the picker, with the default account as its one option:
+  under the name the user gave the default account (see "The default account" in `docs/product/agent-accounts.md`),
+  else as "Default account".
+- Beside the section's title, where a "?" help tip would sit, an icon-only **Manage accounts** button (a key) opens
   Settings on its Agent accounts section, above the console dialog, which stays open beneath with its unsaved edits.
-  When Settings closes, keyboard focus returns to that agent's row — to its picker, if the agent has gained an account
-  meanwhile.
+  Its tooltip and the name announced for it are both "Manage accounts". When Settings closes, keyboard focus returns
+  to the button.
 - An agent that is not installed (see "Agents that are not installed" above) has no row, except while the console pins
   a named account for it: that row stays, its agent labelled as not installed, until it is moved to the agent's default
   account. Before availability has been determined every agent has a row.
@@ -184,8 +185,8 @@ and an owner can move a session of its own with the `switch_session_account` too
 target's directory and reads that account's configuration, while keeping explicit model and reasoning effort choices
 (see `docs/product/switching-session-accounts.md`). A session opened on the default account holds no directory and
 resumes under whatever the user's shell exports at that moment. The Codex or Claude Code account's approval mode is
-looked up again for each launch; keeping a directory does not freeze that choice (see "Agent accounts" in
-`docs/product/settings.md`).
+looked up again for each launch; keeping a directory does not freeze that choice (see "Approval modes" in
+`docs/product/agent-accounts.md`).
 
 If a session's directory no longer exists when it is launched or resumed, the launch is refused rather than
 started — but only for a session that has a conversation on the agent's side to resume. A session with none yet — a

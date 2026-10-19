@@ -48,7 +48,7 @@ function render(
   const request = vi.fn((body: RequestBody) => respond?.(body) ?? Promise.resolve(body.type === "list_agent_models" ? listing(body, MODELS) : ({ type: "ack" } as Event)));
   const daemon: Daemon = {
     store: createStateStore({
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "", accounts },
+      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", accounts },
       agentAvailability: new Map(
         (["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined" }]),
       ),
@@ -499,9 +499,20 @@ it("shows one row per agent in the accounts table, each with its own account", a
   render(consoleOf("c-1", "Main", { codex_account_id: "a-codex" }), [work, codexWork]);
   expect(picker("Claude Code account").textContent).toContain("Default");
   expect(picker("Codex account").textContent).toContain("Codex work");
-  // Grok has only its default account: stated, with the way to add another.
-  expect(buttons().filter((b) => b.textContent === "Manage accounts…")).toHaveLength(1);
-  expect(document.body.textContent).toContain("Default account");
+  // Grok has only its default account, as the one option of its picker; the one way to Settings is for the whole
+  // section, beside its title.
+  expect(picker("Grok Build account").textContent).toContain("Default account");
+  // An icon-only button, named by its label.
+  expect(buttons().filter((b) => b.getAttribute("aria-label") === "Manage accounts" && b.textContent === "")).toHaveLength(1);
+  expect(document.body.textContent).toContain("Agent default accounts");
+  expect(document.body.textContent).not.toContain("Default account:");
+});
+
+it("names the default account by the name the user gave it where it is the only account", () => {
+  render(consoleOf("c-1", "Main"), [work, codexWork]);
+  act(() => lastStore.setState((state) => ({ settings: { ...state.settings, default_account_names: { grok: "Personal" } } })));
+  expect(picker("Grok Build account").textContent?.replace(/[\u2066-\u2069]/g, "")).toContain("Personal");
+  expect(document.body.textContent).not.toContain("Default account:");
 });
 
 it("sends an account chosen for an agent that is not the console session agent", async () => {
@@ -512,7 +523,7 @@ it("sends an account chosen for an agent that is not the console session agent",
   expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Main", default_agent: "claude", codex_account_id: "a-codex" }]);
 });
 
-it("opens Settings at the agent accounts from an agent that has only its default account", async () => {
+it("opens Settings at the agent accounts from the section's Manage accounts button", async () => {
   // The Settings dialog sizes itself by a breakpoint the stylesheet defines.
   vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: true, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
@@ -521,7 +532,7 @@ it("opens Settings at the agent accounts from an agent that has only its default
     document.documentElement.style.removeProperty("--breakpoint-docked");
   });
   render();
-  await clickButton("Manage accounts…");
+  await clickButton((b) => b.getAttribute("aria-label") === "Manage accounts");
   const settings = document.body.querySelector('[aria-label="Settings"]');
   expect(settings).not.toBeNull();
   expect(settings?.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Agent accounts");
@@ -535,7 +546,7 @@ it("keeps the console dialog open and unsaved while an account is added in the S
     document.documentElement.style.removeProperty("--breakpoint-docked");
   });
   const request = render(consoleOf("c-1", "Main"));
-  await clickButton("Manage accounts…");
+  await clickButton((b) => b.getAttribute("aria-label") === "Manage accounts");
   await clickButton("Add account");
   const fill = (label: string, value: string) => {
     const input = Array.from(document.body.querySelectorAll<HTMLInputElement>("input")).filter((el) => el.labels?.[0]?.textContent === label).at(-1)!;

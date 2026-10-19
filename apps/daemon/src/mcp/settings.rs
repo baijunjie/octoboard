@@ -21,7 +21,7 @@ use crate::coordinator::{self, ConsoleChanges, ProjectChanges, SettingsChanges};
 use crate::git_remote;
 use crate::launch_settings::LaunchChange;
 use crate::protocol::{
-    Agent, CodedError, Console, Project, ProjectAccount, Session, DEFAULT_ACCOUNT_NAME,
+    default_account_name_in, Agent, CodedError, Console, Project, ProjectAccount, Session,
 };
 use crate::state::AppState;
 
@@ -76,6 +76,7 @@ pub(super) async fn update_console(
 
 pub(super) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
     let accounts = state.store.list_accounts()?;
+    let default_names = state.store.default_account_names()?;
     // The default account of each agent is no row, so it is added in front of that agent's others,
     // under the id the tools' `accounts` arguments take for it.
     let listed: Vec<Value> = Agent::ALL
@@ -84,7 +85,7 @@ pub(super) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
             let default = json!({
                 "id": "default",
                 "agent": agent,
-                "name": DEFAULT_ACCOUNT_NAME,
+                "name": default_account_name_in(&default_names, *agent),
                 "default": true,
             });
             let others = accounts

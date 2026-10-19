@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { choiceGroups, choiceKey, currentChoice, findEntry, inheritedAccount, initialChoice, type AccountChoice } from "../accountChoices";
-import { AGENT_LABEL, AGENT_OPTIONS, inheritedSessionLaunch, isAgentUnavailable, launchWithOverrides, projectSessionAgent } from "../agents";
+import { AGENT_LABEL, AGENT_OPTIONS, defaultAccountName, inheritedSessionLaunch, isAgentUnavailable, launchWithOverrides, projectSessionAgent } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { useT } from "../i18n/react";
 import type { Agent, Console, Project } from "../protocol";
@@ -21,11 +21,12 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
   const t = useT();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const [pickedAgent, setPickedAgent] = useState<Agent>();
   const [pickedAccounts, setPickedAccounts] = useState<Partial<Record<Agent, string | null>>>({});
   const [launchSettings, setLaunchSettings] = useState<Partial<Record<Agent, Overrides>>>({});
 
-  const groups = choiceGroups(accounts, agentAvailability, t("settings.accounts.defaultName")).filter((group) => group.agent !== exclude);
+  const groups = choiceGroups(accounts, agentAvailability, (agent) => defaultAccountName(t, defaultNames, agent)).filter((group) => group.agent !== exclude);
   const pickedAccount = pickedAgent ? pickedAccounts[pickedAgent] : undefined;
   const pickedEntry = groups.find((group) => group.agent === pickedAgent)?.entries.find((entry) => entry.account === pickedAccount);
   const picked = pickedAgent ? {

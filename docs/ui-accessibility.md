@@ -338,11 +338,12 @@ has one. Two places keep it, and both are a case where nothing else can serve:
 That second reason is the rule the replacement has to be read against, for every tooltip but a control's own:
 **such a tooltip answers the pointer and nothing else**, and is no tab stop. A control's opens on keyboard focus as
 well, and the control is a tab stop either way (see "An icon-only control: tooltip and `aria-label`" above). The
-anchored shape (`AnchoredTooltip`, which a run of running text takes, and a mark in a row that walks its focusable
-descendants with the arrow keys, since neither can be a trigger of its own) is not associated with what it describes
-for assistive technology at all. So whatever a tooltip says must reach a screen reader by another route: a clipped
-label's full text is in the document whether it fits or not, a row carries its own accessible name, and an indicator
-that means something on its own is a named `role="img"`.
+anchored shape (`AnchoredTooltip`, which a run of running text takes, a mark in a row that walks its focusable
+descendants with the arrow keys, and a tab that carries a mark inside it, since none of them can be a trigger of its
+own) is not associated with what it describes for assistive technology at all; the tab, being a control, opens it on
+keyboard focus as well. So whatever a tooltip says must reach a screen reader by another route: a clipped
+label's full text is in the document whether it fits or not, a row or a tab carries its own accessible name, and an
+indicator that means something on its own is a named `role="img"`.
 
 One anchored tooltip is kept without that route: the real target of an OSC 8 hyperlink in a session terminal, whose
 visible text may differ from where it leads. Nothing else carries the target, but the terminal's output as a whole
@@ -372,6 +373,13 @@ What it does not give: the explanation is not part of the surrounding row's acce
 it only on reaching the "?". That is why only a principle-level explanation, which operating the control does not
 need, or the extra line one item in a set of like items carries, moves there; every other description, a status and a
 warning among them, stays visible text.
+
+One deliberate exception: an added agent that is not installed is marked in the Settings agent strip by a warning glyph
+after its tab's name, and the explanation sits in a tooltip anchored to the tab rather than in a line of text. The
+status itself stays visible as the glyph; the tooltip opens on hover and on the tab's keyboard focus, in the latter
+case once any scroll that focus set off to reveal the tab has settled, since a scroll under an open tooltip closes it;
+and since nothing links it to the tab, the tab's accessible name carries "not installed" and each owned account's
+visible "not usable" line carries the rest.
 
 ### Hover marquees belong to one text label
 
@@ -641,6 +649,15 @@ The content panel always holds exactly one `main`, whichever of its views is on 
 welcome screen that replaces the three panes while there is no console. A view that is a region rather than the
 window's main content carries `role="region"` with a name (`<section aria-label>`), per the naming rule above.
 
+### A context menu has a visible trigger too
+
+A menu that opens on right-click also opens from the keyboard with the Menu key or Shift+F10 on the focused element,
+and a visible `ActionMenu` trigger offers the same items, since nothing on the element tells a keyboard or
+screen-reader user that a context menu exists. The Settings agent strip is the instance: each tab's menu, plus a
+"More actions for {agent}" button at the strip's end acting on the selected tab. Reordering by dragging has a
+keyboard counterpart in that menu, labelled by reading order ("Move earlier" / "Move later", never left and right,
+which swap in a right-to-left layout), and the moved item gets focus back once it lands.
+
 ### Announcing a change
 
 State that changes without the user acting (connection, a terminal problem) is announced from a `role="status"`
@@ -666,6 +683,15 @@ element, an error from `role="alert"`.
   result step is the instance: its title becomes "Import finished" and the step focuses the dialog itself
   (`packages/ui/src/configuration/ImportConfigurationDialog.tsx`). That VoiceOver reads the renamed dialog on this
   focus move has not been listened to yet; confirm it once per "Reusing VoiceOver verification".
+- A status region inside a laid-out row (a grid or flex row) stays mounted while empty by being `sr-only`, never
+  `display:none` or `hidden`, which takes it out of the accessibility tree and so loses the first text it receives.
+  An account row's login announcement is the instance (`packages/ui/src/settings/AgentAccountsSection.tsx`): a hidden
+  region that says once that the account is logged in, while the row's login badge shows the same result visibly; it
+  names the account, since nothing around it does.
+- A dialog whose footer changes with its state puts focus on the state's main action each time the state changes.
+  The login dialog is the instance (`packages/ui/src/settings/AccountLoginDialog.tsx`): focus is on Cancel login while
+  the login runs and on Log in again once it ends or is refused; its waiting text is a `role="status"` region mounted
+  from the start.
 - HeroUI's `Alert` renders no role at all, its name notwithstanding. An error that can appear in one after the user has
   moved on puts `role="alert"` on an element of your own inside it.
 

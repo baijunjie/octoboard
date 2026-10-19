@@ -177,6 +177,16 @@ export interface Scenario {
   sessionHandoffs?: Record<string, FixtureError | "pending">;
   /** A refusal to save an account's approval mode, Codex's or Claude Code's; successful requests update settings. */
   accountApprovalError?: FixtureError;
+  /** How a login started from Settings ends, a moment after it reaches `waiting` with its page (Grok Build's with its
+   * device code); `failed` carries `login_failed`. Left out, a started login stays waiting until it is cancelled. A
+   * state shown from the start is set in `state.accountLogins` instead. */
+  loginOutcome?: "succeeded" | "failed" | "timed_out";
+  /** A refusal of `start_account_login`, as the daemon words one. */
+  loginStartError?: FixtureError;
+  /** A refusal of `add_agent`, `remove_agent` and `reorder_agents`, for what the window could not have seen coming
+   * (an agent uninstalled since the list was drawn, a second window that changed the order). Left out, they are
+   * answered by the added list's own rules. */
+  agentListError?: FixtureError;
   /** A refused request to open a project's directory in the host's file manager. The fixture
    * otherwise acknowledges the request without opening any host application. */
   projectDirectoryOpenError?: FixtureError;

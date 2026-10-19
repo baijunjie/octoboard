@@ -853,6 +853,7 @@ const SessionRow = memo(function SessionRow({
   const t = useT();
   const language = useCurrentLanguage();
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const hasBound = useHasBoundSessions(session.id);
   const bound = useSession(session.bound_to);
   const owner = under ?? (bound?.role === "console" ? bound : undefined);
@@ -862,13 +863,13 @@ const SessionRow = memo(function SessionRow({
     <TreeRow
       ref={rowRef}
       describedBy={hasVisibleUsage(session.usage) ? metadataId : undefined}
-      ariaLabel={sessionAriaLabel(t, language, session, accounts, owner)}
+      ariaLabel={sessionAriaLabel(t, language, session, accounts, owner, defaultNames)}
       selected={selected}
       locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
     >
       <StatusIcon status={sessionStatusKind(session)} decorative withTooltip />
-      <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts)} />
+      <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts, defaultNames)} />
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0">{sessionDisplayTitle(t, session)}</RowLabel>
         {hasVisibleUsage(session.usage) && <span id={metadataId} className="shrink-0"><SessionUsageLabel usage={session.usage} /></span>}

@@ -56,6 +56,8 @@ the request id as if it were a record id.
 | `detect_directory_agent` | `path` | Answered with `agent_detected`: the agent the directory at `path` is set up for (marker rules as for `add_project`), or null for none, several, or one known not to be installed. A `path` that is not absolute, does not exist or is not a directory is refused with `path_not_absolute`, `path_not_found` or `path_not_a_directory`, as for `add_project` |
 | `probe_git_remote` | `remote_url` | Answered with `agent_detected` for the remote's top-level names, or refused with `git_remote_unreachable`. Does a shallow, blobless, checkout-less `git clone` into a scratch directory and lists its top level, so it proves the remote can be read with the user's credentials. Runs in the same non-interactive environment as a clone; the fetch is bounded by a 60 second deadline and the scratch directory is removed when the probe ends. An empty repository is reachable and answers null |
 | `list_agent_models` | `agent`, `account?` | Answered with `agent_models`: the models `agent` currently offers, read from the catalogue of the account `account` names (an account id; absent is the default account). An `account` that does not exist or belongs to another agent is refused with `unknown_account`. Nothing else is a refusal: a missing binary, no network, a non-zero exit or output past 8 MiB, output that cannot be read or a command that runs past 15 seconds are an empty list with a reason (see "Agent models" below). Never touches a session or the stored accounts |
+| `start_account_login` | `agent`, `account?` (an account id; absent or null is the agent's default account) | Signs the account in with its agent's own CLI, run in the background (no terminal, no window) against the account's config directory; see "Account login" below. Answered with `ack` once the CLI is running; progress and outcome follow as `account_login_updated`. Refused: `unknown_account`, `agent_not_available`, `shell_environment_timeout`, `binary_not_found`, `login_already_running` (this account has a login running), `login_codex_busy` (a Codex login runs for any account) |
+| `cancel_account_login` | `agent`, `account?` | Ends the account's running login and kills the CLI. Answered with `ack`; `account_login_updated` with `cancelled` follows. Refused: `login_not_running`; it looks only at the logins running, so a login whose account was just deleted can still be cancelled |
 | `refresh_account_quotas` | `agent?`, `account?` | Answered with `ack` at once. Re-reads the plan quota of the accounts it selects whose last attempt is older than the polling interval (five minutes, longer for an account that keeps failing): `agent` limits it to one agent's accounts, `account` (an account id) to that one account, and with neither it covers every account of every available agent. An `account` that does not exist or belongs to another `agent` is refused with `unknown_account`. Each reading that finishes follows as `account_quotas_updated`; an account that is not due, or whose reading is already running, is left alone. See "Account quotas" below |
 | `export_configuration` | `console?` | Answered with `configuration_exported`: the configuration document (see "Configuration export" below) of the console `console` names, or, when it is absent, of every console and the application settings. A `console` that does not exist is refused with `unknown_console` rather than answered with an empty document. A read of what is stored: it runs no `git` and touches no session |
 | `inspect_configuration` | `document` | Answered with `configuration_inspected`: for each project of the configuration document `document` (see "Configuration import" below) the directories it could be placed in on this machine, and for each account reference whether it falls back to a default account. Changes nothing and runs no `git`. Its existence checks of paths together have a 15 second deadline; a project whose check did not come back in that time is offered nothing. A document that is not a configuration document, is of a version this daemon does not read, or cannot be read is refused with `configuration_not_recognised`, `configuration_version_unsupported` or `configuration_unreadable` |
@@ -108,8 +110,12 @@ the request id as if it were a record id.
 | `pull_project_branch` | `project` | Checks one project against its remote and fast-forwards it right now, the same work `refresh_git_status` does per project (see "Daemon behaviour, per project" below), except that the one-minute floor does not apply and the fast-forward happens whether or not `auto_pull_repositories` is on, under the same rule (`upstream` set, `behind > 0`, `ahead == 0`). Answered with `ack` at once; the status follows as `project_git_status` broadcasts. A project whose check is already running gets one more check, with the fast-forward, as soon as that one ends, so the request ends in a fast-forward attempt; any number of requests meanwhile share that one rerun. A project whose check is only waiting for a place in a sweep, or in the fast-forward pass started by turning `auto_pull_repositories` on (at most four projects are checked at once, across every client) does not wait behind it: that check runs at once with the fast-forward, in its place, so the request costs one fetch and no rerun. The in-flight `checking` status is broadcast at once for the request, without the 400 ms delay a sweep's check has. The rerun is skipped too if the project has been removed meanwhile. A project that is not a git repository is reported as such (`repository: false`). An unknown project is `unknown_project` |
 | `create_account` | `agent`, `name`, `config_dir` | Both fields are required: an account always has a name and a directory. `name` is trimmed and must be non-empty and unique within `agent` (compared trimmed, case-insensitively, including against the default account's own name); a collision is `account_name_taken`, naming the account it collides with. `config_dir` must be absolute or start with `~/`, and is stored lexically normalised; existence is not checked. The normalised directory must not equal another account's of the same `agent`, nor the default account's directory (as the daemon resolved it; until that is determined, the conventional `~/.claude`, `~/.codex` or `~/.grok`); compared lexically without following symlinks, folding case on macOS (a case-insensitive file system) and byte-exact elsewhere, the stored text staying as typed, and a collision is `config_dir_taken`, naming the account using it. Broadcasts `settings_updated` |
 | `update_account` | `account`, `name?`, `config_dir?` | Renames the account, repoints it, or both, independently; either field absent leaves it alone. Validated as in `create_account`. Broadcasts `settings_updated` when something actually changed |
+| `add_agent` | `agent` | Puts the agent at the end of `Settings.added_agents`. An undecided list is filled first, once availability is determined (announced by `settings_updated`), so a refusal can follow a change. Refused: `agent_not_installed` when the agent has been determined unavailable, `agent_availability_pending` while availability is not determined yet (the list is not decided until it is, so it cannot be edited before), `agent_already_added`. Broadcasts `settings_updated` |
+| `remove_agent` | `agent` | Takes the agent off `Settings.added_agents`; an undecided list is filled first, as for `add_agent`, and is refused with `added_agents_undecided` while it stays undecided. Its accounts stay in `Settings.accounts` untouched, and the consoles, projects and sessions that use it are left as they are. Answered with `ack` and no `settings_updated` of its own when the agent is not on the list; otherwise broadcasts `settings_updated` |
+| `reorder_agents` | `agents` | Puts `Settings.added_agents` in the given order, which carries the whole list: it must name exactly the agents on it, each once (a permutation of the current list). An undecided list is filled first, as for `add_agent`. Refused: `agent_order_invalid` when an agent is missing, repeated or not added, `added_agents_undecided` while the list stays undecided. A request that leaves the order as it is is answered with `ack` and no `settings_updated` of its own; otherwise broadcasts `settings_updated`. The order is the one every client lists agents in |
+| `set_default_account_name` | `agent`, `name` | Names the agent's default account (`Settings.default_account_names`). `name` is trimmed; a blank name, or `Default` in any letter case, clears it, back to the client's own word for the default. Refused with `account_name_taken` when another account of the `agent` has the name (trimmed, case-insensitive); the same check refuses `create_account` and `update_account` a name the default account has been given. The word the daemon reserves for the default (`Default`) stays refused to accounts either way. Broadcasts `settings_updated` only when the stored name changed. The directory of the default account is not editable |
 | `set_account_approval_reviewer` | `account` (id or `null`), `reviewer` (`user`, `auto_review` or `null`) | Sets the Codex account launch override; a null account names the Codex default account and a null reviewer follows the account's own configuration. An unknown account or one of another agent is `unknown_account`. Broadcasts `settings_updated` only when changed. Takes effect on the next launch or resume; running sessions keep their current reviewer |
-| `set_account_approval_mode` | `account` (id or `null`), `mode` (`auto`, `manual`, `bypass` or `null`) | Sets the Claude Code account launch override; a null account names the Claude Code default account and a null mode follows the account's own configuration. An unknown account or one of another agent is `unknown_account`. Broadcasts `settings_updated` only when changed. Takes effect on the next launch or resume; running sessions keep their current mode. The daemon does not itself ask for confirmation of `bypass`; the client does (see "Agent accounts" in `docs/product/settings.md`) |
+| `set_account_approval_mode` | `account` (id or `null`), `mode` (`auto`, `manual`, `bypass` or `null`) | Sets the Claude Code account launch override; a null account names the Claude Code default account and a null mode follows the account's own configuration. An unknown account or one of another agent is `unknown_account`. Broadcasts `settings_updated` only when changed. Takes effect on the next launch or resume; running sessions keep their current mode. The daemon does not itself ask for confirmation of `bypass`; the client does (see "Approval modes" in `docs/product/agent-accounts.md`) |
 | `delete_account` | `account` | Clears the reference of every console and project that refers to this account — putting each console back on its agent's default account and each project back to inheriting its console's, while a project whose reference is `default` names no account and is left as it is — then removes the account. A session holding it is left alone: it already carries its own copy of the directory it launches with. Broadcasts `settings_updated`, a `console_upserted` for every console whose reference was cleared, and a `project_upserted` for every project whose reference was cleared |
 | `shutdown` | — | Terminates every session process (leaving them `interrupted`) and exits the daemon |
 
@@ -117,11 +123,12 @@ the request id as if it were a record id.
 
 | `type` | Fields |
 |---|---|
-| `snapshot` | `hosts`, `consoles`, `projects`, `sessions`, `trusted_directories`, `settings`, `git_statuses`, `agent_availability`, `account_quotas`, `home_dir` — sent once, unprompted, when a control socket connects. `git_statuses` is every `GitStatus` the daemon currently holds, empty on a fresh start — carried here, like the trusted directories, so a reconnecting client never has to ask for it separately. `agent_availability` is always three entries, one per agent, each `not_determined` until the daemon's one-time login-shell snapshot for this run lands — see "Agent availability" below. `account_quotas` is the plan quota last read for each account of every available agent, empty until the first readings land — see "Account quotas" below. `home_dir` is the daemon host's home directory — not the browser's, the two may be on different machines — so a client can show a path under it as `~/...`; null when the daemon cannot determine one (`HOME` unset, relative or the filesystem root) |
+| `snapshot` | `hosts`, `consoles`, `projects`, `sessions`, `trusted_directories`, `settings`, `git_statuses`, `agent_availability`, `account_quotas`, `account_logins`, `home_dir` — sent once, unprompted, when a control socket connects. `git_statuses` is every `GitStatus` the daemon currently holds, empty on a fresh start — carried here, like the trusted directories, so a reconnecting client never has to ask for it separately. `agent_availability` is always three entries, one per agent, each `not_determined` until the daemon's one-time login-shell snapshot for this run lands — see "Agent availability" below. `account_logins` is the logins that have started and not ended, empty when none runs — see "Account login" below. `account_quotas` is the plan quota last read for each account of every available agent, empty until the first readings land — see "Account quotas" below. `home_dir` is the daemon host's home directory — not the browser's, the two may be on different machines — so a client can show a path under it as `~/...`; null when the daemon cannot determine one (`HOME` unset, relative or the filesystem root) |
 | `agent_availability_updated` | `agent_availability` — the whole three-entry list, sent once, when the daemon's one-time determination of it lands; never again afterwards, since nothing re-determines it during a run |
 | `account_quotas_updated` | `account_quotas` — the whole list, sent whenever a reading finishes or an account's reading is dropped (the account was repointed or deleted); see "Account quotas" below |
 | `trusted_directories_updated` | `trusted_directories` — the whole list of trusted directory paths, sent when it changes |
-| `settings_updated` | `settings` — the whole `Settings` record, sent when `update_settings` actually changes it, and also whenever the account list changes (`create_account`, `update_account`, `delete_account`, `set_account_approval_reviewer`, `set_account_approval_mode`, or a console dialog's save that repoints or mints one) |
+| `account_login_updated` | `login` — an `AccountLogin`, the account's whole login state, sent when it starts, moves on or ends; see "Account login" below |
+| `settings_updated` | `settings` — the whole `Settings` record, sent when `update_settings` actually changes it, and also whenever the account list changes (`create_account`, `update_account`, `delete_account`, `set_account_approval_reviewer`, `set_account_approval_mode`, `set_default_account_name`, or a console dialog's save that repoints or mints one), and whenever `Settings.added_agents` changes (`add_agent`, `remove_agent`, `reorder_agents`, or the one-time fill described with `Settings.added_agents` under "Records") |
 | `console_upserted` / `project_upserted` / `session_upserted` | `console` / `project` / `session` — the whole record, under that key |
 | `console_deleted` / `project_deleted` / `session_deleted` | `console` / `project` / `session` — the id of the record that was removed |
 | `project_git_status` | `status` — one project's whole `GitStatus`, sent on every change, including every transition of `activity` (so an animated icon has something to follow) and every local re-read of the branch header (see "Daemon behaviour, per project"). Nothing is sent when a project is removed; the client drops its status along with it |
@@ -221,8 +228,16 @@ A client also branches on some codes, instead of only showing them:
 | `config_dir_unreachable` | `agent`, `path` | A session's pinned config directory has gone, which refuses the launch — only a session that has a conversation on the agent's side (`Session.has_conversation`); a new session, or one with no conversation yet, launches into it instead (Claude Code creates the directory itself; Octoboard creates it for Codex, and refuses a new Codex session with this code when it cannot) |
 | `grok_home_not_initialized` | `path` | A Grok Build session's pinned source home exists but Grok has never been run against it, so it carries no login and no session history for the per-session home to link; refused at launch on the same path as `config_dir_unreachable` |
 | `unknown_account` | `account` | No account has this id, or the account belongs to another agent than the field naming it (a console's or project's per-agent reference, `open_session`'s `account`) |
-| `account_name_taken` | `agent`, `name` | A requested account name collides with an existing one of the same agent (trimmed, case-insensitive) — including the default account's own name; `name` is the name of the account it collides with |
+| `account_name_taken` | `agent`, `name` | A requested account name collides with an existing one of the same agent (trimmed, case-insensitive) — including the default account's own name, the word `Default` or the custom name the user gave it (`set_default_account_name` is refused for an owned account's name by the same code); `name` is the name of the account it collides with |
+| `login_already_running` | `agent` | `start_account_login` for an account that has a login running |
+| `login_codex_busy` | — | `start_account_login` for a Codex account while a Codex login runs for any account: Codex's browser flow holds one fixed local port |
+| `login_not_running` | `agent` | `cancel_account_login` for an account with no login running |
 | `config_dir_taken` | `agent`, `name` | A requested account config directory, once normalised, equals that of another account of the same agent (symlinks not followed; case folded on macOS) — including the default account's directory; `name` is the name of the account using it |
+| `agent_not_installed` | `agent` | `add_agent`'s agent has been determined unavailable (its binary does not resolve on the login shell's `PATH`) |
+| `agent_already_added` | `agent` | `add_agent`'s agent is on `Settings.added_agents` already |
+| `agent_availability_pending` | `agent` | `add_agent` was asked before which agents are installed is determined. Once `agent_availability_updated` has landed it is no longer refused for this reason; a run whose snapshot failed refuses until the next start |
+| `agent_order_invalid` | — | `reorder_agents` named agents that are not exactly the added ones, each once |
+| `added_agents_undecided` | — | `reorder_agents` or `remove_agent` was asked while the list is undecided (availability not determined); no longer refused for this reason once it is, and a run whose snapshot failed refuses until the next start |
 | `configuration_not_recognised` | — | The `format` of a configuration document is absent or is not `octoboard-configuration` |
 | `configuration_version_unsupported` | `version`, `supported` | A configuration document's `version` is newer than the newest this daemon reads, `supported`, or is 0 |
 | `configuration_unreadable` | `detail` | A configuration document is not a JSON object, has a `version` that is not a whole number, or cannot be read as a document of its version |
@@ -367,7 +382,11 @@ BackgroundTask { id, type?, description? }
 SessionUsage { input_tokens, output_tokens, total_tokens, cached_input_tokens?, cache_write_input_tokens? }
 Page    { id, console_session_id, html, anchor_message_id?, created_at }
 Settings  { auto_pull_repositories, auto_delete_unresumable_archives, default_clone_dir, accounts: Account[],
-            codex_default_approval_reviewer, claude_default_approval_mode }
+            codex_default_approval_reviewer, claude_default_approval_mode,
+            default_account_names: { "<agent>": string } }
+AccountLogin { agent, account: string|null, status: "starting"|"waiting"|"succeeded"|"failed"|"cancelled"|"timed_out",
+               authorization_url: string|null, device_code: string|null, opened_by_agent: bool,
+               failure: { code, params, message }|null }
 GitStatus { project, repository, branch?, detached, upstream?, ahead, behind,
             activity: "idle"|"checking"|"pulling"|"pushing", error? }
 AgentAvailability { agent, availability: "not_determined"|"available"|"unavailable", default_account_dir? }
@@ -461,6 +480,18 @@ set (Claude Code creates a missing directory on first run, and the daemon create
 launching it; Grok Build is checked at launch instead). The whole account list travels as `Settings.accounts`, and a
 client is told about any change to it through `settings_updated` — there is no separate account event.
 
+`Settings.added_agents` is the ordered list of agents the user has added, persisted with the other settings and sent
+with them; only these are offered for a new choice. `add_agent` appends an installed agent and `remove_agent` takes one
+off, keeping its accounts, which reappear when it is added again, and `reorder_agents` sets the order, which clients use
+wherever agents are listed. The list is decided once: a database from before the list existed, and a fresh one, start
+undecided and are filled as soon as every agent's availability is determined (`agent_availability_updated`) with the
+agents that are `available` plus those that have accounts, in the order `claude`, `codex`, `grok`, announced by
+`settings_updated`. An undecided list is sent as `null`, which a client must not
+read as the empty list of a user who removed every agent. The fill waits rather than reading `not_determined` as not
+installed, so an installed agent is never left off it; a run whose login-shell snapshot does not complete leaves the
+list `null` until the next start, and `add_agent` is refused with `agent_availability_pending` meanwhile. Once decided,
+a list the user emptied stays empty. The list is not part of a configuration export.
+
 `Account.approval_reviewer` is `null` (the default for older accounts), `user`, or `auto_review`, and is
 settable only for Codex accounts. `Settings.codex_default_approval_reviewer` has the same values for the Codex default
 account. A null override inherits the effective Codex home's `config.toml`. Non-null values become per-launch
@@ -479,8 +510,9 @@ own first-use warning never appears. The override is looked up from the session'
 the same rules as the Codex reviewer for a deleted account or a legacy pinned directory. Neither value is exported.
 
 **Every agent also has a *default* account, which is not a row in `Settings.accounts` at all**: it is the state of
-pinning nothing, named by `Console.*_account_id` and `Session.account_id` being unset. It cannot be created, renamed
-or removed, and what it is shown as on screen is a client-side concern this protocol does not carry.
+pinning nothing, named by `Console.*_account_id` and `Session.account_id` being unset. It cannot be created or removed.
+The user may name it (`set_default_account_name`, kept in `Settings.default_account_names` by agent); without a name a
+client shows its own word for it, and the daemon compares account names against `Default`.
 
 `Console.*_account_id` is the account each agent's sessions opened in this console read, by id; unset means that agent's
 default account. `Project.*_account_id` is the same setting for the sessions opened in one project, and has one state
@@ -707,6 +739,12 @@ QuotaWindow  { kind, label, used_percent, resets_at, window_minutes }
 | `quota_command_failed` | `agent`, `detail` | The command could not be run, ended without replying, printed more than 8 MiB, or answered the request with an error; `detail` is the exit status and the last line of the first 4 KiB it wrote to stderr, or the error's message |
 | `quota_unreadable_reply` | `agent` | The command replied, but not in a shape that holds a quota window |
 | `quota_no_windows` | `agent` | The command replied and the account has no quota windows to report (an account without a subscription, say) |
+| `quota_config_dir_missing` | `agent`, `dir` | The account's config directory does not exist: found before anything is run for an account with a config directory (Claude Code and Grok Build would create it, empty, and call it not signed in), and for the default Codex account from Codex's own refusal of a `CODEX_HOME` that does not exist. A state, not a failure; logging in creates the directory |
+| `quota_not_signed_in` | `agent` | The directory exists and the agent is not signed in there: Claude Code's `initialize` reply says `account.tokenSource` is `none` (its usage reply alone cannot tell, an account without a subscription answers the same), Codex's and Grok Build's quota request is refused with an "authentication required" error. A state, not a failure |
+
+The last two are states of the account: they replace any windows the account held, do not stretch the wait before the
+next attempt, and are read again soon after the account's login ends: any end marks the reading due, so the poller takes it on its next look (within about 15 seconds), and a success also starts a read at once. A reply that matches none of the
+signals stays one of the failures above.
 
 Readings are kept per agent, account and configuration directory, so an account pointed at another directory never
 inherits the old one's. `delete_account`, and `update_account` when it changes the directory, drop the account's reading
@@ -718,6 +756,36 @@ still running is never started twice. A newly created account, or an agent found
 read within the poller's next look, which comes every fifteen seconds. `refresh_account_quotas` runs the same path on
 request for a client that wants fresher data when it opens a view: it only reads what is due, so asking on every open
 costs nothing. Every change to the list is broadcast whole as `account_quotas_updated`.
+
+### Account login
+
+`start_account_login` runs the agent's login flow in the background and `account_login_updated` carries its state,
+whole, each time it changes. One login runs per account (`login_already_running`), and Codex allows one at a time
+across accounts (`login_codex_busy`). The login of the default account (`account` null) runs with the agent's directory
+variable left as the shell has it. `AccountLogin.status`:
+
+- `starting`: the CLI has started and has not said where to authorize.
+- `waiting`: `authorization_url` is the page to authorize on, and for a device-code flow `device_code` the code to
+  confirm there. `opened_by_agent` is true when the CLI opens the page in the browser itself and cannot be stopped from
+  it (Grok Build): the client must not open it again, only offer to reopen it. Otherwise the client opens the page.
+- `succeeded`: the agent says it is signed in (confirmed, not only the CLI's exit); the account's quota is read at once.
+- `failed`: `failure` is a coded message: `login_failed` (`agent`, `detail`: the CLI's last words or the error) or
+  `login_not_confirmed` (`agent`: the CLI reported success but the agent still says it is not signed in).
+- `cancelled`: ended by `cancel_account_login`.
+- `timed_out`: ended by the daemon after ten minutes of waiting (Claude Code has no timeout of its own; Codex's own
+  timeout is reported as this too).
+
+Only `starting` and `waiting` logins are replayed in a `snapshot`'s `account_logins`; an ended one is announced once.
+A login that is ended while its CLI still runs (`cancel_account_login`, the ten minutes, the daemon's exit) kills the
+CLI's whole process group, and `cancelled` is announced once the CLI has gone; a CLI that exits by itself is not
+followed into what it forked. Deleting an account, or repointing its config directory, ends its running login. The
+flows (measured in `docs/agent-cli-reference.md`, "Signing in a config directory without a terminal"):
+
+| Agent | Command | Authorization | Done |
+|---|---|---|---|
+| Claude Code | `claude auth login`, `CLAUDE_CONFIG_DIR` set, `BROWSER` a script the daemon writes that appends its argument to a file it watches | the URL handed to `BROWSER` (its loopback callback finishes the login) | exit 0, then `claude auth status` says `loggedIn` |
+| Codex | `codex app-server`, `account/login/start` `{"type":"chatgpt"}`; the config directory is created first (for the default account, the one the agent resolved) | `authUrl` of the reply | `account/login/completed` with `success`, then `account/read` holds an account; cancelled with `account/login/cancel` |
+| Grok Build | `grok login --device-auth`, `GROK_HOME` set | the device page and code printed on stderr; the CLI opens the page itself | exit 0 with `auth.json` in the home |
 
 ### Configuration export
 
@@ -1779,7 +1847,7 @@ console, changes a project's path, source, host, remote or `trust_consent`, or w
   `project_session_launch` reaches project sessions at their next launch, unless their project or the session sets
   its own.
 - `get_settings` answers `auto_pull_repositories`, `auto_delete_unresumable_archives`, `default_clone_dir`,
-  `accounts` (`id`, `agent`, `name`, `default`; never a config directory) and `trusted_directories`.
+  `accounts` (`id`, `agent`, `name`, `default`; never a config directory; a default account's `name` is the one the user gave it, else `Default`, and its id stays `default`) and `trusted_directories`.
   `update_settings` takes `auto_pull_repositories`, `auto_delete_unresumable_archives` and `default_clone_dir`
   (blank resets it) through the function `update_settings` runs, so enabling the automatic pull
   fast-forwards the projects already behind at once.

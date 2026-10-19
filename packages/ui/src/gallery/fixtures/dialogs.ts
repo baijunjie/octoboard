@@ -55,6 +55,7 @@ const accountsState = snapshotState({
   settings: {
     auto_pull_repositories: false,
     auto_delete_unresumable_archives: true,
+    added_agents: ["claude", "codex", "grok"],
     default_clone_dir: "/Users/dev/Projects",
     accounts: [
       { id: "a-work", agent: "claude", name: "Work account for release coordination across all production services", config_dir: "/Users/dev/.claude-work" },
@@ -475,7 +476,8 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "New console with accounts",
-    description: "Project sessions start on Same as console sessions, naming Claude Code beside its faded icon. In the accounts table Claude Code, which has named accounts, is a picker; Codex and Grok Build state their default account with a way to Settings.",
+    description: "Project sessions start on Same as console sessions, naming Claude Code beside its faded icon. The \"Agent default accounts\" section has the same picker on every agent's row: Claude Code, which has named accounts, offers them with its default account under the name the user gave it (Studio laptop); Codex and Grok Build have only their default account, so their pickers hold that one option, Codex under its renamed name (Team seat) and Grok Build as \"Default account\". One icon-only key button named \"Manage accounts\" (with a tooltip) sits beside the section title.",
+    state: { ...dialogState, settings: { ...dialogState.settings!, default_account_names: { claude: "Studio laptop", codex: "Team seat" } } },
     steps: [
       (ui) => ui.press(ui.t("rail.newConsole")),
     ],
@@ -487,7 +489,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "New console advanced settings",
-    description: "Without named accounts every agent in the accounts table states its default account. Advanced opens on the console sessions' agent among tabs for every agent, each with a Console sessions and a Project sessions group of model and reasoning effort settings, and at its foot the empty Console session instructions field with its placeholder and note. No line about each agent having its own models sits above the tabs.",
+    description: "Without named accounts every agent in the \"Agent default accounts\" section has a picker holding only its default account, as \"Default account\", with the icon-only key button named \"Manage accounts\" beside the section title. Advanced opens on the console sessions' agent among tabs for every agent, each with a Console sessions and a Project sessions group of model and reasoning effort settings, and at its foot the empty Console session instructions field with its placeholder and note. No line about each agent having its own models sits above the tabs.",
     steps: [
       (ui) => ui.press(ui.t("rail.newConsole")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
@@ -500,7 +502,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "Console settings with differing default agents",
-    description: "Console sessions run on Claude Code and project sessions on Codex, which is no longer installed: the row keeps it, marked. The accounts table has a picker for Claude Code, only the default account for Grok Build, and a Codex (not installed) row because the console still pins its account. In Advanced the agent tabs include Codex (not installed), which stays while the console stores a project session model for it.",
+    description: "Console sessions run on Claude Code and project sessions on Codex, which is no longer installed: the row keeps it, marked. The \"Agent default accounts\" section has a picker for each of Claude Code (with its named accounts), Codex (not installed), which stays because the console still pins its account, and Grok Build, whose picker holds only \"Default account\". In Advanced the agent tabs include Codex (not installed), which stays while the console stores a project session model for it.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.edit")),
@@ -528,7 +530,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "Manage accounts from the console dialog",
-    description: "Settings opens on Agent accounts, reached from Grok Build's row in the new console dialog.",
+    description: "Settings opens on Agent accounts, reached from the icon-only key button named \"Manage accounts\" beside the title of the new console dialog's default-accounts section.",
     steps: [
       (ui) => ui.press(ui.t("rail.newConsole")),
       (ui) => ui.press(ui.t("dialog.console.manageAccounts")),

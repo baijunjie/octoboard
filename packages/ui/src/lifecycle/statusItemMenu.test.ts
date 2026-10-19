@@ -204,6 +204,13 @@ describe("buildStatusItemMenu quota submenus", () => {
     expect(labels(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [empty] })))).toEqual(["Default", "Quota unavailable"]);
   });
 
+  it("says only that an account is not logged in, which is a state and not a failed reading", () => {
+    for (const code of ["quota_not_signed_in", "quota_config_dir_missing"]) {
+      const unauthenticated = quotaOf("claude", null, { plan: null, windows: [], unavailable: { code, params: {}, message: "" } });
+      expect(labels(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [unauthenticated] })))).toEqual(["Default", "Not logged in"]);
+    }
+  });
+
   it("keeps the last windows of an out-of-date reading under a line saying so", () => {
     const stale = quotaOf("claude", null, { fetched_at: NOW - 12 * MINUTE, unavailable: { code: "quota_timed_out", params: {}, message: "" } });
     const lines = labels(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [stale] })));

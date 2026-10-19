@@ -11,11 +11,16 @@
 //!   one credit pool over a billing period and the subscription tier.
 //!
 //! The agents mark these calls experimental, so a reply that cannot be read is an
-//! [`QuotaUnavailable`] for that account and nothing else. A probe runs in the login-shell
-//! snapshot with the agent's configuration-directory variable pointed at the account's directory,
-//! and with the CLI told to load as little of the user's setup as it can without losing its
-//! sign-in.
+//! [`QuotaUnavailable`] for that account and nothing else. An account that is not signed in is
+//! told from each agent's own structured signal and reported as its own state rather than as a
+//! failure: Claude Code's `initialize` reply says its `account.tokenSource` is `none` (its usage
+//! reply alone cannot say, an account without a subscription answers the same), and Codex's and
+//! Grok Build's quota requests are refused with an "authentication required" error. A probe runs
+//! in the login-shell snapshot with the agent's configuration-directory variable pointed at the
+//! account's directory, and with the CLI told to load as little of the user's setup as it can
+//! without losing its sign-in.
 
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
@@ -43,6 +48,22 @@ const STDERR_LIMIT: usize = 4096;
 const SESSION_MINUTES: u32 = 5 * 60;
 const WEEK_MINUTES: u32 = 7 * 24 * 60;
 
+/// How Codex's app server is started, here and for signing an account in. The features off are
+/// the ones that reach out on start: the plugin catalogue sync (which runs `git ls-remote` over
+/// SSH), apps, and the user's hooks. Set as configuration rather than `--disable`, which refuses a
+/// feature name the installed Codex does not know, where an unknown configuration key is ignored.
+pub(crate) const CODEX_APP_SERVER_ARGS: &[&str] = &[
+    "app-server",
+    "-c",
+    "features.plugins=false",
+    "-c",
+    "features.remote_plugin=false",
+    "-c",
+    "features.apps=false",
+    "-c",
+    "features.hooks=false",
+];
+
 /// What a readable reply holds.
 #[derive(Debug, PartialEq)]
 pub(super) struct Reading {
@@ -59,6 +80,8 @@ enum ReplyProblem {
     NoWindows,
     /// The CLI answered the request with an error.
     Error(String),
+    /// The CLI answered that the account is not signed in.
+    NotSignedIn,
 }
 
 /// One agent's side of the conversation: what to run, what to write, which line is the reply,
@@ -107,21 +130,7 @@ fn conversation(agent: Agent) -> Conversation {
             read: read_claude,
         },
         Agent::Codex => Conversation {
-            // The features off are the ones that reach out on start: the plugin catalogue sync
-            // (which runs `git ls-remote` over SSH), apps, and the user's hooks. Set as
-            // configuration rather than `--disable`, which refuses a feature name the installed
-            // Codex does not know, where an unknown configuration key is ignored.
-            args: &[
-                "app-server",
-                "-c",
-                "features.plugins=false",
-                "-c",
-                "features.remote_plugin=false",
-                "-c",
-                "features.apps=false",
-                "-c",
-                "features.hooks=false",
-            ],
+            args: CODEX_APP_SERVER_ARGS,
             input: lines(vec![
                 json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
                     "params": {"clientInfo": {"name": "octoboard",
@@ -173,19 +182,36 @@ pub(super) fn probe(
         stderr_limit: STDERR_LIMIT,
     };
     let is_reply = conversation.is_reply;
+    // Claude Code's sign-in state is in a reply other than the one that is read.
+    let signed_out = Cell::new(false);
     let reply = run_exchange(&mut command, &conversation.input, &bounds, |line| {
-        serde_json::from_str::<Value>(line).is_ok_and(|value| is_reply(&value))
+        let Ok(value) = serde_json::from_str::<Value>(line) else {
+            return false;
+        };
+        if agent == Agent::Claude && claude_signed_out(&value) {
+            signed_out.set(true);
+        }
+        is_reply(&value)
     })
     .map_err(|failure| match failure {
+        _ if signed_out.get() => not_signed_in(agent),
         ExchangeFailure::TimedOut(_) => QuotaUnavailable::new(
             code::TIMED_OUT,
             format!("{} did not report its quota in time", agent.label()),
             &[("agent", agent.label())],
         ),
-        other => failed(agent, &other.to_string()),
+        other => {
+            let detail = other.to_string();
+            match missing_codex_home(agent, &detail) {
+                Some(dir) => config_dir_missing(agent, dir),
+                None => failed(agent, &detail),
+            }
+        }
     })?;
     let value: Value = serde_json::from_str(&reply).map_err(|_| unreadable(agent))?;
     (conversation.read)(&value).map_err(|problem| match problem {
+        _ if signed_out.get() => not_signed_in(agent),
+        ReplyProblem::NotSignedIn => not_signed_in(agent),
         ReplyProblem::Unreadable => unreadable(agent),
         ReplyProblem::NoWindows => QuotaUnavailable::new(
             code::NO_WINDOWS,
@@ -194,6 +220,48 @@ pub(super) fn probe(
         ),
         ReplyProblem::Error(detail) => failed(agent, &detail),
     })
+}
+
+pub(super) fn config_dir_missing(agent: Agent, dir: &str) -> QuotaUnavailable {
+    QuotaUnavailable::new(
+        code::CONFIG_DIR_MISSING,
+        format!(
+            "{}'s configuration directory {dir} does not exist yet",
+            agent.label()
+        ),
+        &[("agent", agent.label()), ("dir", dir)],
+    )
+}
+
+/// The directory in Codex's refusal of a `CODEX_HOME` that does not exist (`CODEX_HOME points to
+/// "<dir>", but that path does not exist`), which is how the default account's missing directory
+/// shows, since nothing is looked for before its probe is run.
+fn missing_codex_home(agent: Agent, detail: &str) -> Option<&str> {
+    if agent != Agent::Codex {
+        return None;
+    }
+    let rest = detail.split_once("CODEX_HOME points to \"")?.1;
+    let (dir, after) = rest.split_once('"')?;
+    after.contains("does not exist").then_some(dir)
+}
+
+fn not_signed_in(agent: Agent) -> QuotaUnavailable {
+    QuotaUnavailable::new(
+        code::NOT_SIGNED_IN,
+        format!("{} is not signed in for this account", agent.label()),
+        &[("agent", agent.label())],
+    )
+}
+
+/// Whether `reply` is Claude Code's answer to `initialize` saying it holds no credential at all.
+/// A subscription login replaces the `none` with the subscription's details and an API key adds
+/// its source, so nothing but a missing sign-in reads `none`.
+fn claude_signed_out(reply: &Value) -> bool {
+    reply.get("type").and_then(Value::as_str) == Some("control_response")
+        && reply
+            .pointer("/response/response/account/tokenSource")
+            .and_then(Value::as_str)
+            == Some("none")
 }
 
 fn failed(agent: Agent, detail: &str) -> QuotaUnavailable {
@@ -342,13 +410,19 @@ fn claude_fallback(limits: &Value) -> Vec<QuotaWindow> {
     windows
 }
 
-/// A JSON-RPC error response's message, if the reply is one.
+/// A JSON-RPC error response's message, if the reply is one. Codex ("codex account authentication
+/// required to read rate limits") and Grok Build ("Authentication required", code -32000) both
+/// refuse the quota request of an account that is not signed in with that message; the code alone
+/// is generic for Codex, so it is the message that marks the case.
 fn rpc_error(reply: &Value) -> Option<ReplyProblem> {
     let error = reply.get("error")?;
     let detail = error
         .get("message")
         .and_then(Value::as_str)
         .unwrap_or("the request was refused");
+    if detail.to_lowercase().contains("authentication required") {
+        return Some(ReplyProblem::NotSignedIn);
+    }
     Some(ReplyProblem::Error(detail.to_string()))
 }
 
@@ -567,6 +641,57 @@ mod tests {
     }
 
     #[test]
+    fn claude_whose_initialize_reply_holds_no_token_is_not_signed_in() {
+        let dir = ScratchDir::new("quota-claude-signed-out");
+        let initialize = |account: &str| {
+            json!({"type": "control_response", "response": {"subtype": "success",
+                "request_id": "r1", "response": {"account": serde_json::from_str::<Value>(account).unwrap()}}})
+        };
+        // An account without a subscription answers the usage request the same way, so only the
+        // `initialize` reply tells the two apart.
+        let no_limits = json!({"type": "control_response", "response": {
+            "subtype": "success", "request_id": "r2", "response": {
+                "subscription_type": null, "rate_limits_available": false, "rate_limits": null}}});
+        let fake_claude = |initialize: Value| {
+            fake(
+                &dir,
+                Agent::Claude,
+                &format!(
+                    "while read line; do case \"$line\" in\n\
+                     *initialize*) echo '{initialize}';;\n\
+                     *get_usage*) echo '{no_limits}';; esac; done"
+                ),
+            )
+        };
+
+        let env = fake_claude(initialize(
+            r#"{"tokenSource":"none","apiProvider":"firstParty"}"#,
+        ));
+        let signed_out = probe(Agent::Claude, &env, None, crate::test_support::PATIENCE);
+        assert_eq!(unavailable_code(signed_out), code::NOT_SIGNED_IN);
+
+        let env = fake_claude(initialize(r#"{"apiKeySource":"ANTHROPIC_API_KEY"}"#));
+        let api_key = probe(Agent::Claude, &env, None, crate::test_support::PATIENCE);
+        assert_eq!(unavailable_code(api_key), code::NO_WINDOWS);
+    }
+
+    #[test]
+    fn codex_and_grok_refusing_for_want_of_authentication_are_not_signed_in() {
+        let codex = json!({"id": 2, "error": {"code": -32600,
+            "message": "codex account authentication required to read rate limits"}});
+        assert_eq!(read_codex(&codex), Err(ReplyProblem::NotSignedIn));
+        let grok = json!({"jsonrpc": "2.0", "id": 2, "error": {"code": -32000,
+            "message": "Authentication required",
+            "data": "Authentication required to fetch billing data"}});
+        assert_eq!(read_grok(&grok), Err(ReplyProblem::NotSignedIn));
+
+        let dir = ScratchDir::new("quota-grok-signed-out");
+        let env = answering_agent(&dir, Agent::Grok, &format!("{grok}\n"));
+        let result = probe(Agent::Grok, &env, None, crate::test_support::PATIENCE);
+        assert_eq!(unavailable_code(result), code::NOT_SIGNED_IN);
+    }
+
+    #[test]
     fn codex_reports_its_primary_and_secondary_windows_and_plan() {
         let dir = ScratchDir::new("quota-codex");
         let env = answering_agent(&dir, Agent::Codex, CODEX_REPLY);
@@ -751,6 +876,25 @@ mod tests {
                 "{unavailable:?}"
             );
         }
+    }
+
+    #[test]
+    fn codex_refusing_a_home_that_does_not_exist_is_a_missing_config_directory() {
+        let detail = r#"ended without replying (exit status: 1): Error: CODEX_HOME points to "/h/.codex", but that path does not exist"#;
+        assert_eq!(missing_codex_home(Agent::Codex, detail), Some("/h/.codex"));
+        assert_eq!(missing_codex_home(Agent::Claude, detail), None);
+        assert_eq!(missing_codex_home(Agent::Codex, "not logged in"), None);
+
+        let dir = ScratchDir::new("quota-codex-home");
+        let env = fake(
+            &dir,
+            Agent::Codex,
+            "echo 'Error loading configuration: CODEX_HOME points to \"/h/.codex\", but that path does not exist' >&2; exit 1",
+        );
+        let unavailable =
+            probe(Agent::Codex, &env, None, crate::test_support::PATIENCE).expect_err("refused");
+        assert_eq!(unavailable.code, code::CONFIG_DIR_MISSING);
+        assert_eq!(unavailable.params["dir"], "/h/.codex");
     }
 
     #[test]

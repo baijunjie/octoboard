@@ -50,6 +50,7 @@ function renderArchiveView(
         boundTo={boundConsoleSession}
         sessions={sessions}
         accounts={[]}
+        defaultNames={undefined}
         onSelect={() => {}}
         onReopen={() => {}}
         onOpenDialog={onOpenDialog}

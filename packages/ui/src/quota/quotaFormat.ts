@@ -1,6 +1,6 @@
 import { isolate } from "../i18n/isolate";
 import type { Translate } from "../i18n/catalog";
-import type { QuotaWindow } from "../protocol";
+import type { AccountQuota, QuotaUnavailable, QuotaWindow } from "../protocol";
 
 const MINUTE = 60_000;
 const DAY_MINUTES = 24 * 60;
@@ -16,6 +16,20 @@ const WINDOW_ORDER: Record<QuotaWindow["kind"], number> = {
  * Copy before the stable sort so store readings and the order among model limits stay intact. */
 export function orderedQuotaWindows(windows: readonly QuotaWindow[]): QuotaWindow[] {
   return [...windows].sort((a, b) => WINDOW_ORDER[a.kind] - WINDOW_ORDER[b.kind]);
+}
+
+/** The quota codes that say the account is not logged in yet, rather than that reading it failed. */
+const ACCOUNT_STATE_CODES = new Set(["quota_not_signed_in", "quota_config_dir_missing"]);
+
+/** Whether the reading shows the account is logged in: a current reading with quota windows. A reading that
+ * failed for another reason, a re-read that failed after a good one, and one not yet taken say nothing either way. */
+export function isLoggedIn(quota: AccountQuota | "loading" | undefined): boolean {
+  return typeof quota === "object" && quota.unavailable === null && quota.windows.length > 0;
+}
+
+/** Whether the reading is unavailable because the account is not logged in yet: a state, not a failure. */
+export function isNotLoggedIn(unavailable: QuotaUnavailable | null): unavailable is QuotaUnavailable {
+  return unavailable !== null && ACCOUNT_STATE_CODES.has(unavailable.code);
 }
 
 /** How much of `window` is left, as a whole percent from 0 to 100. The daemon passes a used

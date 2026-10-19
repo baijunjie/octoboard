@@ -14,9 +14,11 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use uuid::Uuid;
 
+use crate::account_login;
 use crate::account_quotas;
 use crate::adapter;
 use crate::agent_records;
+use crate::availability;
 use crate::branch_origin;
 use crate::config_export;
 use crate::config_import;
@@ -44,7 +46,7 @@ use crate::relocate;
 use crate::reporting;
 use crate::session::LiveSession;
 use crate::state::{AppState, Deletion};
-use crate::store::{Store, LOCAL_HOST_ID};
+use crate::store::{ReorderOutcome, Store, LOCAL_HOST_ID};
 use crate::term;
 use crate::trust;
 
@@ -585,6 +587,49 @@ async fn handle_inner(
             Ok(None)
         }
 
+        RequestBody::StartAccountLogin { agent, account } => {
+            refuse_if_agent_unavailable(state, agent)?;
+            // Read once: the id and the directory the login runs against are the same row's.
+            let stored = match &account {
+                Some(id) => Some(
+                    state
+                        .store
+                        .get_account(id)?
+                        .filter(|stored| stored.agent == agent)
+                        .ok_or_else(|| CodedError::unknown_account(id))?,
+                ),
+                None => None,
+            };
+            let config_dir = stored.map(|stored| stored.config_dir);
+            let resolved_dir = config_dir
+                .clone()
+                .or_else(|| state.agent_availability_of(agent).default_account_dir);
+            account_login::AccountLogins::start(
+                state,
+                account_login::Start {
+                    agent,
+                    account: account.clone(),
+                    config_dir: config_dir.clone(),
+                    resolved_dir,
+                },
+            )
+            .await?;
+            // A delete or repoint between the read and the login being registered missed the
+            // cancel it makes: that cancel follows its write, so the write is seen here.
+            if let Some(id) = &account {
+                let current = state.store.get_account(id)?.map(|stored| stored.config_dir);
+                if current != config_dir {
+                    let _ = state.account_logins.cancel(agent, account);
+                }
+            }
+            Ok(None)
+        }
+
+        RequestBody::CancelAccountLogin { agent, account } => {
+            state.account_logins.cancel(agent, account)?;
+            Ok(None)
+        }
+
         RequestBody::ExportConfiguration { console } => Ok(Some(Event::ConfigurationExported {
             id: request_id,
             document: config_export::build(&state.store, console.as_deref())?,
@@ -1018,8 +1063,28 @@ async fn handle_inner(
             Ok(None)
         }
 
+        RequestBody::SetDefaultAccountName { agent, name } => {
+            set_default_account_name(state, agent, &name)?;
+            Ok(None)
+        }
+
         RequestBody::DeleteAccount { account } => {
             delete_account(state, &account)?;
+            Ok(None)
+        }
+
+        RequestBody::AddAgent { agent } => {
+            add_agent(state, agent)?;
+            Ok(None)
+        }
+
+        RequestBody::ReorderAgents { agents } => {
+            reorder_agents(state, &agents)?;
+            Ok(None)
+        }
+
+        RequestBody::RemoveAgent { agent } => {
+            remove_agent(state, agent)?;
             Ok(None)
         }
 
@@ -4398,6 +4463,26 @@ fn colliding_account_name(
     if wanted == account_name_key(crate::protocol::DEFAULT_ACCOUNT_NAME) {
         return Ok(Some(crate::protocol::DEFAULT_ACCOUNT_NAME.to_string()));
     }
+    if let Some(custom) = state
+        .store
+        .default_account_names()?
+        .get(agent.wire_name())
+        .filter(|custom| account_name_key(custom) == wanted)
+    {
+        return Ok(Some(custom.clone()));
+    }
+    colliding_owned_account_name(state, agent, name, exclude_id)
+}
+
+/// The name of the account of `agent` that is a row (so not the default) whose name collides with
+/// `name`, if any.
+fn colliding_owned_account_name(
+    state: &Arc<AppState>,
+    agent: Agent,
+    name: &str,
+    exclude_id: Option<&str>,
+) -> Result<Option<String>> {
+    let wanted = account_name_key(name);
     for existing in state.store.list_accounts()? {
         if existing.agent == agent
             && Some(existing.id.as_str()) != exclude_id
@@ -4409,6 +4494,29 @@ fn colliding_account_name(
     Ok(None)
 }
 
+/// Names the agent's default account, or clears the name when `name` is blank or is the word the
+/// daemon shows for an unnamed default account, in any letter case. The name takes part in the
+/// same collision check as an account's, so neither can take the other's; the default's own name
+/// is no collision, so only the accounts that are rows are compared.
+fn set_default_account_name(state: &Arc<AppState>, agent: Agent, name: &str) -> Result<()> {
+    let name = name.trim();
+    let _writes = state.lock_account_writes();
+    let clears = name.is_empty()
+        || account_name_key(name) == account_name_key(crate::protocol::DEFAULT_ACCOUNT_NAME);
+    let changed = if clears {
+        state.store.set_default_account_name(agent, None)?
+    } else {
+        if let Some(existing) = colliding_owned_account_name(state, agent, name, None)? {
+            return Err(account_name_taken(agent, name, &existing));
+        }
+        state.store.set_default_account_name(agent, Some(name))?
+    };
+    if changed {
+        broadcast_settings(state)?;
+    }
+    Ok(())
+}
+
 /// Refuses a name that collides within its agent, naming the account it collides with.
 fn check_account_name_unique(
     state: &Arc<AppState>,
@@ -4416,17 +4524,21 @@ fn check_account_name_unique(
     name: &str,
     exclude_id: Option<&str>,
 ) -> Result<()> {
-    if let Some(existing) = colliding_account_name(state, agent, name, exclude_id)? {
-        return Err(CodedError::raised(
-            error_code::ACCOUNT_NAME_TAKEN,
-            format!(
-                "the name `{name}` is already used by `{existing}` for {}",
-                agent.label()
-            ),
-            &[("agent", agent.label()), ("name", &existing)],
-        ));
+    match colliding_account_name(state, agent, name, exclude_id)? {
+        Some(existing) => Err(account_name_taken(agent, name, &existing)),
+        None => Ok(()),
     }
-    Ok(())
+}
+
+fn account_name_taken(agent: Agent, name: &str, existing: &str) -> anyhow::Error {
+    CodedError::raised(
+        error_code::ACCOUNT_NAME_TAKEN,
+        format!(
+            "the name `{name}` is already used by `{existing}` for {}",
+            agent.label()
+        ),
+        &[("agent", agent.label()), ("name", existing)],
+    )
 }
 
 /// The comparison key for an account directory collision. The stored text stays as typed; only
@@ -4468,8 +4580,10 @@ fn colliding_account_dir(
         None => adapter::default_account_dir(agent, &HashMap::new()),
     };
     let default_dir = hostfs::lexically_normalise(&default_dir);
-    Ok((account_dir_key(&default_dir.to_string_lossy()) == key)
-        .then(|| crate::protocol::DEFAULT_ACCOUNT_NAME.to_string()))
+    if account_dir_key(&default_dir.to_string_lossy()) != key {
+        return Ok(None);
+    }
+    Ok(Some(state.store.default_account_name(agent)?))
 }
 
 /// Refuses a directory another account of the agent already uses, naming that account.
@@ -4503,7 +4617,7 @@ fn normalize_account_name(name: &str) -> Result<String> {
 
 /// Broadcasts the current settings record — the pattern every settings-shaped mutation (the
 /// trusted directories, `auto_pull_repositories`, and now the accounts) follows.
-fn broadcast_settings(state: &Arc<AppState>) -> Result<()> {
+pub(crate) fn broadcast_settings(state: &AppState) -> Result<()> {
     state.broadcast(Event::SettingsUpdated {
         settings: state.store.get_settings()?,
     });
@@ -4610,7 +4724,7 @@ fn update_account(
     name: Option<String>,
     config_dir: Option<String>,
 ) -> Result<()> {
-    let dir_changed = {
+    let repointed = {
         // Reading the account, the checks and the write are one step: another create or update
         // cannot slip between them.
         let _writes = state.lock_account_writes();
@@ -4641,18 +4755,20 @@ fn update_account(
             return Ok(());
         }
         state.store.update_account(&account)?;
-        dir_changed
+        dir_changed.then_some(account.agent)
     };
-    // A reading belongs to the directory it was taken under; a rename leaves it valid.
-    if dir_changed {
+    // A reading belongs to the directory it was taken under, and a login signs in to it; a rename
+    // leaves both valid.
+    if let Some(agent) = repointed {
         state.account_quotas.forget_account(state, id);
+        let _ = state.account_logins.cancel(agent, Some(id.to_string()));
     }
     broadcast_settings(state)?;
     Ok(())
 }
 
 fn delete_account(state: &Arc<AppState>, id: &str) -> Result<()> {
-    state
+    let account = state
         .store
         .get_account(id)?
         .ok_or_else(|| CodedError::unknown_account(id))?;
@@ -4672,6 +4788,9 @@ fn delete_account(state: &Arc<AppState>, id: &str) -> Result<()> {
         .collect();
     state.store.delete_account(id)?;
     state.account_quotas.forget_account(state, id);
+    let _ = state
+        .account_logins
+        .cancel(account.agent, Some(id.to_string()));
     for console_id in affected_consoles {
         if let Some(console) = state.store.get_console(&console_id)? {
             state.broadcast(Event::ConsoleUpserted { console });
@@ -4684,6 +4803,82 @@ fn delete_account(state: &Arc<AppState>, id: &str) -> Result<()> {
     }
     broadcast_settings(state)?;
     Ok(())
+}
+
+/// Adds an agent that is installed. While availability is still undetermined it is refused rather
+/// than guessed at, and the list is filled first if the determination has landed since: the list
+/// must be decided by `availability::fill_added_agents` before a user's edit takes it over, or the
+/// agents with accounts would be left off it.
+fn add_agent(state: &Arc<AppState>, agent: Agent) -> Result<()> {
+    match state.agent_availability_of(agent).availability {
+        Availability::Available => {}
+        Availability::Unavailable => {
+            return Err(CodedError::raised(
+                error_code::AGENT_NOT_INSTALLED,
+                format!("{} is not installed on this machine", agent.label()),
+                &[("agent", agent.label())],
+            ));
+        }
+        Availability::NotDetermined => {
+            return Err(CodedError::raised(
+                error_code::AGENT_AVAILABILITY_PENDING,
+                format!(
+                    "{} cannot be added until it is known which agents are installed",
+                    agent.label()
+                ),
+                &[("agent", agent.label())],
+            ));
+        }
+    }
+    availability::fill_added_agents(state)?;
+    if !state.store.add_added_agent(agent)? {
+        return Err(CodedError::raised(
+            error_code::AGENT_ALREADY_ADDED,
+            format!("{} is already added", agent.label()),
+            &[("agent", agent.label())],
+        ));
+    }
+    broadcast_settings(state)?;
+    Ok(())
+}
+
+/// Takes an agent off the list. Its accounts stay, so they reappear when it is added again. An
+/// undecided list is filled first, as `add_agent` does, so the fill cannot put the agent back; if
+/// availability is still unknown it stays undecided and the request is refused.
+fn remove_agent(state: &Arc<AppState>, agent: Agent) -> Result<()> {
+    availability::fill_added_agents(state)?;
+    if state.store.added_agents()?.is_none() {
+        return Err(added_agents_undecided("removed from"));
+    }
+    if state.store.remove_added_agent(agent)? {
+        broadcast_settings(state)?;
+    }
+    Ok(())
+}
+
+/// Puts the added agents in the given order. An undecided list is filled first, as `add_agent`
+/// does; if availability is still unknown it stays undecided and the request is refused.
+fn reorder_agents(state: &Arc<AppState>, order: &[Agent]) -> Result<()> {
+    availability::fill_added_agents(state)?;
+    match state.store.reorder_added_agents(order)? {
+        ReorderOutcome::Undecided => Err(added_agents_undecided("reordered")),
+        ReorderOutcome::NotAPermutation => Err(CodedError::raised(
+            error_code::AGENT_ORDER_INVALID,
+            "the new order must name each added agent exactly once".to_string(),
+            &[],
+        )),
+        ReorderOutcome::Unchanged => Ok(()),
+        ReorderOutcome::Reordered => broadcast_settings(state),
+    }
+}
+
+/// The refusal of a change to the added agents while the list is still undecided.
+fn added_agents_undecided(what: &str) -> anyhow::Error {
+    CodedError::raised(
+        error_code::ADDED_AGENTS_UNDECIDED,
+        format!("the added agents cannot be {what} until it is known which agents are installed"),
+        &[],
+    )
 }
 
 fn console_references_account(console: &Console, account_id: &str) -> bool {
@@ -6495,6 +6690,246 @@ mod tests {
         }
     }
 
+    fn set_availability(state: &Arc<AppState>, agent: Agent, availability: Availability) {
+        state.set_agent_availability(vec![crate::protocol::AgentAvailability {
+            agent,
+            availability,
+            default_account_dir: None,
+        }]);
+    }
+
+    /// Adding is refused for an agent determined not installed, for one whose availability is not
+    /// determined yet, and for one already added; each leaves the list as it was.
+    #[tokio::test]
+    async fn adding_an_agent_is_refused_unless_it_is_installed_and_not_yet_added() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-add-agent");
+        for agent in Agent::ALL {
+            set_availability(&state, agent, Availability::Unavailable);
+        }
+        set_availability(&state, Agent::Claude, Availability::Available);
+        state.store.set_added_agents_if_undecided(&[]).unwrap();
+
+        let add = |agent| handle(&state, None, RequestBody::AddAgent { agent });
+        let refusal = |result: Result<Option<Event>>| {
+            let err = result.expect_err("refused");
+            let (code, params, _) = error_parts(&err);
+            (code, params.get("agent").cloned())
+        };
+        assert_eq!(
+            refusal(add(Agent::Codex).await),
+            (
+                error_code::AGENT_NOT_INSTALLED.to_string(),
+                Some("Codex".to_string())
+            )
+        );
+        let mut events = state.subscribe();
+        add(Agent::Claude).await.expect("added");
+        assert!(matches!(
+            events.try_recv(),
+            Ok(Event::SettingsUpdated { settings })
+                if settings.added_agents == Some(vec![Agent::Claude])
+        ));
+        assert_eq!(
+            refusal(add(Agent::Claude).await).0,
+            error_code::AGENT_ALREADY_ADDED
+        );
+        assert_eq!(
+            state.store.added_agents().unwrap(),
+            Some(vec![Agent::Claude])
+        );
+
+        let (pending, _dir) = crate::test_support::app_state("coordinator-add-agent-pending");
+        assert_eq!(
+            refusal(
+                handle(
+                    &pending,
+                    None,
+                    RequestBody::AddAgent {
+                        agent: Agent::Claude
+                    }
+                )
+                .await
+            )
+            .0,
+            error_code::AGENT_AVAILABILITY_PENDING
+        );
+        assert_eq!(pending.store.added_agents().unwrap(), None);
+    }
+
+    /// An add that arrives once availability is known but before the fill ran settles the list
+    /// first, so the agents with accounts are not left off it and the agent asked for, being
+    /// installed, is found already in it.
+    #[tokio::test]
+    async fn adding_an_agent_first_settles_an_undecided_list() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-add-agent-fill");
+        handle(
+            &state,
+            None,
+            create_account_request(Agent::Codex, "Work", "/home/u/.codex-work"),
+        )
+        .await
+        .expect("created");
+        for agent in Agent::ALL {
+            set_availability(&state, agent, Availability::Unavailable);
+        }
+        set_availability(&state, Agent::Claude, Availability::Available);
+
+        let err = handle(
+            &state,
+            None,
+            RequestBody::AddAgent {
+                agent: Agent::Claude,
+            },
+        )
+        .await
+        .expect_err("already in the filled list");
+
+        assert_eq!(error_parts(&err).0, error_code::AGENT_ALREADY_ADDED);
+        assert_eq!(
+            state.store.added_agents().unwrap(),
+            Some(vec![Agent::Claude, Agent::Codex])
+        );
+    }
+
+    /// Reordering takes a permutation of the decided list, persists and broadcasts it, answers a
+    /// repeat without a broadcast, and refuses a missing, repeated or not-added agent.
+    #[tokio::test]
+    async fn reordering_agents_takes_only_a_permutation_of_the_list() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-reorder-agents");
+        state
+            .store
+            .set_added_agents_if_undecided(&[Agent::Claude, Agent::Codex, Agent::Grok])
+            .unwrap();
+        let mut events = state.subscribe();
+        let reorder =
+            |agents: Vec<Agent>| handle(&state, None, RequestBody::ReorderAgents { agents });
+
+        reorder(vec![Agent::Grok, Agent::Claude, Agent::Codex])
+            .await
+            .expect("reordered");
+        let order = Some(vec![Agent::Grok, Agent::Claude, Agent::Codex]);
+        assert_eq!(state.store.added_agents().unwrap(), order);
+        assert!(matches!(
+            events.try_recv(),
+            Ok(Event::SettingsUpdated { settings }) if settings.added_agents == order
+        ));
+
+        reorder(vec![Agent::Grok, Agent::Claude, Agent::Codex])
+            .await
+            .expect("an unchanged order is accepted");
+        assert!(events.try_recv().is_err(), "nothing changed");
+
+        for bad in [
+            vec![Agent::Grok, Agent::Claude],
+            vec![Agent::Grok, Agent::Grok, Agent::Claude],
+            vec![Agent::Grok, Agent::Claude, Agent::Codex, Agent::Codex],
+            vec![],
+        ] {
+            let err = reorder(bad).await.expect_err("refused");
+            assert_eq!(error_parts(&err).0, error_code::AGENT_ORDER_INVALID);
+        }
+        state.store.remove_added_agent(Agent::Codex).unwrap();
+        let err = reorder(vec![Agent::Grok, Agent::Codex])
+            .await
+            .expect_err("a not-added agent is refused");
+        assert_eq!(error_parts(&err).0, error_code::AGENT_ORDER_INVALID);
+        assert_eq!(
+            state.store.added_agents().unwrap(),
+            Some(vec![Agent::Grok, Agent::Claude])
+        );
+    }
+
+    /// An undecided list is filled first when availability is known, and refused otherwise.
+    #[tokio::test]
+    async fn reordering_agents_settles_an_undecided_list_or_is_refused() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-reorder-undecided");
+        let err = handle(&state, None, RequestBody::ReorderAgents { agents: vec![] })
+            .await
+            .expect_err("undecided");
+        assert_eq!(error_parts(&err).0, error_code::ADDED_AGENTS_UNDECIDED);
+        let err = handle(
+            &state,
+            None,
+            RequestBody::RemoveAgent {
+                agent: Agent::Claude,
+            },
+        )
+        .await
+        .expect_err("undecided");
+        assert_eq!(error_parts(&err).0, error_code::ADDED_AGENTS_UNDECIDED);
+
+        for agent in Agent::ALL {
+            set_availability(&state, agent, Availability::Unavailable);
+        }
+        set_availability(&state, Agent::Grok, Availability::Available);
+        set_availability(&state, Agent::Claude, Availability::Available);
+        handle(
+            &state,
+            None,
+            RequestBody::ReorderAgents {
+                agents: vec![Agent::Grok, Agent::Claude],
+            },
+        )
+        .await
+        .expect("filled, then reordered");
+        assert_eq!(
+            state.store.added_agents().unwrap(),
+            Some(vec![Agent::Grok, Agent::Claude])
+        );
+    }
+
+    /// Removing an agent takes it off the list and nothing else: its accounts stay, and clients
+    /// are told only when the list changed.
+    #[tokio::test]
+    async fn removing_an_agent_keeps_its_accounts() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-remove-agent");
+        state
+            .store
+            .set_added_agents_if_undecided(&[Agent::Claude, Agent::Codex])
+            .unwrap();
+        handle(
+            &state,
+            None,
+            create_account_request(Agent::Codex, "Work", "/home/u/.codex-work"),
+        )
+        .await
+        .expect("created");
+        let account = only_account(&state);
+        let mut events = state.subscribe();
+
+        handle(
+            &state,
+            None,
+            RequestBody::RemoveAgent {
+                agent: Agent::Codex,
+            },
+        )
+        .await
+        .expect("removed");
+
+        assert_eq!(
+            state.store.added_agents().unwrap(),
+            Some(vec![Agent::Claude])
+        );
+        assert_eq!(only_account(&state), account);
+        assert!(matches!(
+            events.try_recv(),
+            Ok(Event::SettingsUpdated { settings })
+                if settings.added_agents == Some(vec![Agent::Claude]) && settings.accounts == [account]
+        ));
+
+        handle(
+            &state,
+            None,
+            RequestBody::RemoveAgent {
+                agent: Agent::Codex,
+            },
+        )
+        .await
+        .expect("removing it again is not an error");
+        assert!(events.try_recv().is_err(), "nothing changed");
+    }
+
     fn only_account(state: &Arc<AppState>) -> Account {
         let accounts = state.store.list_accounts().unwrap();
         assert_eq!(accounts.len(), 1, "{accounts:?}");
@@ -6909,6 +7344,208 @@ mod tests {
             .await
             .expect("accepted");
             assert!(reply.is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn a_login_is_refused_for_a_foreign_account_and_a_cancel_for_a_login_that_is_not_running()
+    {
+        let (state, _dir) = crate::test_support::app_state("coordinator-account-login");
+        handle(
+            &state,
+            None,
+            create_account_request(Agent::Codex, "Work", "/home/u/.codex-work"),
+        )
+        .await
+        .expect("created");
+        let codex_account = only_account(&state).id;
+
+        let refused = handle(
+            &state,
+            None,
+            RequestBody::StartAccountLogin {
+                agent: Agent::Claude,
+                account: Some(codex_account.clone()),
+            },
+        )
+        .await
+        .expect_err("not an account of that agent");
+        assert_eq!(
+            refused.downcast_ref::<CodedError>().unwrap().code,
+            error_code::UNKNOWN_ACCOUNT
+        );
+        for account in [None, Some(codex_account)] {
+            let refused = handle(
+                &state,
+                None,
+                RequestBody::CancelAccountLogin {
+                    agent: Agent::Codex,
+                    account,
+                },
+            )
+            .await
+            .expect_err("no login is running");
+            assert_eq!(
+                refused.downcast_ref::<CodedError>().unwrap().code,
+                error_code::LOGIN_NOT_RUNNING
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn the_default_account_takes_a_name_that_no_account_of_its_agent_shares_and_clears_it() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-default-name");
+        handle(
+            &state,
+            None,
+            create_account_request(Agent::Codex, "Work", "/home/u/.codex-work"),
+        )
+        .await
+        .expect("created");
+        let rename = |agent, name: &str| RequestBody::SetDefaultAccountName {
+            agent,
+            name: name.to_string(),
+        };
+        let code_of = |err: anyhow::Error| err.downcast_ref::<CodedError>().unwrap().code;
+        let names =
+            |state: &Arc<AppState>| state.store.get_settings().unwrap().default_account_names;
+
+        // The default cannot take an owned account's name, in any letter case.
+        let refused = handle(&state, None, rename(Agent::Codex, " work "))
+            .await
+            .expect_err("taken");
+        assert_eq!(code_of(refused), error_code::ACCOUNT_NAME_TAKEN);
+        // Another agent's accounts are not in the way.
+        handle(&state, None, rename(Agent::Claude, "Work"))
+            .await
+            .unwrap();
+        handle(&state, None, rename(Agent::Codex, "  Personal "))
+            .await
+            .unwrap();
+        assert_eq!(names(&state)["codex"], "Personal");
+        assert_eq!(names(&state)["claude"], "Work");
+
+        // An owned account cannot take it either, and a rename to its own name is no collision.
+        let refused = handle(
+            &state,
+            None,
+            create_account_request(Agent::Codex, "personal", "/home/u/.codex-p"),
+        )
+        .await
+        .expect_err("taken by the default");
+        assert_eq!(code_of(refused), error_code::ACCOUNT_NAME_TAKEN);
+        handle(&state, None, rename(Agent::Codex, "Personal"))
+            .await
+            .unwrap();
+        // Nor is a change of letter case alone.
+        handle(&state, None, rename(Agent::Codex, "PERSONAL"))
+            .await
+            .unwrap();
+        assert_eq!(names(&state)["codex"], "PERSONAL");
+        // The word the daemon reserves for the default stays the default's alone to keep.
+        let refused = handle(
+            &state,
+            None,
+            create_account_request(Agent::Codex, "default", "/home/u/.codex-d"),
+        )
+        .await
+        .expect_err("reserved");
+        assert_eq!(code_of(refused), error_code::ACCOUNT_NAME_TAKEN);
+
+        // A blank name clears it back, for that agent only, and frees the name.
+        let mut events = state.subscribe();
+        handle(&state, None, rename(Agent::Codex, "  "))
+            .await
+            .unwrap();
+        assert!(!names(&state).contains_key("codex"));
+        assert_eq!(names(&state)["claude"], "Work");
+        assert!(matches!(
+            events.try_recv(),
+            Ok(Event::SettingsUpdated { .. })
+        ));
+        // Clearing what is not set changes nothing and says nothing.
+        handle(&state, None, rename(Agent::Codex, ""))
+            .await
+            .unwrap();
+        assert!(events.try_recv().is_err());
+        // The word for an unnamed default, in any letter case, clears a name like a blank does.
+        handle(&state, None, rename(Agent::Codex, "Personal"))
+            .await
+            .unwrap();
+        handle(&state, None, rename(Agent::Codex, " DEFAULT "))
+            .await
+            .unwrap();
+        assert!(!names(&state).contains_key("codex"));
+        handle(
+            &state,
+            None,
+            create_account_request(Agent::Codex, "personal", "/home/u/.codex-p"),
+        )
+        .await
+        .expect("free again");
+    }
+
+    #[tokio::test]
+    async fn deleting_or_repointing_an_account_ends_its_running_login_as_cancelled() {
+        let (state, dir) = crate::test_support::app_state("coordinator-login-ends");
+        let bin = dir.join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let env = crate::test_support::fake_agent(&bin, "claude", "sleep 30");
+        for repoint in [true, false] {
+            let home = dir.join("claude-work");
+            handle(
+                &state,
+                None,
+                create_account_request(Agent::Claude, "Work", &home.to_string_lossy()),
+            )
+            .await
+            .expect("created");
+            let account = only_account(&state).id;
+            let mut events = state.subscribe();
+            account_login::AccountLogins::start_for_test(
+                &state,
+                account_login::Start {
+                    agent: Agent::Claude,
+                    account: Some(account.clone()),
+                    config_dir: Some(home.to_string_lossy().into_owned()),
+                    resolved_dir: Some(home.to_string_lossy().into_owned()),
+                },
+                env.clone(),
+                dir.join("run"),
+            )
+            .unwrap();
+            assert_eq!(state.account_logins.running().len(), 1);
+
+            let request = if repoint {
+                RequestBody::UpdateAccount {
+                    account: account.clone(),
+                    name: None,
+                    config_dir: Some(dir.join("elsewhere").to_string_lossy().into_owned()),
+                }
+            } else {
+                RequestBody::DeleteAccount {
+                    account: account.clone(),
+                }
+            };
+            handle(&state, None, request).await.expect("accepted");
+            let ended = tokio::time::timeout(crate::test_support::PATIENCE, async {
+                loop {
+                    if let Ok(Event::AccountLoginUpdated { login }) = events.recv().await {
+                        if login.status == crate::protocol::LoginStatus::Cancelled {
+                            return login;
+                        }
+                    }
+                }
+            })
+            .await
+            .expect("the login was cancelled");
+            assert_eq!(ended.account.as_deref(), Some(account.as_str()));
+            assert!(state.account_logins.running().is_empty());
+            if repoint {
+                handle(&state, None, RequestBody::DeleteAccount { account })
+                    .await
+                    .expect("deleted");
+            }
         }
     }
 

@@ -380,8 +380,9 @@ pub enum ClaudeApprovalMode {
 /// A named config directory of one agent, kept once for the whole application and referred to by
 /// id wherever a config directory is referred to — a console's per-agent setting, a session's own
 /// copy of it. Every agent also has a *default* account, which is not a row here: it is the state
-/// of pinning nothing, its name is Octoboard's own untranslatable-here word for it (derived where
-/// it is shown, not stored), and it cannot be created, renamed or removed.
+/// of pinning nothing. Its name is [`DEFAULT_ACCOUNT_NAME`] until the user gives it one of their
+/// own (`Settings::default_account_names`, set by `set_default_account_name`), and it cannot be
+/// created or removed.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Account {
     pub id: String,
@@ -438,12 +439,22 @@ pub struct AgentAvailability {
     pub default_account_dir: Option<String>,
 }
 
-/// The comparison key the daemon uses for the default account's name when checking a requested
-/// account name for a collision — in English, since the daemon carries no locale and what the
-/// default account is actually *shown* as is a client-side, per-locale concern derived separately
-/// (see `Account`'s doc comment). Not sent to a client and not meant to be displayed; it exists
-/// only so `claude_account_id: None` has something to compare a new name against.
+/// What the default account is called while the user has not named it: also the word every
+/// requested account name is compared against, since the daemon carries no locale to compare the
+/// user's own translated word against. A client shows its own translation of it, and the user's
+/// own name for the account when there is one.
 pub const DEFAULT_ACCOUNT_NAME: &str = "Default";
+
+/// The name of `agent`'s default account in `names` (`Settings::default_account_names`): the
+/// user's own, else [`DEFAULT_ACCOUNT_NAME`].
+pub fn default_account_name_in(
+    names: &std::collections::BTreeMap<String, String>,
+    agent: Agent,
+) -> &str {
+    names
+        .get(agent.wire_name())
+        .map_or(DEFAULT_ACCOUNT_NAME, String::as_str)
+}
 
 /// What a project says about one agent's account, which is one more state than a console's
 /// reference has: a console's is an account or the agent's default account, while a project can
@@ -790,10 +801,18 @@ pub struct Settings {
     /// Every account of every agent, application-wide. The default account of each agent is not
     /// among these — it is the state of pinning nothing, not a row (see `Account`).
     pub accounts: Vec<Account>,
+    /// The agents the user has added, in the order the user set; a newly added agent goes last. Only these are offered for a
+    /// new choice; removing one leaves its accounts here. `null` while the daemon has not yet
+    /// decided the list (it waits for the agents' availability), which is not the same as the
+    /// empty list of a user who removed them all.
+    pub added_agents: Option<Vec<Agent>>,
     /// Launch override for Codex sessions that use the default account.
     pub codex_default_approval_reviewer: Option<ApprovalReviewer>,
     /// Launch override for Claude Code sessions that use the default account.
     pub claude_default_approval_mode: Option<ClaudeApprovalMode>,
+    /// The name the user gave an agent's default account, by agent; an agent without an entry shows
+    /// the client's own word for it. Not an account row and not carried by an export.
+    pub default_account_names: std::collections::BTreeMap<String, String>,
 }
 
 impl Default for Settings {
@@ -804,8 +823,10 @@ impl Default for Settings {
             auto_delete_unresumable_archives: true,
             default_clone_dir: String::new(),
             accounts: Vec::new(),
+            added_agents: None,
             codex_default_approval_reviewer: None,
             claude_default_approval_mode: None,
+            default_account_names: Default::default(),
         }
     }
 }
@@ -1820,6 +1841,36 @@ pub enum RequestBody {
     DeleteAccount {
         account: String,
     },
+    /// Puts an agent at the end of `Settings.added_agents`. Refused with `agent_already_added` when
+    /// it is there, with `agent_not_installed` when it has been determined not installed, and with
+    /// `agent_availability_pending` while that is not yet determined. Broadcasts `settings_updated`.
+    AddAgent {
+        agent: Agent,
+    },
+    /// Takes an agent off `Settings.added_agents`; its accounts, and the consoles, projects and
+    /// sessions that use it, are left as they are. An undecided list is first filled, as for
+    /// `add_agent`, and the request is refused with `added_agents_undecided` while it stays
+    /// undecided. Answered with `ack` and no `settings_updated` of its own when the agent is not
+    /// on the list; otherwise broadcasts `settings_updated`.
+    RemoveAgent {
+        agent: Agent,
+    },
+    /// Puts `Settings.added_agents` in the given order, which must name exactly the agents on it,
+    /// each once. Refused with `agent_order_invalid` when an agent is missing, repeated or not
+    /// added, and with `added_agents_undecided` while the list is undecided (it is first filled, as
+    /// for `add_agent`). A request that leaves the order as it is answers with `ack` and no
+    /// `settings_updated` of its own; otherwise broadcasts `settings_updated`.
+    ReorderAgents {
+        agents: Vec<Agent>,
+    },
+    /// Names an agent's default account, or with a blank `name`, or `Default` in any letter case,
+    /// clears the name back to the client's own word for it. The name is trimmed and compared like an account's: refused with
+    /// `account_name_taken` when another account of the agent has it. Broadcasts `settings_updated`
+    /// when the name changed.
+    SetDefaultAccountName {
+        agent: Agent,
+        name: String,
+    },
     /// Sets a Codex account's approval reviewer. A null account names the default account; a null
     /// reviewer follows its configuration. Takes effect on the next launch or resume.
     SetAccountApprovalReviewer {
@@ -1841,6 +1892,28 @@ pub enum RequestBody {
     RefreshAccountQuotas {
         #[serde(default)]
         agent: Option<Agent>,
+        #[serde(default)]
+        account: Option<String>,
+    },
+    /// Signs an account in with its agent's own CLI, run in the background against the account's
+    /// config directory (no terminal, no window): `account` is an account id, null for the agent's
+    /// default account, whose directory is whatever the agent resolves on its own. Answered with
+    /// `ack` once the CLI has started; its progress and outcome follow as `account_login_updated`.
+    /// An `account` that does not exist or belongs to another `agent` is refused with
+    /// `unknown_account`, an agent determined unavailable with `agent_not_available`, a login shell
+    /// whose environment could not be captured with `shell_environment_timeout`, a CLI that does
+    /// not resolve with `binary_not_found`, an account that is already being signed in with
+    /// `login_already_running`, and a second Codex login while one runs for any account with
+    /// `login_codex_busy`. A success re-reads the account's quota at once.
+    StartAccountLogin {
+        agent: Agent,
+        #[serde(default)]
+        account: Option<String>,
+    },
+    /// Ends the login of an account that is being signed in, and its CLI with it. Answered with
+    /// `ack`; the `cancelled` update follows. Refused with `login_not_running` when there is none.
+    CancelAccountLogin {
+        agent: Agent,
         #[serde(default)]
         account: Option<String>,
     },
@@ -2069,6 +2142,9 @@ pub enum Event {
         /// The plan quota last read for each account of every available agent, the default
         /// account included; empty until the first readings land. Runtime state, not stored.
         account_quotas: Vec<AccountQuota>,
+        /// The logins that have started and not ended, whose later updates a reconnecting client
+        /// would otherwise have missed; empty when none is running. Runtime state, not stored.
+        account_logins: Vec<AccountLogin>,
         /// The daemon host's home directory, so a client can show a path under it as `~/...`; it
         /// is the daemon's home, not the browser's, since the two may be on different machines.
         /// Null when the daemon cannot determine one.
@@ -2085,6 +2161,12 @@ pub enum Event {
     /// upsert.
     AccountQuotasUpdated {
         account_quotas: Vec<AccountQuota>,
+    },
+    /// An account's login started, moved on or ended: its whole state, like every other upsert. The
+    /// ones that have not ended are also replayed in a `snapshot`; an ended one is only announced
+    /// here.
+    AccountLoginUpdated {
+        login: AccountLogin,
     },
     /// The directories whose projects Octoboard presses every agent's trust confirmation for
     /// changed: the whole list, like every other upsert.
@@ -2538,6 +2620,63 @@ pub struct AccountQuota {
     pub unavailable: Option<QuotaUnavailable>,
 }
 
+/// Where an account's login is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LoginStatus {
+    /// The CLI has started and has not yet said where to authorize.
+    Starting,
+    /// Waiting for the user to authorize in a browser: `authorization_url` and `device_code` say
+    /// where and with what.
+    Waiting,
+    /// Signed in, confirmed by the agent itself.
+    Succeeded,
+    /// Ended without signing in; `failure` says why.
+    Failed,
+    /// Ended by `cancel_account_login`.
+    Cancelled,
+    /// Ended by the daemon after waiting too long for the authorization.
+    TimedOut,
+}
+
+/// An account's login as the daemon last saw it. Runtime state: never stored.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct AccountLogin {
+    pub agent: Agent,
+    /// The account's id; `None` for the agent's default account.
+    pub account: Option<String>,
+    pub status: LoginStatus,
+    /// The page the user authorizes on, once the CLI has given it. Octoboard opens it itself unless
+    /// `opened_by_agent`.
+    pub authorization_url: Option<String>,
+    /// The code the user confirms on that page, for a device-code flow (Grok Build).
+    pub device_code: Option<String>,
+    /// The agent's CLI opens the page in the browser by itself and cannot be stopped from it (Grok
+    /// Build), so a client must not open it again, only offer to reopen it.
+    pub opened_by_agent: bool,
+    /// Why a `failed` login failed, as a coded message of the same shape as an `error`; codes in
+    /// `login_failure_code`.
+    pub failure: Option<LoginFailure>,
+}
+
+/// Why a login failed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LoginFailure {
+    pub code: String,
+    pub params: Params,
+    pub message: String,
+}
+
+impl LoginFailure {
+    pub fn new(code: &'static str, message: impl Into<String>, pairs: &[(&str, &str)]) -> Self {
+        Self {
+            code: code.to_string(),
+            params: params(pairs),
+            message: message.into(),
+        }
+    }
+}
+
 /// Something a session's user has to be told, as a coded message. Carried from where it is found to
 /// where it is broadcast as a `session_notice`.
 #[derive(Debug, Clone)]
@@ -2851,7 +2990,31 @@ pub mod error_code {
     /// the login shell's `PATH`) — never raised while that determination is still pending.
     /// `params` names `agent`.
     pub const AGENT_NOT_AVAILABLE: &str = "agent_not_available";
+    /// An `add_agent` asked for an agent that has been determined not installed (its binary does
+    /// not resolve on the login shell's `PATH`). `params` names `agent`.
+    pub const AGENT_NOT_INSTALLED: &str = "agent_not_installed";
+    /// An `add_agent` asked for an agent that is already added. `params` names `agent`.
+    pub const AGENT_ALREADY_ADDED: &str = "agent_already_added";
+    /// An `add_agent` asked before availability is determined, which would leave the daemon unable
+    /// to tell an installed agent from a missing one. Once it is determined it is no longer refused
+    /// for this reason; a run whose snapshot failed refuses until the next start. `params` names
+    /// `agent`.
+    pub const AGENT_AVAILABILITY_PENDING: &str = "agent_availability_pending";
+    /// A `reorder_agents` named agents that are not exactly those on the list, each once. No `params`.
+    pub const AGENT_ORDER_INVALID: &str = "agent_order_invalid";
+    /// A `reorder_agents` or `remove_agent` asked before the list is decided, which waits for availability. No
+    /// `params`.
+    pub const ADDED_AGENTS_UNDECIDED: &str = "added_agents_undecided";
     pub const UNKNOWN_ACCOUNT: &str = "unknown_account";
+    /// A `start_account_login` for an account that is being signed in already. `params` names
+    /// `agent`.
+    pub const LOGIN_ALREADY_RUNNING: &str = "login_already_running";
+    /// A `start_account_login` for a Codex account while another Codex account is being signed in:
+    /// Codex's browser flow holds one fixed local port. No `params`.
+    pub const LOGIN_CODEX_BUSY: &str = "login_codex_busy";
+    /// A `cancel_account_login` for an account that is not being signed in. `params` names
+    /// `agent`.
+    pub const LOGIN_NOT_RUNNING: &str = "login_not_running";
     /// A switch was asked to move a session to the account it is on already.
     pub const SESSION_ALREADY_ON_ACCOUNT: &str = "session_already_on_account";
     /// A switch was asked for an archived session. Reopening one is a resume's job, and a switch
@@ -2905,8 +3068,8 @@ pub mod error_code {
     pub const ACCOUNT_NAME_TAKEN: &str = "account_name_taken";
     /// A requested account config directory, once normalised, equals that of another account of
     /// the same agent — the default account's resolved directory takes part. `params` names
-    /// `agent` and the `name` of the account using it (the default account by
-    /// [`DEFAULT_ACCOUNT_NAME`]).
+    /// `agent` and the `name` of the account using it (the default account by its name, which is
+    /// [`DEFAULT_ACCOUNT_NAME`] unless the user named it).
     pub const CONFIG_DIR_TAKEN: &str = "config_dir_taken";
     /// An approval of a `session_request` whose session is no longer waiting for it — the request
     /// was withdrawn or timed out — so nothing was started. `params` names the `session`.
@@ -3021,6 +3184,24 @@ pub mod quota_unavailable_code {
     /// The command replied and the account has no quota windows (an API key rather than a
     /// subscription, say). `params` names `agent`.
     pub const NO_WINDOWS: &str = "quota_no_windows";
+    /// The account's configuration directory does not exist (yet), so there is nothing to read;
+    /// nothing was run. `params` names `agent` and `dir`. A state, not a failure: logging the
+    /// account in creates the directory.
+    pub const CONFIG_DIR_MISSING: &str = "quota_config_dir_missing";
+    /// The account's directory exists but the agent is not signed in there. `params` names `agent`.
+    /// A state, not a failure.
+    pub const NOT_SIGNED_IN: &str = "quota_not_signed_in";
+}
+
+/// Codes carried by `LoginFailure`; `PROTOCOL.md` lists each with its params. Like an error code,
+/// each needs a `daemon.<code>` message in the UI's catalogs.
+pub mod login_failure_code {
+    /// The CLI could not be run, ended without signing in, or reported an error. `params` names
+    /// `agent` and `detail`.
+    pub const FAILED: &str = "login_failed";
+    /// The CLI reported success but the agent still says it is not signed in. `params` names
+    /// `agent`.
+    pub const NOT_CONFIRMED: &str = "login_not_confirmed";
 }
 
 /// The `reason_code` param of a failed press of a trust confirmation, in the `error` and in the
@@ -3427,10 +3608,59 @@ mod tests {
             git_statuses: vec![],
             agent_availability: vec![],
             account_quotas: quotas,
+            account_logins: vec![],
             home_dir: None,
         })
         .unwrap();
         assert_eq!(snapshot["account_quotas"][0]["plan"], "max");
+    }
+
+    #[test]
+    fn an_account_login_is_asked_for_by_agent_and_account_and_travels_in_the_documented_shape() {
+        let request: Request =
+            serde_json::from_str(r#"{"type":"start_account_login","id":"r","agent":"grok"}"#)
+                .unwrap();
+        assert!(matches!(
+            request.body,
+            RequestBody::StartAccountLogin {
+                agent: super::Agent::Grok,
+                account: None
+            }
+        ));
+        let request: Request = serde_json::from_str(
+            r#"{"type":"cancel_account_login","id":"r","agent":"codex","account":"a"}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            request.body,
+            RequestBody::CancelAccountLogin {
+                agent: super::Agent::Codex,
+                account: Some(_)
+            }
+        ));
+        let event = serde_json::to_value(super::Event::AccountLoginUpdated {
+            login: super::AccountLogin {
+                agent: super::Agent::Grok,
+                account: None,
+                status: super::LoginStatus::Waiting,
+                authorization_url: Some("https://accounts.x.ai/oauth2/device".to_string()),
+                device_code: Some("ABCD-1234".to_string()),
+                opened_by_agent: true,
+                failure: None,
+            },
+        })
+        .unwrap();
+        assert_eq!(
+            event,
+            serde_json::json!({
+                "type": "account_login_updated",
+                "login": {
+                    "agent": "grok", "account": null, "status": "waiting",
+                    "authorization_url": "https://accounts.x.ai/oauth2/device",
+                    "device_code": "ABCD-1234", "opened_by_agent": true, "failure": null,
+                },
+            })
+        );
     }
 
     #[test]
@@ -3891,6 +4121,7 @@ mod tests {
             })
             .collect(),
             account_quotas: vec![],
+            account_logins: vec![],
             home_dir: Some("/Users/dev".to_string()),
         })
         .unwrap();
