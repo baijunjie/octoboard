@@ -18,6 +18,8 @@ import { useDaemon, useDaemonStore } from "../store";
 import { AccountNameLine, AccountQuotaSummary } from "./AccountQuotaSummary";
 import { MODAL_OPEN } from "../layout/useRegionCycle";
 import { useAccountQuota } from "./useAccountQuota";
+import { remainingPercent } from "./quotaFormat";
+import { accountQuotaLabel, sessionQuotaWindowOf } from "./sessionQuota";
 
 /** How long the pointer rests on the button before the panel floats in. It is shorter than the
  * tooltip's wait, so the panel is what a resting pointer meets and the tooltip is held back. */
@@ -42,9 +44,17 @@ function insideAny(target: EventTarget | null, ...elements: Array<Element | null
  * back on closing as react-aria's overlay does it: to the element that held it when the panel
  * opened, which is the button for a keyboard press and the terminal for a mouse one. Each opening
  * asks the daemon to refresh the quotas that are due. */
-export function RailQuotaEntry({ onOpenSettingsAt }: { onOpenSettingsAt: (section: SettingsSectionId) => void }): React.ReactElement {
+export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
+  selectedSessionId?: string;
+  onOpenSettingsAt: (section: SettingsSectionId) => void;
+}): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
+  const session = useDaemonStore((s) => s.sessions.get(selectedSessionId ?? ""));
+  const window = useDaemonStore((s) => sessionQuotaWindowOf(session, {
+    accounts: s.settings.accounts, agentAvailability: s.agentAvailability, accountQuotas: s.accountQuotas,
+  }));
+  const account = useDaemonStore((s) => s.settings.accounts.find((account) => account.id === session?.account_id));
   const [hovered, setHovered] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [keyboardPinned, setKeyboardPinned] = useState(false);
@@ -58,6 +68,8 @@ export function RailQuotaEntry({ onOpenSettingsAt }: { onOpenSettingsAt: (sectio
   const panelId = useId();
   const openTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const label = session && window ? accountQuotaLabel(t, session.agent, account?.name, window) : t("rail.quota");
 
   const clearTimers = () => {
     clearTimeout(openTimer.current);
@@ -145,7 +157,8 @@ export function RailQuotaEntry({ onOpenSettingsAt }: { onOpenSettingsAt: (sectio
     // state is held here, since the trigger's own press would toggle it where this pins instead.
     <Popover isOpen={open} onOpenChange={() => {}}>
       <ChromeButton
-        label={t("rail.quota")}
+        label={label}
+        className="relative"
         buttonRef={button}
         expanded={open}
         tooltipDisabled={open || (justClosed && (onButton || isFocusVisible))}
@@ -155,7 +168,15 @@ export function RailQuotaEntry({ onOpenSettingsAt }: { onOpenSettingsAt: (sectio
         onMouseHoverChange={onHoverChange}
         tooltipPlacement="end"
       >
-        <Gauge aria-hidden="true" className="size-4" />
+        <Gauge aria-hidden="true" className={session && window ? "size-4 -translate-y-0.5" : "size-4"} />
+        {session && window && (
+          <span
+            aria-hidden="true"
+            className="absolute inset-x-[7px] bottom-1.5 h-[5px] overflow-hidden rounded-full border border-current"
+          >
+            <span className="block h-full rounded-full bg-current" style={{ width: `${remainingPercent(window)}%` }} />
+          </span>
+        )}
       </ChromeButton>
       <Popover.Content
         isOpen={open}
@@ -248,7 +269,7 @@ function QuotaPanel({ focusSelectedTab, onOpenAccounts }: { focusSelectedTab: bo
         </Tabs>
       )}
       <div className="groove-t flex justify-end p-2">
-        <Button size="sm" variant="ghost" preventFocusOnPress onPress={onOpenAccounts}>
+        <Button size="sm" variant="ghost" className="text-app-muted hover:text-foreground data-[focus-visible=true]:text-foreground" preventFocusOnPress onPress={onOpenAccounts}>
           {t("rail.quota.manage")}
         </Button>
       </div>

@@ -399,6 +399,7 @@ export const en = {
   "rail.waitingBadgeOverflow": "99+",
   "rail.notifications.enable": "Turn on notifications",
   "rail.quota": "Account quota",
+  "rail.quota.selected": "Account quota: {agent}, {account}, {quota}",
   "rail.quota.accounts": "Accounts",
   "rail.quota.agents": "Agents",
   "rail.quota.none": "No agent available",

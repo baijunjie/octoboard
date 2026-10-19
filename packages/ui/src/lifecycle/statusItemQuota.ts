@@ -1,11 +1,13 @@
+import { consoleAccount } from "../accountChoices";
 import { AGENT_OPTIONS, AGENT_SHORT_NAME, accountsByAgent } from "../agents";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
 import type { StatusItemSubmenu, StatusItemSubmenuItem } from "../platform";
-import type { Account, AccountQuota, Agent, AgentAvailability } from "../protocol";
-import { planLabel, quotaResetsIn, quotaWindowLabel, remainingPercent } from "../quota/quotaFormat";
+import type { Account, AccountQuota, Agent, AgentAvailability, Console } from "../protocol";
+import { orderedQuotaWindows, primaryQuotaWindow, planLabel, quotaResetsIn, quotaWindowLabel, remainingPercent } from "../quota/quotaFormat";
 import { formatRelativeTime } from "../relativeTime";
+import { accountQuotaLabel } from "../quota/sessionQuota";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
 import { agentIconKey } from "./statusItemIconKeys";
 
@@ -30,7 +32,7 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
   // An entry with no windows is unavailable whether or not it says why, which the menu does not.
   if (quota.windows.length === 0) return [...lines, { kind: "note", text: t("quota.unavailable") }];
   if (quota.unavailable) lines.push({ kind: "note", text: t("quota.stale", { age: formatRelativeTime(source.language, quota.fetched_at, source.now) }) });
-  for (const window of quota.windows) {
+  for (const window of orderedQuotaWindows(quota.windows)) {
     const resets = quotaResetsIn(t, window, source.now);
     const percent = remainingPercent(window);
     const windowName = quotaWindowLabel(t, window);
@@ -51,7 +53,7 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
 /** One submenu per available agent — "Claude quota ▸" — listing its default account, then the
  * accounts the user owns, each set off by a separator. Nothing for an agent that is not available
  * or not yet determined. */
-export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource): StatusItemSubmenu[] {
+export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, currentConsole?: Console): StatusItemSubmenu[] {
   const owned = new Map(accountsByAgent(source.accounts).map(({ agent, accounts }) => [agent, accounts]));
   return AGENT_OPTIONS.flatMap(({ value: agent }): StatusItemSubmenu[] => {
     if (source.agentAvailability.get(agent)?.availability !== "available") return [];
@@ -60,6 +62,18 @@ export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource):
       ...(index > 0 ? [{ kind: "separator" as const }] : []),
       ...accountLines(t, source, agent, account),
     ]);
-    return [{ title: t("statusItem.quota", { agent: AGENT_SHORT_NAME[agent] }), icon: agentIconKey(agent), items }];
+    const accountId = currentConsole ? consoleAccount(currentConsole, agent, source.accounts) : undefined;
+    const reading = accountId !== undefined ? accountQuotaOf(source.accountQuotas, agent, accountId) : undefined;
+    const window = reading && !reading.unavailable ? primaryQuotaWindow(reading.windows) : undefined;
+    const accountName = source.accounts.find((account) => account.id === accountId)?.name;
+    return [{
+      title: t("statusItem.quota", { agent: AGENT_SHORT_NAME[agent] }),
+      icon: agentIconKey(agent),
+      ...(window ? {
+        quota_remaining: remainingPercent(window),
+        quota_label: accountQuotaLabel(t, agent, accountName, window),
+      } : {}),
+      items,
+    }];
   });
 }

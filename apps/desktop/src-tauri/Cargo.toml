@@ -92,7 +92,7 @@ image = { version = "=0.25.8", default-features = false }
 # resolved transitively through `tauri-runtime-wry`, so promoting them to direct dependencies does
 # not shift anything else this crate depends on.
 objc2 = "=0.6.4"
-objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSAccessibilityProtocols", "NSApplication", "NSAttributedString", "NSBezierPath", "NSButton", "NSColor", "NSCell", "NSControl", "NSDockTile", "NSFont", "NSGraphics", "NSImage", "NSImageView", "NSMenu", "NSMenuItem", "NSResponder", "NSStatusBarButton", "NSStatusItem", "NSStringDrawing", "NSView", "NSWindow", "NSWorkspace", "objc2-core-foundation"] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSAccessibilityProtocols", "NSApplication", "NSAttributedString", "NSBezierPath", "NSButton", "NSColor", "NSCell", "NSControl", "NSDockTile", "NSFont", "NSGraphics", "NSImage", "NSImageView", "NSMenu", "NSMenuItem", "NSResponder", "NSStatusBarButton", "NSStatusItem", "NSStringDrawing", "NSTextAttachment", "block2", "NSView", "NSWindow", "NSWorkspace", "objc2-core-foundation"] }
 # For the system's preferred languages in `lib.rs`, the notification observers in `background.rs`
 # and `tray.rs` (and the main queue the latter applies a held menu on, and the bytes of the raised
 # hand's picture), the content rule list in `page_isolation.rs`, and in `permissions.rs` the

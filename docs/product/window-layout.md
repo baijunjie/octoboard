@@ -279,8 +279,9 @@ The rail runs from under the top bar to the window's bottom (or the connection b
     `docs/product/sessions.md`);
   - **Turn on notifications**, a bell with a small dot on it, shown only in a browser whose answer to notifications is
     still undecided; pressing it asks the browser (see "Notifications" in `docs/product/settings.md`);
-  - **Account quota**, a gauge, whose floating panel shows the available agents' accounts and their quotas (see "The
-    account quota panel on the rail" in `docs/product/account-quotas.md`);
+  - **Account quota**, a gauge with a small bar for the selected session's account (see "The selected session's quota
+    indicator" in `docs/product/account-quotas.md`), whose floating panel shows the available agents' accounts and
+    their quotas (see "The account quota panel on the rail" in `docs/product/account-quotas.md`);
   - **Settings**, which opens the settings dialog.
 
 The rail is the same at every width; below 1168 px it stays beside the drawers, which open past it.

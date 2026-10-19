@@ -354,6 +354,7 @@ export const zhHans: Translation<"other"> = {
   "rail.waitingBadgeOverflow": "99+",
   "rail.notifications.enable": "开启通知",
   "rail.quota": "账户额度",
+  "rail.quota.selected": "账户额度：{agent}，{account}，{quota}",
   "rail.quota.accounts": "账户",
   "rail.quota.agents": "智能体",
   "rail.quota.none": "没有可用的智能体",

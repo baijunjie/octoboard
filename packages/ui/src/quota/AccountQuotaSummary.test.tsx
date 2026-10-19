@@ -58,8 +58,10 @@ const plain = (container: HTMLElement) => container.textContent?.replace(/[\u206
 const headlines = (container: HTMLElement) =>
   Array.from(container.querySelectorAll('[aria-hidden="true"]'), (row) => row.textContent);
 
-it("shows each window's headline, countdown and a bar of what remains", () => {
-  const container = mount(<AccountQuotaSummary quota={quota()} />);
+it("shows short and general weekly windows before model windows with their remaining bars", () => {
+  const reversed = [...windows].reverse();
+  const container = mount(<AccountQuotaSummary quota={quota({ windows: reversed })} />);
+  expect(reversed).toEqual([windows[2], windows[1], windows[0]]);
   expect(headlines(container)).toEqual([
     "5-hour 82% remainingresets in 1h 57m",
     "Weekly 95% remainingresets in 3d 0h",

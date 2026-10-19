@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { enter, leave, mountForTooltip, openTooltip, pointer, withFakeTimers } from "../components/tooltipTestSupport";
 import { currentLanguage, setLanguage } from "../i18n/language";
-import type { Account, AccountQuota, Agent, Availability } from "../protocol";
+import type { Account, AccountQuota, Agent, Availability, Session } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { MODAL_OPEN, useRegionCycle } from "../layout/useRegionCycle";
 import { RailQuotaEntry } from "./RailQuotaEntry";
@@ -89,6 +89,7 @@ function mount(availability: Partial<Record<Agent, Availability>> = { claude: "a
     </DaemonProvider>,
   );
   return {
+    store,
     container,
     before: container.querySelector<HTMLButtonElement>("#before")!,
     outside: container.querySelector<HTMLButtonElement>("#outside")!,
@@ -503,4 +504,73 @@ it("closes when F6 inside the panel moves focus to the first region", () => {
   advance(100);
   expect(document.activeElement?.id).toBe("topbar-control");
   expect(panel()).toBeNull();
+});
+
+it("follows the selected session's actual agent and account, account switches and live quota updates", () => {
+  withFakeTimers();
+  const { store, container } = mount();
+  const host = container.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => act(() => root.unmount()));
+  const session: Session = {
+    id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
+    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW,
+  };
+  act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
+  const select = (id?: string) => act(() => root.render(
+    <DaemonProvider value={{ store, request } as unknown as Daemon}>
+      <RailQuotaEntry selectedSessionId={id} onOpenSettingsAt={onOpenSettingsAt} />
+    </DaemonProvider>,
+  ));
+  const button = () => host.querySelector("button")!;
+  const fill = () => button().querySelector<HTMLElement>("span[style]");
+  select(session.id);
+  expect(button().getAttribute("aria-label")).toContain("Claude Code, ⁨Work⁩, 5-hour 82% remaining");
+  expect(fill()?.style.width).toBe("82%");
+  act(() => store.setState({ settings: { ...store.getState().settings, accounts: [{ ...accounts[0]!, config_dir: "/home/dev/.claude-other" }] } }));
+  expect(fill()).toBeNull();
+  act(() => store.setState({ settings: { ...store.getState().settings, accounts: [] } }));
+  expect(fill()).toBeNull();
+  act(() => store.setState({ sessions: new Map([[session.id, { ...session, account_id: null }]]) }));
+  expect(fill()).toBeNull();
+
+  act(() => store.setState({ sessions: new Map([[session.id, { ...session, agent: "codex", account_id: null, config_dir: null }]]) }));
+  expect(button().getAttribute("aria-label")).toContain("Codex, ⁨Default⁩");
+  const weekly = quota("codex", null, "plus");
+  weekly.windows = [{ ...weekly.windows[0]!, kind: "weekly", used_percent: 64 }];
+  act(() => store.setState({ accountQuotas: [weekly] }));
+  expect(button().getAttribute("aria-label")).toContain("Weekly 36% remaining");
+  expect(fill()?.style.width).toBe("36%");
+  select();
+  expect(fill()).toBeNull();
+  expect(button().getAttribute("aria-label")).toBe("Account quota");
+});
+
+it("hides the mini bar for unread, failed, stale or unavailable quota instead of showing another account", () => {
+  withFakeTimers();
+  const { store, container } = mount();
+  const host = container.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => act(() => root.unmount()));
+  const session: Session = {
+    id: "selected", agent: "claude", account_id: "claude-work", console_id: "console", host_id: "local",
+    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW,
+  };
+  act(() => store.setState({ sessions: new Map([[session.id, session]]), accountQuotas: [] }));
+  act(() => root.render(<DaemonProvider value={{ store, request } as unknown as Daemon}>
+    <RailQuotaEntry selectedSessionId={session.id} onOpenSettingsAt={onOpenSettingsAt} />
+  </DaemonProvider>));
+  const fill = () => host.querySelector("span[style]");
+  expect(fill()).toBeNull();
+  const reading = quota("claude", "claude-work", "max");
+  act(() => store.setState({ accountQuotas: [reading] }));
+  expect(fill()).not.toBeNull();
+  act(() => store.setState({ accountQuotas: [{ ...reading, unavailable: { code: "quota_timed_out", params: {}, message: "timeout" } }] }));
+  expect(fill()).toBeNull();
+  act(() => store.setState({ accountQuotas: [{ ...reading, windows: [] }] }));
+  expect(fill()).toBeNull();
+  act(() => store.setState({ accountQuotas: [reading], agentAvailability: new Map() }));
+  expect(fill()).toBeNull();
 });

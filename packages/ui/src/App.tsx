@@ -271,6 +271,8 @@ export function App(): React.ReactElement {
 
   useWaitingNotifications(consoles, projects, hosts !== undefined);
   useStatusItemMenu({
+    selectedSessionId,
+    currentConsoleId: sidebarView.currentConsole?.id,
     ready: hosts !== undefined,
     onSessionChosen: (session) => {
       selectSession(session);
@@ -729,6 +731,7 @@ export function App(): React.ReactElement {
       />
       <div className="flex min-h-0 flex-1">
         <Rail
+          selectedSessionId={selectedSessionId}
           consoles={consoleList}
           currentConsoleId={sidebarView.currentConsole?.id}
           onSelectConsole={stableSwitchConsole}

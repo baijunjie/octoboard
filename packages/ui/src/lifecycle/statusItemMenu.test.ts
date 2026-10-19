@@ -163,6 +163,22 @@ describe("buildStatusItemMenu quota submenus", () => {
     ]);
   });
 
+  it("orders native quota details by account-wide priority while preserving model order and the reading", () => {
+    const reading = quotaOf("claude", null, { windows: [
+      window({ kind: "weekly_model", label: "Fable" }),
+      window({ kind: "credit_period", window_minutes: null }),
+      window({ kind: "weekly_model", label: "Sonnet" }),
+      window({ kind: "weekly" }),
+      window({ kind: "session" }),
+    ] });
+    const original = structuredClone(reading.windows);
+    const menu = menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [reading] }));
+    expect(menu.submenus[0].items.flatMap((item) => item.kind === "window" ? [item.name] : [])).toEqual([
+      "5-hour", "Weekly", "Credits", `${isolate("Fable")} weekly`, `${isolate("Sonnet")} weekly`,
+    ]);
+    expect(reading.windows).toEqual(original);
+  });
+
   it("groups the owned accounts after the default one, each set off by a separator", () => {
     const owned: Account[] = [{ id: "a1", agent: "codex", name: "Work", config_dir: "/w" }];
     const menu = menuOf([], source({

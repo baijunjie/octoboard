@@ -66,9 +66,9 @@ const quotaState: Scenario["state"] = {
   agentAvailability: new Map(approvalState.agentAvailability).set("grok", { agent: "grok", availability: "available", default_account_dir: "/Users/dev/.grok" }),
   accountQuotas: [
     quotaOf("claude", null, "max", [
-      quotaWindow("session", 18, 117),
-      quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60),
       quotaWindow("weekly_model", 0, null, "Fable"),
+      quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60),
+      quotaWindow("session", 18, 117),
     ]),
     quotaOf("claude", "a-work", "pro", [quotaWindow("session", 100, 42), quotaWindow("weekly", 137, 2 * 24 * 60 + 5 * 60)]),
     quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60 + 2 * 60)]),
@@ -258,7 +258,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab",
-    description: "The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, and Claude Code is open. The default account's name line ends with a small muted \"?\" after Default and its plan chip, with only its config directory beneath. Each account's plan sits beside its name, with its quota windows beneath: a headline with what remains, the countdown at the end of its line and a bar of the same remainder in the agent's colour; the model window has no countdown. Work is spent: 0% remaining, also where use went past 100%. Client has no quota yet and says it is being read. A line under the tab strip describes the approval selector each account has: the default account is set to Automatic, Work to Approve everything and Client follows its account configuration. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place.",
+    description: "The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, and Claude Code is open. The default account's name line ends with a small muted \"?\" after Default and its plan chip, with only its config directory beneath. Each account's plan sits beside its name, with its quota windows beneath: a headline with what remains, the countdown at the end of its line and a bar of the same remainder in the agent's colour; the default account lists five-hour quota first, weekly next and Fable last, with no countdown on the model window. Work is spent: 0% remaining, also where use went past 100%. Client has no quota yet and says it is being read. A line under the tab strip describes the approval selector each account has: the default account is set to Automatic, Work to Approve everything and Client follows its account configuration. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

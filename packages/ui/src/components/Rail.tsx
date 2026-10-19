@@ -135,6 +135,7 @@ interface RailProps extends ConsoleMenuHandlers {
   consoles: Console[];
   /** The current console, which the sidebar shows unless it is previewing another. */
   currentConsoleId?: string;
+  selectedSessionId?: string;
   onSelectConsole: (consoleId: string) => void;
   /** The pointer is on a console's avatar: with the docked sidebar hidden, that floats it in
    * showing this console. */
@@ -161,6 +162,7 @@ interface RailProps extends ConsoleMenuHandlers {
 export function Rail({
   consoles,
   currentConsoleId,
+  selectedSessionId,
   onSelectConsole,
   onConsoleEnter,
   onConsoleLeave,
@@ -231,7 +233,7 @@ export function Rail({
           </ChromeButton>
         )}
         <NotificationsBell focusTerminal={focusTerminal} />
-        <RailQuotaEntry onOpenSettingsAt={onOpenSettingsAt} />
+        <RailQuotaEntry selectedSessionId={selectedSessionId} onOpenSettingsAt={onOpenSettingsAt} />
         <ChromeButton label={t("rail.settings")} onPress={onOpenSettings} tooltipPlacement="end">
           <Settings aria-hidden="true" className="size-4" />
         </ChromeButton>

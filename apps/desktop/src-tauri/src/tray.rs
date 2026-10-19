@@ -5,12 +5,14 @@
 //! also tells the UI which one. Quit goes through the same exit flow as Cmd+Q, so it still asks
 //! while a session is running.
 //!
-//! The icon itself has two looks: the octopus, and the octopus with an orange raised hand in its
+//! The icon itself has two looks: the octopus, and the octopus with an orange dot in its
 //! corner, which shows while the menu's `attention` flag is set (a session is waiting for the
 //! user). Like the rest of the menu, the UI decides when, and the look changes together with the
-//! menu it came with. The octopus is always a template image, so macOS keeps drawing it for the
-//! menu bar's light or dark look; a template image cannot carry a colour, so the hand is a view of
-//! its own laid over the button, in place of the octopus's cut-out corner (`show_hand`).
+//! menu it came with. A readable selected-account quota adds a capsule over the lower tentacles
+//! (`tray_icon.rs`); the UI supplies its remaining percent and localized label. The octopus and
+//! capsule are always one template image, so macOS keeps drawing them for the menu bar's light or
+//! dark look; a template image cannot carry a colour, so the dot is a view of
+//! its own laid over the button, in place of the octopus's cut-out corner (`show_dot`).
 //!
 //! Replacing the menu closes it if it is open, so a menu the UI sends while a menu is open is held
 //! back and applied once it closes (`MenuTracking`). The UI is told when this menu begins to open
@@ -24,7 +26,6 @@
 //! cannot be chosen is drawn in a grey that nothing but a view of its own can darken.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use base64::Engine;
@@ -39,8 +40,11 @@ use tauri::{AppHandle, Emitter, Manager, Wry};
 use crate::background::show_main_window;
 use crate::exit::request_quit;
 use crate::menu::APP_NAME;
+
+#[path = "tray_icon.rs"]
+mod icon;
 #[cfg(target_os = "macos")]
-use crate::tray_lines::{dress_submenu, heading_row, picture_view};
+use crate::tray_lines::{dress_quota_openers, dress_submenu, heading_row, picture_view};
 
 const TRAY_ID: &str = "main";
 const OPEN_ITEM_ID: &str = "tray-open";
@@ -61,11 +65,12 @@ const MENU_OPENED_EVENT: &str = "tray-menu-opened";
 
 /// The tray menu as the UI words it, already in its language: sections of sessions, each under a
 /// heading, submenus of rows (headers, quota windows, notes) that cannot be chosen, then the Open
-/// and Quit labels, and whether the icon should raise its hand. Text, opaque session ids and the
-/// pictures beside the lines — the UI decides what is listed and how it reads, the same way it
-/// decides the Dock badge's count. The pictures are drawn by the UI, which already has every
-/// agent's mark and status glyph, so a new agent needs nothing here for its pictures: `icons` holds
-/// each distinct one once, as a base64 PNG under a key the lines name, at twice the size they show
+/// and Quit labels, whether the icon should show its attention dot, and its selected-account quota.
+/// Text, opaque session ids and the pictures beside the lines — the UI decides what is listed and
+/// how it reads, the same way it decides the Dock badge's count. The pictures are drawn by the UI,
+/// which already has every agent's mark and status glyph, so a new agent needs nothing here for
+/// its pictures: `icons` holds each distinct one once, as a base64 PNG under a key the lines name,
+/// at twice the size they show
 /// at. Only a quota bar's colour is the shell's, and an agent it does not know gets the text colour
 /// (`AgentKind::Other`).
 #[derive(Deserialize)]
@@ -77,9 +82,15 @@ pub struct TrayMenu {
     icons: HashMap<String, LineIcon>,
     open: String,
     quit: String,
-    /// Whether the icon shows the raised hand, which asks for the user's attention.
+    /// Whether the icon shows the attention dot, which asks for the user's attention.
     #[serde(default)]
     attention: bool,
+    /// The selected session account's remaining quota, already chosen and rounded by the UI.
+    #[serde(default)]
+    quota_remaining: Option<u8>,
+    /// The UI's localized account, window and remainder for the icon's tooltip.
+    #[serde(default)]
+    quota_label: Option<String>,
 }
 
 /// A picture: a base64 PNG, and whether it is a template image, drawn in black for its alpha alone
@@ -105,6 +116,11 @@ pub struct TraySubmenu {
     #[serde(default)]
     icon: Option<String>,
     pub items: Vec<SubmenuItem>,
+    /// The current console's account quota for this agent, selected by the UI.
+    #[serde(default)]
+    pub quota_remaining: Option<u8>,
+    #[serde(default)]
+    pub quota_label: Option<String>,
 }
 
 /// An item with no `session` is a line that cannot be chosen, such as "3 more…".
@@ -173,6 +189,8 @@ impl Default for TrayMenu {
             open: format!("Open {APP_NAME}"),
             quit: format!("Quit {APP_NAME}"),
             attention: false,
+            quota_remaining: None,
+            quota_label: None,
         }
     }
 }
@@ -221,12 +239,11 @@ impl MenuTracking {
     }
 }
 
-/// The menu tracking, and whether the icon now shows the raised hand, so that the picture is
-/// replaced only when that changes.
+/// The menu tracking and the icon currently drawn, so repeated menu updates keep its picture.
 #[derive(Default)]
 pub struct TrayState {
     tracking: Mutex<MenuTracking>,
-    attention_shown: AtomicBool,
+    icon_shown: Mutex<IconState>,
 }
 
 fn tracking(app: &AppHandle) -> std::sync::MutexGuard<'_, MenuTracking> {
@@ -237,22 +254,18 @@ fn tracking(app: &AppHandle) -> std::sync::MutexGuard<'_, MenuTracking> {
         .unwrap_or_else(|e| e.into_inner())
 }
 
-/// The icon's picture for whether it raises its hand: the octopus, or the octopus with the hand's
-/// place cut out of its bottom-right corner, which the hand is drawn into (`show_hand`). Both are
-/// template images, drawn in black for their alpha alone.
-fn icon_image(attention: bool) -> Image<'static> {
-    if attention {
-        tauri::include_image!("icons/tray-attention-template.png")
-    } else {
-        tauri::include_image!("icons/tray-template.png")
-    }
+/// Both values change the picture; an account's live quota can move while attention stays put.
+#[derive(Default, PartialEq, Eq)]
+struct IconState {
+    attention: bool,
+    quota: Option<u8>,
 }
 
 /// Puts the icon in the menu bar. It is a template image, so macOS tints it for a light or dark
 /// menu bar itself.
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
     TrayIconBuilder::with_id(TRAY_ID)
-        .icon(icon_image(false))
+        .icon(icon::octopus(false, None))
         .icon_as_template(true)
         .tooltip(APP_NAME)
         .menu(&build_menu(app, &TrayMenu::default())?)
@@ -350,7 +363,8 @@ fn is_tray_menu(app: &AppHandle, notification: &objc2_foundation::NSNotification
 /// on the pictures of its lines that have it, whose items (separators aside) are the lines
 /// `build_menu` made, in the order `finish_order` gives; gives the lines that are a section's
 /// heading their row, with the picture just made a template where it is one; then dresses each
-/// submenu's lines as the rows they stand for (`dress_submenu`). A replaced menu is never touched
+/// submenu's lines as the rows they stand for (`dress_submenu`). Opening lines keep their native
+/// menu item and receive title attachments for available console-account quotas. A replaced menu is never touched
 /// by mistake, as this runs right after it is set.
 #[cfg(target_os = "macos")]
 fn finish_menu(
@@ -381,6 +395,7 @@ fn finish_menu(
                 item.setView(Some(&heading_row(heading, image.as_deref(), mtm)));
             }
         }
+        dress_quota_openers(&menu, &submenus, mtm);
         let opened = lines.iter().filter_map(|item| item.submenu());
         for (submenu, model) in opened.zip(&submenus) {
             dress_submenu(&submenu, &model.items, mtm);
@@ -405,57 +420,85 @@ fn apply(app: &AppHandle, menu: &TrayMenu) -> Result<(), String> {
     tray.set_menu(Some(built)).map_err(|err| err.to_string())?;
     #[cfg(target_os = "macos")]
     finish_menu(&tray, finish_order(menu), menu.submenus.clone());
-    show_attention(app, &tray, menu.attention)
+    let quota = menu.quota_remaining.map(|remaining| remaining.min(100));
+    let label = quota.and(menu.quota_label.as_deref()).unwrap_or(APP_NAME);
+    tray.set_tooltip(Some(label))
+        .map_err(|err| err.to_string())?;
+    #[cfg(target_os = "macos")]
+    set_icon_label(&tray, label);
+    show_icon(app, &tray, menu.attention, quota)
 }
 
-/// Swaps the icon's picture and shows or hides the hand when `attention` differs from the look
-/// shown, keeping the picture a template image, which a plain `set_icon` would drop. Both happen on
+/// The whole quota phrase is the status button's accessible name as well as its tooltip.
+#[cfg(target_os = "macos")]
+fn set_icon_label(tray: &tauri::tray::TrayIcon, label: &str) {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSAccessibility;
+    use objc2_foundation::NSString;
+
+    let label = label.to_string();
+    let _ = tray.with_inner_tray_icon(move |inner| {
+        if let Some(button) = MainThreadMarker::new()
+            .and_then(|mtm| inner.ns_status_item().and_then(|item| item.button(mtm)))
+        {
+            button.setAccessibilityLabel(Some(&NSString::from_str(&label)));
+        }
+    });
+}
+
+/// Swaps the icon's picture and shows or hides the dot when attention or quota changes,
+/// keeping the picture a template image, which a plain `set_icon` would drop. Both happen on
 /// the main thread in the same pass (a command and the held menu's block both run there), so the
-/// menu bar never draws the cut-out octopus without its hand, or the hand over the whole octopus.
-/// When the hand cannot be put up, the icon stays the octopus alone, which still reads as the
+/// menu bar never draws the cut-out octopus without its dot, or the dot over the whole octopus.
+/// When the dot cannot be put up, the icon stays the octopus alone, which still reads as the
 /// octopus where the cut-out one would look broken, and the look shown is left as it was, so the
 /// next menu tries again.
-fn show_attention(
+fn show_icon(
     app: &AppHandle,
     tray: &tauri::tray::TrayIcon,
     attention: bool,
+    quota: Option<u8>,
 ) -> Result<(), String> {
-    let shown = &app.state::<TrayState>().inner().attention_shown;
-    if shown.load(Ordering::Relaxed) == attention {
+    let state = app.state::<TrayState>();
+    let mut shown = state
+        .icon_shown
+        .lock()
+        .unwrap_or_else(|err| err.into_inner());
+    let next = IconState { attention, quota };
+    if *shown == next {
         return Ok(());
     }
-    tray.set_icon_with_as_template(Some(icon_image(attention)), true)
+    tray.set_icon_with_as_template(Some(icon::octopus(attention, quota)), true)
         .map_err(|err| err.to_string())?;
-    let hand_up = show_hand(tray, attention);
-    if attention && !hand_up {
-        return tray
-            .set_icon_with_as_template(Some(icon_image(false)), true)
-            .map_err(|err| err.to_string());
+    let dot_up = show_dot(tray, attention);
+    if attention && !dot_up {
+        tray.set_icon_with_as_template(Some(icon::octopus(false, quota)), true)
+            .map_err(|err| err.to_string())?;
+        *shown = IconState {
+            attention: false,
+            quota,
+        };
+        return Ok(());
     }
-    shown.store(attention, Ordering::Relaxed);
+    *shown = next;
     Ok(())
 }
 
-/// The raised hand's picture, on the same canvas as the icon's and drawn in black for its alpha
-/// alone; its ink lies inside the corner `icon_image(true)` cuts out of the octopus.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-const HAND_PNG: &[u8] = include_bytes!("../icons/tray-attention-hand-template.png");
-
 #[cfg(target_os = "macos")]
 thread_local! {
-    /// The view that draws the raised hand on the status item's button, once made. AppKit's views
+    /// The view that draws the attention dot on the status item's button, once made. AppKit's views
     /// live on the main thread, and so does this.
-    static HAND_VIEW: std::cell::RefCell<Option<objc2::rc::Retained<objc2_app_kit::NSImageView>>> =
+    static DOT_VIEW: std::cell::RefCell<Option<objc2::rc::Retained<objc2_app_kit::NSImageView>>> =
         const { std::cell::RefCell::new(None) };
 }
 
-/// Shows or hides the raised hand over the icon, and answers whether it is up. The hand is a
+/// Shows or hides the attention dot over the icon, and answers whether it is up. The dot is a
 /// template picture in an image view whose tint is the system orange, a dynamic colour resolved as
 /// it is drawn, so it suits a light or dark menu bar like the octopus under it. The view is made
-/// the first time the hand shows (`make_hand_view`), and is laid over the rectangle the button
+/// the first time the dot shows (`make_dot_view`), and is laid over the rectangle the button
 /// draws the octopus in each time it shows.
 #[cfg(target_os = "macos")]
-fn show_hand(tray: &tauri::tray::TrayIcon, shown: bool) -> bool {
+fn show_dot(tray: &tauri::tray::TrayIcon, shown: bool) -> bool {
     use objc2::MainThreadMarker;
 
     tray.with_inner_tray_icon(move |inner| {
@@ -465,14 +508,24 @@ fn show_hand(tray: &tauri::tray::TrayIcon, shown: bool) -> bool {
         let Some(button) = inner.ns_status_item().and_then(|item| item.button(mtm)) else {
             return false;
         };
-        HAND_VIEW.with_borrow_mut(|hand| {
-            if hand.is_none() && shown {
-                *hand = make_hand_view(&button, mtm);
+        DOT_VIEW.with_borrow_mut(|dot| {
+            let image = shown.then(|| dot_image(&button)).flatten();
+            if shown && image.is_none() {
+                if let Some(view) = dot.as_ref() {
+                    view.setHidden(true);
+                }
+                return false;
             }
-            let Some(view) = hand.as_ref() else {
+            if dot.is_none() {
+                if let Some(image) = image.as_ref() {
+                    *dot = Some(make_dot_view(&button, image, mtm));
+                }
+            }
+            let Some(view) = dot.as_ref() else {
                 return false;
             };
             if shown {
+                view.setImage(image.as_deref());
                 if let Some(cell) = button.cell() {
                     view.setFrame(cell.imageRectForBounds(button.bounds()));
                 }
@@ -484,32 +537,40 @@ fn show_hand(tray: &tauri::tray::TrayIcon, shown: bool) -> bool {
     .unwrap_or(false)
 }
 
-/// The hand is drawn only on macOS; elsewhere it is never up, so the icon keeps the octopus alone.
+/// The dot is drawn only on macOS; elsewhere it is never up, so the icon keeps the octopus alone.
 #[cfg(not(target_os = "macos"))]
-fn show_hand(_tray: &tauri::tray::TrayIcon, _shown: bool) -> bool {
+fn show_dot(_tray: &tauri::tray::TrayIcon, _shown: bool) -> bool {
     false
 }
 
-/// The hand's view on `button`, its picture at the size the button gives the octopus's, or `None`
-/// when the button has no picture yet or the hand's does not decode. It goes below the button's
-/// other subviews, as the topmost is the view through which the tray library receives the clicks
-/// that open the menu.
+/// The dot shares the octopus's complete canvas, including the transparent space where the
+/// quota pill sits, so the same image rectangle aligns both with and without a bar.
 #[cfg(target_os = "macos")]
-fn make_hand_view(
+fn dot_image(
     button: &objc2_app_kit::NSStatusBarButton,
-    mtm: objc2::MainThreadMarker,
-) -> Option<objc2::rc::Retained<objc2_app_kit::NSImageView>> {
+) -> Option<objc2::rc::Retained<objc2_app_kit::NSImage>> {
     use objc2::AnyThread;
-    use objc2_app_kit::{
-        NSAutoresizingMaskOptions, NSColor, NSImage, NSImageScaling, NSWindowOrderingMode,
-    };
+    use objc2_app_kit::NSImage;
     use objc2_foundation::NSData;
 
-    let octopus = button.image()?;
-    let image = NSImage::initWithData(NSImage::alloc(), &NSData::with_bytes(HAND_PNG))?;
-    image.setSize(octopus.size());
+    let png = icon::dot_png()?;
+    let image = NSImage::initWithData(NSImage::alloc(), &NSData::with_bytes(&png))?;
+    image.setSize(button.image()?.size());
     image.setTemplate(true);
-    let view = picture_view(&image, mtm);
+    Some(image)
+}
+
+/// Puts the dot below the button's other subviews: the topmost receives the clicks that open
+/// the menu. Its orange tint is a dynamic system colour, resolved in the menu bar's appearance.
+#[cfg(target_os = "macos")]
+fn make_dot_view(
+    button: &objc2_app_kit::NSStatusBarButton,
+    image: &objc2_app_kit::NSImage,
+    mtm: objc2::MainThreadMarker,
+) -> objc2::rc::Retained<objc2_app_kit::NSImageView> {
+    use objc2_app_kit::{NSAutoresizingMaskOptions, NSColor, NSImageScaling, NSWindowOrderingMode};
+
+    let view = picture_view(image, mtm);
     view.setImageScaling(NSImageScaling::ScaleNone);
     view.setContentTintColor(Some(&NSColor::systemOrangeColor()));
     view.setAutoresizingMask(
@@ -519,7 +580,7 @@ fn make_hand_view(
             | NSAutoresizingMaskOptions::ViewMaxYMargin,
     );
     button.addSubview_positioned_relativeTo(&view, NSWindowOrderingMode::Below, None);
-    Some(view)
+    view
 }
 
 /// The picture a line names, or none when it names none or one the table does not hold, or one that
@@ -678,28 +739,45 @@ mod tests {
     }
 
     #[test]
-    fn both_looks_of_the_icon_and_the_hand_are_decodable_template_pictures() {
-        let hand = Image::from_bytes(HAND_PNG).expect("the hand decodes");
-        for image in [icon_image(false), icon_image(true), hand] {
-            assert_eq!((image.width(), image.height()), (44, 44));
-            assert!(image.rgba().chunks(4).all(|pixel| pixel[..3] == [0, 0, 0]));
+    fn selected_quota_is_optional_and_keeps_both_endpoints() {
+        let bare = parsed(r#"{"sections": [], "open": "Open", "quit": "Quit"}"#);
+        assert_eq!(bare.quota_remaining, None);
+        assert_eq!(bare.quota_label, None);
+        for remaining in [0, 100] {
+            let menu = parsed(&format!(
+                r#"{{"sections": [], "open": "Open", "quit": "Quit", "quota_remaining": {remaining}, "quota_label": "Work quota"}}"#
+            ));
+            assert_eq!(menu.quota_remaining, Some(remaining));
+            assert_eq!(menu.quota_label.as_deref(), Some("Work quota"));
         }
-        assert_ne!(icon_image(true).rgba(), icon_image(false).rgba());
     }
 
     #[test]
-    fn the_hand_falls_inside_the_corner_cut_out_of_the_octopus() {
-        let hand = Image::from_bytes(HAND_PNG).expect("the hand decodes");
-        let octopus = icon_image(true);
+    fn both_looks_of_the_icon_and_the_dot_are_decodable_template_pictures() {
+        let dot = Image::from_bytes(&icon::dot_png().expect("dot PNG")).expect("the dot decodes");
+        for image in [icon::octopus(false, None), icon::octopus(true, None), dot] {
+            assert_eq!((image.width(), image.height()), (44, 44));
+            assert!(image.rgba().chunks(4).all(|pixel| pixel[..3] == [0, 0, 0]));
+        }
+        assert_ne!(
+            icon::octopus(true, None).rgba(),
+            icon::octopus(false, None).rgba()
+        );
+    }
+
+    #[test]
+    fn the_dot_falls_inside_the_corner_cut_out_of_the_octopus() {
+        let dot = Image::from_bytes(&icon::dot_png().expect("dot PNG")).expect("the dot decodes");
+        let octopus = icon::octopus(true, None);
         let alphas = |image: &Image<'_>| -> Vec<u8> {
             image.rgba().chunks(4).map(|pixel| pixel[3]).collect()
         };
-        let (hand, octopus) = (alphas(&hand), alphas(&octopus));
-        assert!(hand.iter().any(|&alpha| alpha > 0));
-        assert!(hand
+        let (dot, octopus) = (alphas(&dot), alphas(&octopus));
+        assert!(dot.iter().any(|&alpha| alpha > 0));
+        assert!(dot
             .iter()
             .zip(&octopus)
-            .all(|(&hand, &octopus)| hand == 0 || octopus == 0));
+            .all(|(&dot, &octopus)| dot == 0 || octopus == 0));
     }
 
     #[test]
@@ -771,6 +849,26 @@ mod tests {
         let menu = parsed(r#"{"sections": [], "open": "Open", "quit": "Quit"}"#);
         assert!(menu.submenus.is_empty());
         assert_eq!(finish_order(&menu).len(), 2);
+    }
+
+    #[test]
+    fn submenu_quota_is_optional_and_preserves_zero_remaining() {
+        let legacy = parsed(WITH_SUBMENUS);
+        assert_eq!(legacy.submenus[0].quota_remaining, None);
+        assert_eq!(legacy.submenus[0].quota_label, None);
+        let menu = parsed(
+            r#"{
+            "sections": [], "open": "Open", "quit": "Quit",
+            "submenus": [{"title": "Claude quota", "items": [],
+                "quota_remaining": 0,
+                "quota_label": "Claude · Work · 5-hour · 0% remaining"}]
+        }"#,
+        );
+        assert_eq!(menu.submenus[0].quota_remaining, Some(0));
+        assert_eq!(
+            menu.submenus[0].quota_label.as_deref(),
+            Some("Claude · Work · 5-hour · 0% remaining")
+        );
     }
 
     #[test]

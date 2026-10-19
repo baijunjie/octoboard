@@ -1,26 +1,41 @@
 # Menu bar icon
 
-The macOS application puts an icon in the system menu bar: an octopus, which raises a hand while a session waits for
-the user (see "The icon's look" below), with the tooltip "Octoboard". It is there for as long as the application
-runs — while the window is shown, while it is closed into the background, and on the screen shown when the daemon
+The macOS application puts an icon in the system menu bar: an octopus, which carries an orange dot while a session waits for
+the user, with a quota indicator for the selected session when one is available (see "The icon's look" below).
+It is there for as long as the application runs — while the window is shown, while it is closed into the background,
+and on the screen shown when the daemon
 failed to start — and whatever the user chose about keeping Octoboard running when the window is closed (see
 "Closing the window" in `docs/product/application-lifecycle.md`). A browser has no such icon.
 
 ## The icon's look
 
-The icon has two looks. In both, the octopus is monochrome, and macOS tints it to suit a light or dark menu bar:
+The icon has two attention states. In both, the octopus is monochrome, and macOS tints it to suit a light or dark menu bar:
 
 - **The octopus alone**, while no session is waiting for the user.
-- **The octopus with a raised hand** — a hand outline taking up its bottom-right corner, cut out of the octopus with a
-  clear margin around it and covering the octopus's right eye and right-hand arms — while at least one session is
-  waiting for the user. The hand is drawn in the system orange, which macOS resolves for a light or dark menu bar,
-  rather than in the octopus's tint. It is part of the icon's look and is not presented to assistive technology on
+- **The octopus with an orange dot** at its upper-right corner, separated from the octopus by a clear margin,
+  while at least one session is waiting for the user. The dot is drawn in the system orange, which macOS resolves
+  for a light or dark menu bar, rather than in the octopus's tint. The dot is about **6.5 pt** across within the
+  18 pt icon. It appears with or without a readable quota.
+  It is part of the icon's look and is not presented to assistive technology on
   its own. The sessions that count are exactly those the menu lists under **Waiting for you** (see "The icon's menu"
   below), across every console.
 
+When the selected session has a readable account quota, an **outlined capsule** below the octopus shows the
+remaining percentage, with a hollow unfilled portion and a gap above it. The capsule uses the octopus's monochrome
+tint and spans the icon's width, covering its lower tentacles while keeping the octopus at its original scale.
+The icon keeps its **18 pt** footprint; the capsule is about **18 × 4.9 pt** within it. The attention dot stays at
+the upper right, clear of the capsule. Without a readable quota the capsule disappears; without attention or a
+quota the original octopus returns.
+
+The account, window priority and hiding rules are the same as "The selected session's quota indicator" in
+`docs/product/account-quotas.md`. With a quota, the icon's tooltip and accessible name identify the agent, account,
+window and whole remaining percent in the UI's language; without one they name only Octoboard. Selecting another
+session updates the indicator even if no session data changed, and a session's account switch, account edits,
+availability changes and new readings update it too.
+
 The look changes together with the menu: a change that has to wait for an open menu to close (see the end of "The
-icon's menu" below) changes the look only when it reaches the menu, so the icon and the menu always agree on whether a
-session is waiting; the octopus with its corner cut out and the orange hand always appear and go together. Until
+icon's menu" below) changes the look and its label only when it reaches the menu, so the icon and the menu always
+agree on whether a session is waiting; the octopus's dot clearance and the orange dot always appear and go together. Until
 the window's UI has sent its first menu — and throughout on the screen shown when the daemon failed to start — the icon
 is the octopus alone.
 
@@ -66,7 +81,7 @@ From top to bottom:
      heading, **No sessions running**, styled like the other headings but with no glyph.
 2. **The quota submenus**, one per available agent — **Claude quota**, **Codex quota**, **Grok quota**, in that
    order, the agents' names never translated — each opening to that agent's accounts and showing what Settings and
-   the rail's panel show (see "Quota windows" and "How an account's quota is shown" in
+   the rail's panel show, including window order (see "Quota windows" and "How an account's quota is shown" in
    `docs/product/account-quotas.md`). An agent that is not available, or whose availability is not yet determined,
    has none. The submenus are set off from the sessions and from Open Octoboard by separators. Inside a submenu,
    nothing can be chosen:
@@ -92,8 +107,22 @@ From top to bottom:
      nothing for. One whose latest reading failed after a good one keeps its last windows under a note "Out of date:
      last read 12 minutes ago", without the reason either.
 
+   Each submenu's opening line can show an **outlined remaining-quota bar** at its right, before the submenu arrow.
+   It uses that agent's account configured for the **current console**, independently of the selected session that
+   supplies the menu bar icon's capsule. A missing, deleted or wrong-agent account reference falls back to the
+   agent's default account. With no current console there is no opener bar. Its window priority is 5-hour, then
+   Weekly, then the credit pool; model-specific weekly limits are excluded. An unread account, a reading without
+   an eligible window or a failed latest reading has no opener bar, including when the submenu retains stale
+   windows. Switching consoles or editing their account choices updates the bars.
+
+   These opener bars are monochrome outlined capsules with a hollow unfilled portion, aligned at the right across
+   the opening lines. Their tint follows the native row in light and dark menus and while highlighted. The row
+   keeps the system's pointer, highlight and keyboard submenu behavior, including Right Arrow to open it. Its
+   tooltip and accessible name identify the agent, account, window and whole remaining percent; the bar is not
+   read separately.
+
    Countdowns and the age of an out-of-date reading are as of the last time the menu was updated, which a change of
-   the sessions, consoles, projects, accounts, agents' availability, quotas or the UI's language causes, not the
+   the selected session, current console, sessions, consoles, projects, accounts, agents' availability, quotas or the UI's language causes, not the
    clock alone, so they can lag behind the clock. Opening the menu asks the daemon to refresh the quotas that are
    due, as opening the rail's panel or Settings' section does; since the menu never changes while open, what that
    brings shows from the next time it is opened. The menu does not wait for the reply.
@@ -142,20 +171,28 @@ the current build renders the texts (their inset and vibrancy) has still to be s
 Chinese, in a light menu: the three session headings — **Waiting for you**, **Working**, **Awaiting instructions** —
 each with its status glyph (the hand, the blue dot, the speech bubble) to the left of its text, lined up with the
 session lines below: the glyphs' centres on the same vertical line as the agent marks' centres, the heading text on
-the same left edge as the session titles, and each glyph centred vertically on its text to within half a point. In
-the menu bar, with white icons over a dark wallpaper: the octopus with a raised hand as an orange hand over the
-octopus's cut-out corner, the octopus in the menu bar's tint; the orange hand still shown while the icon was
-highlighted with its menu open; the icon going back to the octopus alone, with no hand left over, when the waiting
-session stopped waiting, and the orange hand coming back when a session waited again.
+the same left edge as the session titles, and each glyph centred vertically on its text to within half a point.
 
 **Not yet observed** in the packaged application: the headings' styling as described above (their colour, weight, not
 being dimmed, never highlighting, and how assistive technology reads them), **No sessions running**, and the account
 headers in a submenu; the session lines' agent marks and the headings' status glyphs in a dark menu; either look on a
-light menu bar, and the octopus alone while the icon is highlighted with its menu open; the quota submenus opened from
-the icon's own menu; a Claude Code account's quota in a submenu; opening the menu asking for a refresh of the quotas;
-any quota row in a dark menu, and a menu changing between light and dark while the app runs; a row never highlighting
-under the pointer; a row widened by a long window name; the agent marks on the submenus' opening lines; and a left
-click opening the menu.
+light menu bar, and the octopus alone while the icon is highlighted with its menu open; opening the menu asking for
+a refresh of the quotas; a menu changing between light and dark while the app runs; a quota detail row never
+highlighting under the pointer; and a row widened by a long window name.
+
+**Observed in native previews and probes:** an AppKit image-view preview showed the original icon without a quota
+and capsules at 0%, 65% and 100% in light and dark appearances. A native menu
+probe showed the quota opener bars in light and dark menus, both resting and highlighted, verified Right Arrow
+opening a submenu, and confirmed that assistive technology reads the whole quota label. These probes did not
+launch the packaged application.
+
+**Observed in a packaged application with preview fixtures:** the full-size octopus with its larger capsule and
+enlarged orange dot at the upper right in the system menu bar. Clicking that application's own icon opened its native dark
+menu, showing Claude at 65% and Codex at 88% as capsules aligned at the right before the submenu arrows. The native
+quota submenu showed the account-wide Weekly window at 65% before Fable weekly at 10%. These checks did not
+establish packaged-app behavior during an in-place theme change, keyboard submenu opening or quota-label
+accessibility; the latter two were checked in the native probe above. The orange dot without a readable quota and
+its behavior during waiting-state changes have not yet been observed in the packaged application.
 
 **Observed caveat:** for about the first 0.6 seconds after closing the window from native fullscreen, a click on the
 icon is lost — a right click does not even open the menu — apparently swallowed by macOS during its exit from

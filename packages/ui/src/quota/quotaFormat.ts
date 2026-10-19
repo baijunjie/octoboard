@@ -5,6 +5,19 @@ import type { QuotaWindow } from "../protocol";
 const MINUTE = 60_000;
 const DAY_MINUTES = 24 * 60;
 
+const WINDOW_ORDER: Record<QuotaWindow["kind"], number> = {
+  session: 0,
+  weekly: 1,
+  credit_period: 2,
+  weekly_model: 3,
+};
+
+/** Account-wide limits precede model-specific limits regardless of the agent's response order.
+ * Copy before the stable sort so store readings and the order among model limits stay intact. */
+export function orderedQuotaWindows(windows: readonly QuotaWindow[]): QuotaWindow[] {
+  return [...windows].sort((a, b) => WINDOW_ORDER[a.kind] - WINDOW_ORDER[b.kind]);
+}
+
 /** How much of `window` is left, as a whole percent from 0 to 100. The daemon passes a used
  * percentage above 100 on as the agent gives it, and one below 0 is as unlikely, so both are
  * clamped rather than shown as a negative or an excess. */
@@ -66,4 +79,12 @@ export function planLabel(plan: string): string {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+/** The account-wide short window first, then the weekly limit or the agent's credit pool.
+ * Model-specific weekly limits do not represent the whole account. */
+export function primaryQuotaWindow(windows: QuotaWindow[]): QuotaWindow | undefined {
+  return windows.find((window) => window.kind === "session")
+    ?? windows.find((window) => window.kind === "weekly")
+    ?? windows.find((window) => window.kind === "credit_period");
 }

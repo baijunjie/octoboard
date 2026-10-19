@@ -8,7 +8,7 @@ import type { QuotaUnavailable } from "../protocol";
 import { formatRelativeTime } from "../relativeTime";
 import { useNow } from "../useNow";
 import { QuotaMeter } from "./QuotaMeter";
-import { planLabel } from "./quotaFormat";
+import { orderedQuotaWindows, planLabel } from "./quotaFormat";
 import type { QuotaReading } from "./useAccountQuota";
 
 const NO_RECORDS = { consoles: new Map(), projects: new Map(), sessions: new Map() };
@@ -76,7 +76,7 @@ export function AccountQuotaSummary({ quota, single }: {
         </div>
       )}
       <div className={`grid grid-cols-1 gap-x-6 gap-y-3 ${single ? "" : "sm:grid-cols-2"}`}>
-        {windows.map((window) => (
+        {orderedQuotaWindows(windows).map((window) => (
           <QuotaMeter key={`${window.kind}:${window.label ?? ""}`} agent={quota.agent} window={window} />
         ))}
       </div>

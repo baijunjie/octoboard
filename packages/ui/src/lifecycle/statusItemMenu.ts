@@ -1,6 +1,8 @@
 import type { Translate } from "../i18n/catalog";
 import type { StatusItemEntry, StatusItemMenu, StatusItemSection } from "../platform";
 import type { Console, Project, Session, SessionStatus } from "../protocol";
+import { remainingPercent } from "../quota/quotaFormat";
+import { accountQuotaLabel, sessionQuotaWindowOf } from "../quota/sessionQuota";
 import { sessionWithLocation, statusLabel } from "../sessionLabel";
 import { rankedStatus, sessionsInTreeOrder } from "../sidebar/order";
 import { agentIconKey, statusIconKey } from "./statusItemIconKeys";
@@ -24,11 +26,13 @@ export interface StatusItemMenuSource {
   consoleMap: Map<string, Console>;
   projectMap: Map<string, Project>;
   quota: StatusItemQuotaSource;
+  selectedSessionId?: string;
+  currentConsoleId?: string;
 }
 
 /** The live sessions — waiting for the user, working, awaiting instructions — in the sidebar's
  * order, each status under its own heading, then a quota submenu per available agent. The icon
- * raises its hand (`attention`) while any session waits for the user. */
+ * shows its attention dot (`attention`) while any session waits for the user. */
 export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource): StatusItemMenuDraft {
   const { consoles, projects, sessions, consoleMap, projectMap, quota } = source;
   const byStatus = SECTION_ORDER.map((status) => ({ status, listed: sessionsInTreeOrder(consoles, projects, sessions, (s) => rankedStatus(s) === status) }));
@@ -44,12 +48,19 @@ export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource):
     if (listed.length > MAX_PER_SECTION) items.push({ label: t("statusItem.more", { count: listed.length - MAX_PER_SECTION }) });
     return [{ heading: t("statusItem.section", { status: statusLabel(t, status), count: listed.length }), icon: statusIconKey(status), items }];
   });
+  const selected = sessions.find((session) => session.id === source.selectedSessionId);
+  const window = sessionQuotaWindowOf(selected, quota);
+  const accountName = quota.accounts.find((account) => account.id === selected?.account_id)?.name;
   return {
+    ...(selected && window ? {
+      quota_remaining: remainingPercent(window),
+      quota_label: accountQuotaLabel(t, selected.agent, accountName, window),
+    } : {}),
     sections: sections.length > 0 ? sections : [{ heading: t("statusItem.noSessions"), items: [] }],
-    submenus: buildQuotaSubmenus(t, quota),
+    submenus: buildQuotaSubmenus(t, quota, consoleMap.get(source.currentConsoleId ?? "")),
     open: t("statusItem.open"),
     quit: t("menu.quit"),
-    // Taken from the listed sessions, so the hand is never up over a menu with no waiting section.
+    // Taken from the listed sessions, so the dot never shows over a menu with no waiting section.
     attention: byStatus.some(({ status, listed }) => status === "waiting_user" && listed.length > 0),
   };
 }

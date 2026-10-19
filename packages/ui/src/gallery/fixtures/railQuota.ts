@@ -43,9 +43,9 @@ const codexAccounts: Account[] = [
  * clipped name; Codex's default account, Personal, and Automation, which has no plan. */
 const readState = railQuotaState([...claudeAccounts, ...codexAccounts], [
   quotaOf("claude", null, "max", [
-    quotaWindow("session", 18, 117),
-    quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60),
     quotaWindow("weekly_model", 0, null, "Fable"),
+    quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60),
+    quotaWindow("session", 18, 117),
   ]),
   quotaOf("claude", "a-work", "pro", [quotaWindow("session", 100, 42), quotaWindow("weekly", 137, 2 * 24 * 60 + 5 * 60)]),
   quotaOf("claude", "a-long", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)]),
@@ -85,11 +85,47 @@ const shortTabsState = railQuotaState(
 
 export const railQuotaScenarios: Scenario[] = [
   {
+    id: "rail-quota-selected-session",
+    group: GROUP,
+    category: "normal",
+    title: "Rail quota button, selected session's named account",
+    description: "Hub uses Codex's Personal account: the compact bar on the quota button shows 88% remaining in its five-hour window, ahead of its weekly limit. The button's accessible name identifies Codex, Personal and the five-hour remainder. Select a Claude Code session to see the bar follow that session's default account instead.",
+    state: {
+      ...readState,
+      sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, agent: "codex", account_id: "a-codex" } : session])),
+    },
+    steps: [(ui) => ui.press(ui.session("Hub"))],
+  },
+  {
+    id: "rail-quota-selected-weekly",
+    group: GROUP,
+    category: "normal",
+    title: "Rail quota button, weekly fallback",
+    description: "Hub's default Claude Code account has no five-hour window. The bar shows its weekly 65% remaining, ignoring the model-specific weekly window; the accessible name identifies the default account and weekly remainder.",
+    state: railQuotaState([], [quotaOf("claude", null, "max", [
+      quotaWindow("weekly_model", 90, null, "Fable"),
+      quotaWindow("weekly", 35, 3 * 24 * 60),
+    ])]),
+    steps: [(ui) => ui.press(ui.session("Hub"))],
+  },
+  {
+    id: "rail-quota-selected-credit",
+    group: GROUP,
+    category: "normal",
+    title: "Rail quota button, credit-period fallback",
+    description: "Hub uses Grok Build's default account, which has only a credit-period window. The bar shows 77% remaining in the gauge's colour; the accessible name identifies Grok Build, the default account and credit-period remainder.",
+    state: {
+      ...shortTabsState,
+      sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, agent: "grok" } : session])),
+    },
+    steps: [(ui) => ui.press(ui.session("Hub"))],
+  },
+  {
     id: "rail-quota-hover",
     group: GROUP,
     category: "normal",
     title: "Rail quota panel, floated in by hovering",
-    description: "The panel floats in beside the rail's Account quota button, above Settings, after the pointer rests on it, with the button marked open and no tooltip. Claude Code's tab is selected beside Codex's, the default account first and then Work (spent) and an account whose clipped name fades out before its plan chip. Manage accounts is at the bottom.",
+    description: "No session is selected, so the quota button has no mini bar. The panel floats in beside it, above Settings, after the pointer rests on it, with the button marked open and no tooltip. Claude Code's default account lists five-hour quota first, weekly next and Fable last. Work (spent) follows, then an account whose clipped name fades out before its plan chip. Manage accounts is at the bottom.",
     state: readState,
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
@@ -137,17 +173,26 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail quota panel with no agent available",
-    description: "With no agent installed the panel shows the empty state (a glyph, \"No agent available\" and the hint) and Manage accounts is still offered.",
+    description: "Hub is selected but its agent is unavailable, so the quota button has no mini bar. With no agent installed the panel shows the empty state (a glyph, \"No agent available\" and the hint) and Manage accounts is still offered.",
     state: railQuotaState([], [], []),
-    steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
+    steps: [
+      (ui) => ui.press(ui.session("Hub")),
+      (ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota")),
+    ],
   },
   {
     id: "rail-quota-unread",
     group: GROUP,
     category: "exceptional",
     title: "Rail quota panel, accounts without a whole reading",
-    description: "Three accounts, none with a current reading: the default account has nothing to show, with the timeout as the reason; Work keeps its older windows under \"Out of date\" with the failure above them; Client says the quota is being read.",
-    state: unreadState,
-    steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
+    description: "Hub uses Work, whose failed refresh leaves an older reading: the quota button has no mini bar. Three accounts have no current reading: the default account has nothing to show, with the timeout as the reason; Work keeps its older windows under \"Out of date\" with the failure above them; Client says the quota is being read.",
+    state: {
+      ...unreadState,
+      sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, account_id: "a-work" } : session])),
+    },
+    steps: [
+      (ui) => ui.press(ui.session("Hub")),
+      (ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota")),
+    ],
   },
 ];

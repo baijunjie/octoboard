@@ -12,6 +12,8 @@ interface UseStatusItemMenuOptions {
   /** Pass `hosts !== undefined`, as for `useWaitingNotifications`: nothing is sent before the first
    * snapshot, whose sessions would otherwise be missing from the menu. */
   ready: boolean;
+  selectedSessionId?: string;
+  currentConsoleId?: string;
   onSessionChosen: (session: Session) => void;
 }
 
@@ -27,7 +29,7 @@ interface UseStatusItemMenuOptions {
  * rebuilt on each change of the consoles, projects, sessions, accounts, availability or quotas
  * without rendering anything.
  */
-export function useStatusItemMenu({ ready, onSessionChosen }: UseStatusItemMenuOptions): void {
+export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, onSessionChosen }: UseStatusItemMenuOptions): void {
   const { statusItem } = usePlatform();
   const { store, request } = useDaemon();
   const t = useT();
@@ -41,6 +43,8 @@ export function useStatusItemMenu({ ready, onSessionChosen }: UseStatusItemMenuO
     const push = () => {
       const { consoles, projects, sessions, settings, agentAvailability, accountQuotas } = store.getState();
       const draft = buildStatusItemMenu(t, {
+        selectedSessionId,
+        currentConsoleId,
         consoles: Array.from(consoles.values()),
         projects: Array.from(projects.values()),
         sessions: Array.from(sessions.values()),
@@ -73,7 +77,7 @@ export function useStatusItemMenu({ ready, onSessionChosen }: UseStatusItemMenuO
         push();
       }
     });
-  }, [statusItem, ready, t, language, store]);
+  }, [statusItem, ready, selectedSessionId, currentConsoleId, t, language, store]);
 
   // Read at call time: the subscription is made once.
   const chooseRef = useLatest(onSessionChosen);

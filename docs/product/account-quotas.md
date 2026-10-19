@@ -4,8 +4,9 @@ How much of an account's plan quota is left: the plan an account is on, and for 
 much remains and when it resets. Octoboard shows it for every account of an agent — the agent's default account and
 every account the user owns (see "Agent accounts" in `docs/product/settings.md`) — for Claude Code, Codex and Grok
 Build alike. It is shown in Settings' **Agent accounts** section, in the rail's account quota panel (see "The
-account quota panel on the rail" below) and, in the macOS application, in the quota submenus of the menu bar icon's
-menu (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
+account quota panel on the rail" below), in a single-window indicator for the selected session (see "The selected
+session's quota indicator" below) and, in the macOS application, on the menu bar icon and in its quota submenus
+(see "The icon's menu" in `docs/product/menu-bar-icon.md`).
 
 ## Which accounts have a quota
 
@@ -56,6 +57,10 @@ What each agent reports, and what each window is called:
 | Claude Code | **5-hour**, **Weekly**, and one weekly window per model that has a weekly limit of its own, named after the model (for example "Fable weekly") |
 | Codex | **5-hour** and **Weekly** |
 | Grok Build | One credit pool, named after its current period: **Weekly** for a period of about a week (6 to 8 days), **Monthly** for one of about a month (28 to 31 days), and **Credits** when the period is anything else or not given |
+
+In Settings, the rail's quota panel and the native menu's account details, windows appear in this order: **5-hour**,
+then the account-wide **Weekly**, then a credit pool, then **model-specific weekly** limits. Windows within the
+same kind keep the order the agent reported, including the model-specific limits.
 
 The plan is shown as the agent names it, with each word capitalised (`max` as **Max**, `plus` as **Plus**, `pro_lite`
 as **Pro Lite**); a name that already has capitals inside it keeps its own casing (**SuperGrok**). Only the plan and
@@ -120,6 +125,36 @@ Some writes into the account's directory cannot be avoided:
   registration is cleared by a later start of Claude Code.
 - **Codex** writes its model cache, its log databases and a temporary directory it clears on its next start.
 - **Grok Build** writes its model cache, its session search index and its log.
+
+## The selected session's quota indicator
+
+The rail's Account quota button carries one **18 × 5 px** outlined capsule beneath its gauge, inside the same
+32 px button. The capsule's top sits 21 px from the button's top; while it is present the gauge moves up 2 px to
+leave a visible gap. Its outline and fill use the gauge's text colour, with a transparent, visibly hollow unfilled
+portion. The fill shows the **remaining** quota of the selected session's own agent and account, including the
+default account. It follows session selection, a session's account switch and new quota readings; the console's
+or project's account preference does not choose this reading.
+
+The macOS menu bar icon shows the same session's quota using the same window selection and hiding rules below.
+Its appearance and update timing are described in "The icon's look" in `docs/product/menu-bar-icon.md`.
+
+Only one window is shown, in this priority: **5-hour**, then **Weekly**, then the agent's credit pool, labelled as
+in "Quota windows" above. A model-specific weekly limit is never used. The button's tooltip and accessible name
+identify the agent, account name, window and whole remaining percent; the bar is not read separately.
+
+The bar is absent when no session is selected, its agent is unavailable or its availability is not yet determined,
+the account has no reading or no eligible window, or the latest reading failed. A failed reading hides it even
+when Settings and the quota panel retain the last good windows as out of date. Without a bar the button keeps its
+Account quota label.
+
+An account removed from Settings or belonging to another agent cannot supply the indicator. Sessions retain their
+launch configuration directory: if it differs from the named account's current directory, or a session refers to
+the default account but retains an explicit directory, the bar is hidden. An older session without a recorded
+launch directory can still show an existing named account's quota.
+
+The button opens the account quota panel as described below; the selected session does not choose the panel's tab.
+Selecting a session does not itself request a fresh quota reading; the indicator uses the readings described in
+"When quotas are read" above.
 
 ## The account quota panel on the rail
 

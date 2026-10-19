@@ -138,7 +138,7 @@ export interface AppMenuCapability {
 }
 
 /** The menu bar icon's menu, already in the UI's language; it also decides the icon's picture,
- * through `attention`. */
+ * through `attention` and the selected session’s quota. */
 export interface StatusItemMenu {
   sections: StatusItemSection[];
   /** Submenus after the sessions and before Open, such as an agent's quota; none until the UI has
@@ -148,8 +148,12 @@ export interface StatusItemMenu {
   icons: Record<string, StatusItemIcon>;
   open: string;
   quit: string;
-  /** Whether the icon raises its hand: a live session is waiting for the user. */
+  /** Whether the icon shows its attention dot: a live session is waiting for the user. */
   attention: boolean;
+  /** Remaining quota of the selected session's account, 0–100; absent hides the icon's bar. */
+  quota_remaining?: number;
+  /** Localized account, window and remaining quota for the icon's tooltip and accessible name. */
+  quota_label?: string;
 }
 
 export interface StatusItemIcon {
@@ -180,6 +184,10 @@ export interface StatusItemSubmenu {
   /** The key of the picture beside the title, such as the agent's mark; none for no picture. It is
    * decoration: the title is what is read. */
   icon?: string;
+  /** Remaining quota of this agent's default account in the current console, 0–100. */
+  quota_remaining?: number;
+  /** Account, quota window and remainder announced with the submenu's opening row. */
+  quota_label?: string;
   items: StatusItemSubmenuItem[];
 }
 
@@ -194,7 +202,7 @@ export type StatusItemSubmenuItem =
   | { kind: "separator" };
 
 export interface StatusItemCapability {
-  /** Replaces the menu bar icon's menu, and with it whether the icon raises its hand. */
+  /** Replaces the menu bar icon's menu, and with it whether the icon shows its attention dot. */
   setMenu(menu: StatusItemMenu): Promise<void>;
   /** Subscribes to a session being chosen in that menu, returning the function that undoes it. The
    * shell has already brought the window to the front. */

@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { isolate } from "../i18n/isolate";
 import { format, type Translate } from "../i18n/catalog";
 import type { QuotaWindow } from "../protocol";
-import { planLabel, quotaHeadline, quotaResetsIn, quotaWindowLabel, remainingPercent } from "./quotaFormat";
+import { orderedQuotaWindows, primaryQuotaWindow, planLabel, quotaHeadline, quotaResetsIn, quotaWindowLabel, remainingPercent } from "./quotaFormat";
 
 const t: Translate = (key, ...args) => format("en", key, args[0]);
 const MINUTE = 60_000;
@@ -70,4 +70,25 @@ it.each([
   ["team-plan", "Team Plan"],
 ])("displays the plan %s as %s", (plan, shown) => {
   expect(planLabel(plan)).toBe(shown);
+});
+
+it.each([
+  [["weekly", "session", "credit_period"], "session"],
+  [["weekly_model", "weekly", "credit_period"], "weekly"],
+  [["credit_period"], "credit_period"],
+  [["weekly_model"], undefined],
+  [[], undefined],
+] as const)("chooses one account-wide quota window from %j", (kinds, expected) => {
+  expect(primaryQuotaWindow(kinds.map((kind) => window({ kind })))?.kind).toBe(expected);
+});
+
+it("orders account-wide windows before models without mutating or reordering model limits", () => {
+  const fable = window({ kind: "weekly_model", label: "Fable" });
+  const sonnet = window({ kind: "weekly_model", label: "Sonnet" });
+  const credit = window({ kind: "credit_period" });
+  const weekly = window({ kind: "weekly" });
+  const session = window();
+  const source = Object.freeze([fable, credit, sonnet, weekly, session]);
+  expect(orderedQuotaWindows(source)).toEqual([session, weekly, credit, fable, sonnet]);
+  expect(source).toEqual([fable, credit, sonnet, weekly, session]);
 });
