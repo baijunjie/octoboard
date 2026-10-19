@@ -58,3 +58,6 @@ Each was fixed where it was found, but nobody has checked the rest of the UI. Th
 ## Open
 
 - How the fix milestones are split (by area or by rule) is decided from the audit's findings.
+- Whether to add an automated guard (a test or lint over the message catalogs and their render sites) for names
+  interpolated into copy as plain text.
+- Whether the change check should name the "names in copy use the inline chip" rule explicitly.

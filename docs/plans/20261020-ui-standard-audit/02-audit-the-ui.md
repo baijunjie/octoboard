@@ -17,6 +17,12 @@
 
 - **Reusable capabilities**: the UI state gallery and its sweep for walking every scenario; the shared Alert,
   InlineChip, status badge and agent tab strip components the rules name.
+- **Names in copy** (user request): sweep the whole project for names, titles and control labels interpolated into
+  UI copy as plain text instead of the shared inline chip, per the standard's chip rules after "Standalone errors use
+  the shared Alert" (plain-text surfaces such as accessible names and system notifications keep text). Inventory
+  every i18n message with an interpolated parameter together with every place it is rendered; also check copy built
+  in code and daemon error messages shown in the UI — `daemon.unknown_console`, `daemon.unknown_project`,
+  `daemon.unknown_session` and `daemon.unknown_shell_terminal` render their name parameter as plain text today.
 - **Development notes**: the audit only records; it changes no UI. A finding that is a defect outside the standard
   is filed as a bug ticket instead of being recorded here.
 - **Reference docs**: `docs/ui-accessibility.md`; `packages/ui/README.md` "The UI state gallery".
