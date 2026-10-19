@@ -30,12 +30,12 @@ const SIDES = {
     grow: -1,
     centre: "calc(var(--panel-grip-gap) / 2)",
     appearance: "grip",
-    layout: "w-3",
+    layout: "w-6",
   },
 } as const;
 
 /** The width of the hit area of each side's handle, in px, `layout`'s `w-*`. */
-const HIT_WIDTH = { sidebar: 6, aside: 12 } as const;
+const HIT_WIDTH = { sidebar: 6, aside: 24 } as const;
 
 /**
  * The drag handle on a docked pane's inner edge (the sidebar's end, the aside's start): a

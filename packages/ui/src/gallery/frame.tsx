@@ -59,6 +59,9 @@ const { DaemonFailedMessage, NoAddressMessage, StartupScreen } = startup;
  * of the right format with nothing in it. */
 const EMPTY_DOCUMENT = JSON.stringify({ format: "octoboard-configuration", version: 1, consoles: [] });
 
+/** The window's quit handler once the app has registered it, for a scenario that asks to quit. */
+let requestQuit: (() => void) | undefined;
+
 /** The browser platform, with what the desktop app alone offers added so it can be driven in the
  * gallery: `windowChrome` while the URL says `chrome=1` (the window shortcuts among it, ⌃Tab
  * between console sessions; it also puts the top bar's drag region on), the macOS privacy grants
@@ -66,7 +69,9 @@ const EMPTY_DOCUMENT = JSON.stringify({ format: "octoboard-configuration", versi
  * than to really change a system setting, and `backgroundRun` for a scenario that says so (the
  * Settings switch), the clipboard taken away for a scenario that says so, and the configuration-file
  * capability stubbed from the scenario's `configuration` (absent where it says the platform has
- * none) so that no download or file picker is raised from a capture. Nothing else native. */
+ * none) so that no download or file picker is raised from a capture, and the exit capability for a
+ * scenario that says `quitRequested`, whose quit request is raised once its steps have run and whose
+ * confirmation ends nothing. Nothing else native. */
 function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const platform = selectPlatform();
   const grants = scenario?.macosPermissions;
@@ -87,6 +92,16 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
       links: { open: async () => {
         if (typeof scenario.externalLinks === "object") throw new Error(scenario.externalLinks.error);
       } },
+    }),
+    ...(scenario?.quitRequested && {
+      exit: {
+        register: ({ onQuitRequested }) => {
+          requestQuit = onQuitRequested;
+          return () => { requestQuit = undefined; };
+        },
+        heartbeat: async () => {},
+        confirmQuit: async () => {},
+      },
     }),
     ...(scenario?.backgroundRun && { backgroundRun: { set: async () => {} } }),
     ...(scenario?.clipboard === "unavailable" && { clipboard: undefined }),
@@ -171,6 +186,12 @@ try {
   const ui = createUi(document, language, daemon);
   await ui.wait(300);
   for (const step of scenario?.steps ?? []) await step(ui);
+  if (scenario?.quitRequested) {
+    if (requestQuit) {
+      requestQuit();
+      await ui.wait(300);
+    } else galleryFailure("The scenario asks for a quit request but the app registered no quit handler");
+  }
   // After the steps, which find the "+" buttons by their plain names, not the held form's.
   heldModifier?.press();
   const stuck = await stuckExit(document);

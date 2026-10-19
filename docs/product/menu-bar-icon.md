@@ -151,9 +151,9 @@ opened only brings the window back.
 
 ### Quit Octoboard
 
-Quit Octoboard is a quit like `Cmd+Q`: while a session holds a quit up it asks the same confirmation, bringing a window
-closed into the background back to ask it, and otherwise it quits at once (see "Quitting" in
-`docs/product/application-lifecycle.md`, which says which sessions hold a quit up).
+Quit Octoboard is a quit like `Cmd+Q`: while a session or a busy shell terminal holds a quit up it asks the same
+confirmation, bringing a window closed into the background back to ask it, and otherwise it quits at once (see
+"Quitting" in `docs/product/application-lifecycle.md`, which says what holds a quit up).
 
 ## What has been tried by hand
 

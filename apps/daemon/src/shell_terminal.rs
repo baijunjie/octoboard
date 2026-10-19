@@ -409,8 +409,8 @@ fn watch(state: Arc<AppState>, process: Arc<ShellProcess>) {
             if process.poll_exit() {
                 break;
             }
-            // Off the runtime's workers: where the system keeps no list of a process's children,
-            // finding them reads every process's record.
+            // Off the runtime's workers: the check reads each descendant's descriptors, and on a
+            // Linux kernel that keeps no list of children, every process's record.
             let busy = {
                 let process = process.clone();
                 tokio::task::spawn_blocking(move || busy::is_busy(&process)).await

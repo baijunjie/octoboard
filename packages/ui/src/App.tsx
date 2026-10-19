@@ -20,6 +20,7 @@ import { ContentPanel } from "./components/ContentPanel";
 import { HandOffOnUnmount } from "./components/HandOffOnUnmount";
 import { PaneResizeHandle } from "./components/PaneResizeHandle";
 import { refocusIfLost } from "./components/refocusIfLost";
+import { focusLanding } from "./components/regionFocus";
 import { focusNewConsole, Rail } from "./components/Rail";
 import { Scrim } from "./components/Scrim";
 import { BareTitleBar, TitleBar } from "./components/TitleBar";
@@ -53,7 +54,7 @@ import { ALREADY_RUNNING_CODES, type Console, type ConsoleSessionColour, type Pr
 import { sessionDisplayTitle } from "./sessionLabel";
 import { PANEL_ENTRIES } from "./panels/panelRegistry";
 import { RightPane } from "./panels/RightPane";
-import { openPanel, OWNER_KINDS, panelId, panelRegion, shownKinds, shownPanelRegions, toggleKind, visibleKinds, type PanelKind } from "./panels/stackState";
+import { maximizedKind, openPanel, OWNER_KINDS, panelId, panelRegion, OWNER_TOGGLE_KINDS, restoreStack, shownKinds, shownPanelRegions, stackedKinds, toggleKind, type OwnerKind, type PanelKind } from "./panels/stackState";
 import { usePanelStacks } from "./panels/usePanelStacks";
 import { LoginPageOpener } from "./settings/AccountLogin";
 import { SettingsDialog } from "./settings/SettingsDialog";
@@ -70,6 +71,7 @@ import { useSwitchShortcut } from "./sidebar/switchShortcut";
 import type { ArchiveScope } from "./sidebar/types";
 import { useDaemon, useDaemonStore, useDaemonStoreEqual } from "./store";
 import { terminalEmptyState } from "./terminal/emptyState";
+import { startShellTerminal } from "./terminal/shellTerminals";
 import { TerminalPane, type TerminalPaneHandle } from "./terminal/TerminalPane";
 import type { ViewedFile } from "./browser/TerminalFileViewer";
 import { nextWaitingSession, waitingSessionsInTreeOrder } from "./waiting";
@@ -81,7 +83,8 @@ const NO_SESSIONS: Session[] = [];
 export function App(): React.ReactElement {
   const t = useT();
   const { clipboard, links } = usePlatform();
-  const { request, toastError, toastNotice, reconnect, store } = useDaemon();
+  const daemon = useDaemon();
+  const { request, toastError, toastNotice, reconnect, store } = daemon;
   const connectionState = useDaemonStore((s) => s.connectionState);
   const hosts = useDaemonStore((s) => s.hosts);
   const consoles = useDaemonStore((s) => s.consoles);
@@ -103,6 +106,14 @@ export function App(): React.ReactElement {
   const [dialogRequest, setDialogRequest] = useState<DialogRequest>();
   // The file a path in the terminal's output named, while the file viewer shows it over the window.
   const [linkedFile, setLinkedFile] = useState<ViewedFile>();
+  // Where the viewer returns focus to when it closes, as its opener gave it; the agent terminal when
+  // the opener gave none or could not take it (its view is gone). Kept across the viewer opening
+  // another file from within.
+  const linkedReturnFocus = useRef<() => boolean>(undefined);
+  const viewLinkedFile = (file: ViewedFile, returnFocus?: () => boolean) => {
+    linkedReturnFocus.current = returnFocus;
+    setLinkedFile(file);
+  };
   const latestDialogRequest = useLatest(dialogRequest);
   const [archiveScope, setArchiveScope] = useState<ArchiveScope>();
   // How far each scope's archive list was loaded and scrolled, by `archiveKey`, for Back and
@@ -114,8 +125,19 @@ export function App(): React.ReactElement {
 
   const terminalRef = useRef<TerminalPaneHandle>(null);
   const welcomeRef = useRef<WelcomeScreenHandle>(null);
-  // Only one of the two is mounted: the welcome screen stands in for the terminal while there is no console.
-  const focusTerminal = () => (terminalRef.current ?? welcomeRef.current)?.focus();
+  // The agent terminal's area, which a maximized panel covers and makes inert.
+  const agentAreaRef = useRef<HTMLDivElement>(null);
+  // Only one of the two is mounted: the welcome screen stands in for the terminal while there is no
+  // console. While a maximized panel covers the agent terminal, focus meant for it goes where F6
+  // lands in that panel instead. Read off the DOM rather than the state, so a hand-off that runs in
+  // the commit restoring the layout (the maximized panel closing) already finds the terminal
+  // uncovered: it comes before the pane in the tree, so its `inert` is gone by the time the panel's
+  // own hand-off runs.
+  const focusTerminal = () => {
+    const covering = agentAreaRef.current?.hasAttribute("inert") ? document.querySelector("[data-panel-maximized]") : null;
+    if (covering && focusLanding(covering)) return;
+    (terminalRef.current ?? welcomeRef.current)?.focus();
+  };
 
   const consoleList = Array.from(consoles.values());
   const projectList = Array.from(projects.values());
@@ -170,22 +192,44 @@ export function App(): React.ReactElement {
   const ownerOrder = ownerKind ? OWNER_KINDS[ownerKind] : [];
   const ownerStack = ownerKind ? panelStacks[ownerKind] : undefined;
   const openPanels = ownerStack ? shownKinds(ownerStack, ownerOrder) : [];
-  const visiblePanels = ownerStack ? visibleKinds(ownerStack, ownerOrder) : [];
   const paneShown = openPanels.length > 0;
-  const panes = usePaneToggles({ hasSidebar: !noConsoles, asidePeekable: hasAside && !paneShown, focusTerminal });
+  // A maximized panel (the Terminal panel's, `PanelStack.tsx`) leaves the pane's column and covers
+  // the agent terminal's area, which is inert meanwhile and not an F6 stop; the sidebar and the
+  // panels left in the column stay as they are. With none left there, the column folds away and the
+  // area, with the panel over it, reaches the window's end.
+  const covered = ownerStack !== undefined && maximizedKind(ownerStack, ownerOrder) !== undefined;
+  const stackedPanels = ownerStack ? stackedKinds(ownerStack, ownerOrder) : [];
+  const columnShown = stackedPanels.length > 0;
+  // With no card in the column (none open, or the one open maximized) a panel that is not open
+  // floats in while the pointer rests on its toggle.
+  const panes = usePaneToggles({ hasSidebar: !noConsoles, asidePeekable: hasAside && !columnShown, focusTerminal });
   const isNarrow = useIsNarrow();
   const [peekKind, setPeekKind] = useState<PanelKind>();
   const filesOnScreen =
-    ownerKind === "project" && (paneShown ? visiblePanels.includes("files") : panes.asidePeek.active && peekKind === "files");
+    ownerKind === "project" && (openPanels.includes("files") || (panes.asidePeek.active && peekKind === "files"));
   // A panel kind's toggle shows or hides its panel; pressing it while the pane floats in docks it.
   const togglePanel = (kind: PanelKind) => {
     if (!ownerKind || !ownerStack) return;
-    panes.asidePeek.hide(false);
-    setPanelStack(ownerKind, toggleKind(ownerStack, kind, ownerOrder));
+    // A card floating in docks in place, keeping focus, except beside a folded column, where it
+    // floats in a pane of its own and is shown again in the docked one.
+    panes.asidePeek.hide(paneShown && !columnShown);
+    const next = toggleKind(ownerStack, kind, ownerOrder);
+    setPanelStack(ownerKind, next);
+    // Opening the Terminal panel on a project with no terminal starts one; floating it in does not.
+    const opened = !shownKinds(ownerStack, ownerOrder).includes(kind) && shownKinds(next, ownerOrder).includes(kind);
+    if (kind === "terminal" && opened && asideOwner?.kind === "project") void startShellTerminal(daemon, asideOwner.project, { ifNone: true });
   };
+  // A maximized panel is its owner kind's: once the pane passes to an owner of another kind (a
+  // console session, which has no Terminal panel) or to none, it is restored, so coming back shows
+  // the stack as it was. Moving between projects keeps it.
+  useEffect(() => {
+    for (const kind of Object.keys(OWNER_KINDS) as OwnerKind[]) {
+      if (kind !== ownerKind && panelStacks[kind].maximized !== undefined) setPanelStack(kind, restoreStack(panelStacks[kind]), { persist: false });
+    }
+  }, [ownerKind]);
   const hoverPanelToggle = (kind: PanelKind, hovered: boolean) => {
     if (!hovered) return panes.asidePeek.leave();
-    if (paneShown) return;
+    if (columnShown || openPanels.includes(kind)) return;
     setPeekKind(kind);
     panes.asidePeek.reveal();
   };
@@ -221,8 +265,8 @@ export function App(): React.ReactElement {
       rail: true,
       welcome: noConsoles,
       sidebar: !noConsoles && panes.sidebarShown,
-      archive: archiveOpen,
-      terminal: (selectedSession !== undefined || emptyHasAction) && !archiveOpen,
+      archive: archiveOpen && !covered,
+      terminal: (selectedSession !== undefined || emptyHasAction) && !archiveOpen && !covered,
       banner: connectionState === "reconnecting" || connectionState === "closed",
     },
     panels: shownPanelRegions(ownerStack, ownerKind),
@@ -239,16 +283,19 @@ export function App(): React.ReactElement {
   // at every width.
   const sidebarWidth = usePaneWidth("sidebar", {
     sidebar: !noConsoles && !isNarrow && (panes.sidebarDocked || sidebarColumnPhase !== "closed"),
-    aside: hasAside && paneShown,
+    aside: hasAside && columnShown,
   }, isNarrow);
   const asideWidth = usePaneWidth("aside", {
     sidebar: !noConsoles && !isNarrow && panes.sidebarDocked,
-    aside: hasAside && paneShown,
+    aside: hasAside && columnShown,
   }, isNarrow);
   const asideLayout: AsideLayout = {
     width: asideWidth.width,
     peek: paneShown ? undefined : panes.asidePeek,
+    folded: paneShown && !columnShown,
   };
+  // While the column is folded, a panel floats in a pane of its own (`RightPane`).
+  const asideFloat = asideLayout.folded ? panes.asidePeek : undefined;
 
   // An owner that is gone leaves no aside, and is not brought back by anything that appears later.
   useEffect(() => {
@@ -317,8 +364,9 @@ export function App(): React.ReactElement {
   // The exit flow's frontend owner: it registers with the shell on mount, which is what makes the
   // window quittable. Only its confirmation is needed here: the main app has no separate "Quit"
   // control.
-  const { exitConfirmOpen, closeExitConfirm, confirmExit } = useAppExit({
+  const { exitConfirmOpen, exitHolders, closeExitConfirm, confirmExit } = useAppExit({
     getSessions: allSessions,
+    getShellTerminals: () => Array.from(store.getState().shellTerminals.values()),
     requestShutdown: () => request({ type: "shutdown" }),
     toastError,
   });
@@ -420,9 +468,9 @@ export function App(): React.ReactElement {
     if (session.status === "archived") void resumeSession(session.id);
   };
 
-  /** Opens a project's browser in the aside, putting the aside on screen (its Files panel open,
-   * restored if another's maximizing hid it), without selecting or starting any session: the
-   * terminal beside it stays as it is. */
+  /** Opens a project's browser in the aside, putting the aside on screen (its Files panel open;
+   * a maximized panel stays maximized), without selecting or starting any session: the terminal
+   * beside it stays as it is. */
   const browseProject = (project: Project) => {
     setProjectBrowserMode(project.id, "files");
     setOwnerByUser({ kind: "project", project: project.id });
@@ -503,6 +551,9 @@ export function App(): React.ReactElement {
       setArchiveRestore(undefined);
     }
     setArchiveScope(scope);
+    // The archive view is in the agent terminal's area, which a maximized panel covers: restoring
+    // it is how the user sees what was asked for.
+    if (ownerKind && ownerStack && maximizedKind(ownerStack, ownerOrder) !== undefined) setPanelStack(ownerKind, restoreStack(ownerStack), { persist: false });
     // Below the `docked` breakpoint the sidebar is a drawer over the terminal, and would keep
     // covering the archive that was just asked for.
     if (panes.sidebarOpen) panes.closeSidebar();
@@ -745,10 +796,10 @@ export function App(): React.ReactElement {
         onToggleSidebar={stableToggleSidebar}
         onSidebarToggleEnter={panes.sidebarPeek.reveal}
         onSidebarToggleLeave={panes.sidebarPeek.leave}
-        asideSpan={paneShown ? asideWidth.width : 0}
-        panelToggles={ownerKind ? ownerOrder.map((kind) => {
+        asideSpan={columnShown ? asideWidth.width : 0}
+        panelToggles={ownerKind ? OWNER_TOGGLE_KINDS[ownerKind].map((kind) => {
           const entry = PANEL_ENTRIES[kind];
-          const open = paneShown && visiblePanels.includes(kind);
+          const open = openPanels.includes(kind);
           return {
             kind,
             label: t(open ? entry.toggle.hide : entry.toggle.show),
@@ -868,7 +919,7 @@ export function App(): React.ReactElement {
                     closed. The clip-path cuts it on the aside's side: the aside's cards sit apart from the
                     terminal across a gap of the terminal's own background, which a shadow would draw a
                     line in. */}
-                <div className="relative flex min-h-0 min-w-[398px] flex-[1_1_398px] docked:z-1 docked:min-w-[520px] docked:flex-[1_1_520px] docked:shadow-(--panel-shadow) docked:[clip-path:inset(-12px_0_-12px_-12px)] docked:rtl:[clip-path:inset(-12px_-12px_-12px_0)]">
+                <div ref={agentAreaRef} inert={covered} className="relative flex min-h-0 min-w-[398px] flex-[1_1_398px] docked:z-1 docked:min-w-[520px] docked:flex-[1_1_520px] docked:shadow-(--panel-shadow) docked:[clip-path:inset(-12px_0_-12px_-12px)] docked:rtl:[clip-path:inset(-12px_-12px_-12px_0)]">
                   <ArchiveLayer
                     focusTerminal={focusTerminal}
                     view={archiveOpen && archiveConsole ? {
@@ -893,7 +944,7 @@ export function App(): React.ReactElement {
                   <TerminalPane
                     ref={terminalRef}
                     resizing={isDockEasing(sidebarColumnPhase)}
-                    onViewFile={setLinkedFile}
+                    onViewFile={viewLinkedFile}
                     session={selectedSession}
                     onResume={resumeSession}
                     resuming={selectedSessionId !== undefined && resumingIds.has(selectedSessionId)}
@@ -927,15 +978,19 @@ export function App(): React.ReactElement {
                       onMoveConsoleSession: moveConsoleSession,
                     }}
                     peekKind={peekKind}
+                    onViewFile={viewLinkedFile}
                     onDismiss={() => panes.asidePeek.hide()}
+                    maximizeArea={agentAreaRef}
+                    areaEasing={isDockEasing(sidebarColumnPhase)}
+                    float={asideFloat}
                   />
                 )}
               </main>
-              {asideOwner && paneShown && (
+              {asideOwner && columnShown && (
                 <>
                   {/* First among what goes away with the pane, so focus on its handle is still found. */}
                   <HandOffOnUnmount from="[role=separator][data-pane=aside]" to={focusTerminal} />
-                  <PaneResizeHandle side="aside" paneWidth={asideWidth} region={panelRegion(visiblePanels[0] as PanelKind)} />
+                  <PaneResizeHandle side="aside" paneWidth={asideWidth} region={panelRegion(stackedPanels[0] as PanelKind)} />
                 </>
               )}
             </>
@@ -962,7 +1017,9 @@ export function App(): React.ReactElement {
             setLinkedFile(undefined);
             // Back where the click came from, once the viewer has gone and taken its own focus
             // restoring with it.
-            queueMicrotask(focusTerminal);
+            queueMicrotask(() => {
+              if (!linkedReturnFocus.current?.()) focusTerminal();
+            });
           }}
         />
       )}
@@ -970,7 +1027,7 @@ export function App(): React.ReactElement {
       {exitConfirmOpen && (
         <ConfirmDialog
           title={t("app.quit.title")}
-          message={t("app.quit.message")}
+          message={t(exitHolders.terminals ? exitHolders.sessions ? "app.quit.message.both" : "app.quit.message.terminals" : "app.quit.message")}
           confirmLabel={t("common.quit")}
           destructive
           onCancel={closeExitConfirm}

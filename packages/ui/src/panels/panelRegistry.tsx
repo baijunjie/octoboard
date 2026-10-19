@@ -1,13 +1,15 @@
-import { FileText, FolderClosed, type LucideIcon } from "lucide-react";
+import { FileText, FolderClosed, SquareTerminal, type LucideIcon } from "lucide-react";
 import type React from "react";
 
 import { LazyProjectBrowser } from "../browser/LazyProjectBrowser";
+import type { ViewedFile } from "../browser/TerminalFileViewer";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { AsideOwner } from "../layout/asideOwner";
 import type { PanePeek } from "../layout/usePaneToggles";
 import type { Project } from "../protocol";
 import { ReportPanel } from "../report/ReportPanel";
+import { ShellTerminalPanel } from "../terminal/ShellTerminalPanel";
 import type { PanelKind } from "./stackState";
 
 /** What a panel's content is given: who owns the pane, which the stack follows the way the file
@@ -29,6 +31,9 @@ export interface PanelContentProps {
   /** The floating pane's pointer callbacks, for a panel whose content sends this document no pointer
    * events of its own; `undefined` while the pane is docked. */
   peek: Pick<PanePeek, "keep" | "leave"> | undefined;
+  /** The panel is being resized every frame (a maximized card while the sidebar's dock eases): a
+   * terminal keeps its size until this ends, then fits once. */
+  resizing: boolean;
   /** What a key pressed inside a report page's frame asks of the window. */
   frameKeys: {
     onEscape: () => void;
@@ -36,6 +41,10 @@ export interface PanelContentProps {
     onMoveHistory: (backward: boolean) => void;
     onMoveConsoleSession: (backward: boolean) => void;
   };
+  /** Shows a project file a path in a terminal's output named, in the file viewer. `returnFocus`
+   * puts focus back where the click came from once the viewer closes, and says whether it took
+   * it; the agent terminal takes it when `returnFocus` is absent or returns false. */
+  onViewFile?: (file: ViewedFile, returnFocus?: () => boolean) => void;
 }
 
 /** One kind of panel. The content starts with a `PanelHeader`, which supplies the stack's own
@@ -49,11 +58,18 @@ export interface PanelEntry {
   toggle: { show: PlainMessageKey; hide: PlainMessageKey };
   /** The panel's accessible name as a region. */
   label: (t: Translate, project: Project | undefined) => string;
+  /** Whether its header offers Maximize panel, which makes the docked card cover the agent terminal's
+   * area (the sidebar and the other panels stay as they are) until it is restored. */
+  maximizable?: boolean;
   Content: React.ComponentType<PanelContentProps>;
 }
 
 function FilesContent({ project, active, selectedSessionId, switching, focusTerminal }: PanelContentProps): React.ReactElement | null {
   return project ? <LazyProjectBrowser project={project} active={active} selectedSessionId={selectedSessionId} switching={switching} focusTerminal={focusTerminal} /> : null;
+}
+
+function TerminalContent({ project, switching, resizing, onViewFile }: PanelContentProps): React.ReactElement | null {
+  return project ? <ShellTerminalPanel project={project} switching={switching} resizing={resizing} onViewFile={onViewFile} /> : null;
 }
 
 function ReportContent({ owner, peek, frameKeys }: PanelContentProps): React.ReactElement | null {
@@ -69,6 +85,14 @@ export const PANEL_ENTRIES: Record<PanelKind, PanelEntry> = {
     toggle: { show: "titleBar.files.show", hide: "titleBar.files.hide" },
     label: (t, project) => t("browser.label", { project: isolate(project?.name ?? "") }),
     Content: FilesContent,
+  },
+  terminal: {
+    icon: SquareTerminal,
+    name: "panel.terminal.name",
+    toggle: { show: "titleBar.terminal.show", hide: "titleBar.terminal.hide" },
+    label: (t, project) => t("panel.terminal.label", { project: isolate(project?.name ?? "") }),
+    maximizable: true,
+    Content: TerminalContent,
   },
   report: {
     icon: FileText,

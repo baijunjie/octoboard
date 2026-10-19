@@ -499,6 +499,36 @@ impl PtyCore {
         (group > 0).then_some(group)
     }
 
+    /// The device path of the PTY's slave side, what a process on the terminal has open as its
+    /// stdin, stdout or stderr, or `None` when the system cannot say or the PTY is hung up.
+    pub fn slave_path(&self) -> Option<std::path::PathBuf> {
+        let master = self.master.lock().expect("master mutex poisoned");
+        master.as_ref()?;
+        let mut name = [0 as libc::c_char; 256];
+        #[cfg(target_os = "linux")]
+        // SAFETY: the call writes at most the buffer's size, through a descriptor that holding
+        // `master` keeps open.
+        let named = unsafe { libc::ptsname_r(self.fd, name.as_mut_ptr(), name.len()) } == 0;
+        #[cfg(target_os = "macos")]
+        let named = {
+            // SAFETY: the request fills in a buffer of 128 bytes, which `name` exceeds, through a
+            // descriptor that holding `master` keeps open.
+            let status =
+                unsafe { libc::ioctl(self.fd, libc::TIOCPTYGNAME as _, name.as_mut_ptr()) };
+            status == 0
+        };
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        let named = false;
+        if !named {
+            return None;
+        }
+        // SAFETY: the system wrote a NUL-terminated name into the zeroed buffer.
+        let name = unsafe { std::ffi::CStr::from_ptr(name.as_ptr()) };
+        Some(std::path::PathBuf::from(
+            name.to_string_lossy().into_owned(),
+        ))
+    }
+
     /// Whether [`Self::hang_up`] has closed the PTY.
     #[cfg(test)]
     pub fn is_hung_up(&self) -> bool {

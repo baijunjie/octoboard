@@ -108,6 +108,18 @@ export type TerminalElement = HTMLElement & { octoboardTerminalText?: TerminalTe
 
 export type TermStatus = "connecting" | "open" | "closed" | "not_running";
 
+export interface TerminalControllerOptions {
+  /** Draws on the GPU (`useWebglRenderer`), or keeps xterm's DOM renderer. On by default, meant for the one agent
+   * terminal: any other xterm on the page passes `false`. WebKit caps a page's active WebGL contexts, counts a
+   * released one until garbage collection (disposing the addon or `loseContext()` does not free the slot), and over
+   * the cap takes the context of the terminal that drew least recently, which can be the agent terminal's. */
+  gpu?: boolean;
+  /** Tells the daemon only a size the terminal was fitted to its container at, never xterm's
+   * default 80 by 24: for a terminal mounted out of sight (a hidden tab), which cannot be fitted
+   * until it is shown and would otherwise send its process a size it then takes back. */
+  fittedSizesOnly?: boolean;
+}
+
 export interface TerminalControllerHandlers {
   onStatusChange: (status: TermStatus) => void;
   /** Whether the screen shows anything of the current session yet: false from a reset until the
@@ -150,7 +162,8 @@ export interface TerminalControllerHandlers {
  *
  * This class only knows about one session's socket; it has no notion of whether that session's
  * process is still meant to be running. Automatic reconnection after a dropped socket is therefore
- * `TerminalPane`'s job (it has the `Session` record with the status this needs), not this one's.
+ * the job of `TerminalPane` and `ShellTerminalView` (they have the record with the status this
+ * needs), not this one's.
  */
 export class TerminalController {
   readonly term: Terminal;
@@ -197,8 +210,13 @@ export class TerminalController {
   private resizeTimer?: ReturnType<typeof setTimeout>;
   private sentSize?: { cols: number; rows: number };
 
-  constructor(handlers: TerminalControllerHandlers, initialColorTheme: "light" | "dark") {
+  private readonly options: Required<TerminalControllerOptions>;
+  /** Whether the terminal has been fitted to its container at least once. */
+  private fitted = false;
+
+  constructor(handlers: TerminalControllerHandlers, initialColorTheme: "light" | "dark", { gpu = true, fittedSizesOnly = false }: TerminalControllerOptions = {}) {
     this.handlers = handlers;
+    this.options = { gpu, fittedSizesOnly };
     const onLinkClick = terminalLinkHandler(handlers.openLink, () => this.term.hasSelection());
     this.term = new Terminal({
       scrollback: 10000,
@@ -328,7 +346,7 @@ export class TerminalController {
     this.openFrame = requestAnimationFrame(() => {
       this.openFrame = undefined;
       this.touchable = true;
-      this.useWebglRenderer();
+      if (this.options.gpu) this.useWebglRenderer();
       this.fit();
     });
   }
@@ -490,7 +508,7 @@ export class TerminalController {
     socket.addEventListener("open", () => {
       if (generation !== this.generation) return;
       everOpened = true;
-      this.sendResize(this.term.cols, this.term.rows);
+      if (this.fitted || !this.options.fittedSizesOnly) this.sendResize(this.term.cols, this.term.rows);
       for (const data of this.pendingInput.splice(0)) socket.send(data);
       this.setStatus("open");
       if (userInitiated) this.term.focus();
@@ -604,6 +622,7 @@ export class TerminalController {
   syncSize(): void {
     clearTimeout(this.resizeTimer);
     this.resizeTimer = setTimeout(() => {
+      if (!this.fitted && this.options.fittedSizesOnly) return;
       const { cols, rows } = this.term;
       if (this.sentSize?.cols === cols && this.sentSize.rows === rows) return;
       this.sendResize(cols, rows);
@@ -651,6 +670,7 @@ export class TerminalController {
       return;
     }
     this.fitAddon.fit();
+    this.fitted = true;
   }
 
   private setPainted(painted: boolean): void {

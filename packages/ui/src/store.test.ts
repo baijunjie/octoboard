@@ -2,7 +2,7 @@
 import { expect, it, vi } from "vitest";
 
 import { sessionOf } from "./gallery/fixtures/builders";
-import type { Event } from "./protocol";
+import type { Event, Project, ShellTerminal } from "./protocol";
 import { accountQuotaOf } from "./quota/accountQuotaOf";
 import { createDaemon, dismissAccountLogin, trackAccountLogin } from "./store";
 
@@ -99,7 +99,7 @@ it("remembers the logins this window started until they end, and forgets those a
   trackAccountLogin(daemon.store, "grok", null, true);
   const snapshot = {
     type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
-    agent_availability: [], account_quotas: [], account_logins: [{ ...login, account: "b" }], home_dir: null,
+    agent_availability: [], account_quotas: [], account_logins: [{ ...login, account: "b" }], home_dir: null, shell_terminals: [],
   } as unknown as Event;
   client.onEvents!([snapshot]);
   expect(daemon.store.getState().loginsStartedHere).toEqual([]);
@@ -120,4 +120,26 @@ it("replaces the account quotas with each update and keeps the entry of an accou
   client.onEvents!([{ type: "account_quotas_updated", account_quotas: [first] }]);
   expect(daemon.store.getState().accountQuotas).toHaveLength(1);
   expect(accountQuotaOf(daemon.store.getState().accountQuotas, "codex", null)).toBeUndefined();
+});
+
+it("keeps the shell terminals a snapshot lists and the broadcasts change, and drops those of a removed project", () => {
+  const daemon = createDaemon("http://localhost:1234");
+  const shell = (id: string, project: string): ShellTerminal => ({ id, project_id: project, worktree: null, cwd: `/${project}`, title: "zsh", renamed: false, state: "running", busy: false, created_at: 1 });
+  const project = (id: string) => ({ id, console_id: "c", name: id }) as Project;
+  const snapshot = {
+    type: "snapshot", hosts: [], consoles: [], projects: [project("p"), project("q")], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
+    agent_availability: [], account_quotas: [], account_logins: [], home_dir: null, shell_terminals: [shell("a", "p"), shell("b", "q")],
+  } as unknown as Event;
+  client.onEvents!([snapshot]);
+  const held = daemon.store.getState().shellTerminals.get("a");
+  expect([...daemon.store.getState().shellTerminals.keys()]).toEqual(["a", "b"]);
+  // A snapshot naming it again, unchanged, keeps the record a component holds.
+  client.onEvents!([snapshot]);
+  expect(daemon.store.getState().shellTerminals.get("a")).toBe(held);
+  client.onEvents!([{ type: "shell_terminal_upserted", shell_terminal: { ...shell("a", "p"), busy: true } }]);
+  expect(daemon.store.getState().shellTerminals.get("a")?.busy).toBe(true);
+  client.onEvents!([{ type: "shell_terminal_deleted", shell_terminal: "a" }]);
+  expect(daemon.store.getState().shellTerminals.has("a")).toBe(false);
+  client.onEvents!([{ type: "project_deleted", project: "q" }]);
+  expect(daemon.store.getState().shellTerminals.size).toBe(0);
 });

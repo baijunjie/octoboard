@@ -47,7 +47,7 @@ function report(copy: typeof english): string {
 export function createPreviewScenario(
   scene: PreviewScene,
   language: Language,
-): { scenario: Scenario; output: (session: string) => string } {
+): { scenario: Scenario; output: (session: string) => string | undefined } {
   const copy = copyFor(language);
   const workspace = consoleOf("preview-console", copy.workspace, {
     workdir: "/demo/bistro",
@@ -222,11 +222,14 @@ export function createPreviewScenario(
       (ui) => ui.press(ui.changeRow("meal-deal-orders.ts", "modified")),
       (ui) => ui.wait(600),
     );
+  const sessionIds = new Set([coordinator.id, ...projectSessions.map((session) => session.id)]);
   const cyan = "\x1b[38;5;80m";
   const reset = "\x1b[0m";
   return {
     scenario,
     output: (session) => {
+      // A shell terminal of the Terminal panel is not a session: it is left to the fake terminal's shell.
+      if (!sessionIds.has(session)) return undefined;
       const lines =
         session === coordinator.id
           ? scene === "overview"

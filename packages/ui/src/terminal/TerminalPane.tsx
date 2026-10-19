@@ -19,6 +19,7 @@ import { TerminalController, type TermStatus } from "./TerminalController";
 import { openPathTarget } from "./openPathTarget";
 import { TerminalEditMenu } from "./TerminalEditMenu";
 import { TerminalLinkTooltip } from "./TerminalLinkTooltip";
+import { MAX_AUTO_RECONNECT_ATTEMPTS, reconnectDelay, STABLE_CONNECTION_MS } from "./reconnectPolicy";
 import type { HoveredTerminalLink } from "./terminalLinks";
 import { XTERM_THEMES } from "./xtermThemes";
 
@@ -55,18 +56,6 @@ export interface TerminalPaneHandle {
    * bar, except from `<body>`, which is left alone (`focusTerminal`). */
   focus: () => void;
 }
-
-/** Reconnect backoff after a dropped-but-still-live session's socket closes: doubles each attempt,
- * capped, and stops after `MAX_AUTO_RECONNECT_ATTEMPTS` so a session that keeps failing to connect
- * does not retry forever — the cover's Reconnect covers that case instead. The attempt counter only
- * resets once a connection has *stayed* open for `STABLE_CONNECTION_MS` — resetting it on every
- * `open` would mean a connection that opens and drops again within a few seconds (a backpressure
- * drop recurs roughly that often under sustained output) always sees attempt 0, so the delay would
- * never grow past the base value and the cap would never engage. */
-const MAX_AUTO_RECONNECT_ATTEMPTS = 5;
-const BASE_RECONNECT_DELAY_MS = 1000;
-const MAX_RECONNECT_DELAY_MS = 8000;
-const STABLE_CONNECTION_MS = 10000;
 
 function fitController(controller: TerminalController): void {
   controller.fit();
@@ -364,9 +353,7 @@ export function TerminalPane({
     if (status !== "closed" && status !== "not_running") return;
     if (controller.currentSessionId !== session.id) return;
     if (reconnectAttemptsRef.current >= MAX_AUTO_RECONNECT_ATTEMPTS) return;
-    const delay =
-      terminalReconnectDelay?.(reconnectAttemptsRef.current) ??
-      Math.min(BASE_RECONNECT_DELAY_MS * 2 ** reconnectAttemptsRef.current, MAX_RECONNECT_DELAY_MS);
+    const delay = reconnectDelay(reconnectAttemptsRef.current, terminalReconnectDelay);
     const timer = setTimeout(() => {
       reconnectAttemptsRef.current += 1;
       attachCurrent(false);

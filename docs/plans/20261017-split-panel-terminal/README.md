@@ -18,7 +18,7 @@ every value is a literal at its call site.
    and draw dividers as a 0.5px double line that reads as a groove.
 3. Turn the right pane into a vertical stack of panels, in the manner of Claude's desktop app: each panel kind (Files,
    Terminal and a console session's Report to begin with) is its own inset card with a header holding its title,
-   actions, maximize and close, a resize handle sits in the gap between neighbouring cards and another on the stack's
+   actions and close (the Terminal panel also maximize), a resize handle sits in the gap between neighbouring cards and another on the stack's
    inner edge, and the top bar's one toggle per panel kind replaces the pane's own toggle.
 4. Let the daemon run plain shell terminals that belong to a project, beside the agent sessions it already runs.
 5. Add the Terminal panel: several terminal tabs per project, following the project the way the file browser does.
@@ -33,9 +33,9 @@ every value is a literal at its call site.
   keeps a 0.5px hairline outline, a 1px line on a 1x display. Borders that identify a control (form fields and the
   like) and borders that show a selected state stay, at the 3:1 contrast they need.
 - **A floating window keeps its elevation shadow.** The short two-layer shadow is for cards lying in the layout. Whatever
-  floats over the content — the floating cards and the drawers of both panes, the notice floating over the terminal —
-  keeps the larger elevation shadow it has today, and loses only its outline border (a panel card keeping its
-  hairline).
+  floats over the content — the notice floating over the terminal, popovers — keeps the larger elevation shadow it has
+  today, and loses only its outline border. Panel cards, docked or floating (the cards and drawers of both panes),
+  take a light card shadow instead, at the user's request, beside their hairline.
 - **The right pane is its panel cards, inset.** The right pane has no frame of its own, in any form: it is the stack
   of panel cards, as in Claude's desktop app. The cards are inset: the same gap separates them from each other, from
   the top bar, from the window's right and bottom edges and from the agent terminal. Behind them is the agent
@@ -76,14 +76,18 @@ every value is a literal at its call site.
   The server form must not ship with it before remote access has credentials.
 - **Stack rules.** Each panel kind appears in the stack at most once; several terminals are tabs inside the one
   Terminal panel. A per-kind toggle pressed while the whole pane is hidden shows the pane with that panel open.
-  Closing the last panel in the stack closes the pane. Maximizing a panel hides the other panels until it is restored.
+  Closing the last panel in the stack closes the pane. Only the Terminal panel can be maximized: it then takes the
+  agent terminal's area, covering the agent terminal, until it is restored; the sidebar and the Files panel keep their
+  own state, so with both closed the maximized Terminal spans the whole width. Files and Report have no maximize.
 - **Shell terminal rules.** A new terminal starts in the worktree the project pane's Git mode has selected, the project
   root when none is. Opening the Terminal panel on a project with no terminal starts one. A tab whose shell has exited
   stays with its final screen until the user closes it, so the daemon's record keeps an exited state and its final
   screen until then. A tab's title follows the shell's title (OSC sequences) until the user renames it. A project may
   have any number of terminals.
 - **A shell counts as busy while it runs something.** The daemon judges a shell busy when its PTY's foreground process
-  group is not the shell itself or the shell has any child process (which covers a server sent to the background).
+  group is not the shell itself or a descendant of the shell still has the terminal open as its stdin, stdout or
+  stderr (which covers a server sent to the background, but not a helper the prompt keeps with its streams redirected
+  away, such as powerlevel10k's `gitstatusd`).
   Closing a busy shell's tab asks first; an idle one closes without asking. Quitting asks while any shell is busy, as
   it does while an agent session runs; idle shells do not count.
 - **A shell launch uses the agent's environment snapshot policy**, but a failed capture does not refuse it: the login
@@ -107,5 +111,5 @@ The user's standing instruction for whoever picks this plan up:
 2. 02 Shadow edges and groove dividers (closed)
 3. 03 Split right pane (closed)
 4. 04 Shell terminals in the daemon (closed)
-5. [Terminal panel](05-terminal-panel.md)
+5. 05 Terminal panel (closed)
 6. [Final confirmation](06-final-confirmation.md)

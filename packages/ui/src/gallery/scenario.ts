@@ -125,8 +125,20 @@ export interface Scenario {
   toasts?: ToastFixture[];
   /** How a session's terminal behaves: `output` draws scrolling sample output (default),
    * `fullscreen` draws a response in the alternate screen, `paths` draws output naming files and
-   * folders (see `pathLinks`), and `refuse` never connects. */
-  terminal?: TerminalBehaviour;
+   * folders (see `pathLinks`), and `refuse` never connects. It does not reach the Terminal panel's
+   * shells (`shellTerminal`). */
+  terminal?: Exclude<TerminalBehaviour, "shell" | "exited">;
+  /** How the Terminal panel's shell terminals behave, as `terminal` does for a session's: `shell`
+   * (default) draws a shell at its prompt, and `refuse` is a running shell whose socket never
+   * connects. A shell that has exited always draws its last screen and closes. */
+  shellTerminal?: Extract<TerminalBehaviour, "shell" | "refuse">;
+  /** `"pending"`: `create_shell_terminal` is never answered, so a start stays in flight and the
+   * Terminal panel keeps its "Starting terminal…" state. */
+  shellTerminalStart?: "pending";
+  /** The desktop shell asks the window to quit (Cmd+Q) once the steps have run, so the confirmation
+   * a busy session or shell terminal holds the quit up with is on screen. The platform has no exit
+   * capability otherwise, and confirming ends nothing. */
+  quitRequested?: boolean;
   /** The files and folders that exist for `probe_path_links`, by absolute path: a path the terminal
    * shows, in whatever form, is resolved against the home directory `/Users/dev` or the asking
    * project's folder first. A file in the project or a worktree carries its `view`, where
@@ -137,7 +149,8 @@ export interface Scenario {
    * then as `files` does by wire path; a worktree not listed has no file. */
   worktreeFiles?: Record<string, FixtureFiles>;
   /** The terminal's automatic reconnect attempts follow one another at once, so a `refuse`d
-   * terminal reaches its disconnected state without the backoff's wait. */
+   * terminal reaches its disconnected state without the backoff's wait. It drives the Terminal
+   * panel's shell views' backoff as well as a session's terminal's. */
   terminalRetriesImmediate?: boolean;
   /** What `list_dir` answers per path, `~` being asked as the home directory `/Users/dev`; a path not
    * listed gets a generic listing of five directories. */

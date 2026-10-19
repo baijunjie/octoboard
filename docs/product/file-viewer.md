@@ -7,7 +7,8 @@ one change, at a time. It is opened from three places:
   `docs/product/project-pane.md`);
 - **a change in the project pane's Git mode**; what the viewer shows of a change, how it moves through the change list,
   closes and follows a change is in `docs/product/project-pane-git-change-viewer.md`;
-- **a file path link in a session's terminal** (see "File paths" in `docs/product/session-terminal.md`); how that
+- **a file path link in a session's terminal or a shell terminal** (see "File paths" in
+  `docs/product/session-terminal.md`); how that
   differs is in "Opened from the terminal" below.
 
 Nothing can be edited or saved in it.
@@ -372,7 +373,8 @@ below).
 **Escape**, the viewer's **Close** button, or a press on the dimmed area around it closes it (see "What an open
 dialog, menu or popover covers" in `docs/product/window-layout.md`). Keyboard focus then goes, for a viewer opened
 from Files, to the tree row of the file it showed last, not necessarily the one it was opened from; for one opened
-from the terminal, back to the terminal. A change viewer's closing is in `docs/product/project-pane-git-change-viewer.md`.
+from the terminal, back to the terminal — from a shell terminal of the Terminal panel, back to that shell terminal
+while its tab is still there and shown, and to the agent terminal otherwise. A change viewer's closing is in `docs/product/project-pane-git-change-viewer.md`.
 
 ## When the open file changes
 
@@ -397,7 +399,8 @@ connection was lost and that it is read again once the connection is back.
 
 ## Opened from the terminal
 
-A click on a file path link in a session's terminal that names a file inside the session's project — its directory or
+A click on a file path link in a session's terminal, or in a shell terminal of the Terminal panel (see "The shell
+terminal" in `docs/product/terminal-panel.md`), that names a file inside that terminal's project — its directory or
 its place in a worktree of the same repository (see "File paths" in `docs/product/session-terminal.md`) — first reads
 the file, from the directory it was found in:
 

@@ -218,6 +218,21 @@ export function useProjectBrowserState(project: string): ProjectBrowserState {
   };
 }
 
+/** The worktree each project's Git mode shows the uncommitted changes of, by id, while the browser
+ * is in the Git mode: none for the worktree holding the project's directory, or once the browser has
+ * left the Git mode. It stays as the browser last set it after the browser goes, for the window's
+ * lifetime: it is where a new shell terminal starts (`terminal/shellTerminals.ts`). */
+const gitModeWorktrees = new Map<string, string>();
+
+export function setGitModeWorktree(project: string, worktree: string | undefined): void {
+  if (worktree === undefined) gitModeWorktrees.delete(project);
+  else gitModeWorktrees.set(project, worktree);
+}
+
+export function gitModeWorktree(project: string): string | undefined {
+  return gitModeWorktrees.get(project);
+}
+
 /** Drops the browser state of every project not among `projects`, once they are known: a removed
  * project's state has nothing left to apply to. */
 export function forgetProjectsOtherThan(projects: ReadonlySet<string>): void {
@@ -233,4 +248,5 @@ export function forgetProjectsOtherThan(projects: ReadonlySet<string>): void {
   }
   for (const project of [...collapsedRows.keys()]) if (!projects.has(project)) setCollapsed(project, NONE_COLLAPSED);
   for (const project of [...follows.keys()]) if (!projects.has(project)) follows.delete(project);
+  for (const project of [...gitModeWorktrees.keys()]) if (!projects.has(project)) gitModeWorktrees.delete(project);
 }

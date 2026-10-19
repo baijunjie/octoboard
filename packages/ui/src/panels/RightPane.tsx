@@ -22,7 +22,11 @@ export function RightPane({
   focusTerminal,
   frameKeys,
   peekKind,
+  onViewFile,
   onDismiss,
+  maximizeArea,
+  areaEasing,
+  float,
 }: {
   owner: AsideOwner;
   project: Project | undefined;
@@ -34,22 +38,30 @@ export function RightPane({
   frameKeys: PanelContentProps["frameKeys"];
   /** The kind whose toggle the pointer is on, shown while the pane floats in with no panel open. */
   peekKind: PanelKind | undefined;
+  /** Shows a project file a path in a terminal's output named, in the file viewer. */
+  onViewFile?: PanelContentProps["onViewFile"];
   /** Closing a panel that was only floating in dismisses the floating pane. */
   onDismiss: () => void;
+  /** The agent terminal's area, which a maximized panel covers. */
+  maximizeArea: React.RefObject<HTMLElement | null>;
+  /** The sidebar's dock is easing, which resizes the area frame by frame. */
+  areaEasing?: boolean;
+  /** The hover reveal of a panel that is not open, while the pane's column is folded away
+   * (`layout.folded`, its one open panel maximized): the panel floats in a pane of its own, the
+   * folded one holding the maximized card, which has to stay where it is. */
+  float?: AsideLayout["peek"];
 }): React.ReactElement {
+  const shared = { owner, project, selectedSessionId, focusTerminal, peekKind, frameKeys, onViewFile, onDismiss, maximizeArea, areaEasing };
   return (
-    <AsidePane layout={layout}>
-      <PanelStack
-        owner={owner}
-        project={project}
-        active={active}
-        selectedSessionId={selectedSessionId}
-        focusTerminal={focusTerminal}
-        peek={layout.peek}
-        peekKind={peekKind}
-        frameKeys={frameKeys}
-        onDismiss={onDismiss}
-      />
-    </AsidePane>
+    <>
+      <AsidePane layout={layout}>
+        <PanelStack {...shared} active={active} peek={layout.peek} />
+      </AsidePane>
+      {float && (
+        <AsidePane layout={{ width: layout.width, peek: float }}>
+          <PanelStack {...shared} active={float.active} peek={float} floatOnly />
+        </AsidePane>
+      )}
+    </>
   );
 }

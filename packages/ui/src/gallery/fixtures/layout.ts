@@ -1,6 +1,6 @@
 import { describing, type Matcher } from "../interact";
 import type { Scenario } from "../scenario";
-import { consoleOf, pageOf, projectOf, sessionOf, snapshotState } from "./builders";
+import { consoleOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./builders";
 
 const GROUP = "Window layout";
 
@@ -46,6 +46,22 @@ const crowdState = snapshotState({
     sessionOf("s-crowd-hub", crowd[0].id, undefined, "Hub", "idle", { colour: "teal" }),
     sessionOf("s-crowd-1", crowd[0].id, "p-crowd", "Fix the summary layout", "working"),
   ],
+});
+// What the quit confirmation is about: sessions that are idle hold a quit up no more than an idle
+// shell does, so `quitIdleState` is held up by its busy shell alone, and `quitBusyState` by that and a
+// working session.
+const quitShells = [shellTerminalOf("sh-idle", website, "zsh", 0), shellTerminalOf("sh-dev", website, "pnpm dev", 1, { busy: true })];
+const quitIdleState = snapshotState({
+  consoles: [main],
+  projects: [website],
+  sessions: [sessionOf("s-web-2", main.id, website.id, "Update the dependencies", "idle")],
+  shellTerminals: quitShells,
+});
+const quitBusyState = snapshotState({
+  consoles: [main],
+  projects: [website],
+  sessions: [sessionOf("s-web-1", main.id, website.id, "Fix the summary layout", "working"), sessionOf("s-web-2", main.id, website.id, "Update the dependencies", "idle")],
+  shellTerminals: quitShells,
 });
 /** The rail's button for a console: its accessible name is the console's whole name, alone or
  * followed by punctuation and what is going on in it, whichever language writes that. A name
@@ -174,7 +190,7 @@ export const layoutScenarios: Scenario[] = [
     category: "normal",
     title: "Docked report",
     state: railState,
-    description: "A console session's report is a panel of the right pane: one card filling the pane's height, with the Report name, the page arrows and count, and Close panel in its 40px header, rounded corners, a hairline edge and the shadow of the sidebar's floating card. A gap showing the terminal's own background surrounds it: 8px at the window's end, the bottom and below the top bar, and 16px on the terminal side, which holds the width handle; no sidebar-coloured column sits behind it. The top bar has only the Report toggle, pressed, and no toggle for the pane itself. Press Close panel to close the pane, which goes at once.",
+    description: "A console session's report is a panel of the right pane: one card filling the pane's height, with the Report name, the page arrows and count, and Close panel in its 40px header, rounded corners, a hairline edge and the shadow of the sidebar's floating card. A gap showing the terminal's own background surrounds it: 8px at the window's end, the bottom and below the top bar, and 16px on the terminal side, which holds the width handle; no sidebar-coloured column sits behind it. The top bar has only the Report toggle, pressed: a console session has no Files or Terminal toggle, a terminal needing a project's folder, and none for the pane itself. Press Close panel to close the pane, which goes at once.",
     steps: [
       (ui) => ui.press(ui.session("Hub")),
     ],
@@ -206,5 +222,25 @@ export const layoutScenarios: Scenario[] = [
       (ui) => ui.press(ui.session("Fix the summary layout")),
       (ui) => ui.floatPane(ui.t("titleBar.files.show")),
     ],
+  },
+  {
+    id: "layout-quit-terminals",
+    group: GROUP,
+    category: "normal",
+    title: "Quit held up by a terminal",
+    description:
+      "Quitting while a shell terminal is running something, with every session idle: the dialog says some terminals are still running something and that quitting ends it. It makes no mention of sessions, which an idle session never holds a quit up for, nor of resuming, which a terminal cannot.",
+    state: quitIdleState,
+    quitRequested: true,
+  },
+  {
+    id: "layout-quit-sessions-and-terminals",
+    group: GROUP,
+    category: "normal",
+    title: "Quit held up by a session and a terminal",
+    description:
+      "Quitting with a working session and a busy shell terminal: one dialog says both are still running, that the sessions are interrupted and can each be resumed next time, and that what the terminals run is ended.",
+    state: quitBusyState,
+    quitRequested: true,
   },
 ];

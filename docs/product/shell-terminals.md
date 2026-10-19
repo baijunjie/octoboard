@@ -4,9 +4,10 @@ A shell terminal is a plain shell the daemon runs for a project, beside the proj
 login shell on a terminal of its own, with no agent behind it. It is not the system terminal that "Open in" opens
 (see `docs/product/project-terminal.md`), and it is not a session.
 
-Octoboard's window has no view of shell terminals. They exist in the daemon, and any client of the daemon can start
-one, type into it, rename it and close it; what that means for who can reach the daemon is in "Who can reach the
-daemon" in `docs/product/application-lifecycle.md`.
+Octoboard's window shows a project's shell terminals as tabs in the Terminal panel (see
+`docs/product/terminal-panel.md`). They exist in the daemon, and any client of the daemon can start one, type into it,
+rename it and close it; what that means for who can reach the daemon is in "Who can reach the daemon" in
+`docs/product/application-lifecycle.md`.
 
 ## Who owns a shell terminal
 
@@ -53,10 +54,15 @@ shell's titles no longer change it.
 ## Busy shells
 
 A running shell is **busy** while it runs something: the terminal's foreground process group is not the shell's own
-(a program started in the foreground), or the shell has any child process at all, which covers a job left running in
-the background, such as a server. A shell sitting at its prompt with nothing started is not busy, and neither is one
-that has exited. The daemon checks this twice a second while the shell runs and carries the result on the terminal's
-record.
+(a program started in the foreground), or a process the shell started, or one of that process's descendants, still has
+the terminal open as its stdin, stdout or stderr, which covers a job left running in the background, such as a server.
+A process whose descriptors the daemon is not allowed to inspect (one run with `sudo`, say) makes the shell busy,
+and so does a shell with more descendants than one check will look at, because what cannot be ruled out is asked
+about. A helper the prompt keeps beside the shell with all three streams redirected away from the terminal
+(powerlevel10k's `gitstatusd`) does not count, nor does a job started the same way (`</dev/null >log 2>&1 &`); a job
+with only its output redirected (`npm run dev > dev.log 2>&1 &`) still holds the terminal as its stdin, so it counts. A
+shell sitting at its prompt with nothing started is not busy, and neither is one that has exited. The daemon checks
+this twice a second while the shell runs and carries the result on the terminal's record.
 
 ## When the shell exits on its own
 

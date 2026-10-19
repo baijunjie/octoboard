@@ -72,8 +72,8 @@ application buttons below. These are:
 - the three options of Settings' Appearance row — Light, Dark and System (see "Appearance" in
   `docs/product/settings.md`);
 - the report panel's previous-page and next-page buttons;
-- a right pane panel's Maximize panel / Restore panel size and Close panel buttons (see "A panel's header" in
-  `docs/product/right-pane-panels.md`);
+- a right pane panel's Close panel button and the Terminal panel's Maximize panel / Restore panel size (see "A
+  panel's header" in `docs/product/right-pane-panels.md`);
 - the project pane's Refresh button, a folder's arrow button in its file tree and in the Git mode's change list, and a
   commit row's arrow button there ("Expand" / "Collapse") (see `docs/product/project-pane.md`), and the file viewer's
   Previous file and Next file buttons (see `docs/product/file-viewer.md`);

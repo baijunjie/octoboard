@@ -80,8 +80,8 @@ What follows the current language:
 - the text of the system notifications the UI composes, such as the one for a session waiting for the user (see "The
   raised hand" in `docs/product/sessions.md`);
 - the errors and notices the daemon reports. The daemon reports each as a stable code with its details, and the UI
-  words it in the current language; a console, project or session it mentions is shown by that record's current name
-  (by its id when the UI does not know the record). A report the UI has no wording for — one from a daemon newer than
+  words it in the current language; a console, project, session or shell terminal it mentions is shown by that
+  record's current name, a shell terminal's being its title (by its id when the UI does not know the record). A report the UI has no wording for — one from a daemon newer than
   the UI — is shown in the daemon's own English;
 - numbers and dates the UI formats, such as a report page's creation time in the report panel;
 - the UI components' own built-in text and formatting;

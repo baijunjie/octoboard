@@ -4,7 +4,7 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { holdsText, usePaneToggles, type PaneToggles } from "./usePaneToggles";
+import { holdsText, keepsEscape, usePaneToggles, type PaneToggles } from "./usePaneToggles";
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -27,6 +27,11 @@ it("leaves Escape to the pane for xterm's hidden textarea, even with text in it"
   expect(holdsText(field('<textarea class="xterm-helper-textarea">x</textarea>'))).toBe(false);
 });
 
+it("keeps Escape for a shell terminal of the right pane, and leaves it to the pane for the agent terminal", () => {
+  expect(keepsEscape(field('<div data-shell-terminal><textarea class="xterm-helper-textarea"></textarea></div>').querySelector("textarea"))).toBe(true);
+  expect(keepsEscape(field('<div data-region="terminal"><textarea class="xterm-helper-textarea"></textarea></div>').querySelector("textarea"))).toBe(false);
+});
+
 it.each([
   ['<input type="checkbox">', "a checkbox, whose value is always 'on'"],
   ['<input type="range" value="5">', "a range"],
@@ -41,7 +46,7 @@ it.each([
  * value and a way to re-render it with other panes present. The `matchMedia` stub is deliberately
  * query-blind (it answers `matches: !narrow` to every query), so the wide case does not exercise
  * the reduced-motion path. */
-function mountToggles(narrow: boolean) {
+function mountToggles(narrow: boolean, focusTerminal: () => void = () => {}) {
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
   vi.stubGlobal("matchMedia", (query: string) => ({
     matches: !narrow,
@@ -51,7 +56,7 @@ function mountToggles(narrow: boolean) {
   }));
   let latest!: PaneToggles;
   function Probe({ panes }: { panes: { hasSidebar: boolean; asidePeekable: boolean } }) {
-    latest = usePaneToggles({ ...panes, focusTerminal: () => {} });
+    latest = usePaneToggles({ ...panes, focusTerminal });
     return null;
   }
   const container = document.body.appendChild(document.createElement("div"));
@@ -154,4 +159,45 @@ it("closes the sidebar's open drawer when the aside floats in, instead of floati
   expect(panes().asidePeek.active).toBe(false);
   act(() => panes().asidePeek.hide());
   expect(panes().sidebarOpen).toBe(true);
+});
+
+it("leaves Escape in a shell terminal of the floating aside to the shell, and dismisses the pane from the agent terminal", () => {
+  const { panes } = mountToggles(false);
+  act(() => panes().asidePeek.reveal());
+  const aside = document.body.appendChild(document.createElement("div"));
+  aside.setAttribute("data-escape-scope", "");
+  aside.innerHTML = '<div data-shell-terminal><textarea class="xterm-helper-textarea"></textarea></div>';
+  const agent = document.body.appendChild(document.createElement("div"));
+  agent.setAttribute("data-escape-scope", "");
+  agent.innerHTML = '<textarea class="xterm-helper-textarea"></textarea>';
+  onTestFinished(() => {
+    aside.remove();
+    agent.remove();
+  });
+  const escape = (target: Element) => {
+    const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true });
+    act(() => void target.dispatchEvent(event));
+    return event;
+  };
+  const shellKey = vi.fn();
+  aside.querySelector("textarea")!.addEventListener("keydown", shellKey);
+  escape(aside.querySelector("textarea")!);
+  expect(shellKey).toHaveBeenCalledOnce();
+  expect(panes().asidePeek.active).toBe(true);
+  escape(agent.querySelector("textarea")!);
+  expect(panes().asidePeek.active).toBe(false);
+});
+
+it("leaves focus in a docked card when the aside stops being peekable as a column replaces its float", () => {
+  const focusTerminal = vi.fn();
+  const { render, panes } = mountToggles(false, focusTerminal);
+  const pane = document.body.appendChild(document.createElement("div"));
+  pane.setAttribute("data-pane", "aside");
+  pane.innerHTML = '<button type="button">in the restored card</button>';
+  act(() => panes().asidePeek.reveal());
+  pane.querySelector("button")!.focus();
+  render({ hasSidebar: true, asidePeekable: false });
+  expect(panes().asidePeek.active).toBe(false);
+  expect(focusTerminal).not.toHaveBeenCalled();
+  expect(document.activeElement).toBe(pane.querySelector("button"));
 });

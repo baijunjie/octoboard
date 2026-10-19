@@ -132,8 +132,8 @@ closed** switch in Settings' General section, which is **off to begin with** (se
 `docs/product/settings.md`).
 
 **With the switch off, closing the window quits.** It is an ordinary quit gesture, taking exactly the path `Cmd+Q` takes
-(see "Quitting" below): with a session starting, working, waiting for the user or running in background it asks the
-same confirmation, where Cancel leaves the window open and everything running, and otherwise it quits at once. The
+(see "Quitting" below): with a session starting, working, waiting for the user or running in background, or a busy
+shell terminal, it asks the same confirmation, where Cancel leaves the window open and everything running, and otherwise it quits at once. The
 sessions a confirmed close ends are left *interrupted* and resumable, just as any confirmed quit leaves them (see "Archiving, interruption and
 resuming" in `docs/product/archiving-and-resuming-sessions.md`).
 
@@ -237,7 +237,13 @@ application on confirmation (see "Closing the window" above).
   confirmation.** One running in background counts because the quit would also end the work it left running (see
   "Running in background" in `docs/product/sessions.md`). A session *awaiting instructions* does not count: it is in
   the middle of nothing that is reported, and the quit still leaves it interrupted and resumable like the others. The message says that quitting interrupts those sessions and
-  that each stays resumable next time. Asking brings Octoboard to the front first, restoring its window if it was
+  that each stays resumable next time.
+- **While any shell terminal is busy, quitting asks for confirmation too** (see "Busy shells" in
+  `docs/product/shell-terminals.md`); an idle shell terminal, or one whose shell has exited, does not count. With only
+  busy shell terminals holding the quit, the message says some terminals are still running something and quitting ends
+  what they run; with sessions and busy shell terminals both, it says both are still running, that quitting interrupts
+  the sessions, each resumable next time, and ends what the terminals run.
+- Asking brings Octoboard to the front first, restoring its window if it was
   minimized and bringing it back if it was closed into the background, so a quit from outside the window — the Dock
   icon's own Quit while another application covers it, the menu bar icon's Quit or a logout while the window is closed —
   does not leave the question unseen. The menu bar icon's Quit with the window closed was seen to bring it back and ask;
@@ -247,7 +253,7 @@ application on confirmation (see "Closing the window" above).
   `docs/product/archiving-and-resuming-sessions.md`). Every shell terminal ends too (see "Closing a shell terminal" in
   `docs/product/shell-terminals.md`).
 - With no session *starting*, *working*, *waiting for the user* or *running in background* — none at all, or only
-  ones *awaiting instructions* — quitting is immediate and asks nothing, and a window closed into the background is not brought back
+  ones *awaiting instructions* — and no busy shell terminal, quitting is immediate and asks nothing, and a window closed into the background is not brought back
   for it. Seen with the menu bar icon's Quit and no session at all; with only sessions *awaiting instructions* not yet
   tried by hand.
 - While the daemon is not running — it failed to start, or has exited — every quit is immediate and asks nothing.

@@ -15,7 +15,7 @@
     await P.waitIdle(500);
     const regions = {
       document: "html", sidebar: '[data-region="sidebar"]', rail: '[data-region="rail"]',
-      terminal: '[data-region="terminal"]', xtermScreen: ".xterm-screen", aside: '[data-region="aside"]',
+      terminal: '[data-region="terminal"]', xtermScreen: '[data-region="terminal"] .xterm-screen', aside: '[data-region="aside"]',
     };
     const elements = (sel) => { const el = document.querySelector(sel); return el ? el.querySelectorAll("*").length + 1 : 0; };
     const counts = Object.fromEntries(Object.entries(regions).map(([k, s]) => [k, elements(s)]));
@@ -42,7 +42,7 @@
     // What the terminal adds to the document's cost: under the DOM renderer, one element per row under
     // `.xterm-screen`; under WebGL, just the canvases, so the two numbers (this and the region's own
     // `xtermScreen` count) say which renderer the run measured.
-    const screen = document.querySelector(".xterm-screen");
+    const screen = document.querySelector('[data-region="terminal"] .xterm-screen');
     screen.style.display = "none";
     const withoutScreen = time(document.documentElement);
     screen.style.display = "";

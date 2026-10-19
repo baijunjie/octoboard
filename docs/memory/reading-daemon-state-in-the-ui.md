@@ -60,22 +60,28 @@ cannot catch a missing gate: fixture scenarios are built with `hosts` already po
 (`packages/ui/src/gallery/fixtures/builders.ts`), so the pre-snapshot renders never happen there. Either keep the gate
 visible at the call site in `App.tsx`, or drive the pre-snapshot inputs directly in a unit test of the hook.
 
-## A request's reply arrives after its own change is already in the store
+## A request's reply and the broadcast of its change reach the UI in either order
 
-A mutating request's handler in `apps/daemon/src/coordinator.rs` broadcasts the change first and answers the caller
-second, and those are two separate messages on the one control socket. `DaemonClient` does not apply a broadcast the
-moment it arrives: it queues broadcasts and hands them to the store as one batch on the next animation frame (after
-250 ms at the latest, where frames are not running). A reply is different: `receive()` first flushes the queued
-broadcasts, so the store holds every change that came ahead of the reply, and then settles the request. So by the time
-the code after an `await request(...)` runs, the store already holds the change, but React may have rendered on it
-already (the frame's flush came first) or may not have yet (the reply flushed it a moment ago), which is what decides
-whether the component that sent the request, or anything the new state hides, is still mounted. That interleaving is
-not fixed, and nothing fails loudly when it goes the other way.
+A mutating request's handler in `apps/daemon/src/coordinator.rs` broadcasts the change before it answers, but that
+order is lost on the way: on the control socket the reply is queued by the request's own task and the broadcast by the
+connection's `forward_broadcasts` task (`apps/daemon/src/server.rs`), two tasks feeding one outbound queue, so either
+can reach the client first. `DaemonClient` then queues broadcasts and hands them to the store as one batch on the next
+animation frame (after 250 ms at the latest, where frames are not running), while a reply first flushes the
+broadcasts already queued and then settles the request. So when the code after an `await request(...)` runs, the
+store may or may not hold the change yet, and React may or may not have rendered on it — which decides whether the
+component that sent the request, or anything the new state hides, is still mounted. Nothing fails loudly when the
+order flips.
 
-So write what follows an `await request(...)` to be correct under either order: do not sample "has it happened yet?"
-once, and do not assume the sender, or the surface the change replaces, is still there to act on. When something has to
-happen exactly once after such a change, hold it as a debt — a ref set when the change is observed and cleared only once
-the work is actually done — so whichever side lands first, the other finishes the job.
+So write what follows an `await request(...)` to be correct under either order:
+
+- Where it needs the record the request created, seed the store from the reply only when the store lacks that id, and
+  never overwrite one it holds: a held record came from a broadcast at least as new as the reply. `seedShellTerminal`
+  in `packages/ui/src/store.ts` and the `session_opened` case of its reducer have that shape; a new kind of record
+  gets a seed like them.
+- Do not sample "has it happened yet?" once, and do not assume the sender, or the surface the change replaces, is
+  still there to act on. When something has to happen exactly once after such a change, hold it as a debt — a ref set
+  when the change is observed and cleared only once the work is actually done — so whichever side lands first, the
+  other finishes the job.
 
 ## Tell which of two events came first with a counter, never a clock
 

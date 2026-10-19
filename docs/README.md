@@ -168,8 +168,12 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   open, and a file opened from the terminal (the click-time choice between the viewer and the host, opening at a line,
   viewer-only files).
 - [Right pane panels](product/right-pane-panels.md) — the right pane as a stack of inset panel cards (a project's
-  Files, a console session's Report): how the cards look, the panel header, opening and closing panels, the per-kind
-  toggles in the top bar, floating a panel in, resizing, maximizing, what is remembered, and keyboard focus.
+  Files and Terminal, a console session's Report): how the cards look, the panel header, opening and closing panels,
+  the per-kind toggles in the top bar, floating a panel in, switching projects under an open panel, resizing,
+  maximizing, what is remembered, and keyboard focus.
+- [Terminal panel](product/terminal-panel.md) — a project's shell terminals as tabs in the right pane: when a shell
+  starts, tabs and which is shown, rename and close and the busy-close confirmation, Escape, F6 and focus in a shell
+  terminal, links, an exited shell, and reconnecting.
 - [Project pane: Git mode](product/project-pane-git-mode.md) — the project pane's read-only review of one local branch
   in the Changes tab: the branch selector (the default branch from the worktree holding the project's folder, a choice
   that stands, a branch that goes away), the repository and its worktrees, following the selected session, that it

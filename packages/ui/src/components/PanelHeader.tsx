@@ -9,7 +9,7 @@ import { useT } from "../i18n/react";
 
 /** What a panel's card tells its header about the panel's place in the stack. */
 export interface PanelFrame {
-  /** Whether there is another panel to hide, which is what maximizing is for. */
+  /** Whether the header offers maximize / restore: a maximizable kind (the Terminal panel), docked. */
   canMaximize: boolean;
   maximized: boolean;
   onToggleMaximized: () => void;
@@ -23,9 +23,9 @@ export const PanelFrameProvider = PanelFrameContext.Provider;
  * The header every panel's content starts with, laid out as the header of the sidebar's floating
  * card is (the same height, `--pane-header-height-floating`, inset, gap, title size and weight, and
  * icon controls): the title, whatever the kind puts beside it (`children`, such as a tab list) and
- * its own actions at the end, then the stack's maximize / restore and close, which are the same for
- * every kind. When the pane is too narrow for all of it the title gives way first, then the
- * children (a tab list scrolls), never the controls at the end. A header outside a stack (a test)
+ * its own actions at the end, then the stack's maximize / restore, for a kind that offers it, and
+ * close, which every kind has. When the pane is too narrow for all of it the children give way (a tab list scrolls),
+ * never the title or the controls at the end. A header outside a stack (a test)
  * has neither of the stack's controls.
  */
 export function PanelHeader({
@@ -42,7 +42,7 @@ export function PanelHeader({
   const frame = useContext(PanelFrameContext);
   return (
     <div className="flex h-(--pane-header-height-floating) shrink-0 items-center gap-2 groove-b px-(--pane-inset)">
-      <h2 className="flex min-w-0 max-w-40 shrink-[3] text-base font-semibold">
+      <h2 className="flex min-w-0 max-w-40 shrink-0 text-base font-semibold">
         <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={title}>{title}</FadeOverflow>
       </h2>
       {children}

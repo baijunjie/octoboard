@@ -5,7 +5,7 @@ import { daemonMessage } from "../daemonMessage";
 import { errorPresentation, noticeErrorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
 import { currentLanguage } from "../i18n/language";
-import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, type AccountLogin, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type RequestBody, type Session, type SessionRecordsPresence } from "../protocol";
+import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, type AccountLogin, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type RequestBody, type Session, type SessionRecordsPresence, type ShellTerminal } from "../protocol";
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -132,6 +132,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
   const emitToast = (toast: ToastRequest) => toastListeners.forEach((listener) => listener(toast));
   let toastsRaised = false;
   let openedSessionCount = 0;
+  let createdShellTerminalCount = 0;
   // The daemon remembers its ordinal counter independently of session history. Seed it from
   // fixture ordinals once, so renaming or deleting a session never reuses an ordinal.
   const initial = store.getState();
@@ -667,7 +668,8 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const sessions = new Map([...current.sessions].filter(([, session]) => session.console_id !== body.console));
           const pages = new Map([...current.pages].filter(([id]) => sessions.has(id)));
           const gitStatuses = new Map([...current.gitStatuses].filter(([id]) => projects.has(id)));
-          store.setState({ consoles, projects, sessions, pages, gitStatuses });
+          const shellTerminals = new Map([...current.shellTerminals].filter(([, terminal]) => projects.has(terminal.project_id)));
+          store.setState({ consoles, projects, sessions, pages, gitStatuses, shellTerminals });
           return { type: "ack" };
         }
         case "update_console": {
@@ -760,6 +762,42 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           }));
           return { type: "ack" };
         }
+        case "create_shell_terminal": {
+          const project = store.getState().projects.get(body.project);
+          if (!project) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
+          if (scenario.shellTerminalStart === "pending") return new Promise<Event>(() => {});
+          // The project's folder is the first worktree of the repository (as `get_project_source` says),
+          // and its place in another is that worktree's root: a fixture project's scope is the whole worktree.
+          const target = body.worktree === undefined ? undefined : git?.worktrees.find((worktree) => worktree.id === body.worktree);
+          if (body.worktree !== undefined && !target) return fail({ code: "worktree_unavailable", params: { worktree: body.worktree }, message: `worktree ${body.worktree} is gone` });
+          if (target && !target.scope_present) return fail({ code: "source_unavailable", params: { path: target.root, detail: "No such file or directory (os error 2)" }, message: `The directory ${target.root} is not available: No such file or directory (os error 2)` });
+          const shellTerminal: ShellTerminal = {
+            id: `shell-gallery-${++createdShellTerminalCount}`,
+            project_id: project.id,
+            worktree: body.worktree ?? null,
+            cwd: target?.root ?? project.path,
+            title: "zsh",
+            renamed: false,
+            state: "running",
+            busy: false,
+            created_at: Date.now(),
+          };
+          store.setState((state) => ({ shellTerminals: new Map(state.shellTerminals).set(shellTerminal.id, shellTerminal) }));
+          return { type: "shell_terminal_created", shell_terminal: shellTerminal };
+        }
+        case "rename_shell_terminal": {
+          const terminal = store.getState().shellTerminals.get(body.shell_terminal);
+          if (!terminal) return fail({ code: "unknown_shell_terminal", params: { shell_terminal: body.shell_terminal }, message: `unknown shell terminal ${body.shell_terminal}` });
+          const title = body.title.trim();
+          if (!title) return fail({ code: "field_required", params: { field: "title" }, message: "title is required" });
+          store.setState((state) => ({ shellTerminals: new Map(state.shellTerminals).set(terminal.id, { ...terminal, title, renamed: true }) }));
+          return { type: "ack" };
+        }
+        case "close_shell_terminal": {
+          if (!store.getState().shellTerminals.has(body.shell_terminal)) return fail({ code: "unknown_shell_terminal", params: { shell_terminal: body.shell_terminal }, message: `unknown shell terminal ${body.shell_terminal}` });
+          store.setState((state) => ({ shellTerminals: new Map([...state.shellTerminals].filter(([id]) => id !== body.shell_terminal)) }));
+          return { type: "ack" };
+        }
         default:
           return { type: "ack" };
       }
@@ -780,7 +818,13 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
     dismissTrustPrompt: (session) =>
       store.setState((state) => ({ trustPrompts: state.trustPrompts.filter((p) => p.session !== session) })),
     reconnect: () => {},
-    terminalUrl: (session) => terminalFixtureUrl(scenario.terminal ?? "output", session),
+    // A shell terminal follows `shellTerminal` rather than `terminal`, which is the sessions'; one
+    // whose shell has exited shows its final screen and closes, as the daemon's socket does.
+    terminalUrl: (id) => {
+      const shell = store.getState().shellTerminals.get(id);
+      if (!shell) return terminalFixtureUrl(scenario.terminal ?? "output", id);
+      return terminalFixtureUrl(shell.state === "exited" ? "exited" : scenario.shellTerminal ?? "shell", id);
+    },
     terminalReconnectDelay: scenario.terminalRetriesImmediate ? () => 0 : undefined,
   };
 }

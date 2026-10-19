@@ -26,6 +26,7 @@ import {
   type Role,
   type Session,
   type Settings,
+  type ShellTerminal,
 } from "./protocol";
 
 /**
@@ -169,6 +170,10 @@ export interface State {
    * `~/...` (see `abbreviateHome`). Null until the first snapshot, and when the daemon cannot
    * determine one. */
   homeDir: string | null;
+  /** Every shell terminal the daemon holds, running or exited, keyed by id, in the order the
+   * daemon lists them (oldest first) and then as created. Live state of the daemon: a `snapshot`
+   * names them all again, and one goes only on `shell_terminal_deleted` or with its project. */
+  shellTerminals: Map<string, ShellTerminal>;
 }
 
 /** The three entries every run begins with, before the daemon's one-time determination lands. */
@@ -201,6 +206,7 @@ const initialState: State = {
   accountLogins: [],
   loginsStartedHere: [],
   homeDir: null,
+  shellTerminals: new Map(),
 };
 
 /** A store holding the empty state with `initial` laid over it. */
@@ -248,6 +254,29 @@ export function dismissAccountLogin(store: StoreApi<State>, login: AccountLogin)
   store.setState((state) => reducer(state, { kind: "dismiss_account_login", login }));
 }
 
+/** Applies a daemon `event` to the store, as the daemon connection does for each one it receives. */
+export function applyDaemonEvent(store: StoreApi<State>, event: Event): void {
+  store.setState((state) => reducer(state, { kind: "event", event }));
+}
+
+/** Holds `terminal` as a `shell_terminal_upserted` for it would, unless the store already holds that
+ * id. A request's reply and the broadcast of the same change arrive in no fixed order, so a caller
+ * that acts on the reply seeds the record first; a record already held came from a broadcast, which
+ * is at least as new as the reply, so it stands, and the broadcast of the same creation arriving
+ * later changes nothing. */
+export function seedShellTerminal(store: StoreApi<State>, terminal: ShellTerminal): void {
+  if (store.getState().shellTerminals.has(terminal.id)) return;
+  applyDaemonEvent(store, { type: "shell_terminal_upserted", shell_terminal: terminal });
+}
+
+/** The shell terminals of the projects still in `projects`. The daemon ends a removed project's
+ * terminals and says so with a `shell_terminal_deleted` for each, but a client that kept them until
+ * then would offer, for a moment, a terminal of a project that is gone. */
+function withoutRemovedProjectTerminals(terminals: Map<string, ShellTerminal>, projects: Map<string, Project>): Map<string, ShellTerminal> {
+  if (Array.from(terminals.values()).every((terminal) => projects.has(terminal.project_id))) return terminals;
+  return new Map(Array.from(terminals).filter(([, terminal]) => projects.has(terminal.project_id)));
+}
+
 function reducer(state: State, action: Action): State {
   switch (action.kind) {
     case "connection":
@@ -288,6 +317,7 @@ function reducer(state: State, action: Action): State {
             accountLogins: event.account_logins,
             loginsStartedHere: state.loginsStartedHere.filter((key) => event.account_logins.some((login) => accountLoginKey(login.agent, login.account) === key)),
             homeDir: event.home_dir,
+            shellTerminals: keepSame(state.shellTerminals, event.shell_terminals, (t) => t.id),
           };
         case "trusted_directories_updated":
           // A prompt for a project under a directory that is now trusted has nothing left to ask:
@@ -324,7 +354,7 @@ function reducer(state: State, action: Action): State {
           const gitStatuses = new Map(
             Array.from(state.gitStatuses).filter(([projectId]) => projects.has(projectId)),
           );
-          return { ...state, consoles, projects, sessions, pages, gitStatuses };
+          return { ...state, consoles, projects, sessions, pages, gitStatuses, shellTerminals: withoutRemovedProjectTerminals(state.shellTerminals, projects) };
         }
         case "session_opened": {
           // A title or status broadcast can arrive before this launch-time reply. Keep the
@@ -355,7 +385,7 @@ function reducer(state: State, action: Action): State {
           // The daemon sends no event for this; see `gitStatuses` above.
           const gitStatuses = new Map(state.gitStatuses);
           gitStatuses.delete(event.project);
-          return { ...state, projects, sessions, gitStatuses };
+          return { ...state, projects, sessions, gitStatuses, shellTerminals: withoutRemovedProjectTerminals(state.shellTerminals, projects) };
         }
         case "session_upserted": {
           // A session's status broadcasts repeat what the store holds as often as they change it.
@@ -447,6 +477,19 @@ function reducer(state: State, action: Action): State {
           const gitStatuses = new Map(state.gitStatuses);
           gitStatuses.set(event.status.project, event.status);
           return { ...state, gitStatuses };
+        }
+        case "shell_terminal_upserted": {
+          const terminal = event.shell_terminal;
+          if (sameValue(state.shellTerminals.get(terminal.id), terminal)) return state;
+          const shellTerminals = new Map(state.shellTerminals);
+          shellTerminals.set(terminal.id, terminal);
+          return { ...state, shellTerminals };
+        }
+        case "shell_terminal_deleted": {
+          if (!state.shellTerminals.has(event.shell_terminal)) return state;
+          const shellTerminals = new Map(state.shellTerminals);
+          shellTerminals.delete(event.shell_terminal);
+          return { ...state, shellTerminals };
         }
         case "settings_updated":
           return { ...state, settings: event.settings };

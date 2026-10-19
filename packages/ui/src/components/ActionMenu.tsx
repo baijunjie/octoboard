@@ -264,7 +264,6 @@ export function ActionMenu({
   label,
   items,
   trigger,
-  triggerClassName,
   className = "shrink-0",
   tooltip,
   contextTargetRef,
@@ -275,7 +274,6 @@ export function ActionMenu({
   items: ActionMenuEntry[];
   /** What the trigger shows; a vertical ellipsis by default. */
   trigger?: React.ReactNode;
-  triggerClassName?: string;
   className?: string;
   /** The trigger's tooltip: "More actions" by default, short where `label` (its accessible name)
    * has to name the row it belongs to so each trigger is told apart; off for a trigger whose
@@ -421,8 +419,9 @@ export function ActionMenu({
             excludeFromTabOrder={contextOnly}
             preventFocusOnPress
             className={
-              contextOnly ? "hidden" : triggerClassName ??
-              "inline-flex row-icon-control items-center justify-center rounded-md p-0 text-app-muted hover:bg-default hover:text-foreground aria-expanded:bg-default aria-expanded:text-foreground"
+              contextOnly
+                ? "hidden"
+                : "inline-flex row-icon-control items-center justify-center rounded-md p-0 text-app-muted hover:bg-default hover:text-foreground aria-expanded:bg-default aria-expanded:text-foreground"
             }
           >
             {trigger ?? <EllipsisVertical aria-hidden="true" className="size-4" />}

@@ -7,8 +7,9 @@ import type { ToastRequest } from "../store";
 import type { RequestBody } from "../protocol";
 import { exportedDocument } from "./fixtureConfiguration";
 import { createFixtureDaemon } from "./fixtureDaemon";
+import { terminalFixtureUrl } from "./fakeTerminal";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore";
-import { branchItemOf, consoleOf, gitStatusOf, pageOf, projectOf, sessionOf, snapshotState, worktreeItemOf } from "./fixtures/builders";
+import { branchItemOf, consoleOf, gitStatusOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./fixtures/builders";
 
 describe("the fixture daemon's session archiving", () => {
   it("archives running and interrupted descendants and supports reopening", async () => {
@@ -920,5 +921,68 @@ describe("the fixture daemon's account login and default account name", () => {
     expect(daemon.store.getState().settings.default_account_names).toEqual({ grok: "Work" });
     await daemon.request({ type: "set_default_account_name", agent: "grok", name: " DEFAULT " });
     expect(daemon.store.getState().settings.default_account_names).toEqual({});
+  });
+});
+
+describe("the fixture daemon's shell terminals", () => {
+  const daemonWithProject = () => createFixtureDaemon({ id: "shells", group: "Terminal", category: "normal", title: "", state: snapshotState({ consoles: [consoleOf("c", "Work")], projects: [projectOf("p", "c", "Site")] }) });
+
+  it("creates a running, idle terminal, renames it and closes it", async () => {
+    const daemon = daemonWithProject();
+    const created = await daemon.request({ type: "create_shell_terminal", project: "p" });
+    if (created.type !== "shell_terminal_created") throw new Error("expected shell_terminal_created");
+    expect(created.shell_terminal).toMatchObject({ project_id: "p", worktree: null, title: "zsh", renamed: false, state: "running", busy: false });
+    expect(daemon.store.getState().shellTerminals.get(created.shell_terminal.id)).toEqual(created.shell_terminal);
+
+    await daemon.request({ type: "rename_shell_terminal", shell_terminal: created.shell_terminal.id, title: " server " });
+    expect(daemon.store.getState().shellTerminals.get(created.shell_terminal.id)).toMatchObject({ title: "server", renamed: true });
+    await expect(daemon.request({ type: "rename_shell_terminal", shell_terminal: created.shell_terminal.id, title: "  " })).rejects.toMatchObject({ code: "field_required" });
+
+    await daemon.request({ type: "close_shell_terminal", shell_terminal: created.shell_terminal.id });
+    expect(daemon.store.getState().shellTerminals.size).toBe(0);
+    await expect(daemon.request({ type: "close_shell_terminal", shell_terminal: created.shell_terminal.id })).rejects.toMatchObject({ code: "unknown_shell_terminal" });
+  });
+
+  it("refuses a terminal for an unknown project and gives each terminal its own id", async () => {
+    const daemon = daemonWithProject();
+    await expect(daemon.request({ type: "create_shell_terminal", project: "missing" })).rejects.toMatchObject({ code: "unknown_project" });
+    const first = await daemon.request({ type: "create_shell_terminal", project: "p" });
+    const second = await daemon.request({ type: "create_shell_terminal", project: "p", worktree: "wt-side" });
+    expect(new Set(daemon.store.getState().shellTerminals.keys()).size).toBe(2);
+    if (first.type !== "shell_terminal_created" || second.type !== "shell_terminal_created") throw new Error("expected shell_terminal_created");
+    expect(first.shell_terminal).toMatchObject({ worktree: null, cwd: "/Users/dev/code/site" });
+    expect(second.shell_terminal).toMatchObject({ worktree: "wt-side", cwd: "/Users/dev/code/search-api-experiments" });
+  });
+
+  it("refuses a worktree the repository does not have, and one whose scope is missing", async () => {
+    const daemon = daemonWithProject();
+    await expect(daemon.request({ type: "create_shell_terminal", project: "p", worktree: "w1" })).rejects.toMatchObject({ code: "worktree_unavailable" });
+    await expect(daemon.request({ type: "create_shell_terminal", project: "p", worktree: "wt-detached" })).rejects.toMatchObject({ code: "source_unavailable" });
+    expect(daemon.store.getState().shellTerminals.size).toBe(0);
+  });
+
+  it("leaves a start unanswered when the scenario says so", async () => {
+    const daemon = createFixtureDaemon({ id: "shell-starting", group: "Terminal panel", category: "normal", title: "", shellTerminalStart: "pending", state: snapshotState({ consoles: [consoleOf("c", "Work")], projects: [projectOf("p", "c", "Site")] }) });
+    const outcome = await Promise.race([daemon.request({ type: "create_shell_terminal", project: "p" }).then(() => "answered"), new Promise((resolve) => setTimeout(() => resolve("pending"), 50))]);
+    expect(outcome).toBe("pending");
+    expect(daemon.store.getState().shellTerminals.size).toBe(0);
+  });
+
+  it("drops the terminals of a deleted console's projects with them", async () => {
+    const daemon = daemonWithProject();
+    await daemon.request({ type: "create_shell_terminal", project: "p" });
+    await daemon.request({ type: "delete_console", console: "c" });
+    expect(daemon.store.getState().shellTerminals.size).toBe(0);
+  });
+
+  it("points a shell terminal's socket at its own behaviour, an exited one at its last screen, and a session's at the scenario's", () => {
+    const shell = (id: string, state: "running" | "exited") => shellTerminalOf(id, projectOf("p", "c", "Site"), "zsh", 0, { state });
+    const daemon = createFixtureDaemon({
+      id: "shells-refused", group: "Terminal panel", category: "exceptional", title: "", terminal: "paths", shellTerminal: "refuse",
+      state: snapshotState({ consoles: [consoleOf("c", "Work")], projects: [projectOf("p", "c", "Site")], shellTerminals: [shell("running", "running"), shell("done", "exited")] }),
+    });
+    expect(daemon.terminalUrl("running")).toBe(terminalFixtureUrl("refuse", "running"));
+    expect(daemon.terminalUrl("done")).toBe(terminalFixtureUrl("exited", "done"));
+    expect(daemon.terminalUrl("session")).toBe(terminalFixtureUrl("paths", "session"));
   });
 });

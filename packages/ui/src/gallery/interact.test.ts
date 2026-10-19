@@ -177,3 +177,13 @@ it("hoverAnchored fails unless the anchored tooltip that opens reads what the st
   await vi.advanceTimersByTimeAsync(3000);
   await wrong;
 });
+
+it("pressInPanel presses the control of the panel it names and leaves the same name in another untouched", async () => {
+  document.body.innerHTML = "<section id=\"panel-files\"><button>Close panel</button></section><section id=\"panel-terminal\"><button>Close panel</button></section>";
+  const pressed: string[] = [];
+  for (const section of document.querySelectorAll("section")) section.querySelector("button")!.addEventListener("click", () => pressed.push(section.id));
+  const done = createUi(document, "en").pressInPanel("terminal", "Close panel");
+  await vi.advanceTimersByTimeAsync(500);
+  await done;
+  expect(pressed).toEqual(["panel-terminal"]);
+});

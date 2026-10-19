@@ -2,10 +2,16 @@
 import { describe, expect, it } from "vitest";
 
 import { sessionOf } from "../gallery/fixtures/builders";
-import type { SessionStatus } from "../protocol";
-import { holdsQuit } from "./useAppExit";
+import type { SessionStatus, ShellTerminal } from "../protocol";
+import { quitHolders } from "./useAppExit";
 
-describe("holdsQuit", () => {
+/** Whether anything holds the quit up. */
+const holdsQuit = (...args: Parameters<typeof quitHolders>) => {
+  const holders = quitHolders(...args);
+  return holders.sessions || holders.terminals;
+};
+
+describe("quitHolders", () => {
   it.each<[SessionStatus, boolean]>([
     ["starting", true],
     ["working", true],
@@ -29,5 +35,13 @@ describe("holdsQuit", () => {
 
   it("does not ask with no sessions", () => {
     expect(holdsQuit([])).toBe(false);
+  });
+
+  it("asks while a shell terminal runs something, never for an idle or exited one", () => {
+    const shell = (state: ShellTerminal["state"], busy: boolean) => ({ id: "t", project_id: "p", worktree: null, cwd: "/p", title: "zsh", renamed: false, state, busy, created_at: 0 });
+    expect(holdsQuit([], [shell("running", true)])).toBe(true);
+    expect(holdsQuit([], [shell("running", false)])).toBe(false);
+    expect(holdsQuit([], [shell("exited", false)])).toBe(false);
+    expect(quitHolders([sessionOf("a", "c", "p", "A", "working")], [shell("running", true)])).toEqual({ sessions: true, terminals: true });
   });
 });

@@ -1135,10 +1135,14 @@ the daemon.
   is left blank by those rules; and the user's name for it once a client renames it, from then on fixed, which
   `renamed` says.
 - **`busy`** is judged twice a second while the shell runs: the shell is busy when the terminal's foreground process
-  group is not the shell's own, or when the shell has any child process, which covers a job left in the background
-  (a server, say). A shell at its prompt with nothing started is not. A client asks before closing a busy terminal
-  and closes an idle one without asking; one that asks before quitting while sessions run counts busy terminals too,
-  never idle or exited ones. A record is broadcast only when `busy` changes.
+  group is not the shell's own, or when a descendant of the shell still has the terminal open as its stdin, stdout or
+  stderr, which covers a job left in the background (a server, say) but not a helper the prompt keeps with all three
+  streams redirected away from the terminal (a prompt's git status daemon, say). A descendant whose descriptors the
+  daemon may not inspect, or more descendants than one check will look at, make the shell busy too, because what
+  cannot be ruled out is asked about. A shell at
+  its prompt with nothing started is not busy. A client asks before closing a busy terminal and closes an idle one
+  without asking; one that asks before quitting while sessions run counts busy terminals too, never idle or exited
+  ones. A record is broadcast only when `busy` changes.
 - **A shell that exits on its own** (`exit`, a crash) leaves its terminal with `state` `exited` and `busy` false,
   broadcast as `shell_terminal_upserted`. Its output stays replayable on the terminal socket until a client closes
   the terminal.

@@ -57,6 +57,7 @@ it("does not slide in the first panel of a pane that was just shown, however lat
           peekKind={undefined}
           frameKeys={noKeys}
           onDismiss={() => {}}
+          maximizeArea={{ current: null }}
         />,
       ),
     );

@@ -21,7 +21,7 @@ import { PanelHeader } from "../components/PanelHeader";
 import type { Project } from "../protocol";
 import { useDaemonStore } from "../store";
 import { FileViewer } from "../viewer/FileViewer";
-import { useProjectBrowserState } from "./browserState";
+import { setGitModeWorktree, useProjectBrowserState } from "./browserState";
 import { FileFilterField, useFileFilterState } from "./FileFilterField";
 import { BrowserViewControls } from "./BrowserViewControls";
 import { buildFileResults, resultDirectories } from "./filesView";
@@ -95,6 +95,8 @@ export function ProjectBrowser({
   // The selected session sets the Git mode's selector, when it is one of this project's.
   const sessionHere = useDaemonStore((s) => (selectedSessionId !== undefined && s.sessions.get(selectedSessionId)?.project_id === project.id ? selectedSessionId : undefined));
   const git = useGitReview(project.id, browser, active && mode === "git", sessionHere, filters.changes);
+  // Where a new shell terminal of the project starts: the worktree the Git mode shows.
+  useEffect(() => setGitModeWorktree(project.id, mode === "git" ? git.worktree : undefined), [project.id, mode, git.worktree]);
   const treeRef = useRef<HTMLDivElement>(null);
   const refreshRef = useRef<HTMLButtonElement>(null);
   const filesFocus = useFocusHandoff(() => refreshRef.current?.focus());
@@ -236,11 +238,11 @@ export function ProjectBrowser({
   const loadingLabel = t(searching ? "browser.filter.searching" : "browser.loading");
   return (
     <>
-      <div className={`${slides ? "project-browser-switch " : ""}relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden`}>
+      <div className={`${slides ? "panel-switch " : ""}relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden`}>
         <Tabs
           selectedKey={tab}
           onSelectionChange={(key) => browser.setMode(key === "changes" ? "git" : "files")}
-          className="project-browser-view flex min-h-0 flex-1 flex-col gap-0"
+          className="panel-switch-view flex min-h-0 flex-1 flex-col gap-0"
         >
           <PanelHeader
             title={project.name}

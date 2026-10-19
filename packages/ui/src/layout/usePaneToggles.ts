@@ -33,6 +33,15 @@ export function holdsText(target: Element | null): boolean {
   return field.textContent !== "";
 }
 
+/** Whether Escape aimed at `target` is the target's own rather than the floating pane's: a text
+ * field holding text (`holdsText`), or a shell terminal in the right pane, whose programs (vim,
+ * less, fzf) need the key and which keeps Tab as well, so the pane is dismissed with its close
+ * control, its toggle or by the pointer leaving instead. The agent terminal in the centre is not
+ * one: Escape there still dismisses the pane. */
+export function keepsEscape(target: Element | null): boolean {
+  return holdsText(target) || target?.closest("[data-shell-terminal]") != null;
+}
+
 /** The two panes that float in on hover. */
 type Pane = "sidebar" | "aside";
 
@@ -130,9 +139,11 @@ function usePanePeek(panel: Pane, peekable: boolean, focusTerminal: () => void, 
     setPeek(true);
   };
 
-  // A floating pane only means something while it is hidden at and above the breakpoint.
+  // A floating pane only means something while it is hidden at and above the breakpoint. The aside
+  // stops being peekable as a column takes its place (a maximized card restored, a panel docked),
+  // and that column may hold the focus: it is not the floating pane's to hand on.
   useEffect(() => {
-    if (!peekable) hide();
+    if (!peekable) hide(panel !== "aside");
   }, [peekable]);
   useEffect(() => () => clearTimeout(timer.current), []);
 
@@ -173,8 +184,8 @@ export interface PaneToggles {
  * together: revealing one hides the other.
  *
  * `hasSidebar` is whether the sidebar is rendered at all (it is not while there is no console);
- * `asidePeekable` is whether the aside may float in now: something owns it and it has no panel
- * open; `focusTerminal` is where keyboard focus goes when the pane holding it is hidden.
+ * `asidePeekable` is whether the aside may float in now: something owns it and its column has no
+ * panel in it (none open, or the one open maximized, which folds the column away); `focusTerminal` is where keyboard focus goes when the pane holding it is hidden.
  */
 export function usePaneToggles({
   hasSidebar,
@@ -262,9 +273,10 @@ export function usePaneToggles({
   // change list's filter) has its own Escape (clearing it, cancelling an input method's
   // composition), which a capture listener on the window would otherwise pre-empt, so the pane is
   // dismissed by the next Escape, once the field is empty. Not xterm.js's hidden input, a
-  // `textarea` that holds the terminal's focus: Escape there is the terminal's to forward, and
-  // still closes the drawer. An input method's Escape in the terminal is its composition's, and
-  // closes nothing.
+  // `textarea` that holds the terminal's focus: Escape there is the agent terminal's to forward,
+  // and still closes the drawer — except in a shell terminal of the right pane, which keeps it
+  // (`keepsEscape`). An input method's Escape in the terminal is its composition's, and closes
+  // nothing.
   //
   // A target of `<body>` (or no target at all) is treated as in scope too: that is what a fresh
   // narrow-mode window has focused once a drawer is open but no session has ever been selected, so
@@ -283,7 +295,7 @@ export function usePaneToggles({
       if (document.querySelector("[data-escape-topmost]")) return;
       const target = event.target as Element | null;
       if (target && target !== document.body && !target.closest("[data-escape-scope]")) return;
-      if (holdsText(target) || isImeKey(event)) return;
+      if (keepsEscape(target) || isImeKey(event)) return;
       // Consumed here rather than also reaching the terminal: with a drawer open, Escape closes
       // it, not whatever the running agent would have done with it.
       event.stopPropagation();

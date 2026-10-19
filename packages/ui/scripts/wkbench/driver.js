@@ -67,7 +67,7 @@
       const target = params.get("session") ?? "p2-s1";
       await step(`avatar→C${target[1]}`, () => avatar(target[1]), false);
       await step(`select ${target}`, () => card(target), true);
-      const screen = document.querySelector(".xterm-screen");
+      const screen = document.querySelector('[data-region="terminal"] .xterm-screen');
       const r = screen.getBoundingClientRect();
       for (const dir of [-1, 1]) {
         await P.waitIdle(400);

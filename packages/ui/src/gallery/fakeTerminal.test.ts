@@ -96,3 +96,45 @@ it("writes supplied output once and leaves a resize to the terminal's own reflow
   expect(messages).toEqual(["supplied"]);
   socket.close();
 });
+
+it("draws an exited shell's last screen and then closes", async () => {
+  vi.useFakeTimers();
+  installFakeTerminal();
+  const socket = new WebSocket(terminalFixtureUrl("exited", "shell-1"));
+  let output = "";
+  let closed = false;
+  socket.addEventListener("message", (event) => { output = new TextDecoder().decode(event.data); });
+  socket.addEventListener("close", () => { closed = true; });
+  await vi.runAllTimersAsync();
+  expect(output).toContain("built in 1.2s");
+  expect(closed).toBe(true);
+});
+
+it("draws a shell at its prompt and leaves the socket open", async () => {
+  vi.useFakeTimers();
+  installFakeTerminal();
+  const socket = new WebSocket(terminalFixtureUrl("shell", "shell-1"));
+  let output = "";
+  let closed = false;
+  socket.addEventListener("message", (event) => { output = new TextDecoder().decode(event.data); });
+  socket.addEventListener("close", () => { closed = true; });
+  await vi.runAllTimersAsync();
+  expect(output).toContain("git status");
+  expect(closed).toBe(false);
+  socket.close();
+});
+
+it("leaves a session the supplied output declines to the sample of its URL's behaviour", async () => {
+  vi.useFakeTimers();
+  installFakeTerminal({ output: (session) => (session === "known" ? "supplied" : undefined) });
+  const drawn = async (behaviour: "shell" | "output", session: string) => {
+    const socket = new WebSocket(terminalFixtureUrl(behaviour, session));
+    let output = "";
+    socket.addEventListener("message", (event) => { output = new TextDecoder().decode(event.data); });
+    await vi.runAllTimersAsync();
+    socket.close();
+    return output;
+  };
+  expect(await drawn("output", "known")).toBe("supplied");
+  expect(await drawn("shell", "other")).toContain("git status");
+});

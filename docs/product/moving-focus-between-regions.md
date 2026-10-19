@@ -16,13 +16,13 @@ order:
 4. the sidebar;
 5. the archive view, only while it is open (see "The archive view" in `docs/product/sidebar.md`);
 6. the terminal;
-7. the right pane's panels, each a region of its own, in stacking order (see "Panels and keyboard focus" in
-   `docs/product/right-pane-panels.md`);
+7. the right pane's panels, each a region of its own, in stacking order, except that a maximized Terminal panel
+   comes first among them (see "Panels and keyboard focus" in `docs/product/right-pane-panels.md`);
 8. the connection banner, only while it is shown;
 9. the toasts, only while at least one toast is shown.
 
 It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` still go to the agent, and `F6` and
-`Shift+F6` never do. It works from inside a report page too (see "Escape and F6 inside a page" in
+`Shift+F6` never do. The same holds in a shell terminal of the Terminal panel, for the shell. It works from inside a report page too (see "Escape and F6 inside a page" in
 `docs/product/report-panel.md`). With focus in none of the regions, `F6` goes to the first region shown and
 `Shift+F6` to the last.
 
@@ -33,17 +33,17 @@ open, and from focus inside it they go as from focus in none of the regions, clo
 **A region not on screen is skipped**: a docked sidebar the user has hidden, the sidebar's drawer while it is closed,
 a pane that is only floating in, the right pane's panels when nothing owns the pane or none of its panels is open, a
 panel with nothing to take focus (a Files panel while it is still loading, see "Loading the project pane" in
-`docs/product/project-pane.md`), a panel hidden by another panel's maximizing (see "Maximizing a panel" in
-`docs/product/right-pane-panels.md`), and the terminal when no session is selected — unless its area is then offering a creation
-action, which makes it a stop (see "A console with nothing in it" in `docs/product/session-terminal.md`) — or while the
-archive view covers it.
+`docs/product/project-pane.md`), the terminal and the archive view while a maximized Terminal panel covers them (see
+"Maximizing the Terminal panel" in `docs/product/right-pane-panels.md`), and the terminal when no session is selected —
+unless its area is then offering a creation action, which makes it a stop (see "A console with nothing in it" in
+`docs/product/session-terminal.md`) — or while the archive view covers it.
 With no console the sidebar, the archive view, the terminal and the right pane are all skipped together, none of them
 being on screen, and the welcome screen is the only stop between the rail and the connection banner; with a console
 the welcome screen is the one skipped. The sidebar counts as shown when it is docked in the row at 1168 px and wider,
 or its drawer is open below that. A docked sidebar column that is still easing closed already counts as hidden, and
 one that is still easing open already counts as shown (see "The sidebar toggle and the panel toggles" in
-`docs/product/window-layout.md`). A right pane panel counts as shown while it is open in the docked pane, at every
-width.
+`docs/product/window-layout.md`). A right pane panel counts as shown while it is open, docked in the pane's column or
+maximized, at every width.
 
 Where focus lands in each region:
 
@@ -57,6 +57,7 @@ Where focus lands in each region:
 | Terminal | the terminal, so typing reaches the agent; instead the button its area offers in the terminal's place while there is one — its cover's Reconnect, or its empty state's Add project, New session or New console session (see "Reconnecting" and "A console with nothing in it" in `docs/product/session-terminal.md`) |
 | Report panel | the pager's first enabled button in its header, else its Close panel; Tab goes on to the report page |
 | Files panel | its header's first tab (Files); the arrow keys move between Files and Changes, and Tab goes through the tab's controls (the filter toggle, and in Changes Group by folder and Group by commit), then Refresh, the panel's own buttons (see "A panel's header" in `docs/product/right-pane-panels.md`) and the content below; Try again while the panel failed to load (see "Loading the project pane" in `docs/product/project-pane.md`) |
+| Terminal panel | the shown tab's shell terminal, so typing reaches the shell; instead its cover's Reconnect while that is offered, and New terminal in its header while the project has no terminal (see "Keyboard focus" in `docs/product/terminal-panel.md`) |
 | Connection banner | its Retry button; it has none while the banner only says it is reconnecting, and F6 then skips it |
 | Toasts | the newest toast |
 

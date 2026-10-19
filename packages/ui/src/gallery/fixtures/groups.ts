@@ -16,6 +16,7 @@ import {
   Rows3,
   Settings,
   SquareTerminal,
+  Terminal,
 } from "lucide-react";
 
 /** The groups in the order the gallery lists them, each with the icon its heading carries so the
@@ -34,6 +35,7 @@ export const GROUPS = [
   { title: "Focus mode", icon: Focus },
   { title: "Archive view", icon: Archive },
   { title: "Terminal", icon: SquareTerminal },
+  { title: "Terminal panel", icon: Terminal },
   { title: "Report panel", icon: Presentation },
   { title: "Project pane: files", icon: FolderTree },
   { title: "Project pane: Git", icon: GitCompare },

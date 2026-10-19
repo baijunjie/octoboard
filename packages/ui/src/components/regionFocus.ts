@@ -4,6 +4,14 @@
 export const FOCUSABLE =
   'a[href], button:not([disabled]), iframe, [tabindex]:not([tabindex="-1"]):not([aria-disabled="true"])';
 
+/** Focuses where F6 lands in `root`, a region's element: the control it marks `data-region-landing`,
+ * else its first control a keyboard can reach; says whether focus is there now. */
+export function focusLanding(root: Element): boolean {
+  const target = root.querySelector<HTMLElement>("[data-region-landing]") ?? root.querySelector<HTMLElement>(FOCUSABLE);
+  target?.focus();
+  return target != null && target.ownerDocument.activeElement === target;
+}
+
 /** Puts focus on the first control a keyboard can reach in the region marked `data-region`; a
  * disabled control cannot hold focus and is skipped. */
 export function focusFirstIn(region: string): void {

@@ -80,8 +80,10 @@
 }
 
 /* xterm's default black viewport can show through fractional scaling at the screen edges.
-   Use the same theme colour as TerminalPane's opaque surface, including after a theme switch. */
-[data-region="terminal"] .xterm .xterm-viewport {
+   Use the same theme colour as the terminal's opaque surface, including after a theme switch: the
+   agent terminal's in the centre region, and each shell terminal's in the Terminal panel. */
+[data-region="terminal"] .xterm .xterm-viewport,
+[data-shell-terminal] .xterm .xterm-viewport {
   background-color: var(--terminal-background);
 }
 
@@ -177,7 +179,7 @@ html {
    wide. It is a shadow, which takes no layout space unlike a border, so the card is exactly its
    box and its headers line up with the docked ones (`--pane-header-height-floating`). It carries
    only the hairline: the caller adds the card's own shadow (`shadow-(--panel-shadow)` for a card
-   lying in the layout, `shadow-xl` for one that floats) and may add a focus ring (`ring-2`).
+   lying in the layout, `shadow-(--panel-card-shadow)` for a panel card, `shadow-xl` for other floating things) and may add a focus ring (`ring-2`).
    The pieces combine because they sit in different slots of Tailwind's box-shadow composition,
    which every `shadow-*` and `ring-*` utility spells out in full, so whichever sets `box-shadow`
    last still draws all of them. The hairline takes the inset-shadow slot, which nothing here
@@ -249,11 +251,16 @@ html {
   --pane-header-height: 48px;
   --pane-header-height-floating: calc(var(--pane-header-height) - var(--peek-gap));
 
-  /* The gap that holds a resize grip in the right pane (`layout/AsidePane.tsx`: its terminal side;
-     `panels/PanelStack.tsx`: between cards): wide enough that the 4px grip, centred in it, has 6px
-     clear on either side. The other sides of the cards keep `--peek-gap`. `PaneResizeHandle`
-     centres the width grip in this gap by calculation, so a change here moves it. */
+  /* The gap on the terminal side of the right pane (`layout/AsidePane.tsx`), which holds the width
+     grip: wide enough that the 4px grip, centred in it, has 6px clear on either side. The other
+     sides of the cards keep `--peek-gap`. `PaneResizeHandle` centres the width grip in this gap by
+     calculation, so a change here moves it. */
   --panel-grip-gap: 16px;
+
+  /* The gap between two stacked cards of the right pane (`panels/PanelStack.tsx`), which holds the
+     height grip: the 4px grip, centred in it, has 3px clear on either side. The grip's hit area
+     (`PanelStack.tsx`) is a fixed 24px band centred on the gap, derived from this value. */
+  --panel-stack-gap: 10px;
 
   /* The left rail under the top bar (`Rail.tsx`): the window chrome's second half, at the reading
      direction's start. The content panel starts where it ends, so that is also where the
@@ -418,7 +425,8 @@ html {
   --panel-sidebar: oklch(0.965 0.002 286);
   --panel-hover: oklch(0 0 0 / 0.04);
   --panel-selected: oklch(0 0 0 / 0.07);
-  --panel-shadow: 0 0 1px oklch(0 0 0 / 0.18), 0 1px 4px oklch(0 0 0 / 0.12);
+  --panel-shadow: 0 0 1px oklch(0 0 0 / 0.1), 0 1px 2px oklch(0 0 0 / 0.07);
+  --panel-card-shadow: 0 1px 2px oklch(0 0 0 / 0.06), 0 2px 8px -2px oklch(0 0 0 / 0.08);
   /* `--panel-hairline` is the outline of a panel card (`panel-edge`); `--groove-dark` and
      `--groove-light` are the two lines of a divider (`groove-b` and its siblings), the one darker
      and the other lighter than the surface it crosses. All three are translucent black or white,
@@ -455,7 +463,8 @@ html {
   --panel-sidebar: oklch(0.27 0.006 286);
   --panel-hover: oklch(1 0 0 / 0.045);
   --panel-selected: oklch(1 0 0 / 0.075);
-  --panel-shadow: 0 0 1px oklch(0 0 0 / 0.8), 0 1px 4px oklch(0 0 0 / 0.55);
+  --panel-shadow: 0 0 1px oklch(0 0 0 / 0.5), 0 1px 2px oklch(0 0 0 / 0.3);
+  --panel-card-shadow: 0 1px 2px oklch(0 0 0 / 0.3), 0 2px 8px -2px oklch(0 0 0 / 0.35);
   --panel-hairline: oklch(1 0 0 / 0.12);
   --grip-hover: oklch(0.45 0.006 286);
   --groove-dark: oklch(0 0 0 / 0.45);
@@ -940,17 +949,18 @@ html.pane-resizing * {
   --view-shift: -24px;
 }
 
-/* A project's incoming browser, when the user switches projects in a right pane that is already on
-   screen (`project-browser-switch`; a pane that docks or floats in plays none), keeps the pane's
+/* A panel's incoming content (a project's browser, a project's terminals), when the user switches
+   projects in a right pane that is already on screen (`panel-switch` on the panel's root and
+   `panel-switch-view` on what slides; a pane that docks or floats in plays none), keeps the pane's
    geometry fixed. A surface-coloured veil fades instead of the content: ancestor opacity can blank
    composited controls in WKWebView. The viewer stays outside this transformed content so its fixed
    overlays keep the window as their frame. */
-@keyframes project-browser-enter {
-  from { transform: translateX(var(--project-browser-shift, 10px)); }
+@keyframes panel-switch-enter {
+  from { transform: translateX(var(--panel-switch-shift, 10px)); }
   to { transform: translateX(0); }
 }
 
-@keyframes project-browser-reveal {
+@keyframes panel-switch-reveal {
   from { opacity: 1; }
   to { opacity: 0; }
 }
@@ -966,23 +976,23 @@ html.pane-resizing * {
   inset-inline-end: 1.75rem;
 }
 
-.project-browser-switch:dir(rtl) {
-  --project-browser-shift: -10px;
+.panel-switch:dir(rtl) {
+  --panel-switch-shift: -10px;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .project-browser-switch > .project-browser-view {
-    animation: project-browser-enter 240ms cubic-bezier(0.2, 0, 0, 1);
+  .panel-switch > .panel-switch-view {
+    animation: panel-switch-enter 240ms cubic-bezier(0.2, 0, 0, 1);
   }
 
-  .project-browser-switch::after {
+  .panel-switch::after {
     content: "";
     position: absolute;
     inset: 0;
     pointer-events: none;
     background: var(--panel-sidebar);
     opacity: 0;
-    animation: project-browser-reveal 240ms cubic-bezier(0.2, 0, 0, 1);
+    animation: panel-switch-reveal 240ms cubic-bezier(0.2, 0, 0, 1);
   }
 }
 

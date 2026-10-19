@@ -134,14 +134,23 @@ The terminal keeps Tab and Shift+Tab for the agent, so F6 / Shift+F6 region cycl
 (`packages/ui/src/layout/useRegionCycle.ts`) is the only keyboard way out of it. Every new region of the window that
 holds controls — a pane, a panel, an overlay — is marked `data-region` and added to that hook's region order and `shown`,
 or F6 skips it and a keyboard user in the terminal has no way to reach it. A right pane panel is the exception: it
-reaches the hook through its `panels` argument (region `panel-<kind>`, in stacking order), and a panel hidden by
-another's maximize is passed as not shown. A region lands F6 on its first control unless a control in it carries
+reaches the hook through its `panels` argument (region `panel-<kind>`, in stacking order). While the Terminal panel
+is maximized it comes first among the panels, and the agent area it covers (the agent terminal or the archive view,
+made `inert`) is not a stop. A region lands F6 on its first control unless a control in it carries
 `data-region-landing` (a Files panel that failed to load lands on Try again, not on its header's Close panel). `shown`
 follows whether a region holds a control, not whether its element is in the document: the terminal counts while a
 session is selected, and also while its empty state offers a creation action for the current context, since that
 button is then the one thing to do there; with only its empty line it is skipped. A region whose focus goes through a method
 of its own rather than its first control (the terminal's) is only a stop when that method actually leaves focus inside
 it, which is how the cycle tells the two apart.
+
+A shell terminal in the Terminal panel keeps Tab the same way, so the same holds for it: the Terminal panel is its own
+region, and F6 lands on the shown terminal's input, on its cover's Reconnect while that is offered, or on New terminal
+when the panel has no tab. Unlike the agent terminal, a shell terminal also keeps Escape, in a floating pane too
+(vim, less and fzf need it): the floating-pane Escape handling in `packages/ui/src/layout/usePaneToggles.ts` stands
+aside for a target inside a shell terminal, and the pane is dismissed with Close panel or by moving the pointer away.
+A control in a shell terminal's view that xterm's Tab handling puts out of reach (the exited notice's Close terminal)
+needs an equivalent reachable another way; Close terminal in the panel's header menu and the tab's context menu is it.
 
 ### A floating panel that does not take the window
 
@@ -473,7 +482,7 @@ the surface around it does not forbid selection. It is accepted there because th
   `aria-expanded` and, only while that panel is in the document, `aria-controls` pointing at it. It carries the right
   pane's `data-pane-toggle` marker, since it is what floats the pane in, so the pane's pointer watch counts it as part
   of the pane.
-- A button whose name and icon swap with its state (a panel's Maximize / Restore) names the action and carries no
+- A button whose name and icon swap with its state (the Terminal panel's Maximize / Restore) names the action and carries no
   `aria-pressed` or `aria-expanded`, or assistive technology would announce the state twice.
 - The selected row of a hand-built list or tree carries `aria-current` (as the sidebar rows do).
 - HeroUI's `Tabs` and `ListBox` mark their selection themselves with `aria-selected` and get no `aria-current` on top.
@@ -884,6 +893,14 @@ Neither exception in the criterion is easy to rely on here. *Spacing* needs a 24
 touch no other target, which a small control placed over a larger one (a delete badge on a corner) fails by
 construction. *Equivalent* needs the same action to be available from another control on the same view, which a lone
 affordance does not have.
+
+A Terminal panel tab's close mark is drawn at 16 and hit at 24 through such an `::after`. It is a pointer-only
+shortcut, hidden from assistive technology, with its tooltip anchored beside it since a tab cannot hold a trigger; the
+keyboard reaches the same action as Close terminal in the panel's header menu and the tab's context menu.
+
+The right pane's resize handles (the width handle and the separator between stacked panel cards) take a 24-pixel
+pointer target centred on their gap, reaching into the cards' edges where the gap is narrower; the sidebar's width
+handle stays narrower, as a wider one would take the sidebar's scrollbar and its rows' trailing buttons.
 
 Where the drawn size has to stay under 24, extend the target rather than the drawing, as HeroUI does for its own
 select clear button (`.select__clear-button:after{inset:-2px}`): an absolutely positioned `::after` with a negative

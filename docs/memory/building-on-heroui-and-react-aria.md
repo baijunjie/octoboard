@@ -141,6 +141,16 @@ Tab onto such a panel then drops focus to `<body>`, since the render on that foc
 panel's `tabindex` away. A jsdom test catches it by making the late change and asserting the `tabpanel` has no
 `tabindex` afterwards.
 
+## `Tabs.Indicator` only on a strip whose tabs are fixed
+
+HeroUI's `Tabs.Indicator` is react-aria-components' `SelectionIndicator`, which slides from tab to tab with a
+shared-element transition. When the newly selected tab renders again within the frame it was selected in, that
+transition is left stuck part-way, and a tab created and selected in one go always renders again then. So in
+`packages/ui`, use `Tabs.Indicator` only where the set of tabs does not change while the strip is shown; a strip that
+adds a tab and selects it at once draws the selected tab's fill on the tab itself (`data-[selected=true]:` classes
+carrying the indicator's fill and shadow), as the Terminal panel's strip in
+`packages/ui/src/terminal/ShellTerminalPanel.tsx` does.
+
 ## An icon-only control also gets a tooltip, through `TitledControl`
 
 Every control in `packages/ui` that shows only an icon — a `CloseButton` or a menu trigger as much as a HeroUI

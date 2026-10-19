@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { gitStatusOf, snapshotState } from "./builders";
+import { gitStatusOf, projectOf, shellTerminalOf, snapshotState } from "./builders";
 
 describe("snapshotState", () => {
   it("carries the git statuses map through, keyed by project id", () => {
@@ -16,5 +16,11 @@ describe("snapshotState", () => {
     expect(
       snapshotState({ settings: { auto_pull_repositories: true, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/p", accounts: [] } }).settings,
     ).toEqual({ auto_pull_repositories: true, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/p", accounts: [] });
+  });
+
+  it("carries the shell terminals map through, keyed by terminal id, and defaults to none", () => {
+    const terminal = shellTerminalOf("t1", projectOf("p1", "c1", "Site"), "zsh", 0);
+    expect(snapshotState({ shellTerminals: [terminal] }).shellTerminals).toEqual(new Map([["t1", terminal]]));
+    expect(snapshotState({}).shellTerminals).toEqual(new Map());
   });
 });

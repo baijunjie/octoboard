@@ -1,4 +1,4 @@
-import type { AccountQuota, Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionBranchItem, SessionBranchState, SessionStatus, Settings } from "../../protocol";
+import type { AccountQuota, Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionBranchItem, SessionBranchState, SessionStatus, Settings, ShellTerminal } from "../../protocol";
 import type { SessionRequest, State, TrustPrompt } from "../../store";
 
 const NOW = Date.now();
@@ -74,6 +74,24 @@ export function sessionOf(
   };
 }
 
+/** A shell terminal of `project`, running and idle in the project's own directory, titled `title`
+ * as the shell last set it. `created_at` follows `order`, so terminals are listed in the tab strip
+ * in the order of `order`. */
+export function shellTerminalOf(id: string, project: Project, title: string, order: number, extra: Partial<ShellTerminal> = {}): ShellTerminal {
+  return {
+    id,
+    project_id: project.id,
+    worktree: null,
+    cwd: project.path,
+    title,
+    renamed: false,
+    state: "running",
+    busy: false,
+    created_at: minutesAgo(60 - order),
+    ...extra,
+  };
+}
+
 /** A branch bound to `session` of `project` that git refuses to delete as it stands. */
 export function branchItemOf(project: Project, session: Session, branch: string, state: SessionBranchState = "unmerged"): SessionBranchItem {
   return { kind: "branch", repository: `${project.path}/.git`, branch, path: null, project: project.id, session: session.id, state, uncommitted: false, detail: null };
@@ -119,6 +137,7 @@ export function snapshotState(parts: {
   projects?: Project[];
   sessions?: Session[];
   pages?: Record<string, Page[]>;
+  shellTerminals?: ShellTerminal[];
   trustPrompts?: TrustPrompt[];
   trustedDirectories?: string[];
   sessionRequests?: SessionRequest[];
@@ -134,6 +153,7 @@ export function snapshotState(parts: {
     projects: new Map((parts.projects ?? []).map((p) => [p.id, p])),
     sessions: new Map((parts.sessions ?? []).map((s) => [s.id, s])),
     pages: new Map(Object.entries(parts.pages ?? {})),
+    shellTerminals: new Map((parts.shellTerminals ?? []).map((terminal) => [terminal.id, terminal])),
     snapshotEpoch: 1,
     trustPrompts: parts.trustPrompts ?? [],
     trustedDirectories: parts.trustedDirectories ?? [],

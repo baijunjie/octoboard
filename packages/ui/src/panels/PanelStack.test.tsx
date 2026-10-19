@@ -54,10 +54,11 @@ function mount({ peekKind }: { peekKind?: "files" } = {}) {
           active
           selectedSessionId={undefined}
           focusTerminal={focusTerminal}
-          peek={undefined}
+          peek={peekKind ? { active: true, reveal: () => {}, keep: () => {}, leave: () => {} } : undefined}
           peekKind={peekKind}
           frameKeys={noKeys}
           onDismiss={onDismiss}
+          maximizeArea={{ current: null }}
         />
       )}
     </>
@@ -99,11 +100,11 @@ it("shows the open panel as a named region and F6 stop, with a header that runs 
 it("styles the card as the sidebar's floating card, with the same header height", () => {
   const { container } = mount();
   const card = container.querySelector<HTMLElement>("[data-region=panel-files]")!;
-  for (const name of ["rounded-xl", "overflow-hidden", "bg-panel-sidebar", "panel-edge", "shadow-xl"]) expect(card.classList.contains(name), name).toBe(true);
+  for (const name of ["rounded-xl", "overflow-hidden", "bg-panel-sidebar", "panel-edge", "shadow-(--panel-card-shadow)"]) expect(card.classList.contains(name), name).toBe(true);
   expect(card.className).not.toContain("panel-shadow");
 });
 
-it("offers no maximize while the panel is the only one, and closing the last panel leaves the owner's stack empty", () => {
+it("offers no maximize on a kind that is not maximizable, and closing the last panel leaves the owner's stack empty", () => {
   const { container, stack } = mount();
   expect(container.querySelector("[aria-label='Maximize panel']")).toBeNull();
   act(() => void container.querySelector<HTMLButtonElement>("[aria-label='Close panel']")!.click());

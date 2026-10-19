@@ -3,12 +3,14 @@
  * `installFakeTerminal` answers in the page itself, so there is no daemon and no failed network
  * request to read off the console: `output` connects and draws a sample (for a dormant session, as
  * the output its last process left), `fullscreen` draws in the alternate screen, `paths` draws
- * output that names files and folders, and `refuse` closes at once without ever opening, which is a live session whose terminal cannot be reached.
+ * output that names files and folders, `shell` draws a shell at its prompt (the Terminal panel's
+ * shells), `exited` draws the last screen of a shell that has ended and then closes, and `refuse`
+ * closes at once without ever opening, which is a live session whose terminal cannot be reached.
  */
 
 const FIXTURE_ORIGIN = "ws://gallery.invalid/";
 
-export type TerminalBehaviour = "output" | "fullscreen" | "paths" | "refuse";
+export type TerminalBehaviour = "output" | "fullscreen" | "paths" | "shell" | "exited" | "refuse";
 
 export function terminalFixtureUrl(behaviour: TerminalBehaviour, session: string): string {
   return `${FIXTURE_ORIGIN}${behaviour}/${session}`;
@@ -159,6 +161,42 @@ const fullscreenSample = () => `${ESC}?1049h${ESC}H${ESC}2J` + [
   "  > ",
 ].join("\r\n");
 
+/** A shell at its prompt after a couple of commands, as a Terminal panel's shell shows it. */
+const shellSample = () => [
+  `${ESC}32m~/code/website${ESC}0m ${ESC}1m%${ESC}0m git status`,
+  "On branch main",
+  "Your branch is up to date with 'origin/main'.",
+  "",
+  "nothing to commit, working tree clean",
+  "",
+  `${ESC}32m~/code/website${ESC}0m ${ESC}1m%${ESC}0m ls src`,
+  `${ESC}34mcomponents${ESC}0m  ${ESC}34msummary${ESC}0m  main.ts  server.ts`,
+  "",
+  `${ESC}32m~/code/website${ESC}0m ${ESC}1m%${ESC}0m `,
+].join("\r\n");
+
+/** The last screen of a shell that ended on its own: what it printed, up to the command that
+ * ended it. The daemon adds nothing of its own to a shell's output. */
+const exitedSample = () => [
+  `${ESC}32m~/code/website${ESC}0m ${ESC}1m%${ESC}0m npm run build`,
+  "",
+  `${ESC}2m> website@1.0.0 build${ESC}0m`,
+  "built in 1.2s",
+  "",
+  `${ESC}32m~/code/website${ESC}0m ${ESC}1m%${ESC}0m exit`,
+  "",
+].join("\r\n");
+
+/** What each behaviour draws once it connects. `refuse` never connects, so it draws nothing. */
+const SAMPLES: Record<TerminalBehaviour, (cols: number) => string> = {
+  output: sample,
+  fullscreen: fullscreenSample,
+  paths: pathsSample,
+  shell: shellSample,
+  exited: exitedSample,
+  refuse: () => "",
+};
+
 class FakeTerminalSocket extends EventTarget {
   binaryType: BinaryType = "blob";
   readyState = 0;
@@ -168,16 +206,15 @@ class FakeTerminalSocket extends EventTarget {
   /** The width the output on screen was laid out for, once it has been written. */
   private drawnCols?: number;
 
-  /** Whether the output depends on the width, which only the scrolling sample does. Other text is
-   * written once and left to the terminal's own resize behavior. */
-  private readonly sized: boolean;
-  private readonly output: (cols: number) => string;
+  /** Whether the output on screen depends on the width, which only the scrolling sample does. Other
+   * text is written once and left to the terminal's own resize behavior. */
+  private sized = false;
+  private readonly behaviour: TerminalBehaviour;
 
-  constructor(readonly url: string, output?: () => string) {
+  constructor(readonly url: string, private readonly supplied?: () => string | undefined) {
     super();
-    const behaviour = url.slice(FIXTURE_ORIGIN.length).split("/")[0];
-    this.sized = output === undefined && behaviour !== "fullscreen" && behaviour !== "paths";
-    this.output = output ?? (behaviour === "fullscreen" ? fullscreenSample : behaviour === "paths" ? pathsSample : sample);
+    const behaviour = url.slice(FIXTURE_ORIGIN.length).split("/")[0] as TerminalBehaviour;
+    this.behaviour = behaviour;
     // A refusal takes a moment, as a real one does: closing in the same frame as the attempt would
     // batch the "connecting" and the failure into one render and the pane would never see either.
     setTimeout(() => {
@@ -187,14 +224,21 @@ class FakeTerminalSocket extends EventTarget {
       this.dispatchEvent(new Event("open"));
       // The terminal reports its size as it opens, before this timer fires; a later resize
       // (the terminal settles on its real size a moment after opening) redraws in `send`.
-      setTimeout(() => this.draw(""), 20);
+      setTimeout(() => {
+        this.draw("");
+        // The daemon closes the socket once an exited shell's output has been sent.
+        if (behaviour === "exited") setTimeout(() => this.close(), 20);
+      }, 20);
     }, behaviour === "refuse" ? 100 : 0);
   }
 
   /** Writes the output laid out for the current width, after `clear`. */
   private draw(clear: string): void {
     this.drawnCols = this.cols;
-    const bytes = new TextEncoder().encode(clear + this.output(this.cols));
+    // Supplied output is written once; without it (or where it declines) the behaviour's own sample is.
+    const supplied = this.supplied?.();
+    this.sized = supplied === undefined && this.behaviour === "output";
+    const bytes = new TextEncoder().encode(clear + (supplied ?? SAMPLES[this.behaviour](this.cols)));
     this.dispatchEvent(new MessageEvent("message", { data: bytes.buffer }));
   }
 
@@ -221,8 +265,9 @@ class FakeTerminalSocket extends EventTarget {
 }
 
 export interface FakeTerminalOptions {
-  /** Alternate sample text, keyed by session, for consumers such as the public website preview. */
-  output?: (session: string) => string;
+  /** Alternate sample text, keyed by session, for consumers such as the public website preview;
+   * `undefined` leaves a session to the sample its URL's behaviour draws. */
+  output?: (session: string) => string | undefined;
   /** Refuse all other sockets rather than falling back to a real network connection. */
   strict?: boolean;
 }

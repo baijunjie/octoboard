@@ -240,6 +240,29 @@ async fn a_shell_is_busy_while_it_runs_something_in_the_foreground_or_the_backgr
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_background_child_off_the_terminal_does_not_make_a_shell_busy() {
+    let (state, _dir, _project) = with_project("shell-detached-child");
+    let created = create(&state, "p1".to_string(), None, no_git)
+        .await
+        .unwrap();
+    let shell = process(&state, &created);
+
+    // A helper the prompt keeps (a git status daemon) has its streams off the terminal, so the
+    // shell stays idle with it running; a second job that keeps the terminal makes it busy, and
+    // idle again once that one is gone while the helper still runs.
+    shell
+        .write(b"sleep 30 </dev/null >/dev/null 2>&1 &\r")
+        .unwrap();
+    shell.write(b"sleep 31 &\r").unwrap();
+    record_where(&state, &created.id, |record| record.busy).await;
+    shell.write(b"kill %2\r").unwrap();
+    record_where(&state, &created.id, |record| !record.busy).await;
+
+    shell.write(b"kill %1\r").unwrap();
+    close(&state, &created.id).await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_shell_that_exits_leaves_its_terminal_exited_with_its_output_until_closed() {
     let (state, _dir, _project) = with_project("shell-exit");
     let created = create(&state, "p1".to_string(), None, no_git)

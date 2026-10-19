@@ -327,7 +327,7 @@ function select(all, { patterns, group }) {
  * Without terminal isolation, xterm's transparent WebGL link canvas can intercept the notice. DOM clicks
  * bypass that hit testing; drive the actual pointer and verify the fixture session becomes live. */
 async function checkArchivedTerminalReopen(page, language) {
-  await page.locator(".xterm-link-layer").waitFor({ state: "attached", timeout: READ_TIMEOUT_MS });
+  await page.locator('[data-region="terminal"] .xterm-link-layer').waitFor({ state: "attached", timeout: READ_TIMEOUT_MS });
   const labels = await page.evaluate(async (language) => {
     const { format } = await import("/src/i18n/catalog.ts");
     const { sessionAriaLabel } = await import("/src/sessionLabel.ts");

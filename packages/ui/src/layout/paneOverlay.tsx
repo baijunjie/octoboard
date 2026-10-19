@@ -14,12 +14,12 @@ export type PaneMode = "drawer" | "floating";
 export const PANE_ID = { sidebar: "sidebar-pane", aside: "aside-pane" } as const;
 
 /** What a panel card of the right pane looks like, the same as the sidebar's floating card: rounded,
- * clipped to the corner, the sidebar's colour, the `panel-edge` hairline and the `shadow-xl`
- * elevation, kept `--peek-gap` (`--panel-grip-gap` on the terminal side and between cards) from
+ * clipped to the corner, the sidebar's colour, the `panel-edge` hairline and the `--panel-card-shadow`
+ * elevation, kept `--peek-gap` (`--panel-grip-gap` on the terminal side, `--panel-stack-gap` between cards) from
  * everything around it (`AsidePane.tsx`). The sidebar's card
  * spells the same utilities out under `docked:`/`max-docked:` in `drawerClass` below, and
  * Tailwind needs them as literal text, so a change to the look is made in both. */
-export const PANEL_CARD_CLASS = "overflow-hidden rounded-xl bg-panel-sidebar panel-edge shadow-xl";
+export const PANEL_CARD_CLASS = "overflow-hidden rounded-xl bg-panel-sidebar panel-edge shadow-(--panel-card-shadow)";
 
 /** The vertical inset and header height of the desktop floating card. */
 const FLOATING_INSET =
@@ -49,7 +49,7 @@ const FLOATING_FRAME = `docked:start-[calc(var(--rail-width)+var(--peek-gap))] $
  * chrome and the rail. Drawers slide from the start side; desktop floating cards fade vertically.
  * `open` is whether the drawer is open below the breakpoint. Callers add their own
  * width/flex classes on top of this string; the slide direction, what "closed" means and the
- * card's edge (the `panel-edge` hairline together with the `shadow-xl` elevation, while it floats
+ * card's edge (the `panel-edge` hairline together with the `--panel-card-shadow` elevation, while it floats
  * or is an open drawer) are this function's job, not theirs.
  *
  * In `drawer` mode `docked:` turns the pane back into a plain row sibling — no fixed positioning,
@@ -80,9 +80,9 @@ export function drawerClass(mode: PaneMode, open: boolean, peeking = false): str
   const form =
     mode === "drawer"
       ? `transition-[translate,visibility] ${dockedReset}`
-      : `transition-[translate,visibility] ${FLOATING_FRAME} docked:translate-x-0 docked:rtl:translate-x-0 docked:panel-edge docked:shadow-xl docked:transition-[translate,opacity,visibility] docked:duration-240 docked:ease-[cubic-bezier(0.2,0,0,1)] ${peeking ? "docked:translate-y-0 docked:opacity-100 docked:pointer-events-auto" : "docked:translate-y-1.5 docked:opacity-0 docked:pointer-events-none docked:invisible"}`;
+      : `transition-[translate,visibility] ${FLOATING_FRAME} docked:translate-x-0 docked:rtl:translate-x-0 docked:panel-edge docked:shadow-(--panel-card-shadow) docked:transition-[translate,opacity,visibility] docked:duration-240 docked:ease-[cubic-bezier(0.2,0,0,1)] ${peeking ? "docked:translate-y-0 docked:opacity-100 docked:pointer-events-auto" : "docked:translate-y-1.5 docked:opacity-0 docked:pointer-events-none docked:invisible"}`;
   const base = "fixed bottom-(--bottom-chrome-height) top-(--top-chrome-height) z-40 duration-200 motion-reduce:transition-none";
-  return `${base} ${DRAWER_FRAME} ${ANCHOR} ${open ? "translate-x-0 max-docked:panel-edge max-docked:shadow-xl" : `${CLOSED} max-docked:invisible`} ${form}`;
+  return `${base} ${DRAWER_FRAME} ${ANCHOR} ${open ? "translate-x-0 max-docked:panel-edge max-docked:shadow-(--panel-card-shadow)" : `${CLOSED} max-docked:invisible`} ${form}`;
 }
 
 /**

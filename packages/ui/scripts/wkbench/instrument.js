@@ -106,7 +106,7 @@
   // end of its replay has been parsed. The text is read from xterm's buffer through the read-only view the
   // controller hangs on the terminal's element, since the WebGL renderer draws no row elements.
   P.terminalText = () => {
-    const view = document.querySelector(".xterm")?.octoboardTerminalText;
+    const view = document.querySelector('[data-region="terminal"] .xterm')?.octoboardTerminalText;
     if (!view) return "";
     let text = "";
     for (let y = 0; y < view.rows(); y++) text += view.row(y) + "\n";

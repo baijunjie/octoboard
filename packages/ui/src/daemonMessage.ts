@@ -12,9 +12,10 @@ const RECORD_NAMES: Record<string, (state: RecordNames, id: string) => string | 
   console: (state, id) => state.consoles.get(id)?.name,
   project: (state, id) => state.projects.get(id)?.name,
   session: (state, id) => state.sessions.get(id)?.title,
+  shell_terminal: (state, id) => state.shellTerminals?.get(id)?.title,
 };
 
-type RecordNames = Pick<State, "consoles" | "projects" | "sessions"> & { homeDir?: State["homeDir"] };
+type RecordNames = Pick<State, "consoles" | "projects" | "sessions"> & { homeDir?: State["homeDir"]; shellTerminals?: State["shellTerminals"] };
 
 /** The params a message shows as code, by message code: a technical literal (an ID, a path) that
  * reads better set apart from the sentence than quoted inside it. The plain text of such a message

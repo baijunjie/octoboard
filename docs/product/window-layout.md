@@ -75,14 +75,15 @@ nearly so — a dialog such as Settings, or the archive view — the light line 
 single 0.5 px dark line. The borders of controls and of a selected item, the session tree's connectors, the dashed
 outline of an empty column in the file viewer and the lines a rendered document draws are not grooves.
 
-**What floats over the content is raised by a large shadow; what lies in the layout takes the soft one.** The floating
-panes and the sidebar's drawer (see "A hidden pane floats in on hover" and "Below 1168 px: the sidebar becomes a
-drawer" below) and the notice floating over the terminal (see "Interrupted, archived and dormant sessions" in
-`docs/product/session-terminal.md`) each cast a large elevation shadow. A card lying in the layout, such as a focus
-mode's session card (see "What both views show" in `docs/product/focus-mode.md`), has no outline and is set apart by
-the same soft shadow as the content panel's edges. The right pane's panel cards are the exception: docked too, they
-look exactly like the sidebar's floating card, large shadow included (see "The panel cards" in
-`docs/product/right-pane-panels.md`).
+**Panel cards take a light card shadow; whatever else floats over the content is raised by a large shadow; what
+lies in the layout takes the soft one.** The panel cards — the floating sidebar and the sidebar's drawer (see "A
+hidden pane floats in on hover" and "Below 1168 px: the sidebar becomes a drawer" below), and the right pane's cards,
+docked and floating alike (see "The panel cards" in `docs/product/right-pane-panels.md`) — have the hairline edge and a
+light card shadow, short and faint. Whatever else floats over the content, such as the notice floating over the
+terminal (see "Interrupted, archived and dormant sessions" in `docs/product/session-terminal.md`), casts a large
+elevation shadow. A card lying in the layout, such as a focus mode's session card (see "What both views show" in
+`docs/product/focus-mode.md`), has no outline and is set apart by the same soft shadow as the content panel's
+edges.
 
 **The sidebar and the right pane share one horizontal inset**, docked, floating or as the sidebar's drawer alike: a header,
 a bar, a section heading, a notice or a row's content starts **16 px** from the pane's edge, and a row's hover or
@@ -306,14 +307,14 @@ the terminal cannot take it.
 ## What the right pane shows
 
 The right pane has one **owner** at a time: a console session, whose report panel it holds, or a project, whose Files
-panel it holds (see `docs/product/right-pane-panels.md`). With no owner there is no right pane at all, no panel
+and Terminal panels it holds (see `docs/product/right-pane-panels.md`). With no owner there is no right pane at all, no panel
 toggle in the top bar, and its width goes to the terminal. With an owner, the right pane is on screen while one of its
 owner's panels is open. The owner is set only by what the user does, never worked out from whatever else is on
 screen, so a project's Files panel can be shown with no session selected, or beside the terminal of a session of
 another project.
 
 Each session has a **pane of its own**: a console session its report panel, a project session its project's Files
-panel.
+and Terminal panels.
 
 - **Selecting a session** gives the right pane to the session's own owner, whatever the session is selected from (see
   "Selecting a session" in `docs/product/sidebar.md`), a session this window has just opened included. Selecting
@@ -404,7 +405,9 @@ Both work the same way:
 
 The sidebar's handle is there only while the sidebar is shown in the row: not while it is hidden or floating in, and
 not below 1168 px, where the sidebar is a drawer; it is also absent while its column is easing open or closed. The
-right pane's handle is there whenever the right pane is docked, at every width, and not while a panel only floats in.
+right pane's handle is there whenever the right pane is docked, at every width, and not while a panel only floats in,
+nor while the pane's column is folded away under a maximized Terminal panel (see "Maximizing the Terminal panel" in
+`docs/product/right-pane-panels.md`). Its pointer target is 24 px wide, centred on the 16 px gap.
 
 **Each pane's chosen width is remembered per client**, in that client's own browser storage, as the appearance choice
 is (see "Where the choice is stored" in `docs/product/appearance.md`); without that storage a choice lasts until the
@@ -443,9 +446,10 @@ and size" in `docs/product/session-terminal.md`).
 ### A hidden pane floats in on hover
 
 A pane that is not on screen can be brought up for a moment without showing it for good: a hidden sidebar at 1168 px
-and wider, and the right pane, at any width, while it has an owner and none of its panels is open. This is a
+and wider, and the right pane, at any width, while it has an owner and none of its panels is open, or only a maximized
+Terminal panel (see "Floating a panel in" in `docs/product/right-pane-panels.md`). This is a
 **floating pane**. The sidebar floats in as a card inset from the window chrome and the window's edges, with rounded
-corners, a hairline edge and a large elevation shadow (see "The window chrome and the content panel" above); the
+corners, a hairline edge and the light card shadow (see "The window chrome and the content panel" above); the
 right pane floats in as its panel's own card, which looks the same (see "The panel cards" in
 `docs/product/right-pane-panels.md`). The hairline is 0.5 px on a display of 2× pixel density or more and 1 px below
 that, and it takes no space, so the card is exactly its box. Below 1168 px the sidebar's drawer shares this card
@@ -486,8 +490,12 @@ full-height column (see "Hiding the sidebar" above).
   stays, and only a pointer that moves past the gap, or out of the window altogether, sends the card away.
   `Escape` starts its exit without that delay and **does not reach the running agent**, except that in a field
   holding text (the project pane's change filter) it only clears the field, and the next one sends the pane away; so
-  does `Escape` pressed inside a report page (see "Escape and F6 inside a page" in `docs/product/report-panel.md`). A
-  floating pane that holds keyboard focus as it goes away hands focus to the terminal. A floating sidebar previewing a
+  does `Escape` pressed inside a report page (see "Escape and F6 inside a page" in `docs/product/report-panel.md`).
+  Inside a shell terminal of the Terminal panel `Escape` goes to the shell and never sends the pane away (see "The
+  shell terminal" in `docs/product/terminal-panel.md`). A
+  floating pane that holds keyboard focus as it goes away hands focus to the terminal, except a floating right pane
+  that goes because the pane's column takes its place — a panel docked, a maximized Terminal panel restored (see
+  "Maximizing the Terminal panel" in `docs/product/right-pane-panels.md`): focus is then not moved. A floating sidebar previewing a
   console that is deleted goes away as if the pointer had left that console's avatar.
 - **What keeps it up**, whatever the pointer does: keyboard focus inside it, one of its menus being open, or a dialog
   being open, for as long as it is — such as one opened from the pane, the file viewer the Files panel opens among
@@ -510,7 +518,7 @@ Below 1168 px wide, the top bar and the rail stay as they are, and the sidebar l
 one of its panels is open, the right pane share the content panel. The sidebar becomes an **overlay drawer** over
 them, **closed by default**:
 
-- The drawer has the same rounded corners, hairline edge and shadow as the floating panes. It keeps an **8 px gap**
+- The drawer has the same rounded corners, hairline edge and light card shadow as the floating panes. It keeps an **8 px gap**
   from the top bar and from the window's bottom (or the connection banner when it is shown), slides in from behind the
   rail and out behind it, never drawn over the rail, and keeps an 8 px gap from it when open. Its headers are 40 px
   high (see "The window chrome and the content panel" above).

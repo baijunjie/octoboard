@@ -1,15 +1,24 @@
 import type { AsideOwner } from "../layout/asideOwner";
 
 /** The kinds of panel the right pane can stack, in the order they are stacked top to bottom and the
- * order F6 visits them. A later kind (a terminal) is one more entry here and one in
+ * order F6 visits them. A later kind (a browser) is one more entry here and one in
  * `panelRegistry.tsx`. */
-export const PANEL_KINDS = ["files", "report"] as const;
+export const PANEL_KINDS = ["files", "terminal", "report"] as const;
 export type PanelKind = (typeof PANEL_KINDS)[number];
 
 /** Who owns the right pane (`layout/asideOwner.ts`'s kinds): each owner has a stack of its own kinds,
  * in stacking order. */
 export type OwnerKind = AsideOwner["kind"];
-export const OWNER_KINDS: Record<OwnerKind, readonly PanelKind[]> = { project: ["files"], report: ["report"] };
+export const OWNER_KINDS: Record<OwnerKind, readonly PanelKind[]> = { project: ["files", "terminal"], report: ["report"] };
+
+/** The order of an owner's kinds' toggles in the top bar, which is not the stacking order: the
+ * Terminal panel's toggle comes before the Files panel's. */
+export const OWNER_TOGGLE_KINDS: Record<OwnerKind, readonly PanelKind[]> = { project: ["terminal", "files"], report: ["report"] };
+
+/** The kinds open in an owner's stack until the user changes it. The Terminal panel is not among
+ * them: opening it starts a shell when the project has none, which only the user's own opening
+ * should do. */
+const DEFAULT_OPEN: Record<OwnerKind, readonly PanelKind[]> = { project: ["files"], report: ["report"] };
 
 /** The F6 region a kind's panel is: the `data-region` its card carries. */
 export type PanelRegion = `panel-${PanelKind}`;
@@ -28,7 +37,9 @@ export const MIN_PANEL_HEIGHT = 120;
 
 /**
  * What the right pane's stack of panels is, apart from where it is on screen: which kinds are open,
- * each one's share of the stack's height, and which one, if any, is maximized. Kinds are plain
+ * each one's share of the stack's height, and which one, if any, is maximized: a maximized panel
+ * leaves the pane's column to cover the agent terminal's area, while the others stay in the column
+ * as they were (only a kind whose `panelRegistry.tsx` entry is `maximizable` offers it). Kinds are plain
  * strings so a test can stack a kind the app does not have; every function takes the stacking
  * `order` and defaults to the app's. An owner has a stack of its own (`OwnerKind`).
  *
@@ -43,9 +54,9 @@ export interface PanelStack {
   maximized?: string;
 }
 
-/** What an owner's stack is until the user changes it: every kind of the owner open. */
+/** What an owner's stack is until the user changes it: its default kinds open (`DEFAULT_OPEN`). */
 export function defaultStack(owner: OwnerKind): PanelStack {
-  return { open: OWNER_KINDS[owner], shares: {} };
+  return { open: DEFAULT_OPEN[owner], shares: {} };
 }
 
 type Order = readonly string[];
@@ -60,10 +71,15 @@ export function shownKinds(stack: PanelStack, order: Order = PANEL_KINDS): strin
   return ordered(stack.open, order);
 }
 
-/** The panels on screen: only the maximized one while one is, otherwise all that are open. */
-export function visibleKinds(stack: PanelStack, order: Order = PANEL_KINDS): string[] {
-  const open = shownKinds(stack, order);
-  return stack.maximized !== undefined && open.includes(stack.maximized) ? [stack.maximized] : open;
+/** The open kind that is maximized, if one is. */
+export function maximizedKind(stack: PanelStack, order: Order = PANEL_KINDS): string | undefined {
+  return stack.maximized !== undefined && shownKinds(stack, order).includes(stack.maximized) ? stack.maximized : undefined;
+}
+
+/** The open kinds laid out in the pane's column, in stacking order: all but the maximized one. */
+export function stackedKinds(stack: PanelStack, order: Order = PANEL_KINDS): string[] {
+  const maximized = maximizedKind(stack, order);
+  return shownKinds(stack, order).filter((kind) => kind !== maximized);
 }
 
 /** The shares of `kinds` as fractions of one: the stored ones scaled to add up to 1, or an even
@@ -80,18 +96,19 @@ function withShares(stack: PanelStack, kinds: readonly string[], shares: readonl
 }
 
 /** The stack with `kind` opened. It takes an even share, `1 / n` of `n` panels, from the others in
- * proportion to theirs. Opening a kind while another is maximized restores the stack. */
+ * proportion to theirs. A maximized panel stays maximized. */
 export function openPanel(stack: PanelStack, kind: string, order: Order = PANEL_KINDS): PanelStack {
   const open = ordered(stack.open, order);
-  if (open.includes(kind)) return stack.maximized === undefined || stack.maximized === kind ? stack : { ...stack, maximized: undefined };
+  if (open.includes(kind)) return stack;
   const kinds = ordered([...open, kind], order);
   const share = 1 / kinds.length;
   const others = sharesOf(stack, open).map((existing) => existing * (1 - share));
   const shares = kinds.map((candidate) => (candidate === kind ? share : others[open.indexOf(candidate)]));
-  return withShares({ ...stack, maximized: undefined }, kinds, shares);
+  return withShares(stack, kinds, shares);
 }
 
-/** The stack with `kind` closed, its share given to the others in proportion to theirs. */
+/** The stack with `kind` closed, its share given to the others in proportion to theirs; closing the
+ * maximized panel restores the stack. */
 export function closePanel(stack: PanelStack, kind: string, order: Order = PANEL_KINDS): PanelStack {
   const open = shownKinds(stack, order);
   if (!open.includes(kind)) return stack;
@@ -107,13 +124,16 @@ export function toggleMaximized(stack: PanelStack, kind: string): PanelStack {
   return { ...stack, maximized: stack.maximized === kind ? undefined : kind };
 }
 
+/** The stack with no panel maximized: the layout it had before, as maximizing changes nothing else. */
+export function restoreStack(stack: PanelStack): PanelStack {
+  return stack.maximized === undefined ? stack : { ...stack, maximized: undefined };
+}
+
 /** What pressing `kind`'s toggle in the top bar does: it opens the panel when it is not open (which
- * shows the pane when it was hidden), restores the stack when another panel's maximizing hides the
- * panel, and otherwise closes the panel; closing the last one hides the pane. */
+ * shows the pane when it was hidden), and otherwise closes it, maximized or not; closing the last
+ * one hides the pane. */
 export function toggleKind(stack: PanelStack, kind: string, order: Order = PANEL_KINDS): PanelStack {
-  if (!shownKinds(stack, order).includes(kind)) return openPanel(stack, kind, order);
-  if (!visibleKinds(stack, order).includes(kind)) return { ...stack, maximized: undefined };
-  return closePanel(stack, kind, order);
+  return shownKinds(stack, order).includes(kind) ? closePanel(stack, kind, order) : openPanel(stack, kind, order);
 }
 
 /**
@@ -187,8 +207,12 @@ export function serializeStacks(stacks: PanelStacks): string {
   return JSON.stringify({ project: one(stacks.project), report: one(stacks.report) });
 }
 
-/** Which of the F6 regions the panels are: those on screen. */
+/** Which of the F6 regions the panels are, in the order F6 visits them: the open ones are shown. A
+ * maximized panel comes first, as it lies where the agent terminal does, before the pane. */
 export function shownPanelRegions(stack: PanelStack | undefined, owner: OwnerKind | undefined): Record<PanelRegion, boolean> {
-  const visible = stack && owner ? visibleKinds(stack, OWNER_KINDS[owner]) : [];
-  return Object.fromEntries(PANEL_KINDS.map((kind) => [panelRegion(kind), visible.includes(kind)])) as Record<PanelRegion, boolean>;
+  const order = owner ? OWNER_KINDS[owner] : [];
+  const open = stack && owner ? shownKinds(stack, order) : [];
+  const maximized = stack && owner ? maximizedKind(stack, order) : undefined;
+  const kinds = maximized === undefined ? PANEL_KINDS : [maximized as PanelKind, ...PANEL_KINDS.filter((kind) => kind !== maximized)];
+  return Object.fromEntries(kinds.map((kind) => [panelRegion(kind), open.includes(kind)])) as Record<PanelRegion, boolean>;
 }

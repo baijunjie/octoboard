@@ -372,8 +372,9 @@ export interface ShellTerminal {
   /** The user renamed it, so the shell's own titles no longer change `title`. */
   renamed: boolean;
   state: ShellTerminalState;
-  /** The shell is running something: a program in the foreground, or any child process, a job in
-   * the background included. Closing a busy terminal is worth asking about; an idle one is not.
+  /** The shell is running something: a program in the foreground, or a descendant that still has the
+   * terminal open as its stdin, stdout or stderr, a job in the background included. Closing a busy
+   * terminal is worth asking about; an idle one is not.
    * Always false once exited. */
   busy: boolean;
   /** Milliseconds since the epoch; a project's terminals are listed in this order. */

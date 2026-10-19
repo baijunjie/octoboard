@@ -6,7 +6,7 @@ import { daemonMessage } from "./daemonMessage";
 import { CATALOGS } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
 import type { Language } from "./i18n/languages";
-import type { Console, Project, Session } from "./protocol";
+import type { Console, Project, Session, ShellTerminal } from "./protocol";
 
 const records = {
   consoles: new Map([["c1", { id: "c1", name: "Work" } as Console]]),
@@ -18,6 +18,12 @@ it("words a known code from the catalog, showing a record by its name and an unk
   expect(daemonMessage("en", "unknown_session", { session: "s1" }, "x", records)).toBe(`Unknown session ${isolate("Hub")}.`);
   expect(daemonMessage("en", "unknown_project", { project: "p9" }, "x", records)).toBe(`Unknown project ${isolate("p9")}.`);
   expect(daemonMessage("en", "path_not_found", { path: "/a/b" }, "x", records)).toBe(`${isolate("/a/b")} does not exist.`);
+});
+
+it("shows a shell terminal param by the terminal's name, and by its id once the terminal is gone", () => {
+  const withTerminal = { ...records, shellTerminals: new Map([["t1", { id: "t1", title: "npm run dev" } as ShellTerminal]]) };
+  expect(daemonMessage("en", "unknown_shell_terminal", { shell_terminal: "t1" }, "x", withTerminal)).toBe(`Unknown terminal ${isolate("npm run dev")}.`);
+  expect(daemonMessage("en", "unknown_shell_terminal", { shell_terminal: "t2" }, "x", withTerminal)).toBe(`Unknown terminal ${isolate("t2")}.`);
 });
 
 it("words an invalid conversation ID with the example the UI supplies", () => {

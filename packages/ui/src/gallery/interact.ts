@@ -1,6 +1,7 @@
 import { gitBadgeAriaLabel } from "../gitStatusLabel";
 import { format, type MessageArgs, type MessageKey } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
+import { panelId, type PanelKind } from "../panels/stackState";
 import { DORMANT_STATUSES, LIVE_STATUSES, type GitStatus } from "../protocol";
 import { activityLabel, statusLabel } from "../sessionLabel";
 import { ACTIVITIES } from "../sidebar/order";
@@ -57,6 +58,10 @@ const isEnabled = (element: Element): boolean => !element.hasAttribute("disabled
 /** What HeroUI marks a tooltip's trigger with. */
 const TOOLTIP_TRIGGER = "[data-slot=tooltip-trigger]";
 
+/** The agent terminal in the centre, which the terminal steps act on: the Terminal panel's shell
+ * terminals are xterm instances too, and must not be matched in its place. */
+const AGENT_TERMINAL = '[data-region="terminal"]';
+
 const POLL_MS = 50;
 const TIMEOUT_MS = 5000;
 
@@ -92,6 +97,9 @@ export interface Ui {
    * on the sidebar's heading row (earlier in the DOM) and in the filter picker, so pressing it
    * again to unpick it would hit the sidebar row. */
   press: (matcher: Matcher) => Promise<void>;
+  /** Presses the control named `matcher` inside the card of the `kind` panel, for a name two panels
+   * share (each has its own close), where `press` would take the first in the stack. */
+  pressInPanel: (kind: PanelKind, matcher: Matcher) => Promise<void>;
   /** Presses every control named `matcher` that is there when the first appears, in document order:
    * for controls that keep one name whatever their state, such as the disclosures of a dialog's
    * options, where pressing the name twice would fold the first again. */
@@ -347,8 +355,8 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     await wait(150);
   };
 
-  const findAll = (matcher: Matcher): HTMLElement[] => {
-    const named = Array.from(doc.querySelectorAll<HTMLElement>(PRESSABLE)).filter((element) => isEnabled(element) && matches(matcher, nameOf(element)));
+  const findAll = (matcher: Matcher, root: ParentNode = doc): HTMLElement[] => {
+    const named = Array.from(root.querySelectorAll<HTMLElement>(PRESSABLE)).filter((element) => isEnabled(element) && matches(matcher, nameOf(element)));
     // A control that stands inside another of the same name is the one to press: a section heading
     // is a `role="row"` band holding the button that folds it, and the band does nothing.
     return named.filter((element) => !named.some((other) => other !== element && element.contains(other)));
@@ -362,7 +370,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     // screen's box. xterm finds the link under the pointer from the coordinates of a `mousemove`
     // alone.
     const found = await waitFor(() => {
-      const view = (doc.querySelector(".xterm") as TerminalElement | null)?.octoboardTerminalText;
+      const view = (doc.querySelector(`${AGENT_TERMINAL} .xterm`) as TerminalElement | null)?.octoboardTerminalText;
       if (!view) return undefined;
       for (let y = 0; y < view.rows(); y++) {
         const col = view.row(y).indexOf(text);
@@ -370,7 +378,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       }
       return undefined;
     }, `No terminal row holds ${text}`);
-    const screen = doc.querySelector(".xterm-screen");
+    const screen = doc.querySelector(`${AGENT_TERMINAL} .xterm-screen`);
     if (!screen) throw new Error("The terminal has no screen");
     const box = screen.getBoundingClientRect();
     const cellWidth = box.width / found.view.cols();
@@ -389,7 +397,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
       const at = await pointTerminalText(text);
       await wait(POLL_MS);
-      if (doc.querySelector(".xterm-cursor-pointer")) return at;
+      if (doc.querySelector(`${AGENT_TERMINAL} .xterm-cursor-pointer`)) return at;
     }
     throw new Error(`Hovering ${text} in the terminal did not give xterm its link pointer cursor: it is not a link`);
   };
@@ -740,7 +748,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async terminalContextMenu() {
       const screen = await waitFor(() => {
-        const terminal = doc.querySelector(".xterm") as TerminalElement | null;
+        const terminal = doc.querySelector(`${AGENT_TERMINAL} .xterm`) as TerminalElement | null;
         if (!terminal?.octoboardTerminalText?.row(0)) return undefined;
         return terminal.querySelector<HTMLElement>(".xterm-screen") ?? undefined;
       }, "No terminal output to right-click");
@@ -763,6 +771,12 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async press(matcher) {
       await clickWhenFound(() => find(matcher), `Nothing to press matching ${String(matcher)}`);
+    },
+    async pressInPanel(kind, matcher) {
+      await clickWhenFound(() => {
+        const card = doc.getElementById(panelId(kind));
+        return card ? findAll(matcher, card)[0] : undefined;
+      }, `Nothing to press matching ${String(matcher)} in the ${kind} panel`);
     },
     async pressEach(matcher) {
       const controls = await waitFor(() => {
