@@ -81,51 +81,51 @@ anything read off an exec'd app about launch timing, first paint, or what is on 
 `open` still gives the run everything the shell gave it: `--env VAR=value` per variable to override, `-o` and
 `--stderr` for the app's own output, `-n` to force a second instance.
 
-## A throwaway `HOME` and `TMPDIR` isolate the daemon's data, not the webview's
+## Isolate a packaged verification with a build-time app identifier and a throwaway environment
 
-Point `HOME` and `TMPDIR` at fresh directories for every verification run. The daemon keeps its database and instance
-lock (`daemon.lock`) under `$HOME/.octoboard` and its port file (`octoboardd.port`) under `$TMPDIR`, so on the real
-`HOME` a run either works on the user's own data or, while the user's own Octoboard is running, loses the lock and
-opens the window on the `?error=` startup screen instead of the app.
-The daemon then takes that directory as the user's home, and the app offers less around it: the trust dialog for a
-project whose parent folder is or contains it shows no folder checkbox, so that project can only be trusted on its
-own (see the "Trusted folders" section of `docs/product/folder-trust.md`). So put project directories inside the
-throwaway `HOME` (`$HOME/code/<project>`), not beside it in one scratch directory.
+On macOS, a throwaway `HOME` and `TMPDIR` isolate the daemon, but do not isolate WKWebView. The daemon keeps its
+database and instance lock (`daemon.lock`) under `$HOME/.octoboard` and its port file (`octoboardd.port`) under
+`$TMPDIR`. WKWebView still writes under the real user's `~/Library/WebKit/<bundle identifier>/`, including
+`localStorage` and content rule lists. Every normal build shares the installed app's `dev.octoboard.app` identifier.
+An empty daemon project list can prune per-project preferences in that shared profile even when the verification
+never opens their settings, so do not launch a normal build expecting fresh `HOME` alone to protect the user's app.
 
-WKWebView ignores both variables, though: it keeps the page's `localStorage` under the *real* user's
-`~/Library/WebKit/<bundle identifier>/WebsiteData/`, so everything the page persists — the appearance choice
-included — carries over from the previous run, and a run on a fresh `HOME` is not a fresh profile at all. The user's
-own installed Octoboard and every worktree's build share `dev.octoboard.app`, so that directory is the user's own
-profile. Isolating the run means moving it aside before and putting it back afterwards, which needs the user's
-go-ahead up front and is possible only while no app with that identifier is running: check with
-`lsappinfo find bundleid=dev.octoboard.app` (empty output means none) immediately before moving it. Otherwise run on
-the shared profile, but copy the whole directory beforehand (the sqlite file's `-wal` and `-shm` alongside it) and
-restore from that copy afterwards. Noting the settings the run will change beforehand — the appearance and the
-language first of all — is not enough, because a run also *deletes* preferences it never put on screen: a preference
-whose empty state has nothing to store is removed rather than rewritten, and the ones keyed to what the daemon knows
-(the per-project browser state, the current console, what is in focus mode) are pruned against the running daemon's
-project list, which on a throwaway `HOME` is empty — so the run empties them and their keys disappear from the user's
-own profile.
+For an independent packaged verification, build from source with a unique identifier and product name in `apps/desktop`:
 
-Giving the copy an identifier of its own is not a way out of sharing that profile, nor of a scripted click landing on
-the user's window: a built `.app` copied aside and re-identified never shows a window at all — its webview and GPU
-processes start, and nothing appears, long after the safety net that reveals the window regardless of the frontend
-would have fired — so there is no run left to measure. A verification therefore runs under the real identifier and on
-the shared profile, and a key it leaves behind in that profile can only be removed once no app with that identifier is
-running, so plan that cleanup for after the user's own app is stopped, or hand it to them.
+```sh
+pnpm build:app --bundles app --config \
+  '{"identifier":"dev.octoboard.verify.<unique-run>","productName":"Octoboard Verification"}'
+```
 
-The app's defaults domain is shared the same way, so to run it under other system languages pass them for that launch
-only — `open <bundle>.app --args -AppleLanguages '(zh-Hans-CN, en)'` — and never `defaults write dev.octoboard.app
-AppleLanguages`, which the user's own app then reads too. This steers only a launch whose profile has no
-`octoboard.language` key yet: that launch picks the language from the system's languages and stores it, and every
-later launch ignores them. To test that pick, note the key's value and remove it first, and restore it afterwards.
-To read a value out of the profile, open the sqlite file normally rather than with `immutable=1`: the app's last
-write may still be sitting in the WAL, which `immutable=1` skips, answering with the value before it.
+Changing a copied bundle's `Info.plist` after building is not an equivalent route: a re-identified
+copy has failed to show a window. Copy the freshly built bundle to a scratch location, never over the installed app,
+and check both its `CFBundleIdentifier` and code-signing identifier before launching. If the linker left a generic
+ad-hoc signing identifier, ad-hoc sign only the scratch copy with the chosen identifier
+(`codesign --force --deep --sign - --identifier <identifier> <scratch-app>`), then require
+`codesign --verify --deep --strict <scratch-app>` to pass. This does not require a Developer ID or notarization.
 
-Keep the `.app` and both throwaway directories on the internal disk when the checkout is on a removable volume. A
-build here is ad-hoc signed and therefore has a fresh code identity every time, so macOS's consent prompt for
-reaching files on such a volume comes back at the user on every single run and no grant it is given ever applies to
-the next build.
+Launch that exact scratch path with `open -n` and a clean environment: fresh `HOME`, `TMPDIR`, `ZDOTDIR`, XDG
+directories and agent config directories, with a controlled `PATH`. Set each override through `open --env`; do not
+assume the Launch Services process inherits the caller's environment. Put test projects inside the throwaway home
+(`$HOME/code/<project>`), not beside it: the trust dialog cannot offer a folder checkbox for a project whose parent
+is or contains that home (see the "Trusted folders" section of `docs/product/folder-trust.md`).
+
+Before driving the window, verify isolation positively: the running app executes the scratch bundle, its daemon owns
+the scratch database and lock and listens on its own port, and its WebKit processes have their local storage and
+content rule lists open under the unique identifier. Check the installed app's PID and executable separately so an
+automation target cannot silently select its window. If any of these checks fails, stop the verification rather than
+moving, restoring or editing the installed app's profile. During cleanup, stop only the verification's PIDs and remove
+only its scratch bundle, data, and identifier-specific WebKit/cache/defaults artifacts; real-user Library artifacts
+are outside the throwaway `HOME` and need to be included explicitly.
+
+To test other system languages, pass them for that launch only:
+`open <scratch-app> --args -AppleLanguages '(zh-Hans-CN, en)'`. This steers only a profile with no
+`octoboard.language` key: the first launch stores its choice and later launches use that value. Use a fresh unique
+profile when testing the initial pick. To inspect a profile value, open the sqlite file normally rather than with
+`immutable=1`: the app's last write may still be in the WAL, which `immutable=1` skips.
+
+Keep the `.app` and throwaway directories on the internal disk when the checkout is on a removable volume. An ad-hoc
+build has a fresh code identity each time, so macOS's consent prompt for access to that volume can recur on every run.
 
 ## Reload a dev window fully before judging a defect in it
 

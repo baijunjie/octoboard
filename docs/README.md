@@ -336,9 +336,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Building and launching the app for verification](memory/building-and-launching-the-app-for-verification.md) — how to
   build, launch and isolate the app for a verification: when to launch the real window, building the daemon and
   confirming the running sidecar's binary, `pnpm build:app` (a `tauri build` that cannot sign), `open` rather than
-  exec'ing the binary, a throwaway `HOME` and `TMPDIR` and the webview profile they still share — which a run can strip
-  of a preference it never touched, so the profile is copied whole before one and restored afterwards (and running under
-  other system languages for one launch), reading the wire through a wrapped sidecar, why nothing the daemon logs after
+  exec'ing the binary, a build-time app identifier plus a throwaway environment for separate daemon and WebKit data,
+  checking the running processes and storage before driving the window, cleanup confined to that identity, running
+  under other system languages for one launch, reading the wire through a wrapped sidecar, why nothing the daemon
+  logs after
   the application is gone can be read and why putting its log on a file removes the condition under investigation,
   sharing the machine with other worktrees' dev apps (fixed port, stopping by PID only), and fully reloading a dev
   window before judging a defect in it.

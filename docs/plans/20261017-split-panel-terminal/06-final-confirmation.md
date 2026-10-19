@@ -18,14 +18,14 @@
       `/proc` children reading and its fallback scan) and hanging up a closed terminal whose leftover background job
       still holds the PTY: the job loses its terminal and the reader, master and buffers are released. macOS cannot
       show the latter, since a session leader's exit already revokes its terminal there.
-- [ ] In the packaged desktop app (WKWebView), on a project with several shell terminals, and across two projects:
+- [x] In the packaged desktop app (WKWebView), on a project with several shell terminals, and across two projects:
       tabs, switching tabs and projects, reload restoring tabs and scrollback, the Files/Terminal separator (pointer,
       keyboard, double-click reset), New terminal focusing the new shell, and the busy-close confirmation.
 - [ ] In the packaged app: maximizing the Terminal panel with focus in the agent terminal hands focus to the shell
       before the agent area turns inert (focus never on the page body); F6 while maximized skips the agent area;
       hovering the Files toggle while maximized floats Files in and pressing docks it; toggling the sidebar while
       maximized refits the shell once at the end of the ease, not on every frame; opening an archive view restores.
-- [ ] In the packaged app, quitting with a busy shell terminal asks (terminals-only wording, and the sessions plus
+- [x] In the packaged app, quitting with a busy shell terminal asks (terminals-only wording, and the sessions plus
       terminals wording with a working session too), and quitting with only idle or exited shells does not.
 - [ ] With VoiceOver: "Starting terminal…" is announced when a first terminal starts, and the reconnecting and
       disconnected states of the shown tab are announced.
@@ -37,9 +37,9 @@
 
 ## Mid-task handoff
 
-The milestone remains open. Verification on 2026-10-20 started from `b41e61792`, which includes the Terminal panel commit
-`1adc71045`. No product behavior or key design decision has been changed. Browser and unit-test evidence below
-supports the outstanding desktop checks; it does not count as packaged WKWebView or VoiceOver confirmation.
+The milestone remains open. The first verification round on 2026-10-20 started from `b41e61792`, which includes
+`1adc71045`. The later packaged round used `1f41e42c4`. No product behavior or key design decision was changed.
+The automated checks and packaged observations are distinguished below; no VoiceOver listening is claimed.
 
 ### Automated checks
 
@@ -58,8 +58,8 @@ supports the outstanding desktop checks; it does not count as packaged WKWebView
 - **RTL layout passed** in Playwright WebKit build 2370, at device scale 2, with the gallery's Arabic language
   (`dir="rtl"`, English fallback copy). In `shell-panel-many-tabs`, measured the initially selected newest tab
   and the pointer-selected first tab inside the strip's scroller, repeated with keyboard Home/End, and verified
-  visible scroll buttons did not overlap their close marks. In `shell-panel-maximized`, `shell-panel-maximized-alone` and
-  `shell-panel-maximized-files-floating`, measured the maximized card against the agent area: 8 px top/bottom/start
+  visible scroll buttons did not overlap their close marks. In `shell-panel-maximized`, `shell-panel-maximized-alone`
+  and `shell-panel-maximized-files-floating`, measured the maximized card against the agent area: 8 px top/bottom/start
   insets, 0 px on the column side with Files docked (the column supplies the 16 px gap), and 8 px on both sides
   without Files. All three stayed aligned after resizing from 1440 x 900 to 1280 x 800 and hiding/showing the
   sidebar. Hovering Files then pressing its toggle floated and docked it while Terminal stayed maximized.
@@ -87,52 +87,95 @@ supports the outstanding desktop checks; it does not count as packaged WKWebView
   `cargo clippy --locked --all-targets -p octoboardd -- -D warnings` passed without warnings. Both containers were
   removed; no Linux check needs the user to start Docker now.
 
-### Checks requiring the user
+### Packaged verification round
 
-For the desktop checks, first use a packaged build containing `1adc71045` or later. Read-only accessibility
-inspection of the running installed app showed Files but no Terminal toggle, so that window cannot confirm the
-new Terminal panel. Build with `pnpm build:app --bundles app` in `apps/desktop` and arrange the app/profile switch
-when existing work can be stopped, or ask for an isolated verification run with the profile handling below.
+A separate packaged build was made from local main at `1f41e42c4` for this round. The Tauri build configuration
+used a unique bundle identifier and product name from the start. The scratch copy's `CFBundleIdentifier` and ad hoc
+signing identifier matched, and `codesign --verify --deep --strict` passed. The build used `pnpm build:app --bundles
+app --config ...`, so the daemon and production UI were built together without Developer ID signing or notarization.
 
-1. **Retina benchmark:** make a 2x display the main display, then request the comparison again (or run it yourself).
-   Compare `dd137f49320bd2243dc34c4fc4b0b6acf84eec7c`, the parent of the edge/divider change, against
-   `ef8ff5bbb`, the change itself. In separate detached verification worktrees, install dependencies and run
-   `pnpm bench:wkwebview --reps 3` from `packages/ui`, without `--port`, keeping both runs on that display with
-   other work quiet. Both restyle tables must report `devicePixelRatio 2`; compare their switch, scroll and restyle
-   tables, allowing for the harness's documented noise. The current macOS screen inventory reports only a
-   1920 x 1080 display at scale 1.0, so no new 1x run was substituted.
-2. **Real-app panel stack:** in the packaged app, open a project with Files and Terminal, then a console session
-   with Report. Use F6 and Shift+F6 to visit each open panel: Files lands on its first header tab; Terminal on the
-   shown shell's input, its Reconnect button when offered, or header New terminal with no tab; Report on its first
-   enabled pager button, otherwise Close panel. Close all
-   panels, hover each kind's toggle, move into the floating card, press a control inside it, then leave; confirm the
-   fade-up and dismissal. Press the toggle to dock immediately. Hover and drag the width grip, checking its light
-   and strong states and adjacent Resize tooltip. Close a panel while focus is inside it and confirm focus returns
-   to the agent terminal.
-3. **Packaged terminal lifecycle:** use several terminals in each of two projects. Switch tabs and projects, print
-   distinct scrollback markers, reload the window, and confirm the tabs and markers return. Exercise the
-   Files/Terminal separator by dragging, keyboard arrows (including Shift), Home/End and double-click reset.
-   Press New terminal and type to confirm focus reaches the new shell. Run a foreground job, request tab close,
-   and confirm the busy warning; cancel before ending any work you want to keep.
-4. **Packaged maximize:** start with focus in the agent terminal, maximize Terminal, and confirm focus reaches the
-   shell before the covered area becomes inert, never the page body. Cycle F6 and confirm the agent is skipped.
-   With Files closed, hover its toggle, then press to dock it. Toggle the sidebar and check the shell refits once
-   after the ease. Open an archive view and confirm Terminal restores to the stack.
-5. **Packaged quit:** with no working agent session and a busy shell, request Quit and inspect the terminals-only
-   warning, then cancel. Repeat with a working session too and inspect the combined wording. Finally, with only
-   idle or exited shells and no working session, confirm Quit proceeds without a warning. Use disposable work.
-6. **VoiceOver:** enable VoiceOver in the packaged app and listen while the first terminal starts, then while the
-   shown tab reconnects and exhausts its retries. Confirm each starting/reconnecting/disconnected announcement,
-   without duplicate reading of the visible copy. The native VoiceOver caption window is also acceptable evidence.
-   If a first start is too fast or connection loss cannot be staged reliably, request an isolated instrumented
-   verification build rather than counting an unobserved announcement as passed.
-7. **Real powerlevel10k:** install/configure powerlevel10k in the login shell if needed, open a terminal and wait for
-   its real prompt with `gitstatusd` running. Confirm closing this idle tab asks nothing. In another terminal, in a
-   project with a working `dev` script, run `npm run dev > log 2>&1 &` (leave stdin attached), wait for busy polling,
-   and confirm closing asks. Cancel, stop the test job, and clean up its log. No powerlevel10k installation was
-   found in the usual user/theme/Homebrew locations, and the user's shell configuration was left alone.
+Before behavioral checks, process and open-file inspection confirmed that the test app ran its scratch executable,
+its child daemon held only the scratch home's database and lock on a separate loopback port, and its WebKit processes
+opened LocalStorage, ResourceLoadStatistics and content rule lists under the unique identifier. The installed app
+continued running separately. The test launch used fresh `HOME`, `TMPDIR`, `ZDOTDIR`, XDG and agent configuration
+directories, with a controlled PATH exposing only a stand-in agent. Both projects and every shell job were disposable.
 
-No interactive packaged checks were attempted against the user's running app. A separate build with scratch
-`HOME`/`TMPDIR` still shares the installed app's WebKit profile and can prune its saved project preferences. An automated packaged
-run needs the user's go-ahead to preserve and restore that profile, with every app of the same identifier stopped;
-otherwise the user can perform the checks above in the installed app. No app was installed or replaced.
+The test build included a temporary native command-file observer for DOM state, focus events, synchronous inert
+changes, animations, terminal dimension style writes and resize messages. It did not change the product frontend.
+The native source and permissions were restored byte-for-byte after building. Behavioral pointer and keyboard actions
+used a driver that checked the exact test bundle identifier, executable path, PID, foreground app and window bounds.
+DOM inspection supplied coordinates and observations; fixture setup used only the test daemon's protocol.
+
+- **Panel focus:** native F6 and Shift+F6 reached Files on its first header tab, Terminal on the shown shell input,
+  and the agent input. In a console session with no report pages, F6 landed on Report's Close panel fallback.
+  Closing the Terminal panel while its shell held focus returned focus to the agent input.
+- **Separator:** a native drag changed the Files/Terminal boundary by 36 px, and double-click reset equal shares
+  of 347 px. For keyboard operation, DOM focus setup placed focus on the actual separator, then native keys changed
+  its value from 347 to 363 with Down, back to 347 with Up, to 411 with Shift+Down, to 120 with Home and to 574 with
+  End. The earlier attempt to focus it by clicking preserved the previous focus, as designed, and was not counted
+  as keyboard evidence. Reaching that separator by Tab has not been established by this run.
+- **Maximize focus and fit:** from the agent textarea, a native maximize press moved focus to the shell before the
+  synchronous inert setter ran. Both the setter's before/after observations held shell focus and `body=false`.
+  Native F6 then skipped the inert agent area. While maximized, Files could be docked with its toggle. Hiding and
+  showing the sidebar each produced one shell dimension-style update, respectively 9 ms and 22 ms after the width
+  transition ended, followed by one resize message; no per-frame shell dimension updates occurred during the ease.
+- **Tabs and reload:** native New terminal presses created three Alpha shells and two Beta shells, focusing each
+  new shell. Native tab and project selection showed the corresponding sets. Distinct `M06_ALPHA_1/2/3` and
+  `M06_BETA_1/2` output markers were sent through the test daemon's binary PTY input frames and observed in xterm's
+  read-only text view. Each project was checked after a real `location.reload()` of the packaged page and native
+  session reselection: the same terminal IDs and all markers returned. Reload resets session selection, so the
+  check does not claim that selection itself was restored. An earlier text-frame setup attempt was ignored by the
+  terminal socket and was discarded; native Unicode text injection was also unsuitable for seeding command strings.
+- **Busy close:** with a real foreground `sleep 600` in the disposable shell, the native close mark opened the
+  warning that something was still running and closing would end it, with Cancel and Close terminal. The warning
+  was cancelled and the disposable job interrupted.
+
+- **Quit:** the native observer called the existing app-specific quit request entry point. With all stand-in
+  sessions idle and a real busy shell, the confirmation said: "Some terminals are still running something. Quitting
+  ends what they run." With a working stand-in session too, it said: "Some sessions and terminals are still running.
+  Quitting interrupts the sessions, which can each be resumed next time, and ends what the terminals run."
+  Both were cancelled with native Escape. After the job was interrupted and sessions made idle, Quit ended the app
+  and daemon with only idle shells and no warning. A separately relaunched instance created a shell, let it exit,
+  confirmed its record was `exited` and not busy, and Quit again ended both processes without warning. This tests the
+  packaged quit handler and confirmation; no global Command+Q was sent to any application.
+
+`pnpm typecheck` and `pnpm format:check` passed. The packaged build also passed its TypeScript and 27 i18n tests.
+No new gallery scenario or product code was changed, so no additional gallery sweep was needed in this round.
+
+Cleanup was verified after the checks: all recorded test app and daemon PIDs had exited; the scratch bundle, home,
+temporary directory, native driver, build outputs and identifier-specific WebKit/cache data were removed. The test
+bundle's Launch Services registration was removed too. The installed app remained running with the same PID, and
+SHA-256 hashes of its application and sidecar executables matched the pre-test values. No installed app was stopped,
+overwritten or uninstalled, and its profile was not moved, copied or restored.
+
+### Checks still requiring the user
+
+The lifecycle and quit checkboxes are complete. The real-app panel-stack and maximize checkboxes remain open because
+their hover-dependent parts were not established, even though their focus and resizing subchecks above passed.
+
+1. **Retina benchmark:** make a 2x display the main display, then request the comparison again or run it yourself.
+   Compare `dd137f49320bd2243dc34c4fc4b0b6acf84eec7c` against `ef8ff5bbb` in separate verification worktrees.
+   Install dependencies, then run `pnpm bench:wkwebview --reps 3` in `packages/ui`, without `--port`, on the same
+   quiet machine. Both restyle tables must report `devicePixelRatio 2`; compare switch, scroll and restyle tables
+   with the harness's documented noise in mind. This run's packaged viewport reported DPR 1, so it cannot settle it.
+2. **Panel stack and width grip:** in a packaged build containing `1adc71045` or later, close every panel, then hover
+   Files, Terminal and a console session's Report toggles. Confirm fade-up, leaving dismisses the card even after
+   pressing a control inside it, and pressing the toggle docks immediately. Hover and drag the width grip: confirm
+   the light hover state, strong dragging state, adjacent Resize tooltip and changed pane width. Native clicks and
+   separator drags worked in this test, but automated mouse movement did not establish the React hover/reveal path;
+   CSS hover alone was not counted as proof. Also reach the Files/Terminal separator with Tab; its native keyboard
+   operation was verified only after programmatic focus setup.
+3. **Remaining maximize interactions:** with Terminal maximized and Files closed, hover Files and confirm it floats
+   over Terminal, then press to dock it. Open an actual archive view from a project with archived sessions and confirm
+   Terminal restores to the stack. Clicking Files to dock, maximize focus-before-inert, F6 skipping the covered agent
+   area and one shell refit after each sidebar ease already passed. The initial archive popover had no archived
+   sessions, so opening that popover was not counted as opening an archive view. The later isolated relaunch had no
+   native window accessible to the driver despite its page and daemon responding, preventing the final native pass.
+4. **VoiceOver:** in the packaged app, listen or inspect native VoiceOver captions while the first terminal starts,
+   then while the shown tab reconnects and exhausts retries. Confirm starting, reconnecting and disconnected are
+   announced once without duplicate reading of the visible copy. Request a separate instrumented run if the states
+   are too brief or cannot be staged reliably; an unobserved announcement is not a pass.
+5. **Real powerlevel10k:** configure the login shell with powerlevel10k if needed, open a shell and wait for its real
+   prompt with `gitstatusd` running. Confirm closing the idle tab asks nothing. In a project with a working dev
+   script, run `npm run dev > log 2>&1 &`, leaving stdin attached; wait for busy polling and confirm closing asks.
+   Cancel, stop the test job and remove its log. No prompt package was installed or user shell configuration changed.
