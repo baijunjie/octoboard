@@ -847,10 +847,20 @@ mod tests {
             assert_eq!(mode & 0o777, 0o700);
         }
         for url in ["https://a/one?x=1&y=2", "https://a/two"] {
-            let status = std::process::Command::new(&script)
-                .arg(url)
-                .status()
-                .unwrap();
+            // A process forked by another thread while the script was open for writing holds it
+            // open until it execs, and until then the script cannot be run (`ETXTBSY`).
+            let deadline = std::time::Instant::now() + PATIENCE;
+            let status = loop {
+                match std::process::Command::new(&script).arg(url).status() {
+                    Err(err)
+                        if err.raw_os_error() == Some(libc::ETXTBSY)
+                            && std::time::Instant::now() < deadline =>
+                    {
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                    other => break other.unwrap(),
+                }
+            };
             assert!(status.success());
         }
         assert_eq!(last_line_of(&urls), "https://a/two");
