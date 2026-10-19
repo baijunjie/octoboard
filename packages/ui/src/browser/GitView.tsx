@@ -12,7 +12,6 @@ import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useListMotion } from "../components/useListMotion";
 import type { Translate } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
-import { useDaemonStore } from "../store";
 import { displayWirePath } from "../wirePath";
 import { BranchSelect } from "./BranchSelect";
 import { ChangeList } from "./ChangeList";
@@ -123,7 +122,7 @@ function Notice({ notice }: { notice: ChangesNotice }): React.ReactElement {
     case "unborn":
       return <>{t("git.changes.unborn")}</>;
     case "worktree":
-      return <Message id="git.changes.worktree" params={{ path: code(notice.path) }} />;
+      return <Message id="git.changes.worktree" params={{ name: code(notice.name) }} />;
     case "scopeMissing":
       return <>{t("git.changes.scopeMissing")}</>;
     case "noRemote":
@@ -155,7 +154,6 @@ function ChangesView({
   selectedSessionId,
 }: ChangesViewProps): React.ReactElement {
   const t = useT();
-  const homeDir = useDaemonStore((s) => s.homeDir);
   const noticesRef = useListMotion<HTMLDivElement>();
   // When what holds focus below the selector goes — the list replaced by a failure or an empty
   // state — focus goes to the selector rather than falling to `<body>`; with nothing chosen in a
@@ -170,7 +168,7 @@ function ChangesView({
   // A list that failed to refresh stays, and says why; one that never came says so in its place.
   const branchesError = branches.state === "error" ? branches.message : branches.state === "loaded" ? branches.error : undefined;
 
-  const { notices, failures, goneBranches, partial, commitsCut } = changesStatus({ branches, uncommitted, committed, homeDir });
+  const { notices, failures, goneBranches, partial, commitsCut } = changesStatus({ branches, uncommitted, committed });
   useErrorAcknowledgement(branchesError, t("git.branch.branchesFailed"));
   useErrorAcknowledgement(failures.find((failure) => failure.key === "uncommitted")?.message, t("git.error.list"));
   useErrorAcknowledgement(failures.find((failure) => failure.key === "committed")?.message, t("git.changes.compareFailed"));

@@ -703,7 +703,7 @@ export const en = {
   "git.changes.commitsError": "The commits could not be listed: {message}",
   "git.changes.listError": "The uncommitted changes could not be listed: {message}",
   "git.changes.notCheckedOut": "{branch} isn't checked out in any worktree, so it has no uncommitted changes.",
-  "git.changes.worktree": "The uncommitted changes are from the worktree at {path}.",
+  "git.changes.worktree": "The uncommitted changes are from the worktree {name}.",
   "git.changes.scopeMissing": "The project's folder isn't in the worktree this branch is checked out in.",
   "git.commit.source": "Commit {commit}, compared with its parent {parent}",
   "git.commit.sourceRoot": "Commit {commit}, which has no parent",

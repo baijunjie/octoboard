@@ -40,16 +40,16 @@ const compare = (comparison: Extract<CommittedState, { state: "compare" }>["comp
   commits,
 });
 const status = (uncommitted: UncommittedState, committed: CommittedState, branches = branchesOf(["main", "topic"])) =>
-  changesStatus({ branches, uncommitted, committed, homeDir: "/home/me" });
+  changesStatus({ branches, uncommitted, committed });
 
 it("says a branch no worktree has checked out has no uncommitted changes, and an own branch nothing about its worktree", () => {
   expect(status({ state: "notCheckedOut", branch: "topic" }, { state: "none" }).notices).toEqual([{ id: "notCheckedOut", branch: "topic" }]);
   expect(status(listed(), { state: "none" }).notices).toEqual([]);
 });
 
-it("names the worktree another branch's changes are read from, with the home folder abbreviated, and a scope it lacks", () => {
+it("names the worktree another branch's changes are read from by its folder's name, and a scope it lacks", () => {
   expect(status(listed("loaded", { own: false, worktree: tree("c1", false) }), { state: "none" }).notices).toEqual([
-    { id: "worktree", path: "~/code/repo" },
+    { id: "worktree", name: "repo" },
     { id: "scopeMissing" },
   ]);
 });
@@ -72,6 +72,16 @@ it("says what the committed part is while it is read, and what it is made of onc
     { id: "base", base: "main", baseCommit: "c100000", tip: "c2" },
     { id: "listingCommits" },
   ]);
+});
+
+it("names another branch's worktree under the line saying what the branch is compared with", () => {
+  const other = listed("loaded", { own: false });
+  expect(status(other, compare(loadedComparison(), { state: "loading" })).notices).toEqual([
+    { id: "base", base: "main", baseCommit: "c100000", tip: "c2" },
+    { id: "worktree", name: "repo" },
+    { id: "listingCommits" },
+  ]);
+  expect(status(other, { state: "noBase" }).notices).toEqual([{ id: "noBase" }, { id: "worktree", name: "repo" }]);
 });
 
 it("collects the parts that failed, in the order of the list", () => {

@@ -2,9 +2,8 @@
 // when is one place and tested on its own, and the component is left to lay it out.
 import type { ErrorPresentation } from "../errorPresentation";
 import type { PlainMessageKey } from "../i18n/catalog";
-import { abbreviateHome } from "../pathDisplay";
 import type { WorktreeInfo } from "../protocol";
-import { displayWirePath } from "../wirePath";
+import { displayWirePath, wireBaseName } from "../wirePath";
 import { comparisonNews } from "./comparisonNews";
 import { shortCommit } from "./shortCommit";
 import type { BranchList } from "./useBranchList";
@@ -14,7 +13,7 @@ import type { CommittedState, UncommittedState } from "./useGitReview";
 export type ChangesNotice =
   | { id: "notCheckedOut"; branch: string }
   | { id: "unborn" }
-  | { id: "worktree"; path: string }
+  | { id: "worktree"; name: string }
   | { id: "scopeMissing" }
   | { id: "noRemote"; branch: string }
   | { id: "noBase" }
@@ -65,22 +64,25 @@ export function changesStatus({
   branches,
   uncommitted,
   committed,
-  homeDir,
 }: {
   branches: BranchList;
   uncommitted: UncommittedState;
   committed: CommittedState;
-  homeDir: string | null | undefined;
 }): ChangesStatus {
   const notices: ChangesNotice[] = [];
   const failures: ChangesFailure[] = [];
+  // The lines about the worktree another branch's changes are read from come after the line saying
+  // what the branch is compared with, and before the transient one about listing its commits; the
+  // worktree is named by its folder's name, as its full path takes more room than it is worth.
+  const worktreeNotices: ChangesNotice[] = [];
+  let listingCommits = false;
   if (uncommitted.state === "notCheckedOut") {
     notices.push({ id: "notCheckedOut", branch: displayWirePath(uncommitted.branch) });
   } else if (uncommitted.state === "listed") {
     const { worktree, own, list } = uncommitted;
     if (worktree.head === null) notices.push({ id: "unborn" });
-    if (!own) notices.push({ id: "worktree", path: abbreviateHome(displayWirePath(worktree.root), homeDir) });
-    if (!worktree.scope_present) notices.push({ id: "scopeMissing" });
+    if (!own) worktreeNotices.push({ id: "worktree", name: wireBaseName(worktree.root) });
+    if (!worktree.scope_present) worktreeNotices.push({ id: "scopeMissing" });
     if (list.state === "error") failures.push({ key: "uncommitted", title: "git.error.list", line: "git.changes.listError", message: list.message });
   }
   if (committed.state === "noBase") {
@@ -103,10 +105,13 @@ export function changesStatus({
           tip: shortCommit(comparison.right.commit),
         });
       }
-      if (commits?.state === "loading") notices.push({ id: "listingCommits" });
+      if (commits?.state === "loading") listingCommits = true;
       else if (commits?.state === "error") failures.push({ key: "commits", title: "git.changes.commitsFailed", line: "git.changes.commitsError", message: commits.message });
     }
   }
+
+  notices.push(...worktreeNotices);
+  if (listingCommits) notices.push({ id: "listingCommits" });
 
   const shown = committed.state === "compare" && committed.comparison.state === "loaded" ? committed.comparison : undefined;
   const commitList = committed.state === "compare" ? committed.commits : undefined;

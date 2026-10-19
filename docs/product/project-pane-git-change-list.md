@@ -53,10 +53,12 @@ Within a section, changes are in the order the file tree would show their paths 
 
 The uncommitted sections are read from the worktree that has the branch checked out, whichever worktree that is.
 
-- **From another worktree than the one holding the project's folder**, a line above the list names that worktree's
-  path, `~` standing for the home directory.
+- **From another worktree than the one holding the project's folder**, a line above the list names that worktree by
+  its folder's name, not its path, just under the line saying what the committed part is (see "Committed changes"
+  below), or under the other lines when there is none.
 - **A worktree in which the project's folder is not a directory** — missing there, or reached only through a symbolic
-  link — has a line above the list saying the project's folder is not in the worktree the branch is checked out in.
+  link — has a line above the list saying the project's folder is not in the worktree the branch is checked out in,
+  just under the line naming the worktree, where there is one.
 - **A branch checked out in no worktree** has no uncommitted changes: a line says so, naming the branch, and only what
   it has committed is listed.
 - **A branch with no commit yet** — checked out in a worktree whose `HEAD` has none — has a line saying there are no

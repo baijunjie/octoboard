@@ -698,7 +698,7 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "The selected session's branch",
     description:
-      "The selected session is responsible for feature/ranking-experiments, which the side worktree has checked out, so the selector starts on it. Above the list: the worktree its uncommitted change (README.md) is read from, and the branch it forked from with both commits. Committed lists everything it changed since the fork. Right-clicking a committed row offers Copy path only, because that version has no live file to open or reveal.",
+      "The selected session is responsible for feature/ranking-experiments, which the side worktree has checked out, so the selector starts on it. Above the list: the branch it forked from with both commits, then the worktree its uncommitted change (README.md) is read from, named by its folder only. Committed lists everything it changed since the fork. Right-clicking a committed row offers Copy path only, because that version has no live file to open or reveal.",
     state,
     preferences,
     steps: selecting(rankingSession),

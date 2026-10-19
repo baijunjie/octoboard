@@ -640,7 +640,7 @@ export const zhHans: Translation<"other"> = {
   "git.changes.commitsError": "无法列出提交：{message}",
   "git.changes.listError": "无法列出未提交的更改：{message}",
   "git.changes.notCheckedOut": "{branch} 未在任何工作树中检出，因此没有未提交的更改。",
-  "git.changes.worktree": "未提交的更改来自位于 {path} 的工作树。",
+  "git.changes.worktree": "未提交的更改来自工作树 {name}。",
   "git.changes.scopeMissing": "检出此分支的工作树中没有该项目的文件夹。",
   "git.commit.source": "提交 {commit}，与其父提交 {parent} 比较",
   "git.commit.sourceRoot": "提交 {commit}，没有父提交",
