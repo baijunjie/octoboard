@@ -157,8 +157,8 @@ function submitsFromChoice(e: React.KeyboardEvent<HTMLFormElement>): boolean {
 let openDialogs = 0;
 
 /**
- * The frame every dialog shares. Unless `dismissable` is false, Escape and a click outside both
- * call `onClose`, including an `alert` dialog; the dialog is
+ * The frame every dialog shares. Unless `dismissable` is false, Escape calls `onClose`.
+ * A click outside also closes a non-alert dialog; confirmations require an explicit response. The dialog is
  * mounted only while it is open, so `isOpen` is constant. With `onSubmit` the header, body and footer sit in
  * a `<form>`, so Enter in a text field submits it — the dialog decides what "submit" means. The
  * footer is Cancel plus a submit button labelled `submitLabel`, unless the dialog brings its own
@@ -311,7 +311,7 @@ export function Dialog({
   );
 
   return (
-    <Frame.Backdrop isOpen isDismissable={dismissable} isKeyboardDismissDisabled={!dismissable} onOpenChange={(open) => !open && dismissable && onClose()}>
+    <Frame.Backdrop isOpen isDismissable={dismissable && !alert} isKeyboardDismissDisabled={!dismissable} onOpenChange={(open) => !open && dismissable && onClose()}>
       {/* HeroUI pads the container 40px from `sm` up, which below the `docked` breakpoint leaves too
           little of a narrow window for code; the viewer asks for a 16px margin there and the 40px
           one above it. The narrow margin is a `max-docked:` utility, not an `sm:` one paired with a

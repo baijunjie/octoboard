@@ -97,7 +97,9 @@ that could not start or a UI that failed — there is no rail: under the top bar
 
 **A dialog** — Settings, the file viewer, a console, project or session dialog, a confirmation — is drawn over a dimmed
 overlay that covers the whole window: the top bar, the rail and the content panel are dimmed behind it and none of
-them can be used while it is open, and a press anywhere on the dimmed area dismisses the dialog.
+them can be used while it is open. A press on the dimmed area dismisses an ordinary dialog, but never answers or
+closes a confirmation. A confirmation's buttons, close button and Escape still work; an error alert requires its
+acknowledgement button (see "Error alerts" in `docs/product/error-alerts.md`).
 
 **Where keyboard focus starts in a confirmation.** A confirmation opens with keyboard focus on its confirm button, so
 Enter confirms at once. Three kinds start elsewhere:

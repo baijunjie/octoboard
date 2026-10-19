@@ -111,7 +111,7 @@ connected window.
 | Ending | What the call returns | What changes |
 |---|---|---|
 | The user approves | The result described under "On approval" below. | The session is started, as described there. |
-| The user refuses — the **Refuse** button, Escape, the dialog's close button or a click outside it | A tool error in fixed prose saying the user refused the request and nothing was started; it ends by telling the agent not to ask again unless the user tells it to, to tell the user in its terminal what it wanted the session for, and to follow the user's direction on continuing its own work or leaving handover notes and ending. | Nothing. |
+| The user refuses — the **Refuse** button, Escape or the dialog's close button | A tool error in fixed prose saying the user refused the request and nothing was started; it ends by telling the agent not to ask again unless the user tells it to, to tell the user in its terminal what it wanted the session for, and to follow the user's direction on continuing its own work or leaving handover notes and ending. | Nothing. |
 | Nobody answers within the time limit | A tool error of the same shape, saying the user did not respond within the limit. | Nothing. |
 | The request is withdrawn | A tool error saying the request was withdrawn before the user answered and nothing was started, where the call is still there to receive it. | Nothing. |
 

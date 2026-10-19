@@ -270,6 +270,29 @@ function escapeFrom(
 
 const closeTrigger = (dialog: Element) => dialog.querySelector<HTMLElement>("[data-slot$=close-trigger]");
 
+it.each([
+  ["modal", {}, 1],
+  ["confirmation", { alert: true }, 0],
+  ["acknowledgement", { alert: true, dismissable: false }, 0],
+])("handles a backdrop press on a %s", (_name, props, closes) => {
+  const onClose = vi.fn();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  render(root, <Dialog title="Confirm" onClose={onClose} footer={null} {...props}><span>body</span></Dialog>);
+  const backdrop = document.querySelector<HTMLElement>("[data-slot$=-backdrop]");
+  if (!backdrop) throw new Error("the dialog did not render a backdrop");
+  act(() => {
+    backdrop.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+    backdrop.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0 }));
+    backdrop.click();
+  });
+  expect(onClose).toHaveBeenCalledTimes(closes);
+});
+
 // The close button carries a tooltip, and a tooltip opens on keyboard focus. react-aria then holds
 // Escape at `document` to dismiss the tooltip, above `<body>`, where React dispatches the modal's
 // own Escape handling from — so the dialog has to close that press itself. Both frames put a close

@@ -97,7 +97,7 @@ Its buttons:
     If the folder can no longer be offered by the time the go-ahead is given (see "Trusted folders" below), it is
     refused before anything is pressed: an error alert explains why and the trust dialog stays open with the box still
     ticked, so the user can untick it and go on without the folder.
-- **Not now** — also what Escape, the dialog's close button and a click outside it do. Nothing is sent and nothing is
+- **Not now** — also what Escape and the dialog's close button do. Nothing is sent and nothing is
   recorded; the confirmation stays for the user to answer in the session's terminal. The same session is asked about
   again only if the application reloads its state (a reconnect, or catching up after falling behind) while the
   confirmation is still up, and a later session of the project is asked about again, since the project still has no
