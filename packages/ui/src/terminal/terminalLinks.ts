@@ -274,7 +274,7 @@ function brokenUrlsIn(rowAt: (y: number) => TerminalRow | undefined, from: numbe
 }
 
 /** Joins the segments that overlap on a row into one, and sorts them. */
-function mergeSegments(segments: LinkSegment[]): LinkSegment[] {
+export function mergeSegments(segments: LinkSegment[]): LinkSegment[] {
   const merged: LinkSegment[] = [];
   for (const segment of [...segments].sort((a, b) => a.y - b.y || a.col - b.col)) {
     const last = merged[merged.length - 1];
@@ -287,27 +287,17 @@ function mergeSegments(segments: LinkSegment[]): LinkSegment[] {
   return merged;
 }
 
-/**
- * The cells of every address `TERMINAL_URL_REGEX` finds (and `new URL` accepts), soft-wrapped ones
- * included, and of every one the program broke across rows (see `brokenUrlsAt`), on the rows
- * `from` to `to` (1-based buffer lines, both inclusive). A segment lies on one row, and none
- * overlaps another.
- */
-export function linkSegmentsIn(
-  rowAt: (y: number) => TerminalRow | undefined,
+/** The logical lines touching rows `from` to `to` (1-based buffer lines, both inclusive), each as
+ * the rows it fills: a row that is not a continuation and the rows xterm soft-wrapped after it. A
+ * logical line starts on a row that is not a continuation, and the first row shown may be one;
+ * how far a line is followed either way is bounded. */
+export function logicalLinesIn(
+  read: (y: number) => TerminalRow | undefined,
   from: number,
   to: number,
-): LinkSegment[] {
-  const cache = new Map<number, TerminalRow | undefined>();
-  const read = (y: number): TerminalRow | undefined => {
-    if (!cache.has(y)) cache.set(y, rowAt(y));
-    return cache.get(y);
-  };
-  const segments: LinkSegment[] = [];
-
-  // A logical line starts on a row that is not a continuation, the first row shown may be one;
-  // how far it is followed either way is bounded.
+): { y: number; row: TerminalRow }[][] {
   const margin = Math.ceil(LOGICAL_LINE_MARGIN_CHARS / Math.max(1, read(from)?.cells.length ?? 1));
+  const found: { y: number; row: TerminalRow }[][] = [];
   let y = from;
   while (y > 1 && from - y < margin && read(y)?.wrapped) y--;
   while (y <= to) {
@@ -317,14 +307,40 @@ export function linkSegmentsIn(
       y++;
     }
     if (lines.length === 0) break;
-    segments.push(...plainUrlSegments(lines));
+    found.push(lines);
   }
+  return found;
+}
+
+/**
+ * The cells of every address `TERMINAL_URL_REGEX` finds (and `new URL` accepts), soft-wrapped ones
+ * included, and of every one the program broke across rows (see `brokenUrlsAt`), on the rows
+ * `from` to `to` (1-based buffer lines, both inclusive), read through `read`, which should
+ * remember rows (see `cachedRows`). A segment lies on one row, and none overlaps another.
+ */
+export function linkSegmentsIn(
+  read: (y: number) => TerminalRow | undefined,
+  from: number,
+  to: number,
+): LinkSegment[] {
+  const segments: LinkSegment[] = [];
+  for (const lines of logicalLinesIn(read, from, to)) segments.push(...plainUrlSegments(lines));
   for (const url of brokenUrlsIn(read, from, to)) segments.push(...brokenUrlSegments(url, read));
   return mergeSegments(segments.filter((segment) => segment.width > 0 && segment.y >= from && segment.y <= to));
 }
 
+/** `rowAt` remembering each row it has read, for the several passes over the same rows that finding
+ * links takes. It is good for one look at the screen, no longer. */
+export function cachedRows(rowAt: (y: number) => TerminalRow | undefined): (y: number) => TerminalRow | undefined {
+  const cache = new Map<number, TerminalRow | undefined>();
+  return (y) => {
+    if (!cache.has(y)) cache.set(y, rowAt(y));
+    return cache.get(y);
+  };
+}
+
 /** Reads buffer line `y` (1-based) of `term`'s active buffer as a `TerminalRow`. */
-function terminalRowReader(term: Terminal): (y: number) => TerminalRow | undefined {
+export function terminalRowReader(term: Terminal): (y: number) => TerminalRow | undefined {
   const cell = term.buffer.active.getNullCell();
   return (y) => {
     const line = term.buffer.active.getLine(y - 1);
@@ -338,12 +354,25 @@ function terminalRowReader(term: Terminal): (y: number) => TerminalRow | undefin
   };
 }
 
-/** The cells to colour as links in the rows `term` is showing now. */
-export function visibleLinkSegments(term: Terminal): LinkSegment[] {
+/** More cells to colour as links on rows `from` to `to`, read through the same `read` as the
+ * addresses. */
+export type ExtraLinkSegments = (
+  read: (y: number) => TerminalRow | undefined,
+  from: number,
+  to: number,
+) => LinkSegment[];
+
+/** The cells to colour as links in the rows `term` is showing now: the addresses, and the cells
+ * `extra` gives. */
+export function visibleLinkSegments(term: Terminal, extra?: ExtraLinkSegments): LinkSegment[] {
   const { viewportY } = term.buffer.active;
+  const read = cachedRows(terminalRowReader(term));
+  const from = viewportY + 1;
+  const to = viewportY + term.rows;
   return mergeSegments([
-    ...linkSegmentsIn(terminalRowReader(term), viewportY + 1, viewportY + term.rows),
+    ...linkSegmentsIn(read, from, to),
     ...visibleOscLinkSegments(term),
+    ...(extra?.(read, from, to) ?? []),
   ]);
 }
 

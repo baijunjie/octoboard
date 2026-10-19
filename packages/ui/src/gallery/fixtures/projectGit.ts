@@ -1095,7 +1095,7 @@ const reviewScenarios: Scenario[] = [
     title: "Change viewer with collapsed lines",
     state,
     preferences,
-    description: "The staged tag and long expansion gaps accompany the diff; other change subjects remain available through navigation.",
+    description: "The staged tag and long expansion gaps accompany the diff; other change subjects remain available through navigation. File manager and Default application end the header row, as the change is in a working copy.",
     steps: [
       ...openGit,
       (ui) => ui.press(ui.changeRow("pipeline.ts", "modified")),
@@ -1107,7 +1107,7 @@ const reviewScenarios: Scenario[] = [
     group: "File viewer",
     category: "normal",
     title: "A change from a branch's whole history in the viewer",
-    description: "The subtitle names the branch and the commit it is at, with all of its history, because the branch has no remote branch to say where it forked from.",
+    description: "The subtitle names the branch and the commit it is at, with all of its history, because the branch has no remote branch to say where it forked from. A committed change has no File manager or Default application buttons.",
     state,
     preferences,
     git: NEVER_PUSHED_GIT,
@@ -1118,7 +1118,7 @@ const reviewScenarios: Scenario[] = [
     group: "File viewer",
     category: "normal",
     title: "A commit's change in the viewer",
-    description: "The subtitle names the commit and the parent the change is compared with. Next moves to the Import the ranking notes commit, which has no parent: its subtitle says so.",
+    description: "The subtitle names the commit and the parent the change is compared with. Next moves to the Import the ranking notes commit, which has no parent: its subtitle says so. A committed change has no File manager or Default application buttons.",
     state,
     preferences: gitMode({ byCommit: true }),
     steps: [

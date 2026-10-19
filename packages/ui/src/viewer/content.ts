@@ -3,6 +3,7 @@
 // without touching the daemon contract or the callers.
 import type { ReactNode } from "react";
 
+import type { HostPath } from "../components/useHostPathActions";
 import type { ErrorPresentation } from "../errorPresentation";
 import type { FileContent } from "../protocol";
 import { joinedPatch, saysNothingChanged } from "./patch";
@@ -109,6 +110,9 @@ export type ViewerContent =
 export interface ViewerSubject {
   key: string;
   path: string;
+  /** Present when the subject is a live file of a project or one of its worktrees; the header then
+   * offers File manager and Default application on it. A committed file has none. */
+  host?: HostPath;
   source?: ReactNode;
   sourceText?: string;
   stage?: string;

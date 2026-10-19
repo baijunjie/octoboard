@@ -303,6 +303,8 @@ it("lists the committed changes by commit, newest first, and reads a commit's ch
       read_project_commit_change: () => ({ type: "project_commit_change", project: "p4", commit: "c2", parent: "c1", old: absent, new: absent, patch: null }),
     });
     expect(h.latest.git.viewer?.subject.sourceText).toContain("c2");
+    // A committed change has no file on disk to show or open.
+    expect(h.latest.git.viewer?.subject.host).toBeUndefined();
     expect(h.latest.git.viewer?.navigation?.onPrevious).toBeDefined();
 
     // Commits listed again without it: the viewer closes. Grouped back together, the cumulative
@@ -493,6 +495,8 @@ it("follows the list's status for an open uncommitted change whose key did not c
   act(() => h.latest.git.view.onOpen(h.items()[0]));
   await h.settle(readBack);
   expect(h.latest.git.viewer?.subject.status).toBe("modified");
+  // A change in a worktree is a live file the header can show in the file manager or open.
+  expect(h.latest.git.viewer?.subject.host).toEqual({ project: "p6", path: "a.txt" });
 
   act(() => void h.latest.git.refresh());
   await h.settle(source("p6", [MAIN]), branchList("p6", []), changeList("p6", [listed("symlink", "2")]));

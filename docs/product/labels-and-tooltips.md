@@ -28,14 +28,15 @@ carries it — a control, an indicator or a label too long for its space:
 Two places show the operating system's own tooltip instead, which follows the system's styling and timing: a link
 inside a Markdown document in the file viewer, where — for a web or mail address, or a path in the project — the
 address it leads to is also what assistive technology is given as the link's description (see "A Markdown file as a
-document" in `docs/product/project-pane.md`), and the separators standing for the lines a diff leaves out (see
+document" in `docs/product/file-viewer.md`), and the separators standing for the lines a diff leaves out (see
 "Expanding the collapsed lines" in `docs/product/project-pane-git-change-viewer.md`).
 
 ## Tooltips on icon-only controls
 
 A control shown only as an icon has a tooltip naming it, shown both when the mouse rests on it and when it receives
 keyboard focus. The tooltip's text is the same name assistive technology announces for the control, except on the ⋮
-buttons, the pin buttons and the session Delete or Archive shortcuts below. These are:
+buttons, the pin buttons, the session Delete or Archive shortcuts and the file viewer's File manager and Default
+application buttons below. These are:
 
 - the top bar's controls — Back, Forward, the sidebar toggle at its start and the right pane's toggle at its end;
   each pane toggle's tooltip follows its "Show …" / "Hide …" label, and the right pane's also names what the pane
@@ -67,11 +68,15 @@ buttons, the pin buttons and the session Delete or Archive shortcuts below. Thes
   `docs/product/settings.md`);
 - the report panel's previous-page and next-page buttons;
 - the project pane's Refresh button, a folder's arrow button in its file tree and in the Git mode's change list, and a
-  commit row's arrow button there ("Expand" / "Collapse"), and the file viewer's Previous file and Next file buttons
-  (see `docs/product/project-pane.md`);
+  commit row's arrow button there ("Expand" / "Collapse") (see `docs/product/project-pane.md`), and the file viewer's
+  Previous file and Next file buttons (see `docs/product/file-viewer.md`);
 - the copy buttons — the file viewer's Copy path and the Git mode's Copy worktree path, on the change list's line
   naming the worktree — whose tooltip, and the name announced with it, turns to the copied wording after a press (see
   "Copy buttons" below);
+- the file viewer's File manager and Default application buttons, whose tooltip is the short "File manager" or
+  "Default application" that names the action in a project pane row's menu, while the name announced for each says
+  what pressing it does, "Open in file manager" or "Open in default application" (see "The header" in
+  `docs/product/file-viewer.md`);
 - the file viewer's three view controls and the Git mode's three view toggles — the one that shows and hides the
   change filter field, Group by folder and Group by commit — whose tooltip is the name they announce and alternates with their state (see
   "Two-state icon toggles" below);
@@ -127,7 +132,7 @@ Help tips are used in three places:
 
 A control that switches a view between two states is **one icon button**, not a set of choices side by side. These are
 the two pane toggles (see "The two pane toggles" in `docs/product/window-layout.md`), the file viewer's three view
-controls (see "The file viewer" in `docs/product/project-pane.md`), the Files mode's file-name filter toggle
+controls (see "The header" in `docs/product/file-viewer.md`), the Files mode's file-name filter toggle
 (see "Filtering by file name" in that doc), and the Git mode's three — the toggle of its change
 filter field (see "Filtering by file name" in `docs/product/project-pane-git-change-list.md`), Group by folder (see "Flat
 or grouped by folder" in the same doc) and Group by commit (see "Grouped by commit" in the same doc). For all of them:
@@ -148,7 +153,7 @@ where the chosen option is marked by a fill of its own rather than by its icon (
 ## Copy buttons
 
 A copy button is an icon button that puts a text on the clipboard and says it did so on the button itself rather than
-in a toast. These are the file viewer's Copy path (see "The file viewer" in `docs/product/project-pane.md`) and the
+in a toast. These are the file viewer's Copy path (see "The header" in `docs/product/file-viewer.md`) and the
 button after the worktree's name on the Git mode's change list (see "Uncommitted changes" in
 `docs/product/project-pane-git-change-list.md`). For both:
 

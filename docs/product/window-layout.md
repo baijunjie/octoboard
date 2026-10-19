@@ -478,7 +478,7 @@ The hairline is 0.5 px on a display of 2× pixel density or more and
   console that is deleted goes away as if the pointer had left that console's avatar.
 - **What keeps it up**, whatever the pointer does: keyboard focus inside it, one of its menus being open, or a dialog
   being open, for as long as it is — such as one opened from the pane, the file viewer a project pane opens among them
-  (see "The file viewer" in `docs/product/project-pane.md`). So closing a viewer opened from a floating project pane,
+  (see `docs/product/file-viewer.md`). So closing a viewer opened from a floating project pane,
   by the pointer or the keyboard, finds the pane still there to hand focus back to.
 - **Only one at a time**: bringing one up sends the other away.
 - **Pressing the toggle** while the pane is floating shows it for good, and keyboard focus stays where it was. Until
@@ -613,7 +613,7 @@ Not mirrored:
   `docs/product/project-pane-git-change-viewer.md`), are laid out in the direction of their own text, as a name the user typed
   is, and so is a commit's subject on its commit row; a commit's id reads left to right.
 - **A rendered Markdown document in the file viewer** (see "A Markdown file as a document" in
-  `docs/product/project-pane.md`), which is laid out in the direction of its own text, block by block: each paragraph,
+  `docs/product/file-viewer.md`), which is laid out in the direction of its own text, block by block: each paragraph,
   heading, list, quote and table takes the direction of its own first strong character, so a right-to-left passage in
   a left-to-right document reads from its own side, with its markers, quote bar and columns on that side, and an
   English block in an Arabic document reads from the left. Inline code, a fenced block, a diagram and a formula always

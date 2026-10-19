@@ -753,3 +753,65 @@ describe("the fixture daemon's account approval modes", () => {
     }
   });
 });
+
+describe("the fixture daemon's path link probe", () => {
+  it("finds the scenario's paths, in order, whether written absolute, home-relative or relative to the project", async () => {
+    const owner = consoleOf("c", "Main");
+    const project = projectOf("p", owner.id, "Website");
+    const daemon = createFixtureDaemon({
+      id: "path-links",
+      group: "Terminal",
+      category: "normal",
+      title: "",
+      state: snapshotState({ consoles: [owner], projects: [project] }),
+      pathLinks: { [`${project.path}/src/a.ts`]: "file", "/Users/dev/notes": "directory" },
+    });
+    await expect(
+      daemon.request({ type: "probe_path_links", project: project.id, paths: ["src/a.ts", "~/notes", "./src/../src/a.ts", "src/b.ts", `${project.path}/src/a.ts`] }),
+    ).resolves.toEqual({
+      type: "path_links",
+      links: [
+        { path: "src/a.ts", kind: "file" },
+        { path: "~/notes", kind: "directory" },
+        { path: "./src/../src/a.ts", kind: "file" },
+        { path: "src/b.ts", kind: "none" },
+        { path: `${project.path}/src/a.ts`, kind: "file" },
+      ],
+    });
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "src/a.ts" })).resolves.toEqual({ type: "ack" });
+  });
+
+  it("sends where a file the viewer shows is read from, and reads a worktree's files from the worktree", async () => {
+    const owner = consoleOf("c", "Main");
+    const project = projectOf("p", owner.id, "Website");
+    const daemon = createFixtureDaemon({
+      id: "path-link-views",
+      group: "Terminal",
+      category: "normal",
+      title: "",
+      state: snapshotState({ consoles: [owner], projects: [project] }),
+      files: { "a.ts": { text: "const a = 1;\n" }, "bin/tool": { binary: { size: 2048 } } },
+      worktreeFiles: { "wt-side": { "a.ts": { text: "const a = 2;\n" } } },
+      pathLinks: {
+        [`${project.path}/a.ts`]: { view: { path: "a.ts" } },
+        "/Users/dev/side/a.ts": { view: { worktree: "wt-side", path: "a.ts" } },
+        "/tmp/b.png": "file",
+        [`${project.path}/bin/tool`]: { view: { path: "bin/tool" }, viewerOnly: true },
+      },
+    });
+    await expect(daemon.request({ type: "probe_path_links", project: project.id, paths: ["a.ts", "/Users/dev/side/a.ts", "/tmp/b.png", "c.ts", "bin/tool"] })).resolves.toEqual({
+      type: "path_links",
+      links: [
+        { path: "a.ts", kind: "file", view: { path: "a.ts" } },
+        { path: "/Users/dev/side/a.ts", kind: "file", view: { worktree: "wt-side", path: "a.ts" } },
+        { path: "/tmp/b.png", kind: "file" },
+        { path: "c.ts", kind: "none" },
+        { path: "bin/tool", kind: "file", view: { path: "bin/tool" }, viewer_only: true },
+      ],
+    });
+    await expect(daemon.request({ type: "read_project_file", project: project.id, path: "a.ts" })).resolves.toMatchObject({ worktree: null, file: { text: "const a = 1;\n" } });
+    await expect(daemon.request({ type: "read_project_file", project: project.id, path: "bin/tool" })).resolves.toMatchObject({ file: { kind: "binary", size: 2048, media_type: null } });
+    await expect(daemon.request({ type: "read_project_file", project: project.id, worktree: "wt-side", path: "a.ts" })).resolves.toMatchObject({ worktree: "wt-side", file: { text: "const a = 2;\n" } });
+    await expect(daemon.request({ type: "read_project_file", project: project.id, worktree: "wt-gone", path: "a.ts" })).rejects.toMatchObject({ code: "file_not_found" });
+  });
+});

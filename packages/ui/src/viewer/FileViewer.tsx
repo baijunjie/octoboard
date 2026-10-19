@@ -1,5 +1,5 @@
 import { Button } from "@heroui/react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, FolderOpen, SquareArrowOutUpRight } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { CopyButton } from "../components/CopyButton";
@@ -10,6 +10,7 @@ import { PlainMarkedPath } from "../components/MarkedPath";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { TitledControl } from "../components/TitledControl";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
+import { type HostPath, useHostPathActions } from "../components/useHostPathActions";
 import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
 import { useLatest } from "../components/useLatest";
 import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
@@ -76,10 +77,13 @@ export function FileViewer({
   onClose,
   navigation,
   location,
+  line,
 }: {
   subject: ViewerSubject;
   onClose: () => void;
   navigation?: ViewerNavigation;
+  /** The line of a file to scroll to and mark; ignored for a change and for an image. */
+  line?: number;
   /** How a link or an image in a document is followed. The document's path is the subject's. */
   location?: Omit<MarkdownLocation, "path">;
 }): React.ReactElement {
@@ -252,7 +256,8 @@ export function FileViewer({
     >
       <div ref={headerRef} data-viewer-description="" className="flow-root min-h-8 min-w-0 shrink-0 px-(--pane-inset) text-xs leading-8">
         {/* Copy path, then fixed places for the Markdown view choice, the layout choice and the
-            wrap choice, so Tab order matches the screen whichever mounts first.
+            wrap choice, then File manager and Default application, so Tab order matches the screen
+            whichever mounts first.
             Copy path is here, not beside the path it copies, because the group sits at the row's end
             and a button at the row's start would be tabbed to after the three at its end, against the
             reading direction. The slots have no box of their own while empty, so they take none of
@@ -267,6 +272,7 @@ export function FileViewer({
           <div ref={setMarkdownViewSlot} className="contents" />
           <div ref={setLayoutSlot} className="contents" />
           {wrapClaimed && <WrapToggleHost />}
+          {subject.host && <HostPathButtons host={subject.host} />}
         </RowIconGroup>
         <DetailItem>
           <PlainMarkedPath path={displayWirePath(subject.path)} icon={<FileTypeIcon path={subject.path} className="size-3.5 shrink-0 text-app-muted" />} />
@@ -282,7 +288,7 @@ export function FileViewer({
       </div>
       <ControlsSlot value={controls}>
         <MarkdownLocationProvider value={{ path: subject.path, ...location }}>
-          <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} />
+          <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} line={line} />
         </MarkdownLocationProvider>
       </ControlsSlot>
     </Dialog>
@@ -343,6 +349,30 @@ function CopyPathButton({ path }: { path: string }): React.ReactElement {
   );
 }
 
+/** File manager and Default application, the last of the header's controls: the same two actions, with
+ * the same icons and names, as the project pane's row menu has, on the subject's live file. Each is
+ * an icon button that takes no focus from a press, like the others. */
+function HostPathButtons({ host }: { host: HostPath }): React.ReactElement {
+  const t = useT();
+  const act = useHostPathActions();
+  // The tooltip is the short label the row menu has; the accessible name says what pressing does.
+  const buttons = [
+    { type: "reveal_project_path", title: t("common.fileManager"), name: t("viewer.openInFileManager"), Icon: FolderOpen },
+    { type: "open_project_path", title: t("common.defaultApplication"), name: t("viewer.openInDefaultApplication"), Icon: SquareArrowOutUpRight },
+  ] as const;
+  return (
+    <>
+      {buttons.map(({ type, title, name, Icon }) => (
+        <TitledControl key={type} title={title}>
+          <Button isIconOnly size="sm" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={name} onPress={() => act(type, host)} preventFocusOnPress>
+            <Icon aria-hidden="true" className="size-4" />
+          </Button>
+        </TitledControl>
+      ))}
+    </>
+  );
+}
+
 /** For a rename within the project, the path it came from. */
 function renamedFromPath(change: ViewerChange): string | undefined {
   return change.old.state === "present" && change.new.state === "present" && change.old.path !== change.new.path ? change.old.path : undefined;
@@ -393,11 +423,13 @@ function ViewerContentBody({
   name,
   layout,
   onLayoutChange,
+  line,
 }: {
   subject: ViewerSubject;
   name: string;
   layout: DiffLayout;
   onLayoutChange: (layout: DiffLayout) => void;
+  line?: number;
 }): React.ReactElement {
   const t = useT();
   const { resolved: theme } = useOctoboardTheme();
@@ -410,7 +442,7 @@ function ViewerContentBody({
     case "disconnected":
       return <Disconnected what={content.what} />;
     case "file":
-      return <BodyView resetKey={key} name={name} body={content.body} theme={theme} asDocument />;
+      return <BodyView resetKey={key} name={name} body={content.body} theme={theme} asDocument line={line} />;
     case "conflict":
       return (
         <>
@@ -447,18 +479,20 @@ function BodyView({
   body,
   theme,
   asDocument = false,
+  line,
 }: {
   resetKey: string;
   name: string;
   body: ViewerBody;
   theme: "light" | "dark";
   asDocument?: boolean;
+  line?: number;
 }): React.ReactElement {
   const t = useT();
   switch (body.kind) {
     case "text":
-      if (asDocument && isMarkdownName(name)) return <MarkdownSurface resetKey={resetKey} name={name} text={body.text} theme={theme} />;
-      return <CodeSurface resetKey={resetKey} name={name} text={body.text} theme={theme} />;
+      if (asDocument && isMarkdownName(name)) return <MarkdownSurface resetKey={resetKey} name={name} text={body.text} theme={theme} line={line} />;
+      return <CodeSurface resetKey={resetKey} name={name} text={body.text} theme={theme} line={line} />;
     case "image":
       return <ImageView key={resetKey} name={name} body={body} theme={theme} />;
     case "binary":

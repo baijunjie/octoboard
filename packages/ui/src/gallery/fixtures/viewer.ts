@@ -567,9 +567,12 @@ function binary(path: string, image: { mediaType: string | null; data: string })
 }
 
 // A file from the tree has no source: only a committed change opened from the Changes view says where it is from.
+// A live file is the project's, so the header offers File manager and Default application on it.
 function file(path: string, body: ViewerBody): ViewerSubject {
-  return { key: `live:${path}`, path, content: { state: "file", body } };
+  return { key: `live:${path}`, path, host: hostOf(path), content: { state: "file", body } };
 }
+
+const hostOf = (path: string) => ({ project: "gallery", path });
 
 function present(path: string, body?: ViewerBody, kind: "file" | "symlink" | "submodule" = "file"): ViewerChangeSide {
   return { state: "present", path, kind, body };
@@ -756,17 +759,19 @@ const before = binary("assets/logo.png", IMAGES.before_png);
 const after = binary("assets/logo.png", IMAGES.after_png);
 
 function change(t: Translate, path: string, oldSide: ViewerChangeSide, newSide: ViewerChangeSide, patch?: string, stage: "staged" | "unstaged" = "unstaged"): ViewerSubject {
-  return { key: `${stage}:${path}`, path, stage: t(stage === "staged" ? "git.group.staged" : "git.group.unstaged"), content: { state: "change", change: { old: oldSide, new: newSide, patch } } };
+  // A change in the working copy has its file to show in the file manager, unless it is deleted there.
+  const host = newSide.state === "present" ? hostOf(path) : undefined;
+  return { key: `${stage}:${path}`, path, host, stage: t(stage === "staged" ? "git.group.staged" : "git.group.unstaged"), content: { state: "change", change: { old: oldSide, new: newSide, patch } } };
 }
 
 // An untracked file is shown alone, with the Untracked chip and no stage tag.
 function untracked(path: string, body: ViewerBody): ViewerSubject {
-  return { key: `Untracked:${path}`, path, status: "untracked", content: { state: "change", change: { old: { state: "absent" }, new: present(path, body) } } };
+  return { key: `Untracked:${path}`, path, host: hostOf(path), status: "untracked", content: { state: "change", change: { old: { state: "absent" }, new: present(path, body) } } };
 }
 
 // An untracked symbolic link, or a repository of its own, is shown alone with nothing to read on its side.
 function untrackedNotFile(path: string, kind: "symlink" | "submodule"): ViewerSubject {
-  return { key: `Untracked:${path}`, path, status: "untracked", content: { state: "change", change: { old: { state: "absent" }, new: present(path, undefined, kind) } } };
+  return { key: `Untracked:${path}`, path, host: hostOf(path), status: "untracked", content: { state: "change", change: { old: { state: "absent" }, new: present(path, undefined, kind) } } };
 }
 
 /** A committed change opened from the Changes view: the comparison is the subtitle under the title. */
@@ -803,6 +808,7 @@ async function allChanges(language: Language): Promise<ViewerSubject[]> {
     {
       key: "Conflicted:docs/merge.md",
       path: "docs/merge.md",
+      host: hostOf("docs/merge.md"),
       content: {
         state: "conflict",
         conflict: "Both sides modified this file. The file on disk is shown below with its conflict markers.",
@@ -812,6 +818,7 @@ async function allChanges(language: Language): Promise<ViewerSubject[]> {
     {
       key: "Conflicted:src/merge.ts",
       path: "src/merge.ts",
+      host: hostOf("src/merge.ts"),
       content: {
         state: "conflict",
         conflict: "Both sides modified this file. The file on disk is shown below with its conflict markers.",
@@ -1049,7 +1056,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Files",
-    description: "Successful code, Markdown, images, inert repository markup, unsupported binary formats, large-file fallbacks and loading views. Dedicated internationalization subjects cover Arabic document direction and mixed-script source. Previous / Next stays within normal subjects. Compare long paths, source/document and wrap controls, and scroll fades using the width and language controls.",
+    description: "Successful code, Markdown, images, inert repository markup, unsupported binary formats, large-file fallbacks and loading views. Dedicated internationalization subjects cover Arabic document direction and mixed-script source. Previous / Next stays within normal subjects. Compare long paths, source/document and wrap controls, and scroll fades using the width and language controls. File manager and Default application are the last two buttons of every file's header row, after the copy, view and wrap buttons.",
     viewer: { subjects: files },
   },
   {
@@ -1111,7 +1118,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Changes",
-    description: "Successful modified, added, deleted, renamed, type-changed, untracked and compared changes. Includes images, binary notices, large-patch fallbacks and empty diffs. Previous / Next stays within normal subjects; compare stage tags, long comparison subtitles and layout controls.",
+    description: "Successful modified, added, deleted, renamed, type-changed, untracked and compared changes. Includes images, binary notices, large-patch fallbacks and empty diffs. Previous / Next stays within normal subjects; compare stage tags, long comparison subtitles and layout controls. File manager and Default application end the header row of the working-copy changes (staged, unstaged, untracked and conflicted) but not of the ones whose file is gone from the working copy (src/legacy.ts, src/moved-out.ts) nor of the committed ones, which carry a comparison under the title.",
     viewer: { subjects: changes },
   },
 ];

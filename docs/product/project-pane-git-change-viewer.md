@@ -1,13 +1,13 @@
 # Project pane Git change viewer
 
 A change listed in the project pane's Git mode (see `docs/product/project-pane-git-mode.md`) opens in the project
-pane's read-only file viewer (see "The file viewer" in `docs/product/project-pane.md`). This doc is what the viewer
+pane's read-only file viewer (see `docs/product/file-viewer.md`). This doc is what the viewer
 shows of a change, how its diff expands, how the viewer moves through the list, and what happens when the change
 changes or cannot be read.
 
 ## Opening a change
 
-A change opens in the project pane's file viewer (see "The file viewer" in `docs/product/project-pane.md`). Its title is
+A change opens in the project pane's file viewer (see "The header" in `docs/product/file-viewer.md`). Its title is
 the file's name, with the kind of change after it as a tag — Added, Deleted, Modified, Renamed or Type changed —
 coloured as the change's letter in the list is (green, red, amber, blue; the same colours for the same kind). A staged
 or unstaged change has its stage — Staged or Unstaged — as a second, neutral tag after the kind: the two things a
@@ -34,12 +34,12 @@ title, each commit by its first seven characters:
   the parent it is compared with — "Commit 9e8d7c6, compared with its parent 4f2a9c1" — or, for a commit with no
   parent, that it has none.
 
-The full wording is that line's tooltip where it is cut off (see "The file viewer" in `docs/product/project-pane.md`),
+The full wording is that line's tooltip where it is cut off (see "The header" in `docs/product/file-viewer.md`),
 and each branch name in it is laid out in the direction of its own text (see "Right-to-left layout" in
 `docs/product/window-layout.md`). An uncommitted change has no such line.
 
-Under that are the change's details, laid out as the viewer lays out any subject's (see "The file viewer" in
-`docs/product/project-pane.md`): the path within the project and, for a rename, the path it was renamed from.
+Under that are the change's details, laid out as the viewer lays out any subject's (see "The header" in
+`docs/product/file-viewer.md`): the path within the project and, for a rename, the path it was renamed from.
 
 A committed change is read from two commits, and is shown as a staged change is below; it is never untracked or in
 conflict. Listed together, its old side is read from the commit the branch and its base forked at — the empty tree
@@ -57,16 +57,16 @@ the commit's first parent — the empty tree for a commit with none — and its 
   can be expanded (see "Expanding the collapsed lines" below). A change whose patch has no lines — an empty file added
   or removed, say — says it has no diff to show; one whose two sides hold the same content, under one name or two,
   shows the file whole instead, as the bullets below say. Whether its long lines wrap is the viewer's own choice, which
-  a diff shares with every file (see "Wrapping long lines" in `docs/product/project-pane.md`). A patch of more than
+  a diff shares with every file (see "Wrapping long lines" in `docs/product/file-viewer.md`). A patch of more than
   1,000,000 characters or 10,000 lines is shown as the plain patch, under a notice saying it is shown that way because
   the change is large; a patch the diff could not be drawn from is shown the same way, under a failure notice saying
-  so (see "Notices and stand-ins" in `docs/product/project-pane.md`). A patch that is not valid UTF-8 — of a file in
+  so (see "Notices and stand-ins" in `docs/product/file-viewer.md`). A patch that is not valid UTF-8 — of a file in
   another encoding — is shown with replacement characters.
 - **A missing newline at the end** of either version is said in a notice above the diff — the old version, the new
   one, or neither has one — rather than as a line of it. A symbolic link's change never says so, a link's target
   having no newline at its end anyway. A plain patch keeps Git's own marker lines.
 - **An image change** — of a binary image format the file viewer displays (see "What it shows" in
-  `docs/product/project-pane.md`); an SVG, being text, is a text change — shows the two images, Before and After, side
+  `docs/product/file-viewer.md`); an SVG, being text, is a text change — shows the two images, Before and After, side
   by side where the viewer is wide enough (Before on the left, mirrored under a right-to-left language, see
   "Right-to-left layout" in `docs/product/window-layout.md`) and one above the other otherwise. A side with no file
   says so.
@@ -113,7 +113,7 @@ the commit's first parent — the empty tree for a commit with none — and its 
 **A change with no lines to draw shows the file itself.** For the two cases above — the same content under one name or
 two — there is nothing to compare, so the whole content is read instead, the read a diff's collapsed lines use (see
 "Expanding the collapsed lines" below), once as the change opens; while it is in flight the viewer shows its usual
-loading, announced as a file's read is (see "What it shows" in `docs/product/project-pane.md`). It is then shown whole
+loading, announced as a file's read is (see "What it shows" in `docs/product/file-viewer.md`). It is then shown whole
 as a file rather than as a diff — so a Markdown file is offered as a document with its source a choice away, exactly as
 an untracked file is — under a neutral notice saying which of the two cases the change is, in one sentence. Where the
 content cannot be had after all, the change falls back to the centred stand-in and shows none of the file, saying there
@@ -125,16 +125,16 @@ whole, by the same rule as a diff's collapsed lines, or the change having moved 
 turning out to differ from what the change says they are — a neutral notice above it says which of those it was. Only a
 change with nothing to read the content from leaves the stand-in alone: one whose two sides are not both files whose
 content can be read, a rename between two symbolic links among them. Every one of these notices and the stand-in are as
-"Notices and stand-ins" in `docs/product/project-pane.md` describes them.
+"Notices and stand-ins" in `docs/product/file-viewer.md` describes them.
 
 A whole file body shown here instead of a diff — an untracked file, one added with no patch, the version inside the
 project of a rename across the boundary, or a change with no lines to draw whose content was read — is a Markdown
 document when the file is Markdown, as it is for a file read for itself (see "A Markdown file as a document" in
-`docs/product/project-pane.md`). Following a link in that document to another project file leaves Git mode, as that
+`docs/product/file-viewer.md`). Following a link in that document to another project file leaves Git mode, as that
 section describes. A diff and the file behind a path in conflict are shown as source whatever the file is.
 
 How a diff is coloured in each appearance is in "What follows the choice" in `docs/product/appearance.md`. A diff's
-code is focused, selected and copied as a file's is (see "Selecting and copying" in `docs/product/project-pane.md`).
+code is focused, selected and copied as a file's is (see "Selecting and copying" in `docs/product/file-viewer.md`).
 
 ## Expanding the collapsed lines
 
@@ -224,7 +224,7 @@ row (see "Grouped by commit" in the same doc) and, grouped by folder, those unde
 Staged and Unstaged is two stops, as is a file both uncommitted and committed, and, grouped by commit, a file several
 commits changed is a stop under each of their commit rows. A change with no row of its own — one the list no longer has — keeps its place in the order, and the keys move on to the changes that surround it.
 When the keys do nothing, and how they mirror under a right-to-left language, is as in "Moving between files" in
-`docs/product/project-pane.md`.
+`docs/product/file-viewer.md`.
 
 ## Closing it
 
@@ -260,7 +260,7 @@ have it, the viewer closes the same way. The viewer never shows a change from ot
 
 When the connection to the daemon is lost, what is shown stays until the connection is back, and then the change is
 read again; a change that had nothing on screen yet says, in the neutral stand-in rather than as an error (see
-"Notices and stand-ins" in `docs/product/project-pane.md`), that the connection was lost and that it is read again
+"Notices and stand-ins" in `docs/product/file-viewer.md`), that the connection was lost and that it is read again
 once the connection is back.
 
 ## Errors

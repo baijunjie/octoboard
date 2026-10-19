@@ -243,6 +243,8 @@ export interface FileRenderProps {
   language?: string;
   /** Whether lines are numbered; they are unless this is false. */
   lineNumbers?: boolean;
+  /** A line to mark as selected (1-based). */
+  line?: number;
   /** Told whether the file is shown without highlighting because its grammar or a theme failed to
    * load; the caller passes a new callback for each file, so a second file in the same failing
    * language is reported too. */
@@ -262,6 +264,7 @@ export const HighlightedFile = memo(function HighlightedFile({
   wrap,
   language: hint,
   lineNumbers = true,
+  line,
   onPlainChange,
   onDrawn,
 }: FileRenderProps): React.ReactElement | null {
@@ -275,6 +278,8 @@ export const HighlightedFile = memo(function HighlightedFile({
     () => (language ? { name, contents: text.endsWith("\n") ? text.slice(0, -1) : text, lang: language.lang } : undefined),
     [name, text, language?.lang],
   );
+  // Left uncontrolled without a line, so what the user selects themselves is theirs.
+  const selection = useMemo(() => (line === undefined ? undefined : { start: line, end: line }), [line]);
   const onPostRender = useDrawnCallback(onDrawn);
   const options = useMemo(
     () => ({ ...BASE_OPTIONS, themeType: theme, overflow: overflowOption(wrap), disableLineNumbers: !lineNumbers, unsafeCSS: readingCss(theme), onPostRender }) as const,
@@ -282,7 +287,7 @@ export const HighlightedFile = memo(function HighlightedFile({
   );
   return (
     <WorkerPoolContext.Provider value={rendererPool()}>
-      {file && <File file={file} options={options} disableWorkerPool={file.lang === "text"} />}
+      {file && <File file={file} options={options} selectedLines={selection} disableWorkerPool={file.lang === "text"} />}
     </WorkerPoolContext.Provider>
   );
 });

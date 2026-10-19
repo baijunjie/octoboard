@@ -151,17 +151,27 @@ or disconnected, the cover described in "Reconnecting" above is shown in its pla
 
 ## Links in the output
 
-Web addresses in a session's terminal are links:
+Web addresses and file paths in a session's terminal are links. What makes each one a link, and where it opens, is
+described under "Web addresses" and "File paths" below; the rest holds for both:
+
+- **A link is underlined while the pointer is on it.**
+- **A link is drawn in the link colour**: a blue chosen for the light and for the dark theme, shown all the time
+  rather than only under the pointer, and over whatever colour the program wrote the text in, in ordinary output and
+  an agent's full-screen interface alike. It covers every row the link spans and exactly the text that is the link,
+  so text that looks like an address or a path but is not a link stays uncoloured.
+- **A link opens with a primary-button click**, without requiring a modifier key.
+- **Selecting text does not open a link**: a click that leaves a terminal selection, including dragging within a
+  link, opens nothing. Other mouse buttons and a Mac's Control-click do not open a link. Right-click and a Mac's
+  Control-click open the editing menu described in "Copy, paste and selection" above, which has nothing of its own
+  for a link. Opening a link does not resume a dormant session.
+
+### Web addresses
 
 - **What is a link**: an `http` or `https` address written out as plain text, and an OSC 8 hyperlink the program
   emits, whose visible text may differ from the address it leads to. An OSC 8 hyperlink to any other scheme is not a
-  link at all. A link is underlined while the pointer is on it.
-- **A link is drawn in the link colour**: a blue chosen for the light and for the dark theme, shown all the time
-  rather than only under the pointer, and over whatever colour the program wrote the text in. This applies to
-  plain-text addresses and the visible labels of OSC 8 hyperlinks, in ordinary output and an agent's full-screen
-  interface alike. It covers every row the link spans — an address the terminal wraps onto the next row and an
-  address the program itself breaks onto the next line (see below) alike — and exactly the text that would open, so
-  text that looks like an address but is not a link stays uncoloured.
+  link at all.
+- **The link colour** covers plain-text addresses and the visible labels of OSC 8 hyperlinks, an address the terminal
+  wraps onto the next row and an address the program itself breaks onto the next line (see below) alike.
 - **Where a plain-text address ends**: at the first non-ASCII character, or at an ASCII delimiter such as whitespace,
   a quote mark, a parenthesis, a brace or an angle bracket; a trailing punctuation mark such as `.`, `,`, `:`, `!` or
   `?` is left out. So an address written straight into CJK
@@ -169,13 +179,8 @@ Web addresses in a session's terminal are links:
   raw non-ASCII characters is cut short at the first one, and one whose host starts with one (`http://例え.jp`) is
   not a link at all; a percent-encoded address is recognised whole. An OSC 8 hyperlink is not affected, its target
   being the one the program gives.
-- **A link opens with a primary-button click**, without requiring a modifier key. The address opens in the user's
-  own browser — to a new tab, in the UI opened in a browser — as a web link in a Markdown document does (see
-  "A Markdown file as a document" in `docs/product/project-pane.md`).
-- **Selecting text does not open a link**: a click that leaves a terminal selection, including dragging within a
-  link, opens nothing. Other mouse buttons and a Mac's Control-click do not open a link. Right-click and a Mac's
-  Control-click open the editing menu described in "Copy, paste and selection" above. Opening a link does not resume
-  a dormant session.
+- **An address opens in the user's own browser** — to a new tab, in the UI opened in a browser — as a web link in a
+  Markdown document does (see "A Markdown file as a document" in `docs/product/file-viewer.md`).
 - **An OSC 8 hyperlink shows its real target as a tooltip** once the pointer has rested on it for the window's usual
   tooltip delay (see "How a tooltip behaves" in `docs/product/labels-and-tooltips.md`). A plain-text address has no
   tooltip, its text being its target. The tooltip goes when the pointer leaves the link, when the terminal's view
@@ -194,6 +199,72 @@ Web addresses in a session's terminal are links:
   broken inside a table's cells (a border character follows it) are cut at the end of the first row, and that part is
   what opens. An address that runs onto the next row only because the terminal is too narrow for it is recognised
   whole.
+
+### File paths
+
+A file path in the output is a link only once the machine the daemon runs on has confirmed it names a file or folder
+the session may open. Until then — for a moment after it appears — and whenever it does not, it is plain text.
+
+- **What is taken for a path**:
+  - an absolute path, `/…`;
+  - a path under the home directory, `~/…` — the home directory of the machine the daemon runs on;
+  - a relative path with a directory in it: `./a`, `../a`, `src/a.ts`;
+  - a file name with an extension followed by a line, or a line and a column: `a.ts:42`, `a.ts:42:7`.
+
+  Any path may carry such a `:line` or `:line:column`; it belongs to the link, and its line is where a file opened in
+  the file viewer is shown (see "Opened from the terminal" in `docs/product/file-viewer.md`). A path mentioned with a leading `@` (`@src/a.ts`) is a link without
+  the `@`. A compiler's position in parentheses after a path (`src/a.ts(12,5)`, as `tsc` writes it) leaves the path
+  alone as the link, its line used as a `:line` is. A bare file name with neither a
+  directory nor a line (`README.md`) is not taken for a path, and neither is text longer than 1024 characters.
+- **Where a path starts and ends**: it starts at the beginning of a line or after a blank, a quote mark or backtick,
+  an opening parenthesis, bracket, brace or angle bracket, `=`, `,`, `;`, or CJK punctuation. It ends at a blank, a
+  quote mark or backtick, a parenthesis, bracket, brace or angle bracket, `|`, `\`, `^`, `*`, `?`, or full-width or
+  CJK punctuation; a trailing `.`, `,`, `;`, `:`, `!` or `?` is left out. Other non-ASCII characters stay in the path
+  (`/tmp/图片.png`), unlike in a web address. A path containing a space is never recognised whole, quoted or escaped.
+- **What is not a path**: text containing `://` or starting with `//`, and text that runs straight into a `[` or `{`,
+  or a directory ending in `/` followed by `(` — so a route pattern such as `app/[id]/page.tsx` or
+  `app/(group)/page.tsx` is no link, not even its first part.
+- **Rows**: a path the terminal wraps onto the next row is recognised whole and covers both rows. A path the program
+  itself breaks onto the next line is not joined: each piece is taken on its own.
+- **Where a path may lead**: inside the session's project — its directory and, when the project is in a git
+  repository, its place in each worktree of that repository — or inside a temporary directory: `/tmp`,
+  `/private/tmp` and the daemon's own temporary directory, which covers agents' scratch space. A temporary directory
+  that is the filesystem root or holds the home directory is not used.
+  - Symbolic links are followed before this is checked, so a link leading out of these places is no link. An absolute
+    or `~/` path must also be written starting inside one of them, not only resolve into one.
+  - A relative path is looked for in the project's directory and in each worktree's place — not in whichever
+    directory the agent happens to be working in — and is a link only when exactly one of them has it. Found in
+    several, it is no link.
+  - A console session has no project: in it, only absolute and `~/` paths inside a temporary directory are links. A
+    project whose directory cannot be found still has its paths inside a temporary directory linked.
+- **Anything that is neither a file nor a folder** is never a link.
+- **What the system could launch rather than show is never opened on the host by a click**: a file with an
+  executable bit, and a path any part of which, below the project or temporary directory, has one of these
+  extensions, compared without regard to case: `app`, `appex`, `bundle`, `framework`, `plugin`, `kext`, `xpc`,
+  `prefpane`, `saver`, `workflow`, `action`, `command`, `tool`, `terminal`, `term`, `scpt`, `scptd`, `pkg`, `mpkg`,
+  `dmg`, `jar`, `sh`, `bash`, `zsh`, `csh`, `tcsh`, `ksh`, `fish`, `desktop`, `webloc`, `inetloc`, `fileloc`,
+  `afploc`, `ftploc`, `mailloc`, `newsloc`, `atloc`, `nslloc`, `url`, `mobileconfig` and `shortcut` — so an
+  application bundle and everything inside it as well. Inside a temporary directory such a path is no link at all,
+  and in the project neither is such a folder. Such a file in the project is a link, which only ever opens in the file
+  viewer (see "Opened from the terminal" in `docs/product/file-viewer.md`).
+- **Inside a temporary directory**, which other users can write to, the file or folder and every folder from the
+  temporary directory down to it must also belong to the user the daemon runs as and be closed to writes by its group
+  and by others.
+- **A click** on a file inside the project — its directory or a worktree's place — opens it in Octoboard's file
+  viewer, at the path's line, when the viewer can show it; what decides that, and how the viewer then behaves, is in
+  "Opened from the terminal" in `docs/product/file-viewer.md`. Anything else opens on the machine the daemon runs on —
+  not on the machine a browser client happens to be open on: a file with its default application, a folder in the
+  file manager. A line given with the path plays no part there, so such a file opens as it would from the file
+  manager. The path is checked again by the rules above as it is opened on the host; one that no longer passes them —
+  removed since, say — is not opened, and an error alert says so, as it does when the system fails to open it. A path
+  link has no tooltip.
+- **When paths are checked**: only paths on screen, or under the pointer, are checked; those that appear together are
+  checked together, about 120 ms after they appear, at most 64 at a time. An answer is kept for about 30 seconds for a
+  path found and about 10 seconds for one that was not, and a path still on screen is checked again once its answer
+  is older, the next time the screen changes or the pointer passes over it — so a path named before the agent writes
+  the file becomes a link shortly after the file exists, and one removed stops being a link. A check that fails leaves
+  a path as it was, and plain text when nothing was known of it. Every answer is dropped when the terminal is cleared
+  to draw a session afresh.
 
 ## A console with nothing in it
 

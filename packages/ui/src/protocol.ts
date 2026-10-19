@@ -247,6 +247,18 @@ export interface BackgroundTask {
   description?: string;
 }
 
+/** What a path in a session's terminal names on the daemon's host: a file, a folder, or nothing it
+ * would open (missing, outside the project and the temp roots, ambiguous, or launchable). */
+export type PathLinkKind = "file" | "directory" | "none";
+
+/** Where `read_project_file` reads a file a path link names, for one inside the project or one of
+ * its worktrees. Whether the viewer can show it is found by reading it. `path` is a wire path below
+ * that directory. */
+export interface PathLinkView {
+  worktree?: string;
+  path: string;
+}
+
 export interface Session {
   id: string;
   agent: Agent;
@@ -1077,6 +1089,14 @@ export type RequestBody =
   | { type: "reveal_project_path"; project: string; path: string; worktree?: string }
   /** Opens a live project-relative wire path with the host's default application. */
   | { type: "open_project_path"; project: string; path: string; worktree?: string }
+  /** Asks what each of `paths`, as the session's terminal showed them, names on the daemon's host.
+   * Answered with `path_links`. A path is reachable inside the project (or one of its worktrees)
+   * or inside a temp root, unless the system would launch it; a relative path must be in exactly
+   * one of the project's roots. `project` absent means a relative path resolves to nothing. */
+  | { type: "probe_path_links"; project?: string; paths: string[] }
+  /** Opens a path `probe_path_links` found with the host's default application, a folder in the
+   * file manager. Answered with `ack`. */
+  | { type: "open_path_link"; project?: string; path: string }
   /** Pushes the project's current branch and only that branch. Answered with `ack` once `git push`
    * has exited; a success is followed by `project_git_status` from a local re-read. */
   | { type: "push_project_branch"; project: string }
@@ -1323,6 +1343,8 @@ export type Event =
     settings_error?: ImportFailure | null;
     consoles: ImportedConsole[];
   }
+  /** The reply to `probe_path_links`: one entry per path asked, in order, `path` as asked. */
+  | { type: "path_links"; id?: string; links: { path: string; kind: PathLinkKind; view?: PathLinkView; viewer_only?: boolean }[] }
   /** The reply to `list_pages`, oldest first. Pages are not in `snapshot` — a page carries a whole
    * HTML document — so the panel asks for them, and asks again after every `snapshot`: a client
    * that falls too far behind the daemon's broadcasts is sent a fresh snapshot in place of the

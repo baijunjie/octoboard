@@ -4,9 +4,9 @@ import React, { createContext, useContext } from "react";
 import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
 import { RowControls } from "../components/RowControls";
 import { useCopyPath } from "../components/useCopyPath";
+import { useHostPathActions } from "../components/useHostPathActions";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
-import { useDaemon } from "../store";
 
 /** The live directory behind the displayed rows: the project's, or the worktree a branch is checked
  * out in. A committed change has none. */
@@ -24,12 +24,10 @@ export function RowActions({ path, name, directory = false, reserve = false, con
   const t = useT();
   const copyPath = useCopyPath();
   const scope = useContext(RowPathScope);
-  const { request, toastError } = useDaemon();
+  const hostAction = useHostPathActions();
   const items: ActionMenuEntry[] = [{ label: t("common.copyPath"), icon: Copy, onClick: () => copyPath(path) }];
   if (scope) {
-    const run = (type: "open_project_path" | "reveal_project_path") => {
-      void request({ type, ...scope, path }).catch((error: Error) => toastError(error));
-    };
+    const run = (type: "open_project_path" | "reveal_project_path") => hostAction(type, { ...scope, path });
     items.push(
       {
         label: t("common.openIn"), icon: SquareArrowOutUpRight,

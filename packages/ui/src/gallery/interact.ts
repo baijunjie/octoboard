@@ -224,6 +224,10 @@ export interface Ui {
    * address, which has no tooltip but is underlined, on every row it spans, under the pointer.
    * Fails if the terminal does not show the pointer cursor of a link once the pointer is there. */
   hoverTerminalUrl: (text: string) => Promise<void>;
+  /** Clicks the terminal's text `text`, once the pointer on it shows the pointer cursor of a link, as
+   * `hoverTerminalUrl` waits for, and returns when a dialog is up over the window, for a file path
+   * that opens in the file viewer. Fails if the text is not a link or no dialog opens. */
+  clickTerminalLink: (text: string) => Promise<void>;
   /** Moves focus onto the first control named `matcher`, waiting for it to appear, with the keyboard
    * as its source, so that the focus ring is drawn as it is for a user who tabbed there, and a key
    * pressed next goes to it: for a row of a list, which a press would open rather than focus. */
@@ -337,7 +341,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
   const find = (matcher: Matcher): HTMLElement | undefined => findAll(matcher)[0];
 
   /** Puts the pointer on the terminal's text `text`, waiting for a row that holds it. */
-  const pointTerminalText = async (text: string): Promise<void> => {
+  const pointTerminalText = async (text: string): Promise<{ screen: Element; clientX: number; clientY: number }> => {
     // The text comes from the terminal's buffer, which says the same under the DOM renderer and
     // under WebGL (whose `.xterm-rows` is empty), and the pointer goes to a cell computed from the
     // screen's box. xterm finds the link under the pointer from the coordinates of a `mousemove`
@@ -356,13 +360,23 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     const box = screen.getBoundingClientRect();
     const cellWidth = box.width / found.view.cols();
     const cellHeight = box.height / found.view.rows();
-    screen.dispatchEvent(
-      new MouseEvent("mousemove", {
-        bubbles: true,
-        clientX: box.x + (found.col + text.length / 2) * cellWidth,
-        clientY: box.y + (found.y + 0.5) * cellHeight,
-      }),
-    );
+    const at = { clientX: box.x + (found.col + text.length / 2) * cellWidth, clientY: box.y + (found.y + 0.5) * cellHeight };
+    screen.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, ...at }));
+    return { screen, ...at };
+  };
+
+  /** Puts the pointer on the terminal's text `text` and waits for xterm to give its link pointer
+   * cursor, which it does whichever renderer draws the underline. The text is found and the pointer
+   * moved again while it waits: a link is found from the coordinates of a `mousemove` alone, and a
+   * busy page can redraw the text elsewhere (the terminal redraws at its settled width), or finish
+   * finding the link, after the first. */
+  const pointOnTerminalLink = async (text: string) => {
+    for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
+      const at = await pointTerminalText(text);
+      await wait(POLL_MS);
+      if (doc.querySelector(".xterm-cursor-pointer")) return at;
+    }
+    throw new Error(`Hovering ${text} in the terminal did not give xterm its link pointer cursor: it is not a link`);
   };
 
   /** Puts a mouse pointer on `element`. A tooltip opens only for a pointer, and react-aria takes the
@@ -607,13 +621,16 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       );
     },
     async hoverTerminalUrl(text) {
-      await pointTerminalText(text);
-      // xterm marks its element with the pointer cursor while the pointer is on a link, whichever
-      // renderer draws the underline.
-      await waitFor(
-        () => doc.querySelector(".xterm-cursor-pointer") ?? undefined,
-        `Hovering ${text} in the terminal did not give xterm its link pointer cursor: it is not a link`,
-      );
+      await pointOnTerminalLink(text);
+    },
+    async clickTerminalLink(text) {
+      const { screen, clientX, clientY } = await pointOnTerminalLink(text);
+      // xterm activates a link on the mouse-up that follows a mouse-down on the same one.
+      for (const type of ["mousedown", "mouseup"]) {
+        screen.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0, clientX, clientY }));
+      }
+      await waitFor(() => doc.querySelector("[role=dialog]") ?? undefined, `Clicking ${text} in the terminal opened no dialog`);
+      await wait(600);
     },
     async hoverChangeStatus(row, status) {
       await hover(() => find(row)?.querySelector<HTMLElement>("[data-slot=chip]"), `No change row matching ${String(row)} with a status letter to hover`);

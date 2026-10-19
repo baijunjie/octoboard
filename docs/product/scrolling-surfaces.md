@@ -28,7 +28,7 @@ alone, are in "The surfaces that fade" below.
 - Only the **top and bottom** edges fade, apart from the strips that scroll sideways and fade at their sideways
   edges: focus mode's strip of console session chips (see "The switch strip" in `docs/product/focus-mode.md`) and a
   strip of tabs. The file viewer's long lines, read by scrolling sideways while
-  wrapping is off, fade at neither side (see "Wrapping long lines" in `docs/product/project-pane.md`).
+  wrapping is off, fade at neither side (see "Wrapping long lines" in `docs/product/file-viewer.md`).
 
 **Some surfaces draw no scrollbar at all**, so the fade is what says there is more: the rail's column of console
 avatars, too narrow for a scrollbar (see "The rail" in `docs/product/window-layout.md`), focus mode's strip of chips,
@@ -47,7 +47,7 @@ Once it holds more than it can show, each of these fades at its edge:
 - the **project pane's** file tree (see "The file tree" in `docs/product/project-pane.md`), and the Git mode's change
   list (see `docs/product/project-pane-git-change-list.md`);
 - the **file viewer's** reading surfaces — a file shown as plain text, a highlighted file, a diff and a rendered
-  Markdown document (see "The file viewer" in `docs/product/project-pane.md`);
+  Markdown document (see "What it shows" and "A Markdown file as a document" in `docs/product/file-viewer.md`);
 - the **lists inside a popover**: the list of branches of the Git mode's branch selector (see "The branch
   selector" in `docs/product/project-pane-git-mode.md`), and the tags offered by the project filter (see "Filtering
   the project list" in `docs/product/sidebar.md`);
@@ -81,7 +81,7 @@ Two kinds of scrolling show no fade:
 
 A surface whose own content takes keyboard focus is scrolled by moving through that content: a list by its rows, a tab
 strip by its tabs. The file viewer's reading surfaces take focus themselves, whether or not they scroll, because
-selecting and copying is theirs as well (see "Selecting and copying" in `docs/product/project-pane.md`).
+selecting and copying is theirs as well (see "Selecting and copying" in `docs/product/file-viewer.md`).
 
 **Where nothing else on screen would scroll it, the surface itself becomes a tab stop while it scrolls** — a region
 named for what it holds, which the arrow keys, Page Up and Page Down then scroll. It is **no stop once its content

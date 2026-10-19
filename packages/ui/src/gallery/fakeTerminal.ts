@@ -2,13 +2,13 @@
  * The terminal sockets of the gallery. A session's terminal URL points at `FIXTURE_ORIGIN`, which
  * `installFakeTerminal` answers in the page itself, so there is no daemon and no failed network
  * request to read off the console: `output` connects and draws a sample (for a dormant session, as
- * the output its last process left), `fullscreen` draws in the alternate screen, and `refuse`
- * closes at once without ever opening, which is a live session whose terminal cannot be reached.
+ * the output its last process left), `fullscreen` draws in the alternate screen, `paths` draws
+ * output that names files and folders, and `refuse` closes at once without ever opening, which is a live session whose terminal cannot be reached.
  */
 
 const FIXTURE_ORIGIN = "ws://gallery.invalid/";
 
-export type TerminalBehaviour = "output" | "fullscreen" | "refuse";
+export type TerminalBehaviour = "output" | "fullscreen" | "paths" | "refuse";
 
 export function terminalFixtureUrl(behaviour: TerminalBehaviour, session: string): string {
   return `${FIXTURE_ORIGIN}${behaviour}/${session}`;
@@ -106,6 +106,43 @@ const sample = (cols: number) => [
   "",
 ].join("\r\n");
 
+/** Output that names files: each kind of path a terminal turns into a link once the daemon finds it
+ * (absolute, relative with a line and column, a document with a line, one in a side worktree, a
+ * program the system could launch, in a temp folder, inside parentheses, after an `@` mention), the
+ * same shapes the daemon does not find (a path that does not exist, one that more than one of the
+ * project's folders holds, and a route whose folder name is in brackets, which is not looked up),
+ * a sentence's full stop right after a path, and an address beside them for the link colour to be
+ * compared with. The scenario using it says which of these exist. Each line fits the docked pane's
+ * 53 columns. */
+const pathsSample = () => [
+  `${ESC}1;38;5;208m ✻ Welcome to Claude Code${ESC}0m`,
+  "",
+  `${ESC}1m● Read${ESC}0m(src/summary/Summary.css)`,
+  `  ${ESC}2m⎿  Read 142 lines${ESC}0m`,
+  "",
+  `${ESC}32m●${ESC}0m The layout lives in`,
+  "  /Users/dev/code/website/src/summary/Summary.css",
+  "  and the type error is at src/summary/Summary.tsx:42:7.",
+  "",
+  `${ESC}32m●${ESC}0m The icon sheet is written to`,
+  "  /private/tmp/octoboard/scratchpad/icon/sheet3.png,",
+  "  and the next step goes into src/summary/Draft.ts.",
+  "",
+  `${ESC}32m●${ESC}0m The notes are in docs/summary-notes.md:13,`,
+  "  and the side worktree holds",
+  "  /Users/dev/code/search-api-experiments/src/ui.ts:7",
+  "",
+  `${ESC}32m●${ESC}0m The helper is built at bin/helper.`,
+  "",
+  `${ESC}32m●${ESC}0m Context was added from @src/summary/Summary.tsx;`,
+  "  the route app/[id]/page.tsx and src/shared/index.ts",
+  "  are left alone.",
+  "",
+  `${ESC}32m●${ESC}0m Preview it at`,
+  "  http://localhost:5176/gallery.html",
+  "",
+].join("\r\n");
+
 /** A settled full-screen response, rather than the scrolling output used by the other fixtures. */
 const fullscreenSample = () => `${ESC}?1049h${ESC}H${ESC}2J` + [
   `${ESC}1;38;5;208m ✻ Claude Code${ESC}0m`,
@@ -139,8 +176,8 @@ class FakeTerminalSocket extends EventTarget {
   constructor(readonly url: string, output?: () => string) {
     super();
     const behaviour = url.slice(FIXTURE_ORIGIN.length).split("/")[0];
-    this.sized = output === undefined && behaviour !== "fullscreen";
-    this.output = output ?? (behaviour === "fullscreen" ? fullscreenSample : sample);
+    this.sized = output === undefined && behaviour !== "fullscreen" && behaviour !== "paths";
+    this.output = output ?? (behaviour === "fullscreen" ? fullscreenSample : behaviour === "paths" ? pathsSample : sample);
     // A refusal takes a moment, as a real one does: closing in the same frame as the attempt would
     // batch the "connecting" and the failure into one render and the pane would never see either.
     setTimeout(() => {

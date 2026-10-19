@@ -95,7 +95,7 @@ which one is the default and where the choice is kept are in `docs/product/appea
 How a rendered Markdown document in the project pane's file viewer looks, chosen from a drop-down of the styles:
 **Tailwind**, **GitHub**, **Newsprint** and **LaTeX**. The styles are named for what they are modelled on, so their
 names are proper names, the same in every language. What each style looks like, which one is the default and where
-the choice is kept are in "A Markdown file as a document" in `docs/product/project-pane.md`.
+the choice is kept are in "A Markdown file as a document" in `docs/product/file-viewer.md`.
 
 ### Language
 

@@ -1,4 +1,4 @@
-import React, { Suspense, useCallback, useMemo, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFadeRegion, useScrollFade, type FadeRegion } from "../components/scrollFade";
@@ -13,7 +13,7 @@ import { LayoutToggle, type DiffLayout } from "./diffLayout";
 import type { ExpansionStatus, SeparatorLabels } from "./expansion";
 import { FrameSurface } from "./FrameSurface";
 import { hasHunks, linesAfterLastHunk, withoutNoNewlineMarkers } from "./patch";
-import { focusFirstSeparatorControl } from "./rendererDom";
+import { focusFirstSeparatorControl, scrollTextToLine, scrollToLine } from "./rendererDom";
 import { isSelectAll, selectCode } from "./selectAll";
 import { LoadingOverlay, Notice, Unreadable, type NoticeTone } from "./viewerStates";
 import { WrapToggle, wordWrap } from "./wordWrap";
@@ -29,7 +29,21 @@ const EXPANSION_NOTES: Partial<Record<ExpansionStatus["kind"], PlainMessageKey>>
 /** Text as it is, laid out by the browser as one preformatted node: what the viewer falls back to
  * past a budget or when the renderer fails, and cheap at any size the daemon sends. It wraps long
  * lines when the user's word wrap choice says so. */
-export function PlainText({ text, label, theme }: { text: string; label: string; theme: "light" | "dark" }): React.ReactElement {
+export function PlainText({
+  text,
+  label,
+  theme,
+  line,
+  scrollKey,
+}: {
+  text: string;
+  label: string;
+  theme: "light" | "dark";
+  /** A line to bring into view; it is not marked, there being no per-line markup to mark. It is
+   * brought into view once for each `scrollKey` (the file shown) and line. */
+  line?: number;
+  scrollKey?: string;
+}): React.ReactElement {
   const frame = useCodeFrame(label);
   const wrap = wordWrap.useValue();
   const colours = CODE_THEMES[theme];
@@ -40,6 +54,14 @@ export function PlainText({ text, label, theme }: { text: string; label: string;
     // sideways too, and the fade is the vertical one either way.
     className: `min-h-0 flex-1 overflow-auto rounded-xl p-3 font-mono text-xs leading-5 ${wrap ? "break-words whitespace-pre-wrap" : "whitespace-pre"}`,
   });
+  const pre = fade.ref;
+  const scrolledTo = useRef<string>(undefined);
+  useEffect(() => {
+    const asked = `${scrollKey}\0${line}`;
+    if (line === undefined || scrolledTo.current === asked || !pre.current) return;
+    scrolledTo.current = asked;
+    scrollTextToLine(pre.current, line);
+  }, [line, scrollKey]);
   return (
     <FrameSurface focused={frame.region.focused}>
       <pre dir="ltr" {...fade} onKeyDown={frame.onKeyDown}>
@@ -114,23 +136,37 @@ export function CodeSurface({
   name,
   text,
   theme,
+  line,
 }: {
   resetKey: string;
   name: string;
   text: string;
   theme: "light" | "dark";
+  /** A line to mark and scroll to once drawn. A file shown as plain text has no marked line. */
+  line?: number;
 }): React.ReactElement {
   const t = useT();
   const [plainFor, setPlainFor] = useState<string>();
   const onPlainChange = useCallback((plain: boolean) => setPlainFor(plain ? resetKey : undefined), [resetKey]);
   const label = t("viewer.contents", { name: isolate(name) });
   const wrap = wordWrap.useValue();
+  const anchor = useRef<HTMLDivElement>(null);
+  // The line is brought into view once for each file and line asked for: the renderer reports every
+  // drawing (a theme change, a wrap change), and the reader may have scrolled on since.
+  const scrolledTo = useRef<string>(undefined);
+  const showLine = useCallback(() => {
+    const asked = `${resetKey}\0${line}`;
+    if (line === undefined || scrolledTo.current === asked || !anchor.current) return;
+    if (scrollToLine(anchor.current, line)) scrolledTo.current = asked;
+  }, [resetKey, line]);
+  // A new line in a file already drawn; one asked for with the file is shown once it is drawn.
+  useEffect(showLine, [showLine]);
   if (textPlan(text) === "plain") {
     return (
       <>
         <WrapToggle />
         <Notice>{t("viewer.plain.large")}</Notice>
-        <PlainText text={text} label={label} theme={theme} />
+        <PlainText text={text} label={label} theme={theme} line={line} scrollKey={resetKey} />
       </>
     );
   }
@@ -138,7 +174,7 @@ export function CodeSurface({
     <>
       <WrapToggle />
       <Notice tone="failed" speak={t("viewer.plain.unrenderable")} error={error} />
-      <PlainText text={text} label={label} theme={theme} />
+      <PlainText text={text} label={label} theme={theme} line={line} scrollKey={resetKey} />
     </>
   );
   return (
@@ -148,7 +184,20 @@ export function CodeSurface({
         <WrapToggle />
         <CodeFrame label={label} resetKey={resetKey} theme={theme}>
           {(onDrawn) => (
-            <HighlightedFile name={name} text={text} theme={theme} wrap={wrap} onPlainChange={onPlainChange} onDrawn={onDrawn} />
+            <div ref={anchor} className="contents">
+              <HighlightedFile
+                name={name}
+                text={text}
+                theme={theme}
+                wrap={wrap}
+                line={line}
+                onPlainChange={onPlainChange}
+                onDrawn={() => {
+                  onDrawn();
+                  showLine();
+                }}
+              />
+            </div>
           )}
         </CodeFrame>
       </RendererBoundary>

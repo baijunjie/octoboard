@@ -1,6 +1,6 @@
 import type { IDecoration, IDisposable, IMarker, Terminal } from "@xterm/xterm";
 
-import { segmentKey, visibleLinkSegments } from "./terminalLinks";
+import { type ExtraLinkSegments, segmentKey, visibleLinkSegments } from "./terminalLinks";
 import { XTERM_LINK_COLORS } from "./xtermThemes";
 
 let nextFixedMarkerId = -1;
@@ -33,7 +33,8 @@ function fixedMarker(line: number): IMarker {
  * Draws the links in the terminal's output in a link colour all the time, where xterm only
  * underlines one under the pointer. It puts a decoration on the cells of each link in the rows on
  * screen, looked up again once per frame after output, a scroll or a resize, and applies only the
- * differences. Both buffers, plain-text addresses and OSC 8 hyperlink labels are covered.
+ * differences. Both buffers, plain-text addresses and OSC 8 hyperlink labels are covered, and so
+ * are the file paths the daemon confirmed, where it is given a way to find them.
  */
 export class TerminalLinkColors {
   /** A decoration is kept where its marker is now: a marker follows its line when the buffer is
@@ -46,6 +47,8 @@ export class TerminalLinkColors {
   constructor(
     private readonly term: Terminal,
     private mode: "light" | "dark",
+    /** The cells to colour besides the addresses: the file paths the daemon found. */
+    private readonly extra?: ExtraLinkSegments,
   ) {
     this.listeners = [
       term.onWriteParsed(() => this.schedule()),
@@ -76,6 +79,11 @@ export class TerminalLinkColors {
     this.decorations = [];
   }
 
+  /** Looks the links up again at the next frame, for a link that has appeared without any output. */
+  refresh(): void {
+    this.schedule();
+  }
+
   private schedule(): void {
     if (this.frame !== undefined || this.disposed) return;
     this.frame = requestAnimationFrame(() => {
@@ -93,7 +101,7 @@ export class TerminalLinkColors {
 
   private update(): void {
     const { term } = this;
-    const segments = visibleLinkSegments(term);
+    const segments = visibleLinkSegments(term, this.extra);
     const wanted = new Map(segments.map((segment) => [segmentKey(segment.y, segment.col, segment.width), segment]));
     const kept: typeof this.decorations = [];
     for (const entry of this.decorations) {

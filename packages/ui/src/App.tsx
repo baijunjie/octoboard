@@ -15,6 +15,7 @@ import { ArchiveLayer } from "./archive/ArchiveLayer";
 import type { ArchiveViewState } from "./archive/ArchiveView";
 import { forgetProjectsOtherThan, noteSessionSwitch, setProjectBrowserMode } from "./browser/browserState";
 import { LazyProjectBrowser } from "./browser/LazyProjectBrowser";
+import { LazyTerminalFileViewer } from "./browser/LazyTerminalFileViewer";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { ContentPanel } from "./components/ContentPanel";
 import { HandOffOnUnmount } from "./components/HandOffOnUnmount";
@@ -66,6 +67,7 @@ import type { ArchiveScope } from "./sidebar/types";
 import { useDaemon, useDaemonStore, useDaemonStoreEqual } from "./store";
 import { terminalEmptyState } from "./terminal/emptyState";
 import { TerminalPane, type TerminalPaneHandle } from "./terminal/TerminalPane";
+import type { ViewedFile } from "./browser/TerminalFileViewer";
 import { nextWaitingSession, waitingSessionsInTreeOrder } from "./waiting";
 import { WelcomeScreen, type WelcomeScreenHandle } from "./WelcomeScreen";
 
@@ -94,6 +96,8 @@ export function App(): React.ReactElement {
     setSelectedSessionIdState(id);
   };
   const [dialogRequest, setDialogRequest] = useState<DialogRequest>();
+  // The file a path in the terminal's output named, while the file viewer shows it over the window.
+  const [linkedFile, setLinkedFile] = useState<ViewedFile>();
   const latestDialogRequest = useLatest(dialogRequest);
   const [archiveScope, setArchiveScope] = useState<ArchiveScope>();
   // How far each scope's archive list was loaded and scrolled, by `archiveKey`, for Back and
@@ -845,6 +849,7 @@ export function App(): React.ReactElement {
                   <TerminalPane
                     ref={terminalRef}
                     resizing={isDockEasing(sidebarColumnPhase) || isDockEasing(asideColumnPhase)}
+                    onViewFile={setLinkedFile}
                     session={selectedSession}
                     onResume={resumeSession}
                     resuming={selectedSessionId !== undefined && resumingIds.has(selectedSessionId)}
@@ -904,6 +909,18 @@ export function App(): React.ReactElement {
           onClose={closeDialog}
           onSessionOpened={showOpenedSession}
           onSwitchAccount={switchAccount}
+        />
+      )}
+      {linkedFile && (
+        <LazyTerminalFileViewer
+          file={linkedFile}
+          onOpenFile={setLinkedFile}
+          onClose={() => {
+            setLinkedFile(undefined);
+            // Back where the click came from, once the viewer has gone and taken its own focus
+            // restoring with it.
+            queueMicrotask(focusTerminal);
+          }}
         />
       )}
       <PendingQuestionDialog />

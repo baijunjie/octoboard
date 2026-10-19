@@ -39,6 +39,7 @@ mod mcp;
 mod open_directory;
 mod open_terminal;
 mod outbox;
+mod path_links;
 mod paths;
 mod protocol;
 mod ptyio;

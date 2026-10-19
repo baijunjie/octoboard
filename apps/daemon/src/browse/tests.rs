@@ -62,13 +62,13 @@ fn search_request_resolves_the_stored_project_and_echoes_the_query() {
     );
 }
 
-pub(super) struct Fixture {
-    pub(super) state: Arc<AppState>,
+pub(crate) struct Fixture {
+    pub(crate) state: Arc<AppState>,
     _dir: ScratchDir,
 }
 
 impl Fixture {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let (state, dir) = app_state("browse");
         let workdir = dir.join("workdir");
         std::fs::create_dir(&workdir).unwrap();
@@ -105,7 +105,7 @@ impl Fixture {
     }
 
     /// Registers `path` as project `id`, stored as given.
-    pub(super) fn project(&self, id: &str, path: &Path) -> String {
+    pub(crate) fn project(&self, id: &str, path: &Path) -> String {
         self.state
             .store
             .insert_project(&Project {

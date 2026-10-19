@@ -14,7 +14,9 @@ import { usePlatform } from "../platform/react";
 import { isDormant as isDormantStatus, isLive, type Session } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { useOctoboardTheme } from "../theme";
+import type { ViewedFile } from "../browser/TerminalFileViewer";
 import { TerminalController, type TermStatus } from "./TerminalController";
+import { openPathTarget } from "./openPathTarget";
 import { TerminalEditMenu } from "./TerminalEditMenu";
 import { TerminalLinkTooltip } from "./TerminalLinkTooltip";
 import type { HoveredTerminalLink } from "./terminalLinks";
@@ -40,6 +42,9 @@ interface TerminalPaneProps {
    * terminal keeps its size until the ease ends, then fits once: a refit per frame rebuilds
    * xterm's dimension styles each time, which costs a full restyle in WebKit. */
   resizing?: boolean;
+  /** Shows a project file a path in the output named, in the file viewer, at its line if the path
+   * gave one. Without it such a path opens in the default application. */
+  onViewFile?: (file: ViewedFile) => void;
   ref?: React.Ref<TerminalPaneHandle>;
 }
 
@@ -82,10 +87,11 @@ export function TerminalPane({
   newSession,
   noAgents,
   resizing = false,
+  onViewFile,
   ref,
 }: TerminalPaneProps): React.ReactElement {
   const t = useT();
-  const { terminalUrl, terminalReconnectDelay } = useDaemon();
+  const { terminalUrl, terminalReconnectDelay, request, toastError } = useDaemon();
   const links = usePlatform().links;
   const { resolved: colorTheme } = useOctoboardTheme();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -164,6 +170,12 @@ export function TerminalPane({
   // the latest `onResume`.
   const onResumeRef = useLatest(onResume);
   const translateRef = useLatest(t);
+  // The paths in the output are asked about for the session on screen, which the controller built
+  // once does not otherwise follow.
+  const requestRef = useLatest(request);
+  const toastErrorRef = useLatest(toastError);
+  const projectIdRef = useLatest(session?.project_id);
+  const onViewFileRef = useLatest(onViewFile);
 
   const handleStatusChange = useCallback((s: TermStatus) => {
     if (stableTimerRef.current) {
@@ -186,6 +198,20 @@ export function TerminalPane({
         onWake: (sessionId) => onResumeRef.current(sessionId),
         openLink: links && ((url) => links.open(url).catch((cause: unknown) => reportExternalLinkFailure(translateRef.current, url, cause))),
         onLinkHover: (link) => setLinkRef.current?.(link),
+        pathLinks: {
+          probe: async (paths) => {
+            const reply = await requestRef.current({ type: "probe_path_links", project: projectIdRef.current ?? undefined, paths });
+            return reply.type === "path_links" ? reply.links.map(({ kind, view, viewer_only }) => ({ kind, view, viewerOnly: viewer_only })) : [];
+          },
+          open: (target) =>
+            openPathTarget({
+              target,
+              project: projectIdRef.current ?? undefined,
+              request: requestRef.current,
+              viewFile: onViewFileRef.current,
+              toastError: toastErrorRef.current,
+            }),
+        },
       },
       appliedColorThemeRef.current,
     );

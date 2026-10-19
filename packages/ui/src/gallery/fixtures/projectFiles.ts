@@ -16,12 +16,14 @@ export interface FixtureError {
   message: string;
 }
 
-/** One path of a fixture project: a directory (cut short when `complete` is false), a file's text or
- * an image's bytes; with `error`, what reading it (listing it, for a directory) is answered with. */
+/** One path of a fixture project: a directory (cut short when `complete` is false), a file's text,
+ * an image's bytes or a binary of no known type and the size it reports; with `error`, what reading
+ * it (listing it, for a directory) is answered with. */
 export type FixtureFile =
   | { dir: true; complete?: boolean; error?: FixtureError }
   | { text: string; error?: FixtureError }
-  | { image: { mediaType: string; data: string }; error?: FixtureError };
+  | { image: { mediaType: string; data: string }; error?: FixtureError }
+  | { binary: { size: number }; error?: FixtureError };
 
 /** A project's files by wire path; a directory lists the paths directly under it. */
 export type FixtureFiles = Record<string, FixtureFile>;
@@ -204,7 +206,7 @@ export const projectFilesScenarios: Scenario[] = [
     category: "normal",
     title: "A file open from the tree",
     description:
-      "The viewer opened over the project's files, on a file pressed in the tree. Its path uses the same code icon as the file tree. Previous file and Next file sit to the left of its title, leaving the bottom edge for content.",
+      "The viewer opened over the project's files, on a file pressed in the tree. Its path uses the same code icon as the file tree. Previous file and Next file sit to the left of its title, leaving the bottom edge for content. File manager and Default application end the header row, with the same icons as the row menu's.",
     state,
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600)],
   },

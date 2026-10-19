@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
+import type { Event } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { bodyFromFileContent, type ViewerContent, type ViewerSubject } from "../viewer/content";
 import { browseFailure } from "./browseError";
@@ -20,8 +21,10 @@ export interface FileReader {
   subject?: ViewerSubject;
   /** What is shown of the file, for telling from a listing whether to read it again. */
   shown: ShownFile;
-  /** Shows `path` (a wire path), reading it from disk. */
-  open: (path: string) => void;
+  /** Shows `path` (a wire path), reading it from disk. With `read`, the reply of an earlier read of
+   * it, the file is shown at once from that and not read again until something asks, as a new
+   * connection does. */
+  open: (path: string, read?: Extract<Event, { type: "project_file" }>) => void;
   /** Reads the file shown again, keeping what is shown until the answer is in. */
   reload: () => void;
   close: () => void;
@@ -38,10 +41,10 @@ type Shown = { path: string; content: ViewerContent; version?: string; changing?
  * what is shown as it is, and one lost with the connection keeps the body shown until the
  * reconnect, which reads the file again.
  *
- * The subject's key is the project, the source (the live file on disk) and the path: what makes it a
- * different subject for the viewer.
+ * The subject's key is the project, the source (the live file on disk, in a worktree when it is one
+ * that is read) and the path: what makes it a different subject for the viewer.
  */
-export function useFileReader(project: string): FileReader {
+export function useFileReader(project: string, worktree?: string): FileReader {
   const t = useT();
   const language = useCurrentLanguage();
   const { request, store } = useDaemon();
@@ -54,9 +57,9 @@ export function useFileReader(project: string): FileReader {
     const s = live.current;
     const sequence = ++s.sequence;
     const current = () => s.alive && s.sequence === sequence && s.path === target;
-    request({ type: "read_project_file", project, path: target, slot: READ_SLOT })
+    request({ type: "read_project_file", project, ...(worktree !== undefined && { worktree }), path: target, slot: READ_SLOT })
       .then((reply) => {
-        if (!current() || reply.type !== "project_file" || reply.project !== project || reply.path !== target) return;
+        if (!current() || reply.type !== "project_file" || reply.project !== project || reply.path !== target || (reply.worktree ?? undefined) !== worktree) return;
         const version = reply.source.kind === "live" ? reply.source.version : undefined;
         setContent((shown) =>
           shown?.path === target && shown.content.state === "file" && version !== undefined && shown.version === version
@@ -84,11 +87,18 @@ export function useFileReader(project: string): FileReader {
       });
   };
 
-  const open = (target: string) => {
+  const open = (target: string, earlier?: Extract<Event, { type: "project_file" }>) => {
     live.current.path = target;
     setPath(target);
-    setContent((shown) => (shown?.path === target ? shown : { path: target, content: { state: "loading" } }));
-    read(target);
+    const from = earlier?.path === target && earlier.project === project && (earlier.worktree ?? undefined) === worktree ? earlier : undefined;
+    setContent((shown) =>
+      from
+        ? { path: target, content: { state: "file", body: bodyFromFileContent(target, from.file) }, version: from.source.kind === "live" ? from.source.version : undefined }
+        : shown?.path === target
+          ? shown
+          : { path: target, content: { state: "loading" } },
+    );
+    if (!from) read(target);
   };
 
   const reload = () => {
@@ -120,7 +130,7 @@ export function useFileReader(project: string): FileReader {
     subject:
       path === undefined
         ? undefined
-        : { key: `${project}\0live\0${path}`, path, content: shown?.content ?? { state: "loading" } },
+        : { key: `${project}\0live\0${worktree ?? ""}\0${path}`, path, host: { project, worktree, path }, content: shown?.content ?? { state: "loading" } },
     shown:
       shown?.content.state === "file" && shown.version !== undefined
         ? { state: "file", version: shown.version }

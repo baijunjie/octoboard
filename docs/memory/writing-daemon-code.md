@@ -126,6 +126,21 @@ is taken, since a name one level higher can be a whole directory's (a Claude pro
 `-Users-me-work`); and no directory between the records directory and the entry may be a link. `record_paths` in
 `apps/daemon/src/agent_records.rs` does all four; extend it rather than write a second one.
 
+## Opening a path taken from text an agent could have written can run code
+
+Applies to daemon code that hands a path to the host's opener (`/usr/bin/open` on macOS, `xdg-open` on Linux) because
+the path appeared in text an agent, its prompt or a repository could have put there: a session's terminal output, a
+rendered document, a hook's payload. An agent echoes whatever it read, so someone else can choose such a path. And the
+opener does not only show: it runs an application or other bundle, a `.command` or shell script, an installer or any
+file with an executable bit, and follows a `.webloc`, `.fileloc` or `.desktop` shortcut on to somewhere else.
+
+So the daemon resolves such a path itself at the moment it opens it, never trusting a client's earlier answer; it must
+lie inside a root the daemon chose once symbolic links are resolved; nothing launchable may sit anywhere along it; and
+inside a root other users can write to (a system temp directory such as `/tmp`), the file and every directory down to
+it must belong to the daemon's user and be closed to writes by group and others, or another user can swap it between
+the check and the open. `resolve` in `apps/daemon/src/path_links.rs` does all of this; extend it rather than write a
+second one.
+
 ## Act destructively on "it is gone" only when `NotFound` said so
 
 Applies to daemon code that deletes, trashes or refuses something because a file or directory is missing — an agent's

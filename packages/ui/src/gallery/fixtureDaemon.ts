@@ -5,7 +5,7 @@ import { daemonMessage } from "../daemonMessage";
 import { errorPresentation, noticeErrorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
 import { currentLanguage } from "../i18n/language";
-import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type Project, type RequestBody, type Session, type SessionRecordsPresence } from "../protocol";
+import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type RequestBody, type Session, type SessionRecordsPresence } from "../protocol";
 import { createStateStore, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -105,7 +105,7 @@ function entriesUnder(files: FixtureFiles, dir: string): BrowseEntry[] {
     .map(([path, file]): BrowseEntry => ({
       name: path.slice(prefix.length),
       kind: "dir" in file ? "directory" : "file",
-      size: "text" in file ? new TextEncoder().encode(file.text).length : "image" in file ? Math.floor((file.image.data.length * 3) / 4) : null,
+      size: "text" in file ? new TextEncoder().encode(file.text).length : "image" in file ? Math.floor((file.image.data.length * 3) / 4) : "binary" in file ? file.binary.size : null,
       version: "dir" in file ? null : "1",
       target: null,
     }))
@@ -342,6 +342,8 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
           return { type: "ack" };
         }
+        case "open_path_link":
+          return { type: "ack" };
         case "open_project_directory": {
           if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
           if (scenario.projectDirectoryOpenError) return fail(scenario.projectDirectoryOpenError);
@@ -487,6 +489,18 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           store.setState((current) => ({ trustedDirectories: current.trustedDirectories.filter((given) => given !== path) }));
           return { type: "ack" };
         }
+        case "probe_path_links": {
+          const root = body.project === undefined ? undefined : store.getState().projects.get(body.project)?.path;
+          const existing = new Map(Object.entries(scenario.pathLinks ?? {}).map(([path, found]) => [normalizedPath(path), found]));
+          const links = body.paths.map((path): { path: string; kind: PathLinkKind; view?: PathLinkView; viewer_only?: boolean } => {
+            const absolute = path.startsWith("/") || path.startsWith("~") || root === undefined ? path : `${root}/${path}`;
+            const found = existing.get(normalizedPath(absolute));
+            if (found === undefined) return { path, kind: "none" };
+            if (typeof found === "string") return { path, kind: found };
+            return { path, kind: "file", view: found.view, ...(found.viewerOnly && { viewer_only: true }) };
+          });
+          return { type: "path_links", links };
+        }
         case "list_project_dir": {
           const files = projectFiles(body.project);
           const dir = browsed(files, body.path);
@@ -502,15 +516,16 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           return { type: "project_file_matches", project: body.project, query: body.query, paths, complete: true };
         }
         case "read_project_file": {
-          const file = browsed(projectFiles(body.project), body.path);
+          const files = body.worktree === undefined ? projectFiles(body.project) : scenario.worktreeFiles?.[body.worktree] ?? {};
+          const file = browsed(files, body.path);
           const source = { kind: "live" as const, root_id: "fixture", version: "1" };
           const content =
             "text" in file
               ? { size: new TextEncoder().encode(file.text).length, kind: "text" as const, media_type: null, text: file.text, data: null }
               : "image" in file
                 ? { size: Math.floor((file.image.data.length * 3) / 4), kind: "binary" as const, media_type: file.image.mediaType, text: null, data: file.image.data }
-                : { size: 0, kind: "binary" as const, media_type: null, text: null, data: "" };
-          return { type: "project_file", project: body.project, worktree: null, path: body.path, source, file: content };
+                : { size: "binary" in file ? file.binary.size : 0, kind: "binary" as const, media_type: null, text: null, data: "" };
+          return { type: "project_file", project: body.project, worktree: body.worktree ?? null, path: body.path, source, file: content };
         }
         case "list_dir": {
           // `~` is answered with the home directory it resolves to, as the real daemon does, so a

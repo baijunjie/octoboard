@@ -60,8 +60,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   daemon's automatic deletion of archived sessions whose conversation is gone.
 - [Session terminal](product/session-terminal.md) — the selected session's terminal: what its area shows with no
   session selected, typing and the mouse, output, scrollback and resizing, the reconnect and loading covers,
-  interrupted, archived and dormant sessions and the saved preview, links in the output (click to open, the OSC 8
-  target tooltip), and the creation offer while a console has nothing in it.
+  interrupted, archived and dormant sessions and the saved preview, links in the output (web addresses and file paths:
+  click to open, the OSC 8 target tooltip, which paths link), and the creation offer while a console has nothing in it.
 - [Session titles](product/session-titles.md) — the task title alongside created session names: where it is
   displayed, what renaming edits, where it comes from (the agent's records, its decorated terminal title, the first
   prompt), how titles are retained, and the accepted terminal sequences.
@@ -156,9 +156,13 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   is listed, its order, rows and the keyboard, the selected file and a removed one), recursive file-name filtering with
   results shown as a tree, the button and right-click menus of file and change rows (opening live paths with the system,
   revealing them in the file manager and copying paths; committed changes offer only Copy path), when the tree is listed
-  again, what is remembered per project, the read-only file viewer (what it shows, including a Markdown document's
-  diagrams, formulas, project images and links to other project files, wrapping long lines, Previous/Next and the arrow
-  keys, closing it, a file that changes while open), its errors, and a pane that fails to load.
+  again, what is remembered per project, its errors (the file viewer's included), and a pane that fails to load.
+- [File viewer](product/file-viewer.md) — the read-only file viewer opened from Files rows, Git changes and terminal
+  path links: its header (Copy path, the view choices, File manager and Default application), what it shows, including
+  a Markdown document's diagrams, formulas, project images and links to other project files, notices and stand-ins,
+  wrapping long lines, selecting and copying, Previous/Next and the arrow keys, closing it, a file that changes while
+  open, and a file opened from the terminal (the click-time choice between the viewer and the host, opening at a line,
+  viewer-only files).
 - [Project pane: Git mode](product/project-pane-git-mode.md) — the project pane's read-only review of one local branch
   in the Changes tab: the branch selector (the default branch from the worktree holding the project's folder, a choice
   that stands, a branch that goes away), the repository and its worktrees, following the selected session, that it

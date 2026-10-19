@@ -36,7 +36,7 @@ mod line_count_tests;
 #[cfg(test)]
 mod nested_tests;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use std::cell::OnceCell;
 use std::os::unix::ffi::OsStrExt;
@@ -469,6 +469,52 @@ pub fn resolve_project_path(
         .expect("a validated path has a valid parent");
     let directory = live::resolve(&scope.canonical, &parent)?;
     Ok(directory.join(lexical.file_name().expect("a non-root entry has a name")))
+}
+
+/// One live directory a project's paths can name: where it is, and the worktree id that reads it
+/// (`worktree` of the browse requests); none for the project's own directory.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiveRoot {
+    pub root: std::path::PathBuf,
+    pub worktree: Option<String>,
+}
+
+/// Every live directory a project's paths can name: the project's own directory first, then its
+/// place in each other worktree of its repository. A project outside a repository, or one whose
+/// worktrees cannot be listed, has its own directory alone.
+pub fn project_live_roots(
+    state: &AppState,
+    project: &str,
+    git: &dyn Fn() -> Result<GitEnv>,
+) -> Result<Vec<LiveRoot>> {
+    let record = stored_project(state, project)?;
+    let root = source::resolve_root(&record.path)?;
+    let mut roots = vec![LiveRoot {
+        root: root.canonical.clone(),
+        worktree: None,
+    }];
+    let git = Git::new(git);
+    let cancel = AtomicBool::new(false);
+    let Ok(Discovery::Repository(repository)) = source::discover(&root, &git, &cancel) else {
+        return Ok(roots);
+    };
+    let Ok(env) = git.env() else {
+        return Ok(roots);
+    };
+    let Ok(worktrees) = source::worktrees(env, &repository, &cancel) else {
+        return Ok(roots);
+    };
+    for worktree in worktrees {
+        if let Ok(scope) = source::scope_root(&worktree.root, &repository.scope) {
+            if !roots.iter().any(|known| known.root == scope.canonical) {
+                roots.push(LiveRoot {
+                    root: scope.canonical,
+                    worktree: Some(worktree.id),
+                });
+            }
+        }
+    }
+    Ok(roots)
 }
 
 fn parse_path(path: &str) -> Result<RelPath> {

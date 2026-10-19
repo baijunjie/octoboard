@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useCallback, useRef } from "react";
+import React, { Suspense, lazy, useCallback, useRef, useState } from "react";
 
 import { useFadeRegion, useScrollFade } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
@@ -10,7 +10,7 @@ import { RendererBoundary } from "./codeRenderer";
 import { CodeSurface } from "./CodeSurface";
 import { FencedCode } from "./FencedCode";
 import { FrameSurface } from "./FrameSurface";
-import { markdownView, MarkdownViewToggle } from "./markdownView";
+import { markdownView, MarkdownViewToggle, type MarkdownView } from "./markdownView";
 import { useMarkdownLocation } from "./markdownLocation";
 import { copyDocument, isSelectAll, selectDocument } from "./selectAll";
 import { LoadingOverlay, Notice } from "./viewerStates";
@@ -35,19 +35,32 @@ export function MarkdownSurface({
   name,
   text,
   theme,
+  line,
 }: {
   resetKey: string;
   name: string;
   text: string;
   theme: "light" | "dark";
+  /** A line to show: the document has none, so the source opens at it, whatever the user's choice
+   * of view, until they choose one for this file. */
+  line?: number;
 }): React.ReactElement {
-  const view = markdownView.useValue();
-  if (textPlan(text) === "plain") return <CodeSurface resetKey={resetKey} name={name} text={text} theme={theme} />;
+  const preferred = markdownView.useValue();
+  const askedFor = `${resetKey}\0${line}`;
+  const [chosen, setChosen] = useState<{ askedFor: string; view: MarkdownView }>();
+  const view = chosen?.askedFor === askedFor ? chosen.view : line !== undefined ? "source" : preferred;
+  if (textPlan(text) === "plain") return <CodeSurface resetKey={resetKey} name={name} text={text} theme={theme} line={line} />;
   return (
     <>
-      <MarkdownViewToggle view={view} onViewChange={markdownView.set} />
+      <MarkdownViewToggle
+        view={view}
+        onViewChange={(next) => {
+          setChosen({ askedFor, view: next });
+          markdownView.set(next);
+        }}
+      />
       {view === "source" ? (
-        <CodeSurface resetKey={resetKey} name={name} text={text} theme={theme} />
+        <CodeSurface resetKey={resetKey} name={name} text={text} theme={theme} line={line} />
       ) : (
         <DocumentSurface resetKey={resetKey} name={name} text={text} theme={theme} />
       )}

@@ -70,6 +70,7 @@ once.
 | `src/trust/` | Each agent's folder-trust confirmation: the permission decision and prompt, recognising each agent's screen, and pressing it |
 | `src/env_shell/` | The user's real shell environment every agent is launched with (`snapshot`, `launch_snapshot`, `cached_snapshot`) and resolving a binary on it |
 | `src/hostfs.rs`, `src/open_directory.rs`, `src/open_terminal.rs` | Host filesystem work (browsing, Trash, repository discovery, clone, remote probing, agent detection) and launching the system terminal, file manager or default application |
+| `src/path_links.rs` | File paths a session's terminal shows, checked and opened on the daemon's host (`probe` for the `probe_path_links` request, whose answers also say how a file may be viewed, and `open` for `open_path_link`): a path is reachable only inside the session's project, its worktrees or a system temp root, and what could be launched rather than viewed is refused; `path_links/tests.rs` holds the tests |
 | `src/subprocess.rs` | Running a spawned process to completion within bounds (`run_bounded`, `run_with_timeout`), exchanging lines with one that answers on stdout while stdin stays open (`run_exchange`), and detached spawning |
 | `src/hooks.rs`, `src/hook_queue.rs`, `src/hook_mode.rs` | Reading what an agent's hook payload says, the per-session ordered queue of unapplied hook events, and the `octoboardd hook` mode |
 | `src/transcript.rs`, `src/rollout.rs`, `src/record_watch.rs`, `src/line_file.rs` | Watching an agent's own session record for status changes hooks never report (Claude Code transcript, Codex rollout), over a shared offset-tracked line reader whose `open` is the one way to open an agent's record, since Codex may have compressed it (zstd) |
@@ -113,7 +114,7 @@ changes. The wire contract and budgets are in "Browsing a project" in [`PROTOCOL
 
 | File | Role |
 |---|---|
-| `mod.rs` | `serve`, `locate` (repository and worktree for a Git read), `resolve_project_path` |
+| `mod.rs` | `serve`, `locate` (repository and worktree for a Git read), `resolve_project_path`, `project_live_roots` (the directories of a project and its worktrees that path links resolve against) |
 | `source.rs` | Resolving a project to its root, repository, worktree and sibling worktrees, and the identities clients hold |
 | `wire_path.rs` | `RelPath`, the canonical wire form of a path |
 | `live.rs` | Reading and listing files on disk, and the bounded file-name search `search_files` |

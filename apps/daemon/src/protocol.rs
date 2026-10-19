@@ -1887,6 +1887,20 @@ pub enum RequestBody {
         #[serde(default)]
         worktree: Option<String>,
     },
+    /// Asks what each of `paths` names on the daemon host: a file, a folder or nothing reachable
+    /// (see `path_links.rs`). Answered with `path_links`.
+    ProbePathLinks {
+        #[serde(default)]
+        project: Option<String>,
+        paths: Vec<String>,
+    },
+    /// Opens a path `probe_path_links` found with its default application on the daemon host; a
+    /// folder opens in the file manager.
+    OpenPathLink {
+        #[serde(default)]
+        project: Option<String>,
+        path: String,
+    },
     /// Pushes the project's current branch, and only that branch, never with `--force`. Answered
     /// with `ack` once `git push` has exited; a success is followed by `project_git_status` from a
     /// local re-read, with no fetch. Refused with `not_a_git_repository`, `not_on_a_branch`,
@@ -1987,6 +2001,40 @@ pub struct SessionBranchTarget {
     pub state: SessionBranchState,
     #[serde(default)]
     pub uncommitted: bool,
+}
+
+/// What a path asked about in `probe_path_links` names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PathLinkKind {
+    File,
+    Directory,
+    None,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PathLink {
+    /// The path as asked.
+    pub path: String,
+    pub kind: PathLinkKind,
+    /// Where the client reads the file with `read_project_file`, for a file inside the project or
+    /// one of its worktrees; absent for anything else. Whether the viewer can show it is for the
+    /// client to find out by reading it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub view: Option<PathLinkView>,
+    /// A file the system could launch: it is for the viewer to show, and `open_path_link` refuses it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub viewer_only: bool,
+}
+
+/// A file in the project, as `read_project_file` names it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PathLinkView {
+    /// The worktree it is in; absent for the project's own directory.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worktree: Option<String>,
+    /// Its wire path below that directory.
+    pub path: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -2196,6 +2244,11 @@ pub enum Event {
     /// it.
     PageCreated {
         page: Page,
+    },
+    /// The reply to `probe_path_links`: one entry per asked path, in the order asked.
+    PathLinks {
+        id: Option<String>,
+        links: Vec<PathLink>,
     },
     /// The reply to `get_project_source`.
     ProjectSource {
@@ -3244,6 +3297,16 @@ mod tests {
                 },
             ),
             (
+                r#"{"type":"probe_path_links","id":"request-1","project":"project-7","paths":["a.ts","/tmp/b.png"]}"#,
+                |body| match body {
+                    RequestBody::ProbePathLinks {
+                        project: Some(project),
+                        paths,
+                    } if paths == ["a.ts", "/tmp/b.png"] => Some(project),
+                    _ => None,
+                },
+            ),
+            (
                 r#"{"type":"open_project_directory","id":"request-1","project":"project-7"}"#,
                 |body| match body {
                     RequestBody::OpenProjectDirectory { project } => Some(project),
@@ -3282,6 +3345,24 @@ mod tests {
             let target = target(request.body).expect(json);
             assert!(target.ends_with("-7"), "{json} acted on `{target}`");
         }
+    }
+
+    #[test]
+    fn open_path_link_parses_with_and_without_a_project() {
+        let request: Request = serde_json::from_str(
+            r#"{"type":"open_path_link","id":"request-1","project":"project-7","path":"src/a.ts"}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            request.body,
+            RequestBody::OpenPathLink { project: Some(project), path } if project == "project-7" && path == "src/a.ts"
+        ));
+        let request: Request =
+            serde_json::from_str(r#"{"type":"open_path_link","path":"/tmp/b.png"}"#).unwrap();
+        assert!(matches!(
+            request.body,
+            RequestBody::OpenPathLink { project: None, path } if path == "/tmp/b.png"
+        ));
     }
 
     #[test]

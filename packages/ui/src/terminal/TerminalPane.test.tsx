@@ -18,8 +18,15 @@ const { FakeController } = vi.hoisted(() => {
     static last: FakeController;
     currentSessionId: string | undefined;
     currentStatus: TermStatus = "closed";
-    constructor(private callbacks: { onStatusChange: (status: TermStatus) => void; openLink?: (url: string) => Promise<void> }) {
+    constructor(private callbacks: {
+      onStatusChange: (status: TermStatus) => void;
+      openLink?: (url: string) => Promise<void>;
+      pathLinks?: { open: (target: { path: string; line?: number; view?: { worktree?: string; path: string } }) => Promise<void> };
+    }) {
       FakeController.last = this;
+    }
+    openPath(target: { path: string; line?: number; view?: { worktree?: string; path: string } }): Promise<void> | undefined {
+      return this.callbacks.pathLinks?.open(target);
     }
     openLink(url: string): Promise<void> | undefined { return this.callbacks.openLink?.(url); }
     mount(): void {}
@@ -56,7 +63,7 @@ const { FakeController } = vi.hoisted(() => {
 });
 vi.mock("./TerminalController", () => ({ TerminalController: FakeController }));
 // One object for every render: the pane re-attaches when `terminalUrl` changes identity.
-const daemon = vi.hoisted(() => ({ terminalUrl: () => "" }));
+const daemon = vi.hoisted(() => ({ terminalUrl: () => "", request: vi.fn(async (_body: unknown) => ({ type: "ack" })), toastError: vi.fn() }));
 const store = vi.hoisted(() => ({ snapshotEpoch: 0, connectionState: "open" }));
 vi.mock("../store", () => ({
   useDaemon: () => daemon,
@@ -352,4 +359,21 @@ it("reports a native terminal opener failure with the shared actionable destinat
     classification: { kind: "actionable", recovery: "openExternal" },
     error: { cause },
   });
+});
+
+it("hands a path with a view to the file viewer once it has read it, and opens any other on the host", async () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  const onViewFile = vi.fn();
+  const inProject = { ...session, project_id: "p-1" };
+  daemon.request.mockClear();
+  daemon.request.mockResolvedValueOnce({ type: "project_file", project: "p-1", worktree: "w", path: "src/a.ts", source: { kind: "live", version: "1" }, file: { size: 1, kind: "text", media_type: null, text: "x", data: null } } as never);
+  act(() => root.render(<TerminalPane session={inProject} onResume={async () => true} onViewFile={onViewFile} />));
+  await act(async () => FakeController.last.openPath({ path: "/r/src/a.ts", line: 3, view: { worktree: "w", path: "src/a.ts" } }));
+  expect(onViewFile).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ project: "p-1", worktree: "w", path: "src/a.ts", line: 3 }));
+  expect(daemon.request.mock.calls.map(([body]) => (body as { type: string }).type)).toEqual(["read_project_file"]);
+  await act(async () => FakeController.last.openPath({ path: "/tmp/b.png" }));
+  expect(onViewFile).toHaveBeenCalledOnce();
+  expect(daemon.request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p-1", path: "/tmp/b.png" });
 });

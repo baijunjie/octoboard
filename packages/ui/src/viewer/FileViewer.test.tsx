@@ -32,8 +32,10 @@ vi.mock("./renderer", async () => {
     );
   };
   return {
-    HighlightedFile: ({ text, wrap, onDrawn }: { text: string; wrap: boolean; onDrawn?: () => void }) => (
-      <Stand text={text} wrap={wrap} onDrawn={onDrawn} />
+    HighlightedFile: ({ text, wrap, line, onDrawn }: { text: string; wrap: boolean; line?: number; onDrawn?: () => void }) => (
+      <div data-line-asked={line}>
+        <Stand text={text} wrap={wrap} onDrawn={onDrawn} />
+      </div>
     ),
     // A patch marked "unrenderable" stands for one the library rejects.
     // The stand-in tells whether it was handed a way to expand, and each button reports the state the
@@ -66,6 +68,10 @@ vi.mock("./renderer", async () => {
   };
 });
 
+// The library's markup is not there to scroll in; what is asked of it is what these tests look at.
+const scrolls = vi.hoisted(() => ({ toLine: vi.fn((_frame: HTMLElement, _line: number) => true) }));
+vi.mock("./rendererDom", async (importOriginal) => ({ ...(await importOriginal<typeof import("./rendererDom")>()), scrollToLine: scrolls.toLine }));
+
 // jsdom has no `matchMedia`, which the theme needs.
 window.matchMedia ??= ((query: string) =>
   ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList);
@@ -89,13 +95,13 @@ afterEach(() => {
   container.remove();
 });
 
-function show(subject: ViewerSubject | undefined, navigation?: ViewerNavigation, host: Omit<React.ComponentProps<typeof ViewerHost>, "children"> = {}): void {
+function show(subject: ViewerSubject | undefined, navigation?: ViewerNavigation, host: Omit<React.ComponentProps<typeof ViewerHost>, "children"> = {}, line?: number): void {
   act(() => {
     root.render(
       <ViewerHost {...host}>
         <ThemeProvider>
           <button type="button">Open</button>
-          {subject && <FileViewer subject={subject} onClose={() => {}} navigation={navigation} />}
+          {subject && <FileViewer subject={subject} onClose={() => {}} navigation={navigation} line={line} />}
         </ThemeProvider>
       </ViewerHost>,
     );
@@ -837,4 +843,66 @@ it("reads the stored wrap choice, and falls back to unwrapped for anything else"
   };
   expect(await read("true")).toBe(true);
   expect(await read("sideways")).toBe(false);
+});
+
+const textFile = (path: string, text: string, host?: ViewerSubject["host"]): ViewerSubject => ({
+  key: path,
+  path,
+  host,
+  content: { state: "file", body: { kind: "text", text, size: text.length } },
+});
+
+it("offers File manager and Default application last in the controls, on a subject with a place on the host", async () => {
+  const request = vi.fn(async () => ({ type: "ack" }) as never);
+  show(textFile("src/a.ts", "x", { project: "p", worktree: "w", path: "src/a.ts" }), undefined, { clipboard: { writeText: async () => {} }, request });
+  await settled();
+  const group = dialog()!.querySelector("[data-viewer-description] .float-end")!;
+  const labels = [...group.querySelectorAll("button")].map((b) => b.getAttribute("aria-label"));
+  expect(labels.slice(-2)).toEqual(["Open in file manager", "Open in default application"]);
+  act(() => button("Open in file manager").click());
+  act(() => button("Open in default application").click());
+  expect(request.mock.calls).toEqual([
+    [{ type: "reveal_project_path", project: "p", worktree: "w", path: "src/a.ts" }],
+    [{ type: "open_project_path", project: "p", worktree: "w", path: "src/a.ts" }],
+  ]);
+});
+
+it("sends no worktree for a file of the project's own directory, and offers the buttons for nothing without a host path", async () => {
+  const request = vi.fn(async () => ({ type: "ack" }) as never);
+  show(textFile("a.ts", "x", { project: "p", path: "a.ts" }), undefined, { request });
+  await settled();
+  act(() => button("Open in default application").click());
+  expect(request).toHaveBeenCalledWith({ type: "open_project_path", project: "p", path: "a.ts" });
+  show(textFile("b.ts", "x"), undefined, { request });
+  await settled();
+  expect(document.querySelector('button[aria-label="Open in file manager"]')).toBeNull();
+  expect(document.querySelector('button[aria-label="Open in default application"]')).toBeNull();
+});
+
+it("hands a line to the code it shows, and opens a Markdown file's source at one", async () => {
+  show(textFile("a.ts", "one\ntwo"), undefined, {}, 2);
+  await settled();
+  expect(dialog()!.querySelector("[data-line-asked]")?.getAttribute("data-line-asked")).toBe("2");
+  // The document has no lines, so a line asks for the source, whatever the saved choice is.
+  localStorage.clear();
+  show(textFile("README.md", "# Title\ntext"), undefined, {}, 2);
+  await settled();
+  expect(dialog()!.querySelector("[data-line-asked]")?.getAttribute("data-line-asked")).toBe("2");
+  show(textFile("NOTES.md", "# Title\ntext"));
+  await settled();
+  expect(dialog()!.querySelector("[data-line-asked]")).toBeNull();
+});
+
+it("brings a line into view once for each file and line asked for, however often the code is drawn again", async () => {
+  scrolls.toLine.mockClear();
+  const subject = textFile("a.ts", "one\ntwo\nthree");
+  show(subject, undefined, {}, 2);
+  await settled();
+  show(subject, undefined, {}, 2);
+  act(() => wordWrap.set(true));
+  await settled();
+  expect(scrolls.toLine.mock.calls.map(([, line]) => line)).toEqual([2]);
+  show(subject, undefined, {}, 3);
+  await settled();
+  expect(scrolls.toLine.mock.calls.map(([, line]) => line)).toEqual([2, 3]);
 });

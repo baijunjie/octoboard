@@ -4,6 +4,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { type IBufferRange, Terminal } from "@xterm/xterm";
 
 import { TerminalLinkColors } from "./linkColors";
+import { installPathLinks, type PathAnswer, type PathLinkCache, type PathLinkTarget } from "./pathLinks";
 import {
   brokenUrlLinkProvider,
   type HoveredTerminalLink,
@@ -124,6 +125,15 @@ export interface TerminalControllerHandlers {
    * `undefined` once it is no longer on one. Plain-text addresses are not reported: their text is
    * their target. */
   onLinkHover?: (link: HoveredTerminalLink | undefined) => void;
+  /** What the daemon makes of the file paths in the output, for the session on screen: absent where
+   * there is no daemon to ask, which leaves paths as plain text. */
+  pathLinks?: {
+    /** What each of `paths` names, in order. */
+    probe: (paths: string[]) => Promise<PathAnswer[]>;
+    /** Opens a path that was found: in the file viewer when it has a view, otherwise a file with its
+     * default application and a folder in the file manager. */
+    open: (target: PathLinkTarget) => Promise<void>;
+  };
 }
 
 /**
@@ -151,6 +161,7 @@ export class TerminalController {
   /** The buffer line on the first row when the hovered OSC 8 link was reported. */
   private hoveredViewportY = 0;
   private readonly linkColors: TerminalLinkColors;
+  private readonly pathLinks?: PathLinkCache;
   /** False until a frame has passed since `open()`; see `mount`. */
   private touchable = false;
   private openFrame?: number;
@@ -221,13 +232,17 @@ export class TerminalController {
     // Ahead of the addon: where both find a link, the one registered first is used.
     this.term.registerLinkProvider(brokenUrlLinkProvider(this.term, onLinkClick));
     this.term.loadAddon(new WebLinksAddon(onLinkClick, { urlRegex: TERMINAL_URL_REGEX }));
+    const paths =
+      handlers.pathLinks &&
+      installPathLinks(this.term, handlers.pathLinks, () => this.term.hasSelection(), () => this.linkColors.refresh());
+    this.pathLinks = paths?.cache;
     // The tooltip is placed against the viewport, so a scroll under the pointer leaves it behind.
     // xterm reports every line feed that scrolls the buffer, even while the view stays put under a
     // streaming output, so only a view that has actually moved counts.
     this.term.onScroll(() => {
       if (this.term.buffer.active.viewportY !== this.hoveredViewportY) this.handlers.onLinkHover?.(undefined);
     });
-    this.linkColors = new TerminalLinkColors(this.term, initialColorTheme);
+    this.linkColors = new TerminalLinkColors(this.term, initialColorTheme, paths?.segments);
 
     const keepModifiersFromArming = keepModifiersFromArmingKeyDownSeen(this.term);
 
@@ -368,6 +383,7 @@ export class TerminalController {
     if (this.openFrame !== undefined) cancelAnimationFrame(this.openFrame);
     clearTimeout(this.resizeTimer);
     this.linkColors.dispose();
+    this.pathLinks?.clear();
     this.disposed = true;
     this.generation++;
     this.socket?.close();
@@ -603,6 +619,8 @@ export class TerminalController {
    * next session's screen. */
   private resetScreen(): void {
     this.screenSessionId = undefined;
+    // What the daemon said of the paths was for the session shown until now.
+    this.pathLinks?.clear();
     this.savedLoad?.close();
     this.savedLoad = undefined;
     this.setPainted(false);
@@ -615,6 +633,7 @@ export class TerminalController {
       if (this.disposed) return;
       this.term.reset();
       this.linkColors.reset();
+      this.pathLinks?.clear();
       this.handlers.onLinkHover?.(undefined);
     });
   }

@@ -1,0 +1,340 @@
+import type { IBufferRange, ILink, ILinkProvider, Terminal } from "@xterm/xterm";
+
+import type { PathLinkKind, PathLinkView } from "../protocol";
+import {
+  cachedRows,
+  type ExtraLinkSegments,
+  type LinkSegment,
+  logicalLinesIn,
+  mergeSegments,
+  terminalLinkHandler,
+  terminalRowReader,
+  type TerminalRow,
+} from "./terminalLinks";
+
+/** The most paths one probe may ask about; the daemon refuses more. */
+const MAX_PROBED_PATHS = 64;
+/** How long wanted paths gather before they are asked about, so that a screen of output is one
+ * request, and how many requests may be out at once. */
+const PROBE_DELAY_MS = 120;
+const MAX_PROBES_IN_FLIGHT = 2;
+/** The longest text taken as a path. */
+const MAX_PATH_CHARS = 1024;
+/** How long an answer is trusted before the path is asked about again: a file the agent names
+ * before it writes it, or one that goes away, is corrected within this. */
+const FOUND_TTL_MS = 30_000;
+const NONE_TTL_MS = 10_000;
+/** The most answers kept; past it the oldest half goes, so a long session cannot grow it without bound. */
+const MAX_ENTRIES = 2000;
+
+/** The characters a path is made of in running text: not blanks, quotes, brackets, pipes or
+ * full-width punctuation, which end one. */
+const PATH_CHAR = String.raw`[^\s"'\`<>()\[\]{}|\\^*?\u3000-\u303f\uff00-\uffef]`;
+/** What may stand right before a path: the start of the text, a blank, or an opening quote or
+ * bracket, a comma, a semicolon or an equals sign. */
+const PATH_START = String.raw`(?<=^|[\s"'\`(\[<{=,;\u3000-\u303f\uff00-\uffef])`;
+const PATH_TOKEN = new RegExp(`${PATH_START}${PATH_CHAR}+`, "g");
+const TRAILING_PUNCTUATION = /[.,;:!?]+$/;
+const LINE_SUFFIX = /:\d+(?::\d+)?$/;
+
+/** What the daemon answered for a path: what it names and, for a file the file viewer can show,
+ * where to read it from. */
+export interface PathAnswer {
+  kind: PathLinkKind;
+  view?: PathLinkView;
+  /** The file could be launched by the system: it is for the viewer, never for the host to open. */
+  viewerOnly?: boolean;
+}
+
+/** A path as the user clicked it: its line, if the text gave one, and its view, if it has one. */
+export interface PathLinkTarget {
+  path: string;
+  line?: number;
+  view?: PathLinkView;
+  viewerOnly?: boolean;
+}
+
+/** A path found in a run of text: the characters `start` to `end` (exclusive) read as a path with
+ * an optional `:line[:col]` after it (or a compiler's `(line,col)`), and `path` without that
+ * suffix. */
+export interface PathCandidate {
+  start: number;
+  end: number;
+  path: string;
+  line?: number;
+}
+
+const COMPILER_POSITION = /^\((\d+)(?:,\d+)?\)/;
+
+/**
+ * The paths a run of text appears to mention: absolute (`/…`), home-relative (`~/…`) and relative
+ * with a directory in them (`src/a.ts`, `./a`, `../a`), or with a `:line` after a file name
+ * (`a.ts:42`), each optionally mentioned with a leading `@`. A trailing `.`, `,`, `;`, `:`, `!` or
+ * `?` is not part of one, and an address (`https://…`) is not one. Whether a path exists is the
+ * daemon's to say; this only finds the text worth asking about.
+ */
+export function pathCandidates(text: string): PathCandidate[] {
+  const found: PathCandidate[] = [];
+  for (const match of text.matchAll(PATH_TOKEN)) {
+    // A path that goes on into a bracket is a route pattern (`app/[id]/page.tsx`), not the part of
+    // it before the bracket. A parenthesis after a name is a compiler's position (`a.ts(12,5)`).
+    const next = text[match.index + match[0].length];
+    if (next === "[" || next === "{" || (next === "(" && match[0].endsWith("/"))) continue;
+    // An `@` in front is a mention of the path (`@src/a.ts`), not part of it.
+    const mention = match[0].startsWith("@") ? 1 : 0;
+    const token = match[0].slice(mention).replace(TRAILING_PUNCTUATION, "");
+    if (token.length === 0 || token.length > MAX_PATH_CHARS || token.includes("://") || token.startsWith("//")) continue;
+    const suffix = LINE_SUFFIX.exec(token);
+    const path = suffix ? token.slice(0, suffix.index) : token;
+    if (!isPathLike(path, suffix !== null)) continue;
+    const compiler = next === "(" ? COMPILER_POSITION.exec(text.slice(match.index + match[0].length)) : null;
+    const line = Number(suffix ? suffix[0].split(":")[1] : compiler?.[1]);
+    found.push({
+      start: match.index + mention,
+      end: match.index + mention + token.length,
+      path,
+      ...(line > 0 && { line }),
+    });
+  }
+  return found;
+}
+
+function isPathLike(path: string, hasLine: boolean): boolean {
+  if (path.startsWith("/")) return path.length > 1;
+  if (path.startsWith("~/")) return path.length > 2;
+  if (!/[\p{L}\p{N}_]/u.test(path)) return false;
+  return path.includes("/") || (hasLine && /[^.]\.[^.]/.test(path));
+}
+
+/** A path found in the terminal's rows, where it is on screen. */
+export interface PathMatch {
+  path: string;
+  line?: number;
+  /** The cells it fills, one segment per row. */
+  segments: LinkSegment[];
+  /** The same cells as xterm's link range: 1-based, the end inclusive. */
+  range: IBufferRange;
+}
+
+/** The paths in the logical lines touching rows `from` to `to` (1-based buffer lines, both
+ * inclusive), a path soft-wrapped by xterm onto the next row included. A path the program itself
+ * breaks onto another row is not found. */
+export function pathMatchesIn(
+  rowAt: (y: number) => TerminalRow | undefined,
+  from: number,
+  to: number,
+): PathMatch[] {
+  const read = cachedRows(rowAt);
+  const matches: PathMatch[] = [];
+  for (const lines of logicalLinesIn(read, from, to)) {
+    let text = "";
+    const at: { y: number; col: number; width: number }[] = [];
+    for (const { y, row } of lines) {
+      row.cells.forEach((cell, col) => {
+        if (cell === "") return;
+        const width = row.cells[col + 1] === "" ? 2 : 1;
+        for (let i = 0; i < cell.length; i++) at.push({ y, col, width });
+        text += cell;
+      });
+    }
+    for (const { start, end, path, line } of pathCandidates(text)) {
+      const segments: LinkSegment[] = [];
+      for (let i = start; i < end; i++) {
+        const { y, col, width } = at[i];
+        const last = segments[segments.length - 1];
+        // The second half of a surrogate pair stands on the cell its first half did.
+        if (last && last.y === y && last.col + last.width > col) continue;
+        if (last && last.y === y && last.col + last.width === col) last.width += width;
+        else segments.push({ y, col, width });
+      }
+      const first = at[start];
+      const final = at[end - 1];
+      matches.push({
+        path,
+        ...(line !== undefined && { line }),
+        segments,
+        range: { start: { x: first.col + 1, y: first.y }, end: { x: final.col + final.width, y: final.y } },
+      });
+    }
+  }
+  return matches;
+}
+
+/**
+ * What the daemon has said the terminal's candidate paths name. Candidates are asked about once,
+ * gathered for a moment into one batch, with at most two requests out at a time; a path that has
+ * left the screen by then is not asked about. It is asked again only when its answer is old. Until
+ * an answer arrives, or if the path is not one, it is no link. `onChange` runs when an answer makes
+ * a path a link or stops it being one. The cache belongs to one session's project, so it is cleared
+ * when the terminal shows another.
+ */
+export class PathLinkCache {
+  private readonly entries = new Map<string, PathAnswer & { at: number }>();
+  private readonly asking = new Set<string>();
+  private queued: string[] = [];
+  private visible?: Set<string>;
+  private timer?: ReturnType<typeof setTimeout>;
+  private inFlight = 0;
+  private generation = 0;
+
+  constructor(
+    private readonly probe: (paths: string[]) => Promise<PathAnswer[]>,
+    private readonly onChange: () => void,
+    private readonly now: () => number = Date.now,
+    private readonly delay = PROBE_DELAY_MS,
+  ) {}
+
+  /** The kind of a path the daemon found, or `undefined` for one it did not or has not answered for. */
+  kind(path: string): "file" | "directory" | undefined {
+    const kind = this.entries.get(path)?.kind;
+    return kind === "file" || kind === "directory" ? kind : undefined;
+  }
+
+  /** What the daemon answered for a path, as far as a click needs it. */
+  answerFor(path: string): Pick<PathAnswer, "view" | "viewerOnly"> {
+    const { view, viewerOnly } = this.entries.get(path) ?? {};
+    return { view, viewerOnly };
+  }
+
+  /** Records which paths are on screen now, so that a queued one that has left it is dropped. */
+  setVisible(paths: Iterable<string>): void {
+    this.visible = new Set(paths);
+  }
+
+  /** Asks about the paths that have no recent answer and are not being asked about. */
+  want(paths: Iterable<string>): void {
+    const now = this.now();
+    for (const path of paths) {
+      const entry = this.entries.get(path);
+      const ttl = entry?.kind === "none" ? NONE_TTL_MS : FOUND_TTL_MS;
+      if ((entry && now - entry.at < ttl) || this.asking.has(path)) continue;
+      this.asking.add(path);
+      this.queued.push(path);
+    }
+    this.schedule();
+  }
+
+  /** Forgets every answer and drops the ones still on their way. */
+  clear(): void {
+    this.generation++;
+    clearTimeout(this.timer);
+    this.timer = undefined;
+    this.inFlight = 0;
+    this.entries.clear();
+    this.asking.clear();
+    this.queued = [];
+    this.visible = undefined;
+  }
+
+  private schedule(): void {
+    if (this.timer !== undefined || this.queued.length === 0 || this.inFlight >= MAX_PROBES_IN_FLIGHT) return;
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      this.flush();
+    }, this.delay);
+  }
+
+  private flush(): void {
+    const { visible } = this;
+    const wanted = visible ? this.queued.filter((path) => visible.has(path)) : this.queued;
+    const kept = new Set(wanted);
+    for (const path of this.queued) if (!kept.has(path)) this.asking.delete(path);
+    this.queued = wanted;
+    while (this.queued.length > 0 && this.inFlight < MAX_PROBES_IN_FLIGHT) {
+      const batch = this.queued.splice(0, MAX_PROBED_PATHS);
+      const generation = this.generation;
+      this.inFlight++;
+      this.probe(batch).then(
+        (answers) => this.answer(generation, batch, answers),
+        () => this.answer(generation, batch, undefined),
+      );
+    }
+    this.schedule();
+  }
+
+  /** `answers` is `undefined` for a probe that failed: what was known of a path then stays, as of now,
+   * and a path not known at all is taken not to be one. */
+  private answer(generation: number, batch: string[], answers: PathAnswer[] | undefined): void {
+    if (generation !== this.generation) return;
+    this.inFlight--;
+    if (this.entries.size > MAX_ENTRIES) {
+      const oldest = [...this.entries.entries()].sort((a, b) => a[1].at - b[1].at);
+      for (const [path] of oldest.slice(0, MAX_ENTRIES / 2)) this.entries.delete(path);
+    }
+    let changed = false;
+    const at = this.now();
+    batch.forEach((path, i) => {
+      this.asking.delete(path);
+      const before = this.kind(path);
+      const known = this.entries.get(path);
+      const answer: PathAnswer = answers ? (answers[i] ?? { kind: "none" }) : (known ?? { kind: "none" });
+      this.entries.set(path, { ...answer, at });
+      if (before !== this.kind(path)) changed = true;
+    });
+    if (changed) this.onChange();
+    this.schedule();
+  }
+}
+
+/** The cells of the paths on rows `from` to `to` that the daemon found, to colour as links. It also
+ * notes which paths are on screen, and asks about the ones it has no answer for. */
+function pathSegmentsIn(
+  cache: PathLinkCache,
+  read: (y: number) => TerminalRow | undefined,
+  from: number,
+  to: number,
+): LinkSegment[] {
+  const matches = pathMatchesIn(read, from, to);
+  cache.setVisible(matches.map((match) => match.path));
+  cache.want(matches.map((match) => match.path));
+  return mergeSegments(
+    matches
+      .filter((match) => cache.kind(match.path))
+      .flatMap((match) => match.segments)
+      .filter((segment) => segment.y >= from && segment.y <= to),
+  );
+}
+
+/**
+ * The link provider for paths the daemon found. A path it has no answer for yet is no link, but
+ * is asked about, so the pointer meeting it again a moment later finds one.
+ */
+function pathLinkProvider(
+  term: Terminal,
+  cache: PathLinkCache,
+  open: (target: PathLinkTarget) => Promise<void>,
+  hasSelection: () => boolean,
+): ILinkProvider {
+  const rowAt = terminalRowReader(term);
+  return {
+    provideLinks(y, callback) {
+      const matches = pathMatchesIn(rowAt, y, y).filter((match) => match.segments.some((segment) => segment.y === y));
+      cache.want(matches.map((match) => match.path));
+      const links: ILink[] = matches
+        .filter((match) => cache.kind(match.path))
+        .map((match) => {
+          const target: PathLinkTarget = { path: match.path, line: match.line, ...cache.answerFor(match.path) };
+          const activate = terminalLinkHandler(() => open(target), hasSelection);
+          return { range: match.range, text: match.path, activate };
+        });
+      callback(links.length > 0 ? links : undefined);
+    },
+  };
+}
+
+/**
+ * Makes the file paths in `term`'s output links once the daemon says they are files or folders:
+ * a link provider for the pointer, registered after the address providers (an address is never a
+ * candidate, so the two never meet), and the cells to colour, for `TerminalLinkColors`. `onChange`
+ * runs when an answer changes what is a link, for the colours to be drawn again.
+ */
+export function installPathLinks(
+  term: Terminal,
+  handlers: { probe: (paths: string[]) => Promise<PathAnswer[]>; open: (target: PathLinkTarget) => Promise<void> },
+  hasSelection: () => boolean,
+  onChange: () => void,
+): { cache: PathLinkCache; segments: ExtraLinkSegments } {
+  const cache = new PathLinkCache(handlers.probe, onChange);
+  term.registerLinkProvider(pathLinkProvider(term, cache, handlers.open, hasSelection));
+  return { cache, segments: (read, from, to) => pathSegmentsIn(cache, read, from, to) };
+}

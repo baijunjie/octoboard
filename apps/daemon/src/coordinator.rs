@@ -933,6 +933,28 @@ async fn handle_inner(
             Ok(None)
         }
 
+        RequestBody::ProbePathLinks { project, paths } => {
+            let state = Arc::clone(state);
+            let _permit = crate::path_links::PROBE_PERMITS.acquire().await?;
+            let links = tokio::task::spawn_blocking(move || {
+                crate::path_links::probe(&state, project.as_deref(), paths)
+            })
+            .await??;
+            Ok(Some(Event::PathLinks {
+                id: request_id,
+                links,
+            }))
+        }
+
+        RequestBody::OpenPathLink { project, path } => {
+            let state = Arc::clone(state);
+            tokio::task::spawn_blocking(move || {
+                crate::path_links::open(&state, project.as_deref(), &path)
+            })
+            .await??;
+            Ok(None)
+        }
+
         RequestBody::PushProjectBranch { project } => {
             let project = state
                 .store

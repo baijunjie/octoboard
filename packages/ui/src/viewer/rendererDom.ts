@@ -290,3 +290,38 @@ export function refocusControl(root: ShadowRoot, wanted: { gap: number; kind: Ex
   focusControl(target);
   return true;
 }
+
+/**
+ * Scrolls the line numbered `line` (1-based) of a rendered file into the middle of its scrolling
+ * frame. Whether it did: `false` while the frame has drawn no such line, which is the case until
+ * the library has drawn the file and for a line the file does not have.
+ */
+export function scrollToLine(frame: HTMLElement, line: number): boolean {
+  const target = shadowRootOf(frame)?.querySelector(`[data-line="${line}"]`);
+  if (!target) return false;
+  target.scrollIntoView({ block: "center", inline: "nearest" });
+  return true;
+}
+
+/**
+ * Scrolls the line numbered `line` (1-based) of the text in a preformatted element, which holds it
+ * as one text node, to the middle of the element's own scrolling. It measures the line where the
+ * browser laid it out, so a wrapped line above it counts for the rows it takes. A line the text
+ * does not have leaves the scrolling as it is.
+ */
+export function scrollTextToLine(pre: HTMLElement, line: number): void {
+  const node = pre.firstChild;
+  if (node?.nodeType !== Node.TEXT_NODE) return;
+  const text = node.textContent ?? "";
+  let offset = 0;
+  for (let at = 1; at < line; at++) {
+    const next = text.indexOf("\n", offset);
+    if (next < 0) return;
+    offset = next + 1;
+  }
+  const range = pre.ownerDocument.createRange();
+  range.setStart(node, offset);
+  range.setEnd(node, Math.min(offset + 1, text.length));
+  const top = range.getBoundingClientRect().top - pre.getBoundingClientRect().top + pre.scrollTop;
+  pre.scrollTop = Math.max(0, top - pre.clientHeight / 2);
+}

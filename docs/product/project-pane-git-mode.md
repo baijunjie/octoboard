@@ -7,8 +7,8 @@ the repository's main working copy has checked out (for that branch itself, what
 branch), in one Committed section, either all together or under its commits. The **change list** that shows them is
 in `docs/product/project-pane-git-change-list.md`. Each change opens in the project pane's read-only file viewer (see
 `docs/product/project-pane-git-change-viewer.md`). Git is one of the project pane's two modes: opening the pane, its
-header, switching modes and the file viewer in general are in `docs/product/project-pane.md` (see "Files and Git" and
-"The file viewer" there).
+header and switching modes are in `docs/product/project-pane.md` (see "Files and Git" there), and the file viewer in
+general in `docs/product/file-viewer.md`.
 
 Failures to load branches, list changes or compare commits open an error alert requiring acknowledgement; the
 pane retains its failure explanation and recovery controls afterwards (see "Error alerts" in
