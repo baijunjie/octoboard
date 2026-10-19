@@ -19,7 +19,7 @@ const accounts = [account("w", "claude", "Work"), account("c", "codex", "Codex w
 
 describe("choiceGroups", () => {
   it("puts the default account first in every agent's group, the stored accounts after it", () => {
-    const groups = choiceGroups(accounts, availability({}), () => "Default");
+    const groups = choiceGroups(accounts, availability({}), null, () => "Default");
     expect(groups.map((g) => [g.agent, g.entries.map((e) => e.name)])).toEqual([
       ["claude", ["Default", "Work"]],
       ["codex", ["Default", "Codex work"]],
@@ -28,7 +28,7 @@ describe("choiceGroups", () => {
   });
 
   it("holds the default account alone for every agent on a first-ever start", () => {
-    for (const group of choiceGroups([], availability({}), () => "Default")) {
+    for (const group of choiceGroups([], availability({}), null, () => "Default")) {
       expect(group.entries.map((e) => e.account)).toEqual([null]);
     }
   });
@@ -38,7 +38,14 @@ describe("choiceGroups", () => {
     ["available", "available", true],
     ["unavailable", "unavailable", false],
   ] as const)("leaves a group selectable unless its agent is known to be missing (%s)", (_, state, selectable) => {
-    expect(choiceGroups(accounts, availability({ claude: state }), () => "Default")[0].selectable).toBe(selectable);
+    expect(choiceGroups(accounts, availability({ claude: state }), null, () => "Default")[0].selectable).toBe(selectable);
+  });
+});
+
+describe("choiceGroups and the added agents", () => {
+  it("leaves selectable only the groups of added agents", () => {
+    const groups = choiceGroups(accounts, availability({}), ["codex"], () => "Default");
+    expect(groups.map((g) => [g.agent, g.selectable])).toEqual([["claude", false], ["codex", true], ["grok", false]]);
   });
 });
 
@@ -53,29 +60,33 @@ describe("initialChoice", () => {
     ["the resolved agent while availability is not determined", "claude", {}, { agent: "claude", account: null }],
     ["the resolved agent when none may be picked", "claude", { claude: "unavailable", codex: "unavailable", grok: "unavailable" }, { agent: "claude", account: null }],
   ] as const)("opens on %s", (_, projectAgent, states, expected) => {
-    expect(initialChoice(owner, project(projectAgent), accounts, availability(states))).toEqual(expected);
+    expect(initialChoice(owner, project(projectAgent), accounts, availability(states), null)).toEqual(expected);
+  });
+
+  it("opens on the first added agent that may be picked when the resolved one is not added", () => {
+    expect(initialChoice(owner, project(), accounts, availability({}), ["codex", "grok"])).toEqual({ agent: "codex", account: "c" });
   });
 
   it("opens a project session on the console's project session agent when the project names none", () => {
     const split = consoleOf("c-1", "Main", { project_session_agent: "codex", codex_account_id: "c" });
-    expect(initialChoice(split, project(), accounts, availability({}))).toEqual({ agent: "codex", account: "c" });
-    expect(initialChoice(split, project("grok"), accounts, availability({}))).toEqual({ agent: "grok", account: null });
+    expect(initialChoice(split, project(), accounts, availability({}), null)).toEqual({ agent: "codex", account: "c" });
+    expect(initialChoice(split, project("grok"), accounts, availability({}), null)).toEqual({ agent: "grok", account: null });
   });
 
   it("opens a console session on the console session agent, whatever the project session agent is", () => {
     const split = consoleOf("c-1", "Main", { project_session_agent: "codex" });
-    expect(initialChoice(split, undefined, accounts, availability({}))).toEqual({ agent: "claude", account: null });
+    expect(initialChoice(split, undefined, accounts, availability({}), null)).toEqual({ agent: "claude", account: null });
   });
 
   it("opens a project session on the console session agent for a console stored without the setting", () => {
     const legacy = consoleOf("c-1", "Main", { default_agent: "codex" });
-    expect(initialChoice(legacy, project(), accounts, availability({}))).toEqual({ agent: "codex", account: null });
+    expect(initialChoice(legacy, project(), accounts, availability({}), null)).toEqual({ agent: "codex", account: null });
   });
 
   it("opens on the project's account for the agent it moved to when the first is missing", () => {
     const moved = projectOf("p-1", "c-1", "App", { codex_account_id: { kind: "account", id: "c2" } });
     const stored = [...accounts, account("c2", "codex", "Codex 2")];
-    expect(initialChoice(owner, moved, stored, availability({ claude: "unavailable" }))).toEqual({ agent: "codex", account: "c2" });
+    expect(initialChoice(owner, moved, stored, availability({ claude: "unavailable" }), null)).toEqual({ agent: "codex", account: "c2" });
   });
 });
 
@@ -112,7 +123,7 @@ describe("a project on the agent's default account", () => {
 
   it("opens the session dialog on the default account while the console pins one", () => {
     const project = projectOf("p-1", "c-1", "App", { default_agent: "claude", claude_account_id: { kind: "default" } });
-    expect(initialChoice(owner, project, accounts, availability({}))).toEqual({ agent: "claude", account: null });
+    expect(initialChoice(owner, project, accounts, availability({}), null)).toEqual({ agent: "claude", account: null });
   });
 
   it("is told from inheriting by projectAccount", () => {
@@ -143,11 +154,11 @@ describe("currentChoice", () => {
     ["the user's pick", {}, picked],
     ["the initial entry when the pick's agent has since been found missing", { codex: "unavailable" }, initial],
   ] as const)("shows %s", (_, states, expected) => {
-    expect(currentChoice(picked, initial, choiceGroups(accounts, availability(states), () => "Default"))).toEqual(expected);
+    expect(currentChoice(picked, initial, choiceGroups(accounts, availability(states), null, () => "Default"))).toEqual(expected);
   });
 
   it("shows the initial entry when the pick's account is no longer stored, or there is no pick", () => {
-    const groups = choiceGroups([], availability({}), () => "Default");
+    const groups = choiceGroups([], availability({}), null, () => "Default");
     expect(currentChoice(picked, initial, groups)).toEqual(initial);
     expect(currentChoice(undefined, initial, groups)).toEqual(initial);
   });

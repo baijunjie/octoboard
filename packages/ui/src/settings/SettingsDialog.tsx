@@ -1,6 +1,6 @@
 import { Modal, Tabs } from "@heroui/react";
 import { Bell, FileCog, FolderCheck, GitBranch, KeyRound, Settings2, ShieldCheck, type LucideIcon } from "lucide-react";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TitledControl } from "../components/TitledControl";
 import { FadedScroller } from "../components/scrollFade";
@@ -10,6 +10,7 @@ import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen"
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import { useIsNarrow } from "../layout/breakpoint";
+import { AddAgentOnOpenContext } from "./AddAgentOnOpenContext";
 import { AgentAccountsSection, AGENT_STRIP_HEIGHT } from "./AgentAccountsSection";
 import { ConfigurationSection } from "./ConfigurationSection";
 import { GeneralSection } from "./GeneralSection";
@@ -37,6 +38,10 @@ const SECTIONS = [
   { id: "notifications", label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
   { id: "configuration", label: "settings.section.configuration", Icon: FileCog, Content: ConfigurationSection },
 ] as const satisfies readonly Section[];
+
+/** How many animation frames (about half a second) a tab waits for a modal in front of Settings to go before it
+ * gives up taking focus. */
+const MAX_FRAMES_TO_WAIT_FOR_MODAL = 30;
 
 export type SettingsSectionId = (typeof SECTIONS)[number]["id"];
 
@@ -70,22 +75,62 @@ function SectionPanel({ id, stickyHeadingHeight, children }: { id: string; stick
  * Escape, the close button and a click on the backdrop call `onClose`; opening moves focus to the
  * selected section's entry (also where a section's `useSectionRefocus` sends it back to), and
  * `useSettingsDialog` puts it back on the terminal when this closes. It opens on `initialSection`
- * when given, the first section otherwise.
+ * when given, the first section otherwise; `navigation` says the same and more (see its prop).
  */
 export function SettingsDialog({
   initialSection = SECTIONS[0].id,
+  navigation,
   onClose,
 }: {
-  /** The section to open on. A typo must not compile: a key that names no section renders no panel
-   * and never focuses a tab, which would lose the dialog's keyboard rules. */
+  /** The section to open on, for a dialog that asks for no `navigation`. A typo must not compile: a key that
+   * names no section renders no panel and never focuses a tab, which would lose the dialog's keyboard rules. */
   initialSection?: SettingsSectionId;
+  /** What the dialog is asked to show, first on opening and again by a request made while it is open (each has
+   * its own `nonce`): a section, and the Add agent dialog in front for `addAgent`. */
+  navigation?: { nonce: number; section: SettingsSectionId | undefined; addAgent: boolean };
   onClose: () => void;
 }): React.ReactElement {
   const t = useT();
   const tabScrollLabels = useTabScrollLabels();
   const isNarrow = useIsNarrow();
-  const [sectionId, setSectionId] = useState<string>(initialSection);
+  const [sectionId, setSectionId] = useState<string>(navigation?.section ?? initialSection);
+  const addAgentOnOpen = navigation?.addAgent ?? false;
+  // Taken up once by the Agent accounts section, which may be mounted again later by switching back to it.
+  const [addAgentPending, setAddAgentPending] = useState(addAgentOnOpen);
+  const [dismissAddAgent, setDismissAddAgent] = useState(0);
+  const addAgentRequest = useMemo(() => ({ pending: addAgentPending, consume: () => setAddAgentPending(false), dismiss: dismissAddAgent }), [addAgentPending, dismissAddAgent]);
+  const lastNonce = useRef(navigation?.nonce);
+  // Counts the requests whose section's tab takes focus (all but those for the Add agent dialog).
+  const [tabFocusRequests, setTabFocusRequests] = useState(0);
+  useEffect(() => {
+    if (!navigation || navigation.nonce === lastNonce.current) return;
+    lastNonce.current = navigation.nonce;
+    if (navigation.section) setSectionId(navigation.section);
+    setAddAgentPending(navigation.addAgent);
+    // A request for anything but Add agent closes one that is open, before its section's tab takes focus.
+    if (!navigation.addAgent) setDismissAddAgent((count) => count + 1);
+    if (!navigation.addAgent) setTabFocusRequests((count) => count + 1);
+  }, [navigation?.nonce]);
   const selectedRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (tabFocusRequests === 0) return;
+    // Read off the page: the tabs hand their element to `selectedRef` a render later than they select. While a
+    // modal in front (the Add agent dialog being dismissed) has made this one inert, it waits, frame by frame,
+    // and gives up after `MAX_FRAMES_TO_WAIT_FOR_MODAL`.
+    let frames = 0;
+    let frame = 0;
+    const focusSelected = () => {
+      const settings = dialogAround(markerRef);
+      if (!settings) return;
+      if (settings.closest('[inert], [aria-hidden="true"]')) {
+        if (frames++ < MAX_FRAMES_TO_WAIT_FOR_MODAL) frame = requestAnimationFrame(focusSelected);
+        return;
+      }
+      settings.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus();
+    };
+    frame = requestAnimationFrame(focusSelected);
+    return () => cancelAnimationFrame(frame);
+  }, [tabFocusRequests]);
   const focusedOnOpen = useRef(false);
   const markerRef = useRef<HTMLSpanElement>(null);
   useEscapeWhileTooltipOpen(() => dialogAround(markerRef), onClose);
@@ -96,7 +141,7 @@ export function SettingsDialog({
     selectedRef.current = tab;
     if (tab && !focusedOnOpen.current) {
       focusedOnOpen.current = true;
-      tab.focus();
+      if (!addAgentOnOpen) tab.focus();
     }
     // The row of tabs below the breakpoint scrolls, so a section picked from a link may start off
     // screen. Only the tab row itself moves (`block: "nearest"` leaves the dialog where it is).
@@ -161,7 +206,9 @@ export function SettingsDialog({
               <SectionPanel key={id} id={id} stickyHeadingHeight={"stickyHeadingHeight" in section ? section.stickyHeadingHeight : undefined}>
                 <h2 className="pb-2 text-xl font-semibold">{t(label)}</h2>
                 <SettingsFocusContext.Provider value={focusTarget}>
-                  <Content />
+                  <AddAgentOnOpenContext.Provider value={addAgentRequest}>
+                    <Content />
+                  </AddAgentOnOpenContext.Provider>
                 </SettingsFocusContext.Provider>
               </SectionPanel>
             ))}

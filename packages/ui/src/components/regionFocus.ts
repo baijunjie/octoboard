@@ -1,3 +1,6 @@
+/** A window region, named by its `data-region`. */
+export type Region = string;
+
 /** What a region's focus lands on, beyond the terminal's own method: its first control a keyboard
  * can reach. A report page's own frame counts, as the last thing in the aside; the connection
  * banner's is its Retry, and it has none while it only says it is reconnecting. */
@@ -14,7 +17,7 @@ export function focusLanding(root: Element): boolean {
 
 /** Puts focus on the first control a keyboard can reach in the region marked `data-region`; a
  * disabled control cannot hold focus and is skipped. */
-export function focusFirstIn(region: string): void {
+export function focusFirstIn(region: Region): void {
   document.querySelector<HTMLElement>(`[data-region=${region}] :is(${FOCUSABLE})`)?.focus();
 }
 
@@ -37,4 +40,48 @@ export function focusOpenDialog(previous?: Element | null): boolean {
     : dialog;
   target.focus();
   return dialog.contains(document.activeElement);
+}
+
+/** A toast that is on screen, not one fading out. */
+const LIVE_TOAST = '[data-slot="toast"]:not([data-exiting="true"]):not([data-hidden="true"])';
+
+export function regionElements(region: Region): Element[] {
+  return Array.from(document.querySelectorAll(`[data-region=${region}]`));
+}
+
+/** Focuses where `region` takes focus and says whether it did: a control the region marks with
+ * `data-region-landing` (a panel that failed to load, whose Try again follows its header), else the
+ * sidebar's selected row or the rail's current console, else the first control, as the other regions
+ * that are not the terminal do. The toast stack lists its newest toast first, so its first control
+ * is that toast. */
+export function focusRegion(region: Region, focusTerminal: () => void): boolean {
+  if (region === "terminal") {
+    focusTerminal();
+    return regionElements(region).some((el) => el.contains(document.activeElement));
+  }
+  const root = regionElements(region)[0];
+  if (!root) return false;
+  const target =
+    region === "toast"
+      ? root.querySelector<HTMLElement>(LIVE_TOAST)
+      : root.querySelector<HTMLElement>("[data-region-landing]") ||
+        ((region === "sidebar" || region === "rail") && root.querySelector<HTMLElement>('[aria-current="true"]')) ||
+        root.querySelector<HTMLElement>(FOCUSABLE);
+  if (!target) return false;
+  target.focus();
+  return target.ownerDocument.activeElement === target;
+}
+
+/** Where focus goes when the control that held it has gone and nothing hands it back (an alert acknowledged
+ * while focus is on `<body>`): the dialog still open (the window's regions are inert behind it), else
+ * wherever `focusTerminal` puts it, which for the selected session's terminal is the terminal; the empty
+ * terminal and the welcome screen decline from `<body>`, so then the first of the sidebar and the rail that has
+ * a control takes it, each landing where F6 would. With none to take it, focus stays on `<body>`. */
+export function focusAfterLoss(focusTerminal: () => void): void {
+  if (focusOpenDialog()) return;
+  focusTerminal();
+  if (document.activeElement && document.activeElement !== document.body) return;
+  for (const region of ["sidebar", "rail"] as const) {
+    if (focusRegion(region, focusTerminal)) return;
+  }
 }

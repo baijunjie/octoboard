@@ -1,10 +1,10 @@
 import { Tabs } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
+import { ErrorAlert } from "../components/ErrorAlert";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { InlineChip } from "../components/InlineChip";
-import { PATH_VAR_PARAMS } from "../components/literalParams";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { CONVERSATION_ID, EXAMPLE_CONVERSATION_ID } from "../conversationId";
 import { DaemonRequestError } from "../daemon-client";
@@ -20,6 +20,7 @@ import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
 import type { NewSessionBinding } from "./dialogRequest";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
+import { useCloseWhenBlocked } from "./useCloseWhenBlocked";
 import { useLaunchChoice } from "./useLaunchChoice";
 import { openSessionRequest } from "./openSessionRequest";
 import { OptionSelect } from "./OptionSelect";
@@ -98,6 +99,8 @@ export function SessionDialog({
   const { error, busy, run } = useDialogAction();
 
   const { choice, blocked, overrides, agentOptions, setPickedAgent, account: accountField, launch } = useLaunchChoice(parentConsole, project);
+  // Nothing to open a session with (an agent was removed or uninstalled while this was open).
+  useCloseWhenBlocked(blocked, t("dialog.session.noAgent"), onClose);
 
   // The select is shown from the moment there is a console session to offer and stays mounted
   // for the rest of the dialog's life, even if the list later empties, leaving "none" alone: it is
@@ -197,7 +200,6 @@ export function SessionDialog({
           </FadeOverflow>
         </div>
       )}
-      {fixedOwner && fixedOwnerGone && <p className="text-sm text-app-danger">{t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}</p>}
       {sessionBinding.kind === "choose" && ownerOffered && !resuming && (
         <OptionSelect
           label={t("dialog.session.owner")}
@@ -228,7 +230,7 @@ export function SessionDialog({
       submitDisabled={blocked || fixedOwnerGone}
       onSubmit={submit}
     >
-      {blocked && <p className="text-sm text-app-danger"><Message id="agents.installPrompt" params={PATH_VAR_PARAMS} /></p>}
+      {fixedOwner && fixedOwnerGone && <ErrorAlert>{t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, fixedOwner)) })}</ErrorAlert>}
       {resumable && (
         <Tabs selectedKey={conversation} onSelectionChange={(key) => {
           setSwitched(true);

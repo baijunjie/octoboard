@@ -4,12 +4,13 @@ import React, { useId, useLayoutEffect, useRef, useState, useSyncExternalStore }
 import { appConfig } from "../appConfig";
 import { CodeBlock } from "../components/CodeBlock";
 import { ExternalLink } from "../components/ExternalLink";
-import { RecoveryGuidance } from "../components/ErrorGuidance";
+import { RecoveryGuidance, recoveryAction } from "../components/ErrorGuidance";
 import { InlineChip } from "../components/InlineChip";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 import { errorAlerts } from "../errorAlerts";
 import { Message, useT } from "../i18n/react";
 import { useOptionalPlatform } from "../platform/react";
+import { openSettingsFromAnywhere } from "../settings/settingsLauncher";
 import { DaemonProvider, type Daemon } from "../store";
 import { dialogAround } from "./dialogElement";
 import { Dialog } from "./Dialog";
@@ -57,6 +58,8 @@ export function ErrorAlerts({ daemon }: { daemon?: Daemon }): React.ReactElement
   const unexpected = error.classification.kind === "unexpected";
   const diagnostics = [error.error, ...(error.failures?.map((failure) => failure.error) ?? [])].map(diagnosticText).filter((detail): detail is string => !!detail && detail !== error.message);
   const manualIssue = !platform?.links && platform?.kind === "tauri";
+  // A button for the remedy when it is the one remedy of every failure the alert is about.
+  const action = error.sharedRecovery ? recoveryAction(t, error.sharedRecovery) : undefined;
   const report = async () => {
     if (reporting.current) return;
     reporting.current = true;
@@ -87,6 +90,12 @@ export function ErrorAlerts({ daemon }: { daemon?: Daemon }): React.ReactElement
       resetKey={error.message}
       footer={<>
         {unexpected && !manualIssue && <ExternalLink href={issueUrl} appearance="button" onOpen={platform?.links ? report : undefined} isPending={reportPending}>{t("error.issue.report")}</ExternalLink>}
+        {action && (
+          <Button variant="secondary" onPress={() => {
+            errorAlerts.acknowledge();
+            openSettingsFromAnywhere("accounts", { addAgent: action.addAgent });
+          }}>{action.label}</Button>
+        )}
         <Button ref={acknowledge} variant="danger" onPress={() => errorAlerts.acknowledge()}>{t("error.acknowledge")}</Button>
       </>}
     >
@@ -98,7 +107,7 @@ export function ErrorAlerts({ daemon }: { daemon?: Daemon }): React.ReactElement
             : <Message id="error.unexpected.reportGuidance" params={{ report: <InlineChip size="inherit">{t("error.issue.report")}</InlineChip> }} />}</p>
           {diagnostics.length > 0 && <DiagnosticDetails text={[...new Set(diagnostics)].join("\n\n")} />}
         </>
-        : !error.failures?.length && <p><RecoveryGuidance recovery={error.classification.recovery} /></p>}
+        : !error.failures?.length && error.classification.recovery !== "none" && <p><RecoveryGuidance recovery={error.classification.recovery} /></p>}
     </Dialog>
   );
   return daemon ? <DaemonProvider value={daemon}>{dialog}</DaemonProvider> : dialog;

@@ -9,11 +9,12 @@ import {
   AGENT_CONSOLE_PROJECT_EFFORT_FIELD,
   AGENT_CONSOLE_PROJECT_MODEL_FIELD,
   AGENT_LABEL,
-  AGENT_OPTIONS,
-  isAgentUnavailable,
+  agentChoiceBadge,
+  listedPickerAgents,
   type LaunchPair,
 } from "../agents";
 import { AgentIcon } from "../components/AgentIcon";
+import { StatusBadge } from "../components/StatusBadge";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useT } from "../i18n/react";
@@ -33,9 +34,10 @@ type LaunchField =
  * Each agent's panel is a table, the kinds of session as columns and the settings as rows, which
  * stacks below the `md` breakpoint (see `LaunchMatrix`).
  * Until a tab is picked it follows `defaultAgent`, the console session agent, as the user changes
- * it; a picked tab stays. Every agent's values are kept in `values` whichever tab is showing. An
- * agent known to be missing has no tab, unless the console still stores a value for it, which stays
- * until every one of its values is cleared. `children` are the section's further fields, which hold
+ * it; a picked tab stays. Every agent's values are kept in `values` whichever tab is showing. The tabs
+ * are the added agents, in the order they were added; an agent known to be missing or not added has no
+ * tab, unless the console still stores a value for it, which stays, marked, until every one of its
+ * values is cleared. `children` are the section's further fields, which hold
  * for every agent: they sit below a frame around the tabs and their panels, so they do not read as
  * part of the agent shown.
  *
@@ -56,6 +58,7 @@ export function ConsoleLaunchFields({
   const t = useT();
   const tabScrollLabels = useTabScrollLabels();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
+  const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const [expanded, setExpanded] = useState(false);
   const [picked, setPicked] = useState<Agent>();
@@ -66,11 +69,9 @@ export function ConsoleLaunchFields({
       values[AGENT_CONSOLE_PROJECT_MODEL_FIELD[agent]] ||
       values[AGENT_CONSOLE_PROJECT_EFFORT_FIELD[agent]]
     );
-  const listed = AGENT_OPTIONS.map((option) => option.value).filter(
-    (agent) => !isAgentUnavailable(agentAvailability, agent) || stores(agent),
-  );
+  const listed = listedPickerAgents(agentAvailability, addedAgents, stores);
   // The agent picked, else the console session agent, else the first listed: a tab can go away
-  // under the user, when the last value stored for a missing agent is cleared, and one that comes
+  // under the user, when the last value stored for a missing or not added agent is cleared, and one that comes
   // back does not take the view from the one shown meanwhile.
   if (picked && !listed.includes(picked)) setPicked(undefined);
   const agent = [picked, defaultAgent].find((candidate) => candidate && listed.includes(candidate)) ?? listed[0] ?? defaultAgent;
@@ -84,13 +85,17 @@ export function ConsoleLaunchFields({
         <Tabs selectedKey={agent} onSelectionChange={(key) => setPicked(key as Agent)} className="gap-4">
           <Tabs.ListContainer render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
             <Tabs.List aria-label={t("dialog.console.launchAgent")}>
-              {listed.map((option) => (
-                <Tabs.Tab key={option} id={option} className="gap-2 whitespace-nowrap hover:text-foreground hover:opacity-100">
-                  <AgentIcon agent={option} />
-                  {isAgentUnavailable(agentAvailability, option) ? t("agents.notInstalled", { agent: AGENT_LABEL[option] }) : AGENT_LABEL[option]}
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-              ))}
+              {listed.map((option) => {
+                const badge = agentChoiceBadge(t, agentAvailability, addedAgents, option);
+                return (
+                  <Tabs.Tab key={option} id={option} className="w-auto flex-none gap-2 whitespace-nowrap hover:text-foreground hover:opacity-100">
+                    <AgentIcon agent={option} />
+                    {AGENT_LABEL[option]}
+                    {badge && <StatusBadge>{badge}</StatusBadge>}
+                    <Tabs.Indicator />
+                  </Tabs.Tab>
+                );
+              })}
             </Tabs.List>
           </Tabs.ListContainer>
           {listed.map((option) => (

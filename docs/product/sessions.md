@@ -100,9 +100,10 @@ Both dialogs offer these fields in this order:
   title can still appear before either kind of created name, as described in "Displayed names" in
   `docs/product/session-titles.md`.
 - **Agent** — an agent picker joined to an account picker, as in the project dialog. The agent picker lists the
-  agents with their icons and names, leaving out those not installed except the one it holds (see "Agents that are not
-  installed" in `docs/product/consoles.md`). The field opens on a selectable agent whenever there is
-  one, starting from the default resolved in "Which agent a session uses" below.
+  agents that can be picked, in the order of the added agents, with their icons and names, and otherwise only the one
+  it holds (see "Which agents the agent pickers list" in `docs/product/consoles.md`). The field opens on the default
+  resolved in "Which agent a session uses" below when that agent can be picked, otherwise on the first agent that can,
+  whenever there is one.
   The account picker offers only that agent's accounts, with its default account first, and is omitted when the agent
   has no named accounts. It opens on the account resolved from the project and console for that agent (see "Which
   account a session uses" below); a console session starts from its console's account for the selected agent.
@@ -125,7 +126,8 @@ Both dialogs offer these fields in this order:
   `docs/product/hub-orchestration.md`. The choice is offered from the project list and the terminal's **New session** offer outside focus
   mode. Opened from a project's focus mode the dialog has no such field and the session is always unbound; opened from a console session's focus mode it
   has none either, and shows a line saying the session reports to that console session instead, which is the binding
-  it gets (see `docs/product/focus-mode.md`). The **Resume conversation** tab has no such field, since a resumed
+  it gets (see `docs/product/focus-mode.md`). Should that console session be no longer available — archived or gone —
+  the dialog says so in an error callout at the top of its body and cannot be submitted. The **Resume conversation** tab has no such field, since a resumed
   session is never bound (see "Resuming a conversation started outside Octoboard" below).
 
 After these fields, the collapsed **Advanced** section offers the model and reasoning effort for this session. It
@@ -143,7 +145,7 @@ explicitly when no custom name was entered.
 behind it (see "The launch environment" in `docs/product/launching-agents.md`). The dialog does not wait for the
 launch: it closes as soon as the session is recorded, and the session's terminal says it is starting until the agent
 is up (see "Loading" in `docs/product/session-terminal.md`). A refusal that can be known before anything is recorded —
-an unknown owner, an unavailable agent, a model the agent does not offer, the refusals about a conversation to resume
+an unknown owner, an unavailable agent or one that is not added, a model the agent does not offer, the refusals about a conversation to resume
 below — is still shown in the dialog, which stays open. A session an agent opens with `new_session`, and the session
 an approved request for one starts (see "On approval" in `docs/product/session-requests.md`), are listed as *starting*
 the same way, but the agent's call, or the approval, is answered only once the launch has settled, with the launch's
@@ -175,16 +177,47 @@ shown all the same. For `new_session` and an approved session request the failur
 directory does not fail a brand new session for the other two agents: it has no conversation to lose, so Claude Code
 creates the directory itself and Octoboard creates it for Codex.
 
-**With every agent determined unavailable, opening a session is refused outright, before any of that**: the dialog
-cannot be submitted, the console header's new-session action is disabled, no **+** offers to open a session with
-defaults (see "Opening a session with defaults" below), and a console session's
-`new_session` tool is refused with a reason it can report (see "The console session's tools" in
-`docs/product/hub-orchestration.md`). The dialog and the tool's refusal say which agents Octoboard supports and that one
-of them has to be on the user's `PATH`, without saying how to install one; the console sessions section, with room for
-less, says only that no agent was found on the user's `PATH` (see "The console sessions section and the project list" in
-`docs/product/sidebar.md`). This refusal only ever fires once availability has actually been determined and found none;
-while that determination is still pending, nothing is refused on its account and a session opens or fails exactly as
-described above.
+**When no agent is both added and installed, the window offers no way to open a session, before any of that** (an
+agent counts as installed until it has been determined unavailable; see "Which agents the agent pickers list" in
+`docs/product/consoles.md`). Every way into the session dialog is disabled: the console header's **+**, each project
+row's **+**, the **+** of either focus mode's header and of each project in a console session's focus mode; the
+project's empty row saying there are no sessions yet is plain text rather than a button, in the project list and in
+a project's focus mode alike; and no **+** offers to open a session with defaults (see "Opening a session with
+defaults" below). Where the window says why:
+
+- when some supported agent is installed, or not yet determined unavailable, but none of those is added, the
+  terminal's empty panel, where it would otherwise offer a new session, says that no agent is added and offers **Add
+  agent…** (see "A console with nothing in it" in `docs/product/session-terminal.md`), and the console sessions
+  section, with room for less, says only that no agent is added;
+- when every agent has been determined unavailable, the terminal's empty panel, where it would otherwise offer a new
+  session, says that no agent was found and how to make one available, and the console sessions section says only
+  that no agent was found on the user's `PATH` (see "The console sessions section and the project list" in
+  `docs/product/sidebar.md`).
+
+If this state comes about while the session dialog is open — the last such agent removed or found unavailable
+meanwhile — the dialog closes at once, with nothing opened, and an error alert says that no agent is available to open
+a session; that alert offers nothing but its acknowledgement (see "Recovery and unexpected errors" in
+`docs/product/error-alerts.md`).
+
+**The daemon refuses to open a session of an agent that is not added.** Whatever opens it — the dialog, a session
+opened with defaults, `open_session`, a console or project session's `new_session` (with
+`resume_agent_session_id` too), or an approved session request — a new session whose agent, once resolved (see "Which
+agent a session uses" below), is not on the list of added agents is refused with `agent_not_added`, and nothing is
+recorded. The refusal names the agent and says it is not added, pointing to Settings → Agent accounts; in the window it
+is shown in an error alert offering **Add agent…** (see "Recovery and unexpected errors" in
+`docs/product/error-alerts.md`). A session request is refused that way before the user is asked, and again on
+approval should the agent have been removed meanwhile (see `docs/product/session-requests.md`). Handing a session off
+to an agent that is not added is refused the same way (see "What can be handed off" in
+`docs/product/handing-off-sessions.md`). While the list is undecided (see "Added agents" in
+`docs/product/agent-accounts.md`) nothing is refused for it; a list the user has emptied refuses every agent. An agent
+that has been determined unavailable is refused as unavailable (`agent_not_available`) rather than as not added. Only
+a session being opened is checked: a session of an agent removed since keeps running, and resuming, reopening or
+restarting it is never refused for this.
+
+With every agent determined unavailable, a console session's `new_session` tool is refused as well, with a reason it
+can report that says the same (see "The console session's tools" in `docs/product/hub-orchestration.md`). Nothing is
+refused for an agent being unavailable while availability is still being determined: a session then opens or fails
+exactly as described above.
 
 ### Opening a session with defaults
 
@@ -224,9 +257,8 @@ with the same message the dialog shows in that case. Only one session opens with
 are ignored until the daemon has answered the previous one. If the sidebar has switched to another console by the time
 the answer arrives, the session is still opened but not selected.
 
-With every agent determined unavailable, no **+** shows its quick form: a press opens the dialog, which explains the
-missing agent, and the console header's **+** stays disabled (see "The console sessions section and the project list"
-in `docs/product/sidebar.md`).
+When no agent is both added and installed, no **+** shows its quick form, and every one of them is disabled (see
+"Opening a session" above).
 
 ### Which agent a session uses
 

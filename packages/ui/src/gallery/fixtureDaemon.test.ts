@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ToastRequest } from "../store";
 
-import type { RequestBody } from "../protocol";
+import type { Agent, RequestBody } from "../protocol";
 import { exportedDocument } from "./fixtureConfiguration";
 import { createFixtureDaemon } from "./fixtureDaemon";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -106,6 +106,25 @@ describe("the fixture daemon's session handoff", () => {
     const plain = createFixtureDaemon(scenario);
     await expect(plain.request({ type: "hand_off_session", session: lead.id, agent: "claude" })).rejects.toMatchObject({ code: "handoff_to_same_agent", params: { agent: "Claude Code" } });
     await expect(plain.request({ type: "hand_off_session", session: lead.id, agent: "codex", account: "nobody" })).rejects.toMatchObject({ code: "unknown_account" });
+  });
+});
+
+describe("the fixture daemon's added agents", () => {
+  const lead = sessionOf("lead", "c", "p", "Lead", "idle");
+  const state = snapshotState({ consoles: [consoleOf("c", "Main")], projects: [projectOf("p", "c", "Website")], sessions: [lead] });
+  const withAdded = (added: Agent[] | null) => createFixtureDaemon({ id: "added", group: "Sidebar sessions" as const, category: "normal" as const, title: "", state: { ...state, settings: { ...state.settings!, added_agents: added } } });
+  const open = (agent: Agent) => ({ type: "open_session", console_id: "c", project_id: "p", agent }) as const;
+
+  it("refuses to open a session or hand one off to an agent that is not added", async () => {
+    const daemon = withAdded(["claude"]);
+    await expect(daemon.request(open("codex"))).rejects.toMatchObject({ code: "agent_not_added", params: { agent: "Codex" } });
+    await expect(daemon.request({ type: "hand_off_session", session: lead.id, agent: "grok" })).rejects.toMatchObject({ code: "agent_not_added", params: { agent: "Grok Build" } });
+    await expect(daemon.request(open("claude"))).resolves.toMatchObject({ type: "session_opened" });
+  });
+
+  it("refuses an agent nothing was added for, and nothing while the list is undecided", async () => {
+    await expect(withAdded([]).request(open("claude"))).rejects.toMatchObject({ code: "agent_not_added" });
+    await expect(withAdded(null).request(open("codex"))).resolves.toMatchObject({ type: "session_opened" });
   });
 });
 
@@ -247,7 +266,7 @@ describe("the fixture daemon's session creation", () => {
     const project = projectOf("p", owner.id, "Website");
     const existing = sessionOf("hub", owner.id, undefined, "Renamed release coordinator", "archived", { ordinal: 6 });
     const accounts = [{ id: "work", agent: "codex" as const, name: "Work", config_dir: "/Users/dev/.codex-work" }];
-    const daemon = createFixtureDaemon({ id: "open", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ consoles: [owner], projects: [project], sessions: [existing], settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts } }) });
+    const daemon = createFixtureDaemon({ id: "open", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ consoles: [owner], projects: [project], sessions: [existing], settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", accounts } }) });
     const preview = { type: "preview_console_session_title" as const, console: owner.id };
     for (let read = 0; read < 2; read++) {
       await expect(daemon.request(preview)).resolves.toEqual({ type: "console_session_title", console: owner.id, title: owner.name });

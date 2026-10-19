@@ -6,7 +6,8 @@ export type ErrorRecovery =
   | "configuration" | "image" | "clipboard" | "file" | "git" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
   | "contentSyntax" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
-  | "sessionBranches" | "projectBranches" | "lostMessages" | "unresumable" | "unarchive" | "availability" | "addedAgents";
+  | "sessionBranches" | "projectBranches" | "lostMessages" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded"
+  | "none";
 
 /** A local failure whose user remedy is known without inspecting its translated message. */
 export class ActionableError extends DaemonRequestError {
@@ -36,6 +37,7 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   tool: ["binary_not_found", "agent_not_available", "agent_not_installed", "git_unavailable"],
   availability: ["agent_availability_pending", "added_agents_undecided"],
   addedAgents: ["agent_already_added", "agent_order_invalid"],
+  agentNotAdded: ["agent_not_added"],
   shell: ["shell_environment_timeout"],
   account: ["unknown_account", "grok_home_not_initialized"],
   unresumable: ["conversation_unresumable"],

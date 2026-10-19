@@ -70,14 +70,18 @@ const accounts: Account[] = [
   { id: "codex-work", agent: "codex", name: "Codex Work", config_dir: "/home/dev/.codex-work" },
 ];
 
-/** Mounts the entry with Claude Code and Codex available (Grok Build missing, so it has no tab). The
+/** Mounts the entry with Claude Code and Codex available (Grok Build missing) and added (`added`, in
+ * that order, `null` while the daemon has not decided the list). The
  * returned `outside` stands for whatever else is on the window, `before` for a control that held
  * focus when the entry was pressed. */
-function mount(availability: Partial<Record<Agent, Availability>> = { claude: "available", codex: "available", grok: "unavailable" }) {
+function mount(
+  availability: Partial<Record<Agent, Availability>> = { claude: "available", codex: "available", grok: "unavailable" },
+  added: Agent[] | null = ["claude", "codex"],
+) {
   vi.setSystemTime(NOW);
   const store = createStateStore({
     agentAvailability: new Map((["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined" }])),
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", accounts },
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", accounts },
     accountQuotas: [quota("claude", null, "max"), quota("claude", "claude-work", "pro"), quota("codex", null, "plus")],
   });
   const daemon = { store, request } as unknown as Daemon;
@@ -210,6 +214,14 @@ it("moves keyboard focus into a panel the keyboard pinned, and Escape closes it 
   expect(document.activeElement).toBe(button);
 });
 
+it("moves a keyboard pin's focus to Add agent when there is no tab to take it", () => {
+  withFakeTimers();
+  const { button } = mount(undefined, []);
+  act(() => button.focus());
+  press(button, "Enter");
+  expect(document.activeElement?.textContent).toBe("Add agent…");
+});
+
 it("closes on a press outside, handing focus back to the button for a keyboard pin", () => {
   withFakeTimers();
   const { button, outside } = mount();
@@ -261,7 +273,7 @@ it("does not let Escape reach anything else while the panel is open", () => {
   document.body.removeEventListener("keydown", seen);
 });
 
-it("has one tab per available agent and lists each agent's accounts with plan and quota", () => {
+it("has one tab per added agent and lists each agent's accounts with plan and quota", () => {
   withFakeTimers();
   const { button } = mount();
   click(button);
@@ -343,12 +355,49 @@ it("is no tab stop of its own in front of a list that has become a scroll region
   expect(tabPanel.hasAttribute("tabindex")).toBe(false);
 });
 
-it("says so when no agent is available", () => {
+it("lists the agents that are added and installed in the order they were added, and no other", () => {
   withFakeTimers();
-  const { button } = mount({ claude: "unavailable", codex: "unavailable", grok: "unavailable" });
+  const { button } = mount({ claude: "available", codex: "available", grok: "available" }, ["grok", "codex"]);
+  click(button);
+  expect(tabs().map((tab) => tab.textContent)).toEqual(["Grok Build", "Codex"]);
+});
+
+it("leaves out an added agent that is not installed", () => {
+  withFakeTimers();
+  const { button } = mount({ claude: "available", codex: "available", grok: "unavailable" }, ["grok", "codex"]);
+  click(button);
+  expect(tabs().map((tab) => tab.textContent)).toEqual(["Codex"]);
+});
+
+it("lists every installed agent while the daemon has not decided the added list", () => {
+  withFakeTimers();
+  const { button } = mount(undefined, null);
+  click(button);
+  expect(tabs().map((tab) => tab.textContent)).toEqual(["Claude Code", "Codex"]);
+});
+
+it("says so, pointing to Settings, when agents are installed but none is added", () => {
+  withFakeTimers();
+  const { button } = mount(undefined, []);
+  click(button);
+  expect(tabs()).toHaveLength(0);
+  expect(panel()!.textContent).toContain("No agent added");
+  expect(panel()!.textContent).toContain("Add an agent to see its quota here.");
+  // The footer link would repeat the button.
+  expect(panel()!.textContent).not.toContain("Manage accounts…");
+  const add = Array.from(panel()!.querySelectorAll("button")).find((b) => b.textContent === "Add agent…");
+  click(add!);
+  expect(onOpenSettingsAt).toHaveBeenCalledWith("accounts", { addAgent: true });
+  expect(panel()).toBeNull();
+});
+
+it("says that no agent is available when the added ones are not installed and nothing else is", () => {
+  withFakeTimers();
+  const { button } = mount({ claude: "unavailable", codex: "unavailable", grok: "unavailable" }, ["claude"]);
   click(button);
   expect(tabs()).toHaveLength(0);
   expect(panel()!.textContent).toContain("No agent available");
+  expect(panel()!.textContent).toContain("Manage accounts…");
 });
 
 it("asks the daemon to refresh the quotas each time the panel opens, and not when it only changes mode", () => {
@@ -573,4 +622,25 @@ it("hides the mini bar for unread, failed, stale or unavailable quota instead of
   expect(fill()).toBeNull();
   act(() => store.setState({ accountQuotas: [reading], agentAvailability: new Map() }));
   expect(fill()).toBeNull();
+});
+
+it("keeps the mini bar of a session whose agent was removed", () => {
+  withFakeTimers();
+  const { store, container } = mount();
+  const host = container.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => act(() => root.unmount()));
+  const session: Session = {
+    id: "selected", agent: "claude", account_id: "claude-work", console_id: "console", host_id: "local",
+    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW,
+  };
+  act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
+  act(() => root.render(<DaemonProvider value={{ store, request } as unknown as Daemon}>
+    <RailQuotaEntry selectedSessionId={session.id} onOpenSettingsAt={onOpenSettingsAt} />
+  </DaemonProvider>));
+  const fill = () => host.querySelector("span[style]");
+  expect(fill()).not.toBeNull();
+  act(() => store.setState({ settings: { ...store.getState().settings, added_agents: ["codex"] } }));
+  expect(fill()).not.toBeNull();
 });

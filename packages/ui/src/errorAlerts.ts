@@ -22,8 +22,15 @@ export interface ErrorAlertRequest {
 
 const listeners = new Set<() => void>();
 let nextId = 0;
-let queue: readonly (ErrorAlertRequest & { id: number; classification: ErrorClassification; signature: string })[] = [];
+let queue: readonly (ErrorAlertRequest & { id: number; classification: ErrorClassification; sharedRecovery?: ErrorRecovery; signature: string })[] = [];
 const notify = () => listeners.forEach((listener) => listener());
+let focusFallback: (() => void) | undefined;
+let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+const cancelFallback = () => {
+  clearTimeout(fallbackTimer);
+  fallbackTimer = undefined;
+};
+const FOCUS_FALLBACK_DELAY_MS = 400;
 
 /** Errors survive screen changes and stay queued until the user acknowledges them. */
 export const errorAlerts = {
@@ -42,12 +49,36 @@ export const errorAlerts = {
     ]);
     const signature = JSON.stringify([request.message, request.session, metadata]);
     if (queue.some((item) => item.signature === signature)) return;
-    const item = { ...request, id: ++nextId, classification, signature };
+    // The one remedy of every failure the alert is about, if there is one (it can carry a button for it).
+    const first = classifications[0];
+    const sharedRecovery = first.kind === "actionable" && classifications.every((failure) => failure.kind === "actionable" && failure.recovery === first.recovery) ? first.recovery : undefined;
+    const item = { ...request, id: ++nextId, classification, sharedRecovery, signature };
+    cancelFallback();
     queue = options.immediate ? [item, ...queue] : [...queue, item];
     notify();
   },
   acknowledge(): void {
     queue = queue.slice(1);
     notify();
+    // An alert that came when a dialog closed itself has no control to give focus back to, so it is left on
+    // `<body>`: it goes to the window's fallback instead.
+    cancelFallback();
+    if (queue.length === 0) {
+      const fallback = focusFallback;
+      // After the alert's exit transition, whose focus restore would otherwise undo it.
+      fallbackTimer = setTimeout(() => {
+        fallbackTimer = undefined;
+        if (!document.activeElement || document.activeElement === document.body) fallback?.();
+      }, FOCUS_FALLBACK_DELAY_MS);
+    }
+  },
+  /** Where focus goes when acknowledging the last alert leaves it on `<body>`; returns what unregisters it. */
+  setFocusFallback(fallback: () => void): () => void {
+    focusFallback = fallback;
+    return () => {
+      if (focusFallback !== fallback) return;
+      focusFallback = undefined;
+      cancelFallback();
+    };
   },
 };

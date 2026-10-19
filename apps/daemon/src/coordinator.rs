@@ -2325,7 +2325,7 @@ struct ResolvedOpen {
 }
 
 /// Resolves what [`open_session`] opens from `request`, refusing an unknown console, project or
-/// owner, an agent that is not available, and an account of another agent.
+/// owner, an agent that is not available or not added, and an account of another agent.
 fn resolve_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<ResolvedOpen> {
     let console = state
         .store
@@ -2367,6 +2367,8 @@ fn resolve_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<Resolved
 
     let agent = session_agent(request.agent, project.as_ref(), &console);
     refuse_if_agent_unavailable(state, agent)?;
+    // After the availability check, as in the UI, where "not installed" wins over "not added".
+    refuse_unless_agent_added(state, agent)?;
 
     let (account_id, config_dir) = session_account(
         state,
@@ -2673,10 +2675,10 @@ async fn check_launch_settings(
 
 /// Refuses a session that [`open_session`] would refuse for what `request` asks, a console session
 /// included, before anything is launched or recorded: an unknown console, project or owner, an
-/// agent that is not available, an account of another agent, a model or effort the agent does not
-/// offer. For a session whose opening waits on the user's answer, so that a request which could
-/// never be carried out is refused to the asker rather than put to the user. Returns the agent the
-/// session would be of.
+/// agent that is not available or not added, an account of another agent, a model or effort the
+/// agent does not offer. For a session whose opening waits on the user's answer, so that a request
+/// which could never be carried out is refused to the asker rather than put to the user. Returns
+/// the agent the session would be of.
 pub async fn check_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<Agent> {
     let ResolvedOpen {
         project,
@@ -4379,6 +4381,24 @@ fn refuse_if_agent_unavailable(state: &Arc<AppState>, agent: Agent) -> Result<()
     ))
 }
 
+/// Refuses to open a session of an agent that is not on the added list; see "Opening a session" in
+/// `docs/product/sessions.md`. An undecided list refuses nothing. Only a session being opened is
+/// checked, so a live session of an agent removed since keeps running, and resuming, restarting or
+/// reopening an existing session never comes here.
+fn refuse_unless_agent_added(state: &Arc<AppState>, agent: Agent) -> Result<()> {
+    match state.store.added_agents()? {
+        Some(added) if !added.contains(&agent) => Err(CodedError::raised(
+            error_code::AGENT_NOT_ADDED,
+            format!(
+                "{} is not added. Add it in Settings → Agent accounts to open a session with it.",
+                agent.label()
+            ),
+            &[("agent", agent.label())],
+        )),
+        _ => Ok(()),
+    }
+}
+
 /// The agent a session is of: an explicit choice wins over the project's default, then the
 /// console's project session default. A console session has no project, so it falls straight
 /// back to the console's console session default.
@@ -5995,6 +6015,94 @@ mod tests {
             Availability::NotDetermined
         );
         assert!(refuse_if_agent_unavailable(&state, Agent::Claude).is_ok());
+    }
+
+    /// A session is opened only on an added agent, wherever the agent comes from: the request's
+    /// own choice or the console's default. An undecided list refuses nothing.
+    #[tokio::test]
+    async fn opening_a_session_is_refused_when_its_resolved_agent_is_not_added() {
+        let (state, _dir) = state_for_opening("coordinator-open-session-agent-not-added");
+        let refused = |err: anyhow::Error, agent: Agent| {
+            let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+            assert_eq!(coded.code, error_code::AGENT_NOT_ADDED);
+            assert_eq!(coded.params["agent"], agent.label());
+            assert!(coded.message.contains("Settings → Agent accounts"));
+        };
+
+        assert!(check_open(&state, &open_request()).await.is_ok());
+        state
+            .store
+            .set_added_agents_if_undecided(&[Agent::Codex])
+            .unwrap();
+
+        // The console's default agent, Claude, is not added.
+        refused(
+            check_open(&state, &open_request()).await.unwrap_err(),
+            Agent::Claude,
+        );
+        let err = open_session(&state, open_request()).await.unwrap_err();
+        refused(err, Agent::Claude);
+        let err = open_session_detached(
+            &state,
+            OpenRequest {
+                agent: Some(Agent::Grok),
+                ..open_request()
+            },
+        )
+        .await
+        .map(|_| ())
+        .unwrap_err();
+        refused(err, Agent::Grok);
+        assert!(state.store.list_sessions().unwrap().is_empty());
+
+        let codex = OpenRequest {
+            agent: Some(Agent::Codex),
+            ..open_request()
+        };
+        assert_eq!(check_open(&state, &codex).await.unwrap(), Agent::Codex);
+    }
+
+    /// A list emptied on purpose is decided, so it refuses every agent.
+    #[tokio::test]
+    async fn an_empty_added_list_refuses_every_agent() {
+        let (state, _dir) = state_for_opening("coordinator-open-session-nothing-added");
+        state.store.set_added_agents_if_undecided(&[]).unwrap();
+        for agent in Agent::ALL {
+            let err = check_open(
+                &state,
+                &OpenRequest {
+                    agent: Some(agent),
+                    ..open_request()
+                },
+            )
+            .await
+            .unwrap_err();
+            let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+            assert_eq!(coded.code, error_code::AGENT_NOT_ADDED);
+        }
+    }
+
+    /// Reopening a session of an agent that has since been removed is not refused for that: its
+    /// settings and its place stay, so it fails here only for its own reason.
+    #[tokio::test]
+    async fn a_reopen_is_not_refused_for_an_agent_that_is_not_added() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-reopen-agent-removed");
+        state
+            .store
+            .set_added_agents_if_undecided(&[Agent::Codex])
+            .unwrap();
+        state
+            .store
+            .insert_session(&Session {
+                ended_at: Some(5),
+                ..project_session("s", Agent::Claude, SessionStatus::Archived)
+            })
+            .unwrap();
+
+        let err = resume_session_with(&state, "s", None, stub_shell(&dir))
+            .await
+            .expect_err("the project's directory does not exist");
+        assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
     }
 
     /// `~` is the home directory of the host the daemon runs on, like every other path it takes.

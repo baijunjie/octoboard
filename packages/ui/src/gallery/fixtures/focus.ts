@@ -2,7 +2,7 @@ import { AGENT_LABEL } from "../../agents";
 import type { Session, SessionUsage } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
-import { consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
+import { ALL_AGENTS, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
 
 const GROUP = "Focus mode";
 
@@ -22,7 +22,7 @@ const hub4 = sessionOf("s-console-4", console_.id, undefined, "Release notes", "
 const settings = {
   auto_pull_repositories: false,
   auto_delete_unresumable_archives: true,
-  added_agents: [], default_clone_dir: "/Users/dev/Projects",
+  added_agents: ALL_AGENTS, default_clone_dir: "/Users/dev/Projects",
   accounts: [{ id: "a-work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }],
 };
 
@@ -480,6 +480,15 @@ export const focusScenarios: Scenario[] = [
     description: "With no sessions or archive, the Show all project sessions switch is absent. The sidebar keeps one compact clickable empty row and the main area offers New session for the focused project.",
   },
   {
+    id: "focus-project-empty-no-agent-added",
+    group: GROUP,
+    category: "exceptional",
+    title: "Project with no sessions yet, no agent added",
+    state: { ...state, settings: { ...settings, added_agents: [] } },
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${freshProject.id}` },
+    description: "The sidebar's compact empty row has no action, the header's \"+\" is disabled, and the main area, under a bot glyph, says no agent is added with an Add agent… button instead of offering New session.",
+  },
+  {
     id: "focus-console-session-empty",
     group: GROUP,
     category: "normal",
@@ -537,6 +546,20 @@ export const focusScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("sidebar.focus.newSession")),
       (ui) => ui.press(third.name),
+    ],
+  },
+  {
+    id: "focus-console-new-session-owner-gone",
+    group: GROUP,
+    category: "exceptional",
+    title: "New session from console focus, the console session archived meanwhile",
+    state: state,
+    preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
+    description: "Reached only when the console session ends under the open dialog (archived from a second window). A danger alert at the top of the dialog body says it is no longer available, so a session cannot be opened for it; the fixed owner line stays and Open is disabled.",
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.focus.newSession")),
+      (ui) => ui.press(third.name),
+      (ui) => ui.archiveSession(hub1.id),
     ],
   },
 ];

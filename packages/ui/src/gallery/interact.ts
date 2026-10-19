@@ -1,8 +1,9 @@
+import { AGENT_OPTIONS } from "../agents";
 import { gitBadgeAriaLabel } from "../gitStatusLabel";
 import { format, type MessageArgs, type MessageKey } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
 import { panelId, type PanelKind } from "../panels/stackState";
-import { DORMANT_STATUSES, LIVE_STATUSES, type GitStatus } from "../protocol";
+import { DORMANT_STATUSES, LIVE_STATUSES, type Agent, type AgentAvailability, type GitStatus } from "../protocol";
 import { activityLabel, statusLabel } from "../sessionLabel";
 import { ACTIVITIES } from "../sidebar/order";
 import type { Daemon } from "../store";
@@ -268,6 +269,15 @@ export interface Ui {
    * starts at `closed` answers no request, so nothing a step would open over it, the file viewer
    * among them, ever lists. */
   dropConnection: () => Promise<void>;
+  /** Changes which agents are added and which are installed while the window shows something, for what only a
+   * state that changes under an open dialog reaches (the last agent removed elsewhere, a tool uninstalled): a
+   * second window, or the machine, did it. Each is left as it was when not given; an agent not in `installed` is
+   * then not installed. */
+  setAgents: (change: { added?: Agent[]; installed?: Agent[] }) => Promise<void>;
+  /** Archives the session `id` while the window shows something, for what only a session that ends under an open
+   * dialog reaches (a console session archived from a second window while a new session was being set up to report
+   * to it). Fails if the window has no such session. */
+  archiveSession: (id: string) => Promise<void>;
 }
 
 /** The icon the git badge draws for `status`, by the name lucide gives its class (`GitBadge.tsx`
@@ -447,6 +457,29 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     async dropConnection() {
       if (!daemon) throw new Error("This scenario has no daemon behind it to drop the connection to");
       daemon.store.setState({ connectionState: "closed" });
+      await wait(300);
+    },
+    async setAgents({ added, installed }) {
+      if (!daemon) throw new Error("This scenario has no daemon behind it to change the agents of");
+      const current = daemon.store.getState();
+      daemon.store.setState({
+        ...(added && { settings: { ...current.settings, added_agents: added } }),
+        ...(installed && {
+          agentAvailability: new Map<Agent, AgentAvailability>(
+            AGENT_OPTIONS.map(({ value: agent }) => [
+              agent,
+              { default_account_dir: `/Users/dev/.${agent}`, ...current.agentAvailability.get(agent), agent, availability: installed.includes(agent) ? "available" : "unavailable" },
+            ]),
+          ),
+        }),
+      });
+      await wait(300);
+    },
+    async archiveSession(id) {
+      if (!daemon) throw new Error("This scenario has no daemon behind it to archive a session of");
+      const session = daemon.store.getState().sessions.get(id);
+      if (!session) throw new Error(`The window has no session ${id} to archive`);
+      daemon.store.setState({ sessions: new Map(daemon.store.getState().sessions).set(id, { ...session, status: "archived", ended_at: Date.now() }) });
       await wait(300);
     },
     async key(key) {

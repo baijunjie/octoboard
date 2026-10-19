@@ -1,15 +1,13 @@
 import { AGENT_LABEL } from "../../agents";
 import type { AccountLogin, Agent, AgentAvailability } from "../../protocol";
 import type { Scenario } from "../scenario";
-import { SAMPLE, minutesAgo, snapshotState } from "./builders";
+import { ALL_AGENTS, SAMPLE, minutesAgo, snapshotState } from "./builders";
+import { noneAddedState } from "./empty";
 import { quotaFailure, quotaOf, quotaWindow } from "./quotas";
 
 const GROUP = "Settings";
 
 const { console: console_, web, api, sessions } = SAMPLE;
-
-/** Every agent, as the list of added agents of a user who has added them all. */
-const ALL_AGENTS: Agent[] = ["claude", "codex", "grok"];
 
 const state = snapshotState({
   consoles: [console_],
@@ -370,7 +368,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab",
-    description: "The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, and Claude Code is open. The default account's name line ends with a small muted \"?\" after Default and its plan chip, with only its config directory beneath. Each account's plan sits beside its name, with its quota windows beneath: a headline with what remains, the countdown at the end of its line and a bar of the same remainder in the agent's colour; the default account lists five-hour quota first, weekly next and Fable last, with no countdown on the model window. Work is spent: 0% remaining, also where use went past 100%. Client has no quota yet and says it is being read. A line under the tab strip describes the approval selector each account has: the default account is set to Automatic, Work to Approve everything and Client follows its account configuration. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place.",
+    description: "The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each as wide as its icon and name and the strip starting at the left edge, and Claude Code is open. The default account's name line ends with a small muted \"?\" after Default and its plan chip, with only its config directory beneath. Each account's plan sits beside its name, with its quota windows beneath: a headline with what remains, the countdown at the end of its line and a bar of the same remainder in the agent's colour; the default account lists five-hour quota first, weekly next and Fable last, with no countdown on the model window. Work is spent: 0% remaining, also where use went past 100%. Client has no quota yet and says it is being read. A line under the tab strip describes the approval selector each account has: the default account is set to Automatic, Work to Approve everything and Client follows its account configuration. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -586,6 +584,18 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
       (ui) => ui.press(ui.t("settings.accounts.addAgent")),
+    ],
+  },
+  {
+    id: "settings-add-agent-from-empty-state",
+    group: GROUP,
+    category: "normal",
+    title: "Add agent, reached from the terminal's empty state",
+    description: "The Add agent… button under \"No agent added\" opens Settings on Agent accounts with the Add agent dialog already in front: all three agents are Installed with their Add buttons, none is Added, and the section behind shows no tabs.",
+    state: noneAddedState,
+    steps: [
+      (ui) => ui.press("Website"),
+      (ui) => ui.press(ui.t("agents.addAction")),
     ],
   },
   {
@@ -875,7 +885,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Add account, agent picker lists only added agents",
-    description: "Claude Code and \"Codex (not installed)\" are listed; Grok Build, installed but not added, is not. Codex is marked but still selectable, unlike the agent pickers elsewhere, because an account may be set up before its agent is installed.",
+    description: "Claude Code and Codex are listed, Codex followed by a grey Not installed badge; Grok Build, installed but not added, is not. Codex is badged but still selectable, unlike the agent pickers elsewhere, because an account may be set up before its agent is installed.",
     state: { ...unavailableQuotaState, settings: { ...unavailableQuotaState.settings!, added_agents: ["claude", "codex"] } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

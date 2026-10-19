@@ -18,6 +18,15 @@ acknowledgement is not queued again: its message, affected session, original dia
 and available daemon code and parameters must all match. Pending errors survive changes between the application's
 screens until acknowledged. Startup and rendering failures use the same acknowledgement flow.
 
+When the last pending alert is acknowledged and keyboard focus has nowhere to return to — the control that had it is
+gone, as when a dialog closed itself before the alert appeared — focus goes to the dialog still open, if any.
+Otherwise it goes to the selected session's terminal. With no session selected, or no console at all, neither the
+terminal's empty panel nor the welcome screen takes it, as neither takes focus while it is on nothing (see "With no
+session selected" in `docs/product/session-terminal.md` and "Keyboard focus" in `docs/product/welcome-screen.md`):
+it goes to the sidebar instead, else, when the sidebar is not shown or has no control to take it, to the rail. Each
+region lands focus where `F6` would (see "Moving focus between regions with F6" in
+`docs/product/moving-focus-between-regions.md`).
+
 A failed page, pane or viewer may also retain its explanation, fallback content and recovery controls after the error
 alert is acknowledged. That durable state remains useful for retrying or inspecting the failure; it does not replace
 the alert. Background states that are not reported as errors, such as the daemon's reconnecting banner, keep their
@@ -28,8 +37,8 @@ own status and recovery presentation.
 The alert distinguishes failures with a known user remedy from unexpected failures. Both use the danger presentation
 and require acknowledgement.
 
-**An actionable failure** includes a specific next step alongside the original reason. References to Retry, Browse and the Settings sections
-appear as inline chips rather than quoted text. For example:
+**An actionable failure** includes a specific next step alongside the original reason. References to controls such as
+Retry, Browse and Unlock appear as inline chips rather than quoted text. For example:
 
 - A full disk asks the user to free space on the disk used by Octoboard and the project, then retry.
 - A locked session asks the user to choose Unlock in that session's action menu, then retry.
@@ -40,6 +49,23 @@ appear as inline chips rather than quoted text. For example:
 
 Known domain failures and recognized operating-system causes provide the remedy. An unfamiliar failure does not get
 generic retry advice merely because it occurred during a familiar operation.
+
+**A remedy that lives in Settings' Agent accounts section has a button** in the footer, a secondary action before the
+acknowledgement button, instead of the step naming where to go:
+
+| Failure | Button | What it opens |
+|---|---|---|
+| The agent is not added (`agent_not_added`) | **Add agent…** | Settings on Agent accounts, with the Add agent dialog in front (see "Adding an agent" in `docs/product/agent-accounts.md`) |
+| An account problem (`unknown_account`, `grok_home_not_initialized`) | **Manage accounts…** | Settings on Agent accounts |
+| The added agents not being as the change expected (`agent_already_added`, `agent_order_invalid`) | **Manage accounts…** | Settings on Agent accounts |
+
+Pressing the button acknowledges the alert and opens Settings there, above whatever dialog was open; when Settings is
+already open, it moves to that section instead (see "Opening and closing Settings" in `docs/product/settings.md`). The
+step in the alert's body then says only what to do, such as adding the agent and trying again.
+
+**A plain alert** says only what happened, with no next step and nothing but its acknowledgement button. It is used
+when a dialog closes itself because what it would choose from went away while it was open (see "Opening a session" in
+`docs/product/sessions.md` and "Handing off from the window" in `docs/product/handing-off-sessions.md`).
 
 **An unexpected failure** explains that it may be a bug the user cannot resolve in the current interface. The alert
 keeps the error explanation and offers expandable diagnostic details when the original message or stack trace adds
@@ -60,5 +86,6 @@ address as a selectable chip for manual use.
 **A batch of failures**, such as account switches or a configuration import, uses one acknowledgement dialog with
 recovery guidance beside each failed item. Each actionable item keeps its own remedy. If any item is unexpected,
 the dialog adds one shared screenshot and Issue-reporting instruction and the same Issue entry or manual address
-described above; it does not replace the other items' remedies with a common instruction. The result or retry controls remain available after
-acknowledgement under the operation's own rules.
+described above; it does not replace the other items' remedies with a common instruction. The footer carries a
+remedy's button (see above) only when every failure in the batch has that same remedy. The result or retry controls
+remain available after acknowledgement under the operation's own rules.

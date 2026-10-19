@@ -14,9 +14,14 @@ the other application settings, so every window shows the same list, and it is n
 "What is not configuration and never travels" in `docs/product/configuration-export-and-import.md`).
 
 The list decides which agents this section shows, and in what order: the agent strip and the Add account form's agent
-picker. Nothing else follows it: the console, project and session dialogs' agent pickers, the rail's account quota
-panel and the menu bar icon's quota submenus list agents by whether they are installed, in the order Claude Code,
-Codex, Grok Build, added or not.
+picker. Every other place that lists agents follows it too, in its order: the console, project, session and handoff
+dialogs' agent pickers and the console dialog's per-agent sections (see "Which agents the agent pickers list" in
+`docs/product/consoles.md`), the rail's account quota panel (see "What the panel shows" in
+`docs/product/account-quotas.md`) and the menu bar icon's quota submenus (see "The icon's menu" in
+`docs/product/menu-bar-icon.md`); so does whether a new session of an agent can be opened, or a session handed off to
+it, at all — from the window or by an agent's tool (see "Opening a session" in `docs/product/sessions.md`). Only this section's Add agent dialog and the welcome screen's supported CLI
+tools list (see "What the welcome screen shows" in `docs/product/welcome-screen.md`) list an agent that was never
+added.
 
 **How the list starts.** The list is decided once, as soon as Octoboard has determined which agents are installed: it
 is filled with every agent that is installed plus every agent the user owns an account of, in the order Claude Code,
@@ -27,13 +32,15 @@ user changes it; a list the user has emptied stays empty.
 **While the list is undecided** — before Octoboard has determined which agents are installed, and for the whole run
 when the user's login shell environment could not be read (until Octoboard next starts) — the section lists every
 agent, in the order Claude Code, Codex, Grok Build. The agents then have no menu and cannot be dragged, the strip has
-no more-actions button, and the Add agent list adds nothing.
+no more-actions button, and the Add agent list adds nothing. Meanwhile every other place that follows the list treats
+every agent as added, in that same order.
 
 ## The agent strip
 
-Each added agent has a tab of its own, in the list's order, each tab showing the agent's icon and name; only the
-selected agent's accounts are shown, in its tab's panel. The agent tabs are an underlined strip, set apart from the
-list of Settings' sections, and scroll sideways when they do not fit. Once the section is scrolled far enough for the
+Each added agent has a tab of its own, in the list's order, each tab showing the agent's icon and name and as wide as
+its content, the tabs starting at the strip's start; only the selected agent's accounts are shown, in its tab's panel.
+The agent tabs are an underlined strip, set apart from the list of Settings' sections, and scroll sideways when they do
+not fit. Once the section is scrolled far enough for the
 strip to reach the top of the section's area, at any window width, the strip stays pinned there, opaque, and the
 accounts scroll beneath it; the top fade then begins below the strip (see "The edge that hides content fades" in
 `docs/product/scrolling-surfaces.md`). The section always opens on the first agent's tab, however it was opened; when
@@ -60,9 +67,16 @@ of every agent, in the order Claude Code, Codex, Grok Build, each with its icon,
 | **Checking…** (not yet determined) | The Add button, unavailable until the agent is found installed. |
 
 While the list is undecided every Add button is unavailable. The dialog stays open after an agent is added, its row
-turning to Added, so several can be added in turn; it closes on its **Close** button. A refused addition — the agent is
-not installed, is already added, or which agents are installed is not determined yet — is shown in an error alert
-(see `docs/product/error-alerts.md`).
+turning to Added, so several can be added in turn; it closes on its **Close** button.
+
+The dialog also opens by itself, in front of Settings, when Settings is opened or navigated from one of the window's
+**Add agent…** buttons (see "Opening and closing Settings" in `docs/product/settings.md`): Settings shows this section
+and the dialog opens over it, holding keyboard focus. It opens once per such request; switching to another section of
+Settings and back does not open it again. When the user closes a dialog opened this way, keyboard focus
+goes to the section's **Add agent** button. A later request for Settings to show a section without this dialog
+closes the dialog, however it was opened, and focus goes to that section's tab. A refused addition — the agent is not
+installed, is already added, or which agents are installed is not determined yet — is shown in an error alert (see
+`docs/product/error-alerts.md`).
 
 ## Reordering and removing an agent
 
@@ -185,8 +199,8 @@ appears (see "Per-agent specifics a user will notice" in `docs/product/launching
 
 One **Add account** button serves every agent: its form asks for the agent, starting on the agent of the tab in view —
 every added agent is listed, in the list's order (every agent while the list is undecided), and can be picked, one that
-is not installed included and labelled as not installed, since an account may be set up before its agent is, unlike
-the agent pickers elsewhere (see "Agents that are not installed" in `docs/product/consoles.md`) — then a name and a
+is not installed included and marked with a Not installed badge after its name, since an account may be set up before its agent is, unlike
+the agent pickers elsewhere (see "Which agents the agent pickers list" in `docs/product/consoles.md`) — then a name and a
 directory, which can be typed or picked with the directory browser (see "Browsing directories" in
 `docs/product/projects.md`). Editing an account offers its name and its directory, never its agent: a directory
 belongs to one agent's layout. The directory is checked for being absolute (or starting with `~/`) and for not being

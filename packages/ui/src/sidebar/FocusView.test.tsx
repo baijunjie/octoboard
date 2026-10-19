@@ -53,7 +53,7 @@ const withTeams = [...sessions, lead, underLead, underFree];
  * project groups read themselves. */
 function mount(render: (handlers: SidebarHandlers) => React.ReactElement, stored: Session[] = [], agentAvailability?: Map<Agent, AgentAvailability>): { text: () => string; container: HTMLElement; handlers: SidebarHandlers; unmount: () => void } {
   const daemon: Daemon = {
-    store: createStateStore({ ...(agentAvailability && { agentAvailability }), sessions: new Map(stored.map((session) => [session.id, session])), settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/p", accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/w" }] } }),
+    store: createStateStore({ ...(agentAvailability && { agentAvailability }), sessions: new Map(stored.map((session) => [session.id, session])), settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/w" }] } }),
     request: vi.fn(),
     toastError: vi.fn(),
     toastNotice: vi.fn(),
@@ -188,16 +188,14 @@ it("with the modifier held, the header's project menu quick-creates for the chos
   unmount();
 });
 
-it("with no agent available, the header's project menu stays a plain \"+\" that opens the dialog while the modifier is held", () => {
+it("with no agent available, the header's project menu is a disabled \"+\" while the modifier is held", () => {
   const { container, handlers, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions} />
   ), sessions, noAgent);
   hold();
   expect(container.querySelector('button[aria-label="New session with defaults"]')).toBeNull();
-  act(() => container.querySelector<HTMLElement>('button[aria-label="New session"]')?.click());
-  const item = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((el) => el.textContent === "Website");
-  act(() => item?.click());
-  expect(handlers.onOpenDialog).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: bound });
+  expect(container.querySelector<HTMLButtonElement>('button[aria-label="New session"]')?.disabled).toBe(true);
+  expect(handlers.onOpenDialog).not.toHaveBeenCalled();
   expect(handlers.onQuickCreateSession).not.toHaveBeenCalled();
   unmount();
 });

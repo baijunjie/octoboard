@@ -7,7 +7,7 @@ import { errorAlerts } from "../errorAlerts";
 import { useLatest } from "../components/useLatest";
 import { AGENT_LABEL } from "../agents";
 import { InlineChip } from "../components/InlineChip";
-import { CodeToneContext } from "../components/codeTone";
+import { ErrorAlert } from "../components/ErrorAlert";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
 import type { Event, ImportChoiceKind, ImportedProject, ImportFailure } from "../protocol";
@@ -181,14 +181,9 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
       {typeof result.settings_applied?.auto_delete_unresumable_archives === "boolean" &&
         settingLine(t("settings.archiveCleanup.label"), result.settings_applied.auto_delete_unresumable_archives)}
       {result.settings_error && (
-        <CodeToneContext.Provider value="danger">
-          <p className="flex items-start gap-2 text-app-danger">
-            <CircleX aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-            <span className="min-w-0">
-              <Message id="configuration.import.result.settings.failed" params={{ reason: failureNode(result.settings_error) }} />
-            </span>
-          </p>
-        </CodeToneContext.Provider>
+        <ErrorAlert>
+          <Message id="configuration.import.result.settings.failed" params={{ reason: failureNode(result.settings_error) }} />
+        </ErrorAlert>
       )}
       {lines.length > 0 && (
         <div className="@container">

@@ -45,10 +45,13 @@ export const en = {
 
   // Shared across the session dialog, the welcome screen and the console dialog's agent rows —
   // anywhere availability (`AgentAvailability`) is shown or acted on.
-  "agents.installPrompt":
-    "{appName} supports Claude Code, Codex and Grok Build. Make sure one of them is on your {pathVar} to open a session.",
   // The sidebar's row for the same state, which has room for a title and nothing else.
   "agents.noneFound": "No agent found on {pathVar}",
+  "agents.noneAdded": "No agent added",
+  "agents.addPrompt": "Add an agent to open a session.",
+  "agents.addAction": "Add agent…",
+  "agents.badge.notAdded": "Not added",
+  "agents.badge.notInstalled": "Not installed",
   "agents.notInstalled": "{agent} (not installed)",
 
   // What a session activity marker stands for, in words and on its own, for the tooltip of every
@@ -82,13 +85,14 @@ export const en = {
   "error.recovery.uniqueName": "Enter an account name that is not already used by another account of this agent, then save again.",
   "error.recovery.launchSetting": "Open the session launch settings and select a model and reasoning effort offered by the selected agent.",
   "error.recovery.accountDirectory": "Choose a different configuration directory, or select the account already using this directory.",
-  "error.recovery.account": "Open {settings} → {accounts}. Select an available account with an accessible configuration directory; run the agent CLI there to log in if needed.",
+  "error.recovery.account": "Select an available account with an accessible configuration directory; run the agent CLI there to log in if needed.",
   "error.recovery.tool": "Install the named agent CLI or Git on the daemon host and make it available in the login shell PATH, then reopen {appName} and retry.",
   "error.recovery.shell": "Open your login shell in Terminal and fix slow or blocked startup commands in its configuration, then retry.",
   "error.recovery.unlock": "Open the affected session’s action menu, choose {unlock}, then retry.",
   "error.recovery.stopSessions": "Archive the running sessions listed above from their action menus, then retry this operation.",
   "error.recovery.availability": "{appName} is still checking which agents are installed. Try again in a moment; if it keeps failing, reopen {appName}.",
-  "error.recovery.addedAgents": "The list of added agents is not as this change expected. Check it in {settings} → {accounts} before changing it again.",
+  "error.recovery.agentNotAdded": "Add the agent, then try again.",
+  "error.recovery.addedAgents": "The list of added agents is not as this change expected. Check it before changing it again.",
   "error.recovery.wait": "Wait for the session's current turn or operation to finish and check its status before retrying.",
   "error.recovery.lostMessages": "Open the session they were meant for, or the one that took over, and check its terminal. Send again anything that did not arrive.",
   "error.recovery.trust": "Open the affected session’s terminal and answer its pending prompt. For folder trust, choose only the project’s folder, then retry.",
@@ -218,6 +222,7 @@ export const en = {
   "daemon.login_codex_busy": "Another Codex account is logging in. Wait for it to finish, then try again.",
   "daemon.login_not_running": "No login is running for this account.",
   "daemon.agent_not_installed": "{agent} is not installed on this machine.",
+  "daemon.agent_not_added": "{agent} is not added, so a session cannot be opened with it.",
   "daemon.agent_already_added": "{agent} is already added.",
   "daemon.agent_availability_pending": "{appName} has not yet determined whether {agent} is installed.",
   "daemon.agent_order_invalid": "The added agents changed meanwhile, so this order could not be saved.",
@@ -420,8 +425,10 @@ export const en = {
   "rail.quota.selected": "Account quota: {agent}, {account}, {quota}",
   "rail.quota.accounts": "Accounts",
   "rail.quota.agents": "Agents",
-  "rail.quota.none": "No agent available",
-  "rail.quota.noneHint": "An agent's quota is shown once its command is found on your {pathVar}.",
+  "rail.quota.none": "No agent added",
+  "rail.quota.noneHint": "Add an agent to see its quota here.",
+  "rail.quota.noneInstalled": "No agent available",
+  "rail.quota.noneInstalledHint": "An agent's quota is shown once its command is found on your {pathVar}.",
   "rail.quota.manage": "Manage accounts…",
   "rail.settings": "Settings",
 
@@ -981,6 +988,7 @@ export const en = {
   "dialog.session.owner": "Report to",
   "dialog.session.ownerNone": "No console session",
   "dialog.session.ownerFixed": "Reports to {name}",
+  "dialog.session.noAgent": "No agent is available to open a session.",
   "dialog.session.ownerGone": "{name} is no longer available, so a session cannot be opened for it.",
   "dialog.rename.title": "Rename session",
   "dialog.rename.field": "Title",

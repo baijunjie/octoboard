@@ -18,7 +18,7 @@ const branch = (name: string): SessionBranchItem => ({
   kind: "branch", repository: "/r", branch: name, path: null, uncommitted: false, project: project.id, session: "s-1", state: "removable", detail: null,
 });
 
-function mount(session: Session, others: Session[] = [], branches: SessionBranchItem[] | "fail" = [], availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {}) {
+function mount(session: Session, others: Session[] = [], branches: SessionBranchItem[] | "fail" = [], availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {}, added: Agent[] | null = null) {
   const sessions = new Map([session, ...others].map((s) => [s.id, s]));
   const initial: Partial<State> = {
     consoles: new Map([[parentConsole.id, parentConsole]]),
@@ -27,6 +27,7 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
   };
   const store = createStateStore(initial);
   store.setState({
+    settings: { ...store.getState().settings, added_agents: added },
     agentAvailability: new Map((Object.entries(availability) as [Agent, AgentAvailability["availability"]][]).map(([agent, state]) => [agent, { agent, availability: state } as AgentAvailability])),
   });
   const request = vi.fn(async (body: { type: string }) => {
@@ -45,7 +46,7 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
     act(() => root.unmount());
     container.remove();
   });
-  return { request, onClose, onHandedOff };
+  return { request, onClose, onHandedOff, toastError: daemon.toastError };
 }
 
 const buttons = () => Array.from(document.body.querySelectorAll("button"));
@@ -86,11 +87,17 @@ it("says the branches could not be checked rather than that nothing moves", asyn
   expect(document.body.querySelector("h3")?.textContent).toBe("Moves to the new session");
 });
 
-it("never offers the session's own agent and is blocked when no other agent can be picked", async () => {
-  const { request } = mount(hub, [], [], { codex: "unavailable", grok: "unavailable" });
+it("closes and reports a plain alert, with no action, when no other agent can be picked", async () => {
+  const { request, onClose, toastError } = mount(hub, [], [], { codex: "unavailable", grok: "unavailable" });
   await settle();
-  expect(document.body.textContent).toContain("No other agent is available to take this session over.");
-  const confirm = buttons().find((b) => b.textContent === "Hand off");
-  expect(confirm?.disabled).toBe(true);
+  expect(onClose).toHaveBeenCalled();
+  expect(toastError).toHaveBeenCalledWith(expect.objectContaining({ message: "No other agent is available to take this session over.", recovery: "none" }));
   expect(request.mock.calls.some(([body]) => body.type === "hand_off_session")).toBe(false);
+});
+
+it("also closes when the only other agents are not added", async () => {
+  const { onClose, toastError } = mount(hub, [], [], { claude: "available", codex: "available", grok: "available" }, ["claude"]);
+  await settle();
+  expect(onClose).toHaveBeenCalled();
+  expect(toastError).toHaveBeenCalledOnce();
 });

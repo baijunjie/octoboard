@@ -125,7 +125,7 @@ listed first and preselected for a new project (a parent directory preselects "D
 agent the console's default for project sessions currently resolves to — the console's default for console sessions
 while the one for project sessions is unset — shown with that agent's icon dimmed, or is a bare "Inherit from console"
 when the console is not known. Choosing a specific agent stores it as the project's own default. The agents listed
-follow "Agents that are not installed" in `docs/product/consoles.md`.
+follow "Which agents the agent pickers list" in `docs/product/consoles.md`.
 
 Associating a project with no default agent given looks at the directory's top level once and stores the agent it is
 set up for as the project's own default, shown and editable in Project settings like any chosen one. For a single

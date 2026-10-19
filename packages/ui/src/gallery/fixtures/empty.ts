@@ -18,6 +18,22 @@ const NO_AGENTS = new Map<Agent, AgentAvailability>([
   ["grok", { agent: "grok", availability: "unavailable", default_account_dir: "/Users/dev/.grok" }],
 ]);
 
+/** Every agent is on the machine's PATH. */
+const ALL_INSTALLED = new Map<Agent, AgentAvailability>(
+  (["claude", "codex", "grok"] as const).map((agent) => [agent, { agent, availability: "available", default_account_dir: `/Users/dev/.${agent}` }]),
+);
+
+/** A console with a project and a leftover console session, every agent installed and none added. */
+export const noneAddedState = {
+  ...snapshotState({
+    consoles: [consoleOf("c-1", "Main")],
+    projects: [projectOf("p-1", "c-1", "Website")],
+    sessions: [sessionOf("s-hub", "c-1", undefined, "Hub", "interrupted")],
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts: [] },
+  }),
+  agentAvailability: ALL_INSTALLED,
+} satisfies Scenario["state"];
+
 export const emptyScenarios: Scenario[] = [
   {
     id: "empty-no-consoles",
@@ -52,7 +68,7 @@ export const emptyScenarios: Scenario[] = [
     category: "exceptional",
     title: "A console, no agent installed",
     description:
-      "Under Console sessions the row says no agent was found on PATH and the section's New console session is disabled; the console session left over from before still shows beneath it. The project below keeps its own empty row. Modifier: Held changes nothing here: with no agent to create with, the project's \"+\" stays plain and opens the dialog.",
+      "Under Console sessions the row says no agent was found on PATH and the console header's \"+\" (New console session) is disabled; the console session left over from before still shows beneath it. Website's \"No sessions yet\" row has no action, and the project's \"+\", which a hover over its row reveals, is disabled too. The main area says the same as the row, with no button. Modifier: Held changes nothing here.",
     state: {
       ...snapshotState({
         consoles: [consoleOf("c-1", "Main")],
@@ -61,6 +77,16 @@ export const emptyScenarios: Scenario[] = [
       }),
       agentAvailability: NO_AGENTS,
     },
+    steps: [(ui) => ui.press("Website")],
+  },
+  {
+    id: "empty-console-no-agent-added",
+    group: "Sidebar sessions",
+    category: "exceptional",
+    title: "A console, agents installed but none added",
+    description:
+      "Under Console sessions the row says \"No agent added\" with nothing about PATH, and the console header's \"+\" (New console session) is disabled; the console session left over from before still shows beneath it. Website's \"No sessions yet\" row has no action, and the project's \"+\", which a hover over its row reveals, is disabled too. The row carries a bot glyph. With Website selected, the main area has a bot glyph too, says the same and asks for an agent to be added, with an Add agent… button beneath that opens Settings → Agent accounts.",
+    state: noneAddedState,
     steps: [(ui) => ui.press("Website")],
   },
   {

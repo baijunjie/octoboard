@@ -1,6 +1,9 @@
 import type { AccountQuota, Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionBranchItem, SessionBranchState, SessionStatus, Settings, ShellTerminal } from "../../protocol";
 import type { SessionRequest, State, TrustPrompt } from "../../store";
 
+/** Every agent, as the list of added agents of a user who has added them all (in the default order). */
+export const ALL_AGENTS: Agent[] = ["claude", "codex", "grok"];
+
 const NOW = Date.now();
 
 /** An instant `minutes` before the page loaded, in the milliseconds the protocol uses. */

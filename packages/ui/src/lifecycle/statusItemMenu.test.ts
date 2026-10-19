@@ -17,7 +17,7 @@ const projects = [projectOf("p", "c", "Alpha")];
 const NOW = Date.UTC(2026, 9, 19, 12);
 const MINUTE = 60_000;
 
-const NO_QUOTA: StatusItemQuotaSource = { language: "en", now: NOW, accounts: [], agentAvailability: new Map(), accountQuotas: [] };
+const NO_QUOTA: StatusItemQuotaSource = { language: "en", now: NOW, accounts: [], addedAgents: null, agentAvailability: new Map(), accountQuotas: [] };
 
 const menuOf = (sessions: Session[], quota: StatusItemQuotaSource = NO_QUOTA) =>
   buildStatusItemMenu(t, {
@@ -136,6 +136,17 @@ describe("buildStatusItemMenu quota submenus", () => {
   it("has one submenu per available agent, in the agents' usual order", () => {
     const menu = menuOf([], source({ agentAvailability: available("grok", "claude") }));
     expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["Claude quota", "Grok quota"]);
+  });
+
+  it("has a submenu only for added agents, in the order they were added", () => {
+    const menu = menuOf([], source({ addedAgents: ["grok", "claude"], agentAvailability: available("claude", "codex", "grok") }));
+    expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["Grok quota", "Claude quota"]);
+    expect(menuOf([], source({ addedAgents: [], agentAvailability: available("claude") })).submenus).toEqual([]);
+  });
+
+  it("still leaves out an added agent that is not available", () => {
+    const menu = menuOf([], source({ addedAgents: ["codex", "claude"], agentAvailability: available("claude") }));
+    expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["Claude quota"]);
   });
 
   it("names each submenu's mark by the key a session line of that agent uses", () => {

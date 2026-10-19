@@ -1,7 +1,7 @@
 import { ActionableError } from "../errorRecovery";
 import { useRef } from "react";
 
-import { noAgentAvailable } from "../agents";
+import { noAgentState } from "../agents";
 import { useLatest } from "../components/useLatest";
 import { errorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
@@ -33,7 +33,7 @@ export function useQuickCreateSession(
     const { sessions, settings, agentAvailability } = store.getState();
     const project = target.kind === "new-session" ? target.project : undefined;
     const binding = target.kind === "new-session" ? target.binding : { kind: "unbound" as const };
-    if (noAgentAvailable(agentAvailability)) return;
+    if (noAgentState(agentAvailability, settings.added_agents)) return;
     if (binding.kind === "bound") {
       // An owner that is no longer live cannot take a session, and there is no dialog to say so.
       const owner = sessions.get(binding.to.id) ?? binding.to;
@@ -44,7 +44,7 @@ export function useQuickCreateSession(
     }
     const startedIn = latestConsoleId.current;
     pending.current = true;
-    request(defaultOpenSessionRequest(t, target.console, project, binding, settings.accounts, agentAvailability))
+    request(defaultOpenSessionRequest(t, target.console, project, binding, settings.accounts, agentAvailability, settings.added_agents))
       .then((reply) => {
         if (reply.type === "session_opened" && latestConsoleId.current === startedIn) onOpened(reply.session.id);
       })

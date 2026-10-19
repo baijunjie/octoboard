@@ -19,17 +19,19 @@ const REVEAL_START_MS = 64;
 const REVEAL_QUIET_MS = 100;
 
 /** The underline strip of agent tabs, one per agent in `agents`, for the `Tabs` it sits in: each tab
- * the agent's icon and name, and the strip scrolls with its edge labels when the tabs do not fit.
- * Its container takes `className` and the other props of `Tabs.ListContainer`. `tabRef` gives a
- * tab's element a ref callback, for the one a caller means to focus. `notInstalledTip` marks the agents
- * that are not installed: it returns the tooltip content for such an agent and nothing for any other.
- * That agent's tab gets a warning glyph after its name, "not installed" in its accessible name, and the
- * tooltip over the tab, opened by pointer hover and by keyboard focus (see `AgentTab`). With `onReorder` the
- * tabs can be dragged with a mouse or pen, and it is called with the whole new order and the agent moved when one is
- * dropped elsewhere; the order itself stays the caller's, and the tabs fall back to `agents` until it changes, so the
- * caller shows the new order at once. `trailing` is a control at the end of the strip. It sits flush with the
- * container's end, where a row's actions button of the section beneath ends, so the two columns of buttons line up. The container is padded at its end so the tabs
- * scroll clear of it, and HeroUI's scroll-forward chevron, which would sit under it, is moved to just before it. */
+ * the agent's icon and name at its content's width, from the strip's start, and the strip scrolls with
+ * its edge labels when the tabs do not fit. Its container takes `className` and the other props of
+ * `Tabs.ListContainer`. `tabRef` gives a tab's element a ref callback, for the one a caller means to
+ * focus. `notInstalledTip` marks the agents that are not installed: it returns the tooltip content for
+ * such an agent and nothing for any other. That agent's tab gets a warning glyph after its name, "not
+ * installed" in its accessible name, and the tooltip over the tab, opened by pointer hover and by
+ * keyboard focus (see `AgentTab`). With `onReorder` the tabs can be dragged with a mouse or pen, and it
+ * is called with the whole new order and the agent moved when one is dropped elsewhere; the order itself
+ * stays the caller's, and the tabs fall back to `agents` until it changes, so the caller shows the new
+ * order at once. `trailing` is a control at the end of the strip. It sits flush with the container's
+ * end, where a row's actions button of the section beneath ends, so the two columns of buttons line up.
+ * The container is padded at its end so the tabs scroll clear of it, and HeroUI's scroll-forward
+ * chevron, which would sit under it, is moved to just before it. */
 export function AgentTabList({
   agents,
   label,
@@ -177,7 +179,7 @@ function AgentTab({ agent, tabRef, notInstalledTip, elements, onDragStart }: {
         setHasFocus(false);
         setFocusCount((count) => count + 1);
       }}
-      className="scroll-mx-1.5 gap-2 whitespace-nowrap hover:text-foreground hover:opacity-100"
+      className="w-auto flex-none scroll-mx-1.5 gap-2 whitespace-nowrap hover:text-foreground hover:opacity-100"
     >
       <AgentIcon agent={agent} />
       {AGENT_LABEL[agent]}

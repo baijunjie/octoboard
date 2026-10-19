@@ -39,11 +39,12 @@ export function defaultOpenSessionRequest(
   binding: NewSessionBinding,
   accounts: Account[],
   agentAvailability: Map<Agent, AgentAvailability>,
+  added: Agent[] | null,
 ): OpenSessionRequest {
   return openSessionRequest(t, {
     console: parentConsole,
     project,
     ownerId: binding.kind === "bound" ? binding.to.id : undefined,
-    choice: initialChoice(parentConsole, project, accounts, agentAvailability),
+    choice: initialChoice(parentConsole, project, accounts, agentAvailability, added),
   });
 }

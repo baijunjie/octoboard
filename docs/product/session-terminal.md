@@ -288,10 +288,14 @@ scope:
     with no creation button.
   - With **a console session that is not archived and no projects**, it offers **Add project**, opening the ordinary
     new-project dialog. The explanation also tells the user they can ask a console session to create a project for them.
-- **When all supported agents are known to be unavailable**, an otherwise offered **New session** or **New console
-  session** is replaced by an explanation that no agent was found and how to make one available, with no creation
-  button. Availability that has not yet been determined does not prevent either offer. The **Add project** offer and
-  the panel asking for a session to be selected do not depend on agent availability.
+- **When no agent is both added and installed** (see "Opening a session" in `docs/product/sessions.md`), an otherwise
+  offered **New session** or **New console session** is replaced by what is missing. When an installed agent waits
+  to be added, the panel carries the bot icon, says that no agent is added and that one is to be added to open a
+  session, and offers **Add agent…**, which opens Settings on its Agent accounts section with the Add agent dialog in
+  front (see "Opening and closing Settings" in `docs/product/settings.md`). Otherwise it carries a warning icon, says
+  that no agent was found and how to make one available, and offers no button. An added agent whose availability has not yet
+  been determined does not prevent either offer. The **Add project** offer and the panel asking for a session to be
+  selected do not depend on the agents.
 - In a project's focus mode with a session that is not archived in its applicable list, or in a console session's
   focus mode, the panel asks for a session to be selected instead. A console session in focus is itself selectable
   even with no bound sessions.

@@ -26,7 +26,7 @@ interface UseStatusItemMenuOptions {
  * while open, so what that brings lands in the menu's next update.
  *
  * It follows the store through a subscription of its own rather than through props, so the menu is
- * rebuilt on each change of the consoles, projects, sessions, accounts, availability or quotas
+ * rebuilt on each change of the consoles, projects, sessions, accounts, added agents, availability or quotas
  * without rendering anything.
  */
 export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, onSessionChosen }: UseStatusItemMenuOptions): void {
@@ -51,7 +51,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         consoleMap: consoles,
         projectMap: projects,
         // Countdowns are as of this push; the menu is not rebuilt for the clock alone.
-        quota: { language, now: Date.now(), accounts: settings.accounts, defaultAccountNames: settings.default_account_names, agentAvailability, accountQuotas },
+        quota: { language, now: Date.now(), accounts: settings.accounts, addedAgents: settings.added_agents, defaultAccountNames: settings.default_account_names, agentAvailability, accountQuotas },
       });
       const serialized = JSON.stringify(draft);
       if (serialized === lastSentRef.current) return;
@@ -71,6 +71,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         state.projects !== previous.projects ||
         state.sessions !== previous.sessions ||
         state.settings.accounts !== previous.settings.accounts ||
+        state.settings.added_agents !== previous.settings.added_agents ||
         state.settings.default_account_names !== previous.settings.default_account_names ||
         state.agentAvailability !== previous.agentAvailability ||
         state.accountQuotas !== previous.accountQuotas

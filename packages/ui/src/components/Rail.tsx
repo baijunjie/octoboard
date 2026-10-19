@@ -147,7 +147,7 @@ interface RailProps extends ConsoleMenuHandlers {
   onNextWaiting: () => void;
   onOpenSettings: () => void;
   /** Opens Settings on a section, as the quota panel's way into the accounts one. */
-  onOpenSettingsAt: (section: SettingsSectionId) => void;
+  onOpenSettingsAt: (section: SettingsSectionId, options?: { addAgent?: boolean }) => void;
   /** Where focus goes when a control that held it goes away (the notifications bell). */
   focusTerminal: () => void;
 }

@@ -1163,6 +1163,30 @@ pub(super) mod tests {
         assert!(err.to_string().contains("Claude Code"), "{err}");
     }
 
+    /// An agent that is not added is refused to an agent's own `new_session` and `request_session`
+    /// alike, the latter before the user is asked.
+    #[tokio::test]
+    async fn an_agent_that_is_not_added_is_refused_to_new_session_and_request_session() {
+        let (state, _dir) = shared_console_state("new-session-agent-not-added");
+        state
+            .store
+            .set_added_agents_if_undecided(&[Agent::Codex])
+            .unwrap();
+        let brief = json!({ "brief": { "goal": "do the thing" }, "agent": "claude" });
+        let mut new = arguments(brief.clone());
+        new.insert("project".to_string(), json!("project-1"));
+        let mut request = arguments(brief);
+        request.insert("kind".to_string(), json!("project"));
+        request.insert("project".to_string(), json!("project-1"));
+
+        for (tool, args) in [("new_session", new), ("request_session", request)] {
+            let err = call(&state, "a", tool, &args).await.expect_err("refused");
+            assert!(err.to_string().contains("is not added"), "{tool}: {err}");
+            assert!(err.to_string().contains("Agent accounts"), "{tool}: {err}");
+            assert!(!state.session_requests.is_waiting_for("a"));
+        }
+    }
+
     /// A session request is refused before the user is asked whenever the same call to
     /// `new_session` would be, and so is one whose arguments do not say where the session would
     /// be.

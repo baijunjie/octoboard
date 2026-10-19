@@ -1,7 +1,8 @@
 # 04 Final confirmation
 
 > Goal: confirm with real agents and assistive technology what the earlier milestones could only test with fakes.
-> Completion criteria: every item below is confirmed by the user on an installed build that contains milestones 01–03,
+> Completion criteria: every item below is confirmed on an installed build that contains milestones 01–03 — by an
+> agent session where it can, by the user where it needs them —
 > and any defect found is fixed here.
 
 ## To confirm
@@ -16,6 +17,15 @@
       announcement once a login succeeds.
 - [ ] In the real app window, focus lands where it should when the login dialog's state changes and when it closes, and
       after Move later in the agent tab menu.
+- [ ] The menu bar icon's native menu (not shown in the gallery, covered only by unit tests): its quota submenus list
+      only agents that are added and available, in the added order; a live session whose agent was removed keeps its
+      quota capsule.
+- [ ] In the real app window, focus after: an "Add agent…" button opening Settings on the Add agent dialog and that
+      dialog closing; an error alert's footer recovery button opening or navigating Settings; a session or handoff
+      dialog closing itself because no agent is left and its alert being acknowledged; closing Settings opened over
+      another dialog. Dragging an agent tab to reorder it still works now that tabs take their content width.
+- [ ] VoiceOver reads an agent's status badge with its name ("Codex, Not added") in pickers, the console dialog's
+      account rows and its Advanced tabs.
 
 ## Notes for the developer
 

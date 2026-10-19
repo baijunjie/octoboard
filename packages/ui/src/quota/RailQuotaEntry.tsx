@@ -1,13 +1,13 @@
 import { Button, Popover, Tabs } from "@heroui/react";
-import { Gauge, KeyRound } from "lucide-react";
+import { Bot, Gauge, KeyRound } from "lucide-react";
 import React, { useEffect, useId, useRef, useState } from "react";
 import { useFocusVisible, type PressEvent } from "react-aria";
 
-import { accountsByAgent, defaultAccountName } from "../agents";
+import { accountsByAgent, defaultAccountName, noAgentState, pickableAgents } from "../agents";
+import { PATH_VAR_PARAMS } from "../components/literalParams";
 import { AgentTabList } from "../components/AgentTabList";
 import { ChromeButton } from "../components/ChromeButton";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { PATH_VAR_PARAMS } from "../components/literalParams";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 import { useStableHandler } from "../components/useLatest";
@@ -34,7 +34,7 @@ function insideAny(target: EventTarget | null, ...elements: Array<Element | null
 }
 
 /** The rail's quota button and the floating panel it anchors, which lists the accounts of each
- * available agent with their plan and quota (see "The account quota panel on the rail" in
+ * agent that is added and installed, in the order they were added, with their plan and quota (see "The account quota panel on the rail" in
  * `docs/product/account-quotas.md`).
  *
  * The panel has two modes. Resting the mouse on the button, or on the panel, shows it and leaving
@@ -46,7 +46,7 @@ function insideAny(target: EventTarget | null, ...elements: Array<Element | null
  * asks the daemon to refresh the quotas that are due. */
 export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   selectedSessionId?: string;
-  onOpenSettingsAt: (section: SettingsSectionId) => void;
+  onOpenSettingsAt: (section: SettingsSectionId, options?: { addAgent?: boolean }) => void;
 }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
@@ -219,6 +219,10 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
               close();
               onOpenSettingsAt("accounts");
             }}
+            onAddAgent={() => {
+              close();
+              onOpenSettingsAt("accounts", { addAgent: true });
+            }}
           />
         </div>
       </Popover.Content>
@@ -226,33 +230,45 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   );
 }
 
-/** The panel's contents: one tab per available agent, each listing the agent's accounts, and the
+/** The panel's contents: one tab per agent that is added and installed, in the order they were added, each listing the agent's accounts, and the
  * way into Settings' accounts section. */
-function QuotaPanel({ focusSelectedTab, onOpenAccounts }: { focusSelectedTab: boolean; onOpenAccounts: () => void }): React.ReactElement {
+function QuotaPanel({ focusSelectedTab, onOpenAccounts, onAddAgent }: { focusSelectedTab: boolean; onOpenAccounts: () => void; onAddAgent: () => void }): React.ReactElement {
   const t = useT();
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const availability = useDaemonStore((s) => s.agentAvailability);
   const [chosen, setChosen] = useState<Agent>();
   // The tab elements exist only after the tabs have built their collection, so focus is given as
   // the selected one mounts, once.
   const focused = useRef(false);
-  const available = accountsByAgent(accounts).filter(({ agent }) => availability.get(agent)?.availability === "available");
-  const selected = available.find(({ agent }) => agent === chosen)?.agent ?? available[0]?.agent;
+  const listed = accountsByAgent(accounts, pickableAgents(availability, addedAgents));
+  const selected = listed.find(({ agent }) => agent === chosen)?.agent ?? listed[0]?.agent;
   const focusOnce = (tab: HTMLElement | null) => {
     if (!tab || focused.current) return;
     focused.current = true;
     tab.focus();
   };
+  const root = useRef<HTMLDivElement>(null);
+  // With no tab to take it, a keyboard pin's focus goes to the first button of the panel: Add agent, or the
+  // link to Settings' accounts.
+  useEffect(() => {
+    if (focusSelectedTab && selected === undefined) root.current?.querySelector("button")?.focus();
+  }, []);
+  const noAgents = noAgentState(availability, addedAgents);
   return (
-    <div className="flex flex-col">
+    <div ref={root} className="flex flex-col">
       {selected === undefined ? (
         <div className="p-4">
-          <EmptyPanel icon={Gauge} message={t("rail.quota.none")} description={<Message id="rail.quota.noneHint" params={PATH_VAR_PARAMS} />} />
+          {noAgents === "add" ? (
+            <EmptyPanel icon={Bot} message={t("rail.quota.none")} description={t("rail.quota.noneHint")} action={{ label: t("agents.addAction"), onPress: onAddAgent }} />
+          ) : (
+            <EmptyPanel icon={Gauge} message={t("rail.quota.noneInstalled")} description={<Message id="rail.quota.noneInstalledHint" params={PATH_VAR_PARAMS} />} />
+          )}
         </div>
       ) : (
         <Tabs variant="secondary" selectedKey={selected} onSelectionChange={(key) => setChosen(key as Agent)}>
           <AgentTabList
-            agents={available.map(({ agent }) => agent)}
+            agents={listed.map(({ agent }) => agent)}
             label={t("rail.quota.agents")}
             tabRef={(agent) => (focusSelectedTab && agent === selected ? focusOnce : undefined)}
             className="groove-b"
@@ -263,18 +279,21 @@ function QuotaPanel({ focusSelectedTab, onOpenAccounts }: { focusSelectedTab: bo
               tab's panel therefore stands in this one grid cell, which is as tall as the tallest list
               the scroll limit allows, and the cell carries the padding the panels go without. */}
           <div className="grid grid-cols-1 py-2">
-            {available.map(({ agent, accounts: owned }) => (
+            {listed.map(({ agent, accounts: owned }) => (
               <AgentPanel key={agent} agent={agent} owned={owned} />
             ))}
           </div>
         </Tabs>
       )}
-      <div className="groove-t flex justify-end p-2">
-        <Button size="sm" variant="ghost" className="text-app-muted hover:text-foreground data-[focus-visible=true]:text-foreground" preventFocusOnPress onPress={onOpenAccounts}>
-          <KeyRound aria-hidden="true" className="size-4 shrink-0" />
-          {t("rail.quota.manage")}
-        </Button>
-      </div>
+      {/* The empty state that asks to add an agent has that button already; this link would say the same. */}
+      {!(selected === undefined && noAgents === "add") && (
+        <div className="groove-t flex justify-end p-2">
+          <Button size="sm" variant="ghost" className="text-app-muted hover:text-foreground data-[focus-visible=true]:text-foreground" preventFocusOnPress onPress={onOpenAccounts}>
+            <KeyRound aria-hidden="true" className="size-4 shrink-0" />
+            {t("rail.quota.manage")}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

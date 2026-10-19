@@ -32,6 +32,7 @@ import { GitBadge } from "./GitBadge";
 import { projectMenu } from "./menus";
 import { NewSessionButton } from "./NewSessionButton";
 import { NewSessionMenu } from "./NewSessionMenu";
+import { useNoAgentToStart } from "./useNewSessionMode";
 import { SessionActions } from "./SessionActions";
 import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroupRows, focusGroups, liveSessionRows, type NestedSession, notUnderConsoleSession, switchStrip, type SwitchStripEntry } from "./order";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
@@ -121,6 +122,7 @@ export function ProjectFocusView({
   const archived = archivedSessions(sessions);
   const archiveContext = [...sessions, ...owners.values()];
   const elsewhere = boundElsewhere(sessions, owners);
+  const noAgentToStart = useNoAgentToStart();
   const newSession = (): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "unbound" } });
   const viewAll = () => handlers.onOpenArchive({ console: project.console_id, project: project.id });
   const headerRef = useRef<HTMLDivElement>(null);
@@ -174,7 +176,7 @@ export function ProjectFocusView({
               compact
               icon={MessageSquarePlus}
               message={t("sidebar.noSessions")}
-              action={{ label: t("sidebar.project.openSession"), onPress: () => handlers.onOpenDialog(newSession()) }}
+              action={noAgentToStart ? undefined : { label: t("sidebar.project.openSession"), onPress: () => handlers.onOpenDialog(newSession()) }}
             />
           ) : (
             // The padding covers the cards' shadow so the opaque sticky headings do not paint over it.

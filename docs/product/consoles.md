@@ -31,24 +31,41 @@ The console dialog, at most 768 px wide, shows both in one **Default agent** gro
 and **Project sessions**, under a note that a project with its own default agent uses that instead. The two fields sit
 side by side in two equal columns, one under the other in a window narrower than 768 px; each field's name sits above
 its picker, which spans the width of its column. Each field takes one of the three supported agents (Claude Code, Codex,
-Grok Build). Console sessions starts on Claude Code in the creation form — or, once Claude Code is determined
-unavailable, on the first of the others that is not, so it never starts on an agent that cannot be chosen. Project
-sessions starts on its first entry, **Same as console sessions**, which names the agent the Console sessions field
-currently holds, with that agent's icon dimmed, and follows that field as it changes; the agents themselves come after
-it. Changing one field never moves the other. Which agents the two fields list is in "Agents that are not installed"
-below.
+Grok Build). Console sessions starts on Claude Code in the creation form — or, when Claude Code cannot be picked
+(see "Which agents the agent pickers list" below), on the first added agent that can, so it never starts on an agent
+that cannot be chosen. Project sessions starts on its first entry, **Same as console sessions**, which names the agent
+the Console sessions field currently holds, with that agent's icon dimmed, and follows that field as it changes; the
+agents themselves come after it. Changing one field never moves the other. Which agents the two fields list is in "Which agents the agent pickers
+list" below.
 
 Multiple consoles can exist side by side and are independent of each other.
 
-## Agents that are not installed
+## Which agents the agent pickers list
 
-An agent is **not installed** once Octoboard has determined it unavailable: its binary does not resolve on the user's
-login shell `PATH`. Every agent picker — the console dialog's two Default agent fields, the project dialog's Default
-agent field and the session dialog's Agent field — leaves such an agent out, with one exception: the value the picker
-currently holds. An agent already stored or chosen that is not installed stays shown and selected, labelled as not
-installed, and cannot be picked again; it drops out of the list as soon as the picker moves to another entry. Before
-availability has been determined, every agent is listed and can be picked. The console dialog's Agent default accounts
-section follows the same rule (see "Agent config directories" below).
+An agent can be **picked** when it is added (see "Added agents" in `docs/product/agent-accounts.md`) and installed. An
+agent is **not installed** once Octoboard has determined it unavailable: its binary does not resolve on the user's
+login shell `PATH`; until availability has been determined, an agent counts as installed.
+
+Every agent picker — the console dialog's two Default agent fields, the project dialog's Default agent field, the
+session dialog's Agent field and the handoff dialog's Hand off to field (see "Handing off from the window" in
+`docs/product/handing-off-sessions.md`) — lists the agents that can be picked, in the order of the added agents, and
+leaves every other agent out, with one exception: the value the picker currently holds. An agent already stored or
+chosen that cannot be picked stays shown and selected, after the agents that can be, marked as not installed when it
+is not installed and otherwise as not added, and cannot be picked again; it drops out of the list as soon as the picker
+moves to another entry.
+
+The mark is a small grey badge after the agent's name, reading **Not installed** or **Not added**, both in the picker's
+list and on the picker while it holds that agent. The badge never shrinks: when room runs short, the name gives way
+first. Where an agent picker is joined to an account picker, a held agent carrying a badge keeps the width its name and
+badge need, up to 70 % of the pair, and the account picker takes what is left. Assistive technology reads the badge as
+part of the agent's name, set apart from it by a pause.
+
+The console dialog's per-agent sections — its Agent default accounts rows (see "Agent config directories" below) and
+its Advanced options agent tabs (see "The Advanced section" in `docs/product/model-and-reasoning-effort.md`) — follow
+the same rule: one entry per agent that can be picked, in the order of the added agents, and an agent that cannot be
+picked only while the console still holds a value for it, marked with the same badge after its name. Several such
+agents come after the ones that can be picked, the added ones first in the order of the added agents, then the others
+in the order Claude Code, Codex, Grok Build.
 
 Settings' Add account form is the deliberate exception, and lists every added agent, installed or not (see "Adding,
 editing and removing an account" in `docs/product/agent-accounts.md`).
@@ -119,23 +136,27 @@ Each agent's config directory is where that agent keeps its own configuration, l
 How each agent is pointed at its directory is in "The launch environment" and "Per-agent specifics a user will notice"
 in `docs/product/launching-agents.md`.
 
-The console dialog sets them in its **Agent default accounts** section, one row per agent, each headed by the agent's
-icon and name, apart from the Default agent group: every agent's account is shown and set there, whichever agents the
-console's sessions default to. A note under the section's title says that every session of an agent in the console
-uses that agent's account here, unless a project or the session picks another. The agents' names share one column,
-their controls starting in line beside them; in a narrow window each name sits above its control.
+The console dialog sets them in its **Agent default accounts** section, one row per agent that can be picked, in the
+order of the added agents (see "Which agents the agent pickers list" above), each headed by the agent's icon and name,
+apart from the Default agent group: each listed agent's account is shown and set there, whichever agents the console's
+sessions default to. With no row to show, the section is left out. A note under the section's title says that every
+session of an agent in the console uses that agent's account here, unless a project or the session picks another. The
+rows sit on the same two columns as the Default agent group's two fields above: the agent's name where the Console
+sessions field is, its account picker where the Project sessions field is, spanning that column's width; in a window
+narrower than 768 px each name sits above its picker.
 
-- Every agent's row has a picker of its accounts, the default account first, at most 320 px wide rather than spanning
-  the row. An agent with no account of its own still has the picker, with the default account as its one option:
+- Every agent's row has a picker of its accounts, the default account first. An agent with no account of its own still
+  has the picker, with the default account as its one option:
   under the name the user gave the default account (see "The default account" in `docs/product/agent-accounts.md`),
   else as "Default account".
 - Beside the section's title, where a "?" help tip would sit, an icon-only **Manage accounts** button (a key) opens
   Settings on its Agent accounts section, above the console dialog, which stays open beneath with its unsaved edits.
   Its tooltip and the name announced for it are both "Manage accounts". When Settings closes, keyboard focus returns
   to the button.
-- An agent that is not installed (see "Agents that are not installed" above) has no row, except while the console pins
-  a named account for it: that row stays, its agent labelled as not installed, until it is moved to the agent's default
-  account. Before availability has been determined every agent has a row.
+- An agent that cannot be picked (see "Which agents the agent pickers list" above) has no row, except while the
+  console pins a named account for it: that row stays, dimmed — the agent's name in the secondary text colour and its
+  icon faded — with the Not installed or Not added badge after the name, until it is moved to the agent's default
+  account. Its picker's accessible description says which of the two the agent is.
 
 No account is unpickable for its directory being missing.
 

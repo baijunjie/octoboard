@@ -79,12 +79,12 @@ it("quick-creates on a press carrying the modifier even when the key state was m
   expect(onOpen).not.toHaveBeenCalled();
 });
 
-it("stays a plain, enabled \"+\" that opens the dialog, even on a modified press, with no agent available", () => {
+it("is a disabled \"+\" that opens nothing, even on a modified press, with no agent added and installed", () => {
   const { button, key, click, onOpen, onQuickCreate } = mount({ agentAvailability: noAgent });
   key("keydown", true);
   expect(button().getAttribute("aria-label")).toBe("New session");
-  expect(button().disabled).toBe(false);
+  expect(button().disabled).toBe(true);
   click(MODIFIER);
-  expect(onOpen).toHaveBeenCalledWith(request);
+  expect(onOpen).not.toHaveBeenCalled();
   expect(onQuickCreate).not.toHaveBeenCalled();
 });

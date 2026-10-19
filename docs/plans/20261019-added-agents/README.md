@@ -41,6 +41,16 @@ installed, as if something were wrong. Not having an agent is a normal choice, n
 - **The added agents can be reordered** in Settings → Agent accounts, and that order is the order agents appear in
   everywhere: the Settings agent strip, the Add account picker, the console, project and session dialogs' pickers
   and the rail quota panel. A newly added agent goes last.
+- **The rail quota panel and the menu bar's quota submenus list the agents that are added and installed**, in the
+  added order.
+- **New-session gating counts only agents that are added and installed.** When agents are installed but none is added,
+  the hint points to Settings → Agent accounts instead of to installing an agent.
+- **A live session of a removed agent keeps its quota bar** (the rail's selected-session bar and the menu bar's opener
+  bar): the bar belongs to the session, which keeps running.
+- **The daemon refuses to open a session, or hand off, to an agent that is not added**, wherever the session is
+  opened: the window, an agent's `new_session` and `request_session` tools and `hand_off_session`, checked against the
+  resolved agent like an unavailable one. It refuses nothing while the added list is undecided, and never touches a
+  live session or the resume, restart or reopen of an existing one. The refusal points to Settings → Agent accounts.
 - **Settings controls** (decided at the start of 02): Remove agent sits in the agent tab's context / more menu;
   Add agent is a dialog listing every agent with its installed status and a link to that agent's official install
   instructions (Octoboard writes no install instructions of its own); reordering is by dragging tabs, with Move earlier /
@@ -60,9 +70,9 @@ installed, as if something were wrong. Not having an agent is a normal choice, n
 
 ## Milestones
 
-1. 01 Added agents in the daemon (closed; not merged yet — to be merged together with 02, as the user asked)
-2. 02 Settings: add, remove and reorder agents (closed; not merged yet — to be merged together with 01)
-3. [Added agents across the app](03-added-agents-across-the-app.md)
+1. 01 Added agents in the daemon (closed)
+2. 02 Settings: add, remove and reorder agents (closed)
+3. 03 Added agents across the app (closed)
 4. [Final confirmation](04-final-confirmation.md)
 
 ## Open

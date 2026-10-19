@@ -46,13 +46,14 @@ them; changing a field applies only to that session, including its later resumes
 agent's values and retains edits separately, but only the selected agent's edits apply to the opened session. Changing
 accounts keeps those edits.
 
-In the console dialog it holds a row of tabs, one per agent, each with the agent's icon and name; the row of tabs and
-the shown tab's content sit together inside a bordered frame. An agent that is not installed (see "Agents that are not
-installed" in `docs/product/consoles.md`) has a tab, labelled as not installed, only while the console stores a console
-session or project session value for it, until every one of them is cleared; before availability has been determined
-every agent has a tab. Until the user picks a tab, the one shown follows the agent the Default agent group's Console
-sessions field holds; a picked tab stays shown until that tab goes away, which forgets the pick. From a window 768 px
-wide up, each tab holds a table: a column for each kind of session, headed **Console sessions** and **Project
+In the console dialog it holds a row of tabs, one per agent that can be picked, in the order of the added agents (see
+"Which agents the agent pickers list" in `docs/product/consoles.md`), each with the agent's icon and name, as wide as
+its content, the tabs starting at the row's start; the row of tabs and the shown tab's content sit together inside a
+bordered frame. An agent that cannot be picked has a tab, with the Not installed or Not added badge after its name,
+only while the console stores a console session or project session value for
+it, until every one of them is cleared. Until the user picks a tab, the one shown follows the agent the Default agent
+group's Console sessions field holds; a picked tab stays shown until that tab goes away, which forgets the pick. From
+a window 768 px wide up, each tab holds a table: a column for each kind of session, headed **Console sessions** and **Project
 sessions**, and a **Model** row and a **Reasoning effort** row, named in a leading column, with a picker in each cell.
 Below the whole table, two notes say whose sessions each kind applies to — for project sessions, those opened or resumed
 from now on, unless their project or the session sets its own. In a narrower window the cells stack: each kind under its

@@ -1,6 +1,6 @@
 import { Button, Tabs } from "@heroui/react";
 import { Bot, LogIn, Pencil, Trash2, UserPlus } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 
 import { AGENT_LABEL, defaultAccountName, isAgentUnavailable } from "../agents";
 import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
@@ -26,6 +26,7 @@ import { AccountDialog } from "./AccountDialog";
 import { AccountLoginAnnouncement, accountLoginOf, loginIsActive, useClearSucceededLogin } from "./AccountLogin";
 import { AccountLoginDialog } from "./AccountLoginDialog";
 import { AddAgentDialog } from "./AddAgentDialog";
+import { AddAgentOnOpenContext } from "./AddAgentOnOpenContext";
 import { AgentMoreMenu, AgentTabMenu, RemoveAgentDialog, useAgentList } from "./AgentListMenu";
 import { useSectionRefocus } from "./useSectionRefocus";
 
@@ -56,7 +57,35 @@ export function AgentAccountsSection(): React.ReactElement {
   // The account whose login is in the modal; `start` is whether opening it starts the login, which it does not for one
   // found running when the section opened.
   const [loggingIn, setLoggingIn] = useState<{ agent: Agent; account: string | null; start: boolean }>();
+  // The Add agent dialog is open when Settings was asked to put it in front, on opening or by a later request,
+  // which the section takes up once; closing that one then puts focus on the button that opens it, as no
+  // control had it before.
+  const addAgentRequest = useContext(AddAgentOnOpenContext);
+  const openedWithAddAgent = useRef(false);
+  // Opened after the first render rather than with it: both dialogs are portalled to the end of `<body>` on the
+  // same stacking level, so the later one sits on top, and this one must come after Settings' own.
   const [addingAgent, setAddingAgent] = useState(false);
+  useEffect(() => {
+    if (!addAgentRequest.pending) return;
+    addAgentRequest.consume();
+    openedWithAddAgent.current = true;
+    setAddingAgent(true);
+  }, [addAgentRequest.pending]);
+  // A later request for something else closes it, so what that request shows is not left behind a modal.
+  const lastDismiss = useRef(addAgentRequest.dismiss);
+  useEffect(() => {
+    if (addAgentRequest.dismiss === lastDismiss.current) return;
+    lastDismiss.current = addAgentRequest.dismiss;
+    openedWithAddAgent.current = false;
+    setAddingAgent(false);
+  }, [addAgentRequest.dismiss]);
+  const addAgentButton = useRef<HTMLButtonElement>(null);
+  const closeAddAgent = () => {
+    setAddingAgent(false);
+    if (!openedWithAddAgent.current) return;
+    openedWithAddAgent.current = false;
+    requestAnimationFrame(() => addAgentButton.current?.focus());
+  };
   // A login found running as the section opens (after a reload, or started by another window) is taken up in the
   // modal, where it can be followed or cancelled.
   useEffect(() => {
@@ -91,7 +120,7 @@ export function AgentAccountsSection(): React.ReactElement {
           <UserPlus aria-hidden="true" className="size-4" />
           {t("settings.accounts.add")}
         </Button>
-        <Button size="sm" variant="outline" preventFocusOnPress onPress={() => setAddingAgent(true)}>
+        <Button ref={addAgentButton} size="sm" variant="outline" preventFocusOnPress onPress={() => setAddingAgent(true)}>
           <Bot aria-hidden="true" className="size-4" />
           {t("settings.accounts.addAgent")}
         </Button>
@@ -152,7 +181,7 @@ export function AgentAccountsSection(): React.ReactElement {
       {editing !== undefined && <AccountDialog account={editing ?? undefined} agent={selected ?? "claude"} onClose={() => setEditing(undefined)} />}
       {renamingDefault && <AccountDialog agent={renamingDefault} renameDefault onClose={() => setRenamingDefault(undefined)} />}
       {loggingIn && <AccountLoginDialog {...loggingIn} onClose={() => setLoggingIn(undefined)} />}
-      {addingAgent && <AddAgentDialog onClose={() => setAddingAgent(false)} />}
+      {addingAgent && <AddAgentDialog onClose={closeAddAgent} />}
       {removingAgent && (
         <RemoveAgentDialog
           agent={removingAgent}

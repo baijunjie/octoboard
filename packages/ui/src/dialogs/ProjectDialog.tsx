@@ -77,6 +77,7 @@ export function ProjectDialog({
   // its project names none.
   const consoleAgent = owner && projectSessionAgent(owner);
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
+  const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const [source, setSource] = useState<ProjectSource>(editing?.source ?? "local");
@@ -224,7 +225,7 @@ export function ProjectDialog({
       label: consoleAgent ? t("dialog.project.agentInherit", { agent: AGENT_LABEL[consoleAgent] }) : t("dialog.project.agentInheritBare"),
       icon: consoleAgent && <AgentIcon agent={consoleAgent} className="size-4 opacity-50" />,
     },
-    ...agentIconPickerOptions(t, agentAvailability, defaultAgent === "" || defaultAgent === "detect" ? undefined : defaultAgent),
+    ...agentIconPickerOptions(t, agentAvailability, addedAgents, defaultAgent === "" || defaultAgent === "detect" ? undefined : defaultAgent),
   ];
 
   return (

@@ -7,7 +7,7 @@ import type { Inspection } from "../../configuration/ImportReview";
 import type { InspectedProject } from "../../protocol";
 import type { Ui } from "../interact";
 import type { ConfigurationFixture, Scenario, Step } from "../scenario";
-import { SAMPLE, consoleOf, projectOf, snapshotState } from "./builders";
+import { ALL_AGENTS, SAMPLE, consoleOf, projectOf, snapshotState } from "./builders";
 import type { FixtureError } from "./projectFiles";
 
 const GROUP = "Configuration";
@@ -40,17 +40,17 @@ const layout = {
 };
 const state = snapshotState({
   ...layout,
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 const autoPulling = snapshotState({
   ...layout,
-  settings: { auto_pull_repositories: true, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { auto_pull_repositories: true, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 const noConsoleState = snapshotState({
   consoles: [],
   projects: [],
   sessions: [],
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 
 const openSettings = (ui: Ui) => ui.press(ui.t("rail.settings"));
@@ -533,7 +533,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import, result where the settings could not be applied",
-    description: "The settings failure is a line of its own above the table, beside a project that was left out.",
+    description: "The settings failure is a danger alert of its own above the table, beside a project that was left out; the error alert the failures raise is dismissed to leave the result in view.",
     state: autoPulling,
     configuration: { file: FILE, inspection: WITH_SETTING_OFF, imported: SETTINGS_FAILED_RESULT },
     steps: [
@@ -541,6 +541,7 @@ export const configurationScenarios: Scenario[] = [
       chooseFile,
       applySettings,
       importNow,
+      (ui) => ui.press(ui.t("error.acknowledge")),
     ],
   },
   {

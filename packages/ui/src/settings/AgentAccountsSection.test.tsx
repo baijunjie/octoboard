@@ -5,6 +5,7 @@ import { setInteractionModality } from "react-aria";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type { Account, AccountLogin, AccountQuota, Agent, AgentAvailability, Console, Project, Session, Settings } from "../protocol";
+import { AddAgentOnOpenContext } from "./AddAgentOnOpenContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -596,6 +597,54 @@ it("opens the Add agent dialog from its button", () => {
   const { container } = mount();
   act(() => buttonNamed(container, "Add agent")!.click());
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Only an agent installed on this machine can be added.");
+});
+
+it("opens the Add agent dialog once when Settings asked for it, and takes the request up", () => {
+  const consume = vi.fn();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const render = (pending: boolean) => act(() => {
+    root.render(<AddAgentOnOpenContext.Provider value={{ pending, consume, dismiss: 0 }}><AgentAccountsSection /></AddAgentOnOpenContext.Provider>);
+    bus.notify();
+  });
+  render(true);
+  expect(consume).toHaveBeenCalledOnce();
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Only an agent installed on this machine can be added.");
+  // Taken up, the request is gone: the section returning later (another section shown meanwhile) does not reopen it.
+  act(() => root.unmount());
+  const second = document.body.appendChild(document.createElement("div"));
+  const secondRoot = createRoot(second);
+  onTestFinished(() => {
+    act(() => secondRoot.unmount());
+    second.remove();
+  });
+  act(() => {
+    secondRoot.render(<AddAgentOnOpenContext.Provider value={{ pending: false, consume, dismiss: 0 }}><AgentAccountsSection /></AddAgentOnOpenContext.Provider>);
+    bus.notify();
+  });
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(consume).toHaveBeenCalledOnce();
+});
+
+it("closes its Add agent dialog when Settings asks for anything else", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const render = (value: { pending: boolean; dismiss: number }) => act(() => {
+    root.render(<AddAgentOnOpenContext.Provider value={{ ...value, consume: () => {} }}><AgentAccountsSection /></AddAgentOnOpenContext.Provider>);
+    bus.notify();
+  });
+  render({ pending: true, dismiss: 0 });
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  render({ pending: false, dismiss: 1 });
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 
 it("flags only an added agent that is not installed", () => {

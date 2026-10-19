@@ -26,6 +26,11 @@ and the agent tabs in the console dialog's Advanced section keep their labels fu
 foreground colour instead of dimming. Preserve this shared visual treatment as an explicit product choice, while retaining the component's
 layout, selection and keyboard behaviour.
 
+An agent's "Not added" / "Not installed" status after its name is the shared `StatusBadge`: a muted-tint fill with a
+hairline ring, its text at 80% foreground so it keeps at least 4.5:1 on fields, dialogs and popovers, and a
+screen-reader-only comma between name and status. An agent row that cannot be picked is dimmed by its name taking the
+secondary text colour (still at least 4.5:1) and its icon fading; the text is never faded below AA by opacity.
+
 A notice toast (HeroUI's accent variant) tints its indicator with the title's `--accent-soft-foreground`, as HeroUI
 does itself for its success, warning and danger toasts, instead of leaving it in the plain foreground under an accent
 title.
@@ -139,8 +144,9 @@ is maximized it comes first among the panels, and the agent area it covers (the 
 made `inert`) is not a stop. A region lands F6 on its first control unless a control in it carries
 `data-region-landing` (a Files panel that failed to load lands on Try again, not on its header's Close panel). `shown`
 follows whether a region holds a control, not whether its element is in the document: the terminal counts while a
-session is selected, and also while its empty state offers a creation action for the current context, since that
-button is then the one thing to do there; with only its empty line it is skipped. A region whose focus goes through a method
+session is selected, and also while its empty state offers a creation action for the current context or the Add
+agent button (agents are installed but none is added), since that button is then the one thing to do there; with only
+its empty line (nothing installed) it is skipped. A region whose focus goes through a method
 of its own rather than its first control (the terminal's) is only a stop when that method actually leaves focus inside
 it, which is how the cycle tells the two apart.
 
@@ -527,6 +533,10 @@ refusal that is about one field's value, with focus moved to that field; a failu
 rendered document stays in that content's own presentation. A failed page or pane may keep its explanation and recovery
 actions visible after acknowledgement; a form's execution failure is shown in the dedicated error dialog.
 Warnings use warning status, rather than the error wrapper.
+A standalone error, warning or blocking reason — anything that is not a field's validation or a row's own status —
+is never a bare line of danger- or warning-coloured text: colour alone does not mark it, and it needs the Alert's
+indicator and fill. A dialog that cannot proceed for a reason outside its fields shows that reason in an
+`ErrorAlert` (or a warning-status `TintedAlert`) at the top of its body, not as coloured text among the fields.
 
 Keep the summary, explanation and recovery readable as separate parts when a failure needs them. A short error that
 already says what failed needs no generic title repeating it. An optional title is a heading at the level of its

@@ -14,7 +14,7 @@ it.each([
   ["session_branches_not_removed", "sessionBranches"], ["project_branches_not_determined", "projectBranches"],
   ["session_working", "wait"], ["handoff_messages_dropped", "lostMessages"],
   ["agent_not_installed", "tool"], ["agent_availability_pending", "availability"], ["added_agents_undecided", "availability"],
-  ["agent_already_added", "addedAgents"], ["agent_order_invalid", "addedAgents"],
+  ["agent_already_added", "addedAgents"], ["agent_order_invalid", "addedAgents"], ["agent_not_added", "agentNotAdded"],
 ])("classifies the known domain code %s with its specific remedy", (code, recovery) => {
   const error = new DaemonRequestError("localized text", code, { session: "s1" });
   expect(errorPresentation(error)).toBe(error);

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { choiceGroups, choiceKey, currentChoice, findEntry, inheritedAccount, initialChoice, type AccountChoice } from "../accountChoices";
-import { AGENT_LABEL, AGENT_OPTIONS, defaultAccountName, inheritedSessionLaunch, isAgentUnavailable, launchWithOverrides, projectSessionAgent } from "../agents";
+import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { useT } from "../i18n/react";
 import type { Agent, Console, Project } from "../protocol";
@@ -20,13 +20,14 @@ type Overrides = { model?: string | null; effort?: string | null };
 export function useLaunchChoice(parentConsole: Console, project: Project | undefined, exclude?: Agent) {
   const t = useT();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
+  const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const [pickedAgent, setPickedAgent] = useState<Agent>();
   const [pickedAccounts, setPickedAccounts] = useState<Partial<Record<Agent, string | null>>>({});
   const [launchSettings, setLaunchSettings] = useState<Partial<Record<Agent, Overrides>>>({});
 
-  const groups = choiceGroups(accounts, agentAvailability, (agent) => defaultAccountName(t, defaultNames, agent)).filter((group) => group.agent !== exclude);
+  const groups = choiceGroups(accounts, agentAvailability, addedAgents, (agent) => defaultAccountName(t, defaultNames, agent)).filter((group) => group.agent !== exclude);
   const pickedAccount = pickedAgent ? pickedAccounts[pickedAgent] : undefined;
   const pickedEntry = groups.find((group) => group.agent === pickedAgent)?.entries.find((entry) => entry.account === pickedAccount);
   const picked = pickedAgent ? {
@@ -34,14 +35,15 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
     account: pickedEntry ? pickedEntry.account : inheritedAccount(parentConsole, project, pickedAgent, accounts),
   } : undefined;
 
-  const candidates = AGENT_OPTIONS.map((option) => option.value).filter((agent) => agent !== exclude);
-  const selectable = candidates.filter((agent) => !isAgentUnavailable(agentAvailability, agent));
+  const selectable = pickableAgents(agentAvailability, addedAgents).filter((agent) => agent !== exclude);
   let initial: AccountChoice;
   if (exclude === undefined) {
-    initial = initialChoice(parentConsole, project, accounts, agentAvailability);
+    initial = initialChoice(parentConsole, project, accounts, agentAvailability, addedAgents);
   } else {
     const wanted = project ? project.default_agent ?? projectSessionAgent(parentConsole) : parentConsole.default_agent;
-    const agent = selectable.includes(wanted) ? wanted : selectable[0] ?? candidates[0];
+    // With nothing to pick, the first other agent in listing order, so the picker shows a held,
+    // marked value and never the excluded agent itself; submitting stays blocked.
+    const agent = selectable.includes(wanted) ? wanted : selectable[0] ?? agentsInListingOrder(addedAgents).find((other) => other !== exclude)!;
     initial = { agent, account: inheritedAccount(parentConsole, project, agent, accounts) };
   }
   const choice = currentChoice(picked, initial, groups);
@@ -58,7 +60,7 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
     /** No agent that may be picked. */
     blocked,
     overrides,
-    agentOptions: agentIconPickerOptions(t, agentAvailability, choice.agent).filter((option) => option.value !== exclude),
+    agentOptions: agentIconPickerOptions(t, agentAvailability, addedAgents, choice.agent).filter((option) => option.value !== exclude),
     setPickedAgent,
     /** The account half of the joined agent and account field; absent when the agent has one account. */
     account: accountEntries.length > 1 ? {

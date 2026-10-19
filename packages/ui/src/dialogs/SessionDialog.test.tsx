@@ -32,7 +32,7 @@ function fakeDaemon(initial: Partial<State> = {}): Daemon {
 }
 
 /** An `agentAvailability` map with every agent `unavailable` — "no agent available at all". Named
- * distinctly from `agents.ts`'s own `noAgentAvailable`, which this is only a fixture for. */
+ * distinctly from `agents.ts`'s own `noAgentState`, which this is only a fixture for. */
 function everyAgentUnavailable(): Map<Agent, AgentAvailability> {
   const agents: Agent[] = ["claude", "codex", "grok"];
   return new Map(agents.map((agent) => [agent, { agent, availability: "unavailable" as const }]));
@@ -47,8 +47,9 @@ function renderDialog(
   consoleOverride: Partial<typeof parentConsole> = {},
   binding: NewSessionBinding = { kind: "choose" },
   projectOverride: Partial<typeof project> | null = {},
-): { container: HTMLElement; root: ReturnType<typeof createRoot>; daemon: Daemon; pastMountRefocus: () => Promise<void> } {
+): { container: HTMLElement; root: ReturnType<typeof createRoot>; daemon: Daemon; onClose: () => void; pastMountRefocus: () => Promise<void> } {
   const daemon = fakeDaemon(initial);
+  const onClose = vi.fn();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() =>
@@ -59,13 +60,13 @@ function renderDialog(
           project={projectOverride === null ? undefined : { ...project, ...projectOverride }}
           binding={binding}
           sessions={sessions}
-          onClose={() => {}}
+          onClose={onClose}
           onOpened={() => {}}
         />
       </DaemonProvider>,
     ),
   );
-  return { container, root, daemon, pastMountRefocus: trackMountRefocus() };
+  return { container, root, daemon, onClose, pastMountRefocus: trackMountRefocus() };
 }
 
 const hub1 = sessionOf("s-hub-1", parentConsole.id, undefined, "Hub", "idle", { colour: "teal", started_at: 100 });
@@ -166,10 +167,10 @@ it("keeps the owner select, back on none, when the chosen console session is arc
   container.remove();
 });
 
-it("shows the install prompt when no agent is available at all", () => {
-  // HeroUI's `Modal` renders into a portal at `document.body`, not into the container itself.
-  const { container, root } = renderDialog([], { agentAvailability: everyAgentUnavailable() });
-  expect(document.body.textContent).toContain("Make sure one of them is on your PATH to open a session.");
+it("closes and reports a plain alert, with no action, when no agent is available at all", () => {
+  const { container, root, onClose, daemon } = renderDialog([], { agentAvailability: everyAgentUnavailable() });
+  expect(onClose).toHaveBeenCalled();
+  expect(daemon.toastError).toHaveBeenCalledWith(expect.objectContaining({ message: "No agent is available to open a session.", recovery: "none" }));
   act(() => root.unmount());
   container.remove();
 });
@@ -185,7 +186,7 @@ it("opens on a selectable agent, with the console's account for it, and sends bo
         ["grok", { agent: "grok", availability: "available" }],
       ]),
       settings: {
-        auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/p",
+        auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p",
         accounts: [{ id: "a-1", agent: "codex", name: "Work", config_dir: "/home/me/.codex-work" }],
       },
     },
@@ -230,6 +231,35 @@ it("leaves the agents known to be missing out of the agent picker", async () => 
   container.remove();
 });
 
+it("lists only the added agents in the agent picker, in the order they were added", async () => {
+  const { container, root } = renderDialog([], {
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["grok", "claude"], default_clone_dir: "/p", accounts: [] },
+  });
+  await act(async () => pickerNamed("Agent").click());
+  expect(optionElements().map((o) => o.textContent)).toEqual(["Grok Build", "Claude Code"]);
+  act(() => root.unmount());
+  container.remove();
+});
+
+it("opens on the first added agent when the console's default agent is not added", () => {
+  const { container, root } = renderDialog([], {
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["codex"], default_clone_dir: "/p", accounts: [] },
+  });
+  expect(pickerNamed("Agent").textContent).toContain("Codex");
+  act(() => root.unmount());
+  container.remove();
+});
+
+it("closes and reports the same alert when agents are installed but none is added", () => {
+  const { container, root, onClose, daemon } = renderDialog([], {
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/p", accounts: [] },
+  });
+  expect(onClose).toHaveBeenCalled();
+  expect(daemon.toastError).toHaveBeenCalledOnce();
+  act(() => root.unmount());
+  container.remove();
+});
+
 /** Opens the dialog with two stored Claude Code accounts, the console pinning one and the project
  * `projectPin`, presses Open and returns the `account` sent. */
 async function openedAccount(projectPin: Partial<typeof project>): Promise<unknown> {
@@ -237,7 +267,7 @@ async function openedAccount(projectPin: Partial<typeof project>): Promise<unkno
     [],
     {
       settings: {
-        auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/p",
+        auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p",
         accounts: [
           { id: "a-console", agent: "claude", name: "Console pick", config_dir: "/home/me/.claude-console" },
           { id: "a-project", agent: "claude", name: "Project pick", config_dir: "/home/me/.claude-project" },
@@ -451,7 +481,7 @@ it.each(["inherit", "pick", "clear"] as const)("opens with session launch settin
 
 it("queries the selected account and keeps overrides separate when changing agents", async () => {
   const { container, root, daemon, pastMountRefocus } = renderDialog([], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", accounts: [
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", accounts: [
       { id: "a-work", agent: "claude", name: "Work", config_dir: "/accounts/work" },
     ] },
   }, { claude_account_id: "a-work" }, { kind: "unbound" }, { codex_session_model: "codex-project" });
@@ -488,7 +518,7 @@ it("queries the selected account and keeps overrides separate when changing agen
 
 it.each(["trigger", "popover"] as const)("keeps the selected agent and hands focus back when the last named account is removed from %s", async (focused) => {
   const { container, root, daemon, pastMountRefocus } = renderDialog([], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", accounts: [
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", accounts: [
       { id: "a-work", agent: "claude", name: "Work", config_dir: "/accounts/work" },
     ] },
   }, { default_agent: "codex" });
@@ -505,7 +535,7 @@ it.each(["trigger", "popover"] as const)("keeps the selected agent and hands foc
     await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
     expect(document.activeElement?.getAttribute("role")).toBe("option");
   }
-  act(() => daemon.store.setState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", accounts: [] } }));
+  act(() => daemon.store.setState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", accounts: [] } }));
   expect(pickerNamed("Agent")).toBe(agentTrigger);
   expect(agentTrigger.textContent).toContain("Claude Code");
   await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
@@ -515,7 +545,7 @@ it.each(["trigger", "popover"] as const)("keeps the selected agent and hands foc
 
 it.each(["inherit", "pick", "clear"] as const)("opens console sessions with console launch settings: %s", async (mode) => {
   const { container, root, daemon } = renderDialog([hub1], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", accounts: [
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", accounts: [
       { id: "a-console", agent: "claude", name: "Console account", config_dir: "/accounts/console" },
       { id: "a-codex", agent: "codex", name: "Codex work", config_dir: "/accounts/codex" },
     ] },
@@ -575,7 +605,7 @@ it.each(["inherit", "pick", "clear"] as const)("opens console sessions with cons
 
 it("opens console sessions on the console's default agent and its account", async () => {
   const { container, root, daemon } = renderDialog([], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", accounts: [
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", accounts: [
       { id: "a-codex", agent: "codex", name: "Work", config_dir: "/accounts/codex" },
     ] },
   }, { default_agent: "codex", codex_account_id: "a-codex" }, undefined, null);

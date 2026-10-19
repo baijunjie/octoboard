@@ -139,11 +139,14 @@ The section's heading carries no action buttons or menu. Archived console sessio
 one row. With no console session at all, the section shows an empty row saying so; the whole row is a button that
 does what the console header's **+** button does (see "Empty rows" below).
 
-With no agent available on the machine at all, the section instead carries an empty row saying that no agent was found
-on the user's `PATH`, and the console header's **+** button is disabled, since starting one would only be refused.
-The row says that much and no more: the new-session dialog explains which agents Octoboard supports and the `PATH` requirement (see "Opening
-a session" in `docs/product/sessions.md`); the welcome screen's supported-tool list and hint are described in "What
-the welcome screen shows" in `docs/product/welcome-screen.md`. The row shows whatever the section lists — a console
+With no agent both added and installed, the section instead carries an empty row, and the console header's **+**
+button is disabled, since no session can be opened from the window (see "Opening a session" in
+`docs/product/sessions.md`, which gives the full rule). When an installed agent waits to be added, the row carries the
+bot icon and says that no agent is added; otherwise it carries a warning icon and says that no agent was found on the
+user's `PATH`. It says that much and no more, and offers nothing to press: the terminal's empty panel, where it would
+otherwise offer a new session, says the rest, with **Add agent…** when an agent waits to be added (see "A console with
+nothing in it" in `docs/product/session-terminal.md`); the welcome screen's supported-tool list and hint are described in "What the
+welcome screen shows" in `docs/product/welcome-screen.md`. The row shows whatever the section lists — a console
 session left interrupted from before an agent went off the `PATH` still has its row — and it takes the place of the "no
 console session" row.
 
@@ -247,8 +250,9 @@ compact row" in `docs/product/empty-states.md`: where there is one thing to do a
 is the button that does it, and the row takes its accessible name and its tooltip from that action.
 
 The rows with nothing to do about them are not buttons and carry no tooltip: the one saying no project matches the
-filter (see "Filtering the project list" above) and the one saying no agent was found on the user's `PATH` (see "The
-console sessions section and the project list" above). Focus mode's empty lists use the same compact rows (see "What
+filter (see "Filtering the project list" above), the one saying no agent is added or none was found on the user's `PATH` (see
+"The console sessions section and the project list" above), and a project's row saying it has no sessions yet while no
+agent is both added and installed (see "Opening a session" in `docs/product/sessions.md`). Focus mode's empty lists use the same compact rows (see "What
 both views show" in `docs/product/focus-mode.md`). The terminal's empty state is a full panel carrying the next action
 for the current scope (see "A console with nothing in it" in `docs/product/session-terminal.md`).
 
@@ -331,7 +335,8 @@ and **Remove project**. An item a view does not offer is left out without moving
 An expanded project lists its sessions that are not archived as session rows, with a connector bending smoothly
 toward the middle of each child row and stopping at the last child. With none, it shows an empty row saying
 there are no sessions yet; the whole row is a button that opens the new-session dialog for that project, as the row's
-**+** button does (see "Empty rows" above).
+**+** button does (see "Empty rows" above). With no agent both added and installed, the row's **+** is disabled and the
+empty row is plain text.
 
 A session **bound to another of the project's sessions** — one that session started, a lead session's own sessions
 included (see "Lead sessions" in `docs/product/hub-orchestration.md`) — is listed **under that session**, one level
@@ -409,7 +414,7 @@ action menu offers:
 - **Hand off** — opens the handoff dialog, which moves the session's place to a new session of another agent (see
   "Handing off from the window" in `docs/product/handing-off-sessions.md`). Present for a project session's and a
   console session's row; an archived session has no such entry. Disabled while the session is *working* or
-  *starting*, and while it is locked.
+  *starting*, while it is locked, and while no agent other than its own can be picked.
 - **Archive** — archives the session (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). A
   session at its prompt or interrupted, with no unarchived session under it, is archived at once, unless a branch or
   worktree bound to it needs the user's word (see "The confirmation" in `docs/product/branch-and-worktree-cleanup.md`);

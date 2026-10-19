@@ -27,7 +27,8 @@ background" in `docs/product/sessions.md`). A handoff is refused, with nothing c
   (`session_already_starting`);
 - it is locked (`session_locked`; see "Locking a session" in `docs/product/sessions.md`);
 - the receiving agent is the session's own (`handoff_to_same_agent`, which points to switching its account);
-- the receiving agent is not available (`agent_not_available`), the account named is not one of that agent's
+- the receiving agent is not available (`agent_not_available`), is not added (`agent_not_added`; see "Opening a
+  session" in `docs/product/sessions.md` for when that applies), the account named is not one of that agent's
   (`unknown_account`), or the model or reasoning effort is not one the agent offers (`invalid_launch_setting`);
 - for a session bound to an owner, opening a session bound to that owner would be refused.
 
@@ -42,7 +43,8 @@ deleted.
 
 A session's action menu offers **Hand off** right after Switch account (where that is offered), before Archive, for a
 project session or a console session that is not archived, wherever that menu is offered. It is disabled while the
-session is *working* or *starting*, and while the session is locked, as Archive is.
+session is *working* or *starting*, and while the session is locked, as Archive is, and while no agent other than the
+session's own can be picked (see "Which agents the agent pickers list" in `docs/product/consoles.md`).
 
 It opens the **handoff dialog**, titled with the session's name, which opens with keyboard focus on its **Hand off**
 button. It says that a new session of another agent takes over this session's place and this one is archived, and that
@@ -64,15 +66,18 @@ Then come the fields:
 - **Hand off to** — an agent picker joined to an account picker, as in the session dialog (see the **Agent** field in
   "Opening a session" in `docs/product/sessions.md`), except that the session's own agent is never offered. It opens on
   the agent a new session of the project (or, for a console session, of the console) would use by default (see "Which
-  agent a session uses" in `docs/product/sessions.md`) when that is another agent and available, otherwise on the first
-  available other agent, with the account resolved for that agent as for a new session.
+  agent a session uses" in `docs/product/sessions.md`) when that is another agent and can be picked (see "Which agents
+  the agent pickers list" in `docs/product/consoles.md`), otherwise on the first other agent that can, in the order of
+  the added agents, with the account resolved for that agent as for a new session.
 - The collapsed **Advanced** section — the receiving session's model and reasoning effort, showing what a new session of
   the chosen agent and account would inherit, as in the session dialog (see "The Advanced section" in
   `docs/product/model-and-reasoning-effort.md`). Only values the user changed are sent with the request; the rest are
   left for the daemon to resolve.
 
-When no agent other than the session's own is available, the dialog says so, its fields are disabled and its **Hand
-off** button cannot be pressed.
+If, while the dialog is open, no agent other than the session's own can be picked any more — the last one removed or
+found unavailable meanwhile — the dialog closes at once, with nothing sent, and an error alert says that no other agent
+is available to take the session over; that alert offers nothing but its acknowledgement (see "Recovery and unexpected
+errors" in `docs/product/error-alerts.md`).
 
 Pressing **Hand off** sends `hand_off_session`. When it succeeds the dialog closes and the receiving session is
 selected. A refusal or failure is shown as an error alert (see `docs/product/error-alerts.md`) and the dialog stays

@@ -165,7 +165,8 @@ identify the agent, account name, window and whole remaining percent; the bar is
 The bar is absent when no session is selected, its agent is unavailable or its availability is not yet determined,
 the account has no reading or no eligible window, or the latest reading failed. A failed reading hides it even
 when Settings and the quota panel retain the last good windows as out of date. Without a bar the button keeps its
-Account quota label.
+Account quota label. Whether the session's agent is added plays no part: a session whose agent has been removed from
+the added agents (see "Reordering and removing an agent" in `docs/product/agent-accounts.md`) keeps its bar.
 
 An account removed from Settings or belonging to another agent cannot supply the indicator. Sessions retain their
 launch configuration directory: if it differs from the named account's current directory, or a session refers to
@@ -184,9 +185,11 @@ the accounts' quotas without opening Settings.
 
 ### What the panel shows
 
-- **One tab per available agent**, in the order Claude Code, Codex, Grok Build whether or not the agent is added (see
-  "Added agents" in `docs/product/agent-accounts.md`), each showing the agent's icon and name. An agent that is not available, or whose availability is not yet determined, has no tab. Each opening starts
-  on the first agent's tab.
+- **One tab per agent that is added and installed**, in the order of the added agents (see "Added agents" in
+  `docs/product/agent-accounts.md`), each showing the agent's icon and name, as wide as its content, the tabs
+  starting at the strip's start. An agent that is not added, or that has
+  been determined unavailable, has no tab; an added agent whose availability is not yet determined has one. Each
+  opening starts on the first agent's tab.
 - **The selected agent's accounts**: its default account, under the name the user gave it or else "Default" (see "The
   default account" in `docs/product/agent-accounts.md`), then the accounts the user owns. Each shows
   its name, its plan chip and its quota beneath, in the states of "Quota states" above, as "How an account's quota is
@@ -197,10 +200,16 @@ the accounts' quotas without opening Settings.
   pointer (which would close a panel opened by hover). Beyond that height a list scrolls and fades at its edges, and
   while it scrolls it is a tab stop of its own (see "Scrolling a surface from the keyboard" in
   `docs/product/scrolling-surfaces.md`).
-- **With no available agent** there are no tabs: an empty state titled "No agent available" stands in their place,
-  with a line saying an agent's quota is shown once its command is found on the user's `PATH`.
+- **With no agent that is added and installed** there are no tabs, and an empty state stands in their place. When
+  some agent is installed, or not yet determined unavailable, but none of them is added, it carries the bot icon, is
+  titled "No agent added", with a line saying to add an agent to see its quota there, and offers an **Add agent…**
+  button, which closes the panel and opens Settings on its Agent accounts section with the Add agent dialog in front
+  (see "Opening and closing Settings" in `docs/product/settings.md`). When every agent has been determined
+  unavailable, it carries the gauge icon, is titled "No agent available", with a line saying an agent's quota is
+  shown once its command is found on the user's `PATH`, and offers nothing to press.
 - At the panel's foot, **Manage accounts…** closes the panel and opens Settings on its Agent accounts section (see
-  "Opening and closing Settings" in `docs/product/settings.md`).
+  "Opening and closing Settings" in `docs/product/settings.md`). It is left out while the panel shows "No agent
+  added", whose Add agent… button already leads there.
 
 ### Opening and pinning the panel
 
@@ -212,8 +221,9 @@ The panel opens in one of two ways:
   no keyboard focus.
 - **Pressing the button** — a click, a tap, Enter or Space — pins the panel open, whether or not it was already
   floating in, and the mouse leaving no longer closes it. Pinned from the keyboard or by assistive technology,
-  keyboard focus moves into the panel, onto the selected agent's tab; pinned with a pointer, focus stays where it
-  was, so after a mouse press the terminal keeps receiving keystrokes.
+  keyboard focus moves into the panel, onto the selected agent's tab, or, with no tab, onto the panel's first button
+  (Add agent…, or Manage accounts…); pinned with a pointer, focus stays where it was, so after a mouse press the
+  terminal keeps receiving keystrokes.
 
 ### Closing the panel
 

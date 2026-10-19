@@ -1,8 +1,9 @@
 import { Button, Spinner, Surface } from "@heroui/react";
-import { FolderPlus, MessageSquarePlus, Plus, SquareTerminal, TriangleAlert, Unplug } from "lucide-react";
+import { Bot, FolderPlus, MessageSquarePlus, Plus, SquareTerminal, TriangleAlert, Unplug } from "lucide-react";
 import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 
 import "@xterm/xterm/css/xterm.css";
+import type { NoAgentReason } from "../agents";
 import { reportExternalLinkFailure } from "../components/ExternalLink";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { PATH_VAR_PARAMS } from "../components/literalParams";
@@ -37,8 +38,11 @@ interface TerminalPaneProps {
   onAddProject?: () => void;
   /** Offers session creation for the current console and focus scope. */
   newSession?: { message: string; label: string; onPress: () => void };
-  /** No supported agent is installed, so creating a session cannot be offered. */
-  noAgents?: boolean;
+  /** No agent is both added and installed, so creating a session cannot be offered; `reason` says
+   * whether the user has to add one or install one. */
+  noAgents?: NoAgentReason;
+  /** Opens Settings on the Add agent dialog, for the empty state that asks the user to add an agent. */
+  onAddAgent: () => void;
   /** A docked pane beside the terminal is easing, which resizes the terminal every frame. The
    * terminal keeps its size until the ease ends, then fits once: a refit per frame rebuilds
    * xterm's dimension styles each time, which costs a full restyle in WebKit. */
@@ -75,6 +79,7 @@ export function TerminalPane({
   onAddProject,
   newSession,
   noAgents,
+  onAddAgent,
   resizing = false,
   onViewFile,
   ref,
@@ -479,7 +484,11 @@ export function TerminalPane({
         // same hand-off the cover's button uses, which can never be on screen at the same time.
         <div ref={emptyRef} {...held} className="absolute inset-0 flex items-center justify-center-safe bg-panel">
           {noAgents ? (
-            <EmptyPanel icon={TriangleAlert} message={<Message id="agents.noneFound" params={PATH_VAR_PARAMS} />} description={<Message id="welcome.toolsHint" params={PATH_VAR_PARAMS} />} />
+            noAgents === "add" ? (
+              <EmptyPanel icon={Bot} message={t("agents.noneAdded")} description={t("agents.addPrompt")} action={{ label: t("agents.addAction"), onPress: onAddAgent }} />
+            ) : (
+              <EmptyPanel icon={TriangleAlert} message={<Message id="agents.noneFound" params={PATH_VAR_PARAMS} />} description={<Message id="welcome.toolsHint" params={PATH_VAR_PARAMS} />} />
+            )
           ) : newSession ? (
             <EmptyPanel
               icon={MessageSquarePlus}

@@ -1,7 +1,7 @@
-import type { Agent, AgentAvailability } from "../../protocol";
+import type { Agent, AgentAvailability, Settings } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
-import { SAMPLE, branchItemOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "./builders";
+import { ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "./builders";
 import { SAMPLE_CODEX_MODELS } from "./agentModels";
 import { IMAGES } from "./viewerImages";
 import { SHELL_TIMEOUT } from "./shellTimeout";
@@ -55,7 +55,7 @@ const accountsState = snapshotState({
   settings: {
     auto_pull_repositories: false,
     auto_delete_unresumable_archives: true,
-    added_agents: ["claude", "codex", "grok"],
+    added_agents: ALL_AGENTS,
     default_clone_dir: "/Users/dev/Projects",
     accounts: [
       { id: "a-work", agent: "claude", name: "Work account for release coordination across all production services", config_dir: "/Users/dev/.claude-work" },
@@ -145,6 +145,13 @@ const detected = (missing: Agent[]) =>
     ]),
   );
 
+// Only the `added` agents are added, in that order, over a machine that has all of them installed.
+const withAddedAgents = <S extends { settings?: Settings }>(state: S, added: Agent[]) => ({
+  ...state,
+  settings: { ...state.settings!, added_agents: added },
+  agentAvailability: detected([]),
+});
+
 // A console that was set up while Codex was installed: its project sessions run on Codex, where its
 // console sessions run on Claude Code, and it still pins a named account for each. Claude Code has
 // a second account to choose between; Grok Build has only its default account.
@@ -226,6 +233,35 @@ const dialogState = {
   projects: new Map([...accountsState.projects!, ...taggedState.projects!, ...configuredState.projects!, ...onDefaultState.projects!]),
   sessions: new Map([...twoHubsState.sessions!, ...removeState.sessions!, ...cascadeState.sessions!]),
 };
+
+// A console whose agents were removed from the added list after it was set up: its console sessions run on Grok
+// Build and its project sessions on Codex, both installed, with a named account pinned and model stored for each.
+const removedAgentsState = (() => {
+  const base = withAddedAgents(dialogState, ["claude"]);
+  return {
+    ...base,
+    settings: {
+      ...base.settings,
+      accounts: [
+        ...base.settings.accounts,
+        { id: "a-codex", agent: "codex" as const, name: "Codex personal", config_dir: "/Users/dev/.codex-personal" },
+        { id: "a-grok", agent: "grok" as const, name: "Grok team", config_dir: "/Users/dev/.grok-team" },
+      ],
+    },
+    consoles: new Map([[console_.id, {
+      ...console_,
+      default_agent: "grok" as const,
+      project_session_agent: "codex" as const,
+      codex_account_id: "a-codex",
+      grok_account_id: "a-grok",
+      codex_project_session_model: SAMPLE_CODEX_MODELS[0].id,
+      grok_console_session_model: "grok-code-fast-1",
+    }]]),
+  };
+})();
+
+// A project that still names an agent the user has since removed.
+const removedAgentProject = projectOf("p-removed-agent", console_.id, "Grok Site", { default_agent: "grok" });
 
 // An archived session of the Docs Site project: the one whose branches and worktree its removal with
 // the folder takes along.
@@ -446,6 +482,19 @@ export const dialogScenarios: Scenario[] = [
     steps: submitConsoleSwitch,
   },
   {
+    id: "dialog-switch-account-shared-recovery",
+    group: "Sidebar sessions",
+    category: "exceptional",
+    title: "Console account switch, every failure shares one remedy",
+    description: "Both failed sessions say the target account no longer exists, so the alert's footer carries a Manage accounts… button, left of OK, and the failure rows carry no button of their own. Compare the partial failure above, whose different remedies leave the footer without one.",
+    state: switchAccountState,
+    sessionAccountSwitches: {
+      "s-switch-bound": { code: "unknown_account", params: { account: "a-removed" }, message: "unknown account a-removed" },
+      "s-switch-work": { code: "unknown_account", params: { account: "a-removed" }, message: "unknown account a-removed" },
+    },
+    steps: submitConsoleSwitch,
+  },
+  {
     ...dialogFixture,
     state: consoleSessionLaunchState,
     id: "dialog-new-console-session",
@@ -502,7 +551,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "Console settings with differing default agents",
-    description: "Console sessions run on Claude Code and project sessions on Codex, which is no longer installed: the row keeps it, marked. The \"Agent default accounts\" section has a picker for each of Claude Code (with its named accounts), Codex (not installed), which stays because the console still pins its account, and Grok Build, whose picker holds only \"Default account\". In Advanced the agent tabs include Codex (not installed), which stays while the console stores a project session model for it.",
+    description: "Console sessions run on Claude Code and project sessions on Codex, which is no longer installed: that picker keeps it, with a grey Not installed badge after the name. The \"Agent default accounts\" rows sit on the same two columns as the Default agent pickers above, each agent's name on the left and its account picker on the right: Claude Code (with its named accounts), Grok Build (only \"Default account\") and Codex with the badge, which stays because the console still pins its account. In Advanced the agent tabs include Codex with the badge, which stays while the console stores a project session model for it.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.edit")),
@@ -516,11 +565,39 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "Project sessions agent choices",
-    description: "The list offers Same as console sessions, Claude Code, and Codex as the held value, marked not installed; Grok Build, also missing, is left out.",
+    description: "The list offers Same as console sessions, Claude Code, and Codex as the held value, with a grey Not installed badge after its name in the option as well as in the field; Grok Build, also missing, is left out.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.edit")),
       (ui) => ui.press(ui.t("dialog.console.defaultAgentProject")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: withAddedAgents(dialogState, ["codex", "claude"]),
+    id: "dialog-new-console-added-agents",
+    group: "Consoles",
+    category: "normal",
+    title: "New console with only some agents added",
+    description: "Codex was added before Claude Code and Grok Build is not added. The open Project sessions list offers Same as console sessions, then Codex and Claude Code; the \"Agent default accounts\" rows and the agent tabs under Advanced follow the same order, and Grok Build appears nowhere.",
+    steps: [
+      (ui) => ui.press(ui.t("rail.newConsole")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+      (ui) => ui.press(ui.t("dialog.console.defaultAgentProject")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: removedAgentsState,
+    id: "dialog-edit-console-agents-not-added",
+    group: "Consoles",
+    category: "normal",
+    title: "Console settings with agents that are no longer added",
+    description: "Only Claude Code is added. Console sessions still run on Grok Build and project sessions on Codex, so both pickers hold their agent with a grey Not added badge after the name. The \"Agent default accounts\" rows list Claude Code first, then Codex and Grok Build badged the same way and dimmed (the name in the secondary colour, the icon faded, against Claude Code's foreground-coloured name), because the console still pins an account for each; Advanced does the same for the agent tabs, which keep Codex and Grok Build while the console stores a model for each.",
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
     ],
   },
   {
@@ -664,6 +741,60 @@ export const dialogScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: withAddedAgents(sessionLaunchState, ["codex", "claude"]),
+    id: "dialog-new-session-added-agents",
+    group: "Sidebar sessions",
+    category: "normal",
+    title: "New session with only some agents added",
+    description: "The open Agent list offers Codex then Claude Code, the order the agents were added in; Grok Build is not added and is absent. The session opens on the project's own agent, Claude Code.",
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.project.openSession")),
+      (ui) => ui.press(ui.t("dialog.session.agent")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: withAddedAgents(sessionLaunchState, ["claude", "codex", "grok"]),
+    id: "dialog-new-session-no-agent-added",
+    group: "Sidebar sessions",
+    category: "exceptional",
+    title: "New session dialog open as the last agent is removed",
+    description: "Reached only when the agents change under an open dialog (the buttons that open it are disabled without an added agent): every agent is removed meanwhile. The dialog closes itself and a plain error alert says no agent is available to open a session; OK is its only button.",
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.project.openSession")),
+      (ui) => ui.setAgents({ added: [] }),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: sessionLaunchState,
+    id: "dialog-new-session-agent-not-added",
+    group: "Sidebar sessions",
+    category: "exceptional",
+    title: "Session launch refused, the agent is not added",
+    description: "The daemon finds Claude Code off the added list, which the window has not heard yet. The danger alert says the session cannot be opened with it, with the remedy in words and an Add agent… button in the footer, left of OK; the dialog stays behind it.",
+    sessionOpenError: { code: "agent_not_added", params: { agent: "Claude Code" }, message: "Claude Code is not added. Add it in Settings → Agent accounts to open a session with it." },
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.project.openSession")),
+      (ui) => ui.confirm(),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: sessionLaunchState,
+    id: "dialog-new-session-account-refused",
+    group: "Sidebar sessions",
+    category: "exceptional",
+    title: "Session launch refused, the account is gone",
+    description: "The daemon finds the account the session was to run under removed. The danger alert says so, with the remedy in words and a Manage accounts… button in the footer, left of OK; the dialog stays behind it.",
+    sessionOpenError: { code: "unknown_account", params: { account: "a-removed" }, message: "unknown account a-removed" },
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.project.openSession")),
+      (ui) => ui.confirm(),
     ],
   },
   {
@@ -947,6 +1078,23 @@ export const dialogScenarios: Scenario[] = [
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.press(ui.t("dialog.project.defaultAgent")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: (() => {
+      const base = withAddedAgents(dialogState, ["codex", "claude"]);
+      return { ...base, projects: new Map([...base.projects, [removedAgentProject.id, removedAgentProject]]) };
+    })(),
+    id: "dialog-edit-project-agent-not-added",
+    group: "Projects",
+    category: "normal",
+    title: "Project default agent with only some agents added",
+    description: "The open Default agent list offers Codex then Claude Code, the order the agents were added in, after Inherit from console and Detect from files. The project still names Grok Build, which is not added, so it stays selected at the foot, with a grey Not added badge after its name in the option as well as in the field, and unselectable.",
+    steps: [
+      (ui) => projectActions(ui, removedAgentProject.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
       (ui) => ui.press(ui.t("dialog.project.defaultAgent")),
     ],
   },

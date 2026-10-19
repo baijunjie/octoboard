@@ -32,7 +32,8 @@ Below 640 px each setting row puts its control under its name and its line of te
 ## Moving between sections
 
 The list of sections is a tab list — vertical, or the row along the top in a narrow window — with the selected
-section marked. Opening Settings puts keyboard focus on the selected section's tab. Only that tab is reached with Tab:
+section marked. Opening Settings puts keyboard focus on the selected section's tab (unless the Add agent dialog is
+put in front; see "Opening and closing Settings" below). Only that tab is reached with Tab:
 the arrow keys move to the previous or next section and show it at once, wrapping around at either end, and Tab from the
 list moves on into the section's settings. In the row along the top only Left and Right move, mirrored under a
 right-to-left language; in the vertical list Up and Down do too. When a control holding keyboard focus disappears from a
@@ -56,11 +57,23 @@ Settings opens from:
   it on the Agent accounts section above the console dialog, left open beneath it (see "Agent config directories" in
   `docs/product/consoles.md`);
 - the **Manage accounts…** button in the rail's account quota panel, which closes the panel and opens it on the Agent
-  accounts section (see "The account quota panel on the rail" in `docs/product/account-quotas.md`).
+  accounts section (see "The account quota panel on the rail" in `docs/product/account-quotas.md`);
+- the **Add agent…** button of the "No agent added" states — the terminal's empty panel (see "A console with nothing
+  in it" in `docs/product/session-terminal.md`) and the rail's account quota panel, which it closes first — which
+  opens it on the Agent accounts section with the Add agent dialog in front (see "Adding an agent" in
+  `docs/product/agent-accounts.md`);
+- an error alert's **Add agent…** or **Manage accounts…** button, which acknowledges the alert and opens it the same
+  way, above whatever dialog is open (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
+
+When the Add agent dialog is put in front, that dialog holds keyboard focus rather than the selected section's tab. A
+request to open Settings on a section while it is already open moves it to that section, putting focus on that
+section's tab and closing the Add agent dialog first if it is open, or, when the Add agent dialog is asked for, shows
+the Agent accounts section with that dialog in front.
 
 Settings closes on `Escape`, on its close button, and on a press on the dimmed area around it. Closing it puts
-keyboard focus back on the selected session's terminal, or, when it was opened from the console dialog, on the
-console dialog's Manage accounts button.
+keyboard focus back on the selected session's terminal, unless a dialog is open beneath it: focus then stays in that
+dialog, on the control that opened Settings — the console dialog's Manage accounts button, say — or on the dialog
+itself when that control is gone.
 
 While Settings is open everything under it stays as it was, the terminal included, and its size does not change.
 

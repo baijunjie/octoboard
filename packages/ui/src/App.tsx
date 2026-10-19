@@ -1,3 +1,5 @@
+import { errorAlerts } from "./errorAlerts";
+import { noAgentState, pickableAgents } from "./agents";
 import { reportExternalLinkFailure } from "./components/ExternalLink";
 import { copyText } from "./components/copyText";
 import { ActionableError } from "./errorRecovery";
@@ -27,6 +29,7 @@ import { BareTitleBar, TitleBar } from "./components/TitleBar";
 import { Toasts } from "./components/Toasts";
 import { useFirstConsoleHandoff } from "./components/useFirstConsoleHandoff";
 import { useLatest, useStableHandler } from "./components/useLatest";
+import { focusAfterLoss } from "./components/regionFocus";
 import { DaemonRequestError } from "./daemon-client";
 import { ConfirmDialog } from "./dialogs/ConfirmDialog";
 import type { DialogRequest } from "./dialogs/dialogRequest";
@@ -58,6 +61,7 @@ import { maximizedKind, openPanel, OWNER_KINDS, panelId, panelRegion, OWNER_TOGG
 import { usePanelStacks } from "./panels/usePanelStacks";
 import { LoginPageOpener } from "./settings/AccountLogin";
 import { SettingsDialog } from "./settings/SettingsDialog";
+import { registerSettingsLauncher } from "./settings/settingsLauncher";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
 import { belongsToFocus, focusAfterSelect, focusFor, focusKey, KEY_SWITCH_SELECTION, resolveFocus, shortcutOutcome } from "./sidebar/focus";
 import { useFocusShortcut } from "./sidebar/focusShortcut";
@@ -253,10 +257,11 @@ export function App(): React.ReactElement {
   // sidebar previews another console. A selected session or an archive keeps that offer hidden.
   const emptyState = useDaemonStoreEqual((s) =>
     selectedSession === undefined && !archiveOpen
-      ? terminalEmptyState(hosts !== undefined, currentConsole, sidebarView.focus, projectList, currentConsole ? sessionsOf(indexSessions(s.sessions).byConsole, currentConsole.id) : NO_SESSIONS, agentAvailability)
+      ? terminalEmptyState(hosts !== undefined, currentConsole, sidebarView.focus, projectList, currentConsole ? sessionsOf(indexSessions(s.sessions).byConsole, currentConsole.id) : NO_SESSIONS, agentAvailability, s.settings.added_agents)
       : undefined,
   );
-  const emptyHasAction = emptyState !== undefined && emptyState.kind !== "no-agents";
+  // The "no agent added" state offers Add agent; only "no agent installed" has nothing to press.
+  const emptyHasAction = emptyState !== undefined && !(emptyState.kind === "no-agents" && emptyState.reason === "install");
   // A region off screen is skipped by F6: a hidden docked pane, a closed drawer, and a floating pane
   // too, which is only a hover away rather than shown. The top bar and the rail are always there.
   const regionCycle = useRegionCycle({
@@ -371,7 +376,7 @@ export function App(): React.ReactElement {
     toastError,
   });
 
-  const { settingsOpen, settingsSection, openSettings, openSettingsAt, closeSettings } = useSettingsDialog({
+  const { settingsOpen, settingsNavigation, openSettings, openSettingsAt, closeSettings } = useSettingsDialog({
     ready: hosts !== undefined,
     otherModalOpen: dialogRequest !== undefined || questionPending || exitConfirmOpen,
     focusTerminal,
@@ -426,6 +431,10 @@ export function App(): React.ReactElement {
   // recognised as the one that was not there when its dialog opened, and the sidebar switches to it.
   const consolesBeforeNew = useRef<Set<string> | undefined>(undefined);
   const openDialog = (dialog: DialogRequest) => {
+    // Nothing to offer without an agent that is added and installed; the controls are disabled already.
+    const { agentAvailability, settings } = store.getState();
+    if ((dialog.kind === "new-session" || dialog.kind === "new-console-session") && noAgentState(agentAvailability, settings.added_agents)) return;
+    if (dialog.kind === "hand-off" && !pickableAgents(agentAvailability, settings.added_agents).some((agent) => agent !== dialog.session.agent)) return;
     if (dialog.kind === "new-console") consolesBeforeNew.current = new Set(consoles.keys());
     setDialogRequest(dialog);
   };
@@ -759,6 +768,10 @@ export function App(): React.ReactElement {
   const stableSetLocked = useStableHandler(setLocked);
   const stableSetPinned = useStableHandler(setPinned);
   const stableOpenSettingsAt = useStableHandler(openSettingsAt);
+  useEffect(() => registerSettingsLauncher(stableOpenSettingsAt), [stableOpenSettingsAt]);
+  // Where focus goes once the last alert is acknowledged with nothing to give it back to.
+  const focusAfterAlert = useStableHandler(() => focusAfterLoss(focusTerminal));
+  useEffect(() => errorAlerts.setFocusFallback(focusAfterAlert), [focusAfterAlert]);
   const stableBack = useStableHandler(navigation.back);
   const stableForward = useStableHandler(navigation.forward);
 
@@ -951,7 +964,8 @@ export function App(): React.ReactElement {
                     onAddProject={emptyState?.kind === "add-project" && currentConsole
                       ? () => openDialog({ kind: "new-project", console: currentConsole })
                       : undefined}
-                    noAgents={emptyState?.kind === "no-agents"}
+                    noAgents={emptyState?.kind === "no-agents" ? emptyState.reason : undefined}
+                    onAddAgent={() => openSettingsAt("accounts", { addAgent: true })}
                     newSession={emptyState && currentConsole && (emptyState.kind === "new-session" || emptyState.kind === "new-console-session")
                       ? {
                         message: t(emptyState.kind === "new-session" ? "sidebar.project.openSession" : "sidebar.consoleSessions.empty"),
@@ -1000,7 +1014,7 @@ export function App(): React.ReactElement {
       {/* A login started in Settings opens its authorization page for as long as the window lives, Settings open or not. */}
       <LoginPageOpener />
       <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />
-      {settingsOpen && <SettingsDialog initialSection={settingsSection} onClose={closeSettings} />}
+      {settingsOpen && <SettingsDialog navigation={settingsNavigation} onClose={closeSettings} />}
       {dialogRequest && (
         <RequestedDialog
           dialog={dialogRequest}

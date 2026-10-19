@@ -172,15 +172,15 @@ function switchAccountSubmenu(
 }
 
 /** "Hand off": offered for a session that is not archived. Disabled while the session is in the
- * middle of a turn or still starting, which the daemon refuses (`session_working`), and while it
- * is locked, as Archive is. */
-function handOffItem(t: Translate, handlers: SidebarHandlers, session: Session): ActionMenuItem {
+ * middle of a turn or still starting, which the daemon refuses (`session_working`), while it
+ * is locked, as Archive is, and while no other agent could take it over (`hasTarget`). */
+function handOffItem(t: Translate, handlers: SidebarHandlers, session: Session, hasTarget: boolean): ActionMenuItem {
   return {
     label: t("sidebar.session.handOff"),
     icon: Forward,
     iconClassName: "rtl:-scale-x-100",
     onClick: () => handlers.onOpenDialog({ kind: "hand-off", session }),
-    disabled: session.locked || session.status === "working" || session.status === "starting",
+    disabled: !hasTarget || session.locked || session.status === "working" || session.status === "starting",
   };
 }
 
@@ -219,14 +219,14 @@ function colourSubmenu(t: Translate, handlers: SidebarHandlers, session: Session
  * this is the user's only way to archive a console session (see "A session archiving itself" in
  * `docs/product/hub-orchestration.md`), and the only place to switch its account. Focus mode is
  * offered for a console session alone; its own card in its focus mode (`placement` `focused`)
- * leaves out Focus mode and Pin / Unpin. */
+ * leaves out Focus mode and Pin / Unpin. `canHandOff` is whether another agent could take a session over. */
 export function sessionMenu(
   t: Translate,
   handlers: SidebarHandlers,
   session: Session,
   accounts: Account[],
   defaultNames: Settings["default_account_names"],
-  { placement = "list", hasBoundSessions = false }: { placement?: MenuPlacement; hasBoundSessions?: boolean } = {},
+  { placement = "list", hasBoundSessions = false, canHandOff = true }: { placement?: MenuPlacement; hasBoundSessions?: boolean; canHandOff?: boolean } = {},
 ): ActionMenuEntry[] {
   const focused = placement === "focused";
   const archived = session.status === "archived";
@@ -242,7 +242,7 @@ export function sessionMenu(
     ...(session.role === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
     ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
     ...(switchAccount ? [switchAccount] : []),
-    ...(archived ? [] : [handOffItem(t, handlers, session)]),
+    ...(archived ? [] : [handOffItem(t, handlers, session, canHandOff)]),
     "separator",
     offersDelete(session, hasBoundSessions)
       ? { label: t("sidebar.session.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true, disabled: session.locked }

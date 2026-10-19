@@ -81,11 +81,12 @@ From top to bottom:
      ("N more…"); the heading's number still counts them all.
    - With no session in any of these groups — none running, or only ones still starting — this part is a single
      heading, **No sessions running**, styled like the other headings but with no glyph.
-2. **The quota submenus**, one per available agent — **Claude quota**, **Codex quota**, **Grok quota**, in that
-   order, the agents' names never translated — each opening to that agent's accounts and showing what Settings and
-   the rail's panel show, including window order (see "Quota windows" and "How an account's quota is shown" in
-   `docs/product/account-quotas.md`). An agent that is not available, or whose availability is not yet determined,
-   has none. The submenus are set off from the sessions and from Open Octoboard by separators. Inside a submenu,
+2. **The quota submenus**, one per added agent that is available — **Claude quota**, **Codex quota**, **Grok
+   quota**, in the order of the added agents (see "Added agents" in `docs/product/agent-accounts.md`), the agents'
+   names never translated — each opening to that agent's accounts and showing what Settings and the rail's panel
+   show, including window order (see "Quota windows" and "How an account's quota is shown" in
+   `docs/product/account-quotas.md`). An agent that is not added, not available, or whose availability is not yet
+   determined has none. The submenus are set off from the sessions and from Open Octoboard by separators. Inside a submenu,
    nothing can be chosen:
    - each account is a header line, at the small size of a section header, regular weight, in the secondary text
      colour, with its name — for the agent's default account the name the user gave it, else **Default** (see "The
@@ -125,7 +126,7 @@ From top to bottom:
    separately. The row has no tooltip, which would float over the submenu it opens and repeat what that shows.
 
    Countdowns and the age of an out-of-date reading are as of the last time the menu was updated, which a change of
-   the selected session, current console, sessions, consoles, projects, accounts, agents' availability, quotas or the UI's language causes, not the
+   the selected session, current console, sessions, consoles, projects, accounts, added agents, agents' availability, quotas or the UI's language causes, not the
    clock alone, so they can lag behind the clock. Opening the menu asks the daemon for a fresh reading, as opening
    the rail's panel or Settings' section does (see "When quotas are read" in `docs/product/account-quotas.md`); since
    the menu never changes while open, what that brings shows from the next time it is opened. The menu does not wait for the reply.

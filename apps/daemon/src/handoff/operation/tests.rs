@@ -482,6 +482,43 @@ async fn a_handoff_that_is_refused_changes_nothing() {
     drop(boss);
 }
 
+/// A handoff to an agent that is not added is refused with nothing changed.
+#[tokio::test]
+async fn a_handoff_to_an_agent_that_is_not_added_is_refused() {
+    let fixture = Fixture::new("target-not-added");
+    fixture.run(session("original", true, "idle", None, false));
+    fixture
+        .state
+        .store
+        .set_added_agents_if_undecided(&[Agent::Claude])
+        .unwrap();
+    let before = fixture.snapshot();
+
+    let err = fixture
+        .hand_off_to("original", Agent::Codex)
+        .await
+        .expect_err("refused");
+    let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+    assert_eq!(coded.code, error_code::AGENT_NOT_ADDED);
+    assert_eq!(coded.params["agent"], Agent::Codex.label());
+    assert!(fixture.launches.lock().unwrap().is_empty());
+    assert_eq!(fixture.snapshot(), before);
+}
+
+/// While the added list is undecided nothing is refused for it, so the handoff goes ahead.
+#[tokio::test]
+async fn a_handoff_goes_ahead_while_the_added_list_is_undecided() {
+    let fixture = Fixture::new("target-undecided");
+    fixture.run(session("original", true, "idle", None, false));
+    assert_eq!(fixture.state.store.added_agents().unwrap(), None);
+
+    let receiving = fixture
+        .hand_off_to("original", Agent::Codex)
+        .await
+        .expect("handed off");
+    assert_eq!(receiving.agent, Agent::Codex);
+}
+
 /// An agent that cannot be launched leaves the original, its branches and its sessions as they were,
 /// no receiving session and no package, and nobody is told.
 #[tokio::test]

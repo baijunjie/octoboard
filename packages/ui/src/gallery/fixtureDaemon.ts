@@ -1,6 +1,6 @@
 import { DaemonRequestError } from "../daemon-client";
 import { consoleAccount, inheritedAccount } from "../accountChoices";
-import { AGENT_LABEL, isAgentUnavailable, projectSessionAgent } from "../agents";
+import { AGENT_LABEL, isAgentAdded, isAgentUnavailable, projectSessionAgent } from "../agents";
 import { daemonMessage } from "../daemonMessage";
 import { errorPresentation, noticeErrorPresentation } from "../errorPresentation";
 import { errorText } from "../errorText";
@@ -57,6 +57,13 @@ function normalizedPath(path: string): string {
   }
   return `${expanded.startsWith("/") ? "/" : ""}${parts.join("/")}`;
 }
+
+/** The refusal to open a session, or hand one off, on an agent the user has not added. */
+const agentNotAdded = (agent: Agent) => ({
+  code: "agent_not_added",
+  params: { agent: AGENT_LABEL[agent] },
+  message: `${AGENT_LABEL[agent]} is not added. Add it in Settings → Agent accounts to open a session with it.`,
+});
 
 /** A text as the daemon stores one that may be left blank: trimmed, and none when nothing is left
  * (`trimmed_or_none` of `launch_settings.rs`). */
@@ -305,6 +312,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           refuseLocked([session]);
           if (body.agent === session.agent) return fail({ code: "handoff_to_same_agent", params: { session: session.id, agent: AGENT_LABEL[session.agent] }, message: "The session already runs on that agent" });
           if (isAgentUnavailable(current.agentAvailability, body.agent)) return fail({ code: "agent_not_available", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} is not available` });
+          if (!isAgentAdded(current.settings.added_agents, body.agent)) return fail(agentNotAdded(body.agent));
           if (body.account != null && !current.settings.accounts.some((account) => account.id === body.account && account.agent === body.agent)) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
           const owner = current.consoles.get(session.console_id);
           if (!owner) return fail({ code: "unknown_console", params: { console: session.console_id }, message: `unknown console ${session.console_id}` });
@@ -392,6 +400,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           const project = body.project_id ? current.projects.get(body.project_id) : undefined;
           if (body.project_id && !project) return fail({ code: "unknown_project", params: { project: body.project_id }, message: `unknown project ${body.project_id}` });
           const agent = body.agent ?? (project ? project.default_agent ?? projectSessionAgent(owner) : owner.default_agent);
+          if (!isAgentAdded(current.settings.added_agents, agent)) return fail(agentNotAdded(agent));
           const account = launchAccount(owner, project, agent, body.account);
           const ordinal = nextConsoleOrdinals.get(owner.id) ?? 1;
           if (!project) nextConsoleOrdinals.set(owner.id, ordinal + 1);

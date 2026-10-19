@@ -1,6 +1,7 @@
 import { Archive, Trash2 } from "lucide-react";
 import React, { type RefObject } from "react";
 
+import { pickableAgents } from "../agents";
 import { ActionMenu } from "../components/ActionMenu";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { isolate } from "../i18n/isolate";
@@ -44,6 +45,7 @@ export function SessionActions({
     const related = index.boundOwnerIds.has(session.id) ? sessionsOf(index.byConsole, session.console_id) : [];
     return !archiveNeedsConfirmation(related, session);
   });
+  const canHandOff = useDaemonStore((s) => pickableAgents(s.agentAvailability, s.settings.added_agents).some((agent) => agent !== session.agent));
   const handoff = useFocusHandoff(() => rowRef.current?.focus());
   const title = sessionDisplayTitle(t, session);
   const deletable = isUnusedSession(session, hasBoundSessions);
@@ -62,7 +64,7 @@ export function SessionActions({
           />
         </div>
       )}
-      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={sessionMenu(t, handlers, session, accounts, defaultNames, { placement, hasBoundSessions })} contextTargetRef={rowRef} />
+      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={sessionMenu(t, handlers, session, accounts, defaultNames, { placement, hasBoundSessions, canHandOff })} contextTargetRef={rowRef} />
     </>
   );
 }

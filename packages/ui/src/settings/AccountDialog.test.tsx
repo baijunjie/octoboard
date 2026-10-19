@@ -73,14 +73,14 @@ it("lists every added agent as selectable when adding, naming the ones known to 
   render(undefined, () => Promise.resolve(), availabilityOf("codex"));
   await act(async () => document.body.querySelector<HTMLElement>('[data-slot="select-trigger"]')!.click());
   const options = Array.from(document.body.querySelectorAll('[role="option"]'));
-  expect(options.map((o) => o.textContent)).toEqual(["Claude Code", "Codex (not installed)", "Grok Build"]);
+  expect(options.map((o) => o.textContent)).toEqual(["Claude Code", "Codex, Not installed", "Grok Build"]);
   expect(options.some((o) => o.hasAttribute("data-disabled") || o.getAttribute("aria-disabled") === "true")).toBe(false);
 });
 
 it("lists only the added agents, in the list's order", async () => {
   render(undefined, () => Promise.resolve(), availabilityOf("codex"), ["grok", "codex"]);
   await act(async () => document.body.querySelector<HTMLElement>('[data-slot="select-trigger"]')!.click());
-  expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).toEqual(["Grok Build", "Codex (not installed)"]);
+  expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).toEqual(["Grok Build", "Codex, Not installed"]);
 });
 
 const taken = () =>

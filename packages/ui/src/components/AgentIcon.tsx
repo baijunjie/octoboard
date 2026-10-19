@@ -31,6 +31,6 @@ export function agentIconSetupOptions(t: Translate, agentAvailability: Map<Agent
 }
 
 /** `agentPickerOptions`, with each agent's mark. */
-export function agentIconPickerOptions(t: Translate, agentAvailability: Map<Agent, AgentAvailability>, held?: Agent | null) {
-  return agentPickerOptions(t, agentAvailability, held).map((option) => ({ ...option, icon: <AgentIcon agent={option.value} /> }));
+export function agentIconPickerOptions(t: Translate, agentAvailability: Map<Agent, AgentAvailability>, added: Agent[] | null, held?: Agent | null) {
+  return agentPickerOptions(t, agentAvailability, added, held).map((option) => ({ ...option, icon: <AgentIcon agent={option.value} /> }));
 }

@@ -90,7 +90,7 @@ afterEach(() => {
 const session = sessionOf("s-1", "c-1", undefined, "Work", "working");
 
 function render(root: Root, current = session) {
-  act(() => root.render(<TerminalPane session={current} onResume={async () => true} />));
+  act(() => root.render(<TerminalPane session={current} onResume={async () => true} onAddAgent={() => {}} />));
 }
 
 function mount() {
@@ -166,7 +166,7 @@ it("focuses the Reconnect button, not the terminal, through the handle while it 
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(<TerminalPane ref={handle} session={session} onResume={async () => true} />));
+  act(() => root.render(<TerminalPane ref={handle} session={session} onResume={async () => true} onAddAgent={() => {}} />));
   act(() => handle.current?.focus());
   expect(FakeController.last.focuses).toBe(1);
   for (let i = 0; i < 5; i++) failAttempt();
@@ -210,7 +210,7 @@ it("holds its size while a docked pane eases, then fits once", () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  const show = (resizing: boolean) => act(() => root.render(<TerminalPane session={session} resizing={resizing} onResume={async () => true} />));
+  const show = (resizing: boolean) => act(() => root.render(<TerminalPane session={session} resizing={resizing} onResume={async () => true} onAddAgent={() => {}} />));
   show(true);
   const fits = FakeController.last.fits;
   observers.forEach((notify) => notify());
@@ -247,7 +247,7 @@ function mountEmpty(props: Partial<React.ComponentProps<typeof TerminalPane>> = 
   const root = createRoot(container);
   roots.push(root);
   const show = (next: Partial<React.ComponentProps<typeof TerminalPane>> = props) =>
-    act(() => root.render(<TerminalPane ref={handle} onResume={async () => true} {...next} />));
+    act(() => root.render(<TerminalPane ref={handle} onResume={async () => true} onAddAgent={() => {}} {...next} />));
   show();
   return { container, handle, topBarButton, elsewhere, show };
 }
@@ -319,10 +319,21 @@ it("offers the contextual session action and hands focus on when it disappears",
 });
 
 it("shows the installation step without a creation control when no agent is available", () => {
-  const { container } = mountEmpty({ noAgents: true });
+  const { container } = mountEmpty({ noAgents: "install" });
   expect(container.textContent).toContain("install at least one tool");
   expect(container.textContent).not.toContain("Select a session");
   expect(container.querySelector<HTMLButtonElement>("button:not([hidden])")).toBeNull();
+});
+
+it("offers to add an agent instead of the installation step when installed agents are waiting to be added", () => {
+  const onAddAgent = vi.fn();
+  const { container } = mountEmpty({ noAgents: "add", onAddAgent });
+  expect(container.textContent).toContain("No agent added");
+  expect(container.textContent).toContain("Add an agent to open a session.");
+  expect(container.textContent).not.toContain("install at least one tool");
+  const button = Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Add agent…");
+  act(() => button!.click());
+  expect(onAddAgent).toHaveBeenCalledOnce();
 });
 
 it("covers a starting session with its own message and attaches only once it is up", () => {
@@ -369,7 +380,7 @@ it("hands a path with a view to the file viewer once it has read it, and opens a
   const inProject = { ...session, project_id: "p-1" };
   daemon.request.mockClear();
   daemon.request.mockResolvedValueOnce({ type: "project_file", project: "p-1", worktree: "w", path: "src/a.ts", source: { kind: "live", version: "1" }, file: { size: 1, kind: "text", media_type: null, text: "x", data: null } } as never);
-  act(() => root.render(<TerminalPane session={inProject} onResume={async () => true} onViewFile={onViewFile} />));
+  act(() => root.render(<TerminalPane session={inProject} onResume={async () => true} onAddAgent={() => {}} onViewFile={onViewFile} />));
   await act(async () => FakeController.last.openPath({ path: "/r/src/a.ts", line: 3, view: { worktree: "w", path: "src/a.ts" } }));
   expect(onViewFile).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ project: "p-1", worktree: "w", path: "src/a.ts", line: 3 }));
   expect(daemon.request.mock.calls.map(([body]) => (body as { type: string }).type)).toEqual(["read_project_file"]);

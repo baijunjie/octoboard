@@ -3,6 +3,7 @@ import React, { useId } from "react";
 
 import { FadeOverflow } from "../components/FadeOverflow";
 import { MotionListBox } from "../components/MotionListBox";
+import { StatusBadge } from "../components/StatusBadge";
 
 /** One choice of an `OptionSelect`. */
 export type Option<T extends string> = {
@@ -10,6 +11,8 @@ export type Option<T extends string> = {
   label: string;
   lang?: string;
   icon?: React.ReactNode;
+  /** A status badge after the label ("Not added"), which never shrinks: the label gives way first. */
+  badge?: string;
   isDisabled?: boolean;
 };
 
@@ -24,7 +27,8 @@ export type Option<T extends string> = {
  * With `inline` it is only as wide as its value and `label` is its accessible name alone, for a
  * control whose own row already shows the name (a setting). With `joined` it is one part of an
  * input group rather than a field of its own: it shares the group's label, so `label` is its
- * accessible name alone, it takes an equal share of the group's width, and the corners it meets
+ * accessible name alone, it takes an equal share of the group's width (the start half whose value
+ * carries a badge keeps its natural width, up to 70%, and the other half gives way), and the corners it meets
  * its neighbour at are squared and the two triggers meet with nothing between them: each half's own
  * chevron and hover fill are what say there are two controls.
  *
@@ -77,7 +81,9 @@ export function OptionSelect<T extends string>({
       // A joined half that holds keyboard focus is raised, as its focus ring is drawn outside the
       // trigger and the later half would otherwise paint over it along the shared edge. The raise
       // is on the flex item, the root, which a trigger's own `z-index` would not be.
-      className={inline ? "w-48" : joined ? "min-w-0 flex-1 has-[[data-focus-visible=true]]:z-10" : undefined}
+      // The start half of a joined pair whose value carries a badge keeps its natural width, so the name and
+      // the badge stay readable and the other half is what gives way.
+      className={inline ? "w-48" : joined ? `min-w-0 has-[[data-focus-visible=true]]:z-10 ${joined === "start" && current?.badge ? "flex-none max-w-[70%]" : "flex-1"}` : undefined}
       aria-label={(inline || joined || hideLabel) && !labelledBy ? label : undefined}
       aria-labelledby={labelledBy}
       // react-aria drops the slot's id when no note exists on mount and does not restore it when
@@ -120,9 +126,10 @@ export function OptionSelect<T extends string>({
         <Select.Value className="flex min-w-0 flex-1 items-center gap-2 text-clip">
           {() => <>
             {current?.icon && <span aria-hidden="true" className="flex shrink-0">{current.icon}</span>}
-            <FadeOverflow as="span" lang={current?.lang} dir="auto" className="min-w-0 flex-1" titleWhenClipped={current?.label ?? placeholder}>
+            <FadeOverflow as="span" lang={current?.lang} dir="auto" className={current?.badge ? "min-w-0" : "min-w-0 flex-1"} titleWhenClipped={current?.label ?? placeholder}>
               {current?.label ?? placeholder}
             </FadeOverflow>
+            {current?.badge && <StatusBadge>{current.badge}</StatusBadge>}
           </>}
         </Select.Value>
         {placeholder !== undefined && <Select.ClearButton />}
@@ -137,9 +144,10 @@ export function OptionSelect<T extends string>({
                   {option.icon}
                 </span>
               )}
-              <FadeOverflow lang={option.lang} dir="auto" className="min-w-0 flex-1" titleWhenClipped={option.label}>
+              <FadeOverflow lang={option.lang} dir="auto" className={option.badge ? "min-w-0" : "min-w-0 flex-1"} titleWhenClipped={option.label}>
                 {option.label}
               </FadeOverflow>
+              {option.badge && <StatusBadge>{option.badge}</StatusBadge>}
               <ListBox.ItemIndicator />
             </ListBox.Item>
           ))}

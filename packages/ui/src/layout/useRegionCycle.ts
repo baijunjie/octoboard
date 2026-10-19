@@ -1,7 +1,7 @@
 import { setInteractionModality } from "react-aria";
 import { useCallback, useEffect, useRef } from "react";
 
-import { FOCUSABLE, focusOpenDialog } from "../components/regionFocus";
+import { focusOpenDialog, focusRegion, regionElements, type Region } from "../components/regionFocus";
 import { useLatest } from "../components/useLatest";
 
 /** The window's regions in visual order, each an element (or several) marked `data-region`. The
@@ -13,50 +13,19 @@ import { useLatest } from "../components/useLatest";
 const BEFORE_PANELS = ["topbar", "rail", "welcome", "sidebar", "archive", "terminal"] as const;
 const AFTER_PANELS = ["banner", "toast"] as const;
 type FixedRegion = (typeof BEFORE_PANELS)[number] | (typeof AFTER_PANELS)[number];
-type Region = string;
 type ShownRegion = Exclude<FixedRegion, "toast">;
 
 function windowRegions(panels: readonly string[]): readonly Region[] {
   return [...BEFORE_PANELS, ...panels, ...AFTER_PANELS];
 }
 
-/** A toast that is on screen, not one fading out. */
-const LIVE_TOAST = '[data-slot="toast"]:not([data-exiting="true"]):not([data-hidden="true"])';
-
 /** A dialog or a menu is open: ordinary regions stay unavailable. A toast is an `alertdialog`
  * too, but a non-modal one. */
 export const MODAL_OPEN =
   '[role="dialog"]:not([aria-modal="false"]), [role="alertdialog"]:not([aria-modal="false"]), [role="menu"]';
 
-function regionElements(region: Region): Element[] {
-  return Array.from(document.querySelectorAll(`[data-region=${region}]`));
-}
-
 function currentRegion(regions: readonly Region[]): Region | undefined {
   return regions.find((region) => regionElements(region).some((el) => el.contains(document.activeElement)));
-}
-
-/** Focuses where `region` takes focus and says whether it did: a control the region marks with
- * `data-region-landing` (a panel that failed to load, whose Try again follows its header), else the
- * sidebar's selected row or the rail's current console, else the first control, as the other regions
- * that are not the terminal do. The toast stack lists its newest toast first, so its first control
- * is that toast. */
-function focusRegion(region: Region, focusTerminal: () => void): boolean {
-  if (region === "terminal") {
-    focusTerminal();
-    return regionElements(region).some((el) => el.contains(document.activeElement));
-  }
-  const root = regionElements(region)[0];
-  if (!root) return false;
-  const target =
-    region === "toast"
-      ? root.querySelector<HTMLElement>(LIVE_TOAST)
-      : root.querySelector<HTMLElement>("[data-region-landing]") ||
-        ((region === "sidebar" || region === "rail") && root.querySelector<HTMLElement>('[aria-current="true"]')) ||
-        root.querySelector<HTMLElement>(FOCUSABLE);
-  if (!target) return false;
-  target.focus();
-  return target.ownerDocument.activeElement === target;
 }
 
 /**

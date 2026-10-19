@@ -1,4 +1,4 @@
-import { accountsByAgent, AGENT_ACCOUNT_FIELD, defaultAccountName, isAgentUnavailable, projectSessionAgent, selectableAgent } from "./agents";
+import { accountsByAgent, AGENT_ACCOUNT_FIELD, defaultAccountName, isAgentPickable, projectSessionAgent, selectableAgent } from "./agents";
 import type { Translate } from "./i18n/catalog";
 import type { Account, Agent, AgentAvailability, Console, Project, ProjectAccount, Session, Settings } from "./protocol";
 import { sessionAccountName } from "./sessionLabel";
@@ -18,7 +18,7 @@ export interface ChoiceEntry {
 }
 
 /** One agent's entries, the default account first. `selectable` is false only once the agent is
- * determined to be missing; before that nothing is known to be wrong with any of its entries. */
+ * determined to be missing or is not added; before that nothing is known to be wrong with any of its entries. */
 export interface ChoiceGroup {
   agent: Agent;
   selectable: boolean;
@@ -29,17 +29,19 @@ export function choiceKey({ agent, account }: AccountChoice): string {
   return `${agent}:${account ?? ""}`;
 }
 
-/** Every agent's group, built from the stored accounts. With none stored an agent's group holds its
+/** Every agent's group, built from the stored accounts (`added` is the user's added agents, `null` while
+ * the daemon has not decided them). With none stored an agent's group holds its
  * default account alone, which needs no discovery to exist. `defaultName` is the default account's
  * name in the current language. */
 export function choiceGroups(
   accounts: Account[],
   agentAvailability: Map<Agent, AgentAvailability>,
+  added: Agent[] | null,
   defaultName: (agent: Agent) => string,
 ): ChoiceGroup[] {
   return accountsByAgent(accounts).map(({ agent, accounts: owned }) => ({
     agent,
-    selectable: !isAgentUnavailable(agentAvailability, agent),
+    selectable: isAgentPickable(agentAvailability, added, agent),
     entries: [
       { account: null, name: defaultName(agent) },
       ...owned.map((account) => ({ account: account.id, name: account.name })),
@@ -97,7 +99,7 @@ export function inheritedAccount(owner: Console, project: Project | undefined, a
 /** Where the session dialog's control opens: the agent the dialog already resolves — a project
  * session's: the project's default, else the console's project session default; a console
  * session's: the console's default — moved to one that may be picked when that one is known
- * to be missing, with the account that agent resolves to when none is chosen: the project's
+ * to be missing or is not added, with the account that agent resolves to when none is chosen: the project's
  * setting for it, else the console `owner`'s. The choice made in the dialog sits above this, as
  * the daemon's own chain puts a session's choice above both. */
 export function initialChoice(
@@ -105,8 +107,9 @@ export function initialChoice(
   project: Project | undefined,
   accounts: Account[],
   agentAvailability: Map<Agent, AgentAvailability>,
+  added: Agent[] | null,
 ): AccountChoice {
-  const agent = selectableAgent(agentAvailability, project ? project.default_agent ?? projectSessionAgent(owner) : owner.default_agent);
+  const agent = selectableAgent(agentAvailability, added, project ? project.default_agent ?? projectSessionAgent(owner) : owner.default_agent);
   return { agent, account: inheritedAccount(owner, project, agent, accounts) };
 }
 

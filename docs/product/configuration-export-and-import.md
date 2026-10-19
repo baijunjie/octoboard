@@ -61,7 +61,7 @@ request; a project left out is sent none. A directory the user typed that is not
 request and is marked on its row. The dialog cannot be dismissed while the request runs, which with clones can be long.
 The **result** replaces the review. It opens with a summary of the totals (only what happened, and that nothing failed
 when so) and, when the application settings were applied, a line for each setting applied, saying it is now on or off;
-when they could not be applied, a line saying so with the reason. Under it a table has a line for each project, under
+when they could not be applied, an error callout saying so with the reason. Under it a table has a line for each project, under
 its console, with its result (created, left out, failed, not tried) and a detail: how a created project was placed (at
 its exported path, in the default clone directory, cloned, in the directory chosen), why a failed one failed, or that a
 project was not tried because its console could not be created. A console that could not be

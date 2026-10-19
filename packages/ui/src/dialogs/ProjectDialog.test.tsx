@@ -32,6 +32,7 @@ function render(
   accounts: Account[] = [],
   consoleOverride: Partial<Console> = {},
   availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {},
+  added: Agent[] | null = null,
 ) {
   const pending: Pending[] = [];
   const daemon: Daemon = {
@@ -40,7 +41,7 @@ function render(
       agentAvailability: new Map(
         (["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined" }]),
       ),
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", accounts },
+      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", accounts },
     }),
     request: (body) => new Promise((resolve, reject) => pending.push({ body, resolve, reject })),
     toastError: vi.fn(),
@@ -405,17 +406,35 @@ it("leaves the agents known to be missing out of the default agent picker", asyn
 
 it("keeps the project's own missing agent in the picker as not installed until another is chosen", async () => {
   render(projectOf("p-2", "c-1", "Site", { default_agent: "codex" }), [], {}, { codex: "unavailable" });
-  expect(buttons().some((b) => b.textContent?.includes("Codex (not installed)"))).toBe(true);
-  await click(buttons().find((b) => b.textContent?.includes("Codex (not installed)")));
+  expect(buttons().some((b) => b.textContent?.includes("Codex, Not installed"))).toBe(true);
+  await click(buttons().find((b) => b.textContent?.includes("Codex, Not installed")));
   expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).toEqual([
     "Inherit from console (Claude Code)",
     "Claude Code",
-    "Codex (not installed)",
     "Grok Build",
+    "Codex, Not installed",
   ]);
   await choose("Claude Code");
   await click(buttons().find((b) => b.textContent?.includes("Claude Code")));
-  expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).not.toContain("Codex (not installed)");
+  expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).not.toContain("Codex, Not installed");
+});
+
+it("lists only the added agents in the picker, in the order they were added", async () => {
+  render(undefined, [], {}, {}, ["grok", "claude"]);
+  await click(buttons().find((b) => b.textContent?.includes("Inherit from console")));
+  expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).toEqual([
+    "Inherit from console (Claude Code)",
+    "Grok Build",
+    "Claude Code",
+  ]);
+});
+
+it("keeps the project's own agent that is not added in the picker, marked, until another is chosen", async () => {
+  render(projectOf("p-2", "c-1", "Site", { default_agent: "codex" }), [], {}, {}, ["claude"]);
+  const trigger = buttons().find((b) => b.textContent?.includes("Codex, Not added"));
+  expect(trigger).toBeDefined();
+  await click(trigger);
+  expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent).filter((text) => text?.includes("Codex"))).toEqual(["Codex, Not added"]);
 });
 
 it("offers neither the account nor Advanced while the source is a parent directory with Detect from files", async () => {

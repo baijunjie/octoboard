@@ -1,5 +1,5 @@
 import { consoleAccount } from "../accountChoices";
-import { AGENT_OPTIONS, AGENT_SHORT_NAME, accountsByAgent, defaultAccountName } from "../agents";
+import { AGENT_SHORT_NAME, accountsByAgent, defaultAccountName, listedAgents } from "../agents";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
@@ -17,6 +17,8 @@ export interface StatusItemQuotaSource {
   /** The moment the countdowns and the age of an out-of-date reading are counted from. */
   now: number;
   accounts: Account[];
+  /** The agents the user added, `null` while the daemon has not decided them. */
+  addedAgents: Agent[] | null;
   /** The names the user gave the default accounts, by agent. */
   defaultAccountNames?: Settings["default_account_names"];
   agentAvailability: Map<Agent, AgentAvailability>;
@@ -53,12 +55,13 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
   return lines;
 }
 
-/** One submenu per available agent — "Claude quota ▸" — listing its default account, then the
- * accounts the user owns, each set off by a separator. Nothing for an agent that is not available
- * or not yet determined. */
+/** One submenu per added agent that is available, in the order they were added — "Claude quota ▸" —
+ * listing its default account, then the accounts the user owns, each set off by a separator. Nothing
+ * for an agent that is not added, not available or not yet determined: unlike the rail's panel, which
+ * lists an undetermined agent, a submenu without readings to fill it would be empty. */
 export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, currentConsole?: Console): StatusItemSubmenu[] {
   const owned = new Map(accountsByAgent(source.accounts).map(({ agent, accounts }) => [agent, accounts]));
-  return AGENT_OPTIONS.flatMap(({ value: agent }): StatusItemSubmenu[] => {
+  return listedAgents(source.addedAgents).flatMap((agent): StatusItemSubmenu[] => {
     if (source.agentAvailability.get(agent)?.availability !== "available") return [];
     const accounts: Array<Account | null> = [null, ...(owned.get(agent) ?? [])];
     const items = accounts.flatMap((account, index): StatusItemSubmenuItem[] => [

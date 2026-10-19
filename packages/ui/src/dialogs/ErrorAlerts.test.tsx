@@ -13,6 +13,7 @@ import { errorAlerts } from "../errorAlerts";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
 import { ErrorAlerts, issueUrl } from "./ErrorAlerts";
+import { registerSettingsLauncher } from "../settings/settingsLauncher";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -140,13 +141,52 @@ it("retains explicit clipboard recovery metadata through the queue", () => {
 it.each([
   ["connection", ["Try again"]],
   ["path", ["Browse"]],
-  ["account", ["Settings", "Agent accounts"]],
   ["unlock", ["Unlock"]],
 ] as const)("renders %s recovery control references as chips", (recovery, labels) => {
   mount();
   act(() => errorAlerts.report({ message: "Action failed", recovery }));
   const chips = [...document.querySelectorAll('[role="alertdialog"] [data-inline-chip]')].map((chip) => chip.textContent);
   expect(chips).toEqual(labels);
+});
+
+it.each([
+  ["account", "Manage accounts…", undefined],
+  ["addedAgents", "Manage accounts…", undefined],
+  ["agentNotAdded", "Add agent…", true],
+] as const)("offers a button for %s recovery that opens Settings' Agent accounts", (recovery, label, addAgent) => {
+  mount();
+  const open = vi.fn();
+  onTestFinished(registerSettingsLauncher(open));
+  act(() => errorAlerts.report({ message: "Action failed", recovery }));
+  const button = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find((b) => b.textContent === label);
+  expect(button).toBeDefined();
+  act(() => button!.click());
+  expect(open).toHaveBeenCalledWith("accounts", { addAgent });
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+});
+
+it("offers the footer action for a batch only when every failure shares that recovery", () => {
+  mount();
+  const labels = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).map((b) => b.textContent);
+  act(() => errorAlerts.report({ message: "Batch", failures: [{ error: "a", recovery: "account" }, { error: "b", recovery: "account" }] }));
+  expect(labels()).toContain("Manage accounts…");
+  act(() => errorAlerts.acknowledge());
+  act(() => errorAlerts.report({ message: "Mixed", failures: [{ error: "a", recovery: "account" }, { error: "b", recovery: "path" }] }));
+  expect(labels()).not.toContain("Manage accounts…");
+});
+
+it("hands focus to the window's fallback when acknowledging the last alert leaves it on the page body", async () => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  mount();
+  const fallback = vi.fn();
+  onTestFinished(errorAlerts.setFocusFallback(fallback));
+  act(() => errorAlerts.report({ message: "Plain", recovery: "none" }));
+  expect(document.querySelector('[role="alertdialog"] p')).toBeNull();
+  act(() => errorAlerts.acknowledge());
+  (document.activeElement as HTMLElement | null)?.blur();
+  await act(async () => { vi.advanceTimersByTime(500); });
+  expect(fallback).toHaveBeenCalledOnce();
 });
 
 it("shows foreign-realm diagnostic stacks and an accurate manual Issue fallback", () => {

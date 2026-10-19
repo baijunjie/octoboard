@@ -3080,6 +3080,9 @@ pub mod error_code {
     /// the login shell's `PATH`) — never raised while that determination is still pending.
     /// `params` names `agent`.
     pub const AGENT_NOT_AVAILABLE: &str = "agent_not_available";
+    /// A session's resolved agent is not on `Settings.added_agents`, so a new session or a handoff
+    /// to it is refused; never raised while that list is undecided. `params` names `agent`.
+    pub const AGENT_NOT_ADDED: &str = "agent_not_added";
     /// An `add_agent` asked for an agent that has been determined not installed (its binary does
     /// not resolve on the login shell's `PATH`). `params` names `agent`.
     pub const AGENT_NOT_INSTALLED: &str = "agent_not_installed";

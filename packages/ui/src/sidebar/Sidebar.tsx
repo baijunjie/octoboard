@@ -1,4 +1,5 @@
 import {
+  Bot,
   ChevronDown,
   ChevronRight,
   FolderPlus,
@@ -12,7 +13,7 @@ import { setInteractionModality } from "react-aria";
 import React, { memo, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import { noAgentAvailable } from "../agents";
+import { noAgentState } from "../agents";
 import { ActionMenu } from "../components/ActionMenu";
 import { ActivityMarker } from "../components/ActivityMarker";
 import { AgentIcon } from "../components/AgentIcon";
@@ -42,6 +43,7 @@ import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
 import { consoleMenu, projectMenu } from "./menus";
 import { NewSessionButton } from "./NewSessionButton";
+import { useNoAgentToStart } from "./useNewSessionMode";
 import { SessionActions } from "./SessionActions";
 import { archivedSessions, consoleActivity, INACTIVE_PROJECT_RANK, liveSessionRows, liveSessions, projectRank, sortProjectsByRank } from "./order";
 import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterSummary } from "./ProjectFilter";
@@ -425,7 +427,6 @@ function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers; curre
           target={() => ({ kind: "new-console-session", console: current })}
           onOpen={handlers.onOpenDialog}
           onQuickCreate={handlers.onQuickCreateSession}
-          isDisabledWhenBlocked
         />
         <ActionMenu
           label={t("sidebar.console.actions", { name: isolate(current.name) })}
@@ -609,14 +610,16 @@ function ConsoleSessionsSection({
   const t = useT();
   const listRef = useFlip<HTMLDivElement>();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
+  const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const consoleSessions = useOwnerSessions(thisConsole.id);
-  // With no agent on the machine at all, starting a console session would only be refused by the
-  // daemon the moment it tried — so the action is disabled here instead, and `agents.noneFound` is
-  // shown. It is rendered whenever the console is blocked, not only when `live` is empty, because a
-  // blocked console can still hold console sessions left over from before: one that was
-  // interrupted (an agent removed, or a `PATH` change) stays live and keeps `liveSessions` from
-  // being empty.
-  const blocked = noAgentAvailable(agentAvailability);
+  // With no agent added and installed, starting a console session would only be refused by the
+  // daemon the moment it tried — so the action is disabled here instead, and `agents.noneAdded` (an
+  // installed agent waits to be added) or `agents.noneFound` (none is installed) is shown. It is
+  // rendered whenever the console is blocked, not only when `live` is empty, because a blocked
+  // console can still hold console sessions left over from before: one that was interrupted (an
+  // agent removed, or a `PATH` change) stays live and keeps `liveSessions` from being empty.
+  const noAgents = noAgentState(agentAvailability, addedAgents);
+  const blocked = noAgents !== undefined;
   const live = liveSessions(consoleSessions);
   const openNew = () => handlers.onOpenConsoleSession(thisConsole);
 
@@ -625,9 +628,10 @@ function ConsoleSessionsSection({
       <StickySectionHeading>
         {t("sidebar.consoleSessions.headingWithCount", { count: live.length })}
       </StickySectionHeading>
-      {/* A warning rather than the glyph the rows below carry: this row is the one in the section
-          that offers nothing to press, and the console header's `+` is disabled. */}
-      {blocked && <EmptyPanel compact icon={TriangleAlert} message={<Message id="agents.noneFound" params={PATH_VAR_PARAMS} />} />}
+      {/* Not the glyph the rows below carry: this row is the one in the section that offers nothing to
+          press, and the console header's `+` is disabled. The bot says an agent is waiting to be added,
+          which is a normal state; the warning says none is installed. */}
+      {blocked && <EmptyPanel compact icon={noAgents === "add" ? Bot : TriangleAlert} message={noAgents === "add" ? t("agents.noneAdded") : <Message id="agents.noneFound" params={PATH_VAR_PARAMS} />} />}
       {live.length === 0 && !blocked && (
         <EmptyPanel
           compact
@@ -749,6 +753,7 @@ const ProjectNode = memo(function ProjectNode({
   const lastRootIndex = rows.reduce((last, row, index) => row.under ? last : index, -1);
   const archived = archivedSessions(sessions);
   const activity = consoleActivity(sessions);
+  const noAgentToStart = useNoAgentToStart();
   const newSession = (): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "choose" } });
   const activityKey = activityLabelKey(activity, project.pinned);
   const nameLabel = activityKey
@@ -800,7 +805,7 @@ const ProjectNode = memo(function ProjectNode({
               compact
               icon={MessageSquarePlus}
               message={t("sidebar.noSessions")}
-              action={{ label: t("sidebar.project.openSession"), onPress: () => handlers.onOpenDialog(newSession()) }}
+              action={noAgentToStart ? undefined : { label: t("sidebar.project.openSession"), onPress: () => handlers.onOpenDialog(newSession()) }}
             />
           ) : (
             <div ref={listRef} className="relative flex flex-col gap-0.5">

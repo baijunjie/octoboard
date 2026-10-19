@@ -1,7 +1,7 @@
 import type { Agent, AgentAvailability } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
-import { SAMPLE, branchItemOf, minutesAgo, sessionOf, snapshotState, worktreeItemOf } from "./builders";
+import { ALL_AGENTS, SAMPLE, branchItemOf, minutesAgo, sessionOf, snapshotState, worktreeItemOf } from "./builders";
 
 const { console: console_, web, api, consoleSession: hub } = SAMPLE;
 
@@ -27,7 +27,7 @@ const hubOwned = [
 const settings = {
   auto_pull_repositories: false,
   auto_delete_unresumable_archives: true,
-  added_agents: [], default_clone_dir: "/Users/dev/Projects",
+  added_agents: ALL_AGENTS, default_clone_dir: "/Users/dev/Projects",
   accounts: [
     { id: "a-codex-work", agent: "codex" as const, name: "Work account", config_dir: "/Users/dev/.codex-work" },
     { id: "a-codex-personal", agent: "codex" as const, name: "Personal account", config_dir: "/Users/dev/.codex-personal" },
@@ -93,6 +93,15 @@ export const handoffScenarios: Scenario[] = [
     steps: [openMenu(working.title)],
   },
   {
+    id: "sidebar-session-menu-hand-off-no-agent",
+    group: GROUP,
+    category: "normal",
+    title: "Menu of an idle session, no other agent to hand off to",
+    description: "Codex and Grok Build are not installed, so no other agent could take the session over: Hand off is greyed out although the session is idle, and Archive stays available.",
+    state: { ...state, agentAvailability: onlyClaude },
+    steps: [openMenu(bare.title)],
+  },
+  {
     id: "dialog-hand-off",
     group: GROUP,
     category: "normal",
@@ -143,11 +152,11 @@ export const handoffScenarios: Scenario[] = [
   {
     id: "dialog-hand-off-no-agent",
     group: GROUP,
-    category: "normal",
-    title: "Hand off with no other agent available",
-    description: "Codex and Grok Build are not installed: the warning says no other agent can take the session over, the agent and launch fields are disabled and Hand off cannot be pressed.",
-    state: { ...state, agentAvailability: onlyClaude },
-    steps: openHandoff(bare.title),
+    category: "exceptional",
+    title: "Hand off dialog open as the other agents go missing",
+    description: "Reached only when the agents change under an open dialog (the menu's Hand off is disabled without another agent): Codex and Grok Build stop being installed meanwhile. The dialog closes itself and a plain error alert says no other agent can take the session over; OK is its only button.",
+    state,
+    steps: [...openHandoff(bare.title), (ui) => ui.setAgents({ installed: ["claude"] })],
   },
   {
     id: "dialog-hand-off-pending",

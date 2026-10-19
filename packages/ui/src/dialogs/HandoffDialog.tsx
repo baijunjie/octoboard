@@ -9,6 +9,7 @@ import { useDaemon, useDaemonStore } from "../store";
 import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, DialogError, useDialogAction } from "./Dialog";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
+import { useCloseWhenBlocked } from "./useCloseWhenBlocked";
 import { useLaunchChoice } from "./useLaunchChoice";
 import { useResponsibleBranches } from "./useSessionBranches";
 
@@ -44,6 +45,9 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
   const { error, busy, run } = useDialogAction();
   const { choice, blocked, overrides, agentOptions, setPickedAgent, account, launch } = useLaunchChoice(parentConsole, project, session.agent);
 
+  // No other agent could take the session over (one was removed or uninstalled while this was open).
+  useCloseWhenBlocked(blocked, t("dialog.handOff.noOtherAgent"), onClose);
+
   const submit = () => {
     void run(async () => {
       const reply = await request({
@@ -70,7 +74,6 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
     >
       <p className="text-sm">{t("dialog.handOff.message")}</p>
       <HandoffMoves session={session} busy={busy} />
-      {blocked && <p className="text-sm text-app-danger">{t("dialog.handOff.noOtherAgent")}</p>}
       <AgentAccountField
         label={t("dialog.handOff.agent")}
         options={agentOptions}

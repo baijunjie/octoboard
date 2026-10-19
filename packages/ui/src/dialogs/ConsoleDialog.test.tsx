@@ -44,11 +44,12 @@ function render(
   accounts: Account[] = [],
   respond?: (body: RequestBody) => Promise<Event>,
   availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {},
+  added: Agent[] | null = null,
 ) {
   const request = vi.fn((body: RequestBody) => respond?.(body) ?? Promise.resolve(body.type === "list_agent_models" ? listing(body, MODELS) : ({ type: "ack" } as Event)));
   const daemon: Daemon = {
     store: createStateStore({
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", accounts },
+      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", accounts },
       agentAvailability: new Map(
         (["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined" }]),
       ),
@@ -567,7 +568,7 @@ it("lists only the agents that may be picked, and the accounts of those", () => 
   expect(picker("Console sessions")).toBeDefined();
   expect(picker("Claude Code account")).toBeDefined();
   expect(buttons().some((b) => b.getAttribute("aria-label") === "Codex account")).toBe(false);
-  expect(document.body.textContent).not.toContain("Codex (not installed)");
+  expect(document.body.textContent).not.toContain("Codex, Not installed");
 });
 
 it("leaves the missing agents out of both default agent pickers", async () => {
@@ -581,9 +582,9 @@ it("leaves the missing agents out of both default agent pickers", async () => {
 
 it("keeps the stored agent in its picker as not installed while it is the value, and drops it once moved off", async () => {
   render(consoleOf("c-1", "Main", { default_agent: "codex" }), [], undefined, { codex: "unavailable" });
-  expect(picker("Console sessions").textContent).toContain("Codex (not installed)");
+  expect(picker("Console sessions").textContent).toContain("Codex, Not installed");
   await click(picker("Console sessions"));
-  const codex = Array.from(document.body.querySelectorAll('[role="option"]')).find((o) => o.textContent === "Codex (not installed)");
+  const codex = Array.from(document.body.querySelectorAll('[role="option"]')).find((o) => o.textContent === "Codex, Not installed");
   expect(codex?.getAttribute("aria-selected")).toBe("true");
   await choose("Claude Code");
   await click(picker("Console sessions"));
@@ -593,10 +594,68 @@ it("keeps the stored agent in its picker as not installed while it is the value,
 it("keeps a missing agent's row while the console pins a named account for it, and drops it once moved off", async () => {
   render(consoleOf("c-1", "Main", { codex_account_id: "a-codex" }), [work, codexWork], undefined, { codex: "unavailable" });
   expect(picker("Codex account").textContent).toContain("Codex work");
-  expect(document.body.textContent).toContain("Codex (not installed)");
+  expect(document.body.textContent).toContain("Codex, Not installed");
   await click(picker("Codex account"));
   await choose("Default");
-  expect(document.body.textContent).not.toContain("Codex (not installed)");
+  expect(document.body.textContent).not.toContain("Codex, Not installed");
+});
+
+it("lists only the added agents, in the order they were added, in the agent pickers, the account rows and the Advanced tabs", async () => {
+  render(undefined, [work, codexWork], undefined, {}, ["grok", "claude"]);
+  expect(buttons().some((b) => b.getAttribute("aria-label") === "Codex account")).toBe(false);
+  await click(picker("Console sessions"));
+  expect(optionTexts()).toEqual(["Grok Build", "Claude Code"]);
+  await choose("Grok Build");
+  await click(picker("Project sessions"));
+  expect(optionTexts()).toEqual(["Same as console sessions (Grok Build)", "Grok Build", "Claude Code"]);
+  await choose("Claude Code");
+  await openAdvanced();
+  expect(tabNames()).toEqual(["Grok Build", "Claude Code"]);
+  expect(buttons().filter((b) => /^(Grok Build|Claude Code) account$/.test(b.getAttribute("aria-label") ?? "")).map((b) => b.getAttribute("aria-label"))).toEqual(["Grok Build account", "Claude Code account"]);
+});
+
+it("opens a new console on the first added agent that may be picked when Claude Code is not added", () => {
+  render(undefined, [], undefined, {}, ["codex"]);
+  expect(picker("Console sessions").textContent).toContain("Codex");
+});
+
+it("keeps the stored agent in its picker as not added while it is the value, and drops it once moved off", async () => {
+  render(consoleOf("c-1", "Main", { default_agent: "codex" }), [], undefined, {}, ["claude"]);
+  expect(picker("Console sessions").textContent).toContain("Codex, Not added");
+  await click(picker("Console sessions"));
+  expect(optionTexts()).toEqual(["Claude Code", "Codex, Not added"]);
+  await choose("Claude Code");
+  await click(picker("Console sessions"));
+  expect(optionTexts()).toEqual(["Claude Code"]);
+});
+
+it("keeps the row of an agent that is not added while the console pins a named account for it, marked, and drops it once moved off", async () => {
+  render(consoleOf("c-1", "Main", { codex_account_id: "a-codex" }), [work, codexWork], undefined, {}, ["claude"]);
+  expect(picker("Codex account").textContent).toContain("Codex work");
+  expect(document.body.textContent).toContain("Codex, Not added");
+  await click(picker("Codex account"));
+  await choose("Default");
+  expect(document.body.textContent).not.toContain("Codex, Not added");
+});
+
+it("shows the badge after the name of a row that may not be picked, with the row dimmed, and none on the others", () => {
+  render(consoleOf("c-1", "Main", { codex_account_id: "a-codex" }), [work, codexWork], undefined, {}, ["claude"]);
+  const names = Array.from(document.body.querySelectorAll<HTMLElement>('[aria-hidden="true"].text-sm')).filter((el) => /^(Claude Code|Codex)/.test(el.textContent ?? ""));
+  const codex = names.find((el) => el.textContent?.startsWith("Codex"))!;
+  const claude = names.find((el) => el.textContent?.startsWith("Claude Code"))!;
+  expect(codex.querySelector(".rounded-full")?.textContent).toBe("Not added");
+  expect(codex.querySelector("span.text-app-muted")?.textContent).toBe("Codex");
+  expect(claude.querySelector(".rounded-full")).toBeNull();
+  expect(claude.querySelector("span.text-foreground")?.textContent).toBe("Claude Code");
+});
+
+it("keeps the Advanced tab of an agent that is not added while the console stores a value for it, marked, and drops it once cleared", async () => {
+  render(consoleOf("c-1", "Main", { codex_project_session_model: "kept" }), [], undefined, {}, ["claude"]);
+  await openAdvanced();
+  expect(tabNames()).toEqual(["Claude Code", "Codex, Not added"]);
+  await clickTab("Codex, Not added");
+  await click(groupPicker("Project sessions", "Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
+  expect(tabNames()).toEqual(["Claude Code"]);
 });
 
 it("lists every agent before availability has been determined", async () => {
@@ -671,8 +730,8 @@ it("sends an explicit null when a project session value is cleared", async () =>
 it("leaves a missing agent without a tab unless the console stores a value for it, and drops it once cleared", async () => {
   render(consoleOf("c-1", "Main", { codex_project_session_model: "kept" }), [], undefined, { codex: "unavailable", grok: "unavailable" });
   await openAdvanced();
-  expect(tabNames()).toEqual(["Claude Code", "Codex (not installed)"]);
-  await clickTab("Codex (not installed)");
+  expect(tabNames()).toEqual(["Claude Code", "Codex, Not installed"]);
+  await clickTab("Codex, Not installed");
   await click(groupPicker("Project sessions", "Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
   expect(tabNames()).toEqual(["Claude Code"]);
   expect(selectedTab()).toBe("Claude Code");
@@ -696,7 +755,7 @@ it("follows the console session agent in the Advanced section until a tab is pic
 it("does not take the view back to an agent picked earlier that comes back", async () => {
   render(consoleOf("c-1", "Main", { codex_project_session_model: "kept" }), [], undefined, { codex: "unavailable" });
   await openAdvanced();
-  await clickTab("Codex (not installed)");
+  await clickTab("Codex, Not installed");
   await click(groupPicker("Project sessions", "Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
   expect(selectedTab()).toBe("Claude Code");
   await act(async () => lastStore.setState({ agentAvailability: new Map([["claude", { agent: "claude", availability: "available" }], ["codex", { agent: "codex", availability: "available" }], ["grok", { agent: "grok", availability: "available" }]]) }));
