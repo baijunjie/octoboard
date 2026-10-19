@@ -28,11 +28,13 @@
 //! right after, so the first hook callback retires the watch; Codex runs none around it, so for
 //! Codex and Grok anything written into the session's input since the sighting — the person
 //! answering in the terminal — also means the screen is no longer waiting: its prompt is not put
-//! to a client again and a go-ahead for it is refused as stale. Every watch is also bounded: it
+//! to a client again and a go-ahead for it is refused as stale. Codex's watch is also bounded: it
 //! ends after [`WATCH_BYTES`] of output or [`WATCH_SECONDS`] seconds, the confirmation being among
-//! the first things each agent prints. A transcript that quotes a screen is not taken for it
-//! unless it reproduces the first-draw pattern inside that window before any hook has run; and
-//! whatever is sighted, keys are sent only if the checks below pass.
+//! the first things it prints. Claude Code's and Grok's is not, since either can print a good deal
+//! first (Claude Code's onboarding on an account's first launch) and runs no hook until past the
+//! screen, so nothing a transcript quotes can precede the first hook. A transcript that quotes a
+//! screen is not taken for it unless it reproduces the first-draw pattern inside the output window
+//! before any hook has run; and whatever is sighted, keys are sent only if the checks below pass.
 //!
 //! **Octoboard's own messages are held** for as long as a screen may be up
 //! ([`TrustState::holds_writes`]), since a message's trailing Enter would otherwise answer it —

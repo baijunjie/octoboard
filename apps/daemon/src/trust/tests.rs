@@ -252,12 +252,14 @@ fn a_transcript_quoting_both_options_beside_a_cursor_glyph_is_not_the_screen() {
     assert!(!CLAUDE.is_shown_in(reversed.as_bytes()));
 }
 
+/// Codex runs no hook before its screen, so a screen that has not appeared within the limits is
+/// not coming.
 #[test]
-fn the_watch_ends_after_too_much_output_or_too_long() {
-    let state = TrustState::new(Agent::Claude, None);
+fn the_watch_for_codex_ends_after_too_much_output_or_too_long() {
+    let state = TrustState::new(Agent::Codex, None);
     let mut sightings = state.take_sightings().expect("receiver");
     state.feed(&vec![b'.'; WATCH_BYTES + 1], 0, 0);
-    state.feed(SCREEN, 0, 0);
+    state.feed(CODEX_SCREEN, 0, 0);
     assert!(sightings.try_recv().is_err(), "too late by output");
     assert!(!state.waiting());
     assert_eq!(
@@ -266,11 +268,29 @@ fn the_watch_ends_after_too_much_output_or_too_long() {
         "the window is released"
     );
 
-    let state = TrustState::with_limits(Agent::Claude, None, WATCH_BYTES, Duration::ZERO);
+    let state = TrustState::with_limits(Agent::Codex, None, WATCH_BYTES, Duration::ZERO);
     let mut sightings = state.take_sightings().expect("receiver");
     std::thread::sleep(Duration::from_millis(5));
-    state.feed(SCREEN, 0, 0);
+    state.feed(CODEX_SCREEN, 0, 0);
     assert!(sightings.try_recv().is_err(), "too late by time");
+}
+
+/// Claude Code and Grok can print a good deal before the screen (Claude Code's onboarding on an
+/// account's first launch, a browser login among it); neither the output nor the time limit ends
+/// their watch.
+#[test]
+fn the_watch_for_an_agent_with_a_hook_at_start_outlasts_the_limits() {
+    for (agent, screen) in [(Agent::Claude, SCREEN), (Agent::Grok, GROK_SCREEN)] {
+        let state = TrustState::with_limits(agent, None, WATCH_BYTES, Duration::ZERO);
+        let mut sightings = state.take_sightings().expect("receiver");
+        std::thread::sleep(Duration::from_millis(5));
+        for _ in 0..3 {
+            state.feed(&vec![b'.'; WATCH_BYTES], 0, 0);
+        }
+        state.feed(screen, 0, 0);
+        assert!(sightings.try_recv().is_ok(), "{agent:?} sighted late");
+        assert!(state.waiting());
+    }
 }
 
 #[test]

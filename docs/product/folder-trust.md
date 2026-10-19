@@ -153,9 +153,17 @@ sent its first hook report, within about 12 seconds of the key, and the entry it
 store (see "Carrying Grok Build's trust record" below).
 
 **Recognition is limited to the start of a session.** A confirmation is looked for only in the session's own terminal
-output, and only until the session's first hook report or until it has printed 64 KiB or run for 30 seconds, whichever
-comes first — the confirmation is among the first things each agent prints, so the same words appearing later in a
-session are never taken for it.
+output, and only for as long as it can still come up, so the same words appearing later in a session are never taken
+for it:
+
+- for Claude Code and Grok Build, until the session's first hook report, which each sends only once it is past the
+  confirmation. There is no limit on output or time before that, so a confirmation that comes after a long stretch of
+  other screens is still recognised — Claude Code's onboarding on an account's first launch, with its sign-in through
+  the browser, comes before its confirmation;
+- for Codex, which sends no hook report until its first prompt, until its first hook report or until it has printed
+  64 KiB or run for 30 seconds, whichever comes first, the confirmation being among the first things Codex prints. A
+  confirmation Codex shows after that is not recognised: it raises no hand and is left for the person to answer in
+  the terminal.
 
 What Octoboard writes into a session while its confirmation may be up is held; see "Messages held until a session can
 take them" in `docs/product/message-delivery.md`.

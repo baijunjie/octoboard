@@ -109,9 +109,12 @@ pub(super) fn screen_of(agent: Agent) -> &'static Screen {
 /// arrive in pieces and for what comes before it.
 pub(super) const WINDOW: usize = 16 * 1024;
 
-/// How long the watch for the screen lasts: it is among the first things each agent prints, so a
-/// session that has printed this much or has been running this long and has not shown it, will
-/// not.
+/// How long the watch for the screen lasts for an agent that runs no hook at start (Codex): it is
+/// among the first things that agent prints, so a session that has printed this much or has been
+/// running this long and has not shown it, will not. An agent that does run one
+/// (`Screen::hook_at_start`) has no such bound, since it can print a good deal first — Claude
+/// Code's onboarding on an account's first launch, with its browser login, comes before the
+/// screen — and its first hook ends the watch instead.
 pub(super) const WATCH_BYTES: usize = 64 * 1024;
 pub(super) const WATCH_SECONDS: u64 = 30;
 
@@ -283,14 +286,17 @@ pub struct TrustState {
     pub(super) screen: &'static Screen,
     /// Grok's: where its trust entry is carried from and to after a press.
     pub(super) carried: Option<CarriedTrust>,
-    /// The output not yet identified as anything, at most [`WINDOW`] bytes of it, and what the
-    /// watch has seen in all. Released when the watch ends.
+    /// The output not yet identified as anything, at most [`WINDOW`] bytes of it, and, for an
+    /// agent that runs no hook at start, what the watch has seen in all. Released when the watch
+    /// ends.
     pub(super) window: Mutex<Watched>,
-    /// When the watch began, and how much output and how long it lasts.
+    /// When the watch began, and how much output and how long it lasts, for an agent that runs no
+    /// hook at start.
     pub(super) started: Instant,
     pub(super) watch_bytes: usize,
     pub(super) watch_age: Mutex<Duration>,
-    /// The watch has ended without a sighting: too much output or too long a time.
+    /// The watch has ended without a sighting: too much output or too long a time. Never set for an
+    /// agent that runs a hook at start.
     pub(super) expired: AtomicBool,
     /// The screen has been sighted, once, and `sightings` told.
     pub(super) sighted: AtomicBool,
@@ -369,11 +375,13 @@ impl TrustState {
             return;
         }
         let mut watched = self.window.lock().expect("trust window mutex poisoned");
-        watched.total += chunk.len();
-        if watched.total > self.watch_bytes || self.started.elapsed() > self.watch_age() {
-            self.expired.store(true, Ordering::Release);
-            *watched = Watched::default();
-            return;
+        if !self.screen.hook_at_start {
+            watched.total += chunk.len();
+            if watched.total > self.watch_bytes || self.started.elapsed() > self.watch_age() {
+                self.expired.store(true, Ordering::Release);
+                *watched = Watched::default();
+                return;
+            }
         }
         watched.window.extend_from_slice(chunk);
         if watched.window.len() > WINDOW {
