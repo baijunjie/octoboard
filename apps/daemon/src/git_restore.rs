@@ -12,7 +12,7 @@ use crate::git_status;
 use crate::hostfs;
 use crate::protocol::{error_code, CodedError, Project};
 use crate::state::AppState;
-use crate::subprocess::{self, Bounds};
+use crate::subprocess::{self, Bounds, Reach};
 
 pub fn restore_project(state: &AppState, project: &Project) -> anyhow::Result<()> {
     let env = env_shell::cached_snapshot()?;
@@ -210,6 +210,7 @@ fn run_git(
         timeout: Duration::from_secs(120),
         stdout_limit: 16 * 1024 * 1024,
         stderr_limit: 64 * 1024,
+        reach: Reach::ProcessGroup,
     };
     let output = subprocess::run_bounded(&mut command, &bounds, &AtomicBool::new(false))
         .map_err(|err| failed(&format!("git {err}")))?;

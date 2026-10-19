@@ -94,15 +94,19 @@ it off the path the user waits on, cache what it returns, and bound how many run
 
 ## Ending everything an agent CLI started takes its session, not its process group
 
-Applies to daemon code that has to end whatever an agent CLI left running — when it exits, when it is stopped, when the
-daemon goes down — however the CLI was started. Agent CLIs move some helpers (a REPL or code-execution host, a
-background shell task) into process groups of their own, so signalling the CLI's process group, the stop every other
-subprocess in the daemon gets (`apps/daemon/src/subprocess.rs`), leaves them running. They keep the CLI's session: start
-the CLI as a session leader (`setsid()`; a PTY spawn already is one, while `process_group(0)` leaves it in the daemon's
-session) and kill every process whose `getsid` is the leader's pid. Do it only after the leader has exited and before
-it is reaped: the unreaped zombie keeps its pid, and with it the session id, from passing to an unrelated process. A
-helper that called `setsid()` itself has left the session and is out of reach. `PtyCore::kill_session_members` in
-`apps/daemon/src/pty.rs` is this for a process on a PTY.
+Applies to daemon code that runs an agent CLI and has to end whatever it left running — when it exits, when it is
+stopped, when the daemon goes down. Agent CLIs move some helpers (a REPL or code-execution host, a background shell
+task) into process groups of their own, so the process-group stop other subprocesses get leaves them running; they
+keep the CLI's session. Do not write a sweep of your own: run the CLI through `apps/daemon/src/subprocess.rs` with
+`Reach::Session` (`run_agent_with_timeout`, or `Bounds { reach: Reach::Session, .. }` for `run_bounded` and
+`run_exchange`), and where it cannot go through there (it runs on a PTY, or a flow reads it while it runs), build on
+`apps/daemon/src/process_session.rs`. Anything that is not an agent CLI, such as `git`, keeps `Reach::ProcessGroup`
+(`run_with_timeout`): a session sweep lists every process on the system.
+
+`Reach::Session` sweeps the session when the CLI ends by itself too. Where the CLI can start something the user goes
+on using — a login that opens a browser, which `xdg-open` on a Linux desktop starts straight into the CLI's session —
+sweep only when the daemon ends the CLI (cancel, timeout, daemon exit) and just reap one that exits by itself, as the
+account login flows in `apps/daemon/src/account_login/flows.rs` do.
 
 ## A request handler or daemon task is never alone with the state: re-check after a step, or hold a claim
 

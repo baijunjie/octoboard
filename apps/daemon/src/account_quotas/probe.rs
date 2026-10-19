@@ -32,7 +32,7 @@ use crate::protocol::{
     quota_unavailable_code as code, Agent, QuotaUnavailable, QuotaWindow, QuotaWindowKind,
 };
 use crate::rfc3339::parse_rfc3339_millis;
-use crate::subprocess::{run_exchange, Bounds, ExchangeFailure};
+use crate::subprocess::{run_exchange, Bounds, ExchangeFailure, Reach};
 
 /// How long a probe may take. The CLIs answer in one to three seconds; this leaves room for a
 /// slow start or a refreshed login while keeping a hung CLI from holding a slot for long.
@@ -180,6 +180,7 @@ pub(super) fn probe(
         timeout,
         stdout_limit: OUTPUT_LIMIT,
         stderr_limit: STDERR_LIMIT,
+        reach: Reach::Session,
     };
     let is_reply = conversation.is_reply;
     // Claude Code's sign-in state is in a reply other than the one that is read.

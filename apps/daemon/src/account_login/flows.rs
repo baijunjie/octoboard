@@ -13,12 +13,11 @@
 //!   and opens the browser itself, which cannot be stopped. Done is exit 0 with `auth.json` in its
 //!   home.
 //!
-//! Dropping a flow's future kills the CLI's whole process group (see [`Process`]), which is how a
-//! timeout and the daemon's exit end one, and removes the flow's scratch directory.
+//! Dropping a flow's future kills the CLI's whole session (see [`Process`]), which is how a timeout
+//! and the daemon's exit end one, and removes the flow's scratch directory.
 
 use std::collections::HashMap;
 use std::os::unix::fs::DirBuilderExt;
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -32,6 +31,7 @@ use tokio::sync::{mpsc, Notify};
 use super::Key;
 use crate::account_quotas::CODEX_APP_SERVER_ARGS;
 use crate::adapter;
+use crate::process_session;
 use crate::protocol::{login_failure_code as code, Agent, LoginFailure, LoginStatus};
 use crate::state::AppState;
 
@@ -54,6 +54,11 @@ const CANCEL_GRACE: Duration = Duration::from_secs(2);
 
 /// How long `claude auth status` may take.
 const STATUS_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// How often a CLI that has been killed is looked at for having exited, which is found out
+/// without reaping it so that what it left in its session can be killed first (see
+/// [`Process::stop`]).
+const EXIT_POLL: Duration = Duration::from_millis(20);
 
 /// Reports a login's progress to the clients.
 pub(super) struct Progress {
@@ -177,7 +182,7 @@ impl Flow {
         };
         let mut command = self.command(&["auth", "login"]);
         command.env("BROWSER", script);
-        let mut process = match Process::spawn(command, false) {
+        let mut process = match Process::spawn(command, self.agent.label(), false) {
             Ok(process) => process,
             Err(err) => return self.failed(&format!("it could not be started: {err}")),
         };
@@ -256,7 +261,7 @@ impl Flow {
     async fn claude_signed_in(&self) -> bool {
         let mut command = self.command(&["auth", "status"]);
         let output = tokio::task::spawn_blocking(move || {
-            crate::subprocess::run_with_timeout(&mut command, STATUS_TIMEOUT)
+            crate::subprocess::run_agent_with_timeout(&mut command, STATUS_TIMEOUT)
         })
         .await;
         let Ok(Ok(output)) = output else {
@@ -269,7 +274,11 @@ impl Flow {
     }
 
     async fn grok(&self, progress: &Progress, cancel: &Notify) -> Outcome {
-        let mut process = match Process::spawn(self.command(&["login", "--device-auth"]), false) {
+        let mut process = match Process::spawn(
+            self.command(&["login", "--device-auth"]),
+            self.agent.label(),
+            false,
+        ) {
             Ok(process) => process,
             Err(err) => return self.failed(&format!("it could not be started: {err}")),
         };
@@ -325,7 +334,11 @@ impl Flow {
                 return self.failed(&format!("creating {} failed: {err}", dir.display()));
             }
         }
-        let mut process = match Process::spawn(self.command(CODEX_APP_SERVER_ARGS), true) {
+        let mut process = match Process::spawn(
+            self.command(CODEX_APP_SERVER_ARGS),
+            self.agent.label(),
+            true,
+        ) {
             Ok(process) => process,
             Err(err) => return self.failed(&format!("it could not be started: {err}")),
         };
@@ -556,19 +569,27 @@ fn strip_ansi(text: &str) -> String {
     out
 }
 
-/// A CLI running in a process group of its own, with the lines of its stdout and stderr (colour
-/// stripped, trimmed) arriving on [`Self::lines`]. Dropping it, as a flow's end by a timeout, a
-/// cancel or the daemon's exit does, kills the whole group; a CLI that exits by itself is not
-/// followed into what it forked.
+/// A CLI running in a session of its own, with the lines of its stdout and stderr (colour
+/// stripped, trimmed) arriving on [`Self::lines`]. A cancel ([`Self::stop`]) kills the whole
+/// session, and so does dropping it, as a flow's end by a timeout or the daemon's exit does: some
+/// helpers of an agent CLI move into process groups of their own, where a signal to its group
+/// would miss them. A CLI that exits by itself is only reaped, its session left as it is: the
+/// browser a login opens can be in it, started directly by `xdg-open` on a Linux desktop.
 struct Process {
     child: Child,
+    /// Names the CLI in the log of a session sweep: the agent's name.
+    label: &'static str,
     stdin: Option<ChildStdin>,
     lines: mpsc::UnboundedReceiver<String>,
 }
 
 impl Process {
-    fn spawn(mut command: std::process::Command, pipe_stdin: bool) -> std::io::Result<Self> {
-        command.process_group(0);
+    fn spawn(
+        mut command: std::process::Command,
+        label: &'static str,
+        pipe_stdin: bool,
+    ) -> std::io::Result<Self> {
+        process_session::lead_session(&mut command);
         let mut command = tokio::process::Command::from(command);
         command
             .stdin(if pipe_stdin {
@@ -590,6 +611,7 @@ impl Process {
         Ok(Self {
             stdin: child.stdin.take(),
             child,
+            label,
             lines,
         })
     }
@@ -613,22 +635,29 @@ impl Process {
         }
     }
 
-    /// Kills the CLI's whole group and waits for the CLI to be gone, so that what it held (Codex's
-    /// login port) is free when this returns.
+    /// Kills the CLI's whole session and waits for the CLI to be gone, so that what it held
+    /// (Codex's login port) is free when this returns. The session is swept once the CLI has
+    /// exited, found out without reaping it (`WNOWAIT`), while its zombie keeps the session id
+    /// from passing to another process.
     async fn stop(&mut self) {
-        self.kill_group();
-        let _ = self.child.wait().await;
-    }
-
-    fn kill_group(&self) {
         // `id` is `None` once the child has been reaped, when its pid may be someone else's.
         if let Some(pid) = self.child.id() {
-            // SAFETY: a plain signal to a process group the child leads (`process_group(0)`) and
-            // has not been reaped from.
-            unsafe {
-                libc::kill(-(pid as i32), libc::SIGKILL);
+            let pid = pid as libc::pid_t;
+            process_session::kill_group(pid);
+            loop {
+                match process_session::exited_unreaped(pid) {
+                    Some(false) => tokio::time::sleep(EXIT_POLL).await,
+                    Some(true) => {
+                        process_session::kill_members(pid).log(pid, self.label);
+                        break;
+                    }
+                    // `waitid` cannot tell, which it also says of a child already reaped, whose
+                    // pid may be someone else's: no sweep, and `wait` decides.
+                    None => break,
+                }
             }
         }
+        let _ = self.child.wait().await;
     }
 
     /// Takes what the CLI printed last into `last_words`, a moment's worth: the line that says
@@ -644,7 +673,13 @@ impl Process {
 
 impl Drop for Process {
     fn drop(&mut self) {
-        self.kill_group();
+        // Swept without waiting for the CLI to exit, which a drop cannot do, so a process it
+        // starts while the kill is landing is missed.
+        if let Some(pid) = self.child.id() {
+            let pid = pid as libc::pid_t;
+            process_session::kill_group(pid);
+            process_session::kill_members(pid).log(pid, self.label);
+        }
     }
 }
 
@@ -674,6 +709,10 @@ fn forward_lines(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{
+        assert_stops_running, helper_in_its_own_group, is_running, read_pid_file, KillOnDrop,
+        ScratchFile, PATIENCE,
+    };
 
     #[test]
     fn grok_builds_its_page_and_code_from_the_lines_it_prints() {
@@ -789,6 +828,59 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(&urls).unwrap(),
             "https://a/one?x=1&y=2\nhttps://a/two\n"
+        );
+    }
+
+    /// Starts a stand-in login CLI that leaves a helper in a process group of its own and then
+    /// runs `then`, and returns it with the helper's pid once the helper is running.
+    async fn stand_in_with_a_helper(then: &str) -> (Process, libc::pid_t) {
+        let pid_file = ScratchFile::new("login-helper", "pid");
+        let mut command = std::process::Command::new("/bin/bash");
+        command.args([
+            "-c",
+            &format!("{}; {then}", helper_in_its_own_group(&pid_file)),
+        ]);
+        let process = Process::spawn(command, "stand-in", false).expect("the stand-in starts");
+        let deadline = tokio::time::Instant::now() + PATIENCE;
+        loop {
+            if let Some(pid) = read_pid_file(&pid_file) {
+                return (process, pid);
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "the stand-in never recorded its helper"
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn a_login_cli_stopped_or_dropped_leaves_no_helper_behind() {
+        for stopped in [true, false] {
+            let (mut process, helper) = stand_in_with_a_helper("exec /bin/sleep 300").await;
+            let mut guard = KillOnDrop(vec![helper]);
+            if stopped {
+                process.stop().await;
+            } else {
+                drop(process);
+            }
+            assert_stops_running(helper);
+            guard.0.clear();
+        }
+    }
+
+    #[tokio::test]
+    async fn dropping_a_login_cli_that_was_reaped_leaves_its_helpers_running() {
+        let (mut process, helper) = stand_in_with_a_helper("exit 0").await;
+        let _guard = KillOnDrop(vec![helper]);
+        let status = process.child.wait().await.expect("its status");
+        assert!(status.success());
+        drop(process);
+        // Long enough for a kill sent on the drop to have landed.
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert!(
+            is_running(helper),
+            "the helper of a CLI that exited was killed"
         );
     }
 }

@@ -119,7 +119,7 @@ static SCRATCH_CLAIMED: AtomicBool = AtomicBool::new(false);
 /// session id is that of an unreaped process, so no other process can have it (see `Entry`).
 ///
 /// One pass over one listing: the daemon is going down, and a process that forks while it is
-/// killed is not chased. The listing is its own rather than the one in `crate::pty` because that
+/// killed is not chased. The listing is its own rather than `crate::process_session`'s because that
 /// one allocates.
 fn kill_sessions() {
     if SCRATCH_CLAIMED.swap(true, Ordering::AcqRel) {

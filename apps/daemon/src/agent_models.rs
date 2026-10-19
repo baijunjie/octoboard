@@ -39,7 +39,7 @@ use serde_json::Value;
 use crate::adapter;
 use crate::env_shell;
 use crate::protocol::{models_unavailable_code as code, Agent, AgentModel, ModelsUnavailable};
-use crate::subprocess::{run_bounded, BoundedFailure, Bounds};
+use crate::subprocess::{run_bounded, BoundedFailure, Bounds, Reach};
 
 /// How long a catalogue command may run. The commands answer in well under a second from a
 /// warm cache and a few seconds when they refresh over the network; this leaves a wide margin
@@ -238,6 +238,7 @@ fn run(
         timeout,
         stdout_limit: OUTPUT_LIMIT,
         stderr_limit: 4096,
+        reach: Reach::Session,
     };
     let never = std::sync::atomic::AtomicBool::new(false);
     let output = run_bounded(&mut command, &bounds, &never).map_err(|failure| match failure {

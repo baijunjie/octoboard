@@ -42,6 +42,7 @@ mod open_terminal;
 mod outbox;
 mod path_links;
 mod paths;
+mod process_session;
 mod protocol;
 mod pty;
 mod ptyio;

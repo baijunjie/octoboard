@@ -17,6 +17,7 @@ use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize}
 use tokio::sync::mpsc;
 
 use crate::crash_cleanup;
+use crate::process_session;
 use crate::ptyio;
 use crate::ringbuf::RingBuffer;
 use crate::terminal_snapshot::{TerminalSnapshot, MAX_COLS, MAX_ROWS};
@@ -579,12 +580,21 @@ impl PtyCore {
         // The crash cleanup signals by number, so the child leaves it while it is exited but not
         // yet reaped, its pid still reserved. When `waitid` cannot tell, `try_wait` decides, and
         // the child leaves only after it is reaped.
-        match self.exited_unreaped() {
+        let pid = self.pid as libc::pid_t;
+        match process_session::exited_unreaped(pid) {
             Some(false) => return false,
             Some(true) => {
                 self.leave_crash_cleanup();
+                // Its zombie keeps the session id from passing to another process, so what is in
+                // the session is the child's: a helper that moved to a process group of its own
+                // too, which a signal to the child's group would miss.
                 if self.kill_session_leftovers {
-                    self.kill_session_members();
+                    let swept = process_session::kill_members(pid);
+                    if !swept.complete {
+                        tracing::warn!(terminal = %self.label, pid, killed = swept.killed, "listing processes failed; the sweep of the exited process's session may be incomplete");
+                    } else if swept.killed > 0 {
+                        tracing::info!(terminal = %self.label, pid, killed = swept.killed, "killed processes the exited process left in its session");
+                    }
                 }
             }
             None => {}
@@ -606,68 +616,6 @@ impl PtyCore {
             self.clean_scratch_dir();
         }
         exited
-    }
-
-    /// Kills every process left in the child's session, which the child itself leads. Called only
-    /// while the child is exited but not reaped: its zombie keeps its pid, and with it the session
-    /// id, from being handed to anything else, so a process found in that session is the child's.
-    /// This reaches what a signal to the child's process group does not: a helper that moved to a
-    /// process group of its own still has the session. One that called `setsid()` has left the
-    /// session and is out of reach.
-    fn kill_session_members(&self) {
-        // A process killed in one pass may have forked just before it died, and the child is in
-        // the session too, so passes repeat until one signals no process it had not already
-        // signalled. A killed process can stay in the list as a zombie, which is why those are
-        // remembered.
-        const MAX_PASSES: usize = 3;
-        let leader = self.pid as libc::pid_t;
-        let mut signalled = std::collections::HashSet::new();
-        for _ in 0..MAX_PASSES {
-            let Some(candidates) = session_candidates() else {
-                tracing::warn!(terminal = %self.label, pid = self.pid, killed = signalled.len(), "listing processes failed; the sweep of the exited process's session may be incomplete");
-                return;
-            };
-            let before = signalled.len();
-            for pid in candidates {
-                if pid == leader || signalled.contains(&pid) {
-                    continue;
-                }
-                // SAFETY: `getsid` only reads; a pid that is gone in the meantime reports an error.
-                if unsafe { libc::getsid(pid) } != leader {
-                    continue;
-                }
-                // SAFETY: the pid was in the session of the unreaped leader a moment ago. It may
-                // have exited since, which is the `ESRCH` that is ignored.
-                if unsafe { libc::kill(pid, libc::SIGKILL) } == 0 {
-                    signalled.insert(pid);
-                }
-            }
-            if signalled.len() == before {
-                break;
-            }
-        }
-        let killed = signalled.len();
-        if killed > 0 {
-            tracing::info!(terminal = %self.label, pid = self.pid, killed, "killed processes the exited process left in its session");
-        } else {
-            tracing::debug!(terminal = %self.label, pid = self.pid, "no process left in the exited process's session");
-        }
-    }
-
-    /// Whether the child has exited, found out without reaping it (`WNOWAIT`), or `None` when
-    /// `waitid` cannot say.
-    fn exited_unreaped(&self) -> Option<bool> {
-        // SAFETY: a zeroed `siginfo_t` is a valid buffer for `waitid` to fill in, and it is only
-        // read once `waitid` has succeeded.
-        unsafe {
-            let mut info: libc::siginfo_t = std::mem::zeroed();
-            let flags = libc::WEXITED | libc::WNOHANG | libc::WNOWAIT;
-            if libc::waitid(libc::P_PID, self.pid as libc::id_t, &mut info, flags) != 0 {
-                return None;
-            }
-            // With `WNOHANG`, a child that has not exited leaves `si_pid` as it was: 0.
-            Some(info.si_pid() != 0)
-        }
     }
 
     fn clean_scratch_dir(&self) {
@@ -777,41 +725,6 @@ impl PtyCore {
             }
         }
     }
-}
-
-/// Every process id on the system, a superset of the session's members for the caller to filter
-/// with `getsid`, or `None` when the system cannot list them.
-#[cfg(target_os = "linux")]
-fn session_candidates() -> Option<Vec<libc::pid_t>> {
-    let entries = std::fs::read_dir("/proc").ok()?;
-    Some(
-        entries
-            .flatten()
-            .filter_map(|entry| entry.file_name().to_str()?.parse().ok())
-            .collect(),
-    )
-}
-
-/// As the Linux one, from `libproc`.
-#[cfg(target_os = "macos")]
-fn session_candidates() -> Option<Vec<libc::pid_t>> {
-    // SAFETY: a null buffer of size 0 only asks how many processes there are.
-    let count = unsafe { libc::proc_listallpids(std::ptr::null_mut(), 0) };
-    if count <= 0 {
-        return None;
-    }
-    // Room beyond that count for processes started since.
-    let mut pids = vec![0 as libc::pid_t; count as usize + 256];
-    let size = (pids.len() * std::mem::size_of::<libc::pid_t>()) as libc::c_int;
-    // SAFETY: `pids` is writable for `size` bytes.
-    let filled = unsafe { libc::proc_listallpids(pids.as_mut_ptr().cast(), size) };
-    if filled <= 0 {
-        return None;
-    }
-    pids.truncate(filled as usize);
-    // Pid 0 is the kernel, which `getsid(0)` would answer for the caller instead.
-    pids.retain(|&pid| pid > 0);
-    Some(pids)
 }
 
 /// Hands one chunk to one client, waiting out a full queue up to `SUBSCRIBER_GRACE`. Returns

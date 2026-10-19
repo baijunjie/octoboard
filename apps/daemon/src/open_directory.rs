@@ -8,12 +8,13 @@ use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use crate::protocol::{error_code, CodedError};
-use crate::subprocess::{run_bounded, Bounds};
+use crate::subprocess::{run_bounded, Bounds, Reach};
 
 const OPEN_BOUNDS: Bounds = Bounds {
     timeout: Duration::from_secs(15),
     stdout_limit: 16 * 1024,
     stderr_limit: 16 * 1024,
+    reach: Reach::ProcessGroup,
 };
 
 pub fn open(directory: &Path) -> Result<(), anyhow::Error> {

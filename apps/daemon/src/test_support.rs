@@ -522,6 +522,28 @@ pub(crate) fn is_running(pid: i32) -> bool {
     !stat.trim().is_empty() && !stat.trim_start().starts_with('Z')
 }
 
+/// The start of a `/bin/bash -c` script that stands in for an agent CLI moving a background task
+/// into a process group of its own: job control starts a helper in one, and its pid is written to
+/// `pid_file` (whole, through a rename). The helper keeps none of the script's stdio open, so how
+/// the run ends is up to the script. Followed by `; ` and the rest of the script.
+pub(crate) fn helper_in_its_own_group(pid_file: &Path) -> String {
+    format!(
+        "set -m; /bin/sleep 300 </dev/null >/dev/null 2>&1 & echo $! > '{file}.tmp'; \
+         mv '{file}.tmp' '{file}'; set +m",
+        file = pid_file.display()
+    )
+}
+
+/// Waits up to [`PATIENCE`] for `pid` to stop running (gone or a zombie), failing the test if it
+/// does not.
+pub(crate) fn assert_stops_running(pid: libc::pid_t) {
+    let deadline = Instant::now() + PATIENCE;
+    while is_running(pid) {
+        assert!(Instant::now() < deadline, "pid {pid} kept running");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
 /// Waits for `pid` to no longer exist, failing the test if it outlives `deadline`. Used to
 /// confirm a process the fixture backgrounded was actually reaped rather than leaked, whether
 /// by the production code's own group kill or by a test cleaning up after a successful

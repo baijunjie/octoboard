@@ -341,7 +341,7 @@ pub fn unarchive(
                 )
             },
         )?;
-    let output = crate::subprocess::run_with_timeout(&mut command, UNARCHIVE_TIMEOUT)
+    let output = crate::subprocess::run_agent_with_timeout(&mut command, UNARCHIVE_TIMEOUT)
         .map_err(|err| failed(err.to_string()))?;
     if output.status.success() {
         return Ok(());

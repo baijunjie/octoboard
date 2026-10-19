@@ -49,7 +49,7 @@ use anyhow::Result;
 
 use crate::browse::budget;
 use crate::env_shell;
-use crate::subprocess::{self, BoundedFailure, Bounds};
+use crate::subprocess::{self, BoundedFailure, Bounds, Reach};
 
 /// Pathspecs that match each of `paths` exactly: the path itself, literally, and nothing below
 /// it (`<path>/**` excluded, the path's own glob characters escaped). A plain path would also match
@@ -252,6 +252,7 @@ impl GitEnv {
             timeout,
             stdout_limit,
             stderr_limit: budget::GIT_STDERR,
+            reach: Reach::ProcessGroup,
         };
         let output =
             subprocess::run_bounded(command, &bounds, cancel).map_err(GitError::Stopped)?;
