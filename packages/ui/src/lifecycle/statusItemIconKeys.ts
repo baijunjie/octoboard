@@ -1,4 +1,5 @@
-import type { Agent, SessionStatus } from "../protocol";
+import type { Agent } from "../protocol";
+import type { StatusKind } from "../sessionLabel";
 
 /** The keys by which the menu's lines name their pictures in `StatusItemMenu.icons`; the pictures
  * themselves are drawn by `statusItemIcons.ts`. */
@@ -8,6 +9,6 @@ export function agentIconKey(agent: Agent): string {
 }
 
 /** The key of a status heading's glyph. */
-export function statusIconKey(status: SessionStatus): string {
+export function statusIconKey(status: StatusKind): string {
   return `status:${status}`;
 }

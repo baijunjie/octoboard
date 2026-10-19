@@ -60,12 +60,13 @@ describe("buildStatusItemMenu", () => {
     expect(menuOf([orphan]).attention).toBe(false);
   });
 
-  it("lists a session running in the background with the working ones", () => {
+  it("lists sessions running in the background under a heading of their own, after the working ones", () => {
     const background = sessionOf("b", "c", "p", "b", "idle", { background_tasks: [{ id: "t1" }] });
     const { sections } = menuOf([inProject("i", "idle"), inProject("w", "working"), background]);
-    expect(sections.map((s) => [s.heading, s.items.map((item) => item.session)])).toEqual([
-      ["Working (2)", ["w", "b"]],
-      ["Awaiting instructions (1)", ["i"]],
+    expect(sections.map((s) => [s.heading, s.icon, s.items.map((item) => item.session)])).toEqual([
+      ["Working (1)", "status:working", ["w"]],
+      ["Running in background (1)", "status:background", ["b"]],
+      ["Awaiting instructions (1)", "status:idle", ["i"]],
     ]);
   });
 

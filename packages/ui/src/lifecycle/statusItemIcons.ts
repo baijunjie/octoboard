@@ -1,6 +1,7 @@
 import { AGENT_MARKS } from "../components/agentMarks";
 import type { StatusItemIcon, StatusItemMenu } from "../platform";
-import type { Agent, SessionStatus } from "../protocol";
+import type { Agent } from "../protocol";
+import type { StatusKind } from "../sessionLabel";
 import type { StatusItemMenuDraft } from "./statusItemMenu";
 
 /** What the shell's menu shows beside a line: the mark of a session's agent, and a heading's status
@@ -34,9 +35,11 @@ function stroked(paths: string[], colour: string): string {
   return `<g fill="none" stroke="${colour}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</g>`;
 }
 
-const STATUS_GLYPHS: Partial<Record<SessionStatus, string>> = {
+const STATUS_GLYPHS: Partial<Record<StatusKind, string>> = {
   // The accent dot of `WorkingDot`, without the ping that cannot be drawn here.
   working: "<circle cx=\"12\" cy=\"12\" r=\"5\" fill=\"#3b82f6\"/>",
+  // `WorkingDot`'s background ring: the same dot, hollow, in idle's green.
+  background: "<circle cx=\"12\" cy=\"12\" r=\"3.75\" fill=\"none\" stroke=\"#22a05a\" stroke-width=\"2.5\"/>",
   waiting_user: stroked(HAND, "#d98200"),
   idle: stroked(BUBBLE, "#22a05a"),
 };
@@ -50,7 +53,7 @@ function glyphOf(key: string): { svg: string; template: boolean } | undefined {
     const template = mark.fill === "currentColor";
     return { svg: `<path d="${mark.d}" fill="${template ? "#000" : mark.fill}" fill-rule="evenodd"/>`, template };
   }
-  const svg = kind === "status" ? STATUS_GLYPHS[name as SessionStatus] : undefined;
+  const svg = kind === "status" ? STATUS_GLYPHS[name as StatusKind] : undefined;
   return svg ? { svg, template: false } : undefined;
 }
 

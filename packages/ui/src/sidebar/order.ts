@@ -17,7 +17,7 @@ const STATUS_RANK: Record<SessionStatus, number> = {
 /** The status `session` is ranked and summed up by: one running in the background has work under
  * way, so it sits with the working sessions. Its wire status stays `idle`, so everything else about
  * it (input, notifications) is an idle one's. */
-export function rankedStatus(session: Pick<Session, "status" | "background_tasks">): SessionStatus {
+function rankedStatus(session: Pick<Session, "status" | "background_tasks">): SessionStatus {
   return sessionStatusKind(session) === "background" ? "working" : session.status;
 }
 

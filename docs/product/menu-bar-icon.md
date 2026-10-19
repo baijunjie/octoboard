@@ -49,10 +49,11 @@ comes back through the menu's **Open Octoboard** or one of its sessions.
 From top to bottom:
 
 1. **The running sessions**, one group per status, each group under a heading that cannot be chosen and that names the
-   status with the number of sessions in it: **Waiting for you (n)**, then **Working (n)**, then **Awaiting
-   instructions (n)**. A group with no session is left out. Sessions still starting, interrupted and archived
-   sessions are never listed. A session running in background is listed under **Working** (see "Running in
-   background" in `docs/product/sessions.md`).
+   status with the number of sessions in it: **Waiting for you (n)**, then **Working (n)**, then **Running in
+   background (n)**, then **Awaiting instructions (n)**. A group with no session is left out. Sessions still
+   starting, interrupted and archived sessions are never listed. A session running in background (see "Running in
+   background" in `docs/product/sessions.md`) is listed in its own group, not under **Working** or **Awaiting
+   instructions**.
    - **Headings.** A heading is system text at the menu font's size, regular weight, in the secondary text
      colour, with its status glyph to the left of the text. Its glyph and text sit where the session lines below place
      their agent marks and titles — the same left edges and the same line height, the glyph centred on the text — as
@@ -60,8 +61,9 @@ From top to bottom:
      is not dimmed the way a menu line that cannot be chosen is, never highlights under the pointer, and is read by
      assistive technology once, as its menu item, the heading's words.
    - **Pictures.** Each heading has a still glyph for its status — the accent dot for working, the waving hand for
-     waiting for you, the speech bubble for awaiting instructions — and each session line has the mark of its agent
-     (Claude Code, Codex, Grok), as the sidebar draws them. The menu cannot animate, so the working dot does not pulse.
+     waiting for you, the green hollow ring for running in background, the speech bubble for awaiting instructions —
+     and each session line has the mark of its agent (Claude Code, Codex, Grok), as the sidebar draws them. The menu
+     cannot animate, so the working dot and the ring do not pulse.
      The marks the sidebar draws in the text colour (Codex, Grok) are template images here, which macOS tints to suit a
      light or dark menu; the other pictures keep their own colours, chosen to read on both. The "N more…" line has
      none. Each quota submenu's opening line (below) carries the mark of its agent in the same way; the title is what
