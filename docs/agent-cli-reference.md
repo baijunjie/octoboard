@@ -46,7 +46,8 @@ hold state against.
   can be replaced wholesale rather than patched (measured on 2.1.303: with two backgrounded sleeps finishing at
   different times, each `Stop` listed exactly the ones still running, and the last listed none). A finished task
   is reported to the session as a `UserPromptSubmit` whose prompt is a `<task-notification>` carrying its
-  `<task-id>`, followed by a `Stop` of its own. `/clear` does not end a running background shell: the next `Stop`
+  `<task-id>`, followed by a `Stop` of its own. A subagent running in the background is listed the same way (see
+  "Subagent events"). `/clear` does not end a running background shell: the next `Stop`
   after the `SessionStart` with source `clear` still listed it (measured through `-p --input-format stream-json`;
   the interactive TUI is unmeasured).
 - `StopFailure` — mutually exclusive with `Stop`: a turn that ends in an API error fires only `StopFailure`, so a
@@ -550,10 +551,30 @@ name):
   `synthetic_reason` `compaction_meta` opening "This session is being continued from a previous conversation"; another
   `compaction_meta` line carries the user info and rules.
 
-**Subagent events**, none of which Octoboard registers, carry join traps that make them unusable as if they were the
-session's own:
+**Subagent events** carry join traps that make them unusable as if they were the session's own. Octoboard drops them
+from the session's status, and registers Claude Code's `SubagentStart` and `SubagentStop` only for the background-task
+list:
 
 - Claude Code — `SubagentStop` also fires for internal helper agents, which are the ones with an empty `agent_type`.
+  Measured on 2.1.303:
+  - The parent session's hooks receive every subagent event at any depth, all under the main `session_id`, each carrying
+    `agent_id`. The internal helper that summarises a subagent's progress fires `PreToolUse` and `PostToolBatch` with an
+    `agent_id` but **no `agent_type` key at all**, so `agent_type` alone does not tell them from the session's own
+    events; a non-empty `agent_id` does.
+  - A `SubagentStop`'s `background_tasks` is the whole session's registry, as a `Stop`'s is: every running shell,
+    Monitor (type `"shell"`) and subagent (type `"subagent"`, with `agent_type`) at any depth, with no owner field (an
+    MCP task listed in a `SubagentStop` was not measured). It always lists the stopping subagent itself as running. A
+    subagent paused to wait on its own background work is omitted from the list (its task is reported `completed`).
+  - `SubagentStart` fires again with the same `agent_id` on every resume, and carries no description. A subagent's
+    `<task-id>` in a `<task-notification>` is its `agent_id`, which is its `background_tasks[].id`.
+  - While the main session is idle, each wake of a subagent runs `SubagentStart` → its tool events → `SubagentStop`, and
+    only when the subagent's notification is routed to the main session a `<task-notification>` `UserPromptSubmit` and a
+    main `Stop` follow. In the TUI, a subagent that stops while one of its own children is still running sends the main
+    session no notification until later. Nothing structured tells a notification of a subagent that paused from one that
+    finished; the `finished` flag in the subagent's `agent-<id>.meta.json` toggles with each turn, so it does not
+    either.
+  - A subagent handing over to the next one can fire `SubagentStop(B)` listing only B and `SubagentStart(A)` in the same
+    instant, so the list is momentarily empty.
 - Codex — `transcript_path` is the *subagent's* file on `SubagentStart` but the *parent's* on `SubagentStop`, where the
   subagent's own is in `agent_transcript_path`; `session_id` is the parent's while `turn_id` is the subagent's own, so
   the pair can be joined to the parent only by `agent_id`; and the subagent thread emits no `SessionStart` or `Stop` of

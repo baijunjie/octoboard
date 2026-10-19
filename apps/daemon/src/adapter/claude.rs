@@ -44,6 +44,8 @@ use crate::protocol::{notice_code, Agent, ClaudeApprovalMode, Notice};
 /// `StopFailure`, and a daemon keying "finished" on `Stop` alone leaves that session looking busy
 /// forever. `PostToolBatch` is here because a tool call rejected by Claude Code's own
 /// pre-execution guard fires only that one, skipping `PreToolUse` and both post events.
+/// `SubagentStart` and `SubagentStop` keep the background tasks current while the session is idle
+/// and a subagent works (see `crate::hooks::background_tasks_change`).
 const HOOK_EVENTS: &[&str] = &[
     "SessionStart",
     "UserPromptSubmit",
@@ -55,6 +57,8 @@ const HOOK_EVENTS: &[&str] = &[
     "Notification",
     "Stop",
     "StopFailure",
+    "SubagentStart",
+    "SubagentStop",
 ];
 
 /// The first Claude Code that takes a `"type": "http"` hook handler, which posts the event's JSON

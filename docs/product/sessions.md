@@ -403,8 +403,10 @@ Transitions:
 
 ### What the statuses are derived from
 
-Status comes from hook events Octoboard injects into each agent per launch, with the exceptions below. Five things
-besides those events bear on a running session's status, and only these five.
+Status comes from hook events Octoboard injects into each agent per launch, with the exceptions below. Only the
+session's own events count: those of a subagent it runs never change its status, on any agent, and on Claude Code
+neither do those of its internal helper agents. Five things besides those events bear on a running session's status,
+and only these five.
 
 - While a **Claude Code** session is *working* or *waiting for the user*, Octoboard also reads that session's own
   transcript file — the machine-readable record the agent keeps of the conversation, still not its rendered output —
@@ -452,10 +454,10 @@ practice was not checked (in one run an ending followed within a second by a new
 
 A Claude Code turn can end while work it started is still running in the background — a shell command sent there
 (by the user, or by Claude Code when it runs past the tool's time limit), a Monitor, an MCP tool call still waiting, or
-a background agent. Claude Code lists that work as the turn ends, and the session then reads as *running in background*
-instead of *awaiting instructions* until none of it is left. On the wire it is still `idle`; what sets it apart is the
-session's `background_tasks`, one entry per piece of work: `id`, and `type` and `description` where Claude Code gives
-them.
+a background agent. Claude Code lists that work as the turn ends, and as its background subagents start and stop
+between turns, and the session then reads as *running in background* instead of *awaiting instructions* until none of
+it is left. On the wire it is still `idle`; what sets it apart is the session's `background_tasks`, one entry per piece
+of work: `id`, and `type` and `description` where Claude Code gives them.
 
 **How the list is kept:**
 
@@ -463,6 +465,17 @@ them.
   a turn end listing nothing empties it. A turn that ends in an error empties it too.
 - When a piece of work finishes, Claude Code tells the session so in a turn of its own, naming it; that work leaves the
   list, and the session reads as *working* for that turn as for any other.
+- Between turns, while the session is at its prompt, a background subagent's own starts and stops keep the list
+  current, since a subagent can wake to its own background work without the session taking a turn. A subagent that
+  starts or resumes joins the list; one that stops leaves it, and the rest of the list becomes everything Claude Code
+  reports as still running across the whole session at that moment. A subagent's activity never changes the
+  session's status: while one works between turns the session keeps reading as *running in background*, not
+  *working*. Inside a turn these starts and stops change nothing, the turn's end listing everything. Only a named
+  subagent counts; Claude Code's internal helper agents are never listed. A subagent listed because it started
+  carries its description only if an earlier report had named it.
+- A subagent stop that would leave nothing running takes effect only after about **2 seconds**, so one subagent
+  handing over to the next does not make the session flash to *awaiting instructions* in between; a turn end, a
+  subagent starting, or another subagent stop within that time decides the list instead.
 - The list goes when the session's process ends — archived, interrupted, switched to another account or handed off —
   and the work goes with the process.
 - It is given only while the session is at its prompt: in any other status the session shows that status and no

@@ -498,6 +498,21 @@ fn drain_hook_queue(state: &Arc<AppState>, session_id: &str) {
     guard.drained = true;
 }
 
+/// The agent a hook's session runs, live or recorded.
+fn hook_agent(state: &Arc<AppState>, session_id: &str) -> Option<Agent> {
+    state
+        .live_session(session_id)
+        .map(|live| live.agent)
+        .or_else(|| {
+            state
+                .store
+                .get_session(session_id)
+                .ok()
+                .flatten()
+                .map(|session| session.agent)
+        })
+}
+
 /// Applies one hook event to its session. The event name comes from the payload, because the hook
 /// script is argument-free.
 fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
@@ -513,8 +528,17 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
         crate::trust::on_hook(state, &live);
     }
 
-    // A subagent's events are the agent's internal business and carry the subagent's own ids.
-    if hooks::is_subagent(&payload) {
+    // A subagent's events are the agent's internal business and carry the subagent's own ids; the
+    // only thing read from them is the background work they leave running, which never changes
+    // the session's status.
+    let agent = hook_agent(state, session_id);
+    if hooks::is_subagent(agent, &payload) {
+        let change = hooks::event_name(&payload)
+            .zip(agent)
+            .and_then(|(event, agent)| hooks::background_tasks_change(agent, &event, &payload));
+        if let Some(change) = change {
+            state.apply_background_tasks_change(session_id, change);
+        }
         return;
     }
 
@@ -528,17 +552,6 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
 
     match hooks::event_name(&payload) {
         Some(event) => {
-            let agent = state
-                .live_session(session_id)
-                .map(|live| live.agent)
-                .or_else(|| {
-                    state
-                        .store
-                        .get_session(session_id)
-                        .ok()
-                        .flatten()
-                        .map(|session| session.agent)
-                });
             if hooks::starts_conversation(&event) {
                 if let Err(err) = state.mark_conversation_started(session_id) {
                     tracing::debug!(session = %session_id, %err, "recording the session's first turn failed");
@@ -1264,6 +1277,155 @@ mod tests {
 
         std::fs::write(&path, crate::test_support::fresh_interrupt().repeat(2)).unwrap();
         assert!(reaches(&state, SessionStatus::Idle).await);
+    }
+
+    /// A helper agent's tool events carry an `agent_id` and no `agent_type`: they are not the
+    /// session's work, so an idle session stays idle.
+    #[tokio::test]
+    async fn a_helper_agents_tool_events_leave_an_idle_session_idle() {
+        let (state, dir) = app_state("server-helper-agent");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        state
+            .store
+            .insert_session(&crate::test_support::console_session(
+                "s",
+                SessionStatus::Idle,
+            ))
+            .unwrap();
+        for event in ["PreToolUse", "PostToolUse", "PostToolBatch"] {
+            let body = format!(
+                r#"{{"hook_event_name": "{event}", "agent_id": "h1", "tool_name": "Read"}}"#
+            );
+            apply_hook(&state, "s", body.as_bytes());
+        }
+        let session = state.store.get_session("s").unwrap().unwrap();
+        assert_eq!(session.status, SessionStatus::Idle);
+    }
+
+    /// Subagent events keep the task list while the session stays idle; the handoff between two
+    /// subagents never publishes it empty, and the end of the last one does once it has stood.
+    #[tokio::test(start_paused = true)]
+    async fn subagent_events_keep_the_tasks_of_an_idle_session() {
+        let (state, dir) = app_state("server-subagent-tasks");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        state
+            .store
+            .insert_session(&crate::test_support::console_session(
+                "s",
+                SessionStatus::Idle,
+            ))
+            .unwrap();
+        let mut events = state.subscribe();
+        let hook = |body: &str| apply_hook(&state, "s", body.as_bytes());
+        let published = |events: &mut tokio::sync::broadcast::Receiver<Event>| {
+            let mut out = Vec::new();
+            while let Ok(Event::SessionUpserted { session }) = events.try_recv() {
+                out.push((session.status, session.background_tasks.len()));
+            }
+            out
+        };
+
+        hook(
+            r#"{"hook_event_name": "SubagentStart", "agent_id": "a", "agent_type": "general-purpose"}"#,
+        );
+        hook(
+            r#"{"hook_event_name": "SubagentStart", "agent_id": "b", "agent_type": "general-purpose"}"#,
+        );
+        assert_eq!(
+            published(&mut events),
+            [(SessionStatus::Idle, 1), (SessionStatus::Idle, 2)]
+        );
+        // The helper agent is not work, and its stop says nothing.
+        hook(r#"{"hook_event_name": "SubagentStop", "agent_id": "h", "background_tasks": []}"#);
+        let stop_a = r#"{"hook_event_name": "SubagentStop", "agent_id": "a", "agent_type": "general-purpose", "background_tasks": [{"id": "a", "type": "subagent", "description": "probe A"}, {"id": "b", "type": "subagent", "description": "probe B"}]}"#;
+        hook(stop_a);
+        assert_eq!(published(&mut events), [(SessionStatus::Idle, 1)]);
+
+        // b stops, a starts again in the same instant: no empty list in between.
+        hook(
+            r#"{"hook_event_name": "SubagentStop", "agent_id": "b", "agent_type": "general-purpose", "background_tasks": [{"id": "b", "type": "subagent"}]}"#,
+        );
+        hook(
+            r#"{"hook_event_name": "SubagentStart", "agent_id": "a", "agent_type": "general-purpose"}"#,
+        );
+        tokio::time::sleep(crate::state::EMPTY_TASKS_DELAY * 2).await;
+        let seen = published(&mut events);
+        assert!(!seen.contains(&(SessionStatus::Idle, 0)), "{seen:?}");
+        let tasks = state.background_tasks_of("s");
+        // b had stopped with nothing else running, so only a is left.
+        assert_eq!(tasks.len(), 1);
+        // a was named by an earlier stop, and comes back with its description.
+        let a = tasks.iter().find(|task| task.id == "a").unwrap();
+        assert_eq!(a.description.as_deref(), Some("probe A"));
+
+        // A `Stop` within the wait takes the emptying back: its own list is the truth.
+        hook(
+            r#"{"hook_event_name": "SubagentStop", "agent_id": "a", "agent_type": "general-purpose", "background_tasks": [{"id": "a", "type": "subagent"}]}"#,
+        );
+        hook(r#"{"hook_event_name": "Stop", "background_tasks": [{"id": "S", "type": "shell"}]}"#);
+        tokio::time::sleep(crate::state::EMPTY_TASKS_DELAY * 2).await;
+        let tasks = state.background_tasks_of("s");
+        assert_eq!(
+            tasks.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
+            ["S"]
+        );
+
+        // The last subagent stops with nothing else running: the list is emptied once the stop has
+        // stood.
+        hook(r#"{"hook_event_name": "Stop", "background_tasks": []}"#);
+        hook(
+            r#"{"hook_event_name": "SubagentStart", "agent_id": "a", "agent_type": "general-purpose"}"#,
+        );
+        hook(
+            r#"{"hook_event_name": "SubagentStop", "agent_id": "a", "agent_type": "general-purpose", "background_tasks": [{"id": "a", "type": "subagent"}]}"#,
+        );
+        assert!(!state.background_tasks_of("s").is_empty());
+        tokio::time::sleep(crate::state::EMPTY_TASKS_DELAY * 2).await;
+        assert!(state.background_tasks_of("s").is_empty());
+        assert_eq!(
+            published(&mut events).last(),
+            Some(&(SessionStatus::Idle, 0))
+        );
+        assert_eq!(
+            state.store.get_session("s").unwrap().unwrap().status,
+            SessionStatus::Idle
+        );
+    }
+
+    /// Inside a turn a subagent's start and stop leave the list alone: the turn's own `Stop` lists
+    /// everything, and a turn cancelled without one would leave a foreground subagent behind.
+    #[tokio::test(start_paused = true)]
+    async fn subagent_events_inside_a_turn_leave_the_tasks_alone() {
+        let (state, dir) = app_state("server-subagent-in-turn");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        state
+            .store
+            .insert_session(&crate::test_support::console_session(
+                "s",
+                SessionStatus::Working,
+            ))
+            .unwrap();
+        apply_hook(
+            &state,
+            "s",
+            br#"{"hook_event_name": "SubagentStart", "agent_id": "a", "agent_type": "general-purpose"}"#,
+        );
+        assert!(state.background_tasks_of("s").is_empty());
+        apply_hook(
+            &state,
+            "s",
+            br#"{"hook_event_name": "SubagentStop", "agent_id": "a", "agent_type": "general-purpose", "background_tasks": [{"id": "a", "type": "subagent"}, {"id": "b", "type": "shell"}]}"#,
+        );
+        assert!(state.background_tasks_of("s").is_empty());
     }
 
     /// A path no route serves is still behind the guard: hostile callers learn nothing from it.

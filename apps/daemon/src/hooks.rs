@@ -14,7 +14,11 @@
 //!   `idle_prompt` is the only one worth mapping: its `permission_prompt` does fire, but a fixed
 //!   six seconds after the `PermissionRequest` that already raised the hand, so it says nothing
 //!   new. `idle_prompt` is no use as a general backstop either, being armed by `Stop`: a turn that
-//!   fires no `Stop` never produces one.
+//!   fires no `Stop` never produces one. The session's hooks also receive every subagent's events,
+//!   at any depth, each carrying an `agent_id`; none of them changes the session's status (see
+//!   [`is_subagent`]), but a named subagent's `SubagentStart` and `SubagentStop` keep the task list
+//!   current while the session is idle, because a `SubagentStop` carries the session-wide
+//!   registry and a subagent woken by its own background work runs with no `Stop` of the session's.
 //! - **Grok**: `Stop` fires twice per session — once per turn with `reason: "end_turn"` and again
 //!   at teardown with `reason: "shutdown"` — so an unfiltered mapping ends every session with a
 //!   phantom finished turn. Payload keys exist in both camelCase and snake_case.
@@ -101,6 +105,18 @@ pub enum BackgroundTasksChange {
     /// These tasks have finished: the agent reports each completion to itself as a turn of its
     /// own, whose prompt carries the task's id.
     Finished(Vec<String>),
+    /// A named subagent stopped, with the session-wide registry its `SubagentStop` lists. That
+    /// list always names the stopping subagent as running, so the subagent's own entry does not
+    /// count; the rest replaces the current list. It may be momentarily empty between one
+    /// subagent stopping and the next starting, so a change to empty is not final until it has
+    /// stood for a while.
+    SubagentStopped {
+        id: String,
+        tasks: Vec<BackgroundTask>,
+    },
+    /// A named subagent started, or resumed (`SubagentStart` fires again on every resume): it
+    /// is running, whether or not a `Stop` has listed it yet.
+    SubagentStarted(String),
 }
 
 /// The change an event makes to the session's background tasks, or `None` when it makes none.
@@ -113,6 +129,20 @@ pub fn background_tasks_change(
 ) -> Option<BackgroundTasksChange> {
     if agent != Agent::Claude {
         return None;
+    }
+    if is_subagent(Some(agent), payload) {
+        // Only a named subagent counts: the internal helper agents fire these events too, with no
+        // `agent_type`, and are not work the session has left running.
+        let id = text_field(payload, "agent_id")?;
+        text_field(payload, "agent_type")?;
+        return match event {
+            "SubagentStart" => Some(BackgroundTasksChange::SubagentStarted(id)),
+            "SubagentStop" => Some(BackgroundTasksChange::SubagentStopped {
+                tasks: claude_background_tasks(payload),
+                id,
+            }),
+            _ => None,
+        };
     }
     match event {
         "Stop" => Some(BackgroundTasksChange::Replace(claude_background_tasks(
@@ -129,7 +159,8 @@ pub fn background_tasks_change(
     }
 }
 
-/// The background tasks a Claude Code `Stop` lists; an entry without an id is not one.
+/// The background tasks a Claude Code `Stop` or `SubagentStop` lists; an entry without an id is
+/// not one.
 fn claude_background_tasks(payload: &Value) -> Vec<BackgroundTask> {
     payload
         .get("background_tasks")
@@ -228,9 +259,20 @@ fn grok_field<'a>(payload: &'a Value, camel: &str, snake: &str) -> Option<&'a st
 /// subagent's `SessionEnd` carries the *child's* session id, so storing it would overwrite the id
 /// a resume needs and point the next resume at a conversation the user never had. A subagent's
 /// `StopCancelled` would likewise report the session as finished while it is still working.
-pub fn is_subagent(payload: &Value) -> bool {
-    ["subagentType", "subagent_type", "agent_type"]
-        .iter()
+///
+/// A named subagent carries an `agent_type`, for every agent. On Claude Code a non-empty `agent_id`
+/// marks one too, at any depth: the internal helper agent that summarises a subagent's progress
+/// carries an `agent_id` but no `agent_type`, and its tool events would otherwise read as the
+/// session's own work. Codex's schemas give some events an optional `agent_id` without saying the
+/// main thread leaves it empty, so for any other agent it says nothing. The agent is `None` for a
+/// session nothing is known of.
+pub fn is_subagent(agent: Option<Agent>, payload: &Value) -> bool {
+    let keys: &[&str] = if agent == Some(Agent::Claude) {
+        &["subagentType", "subagent_type", "agent_type", "agent_id"]
+    } else {
+        &["subagentType", "subagent_type", "agent_type"]
+    };
+    keys.iter()
         .filter_map(|key| payload.get(*key))
         .any(|value| match value {
             Value::String(text) => !text.is_empty(),
@@ -663,5 +705,68 @@ mod tests {
         let stop = json!({"backgroundTasks": [{"id": "g1"}], "background_tasks": [{"id": "g1"}]});
         assert_eq!(background_tasks_change(Agent::Grok, "Stop", &stop), None);
         assert_eq!(background_tasks_change(Agent::Codex, "Stop", &stop), None);
+    }
+
+    /// On Claude Code any `agent_id` marks a subagent's payload, including the internal helper
+    /// agent's, which has no `agent_type`; for another agent only `agent_type` does.
+    #[test]
+    fn a_claude_payload_with_an_agent_id_is_a_subagents() {
+        let claude = Some(Agent::Claude);
+        assert!(is_subagent(claude, &json!({"agent_id": "a1"})));
+        assert!(is_subagent(
+            claude,
+            &json!({"agent_id": "a1", "agent_type": ""})
+        ));
+        assert!(is_subagent(
+            claude,
+            &json!({"agent_type": "general-purpose"})
+        ));
+        assert!(!is_subagent(claude, &json!({"agent_id": ""})));
+        assert!(!is_subagent(claude, &json!({"session_id": "s"})));
+        for other in [Some(Agent::Codex), Some(Agent::Grok), None] {
+            assert!(!is_subagent(other, &json!({"agent_id": "a1"})));
+            assert!(is_subagent(other, &json!({"agent_type": "worker"})));
+        }
+    }
+
+    /// A named subagent's stop carries the registry, its own entry included;
+    /// its start adds it. A helper agent (no `agent_type`) changes nothing, and neither does a
+    /// subagent's own `Stop`-shaped payload.
+    #[test]
+    fn a_named_subagents_start_and_stop_change_the_tasks() {
+        let stop = json!({
+            "agent_id": "x", "agent_type": "general-purpose",
+            "background_tasks": [
+                {"id": "x", "type": "subagent", "description": "probe"},
+                {"id": "b1", "type": "shell", "description": "npm run dev"},
+            ],
+        });
+        assert_eq!(
+            background_tasks_change(Agent::Claude, "SubagentStop", &stop),
+            Some(BackgroundTasksChange::SubagentStopped {
+                id: "x".to_string(),
+                tasks: vec![
+                    task("x", "subagent", "probe"),
+                    task("b1", "shell", "npm run dev")
+                ],
+            })
+        );
+        let start = json!({"agent_id": "x", "agent_type": "general-purpose"});
+        assert_eq!(
+            background_tasks_change(Agent::Claude, "SubagentStart", &start),
+            Some(BackgroundTasksChange::SubagentStarted("x".to_string()))
+        );
+        let helper = json!({"agent_id": "h", "background_tasks": [{"id": "h"}]});
+        for event in ["SubagentStart", "SubagentStop", "Stop"] {
+            assert_eq!(background_tasks_change(Agent::Claude, event, &helper), None);
+        }
+        // A named subagent's `Stop`-shaped payload is not the session's `Stop`.
+        for event in ["Stop", "StopFailure", "UserPromptSubmit"] {
+            assert_eq!(background_tasks_change(Agent::Claude, event, &stop), None);
+        }
+        assert_eq!(
+            background_tasks_change(Agent::Codex, "SubagentStop", &stop),
+            None
+        );
     }
 }

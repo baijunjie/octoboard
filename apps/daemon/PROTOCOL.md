@@ -418,14 +418,24 @@ record that names one wins, and a value the records do not show stays unknown ra
 configured ids rather than the ones a request was served by. They are stored and collected like `usage`, retained when
 archived, and cleared with it when the native conversation id changes.
 
-`Session.background_tasks` lists the work a Claude Code session has left running in the background after a turn that
-ended without finishing it; it is `BackgroundTask { id, type?, description? }` as the agent's `Stop` hook names each
+`Session.background_tasks` lists the work a Claude Code session has left running in the background, including its
+named subagents (`type` `"subagent"`); it is `BackgroundTask { id, type?, description? }` as the agent's hooks name each
 entry. It is Claude Code only, and held in the daemon's memory only: it is lost at daemon restart and dropped when the
 session's process exits. Every `Stop` replaces the list with the one it carries, so a `Stop` without tasks empties it; a
 `StopFailure` clears it; and a completion notification, which Claude Code delivers to the session as a prompt naming the
-finished tasks, removes just those. The list is present on the record, and published, only while the session is `idle`:
-for any other status it is absent, though the daemon keeps what it was told for the next time the session is idle. An
-idle session with tasks takes messages like any idle session; the tasks only say that its work is not over.
+finished tasks, removes just those. Between turns, a subagent's own events keep it current, because a subagent woken by
+its background work runs without the session having a `Stop`: a `SubagentStop` replaces the list with the session-wide
+registry it carries, less the stopping subagent's own entry, and a `SubagentStart` adds that subagent. Only a subagent
+with an `agent_type` counts (the internal helper agents have none), the two count only while the session is `idle`
+(inside a turn its own `Stop` lists everything), and neither changes the session's status. A subagent that started
+within the last two seconds stays in the list through a `SubagentStop`, whatever the registry says, because hooks run
+as commands can arrive out of order. A `SubagentStop` that would leave the list empty takes effect two seconds later
+ininstead, because one subagent stopping and the next starting arrive in the same instant; a `Stop`, a `StopFailure` or a
+`SubagentStop` that leaves something running in that time takes it back, a `SubagentStart` applies it at once before
+adding itself, and a completion notification does neither. The list is present on the record, and published, only
+while the session is `idle`: for any other status it is absent, though the daemon keeps what it was told for the next
+time the session is idle. An idle session with tasks takes messages like any idle session; the tasks only
+say that its work is not over.
 
 One daemon collector checks live sources at a one-second interval, reading only newly completed JSONL lines and skipping
 unchanged ledgers. Updates appear when the agent writes its own usage, which may be after a model call or turn completes;
