@@ -326,8 +326,10 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       owner, and you instruct it with `send_message`, archive it once it is done \
                       and reopen it with `reopen_session` when it has another task. Needs no \
                       approval. Returns the new session's id. The brief is rendered into the \
-                      session's opening prompt. A session that should not report to you is one \
-                      `request_session` asks the user for.",
+                      session's opening prompt. Use this when you should keep directing the \
+                      session and receiving its reports. To hand your own work to a peer in the next \
+                      session, use `request_session`; if the user only wants handover notes and \
+                      an end, leave the notes and end. Ask the user if their intent is unclear.",
         schema: || new_session_schema(true),
     },
     SEND_MESSAGE,
@@ -769,16 +771,19 @@ const REQUEST_SESSION: ToolDef = ToolDef {
     name: "request_session",
     description: "Ask the user to start a session that is nobody's — neither yours nor your \
                   owner's: it reports to the user, and you and it can only exchange information \
-                  (`share_info`). It can be a project session in any project of any console, or a \
-                  console session. A session you want to drive yourself is one `new_session` \
+                  (`share_info`). It can be a project session in any project of any console, or \
+                  a console session. A session you want to drive yourself is one `new_session` \
                   starts, where you have it. The user is asked first, and the call waits for \
-                  their answer, for several minutes at most. On approval Octoboard starts it with \
-                  your brief as its opening prompt, and you carry on as you were. A refusal, or no \
-                  answer in time, comes back as an error and changes nothing. When you are \
-                  handing over the work on a branch you are responsible for, pass it in \
-                  `branches`: the user is shown them, and on approval the new session becomes \
-                  responsible for them in your place. Leave `branches` out when you are only \
-                  working on whatever branch is checked out.",
+                  their answer, for several minutes at most. On approval Octoboard starts it \
+                  with your brief as its opening prompt; follow the user's direction on whether \
+                  your own work ends after the handover. Use this for a peer to continue your \
+                  current work in the next session. If the user only wants handover notes and an \
+                  end, leave the notes and end without starting a session. If their intent is \
+                  unclear, ask before acting. A refusal, or no answer in time, comes back as an \
+                  error and changes nothing. When handing over work on a branch you are \
+                  responsible for, pass it in `branches`: the user is shown them, and on \
+                  approval the new session becomes responsible for them in your place. Leave \
+                  `branches` out when you are only working on whatever branch is checked out.",
     schema: request_session_schema,
 };
 
@@ -809,7 +814,11 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
                       id. The brief is rendered into the session's opening prompt. A session \
                       started this way cannot start sessions of its own, and only this project is \
                       available; a session elsewhere, or one that should not report to you, is \
-                      one `request_session` asks the user for.",
+                      one `request_session` asks the user for. Use this only when you should keep \
+                      directing the session and receiving its reports. To hand your own work to \
+                      a peer in the next session, use `request_session`; if the user only wants \
+                      handover notes and an end, leave the notes and end. Ask the user if their \
+                      intent is unclear.",
         schema: || new_session_schema(false),
     },
     SEND_MESSAGE,

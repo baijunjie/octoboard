@@ -15,6 +15,25 @@ Every session is offered `request_session`: a console session, an unbound projec
 project session bound to an owner. The role description of every project session and the console session's
 instruction file describe it.
 
+## Continuing work in another session
+
+The console session's instructions and every project session's role description give the agent these rules:
+
+- A request to hand its current work to the next session, open another session to continue it, or request a peer
+  defaults to `request_session`. The peer reports directly to the user. The brief carries progress, remaining work
+  and necessary context; `branches` names the branches the caller is responsible for that the peer should take over.
+- A request to leave handover notes and finish, or permission to end without asking for a successor, means leaving
+  the notes and ending work, without creating or transferring sessions or continuing work in the background.
+- `new_session`, where offered, is for a recipient the caller should keep directing and receiving reports from.
+  `handoff_session`, where offered, replaces an existing session the caller owns; it does not hand the caller's own
+  work to a peer.
+- Instructions to persist until completion, permission to act without approval and earlier permission to delegate
+  do not override the user's handover intent or request to end. If the agent cannot distinguish a peer request,
+  notes followed by ending, and a child session it should direct, it must ask the user before acting.
+
+These are instructions for the agent, not intent detection enforced by Octoboard. The confirmation described above
+still controls whether a `request_session` call starts anything.
+
 ## The call
 
 | Argument | Required | Contents |
@@ -92,7 +111,7 @@ connected window.
 | Ending | What the call returns | What changes |
 |---|---|---|
 | The user approves | The result described under "On approval" below. | The session is started, as described there. |
-| The user refuses — the **Refuse** button, Escape, the dialog's close button or a click outside it | A tool error in fixed prose saying the user refused the request and nothing was started; it ends by telling the agent not to ask again unless the user tells it to, to carry on with its own work, and to tell the user in its terminal what it wanted the session for. | Nothing. |
+| The user refuses — the **Refuse** button, Escape, the dialog's close button or a click outside it | A tool error in fixed prose saying the user refused the request and nothing was started; it ends by telling the agent not to ask again unless the user tells it to, to tell the user in its terminal what it wanted the session for, and to follow the user's direction on continuing its own work or leaving handover notes and ending. | Nothing. |
 | Nobody answers within the time limit | A tool error of the same shape, saying the user did not respond within the limit. | Nothing. |
 | The request is withdrawn | A tool error saying the request was withdrawn before the user answered and nothing was started, where the call is still there to receive it. | Nothing. |
 
@@ -137,9 +156,10 @@ Once the user approves, the dialog closes everywhere at once, and then:
    on them. The paragraph is written when the request is made, so it names every branch the request named, whatever
    the move then finds.
 4. **The branches the request named are handed to it** once it has started (see "Handing branches over" below).
-5. **The caller carries on as it was.** It keeps running and is not archived, and the approval does not count as a
-   report. It does not own the new session, so `send_message`, `archive_session`, `reopen_session` and the other tools
-   that act on a session of the caller's own refuse it; `share_info` reaches it (see
+5. **The approval does not archive the caller.** It keeps running, and the approval does not count as a report.
+   The result tells the caller to follow the user's direction on continuing its own work or ending after the
+   handover. It does not own the new session, so `send_message`, `archive_session`, `reopen_session` and the other
+   tools that act on a session of the caller's own refuse it; `share_info` reaches it (see
    `docs/product/information-between-sessions.md`), and `get_session` reads it where the caller has that tool.
 
 The call returns:
@@ -152,10 +172,9 @@ The call returns:
 | `title` | Its title. |
 | `console` | The console it is in. |
 | `project` | The project it is in, or null for a console session. |
-| `note` | Prose telling the caller that the user approved and which session was started — its kind, id, title, agent and project or console; that it has no owner and reports to the user, not to the caller; that it is not the caller's to drive and the caller goes on with its own work; where the request named branches, what became of them (see "Handing branches over" below); that `share_info` tells it something that touches its work, and, where the caller has `get_session`, that it reads it. Where the caller is unbound, has `bind_to_session`, and could be bound to the new session under the rules a binding keeps, the note adds that `bind_to_session` with the new session as `owner` makes the caller one of its sessions — the way a project session comes to be driven by a console session it asked for (see "Lead sessions" in `docs/product/hub-orchestration.md`). |
+| `note` | Prose telling the caller that the user approved and which session was started — its kind, id, title, agent and project or console; that it has no owner and reports to the user, not to the caller; that it is not the caller's to drive and the caller should follow the user's direction on continuing its own work or ending after the handover; where the request named branches, what became of them (see "Handing branches over" below); that `share_info` tells it something that touches its work, and, where the caller has `get_session`, that it reads it. Where the caller is unbound, has `bind_to_session`, and could be bound to the new session under the rules a binding keeps, the note adds that `bind_to_session` with the new session as `owner` makes the caller one of its sessions — the way a project session comes to be driven by a console session it asked for (see "Lead sessions" in `docs/product/hub-orchestration.md`). |
 
-**No window follows the new session.** Approving selects nothing and changes no window's view or focus mode: the
-requesting session carries on, and the new session is not one the user asked to open.
+**No window follows the new session.** Approving selects nothing and changes no window's view or focus mode.
 
 ## Handing branches over
 
@@ -219,7 +238,7 @@ No report is synthesised for the turn this message starts (see "When a session d
 and Grok Build, whose prompts Octoboard does not read, the next turn to start is the one spared a report instead.
 
 The turn in which Claude Code delivers the call's result after moving the call to the background, as described above,
-is not spared: the caller carries on with its own work there, and that turn is reported on as any other.
+is not spared: that turn is reported on as any other, whether the caller continues work or ends after the handover.
 
 ## When an approval cannot be carried out
 

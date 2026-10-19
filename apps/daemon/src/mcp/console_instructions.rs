@@ -179,19 +179,21 @@ fn escape_close_tag(text: &str) -> String {
     escaped
 }
 
-/// The console session's whole instruction file: [`CONSOLE_SESSION_INSTRUCTIONS`], then, only when
-/// the user has text of their own for this console, that text under [`USER_SECTION`], inside the
-/// user tags. The text is kept as written, except that a closing tag of its own is escaped, so it
-/// cannot end the user's part early and have what follows read as Octoboard's.
+/// The console session's whole instruction file: built-in instructions and handover guidance, then
+/// only when the user has text of their own for this console, that text under [`USER_SECTION`],
+/// inside the user tags. The text is kept as written, except that a closing tag of its own is
+/// escaped, so it cannot end the user's part early and have what follows read as Octoboard's.
 pub fn console_session_instructions(user_prompt: Option<&str>) -> String {
+    let handover = super::role::handover_guidance(None);
     match user_prompt {
         Some(prompt) => {
             let prompt = escape_close_tag(prompt);
             format!(
-                "{CONSOLE_SESSION_INSTRUCTIONS}\n\n{USER_SECTION}{USER_OPEN_TAG}\n{prompt}\n{USER_CLOSE_TAG}\n"
+                "{CONSOLE_SESSION_INSTRUCTIONS}\n\n{handover}\n\n\
+                 {USER_SECTION}{USER_OPEN_TAG}\n{prompt}\n{USER_CLOSE_TAG}\n"
             )
         }
-        None => format!("{CONSOLE_SESSION_INSTRUCTIONS}\n"),
+        None => format!("{CONSOLE_SESSION_INSTRUCTIONS}\n\n{handover}\n"),
     }
 }
 

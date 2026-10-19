@@ -70,9 +70,10 @@ const REMEMBERED_ENDINGS: usize = 64;
 
 /// What a call that changed nothing tells the model to do next: stopping there is the expected
 /// outcome, and asking again would put the same question in front of the user straight away.
-const DO_NOT_ASK_AGAIN: &str = "Do not ask again unless the user tells you to: carry on with your \
-                                own work, and tell the user in this terminal what you wanted the \
-                                session for";
+const DO_NOT_ASK_AGAIN: &str = "Do not ask again unless the user tells you to. Tell the user in \
+                                this terminal what you wanted the session for, and follow their \
+                                direction on whether to continue your own work or leave handover \
+                                notes and end";
 
 /// What the waiting call is handed when its request is answered: the tool's result, or the reason
 /// it failed, written for the model.
@@ -626,8 +627,8 @@ fn outcome_note(
         "The user approved the request: Octoboard started the {kind} session `{id}` (\"{title}\", \
          {agent}){place}, with your brief as its opening prompt. It has no owner: it reports to \
          the user, not to you. It is not yours to drive — you cannot instruct, archive or reopen \
-         it — and you go on with your own work as you were.{branches} `{share_info}` tells it \
-         something that touches its work{reads}.{bind}",
+         it. Follow the user's direction on whether to continue your own work or end after the \
+         handover.{branches} `{share_info}` tells it something that touches its work{reads}.{bind}",
         id = started.id,
         title = one_line(&started.title),
         agent = started.agent.label(),

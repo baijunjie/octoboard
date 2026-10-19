@@ -56,6 +56,37 @@ fn console_session_pointer(agent: Agent) -> String {
     )
 }
 
+/// Shared intent rules use qualified tool names in project prompts and bare names in the
+/// console instruction file, which serves every agent.
+pub(super) fn handover_guidance(agent: Option<Agent>) -> String {
+    let tool = |name: &str| match agent {
+        Some(agent) => qualified_tool_name(agent, name),
+        None => name.to_string(),
+    };
+    format!(
+        "## Continuing work in another session\n\n\
+         - When the user asks to hand your current work to the next session, open another \
+           session to continue it, or request a peer session, default to `{request_session}`. \
+           The peer reports directly to the user. Put progress, remaining work and necessary \
+           context in the brief, and pass any branches you are responsible for that it should \
+           take over.\n\
+         - When the user asks you to leave handover notes and finish, or says you can end, \
+           without asking to start a successor, leave the notes and end your work. Do not \
+           create or transfer sessions or continue work in the background.\n\
+         - Use `{new_session}`, where available, only when the user wants you to keep directing \
+           the recipient and receiving its reports. `{handoff_session}`, where available, \
+           replaces an existing session you own; it does not hand your own work to a peer.\n\
+         - Instructions to persist until completion, permission to act without approval and \
+           earlier permission to delegate do not override the user's intent for this handover \
+           or a request to end. If you cannot tell whether the user wants a peer session, \
+           handover notes followed by ending, or a child session you direct, ask the user \
+           before acting.",
+        request_session = tool("request_session"),
+        new_session = tool("new_session"),
+        handoff_session = tool("handoff_session"),
+    )
+}
+
 /// The ways a session relates to another, in the words every project session's role text gives
 /// them: which tool makes a session one's own, the ones that move a session to another agent,
 /// another account or another owner or bind this one to an owner, which one makes a session
@@ -116,7 +147,7 @@ fn relationships(agent: Agent, owns: bool) -> String {
         list_sessions = tool("list_sessions"),
         share_info = tool("share_info"),
     ));
-    lines.join("\n")
+    format!("{}\n\n{}", lines.join("\n"), handover_guidance(Some(agent)))
 }
 
 /// What a project session bound to another session is told. It never talks to its owner directly:
