@@ -21,9 +21,9 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::protocol::{
-    error_code, now_millis, Account, Agent, ApprovalReviewer, CodedError, Console,
-    ConsoleSessionColour, Host, HostKind, Origin, Page, Project, ProjectAccount, ProjectSource,
-    Role, Session, SessionStatus, Settings,
+    error_code, now_millis, Account, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError,
+    Console, ConsoleSessionColour, Host, HostKind, Origin, Page, Project, ProjectAccount,
+    ProjectSource, Role, Session, SessionStatus, Settings,
 };
 use crate::session_title::RecordTitles;
 
@@ -324,6 +324,8 @@ impl Store {
         for (table, column) in [
             ("accounts", "approval_reviewer"),
             ("settings", "codex_default_approval_reviewer"),
+            ("accounts", "approval_mode"),
+            ("settings", "claude_default_approval_mode"),
         ] {
             if !column_exists(&conn, table, column)? {
                 conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {column} TEXT"), [])?;
@@ -649,7 +651,7 @@ impl Store {
     pub fn insert_account(&self, account: &Account) -> Result<()> {
         self.lock()
             .execute(
-                "INSERT INTO accounts (id, agent, name, config_dir, created_at, approval_reviewer) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO accounts (id, agent, name, config_dir, created_at, approval_reviewer, approval_mode) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
                     account.id,
                     enum_to_text(&account.agent),
@@ -657,6 +659,7 @@ impl Store {
                     account.config_dir,
                     now_millis(),
                     account.approval_reviewer.as_ref().map(enum_to_text),
+                    account.approval_mode.as_ref().map(enum_to_text),
                 ],
             )
             .map_err(|err| account_write_error(err, account))?;
@@ -689,11 +692,23 @@ impl Store {
         Ok(())
     }
 
+    pub fn set_account_approval_mode(
+        &self,
+        id: &str,
+        mode: Option<ClaudeApprovalMode>,
+    ) -> Result<()> {
+        self.lock().execute(
+            "UPDATE accounts SET approval_mode = ?2 WHERE id = ?1",
+            params![id, mode.as_ref().map(enum_to_text)],
+        )?;
+        Ok(())
+    }
+
     pub fn get_account(&self, id: &str) -> Result<Option<Account>> {
         let account = self
             .lock()
             .query_row(
-                "SELECT id, agent, name, config_dir, approval_reviewer FROM accounts WHERE id = ?1",
+                "SELECT id, agent, name, config_dir, approval_reviewer, approval_mode FROM accounts WHERE id = ?1",
                 params![id],
                 read_account,
             )
@@ -714,7 +729,7 @@ impl Store {
     pub fn list_accounts(&self) -> Result<Vec<Account>> {
         let conn = self.lock();
         let mut stmt =
-            conn.prepare("SELECT id, agent, name, config_dir, approval_reviewer FROM accounts ORDER BY created_at")?;
+            conn.prepare("SELECT id, agent, name, config_dir, approval_reviewer, approval_mode FROM accounts ORDER BY created_at")?;
         let rows = stmt
             .query_map([], read_account)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -927,6 +942,7 @@ impl Store {
             default_clone_dir: self.default_clone_dir()?,
             accounts: self.list_accounts()?,
             codex_default_approval_reviewer: self.codex_default_approval_reviewer()?,
+            claude_default_approval_mode: self.claude_default_approval_mode()?,
         })
     }
 
@@ -945,6 +961,22 @@ impl Store {
         self.lock().execute(
             "UPDATE settings SET codex_default_approval_reviewer = ?2 WHERE id = ?1",
             params![SETTINGS_ID, reviewer.as_ref().map(enum_to_text)],
+        )?;
+        Ok(())
+    }
+
+    pub fn claude_default_approval_mode(&self) -> Result<Option<ClaudeApprovalMode>> {
+        Ok(self.lock().query_row(
+            "SELECT claude_default_approval_mode FROM settings WHERE id = ?1",
+            params![SETTINGS_ID],
+            |row| enum_from_row_opt(row, 0),
+        )?)
+    }
+
+    pub fn set_claude_default_approval_mode(&self, mode: Option<ClaudeApprovalMode>) -> Result<()> {
+        self.lock().execute(
+            "UPDATE settings SET claude_default_approval_mode = ?2 WHERE id = ?1",
+            params![SETTINGS_ID, mode.as_ref().map(enum_to_text)],
         )?;
         Ok(())
     }
@@ -2053,6 +2085,7 @@ fn read_account(row: &Row<'_>) -> rusqlite::Result<Account> {
         name: row.get(2)?,
         config_dir: row.get(3)?,
         approval_reviewer: enum_from_row_opt(row, 4)?,
+        approval_mode: enum_from_row_opt(row, 5)?,
     })
 }
 
@@ -2237,6 +2270,7 @@ mod tests {
             name: format!("{id}-name"),
             config_dir: config_dir.to_string(),
             approval_reviewer: None,
+            approval_mode: None,
         }
     }
 
@@ -3438,6 +3472,46 @@ mod tests {
         );
         store.set_codex_default_approval_reviewer(None).unwrap();
         assert_eq!(store.codex_default_approval_reviewer().unwrap(), None);
+    }
+
+    #[test]
+    fn approval_mode_columns_migrate_and_settings_round_trip() {
+        let path = temp_db("approval-mode-migration");
+        let store = Store::open(&path).unwrap();
+        store
+            .insert_account(&account("acct-1", Agent::Claude, "/tmp/claude"))
+            .unwrap();
+        {
+            let conn = store.lock();
+            conn.execute("ALTER TABLE accounts DROP COLUMN approval_mode", [])
+                .unwrap();
+            conn.execute(
+                "ALTER TABLE settings DROP COLUMN claude_default_approval_mode",
+                [],
+            )
+            .unwrap();
+        }
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        let mut account = store.get_account("acct-1").unwrap().unwrap();
+        assert_eq!(account.approval_mode, None);
+        assert_eq!(store.claude_default_approval_mode().unwrap(), None);
+        account.approval_mode = Some(ClaudeApprovalMode::Manual);
+        store
+            .set_account_approval_mode(&account.id, account.approval_mode)
+            .unwrap();
+        store
+            .set_claude_default_approval_mode(Some(ClaudeApprovalMode::Bypass))
+            .unwrap();
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert_eq!(store.get_account("acct-1").unwrap().unwrap(), account);
+        assert_eq!(
+            store.get_settings().unwrap().claude_default_approval_mode,
+            Some(ClaudeApprovalMode::Bypass)
+        );
+        store.set_claude_default_approval_mode(None).unwrap();
+        assert_eq!(store.claude_default_approval_mode().unwrap(), None);
     }
 
     #[test]

@@ -15,14 +15,14 @@ Build 1.0.46**. What "Folder-trust confirmations" says about Codex and Grok Buil
 was measured on **Claude Code 2.1.296**, **Codex 0.160.0** and **Grok Build 1.0.50**; the Codex facts were not
 re-checked on **0.161.0**, which the folder-trust facts above were measured on. What the Grok Build section's "What the
 model itself is handed, and what it calls" says was re-confirmed on **Grok Build 1.0.52** with a real account, as was
-the timeout paragraph's `tool_timeout_sec = 660`; "The id a turn records is not one of the ids `grok models` prints"
-was first measured on that build. What "Plan quota" says was measured on **Claude Code 2.1.302**, **Codex 0.162.1** and
-**Grok Build 1.0.60**. What "Sharing a session directory between accounts" says, and the "Codex, history segments"
-and "Under a different account" notes under "Moving a conversation to another config directory", were measured on
-2026-10-19 on **Claude Code 2.1.302**, **Codex 0.162.1** and **Grok Build 1.0.62**.
-What "Codex resume from aged rollouts" says was measured on **Codex 0.162.1**.
-All three rewrite their hook surface, their payload fields, their configuration layering and their on-disk layout on
-upgrade, so check a detail here against the installed version before relying on it.
+the timeout paragraph's `tool_timeout_sec = 660`; "The id a turn records is not one of the ids `grok models` prints" was
+first measured on that build. What "Plan quota" says was measured on **Claude Code 2.1.302**, **Codex 0.162.1** and
+**Grok Build 1.0.60**. What the Claude Code section's "Permission mode" says was measured on **Claude Code 2.1.303**.
+What "Sharing a session directory between accounts" says, and the "Codex, history segments" and "Under a different
+account" notes under "Moving a conversation to another config directory", were measured on 2026-10-19 on **Claude Code
+2.1.302**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Codex resume from aged rollouts" says was measured on
+**Codex 0.162.1**. All three rewrite their hook surface, their payload fields, their configuration layering and their
+on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
 
 How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks.rs`; the product behavior
 built on them is in the product docs.
@@ -65,10 +65,12 @@ hold state against.
 **A configuration that names no permission mode does not ask.** On 2.1.296 a config directory whose `settings.json`
 carries no `permissions` block runs in *auto mode* (status line `⏵⏵ auto mode on (shift+tab to cycle)`), and a `Write`
 creating a new file in the session's own working directory went through with no prompt and no `PermissionRequest`. The
-mode that prompts has to be asked for: `permissions.defaultMode: "default"` in that directory's `settings.json`, since
-a launch passes no `--permission-mode`. The running session then calls that mode `⏸ manual mode on`, which matches
-neither the settings value nor the word "normal" — read the mode off the session's own transcript instead, where it is
-recorded unambiguously as `{"type":"permission-mode","permissionMode":"default"}` and `{"type":"mode","mode":"normal"}`.
+mode that prompts has to be asked for: `permissions.defaultMode: "default"` in that directory's `settings.json` when
+the account follows its configuration and a launch passes no `--permission-mode` (an explicit choice in Settings is
+passed as that flag; see "Permission mode" below). The running session then calls that mode `⏸ manual mode on`, which
+matches neither the settings value nor the word "normal" — read the mode off the session's own transcript instead,
+where it is recorded unambiguously as `{"type":"permission-mode","permissionMode":"default"}` and
+`{"type":"mode","mode":"normal"}`.
 
 **A pending permission prompt** is `PermissionRequest`; a question put through the agent's own ask-the-user tool is also
 reported. A question asked as plain prose is not: the turn simply ends, and no payload field tells it from a finished
@@ -199,6 +201,32 @@ cannot be refused**. Three traps: `fable` on its own is gated by the account and
 reserved word and **not an alias**; `mythos` has no alias. The list Octoboard offers is therefore the four strings
 `best`, `opus`, `sonnet`, `haiku`. `--effort` takes `low`, `medium`, `high`, `xhigh` and `max`, and a level the resolved
 model lacks is silently lowered, so no level is ever refused.
+
+**Permission mode** (Claude Code 2.1.303): `--permission-mode <mode>` is a global flag, so it works alongside `--resume`
+(including `bypassPermissions` with the `--settings` key, which showed no warning on a resume). The listed values are
+`acceptEdits`, `auto`, `bypassPermissions`, `manual`, `dontAsk` and `plan`; `default` is still accepted and equals
+`manual`, and is what the hooks and the transcript report. `manual` exists only from 2.1.200, so Octoboard passes
+`default` for "ask me".
+
+- **`bypassPermissions` blocks on each config directory's first use.** After onboarding or login and the trust screen
+  it shows a "Bypass Permissions mode" warning with the cursor on "No, exit" (Enter exits with status 1, Esc with 0); no
+  hook fires while it is up. Accepting writes only `skipDangerousModePermissionPrompt: true` to
+  `$CLAUDE_CONFIG_DIR/settings.json`. The same key in `.claude.json` does not suppress it.
+  `--settings '{"skipDangerousModePermissionPrompt":true}'` suppresses it and writes nothing, which is what Octoboard
+  passes (merged into its hook `--settings` JSON); background and `claude agents` sessions do not honour a flag-only
+  consent, which is irrelevant for a PTY launch.
+- **Each mode as launched** (2.1.303, fresh config dir logged in through the Keychain, a conversation with one turn,
+  then stopped and resumed): no flag started in `⏵⏵ auto mode on`, `--permission-mode auto` in `⏵⏵ auto mode on`,
+  `--permission-mode default` in `⏸ manual mode on`, and `--permission-mode bypassPermissions` plus the `--settings`
+  key in `⏵⏵ bypass permissions on`, on the fresh launch and on `--resume` alike. No warning screen appeared and no
+  `settings.json` was written to the config dir in any of them. A conversation with no turn yet is relaunched with a
+  new `--session-id` instead of `--resume`.
+- **`auto` has no blocking consent** (since 2.1.152), only a non-blocking notice, recorded as
+  `hasSeenAutoModeEntryWarning` in `.claude.json`. It is available on Max, and may fall back with a notice where it is
+  not (plan, model, `disableAutoMode`); those fallbacks and a non-Max plan were not measured.
+- **In `auto`, an `ask` rule raises a normal prompt** with `PreToolUse`, then `PermissionRequest` (`permission_mode` is
+  `auto`), then `Notification` `permission_prompt`. A tool call the classifier blocks shows no prompt: `PreToolUse` and
+  then `Stop`, with no `PermissionRequest` and no `PostToolUse`.
 
 ## Codex
 

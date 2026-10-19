@@ -861,6 +861,7 @@ mod tests {
             name: name.to_string(),
             config_dir: format!("/accounts/{id}"),
             approval_reviewer: None,
+            approval_mode: None,
         }
     }
 

@@ -685,6 +685,7 @@ mod tests {
             name: "Work".to_string(),
             config_dir: dir.join("codex-work").to_string_lossy().into_owned(),
             approval_reviewer: None,
+            approval_mode: None,
         };
         state.store.insert_account(&account).unwrap();
         let mut events = state.subscribe();

@@ -161,7 +161,7 @@ export interface Scenario {
    * daemon finding a session mid-turn that the window still lists as idle). Unlisted sessions are
    * handed off normally. */
   sessionHandoffs?: Record<string, FixtureError | "pending">;
-  /** A refusal to save a Codex account's approval mode; successful requests update settings. */
+  /** A refusal to save an account's approval mode, Codex's or Claude Code's; successful requests update settings. */
   accountApprovalError?: FixtureError;
   /** A refused request to open a project's directory in the host's file manager. The fixture
    * otherwise acknowledges the request without opening any host application. */

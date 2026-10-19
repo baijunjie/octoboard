@@ -739,6 +739,7 @@ pub(crate) fn console_with_project_and_accounts(prefix: &str) -> (Arc<AppState>,
                 name: id.to_string(),
                 config_dir: dir.join(id).to_string_lossy().into_owned(),
                 approval_reviewer: None,
+                approval_mode: None,
             })
             .unwrap();
     }

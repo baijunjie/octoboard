@@ -55,10 +55,10 @@ given Octoboard permission, for a console session in the console's own working d
 agent records the trust in its own configuration, as it does when a person answers. See
 `docs/product/folder-trust.md`.
 
-Claude Code's folder trust and Codex's approval reviewer affect what Octoboard can promise for a session (see
-"Per-agent specifics a user will notice" below and "The raised hand" in `docs/product/sessions.md`). Their
-configuration files are read at launch and never rewritten. Claude Code's trust is given by answering its trust
-confirmation. Codex's reviewer can be overridden for an account in Settings; see "Agent accounts" in
+Claude Code's folder trust and Codex's approval reviewer affect what Octoboard can promise for a session (see "Per-agent
+specifics a user will notice" below and "The raised hand" in `docs/product/sessions.md`). Their configuration files are
+read at launch and never rewritten. Claude Code's trust is given by answering its trust confirmation. Codex's reviewer
+and Claude Code's approval mode can be overridden for an account in Settings; see "Agent accounts" in
 `docs/product/settings.md`.
 
 Everything Octoboard adds is injected **per launch** and disappears with the process. In consequence, a project's own
@@ -121,9 +121,10 @@ A resume reassembles the full injection, because all three agents resolve hooks 
 arguments every time and a resume that omitted them would leave a session nobody can observe and nothing to report
 with.
 
-The model and reasoning effort resolved for the session are passed on the launch as well (see "The model and
-reasoning effort" below), as is an explicit Codex account approval reviewer (see "Agent accounts" in
-`docs/product/settings.md`). These are the user's choices carried to the agent, separate from the injected capabilities.
+The model and reasoning effort resolved for the session are passed on the launch as well (see "The model and reasoning
+effort" below), as is an explicit Codex account approval reviewer or Claude Code account approval mode (see "Agent
+accounts" in `docs/product/settings.md`). These are the user's choices carried to the agent, separate from the injected
+capabilities.
 
 ### The console session's instruction file
 
@@ -280,6 +281,13 @@ record saying untrusted. The trust state is read from the global config file thi
 will itself read: `.claude.json` inside the Claude Code config directory in effect — the session's own, or else a
 `CLAUDE_CONFIG_DIR` the user's shell exports — and `~/.claude.json` when there is none. A config directory without
 that file yet produces no warning; `~/.claude.json` is not consulted in its place.
+
+An explicit approval mode chosen for the account in Settings is passed on every launch, a resume included, as the
+permission mode Claude Code starts in; an account that follows its configuration passes none, so that account's
+`settings.json` decides. Under **Approve everything**, every launch also tells Claude Code that its own warning for that
+mode has been accepted, so the blocking screen it would otherwise raise on a config directory's first use of the mode
+never appears; this holds for that launch alone, and nothing is written into the account's configuration files. The
+account choices are in "Agent accounts" in `docs/product/settings.md`.
 
 **Codex.** Codex cannot be given a session id in advance, and its conversation is created lazily on the first prompt
 submission — so a session opened without a task has no agent-side id until the user types something, unless it was

@@ -364,6 +364,19 @@ pub enum ApprovalReviewer {
     AutoReview,
 }
 
+/// The permission mode a Claude Code launch is asked for. An absent override follows the account
+/// configuration and passes no flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClaudeApprovalMode {
+    /// Claude Code's classifier approves what it judges safe and blocks the rest.
+    Auto,
+    /// Every tool call that is not already allowed asks the user.
+    Manual,
+    /// Every tool call runs without asking.
+    Bypass,
+}
+
 /// A named config directory of one agent, kept once for the whole application and referred to by
 /// id wherever a config directory is referred to — a console's per-agent setting, a session's own
 /// copy of it. Every agent also has a *default* account, which is not a row here: it is the state
@@ -387,6 +400,9 @@ pub struct Account {
     /// Codex-only launch override; never written into the agent's own configuration.
     #[serde(default)]
     pub approval_reviewer: Option<ApprovalReviewer>,
+    /// Claude Code-only launch override; never written into the agent's own configuration.
+    #[serde(default)]
+    pub approval_mode: Option<ClaudeApprovalMode>,
 }
 
 /// Whether an agent's binary resolves on the user's login shell `PATH`, the only test an agent is
@@ -752,6 +768,8 @@ pub struct Settings {
     pub accounts: Vec<Account>,
     /// Launch override for Codex sessions that use the default account.
     pub codex_default_approval_reviewer: Option<ApprovalReviewer>,
+    /// Launch override for Claude Code sessions that use the default account.
+    pub claude_default_approval_mode: Option<ClaudeApprovalMode>,
 }
 
 /// Where a project's files are read from, as `project_source` reports it. See "Project sources" in
@@ -1768,6 +1786,12 @@ pub enum RequestBody {
     SetAccountApprovalReviewer {
         account: Option<String>,
         reviewer: Option<ApprovalReviewer>,
+    },
+    /// Sets a Claude Code account's approval mode. A null account names the default account; a
+    /// null mode follows its configuration. Takes effect on the next launch or resume.
+    SetAccountApprovalMode {
+        account: Option<String>,
+        mode: Option<ClaudeApprovalMode>,
     },
     /// Re-reads the plan quotas of the accounts it selects whose last reading is older than the
     /// polling interval (and not backed off after failures): `agent` limits it to one agent's

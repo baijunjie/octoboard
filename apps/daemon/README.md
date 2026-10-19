@@ -43,7 +43,7 @@ once.
 | `src/server.rs` | The HTTP/WebSocket router described in `PROTOCOL.md`, including `POST /mcp/:token`, `POST /git-ref/:session` and `POST /hook/:session` |
 | `src/access.rs` | The middleware every route sits behind: refuses with `403` a request whose `Host` or `Origin` is not a local client's or the application's own UI's |
 | `src/protocol.rs` | Rust types for the wire protocol (kept in sync by hand with `PROTOCOL.md` and `packages/ui/src/protocol.ts`), the console session colours, and the one mapping from a failure to an `error` reply |
-| `src/coordinator.rs` | Coordinator role: what each control-socket request does to the stored consoles, projects, sessions, pages and accounts, and which host-role work it triggers (session open/launch, binding and transfer, archive/reopen/delete cascades, the resumability check and `codex unarchive` before a reopen launches, account resolution, launch settings, console and project association and edits) |
+| `src/coordinator.rs` | Coordinator role: what each control-socket request does to the stored consoles, projects, sessions, pages and accounts, and which host-role work it triggers (session open/launch, binding and transfer, archive/reopen/delete cascades, the resumability check and `codex unarchive` before a reopen launches, account resolution, launch settings, the per-account and default-account launch override of each agent's approval handling — Codex's reviewer, Claude Code's permission mode — resolved at every launch, console and project association and edits) |
 | `src/session_request/` | `request_session`: a session asking the user to approve a session with no owner, with the pending requests, the wait for the answer and the carrying out of an approval |
 | `src/reporting.rs` | The channel between an owner and the sessions bound to it: briefs, messages into a running session, reports reaching the owner or synthesised when a session stops, automatic archiving, and report-panel form submissions |
 | `src/sharing.rs` | Information one session shares with another, delivered through `reporting.rs`'s message writing |
@@ -130,7 +130,8 @@ changes. The wire contract and budgets are in "Browsing a project" in [`PROTOCOL
 
 A single adapter interface (launch, session id, capability injection, status reporting, resume), so the rest of the
 daemon is agnostic to which agent it drives. Status hooks, the Octoboard MCP server and a role description are
-injected when a session starts.
+injected when a session starts, along with the account's approval override where the agent has one (Codex's reviewer,
+Claude Code's permission mode).
 
 | File | Agent |
 |---|---|

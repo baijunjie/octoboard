@@ -51,6 +51,7 @@ beforeEach(() => {
   toastError.mockClear();
   settings.accounts = [account("claude-work", "claude"), account("codex-work", "codex"), account("grok-work", "grok")];
   settings.codex_default_approval_reviewer = null;
+  settings.claude_default_approval_mode = null;
   accountQuotas.length = 0;
   availability.clear();
 });
@@ -136,6 +137,62 @@ it("keeps the trigger available while saving and prevents another option selecti
   expect([...selects[0]!.options].every((option) => !option.disabled)).toBe(true);
 });
 
+it("offers Claude Code's four choices for its default and each account, following configuration by default", () => {
+  const { selects } = mount("Claude Code");
+  expect(selects).toHaveLength(2);
+  expect(selects.map((select) => select.value)).toEqual(["inherit", "inherit"]);
+  expect([...selects[0]!.options].map((option) => option.value)).toEqual(["inherit", "auto", "manual", "bypass"]);
+  expect(selects[1]!.getAttribute("aria-label")).toContain("claude-work");
+});
+
+it("shows stored Claude Code modes separately for default and named accounts", () => {
+  settings.claude_default_approval_mode = "manual";
+  settings.accounts[0]!.approval_mode = "auto";
+  expect(mount("Claude Code").selects.map((select) => select.value)).toEqual(["manual", "auto"]);
+});
+
+it.each([
+  [0, "auto", null, "auto"],
+  [1, "manual", "claude-work", "manual"],
+  [1, "inherit", "claude-work", null],
+] as const)("saves Claude Code selector %i as %s at once", async (index, value, account, mode) => {
+  settings.accounts[0]!.approval_mode = "auto";
+  const { selects, change } = mount("Claude Code");
+  change(selects[index]!, value);
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_approval_mode", account, mode });
+  await act(async () => {});
+});
+
+it("keeps the confirmation open and the choice unchanged when saving Approve everything fails", async () => {
+  const { selects, change } = mount("Claude Code");
+  change(selects[1]!, "bypass");
+  request.mockRejectedValueOnce(new Error("save refused"));
+  act(() => [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Approve everything")!.click());
+  await act(async () => {});
+  expect(document.body.textContent).toContain("Approve everything for account claude-work?");
+  expect(selects[1]!.value).toBe("inherit");
+});
+
+it("saves Approve everything only once the warning is confirmed", async () => {
+  const { container, selects, change } = mount("Claude Code");
+  change(selects[1]!, "bypass");
+  expect(request).not.toHaveBeenCalled();
+  const buttons = () => [...document.querySelectorAll<HTMLButtonElement>("button")];
+  const press = (label: string) => act(() => buttons().find((b) => b.textContent === label)!.click());
+  expect(document.body.textContent).toContain("Approve everything for account claude-work?");
+  press("Cancel");
+  expect(request).not.toHaveBeenCalled();
+  expect(document.body.textContent).not.toContain("for account claude-work?");
+  change(selects[0]!, "bypass");
+  expect(document.body.textContent).toContain("Approve everything for the default account?");
+  press("Cancel");
+  change(selects[1]!, "bypass");
+  press("Approve everything");
+  await act(async () => {});
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_account_approval_mode", account: "claude-work", mode: "bypass" });
+  expect(container.querySelectorAll("select")).toHaveLength(2);
+});
+
 const quotaOf = (agent: Account["agent"], account: string | null, patch: Partial<AccountQuota> = {}): AccountQuota => ({
   agent,
   account,
@@ -217,7 +274,7 @@ it("shows one agent at a time, opening on the first and switching by tab", () =>
   expect(tabs.map((tab) => tab.getAttribute("aria-selected"))).toEqual(["true", "false", "false"]);
   expect(container.textContent).toContain("claude-work");
   expect(container.textContent).not.toContain("codex-work");
-  expect(container.querySelectorAll("select")).toHaveLength(0);
+  expect(container.querySelectorAll("select")).toHaveLength(2);
   selectTab(container, "Grok Build");
   expect(container.textContent).toContain("grok-work");
   expect(container.textContent).not.toContain("claude-work");

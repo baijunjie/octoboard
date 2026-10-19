@@ -49,7 +49,9 @@ controls holds.
 A confirmation dialog opens with focus on its confirm button, so Enter confirms it at once. Two kinds do not, and keep
 focus on the dialog itself, so an Enter pressed before the user has moved focus onto one of its controls does nothing: a
 destructive one, and a question the user did not ask for (a folder trust prompt, a session request), which can come up
-while they are typing elsewhere. The latter starts on the dialog again for each queued question it moves on to. One that
+while they are typing elsewhere. The latter starts on the dialog again for each queued question it moves on to. A
+confirmation opened by picking a choice in a select returns focus to that select's trigger however it closes (Cancel,
+Escape or the confirm button), and the select shows the old choice until the confirmation succeeds. One that
 turns destructive only once an option is ticked opens unticked, as an ordinary one, with focus on its confirm button.
 One that asks for a word to be typed opens with focus in that field. A dialog's form ignores the repeats of a held Enter
 or Space, except Space in a text field and Enter in a multi-line one, so the press that opened it cannot go on to submit

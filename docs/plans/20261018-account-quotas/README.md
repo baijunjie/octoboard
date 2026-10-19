@@ -50,9 +50,13 @@ Claude Code accounts have no such choice, although Claude Code takes a permissio
   line that cannot be chosen is drawn dimmed by the system, so each window is a menu item with a view of its own: the
   window's name and detail over a bar the shell draws, at full strength and never highlighted.
 - **Claude Code's approval mode offers four choices:** Follow account configuration (no flag; the account's
-  `settings.json` decides), Automatic (`--permission-mode auto`), Ask me (`--permission-mode manual`), and Approve
-  everything (`--permission-mode bypassPermissions`). It is per account plus a default for the default account, like
-  Codex's, passed on fresh launches and resumes alike. Grok Build is not included.
+  `settings.json` decides), Automatic (`--permission-mode auto`), Ask me (`--permission-mode default`, which every
+  Claude Code version accepts, unlike `manual`) and Approve everything (`--permission-mode bypassPermissions`). It is
+  per account plus a default for the default account, like Codex's, passed on fresh launches and resumes alike. Grok
+  Build is not included. Choosing Approve everything in Settings first shows a confirmation dialog explaining the risk;
+  only on confirm is it saved, and every launch under it passes `--settings` with
+  `"skipDangerousModePermissionPrompt": true` so Claude Code's own blocking warning never appears and nothing is written
+  into the account's files.
 - **Quotas are runtime state, not configuration:** never persisted, never exported with the configuration.
 
 ## Milestones
@@ -61,17 +65,12 @@ Claude Code accounts have no such choice, although Claude Code takes a permissio
 2. 02 Account management with quotas (closed)
 3. 03 Rail quota entry (closed)
 4. 04 Menu bar quota submenus (closed)
-5. [Claude Code approval mode](05-claude-approval-mode.md)
+5. 05 Claude Code approval mode (closed)
 6. [Final confirmation](06-final-confirmation.md)
 
 Milestones 2–4 depend on 1; milestone 5 is independent of the others.
 
 ## Open
 
-- Whether Approve everything (`bypassPermissions`) shows a blocking confirmation on an account's first use, and
-  whether the user's `skipDangerousModePermissionPrompt` setting is what suppresses it — to be measured in milestone 5;
-  if it blocks, how to handle it needs the user's call.
-- Whether Claude's auto mode raises a normal prompt plus a `PermissionRequest` hook when its classifier escalates, and
-  whether a fresh account's first use of auto shows a one-time consent screen — to be measured in milestone 5.
 - Colour thresholds for low remaining quota (e.g. warning below some percent) are not settled; bars use one colour
   per agent until decided.

@@ -11,7 +11,7 @@ import { MarkedPath } from "../components/MarkedPath";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
-import type { Account, Agent, ApprovalReviewer } from "../protocol";
+import type { Account, Agent, ApprovalReviewer, ClaudeApprovalMode } from "../protocol";
 import { AccountNameLine, AccountQuotaSummary } from "../quota/AccountQuotaSummary";
 import { useAccountQuota } from "../quota/useAccountQuota";
 import { useDaemon, useDaemonStore } from "../store";
@@ -107,19 +107,32 @@ function AgentAccountsPanel({ agent, owned, onEdit, onRemove }: {
   const t = useT();
   const listRef = useListMotion<HTMLDivElement>({ descendants: true });
   const defaultReviewer = useDaemonStore((s) => s.settings.codex_default_approval_reviewer);
+  const defaultMode = useDaemonStore((s) => s.settings.claude_default_approval_mode);
   const state = useDaemonStore((s) => s.agentAvailability.get(agent));
   const unavailable = state?.availability === "unavailable";
   const notUsable = unavailable && (
     <div><Message id="settings.accounts.notUsable" params={{ agent: AGENT_LABEL[agent], ...PATH_VAR_PARAMS }} /></div>
   );
   // The strip's own rule is the grid's top edge unless a line of text sits between them.
-  const above = unavailable || agent === "codex";
+  const hasApproval = agent === "codex" || agent === "claude";
+  const approvalSelect = (account: Account | null) => {
+    const name = account?.name ?? t("settings.accounts.defaultName");
+    if (agent === "codex") {
+      return <ApprovalReviewerSelect account={account?.id ?? null} name={name} reviewer={account ? account.approval_reviewer : defaultReviewer} />;
+    }
+    if (agent === "claude") {
+      return <ClaudeApprovalModeSelect account={account?.id ?? null} name={name} mode={account ? account.approval_mode : defaultMode} />;
+    }
+    return null;
+  };
+  const above = unavailable || hasApproval;
   return (
     <Tabs.Panel id={agent} className="px-0 pt-3">
       <div ref={listRef} className="relative">
         {unavailable && <p className="pb-2 text-sm text-app-muted">{t("agents.notInstalled", { agent: AGENT_LABEL[agent] })}</p>}
-        {agent === "codex" && <p className="pb-2 text-sm text-app-muted">{t("settings.accounts.approval.description")}</p>}
-        <div className={`grid grid-cols-1 ${above ? "groove-t" : ""} ${agent === "codex" && owned.length > 0 ? "sm:grid-cols-[minmax(0,1fr)_auto_auto]" : "sm:grid-cols-[minmax(0,1fr)_auto]"}`}>
+        {agent === "codex" && <p className="pb-2 text-sm text-app-muted">{t("settings.accounts.approval.codexDescription")}</p>}
+        {agent === "claude" && <p className="pb-2 text-sm text-app-muted">{t("settings.accounts.approval.claudeDescription")}</p>}
+        <div className={`grid grid-cols-1 ${above ? "groove-t" : ""} ${hasApproval && owned.length > 0 ? "sm:grid-cols-[minmax(0,1fr)_auto_auto]" : "sm:grid-cols-[minmax(0,1fr)_auto]"}`}>
           <AccountRow
             motionKey={`default:${agent}`}
             agent={agent}
@@ -127,7 +140,7 @@ function AgentAccountsPanel({ agent, owned, onEdit, onRemove }: {
             label={t("settings.accounts.defaultName")}
             help={<HelpTip label={t("settings.accounts.defaultHelp")}>{t("settings.accounts.defaultSetup")}</HelpTip>}
             description={state?.default_account_dir && <MarkedPath path={state.default_account_dir} />}
-            reviewer={agent === "codex" && <ApprovalReviewerSelect account={null} name={t("settings.accounts.defaultName")} reviewer={defaultReviewer} />}
+            approval={approvalSelect(null)}
           />
           {owned.map((account) => (
             <AccountRow
@@ -146,7 +159,7 @@ function AgentAccountsPanel({ agent, owned, onEdit, onRemove }: {
                   {notUsable}
                 </>
               }
-              reviewer={agent === "codex" && <ApprovalReviewerSelect account={account.id} name={account.name} reviewer={account.approval_reviewer} />}
+              approval={approvalSelect(account)}
             >
               <Button
                 size="sm"
@@ -176,14 +189,14 @@ function AgentAccountsPanel({ agent, owned, onEdit, onRemove }: {
 
 /** Subgrid shares control widths across accounts, including the default account without actions.
  * The account's quota takes the row's full width beneath its controls. */
-function AccountRow({ agent, account, label, help, description, reviewer, children, motionKey }: {
+function AccountRow({ agent, account, label, help, description, approval, children, motionKey }: {
   agent: Agent;
   account: string | null;
   label: React.ReactNode;
   /** A help tip that ends the name line, after the plan. */
   help?: React.ReactNode;
   description: React.ReactNode;
-  reviewer?: React.ReactNode;
+  approval?: React.ReactNode;
   children?: React.ReactNode;
   motionKey: string;
 }): React.ReactElement {
@@ -194,7 +207,7 @@ function AccountRow({ agent, account, label, help, description, reviewer, childr
         <AccountNameLine name={label} quota={quota} help={help} />
         <div className="text-sm text-app-muted">{description}</div>
       </div>
-      {reviewer && <div className="min-w-0">{reviewer}</div>}
+      {approval && <div className="min-w-0">{approval}</div>}
       {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
       {quota && <div className="col-span-full"><AccountQuotaSummary quota={quota} /></div>}
     </div>
@@ -202,34 +215,117 @@ function AccountRow({ agent, account, label, help, description, reviewer, childr
 }
 
 
-function ApprovalReviewerSelect({ account, name, reviewer }: {
-  account: string | null;
-  name: string;
-  reviewer?: ApprovalReviewer | null;
+/** What a choice that needs confirming says before it is saved. */
+interface ApprovalConfirmation {
+  title: string | React.ReactElement;
+  message: string;
+  confirmLabel: string;
+}
+
+/** An account's approval-mode selector: "follow account configuration" plus the agent's own choices, saved when
+ * selected. A choice `confirmation` describes is saved only once its confirmation dialog is accepted; cancelling leaves
+ * the stored value as it was. */
+function ApprovalSelect<T extends string>({ label, value, choices, save, confirmation }: {
+  label: string;
+  value?: T | null;
+  choices: { value: T; label: string }[];
+  /** Sends the choice; null follows the account configuration. */
+  save: (value: T | null) => Promise<unknown>;
+  confirmation?: (value: T) => ApprovalConfirmation | null;
 }): React.ReactElement {
   const t = useT();
-  const { request, toastError } = useDaemon();
+  const { toastError } = useDaemon();
   const [busy, setBusy] = useState(false);
-  const save = (value: ApprovalReviewer | "inherit") => {
+  const [confirming, setConfirming] = useState<{ value: T } & ApprovalConfirmation>();
+  const choose = (picked: T | "inherit") => {
+    const asked = picked === "inherit" ? null : confirmation?.(picked);
+    if (asked) {
+      setConfirming({ value: picked as T, ...asked });
+      return;
+    }
     setBusy(true);
-    void request({ type: "set_account_approval_reviewer", account, reviewer: value === "inherit" ? null : value })
+    void save(picked === "inherit" ? null : picked)
       .catch((err) => toastError(errorPresentation(err as Error)))
       .finally(() => setBusy(false));
   };
   // The trigger must stay focusable while the popover returns keyboard focus after selection.
   return (
     <div className="w-64 max-w-full">
-      <OptionSelect<ApprovalReviewer | "inherit">
+      <OptionSelect<T | "inherit">
         hideLabel
-        label={t("settings.accounts.approval.label", { name: isolate(name) })}
-        value={reviewer ?? "inherit"}
-        onChange={save}
+        label={label}
+        value={value ?? "inherit"}
+        onChange={choose}
         options={[
           { value: "inherit", label: t("settings.accounts.approval.inherit"), isDisabled: busy },
-          { value: "auto_review", label: t("settings.accounts.approval.auto"), isDisabled: busy },
-          { value: "user", label: t("settings.accounts.approval.user"), isDisabled: busy },
+          ...choices.map((choice) => ({ ...choice, isDisabled: busy })),
         ]}
       />
+      {confirming && (
+        <ConfirmDialog
+          title={confirming.title}
+          message={confirming.message}
+          confirmLabel={confirming.confirmLabel}
+          destructive
+          onConfirm={async () => {
+            await save(confirming.value);
+            setConfirming(undefined);
+          }}
+          onCancel={() => setConfirming(undefined)}
+        />
+      )}
     </div>
+  );
+}
+
+/** Codex's reviewer choice for an account, or for the default account when `account` is null. */
+function ApprovalReviewerSelect({ account, name, reviewer }: {
+  account: string | null;
+  name: string;
+  reviewer?: ApprovalReviewer | null;
+}): React.ReactElement {
+  const t = useT();
+  const { request } = useDaemon();
+  return (
+    <ApprovalSelect<ApprovalReviewer>
+      label={t("settings.accounts.approval.label", { name: isolate(name), agent: AGENT_LABEL.codex })}
+      value={reviewer}
+      choices={[
+        { value: "auto_review", label: t("settings.accounts.approval.auto") },
+        { value: "user", label: t("settings.accounts.approval.user") },
+      ]}
+      save={(value) => request({ type: "set_account_approval_reviewer", account, reviewer: value })}
+    />
+  );
+}
+
+/** Claude Code's four choices. Approve everything is saved only after the confirmation dialog: it makes Claude Code run
+ * every tool without asking, and Octoboard suppresses Claude Code's own warning for it (see "Agent accounts" in
+ * `docs/product/settings.md`). */
+function ClaudeApprovalModeSelect({ account, name, mode }: {
+  account: string | null;
+  name: string;
+  mode?: ClaudeApprovalMode | null;
+}): React.ReactElement {
+  const t = useT();
+  const { request } = useDaemon();
+  return (
+    <ApprovalSelect<ClaudeApprovalMode>
+      label={t("settings.accounts.approval.label", { name: isolate(name), agent: AGENT_LABEL.claude })}
+      value={mode}
+      choices={[
+        { value: "auto", label: t("settings.accounts.approval.claudeAuto") },
+        { value: "manual", label: t("settings.accounts.approval.user") },
+        { value: "bypass", label: t("settings.accounts.approval.claudeBypass") },
+      ]}
+      save={(value) => request({ type: "set_account_approval_mode", account, mode: value })}
+      confirmation={(value) => value === "bypass" ? {
+        title: account === null
+          ? t("settings.accounts.approval.bypassTitleDefault")
+          : <Message id="settings.accounts.approval.bypassTitle" params={{ name: <InlineChip dir="auto" wrap size="inherit">{name}</InlineChip> }} />,
+        message: t("settings.accounts.approval.bypassMessage"),
+        confirmLabel: t("settings.accounts.approval.claudeBypass"),
+      } : null}
+    />
   );
 }

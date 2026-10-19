@@ -115,6 +115,7 @@ mod tests {
                     name: format!("{id} name"),
                     config_dir: dir.join(id).to_string_lossy().into_owned(),
                     approval_reviewer: None,
+                    approval_mode: None,
                 })
                 .unwrap();
         }

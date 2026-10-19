@@ -178,11 +178,30 @@ while saving; a failure is shown in an error alert. It applies when a session ne
 a running process keeps its current reviewer. A named account's choice is independent of the default account's:
 following configuration does not inherit the default account's selector. If a session's named account was deleted,
 or it holds a pinned directory without a stored account reference, it follows that original directory's Codex
-configuration instead of adopting the default account's choice. Claude Code and Grok Build have no such selector.
+configuration instead of adopting the default account's choice. Grok Build has no such selector.
 
 These choices are stored by Octoboard. An explicit reviewer overrides Codex's reviewer for that launch without
 writing its configuration files or changing its sandbox or approval policy. They remain local; see
 "What is not configuration and never travels" in `docs/product/configuration-export-and-import.md`.
+
+Every Claude Code account row, including the default account, has the same kind of selector with Claude Code's four
+choices:
+
+- **Follow account configuration** passes nothing, so the account's own `settings.json` decides. This is the initial
+  choice for new and existing accounts.
+- **Automatic** launches Claude Code in its auto mode, where a classifier approves what it judges safe and blocks the
+  rest. Whether auto mode is available to the account, which depends on its plan among other things, is Claude Code's
+  own decision; Octoboard only asks for it.
+- **Ask me** launches Claude Code so that every tool call not already allowed asks the user.
+- **Approve everything** launches Claude Code so that every tool runs without asking.
+
+The choice is saved and applies exactly as Codex's does, a resume and an account switch included, and it stays local
+too. **Approve everything** is saved only once the user accepts a destructive confirmation that names the account (or
+the default account) and warns that Claude Code will run every tool in that account's sessions without asking,
+commands that change or delete files included; its confirm button carries the choice's own name. Cancelling, Escape
+included, leaves the choice as it was. If the save fails, the error is shown in the confirmation, which stays open, and
+the choice stays unchanged. Because the user has agreed there, Claude Code's own blocking warning for that mode never
+appears (see "Per-agent specifics a user will notice" in `docs/product/launching-agents.md`).
 
 One **Add account** button, above the agent tabs, serves every agent: its form asks for the agent — every agent is
 listed and can be picked, one that is not installed included and labelled as not installed, since an account may be set

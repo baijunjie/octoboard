@@ -209,6 +209,7 @@ mod tests {
                 name: "Work".to_string(),
                 config_dir: "/tmp/claude-account".to_string(),
                 approval_reviewer: None,
+                approval_mode: None,
             })
             .unwrap();
         let before = sessions_as_stored(&state);

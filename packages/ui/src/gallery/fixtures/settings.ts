@@ -53,9 +53,15 @@ const approvalState: Scenario["state"] = {
 
 /** Every agent installed and its readings in, one tab each: Claude Code's default account and Work have their plan
  * and windows (Work's spent), Client has no reading yet while its agent is available, Codex's accounts have a plan
- * and two windows each but Automation's, which has no plan, and Grok has one credit pool. */
+ * and two windows each but Automation's, which has no plan, and Grok has one credit pool. Claude Code's default
+ * account is set to automatic, Work to approve everything and Client follows its configuration. */
 const quotaState: Scenario["state"] = {
   ...approvalState,
+  settings: {
+    ...approvalState.settings!,
+    claude_default_approval_mode: "auto",
+    accounts: approvalState.settings!.accounts.map((account) => account.id === "a-work" ? { ...account, approval_mode: "bypass" as const } : account),
+  },
   agentAvailability: new Map(approvalState.agentAvailability).set("grok", { agent: "grok", availability: "available", default_account_dir: "/Users/dev/.grok" }),
   accountQuotas: [
     quotaOf("claude", null, "max", [
@@ -139,6 +145,14 @@ const SCROLLED_UNDER_STRIP = 420;
 
 /** Past any section's end, which the scroller clamps to. */
 const SCROLLED_TO_END = 10_000;
+
+/** Claude Code's tab, Client's approval selector set to Approve everything: the confirmation dialog it opens. */
+const bypassSteps: Scenario["steps"] = [
+  (ui) => ui.press(ui.t("rail.settings")),
+  (ui) => ui.press(ui.t("settings.section.accounts")),
+  (ui) => ui.press(ui.t("settings.accounts.approval.label", { name: "Client", agent: AGENT_LABEL.claude })),
+  (ui) => ui.press(ui.t("settings.accounts.approval.claudeBypass")),
+];
 
 export const settingsScenarios: Scenario[] = [
   {
@@ -231,7 +245,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab",
-    description: "The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, and Claude Code is open. The default account's name line ends with a small muted \"?\" after Default and its plan chip, with only its config directory beneath. Each account's plan sits beside its name, with its quota windows beneath: a headline with what remains, the countdown at the end of its line and a bar of the same remainder in the agent's colour; the model window has no countdown. Work is spent: 0% remaining, also where use went past 100%. Client has no quota yet and says it is being read. Claude Code has no approval selector. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place.",
+    description: "The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, and Claude Code is open. The default account's name line ends with a small muted \"?\" after Default and its plan chip, with only its config directory beneath. Each account's plan sits beside its name, with its quota windows beneath: a headline with what remains, the countdown at the end of its line and a bar of the same remainder in the agent's colour; the model window has no countdown. Work is spent: 0% remaining, also where use went past 100%. Client has no quota yet and says it is being read. A line under the tab strip describes the approval selector each account has: the default account is set to Automatic, Work to Approve everything and Client follows its account configuration. Remove Work or Client: the account fades out while sliding to the right while the remaining accounts slide into place.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -308,7 +322,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab in a narrow window",
-    description: "Below 640px the windows stack in one column and a long model name wraps under its own headline, the countdown staying at the end of the first line. The tab strip fits the width.",
+    description: "Below 640px the windows stack in one column and a long model name wraps under its own headline, the countdown staying at the end of the first line. The default account's approval selector drops beneath its name. The tab strip fits the width.",
     width: 560,
     state: narrowQuotaState,
     steps: [
@@ -346,6 +360,15 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
+    id: "settings-account-approval-bypass",
+    group: GROUP,
+    category: "normal",
+    title: "Approve everything confirmation",
+    description: "Choosing Approve everything for Client opens a destructive confirmation instead of saving: the account name is a chip in the title, and the red button repeats the choice. Cancelling leaves Client on Follow account configuration.",
+    state: quotaState,
+    steps: bypassSteps,
+  },
+  {
     id: "settings-account-approval-error",
     group: GROUP,
     category: "exceptional",
@@ -357,8 +380,21 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
       (ui) => ui.press(AGENT_LABEL.codex),
-      (ui) => ui.press(ui.t("settings.accounts.approval.label", { name: ui.t("settings.accounts.defaultName") })),
+      (ui) => ui.press(ui.t("settings.accounts.approval.label", { name: ui.t("settings.accounts.defaultName"), agent: AGENT_LABEL.codex })),
       (ui) => ui.press(ui.t("settings.accounts.approval.auto")),
+    ],
+  },
+  {
+    id: "settings-account-approval-bypass-error",
+    group: GROUP,
+    category: "exceptional",
+    title: "Approve everything could not be saved",
+    description: "Confirming Approve everything for Client was refused, so the error alert is open, with the confirmation dialog still open beneath it; Client still follows its account configuration.",
+    state: quotaState,
+    accountApprovalError: { code: "store_io_failed", params: { detail: "Permission denied (os error 13)" }, message: "The account settings could not be saved: Permission denied (os error 13)" },
+    steps: [
+      ...bypassSteps,
+      (ui) => ui.confirm(),
     ],
   },
   {

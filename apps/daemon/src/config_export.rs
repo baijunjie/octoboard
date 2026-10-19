@@ -320,6 +320,7 @@ mod tests {
             name: name.to_string(),
             config_dir: config_dir.to_string(),
             approval_reviewer: None,
+            approval_mode: None,
         }
     }
 

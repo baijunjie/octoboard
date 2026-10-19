@@ -42,7 +42,9 @@ use std::time::Duration;
 use anyhow::Result;
 
 use crate::mcp::Owner;
-use crate::protocol::{error_code, Agent, ApprovalReviewer, CodedError, Notice, Role};
+use crate::protocol::{
+    error_code, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError, Notice, Role,
+};
 
 /// Everything an adapter needs to assemble one launch.
 pub struct LaunchSpec<'a> {
@@ -85,6 +87,8 @@ pub struct LaunchSpec<'a> {
     pub config_dir: Option<&'a Path>,
     /// Codex-only override; absent follows its own configuration.
     pub approval_reviewer: Option<ApprovalReviewer>,
+    /// Claude Code-only override; absent follows its own configuration and passes no flag.
+    pub approval_mode: Option<ClaudeApprovalMode>,
     /// The model to launch with, in the agent's own spelling; `None` leaves it to the agent. Read
     /// from the setting for this agent of the session's console (a console session) or of its
     /// project (a project session), and `None` when that setting is unset.
@@ -469,6 +473,7 @@ pub mod tests {
                 shell_env: &self.shell_env,
                 config_dir: self.config_dir.as_deref(),
                 approval_reviewer: None,
+                approval_mode: None,
                 model: self.model.as_deref(),
                 effort: self.effort.as_deref(),
                 agent_version: self.agent_version,

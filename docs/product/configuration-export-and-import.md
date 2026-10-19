@@ -136,13 +136,13 @@ meets it (see `docs/product/model-and-reasoning-effort.md`).
 ### What is not configuration and never travels
 
 Sessions and their records, the pages console sessions pushed to the report panel, the conversations the agents keep,
-and folder trust — a project's trust permission and the trusted folders alike — are the state of one machine rather
-than configuration, and are in no document. Neither is the default clone directory: that one is the importing
-machine's own to choose, and an import places what it clones under it (see "Default clone directory" in
-`docs/product/settings.md`). No console and no project carries its stored id.
-Codex account approval modes, including the default account's, also stay local: exports omit them and imports leave
-the importing machine's choices unchanged. Account quota readings are not stored at all and are in no document either
-(see "How a quota is read" in `docs/product/account-quotas.md`).
+and folder trust — a project's trust permission and the trusted folders alike — are the state of one machine rather than
+configuration, and are in no document. Neither is the default clone directory: that one is the importing machine's own
+to choose, and an import places what it clones under it (see "Default clone directory" in `docs/product/settings.md`).
+No console and no project carries its stored id. Codex and Claude Code account approval modes, including the default
+accounts', also stay local: exports omit them and imports leave the importing machine's choices unchanged. Account quota
+readings are not stored at all and are in no document either (see "How a quota is read" in
+`docs/product/account-quotas.md`).
 
 ### The application setting a full export carries
 

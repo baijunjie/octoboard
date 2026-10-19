@@ -17,6 +17,12 @@
 //! raises, is recognised from terminal text and answered with keystrokes once the user has agreed
 //! to that — see `crate::trust`.
 //!
+//! An approval mode chosen for the account is passed as `--permission-mode` on every launch and
+//! resume, and none is passed for an account that follows its own configuration. Approve everything
+//! also adds `skipDangerousModePermissionPrompt` to the `--settings` JSON: Octoboard asks the user
+//! for that consent in Settings, and the flag-borne key keeps Claude Code's own blocking warning
+//! from appearing without writing anything into the account's configuration files.
+//!
 //! A console can pin its sessions to another Claude Code configuration directory
 //! (`CLAUDE_CONFIG_DIR`). That directory holds the conversation transcripts as well as the global
 //! config file, so everything here that reads or relaunches follows it: the variable is set for the
@@ -31,7 +37,7 @@ use super::{
     HOOK_TIMEOUT_SECS,
 };
 use crate::mcp;
-use crate::protocol::{notice_code, Agent, Notice};
+use crate::protocol::{notice_code, Agent, ClaudeApprovalMode, Notice};
 
 /// The events that carry the session states Octoboard shows. `StopFailure` is registered next to
 /// `Stop` because the two are mutually exclusive — a turn ending in an API error fires only
@@ -112,7 +118,11 @@ impl ClaudeAdapter {
             }
             hooks.insert((*event).to_string(), json!([group]));
         }
-        json!({ "hooks": hooks }).to_string()
+        let mut settings = json!({ "hooks": hooks });
+        if spec.approval_mode == Some(ClaudeApprovalMode::Bypass) {
+            settings["skipDangerousModePermissionPrompt"] = json!(true);
+        }
+        settings.to_string()
     }
 
     /// The `--mcp-config` JSON. Merged with the project's and the user's servers, which is why
@@ -230,13 +240,27 @@ impl AgentAdapter for ClaudeAdapter {
             spec.owner.as_ref(),
             Agent::Claude,
         ));
-        // Last, after every list-valued flag has closed. Both are global flags, so they sit
-        // alongside `--resume` too. Claude Code quietly lowers `max` and `xhigh` to `high` on a
-        // model that does not support them.
+        // Last, after every list-valued flag has closed. All are global flags, so they sit
+        // alongside `--resume` too.
+        if let Some(mode) = spec.approval_mode {
+            args.push("--permission-mode".to_string());
+            // `default` rather than `manual`: every Claude Code version accepts it, and it is what
+            // the hooks and the transcript report; `manual` exists only from 2.1.200.
+            args.push(
+                match mode {
+                    ClaudeApprovalMode::Auto => "auto",
+                    ClaudeApprovalMode::Manual => "default",
+                    ClaudeApprovalMode::Bypass => "bypassPermissions",
+                }
+                .to_string(),
+            );
+        }
         if let Some(model) = spec.model {
             args.push("--model".to_string());
             args.push(model.to_string());
         }
+        // Claude Code quietly lowers `max` and `xhigh` to `high` on a model that does not support
+        // them.
         if let Some(effort) = spec.effort {
             args.push("--effort".to_string());
             args.push(effort.to_string());
@@ -479,6 +503,67 @@ mod tests {
             plan.args[plan.args.len() - 4..],
             ["--model", "opus", "--effort", "high"]
         );
+    }
+
+    /// The flag follows the choice on a fresh launch and a resume alike; following the account
+    /// configuration passes none, and only Approve everything carries the consent key in
+    /// `--settings`.
+    #[test]
+    fn the_approval_mode_is_passed_on_fresh_launches_and_resumes() {
+        let mut fixture = spec_fixture();
+        fixture.model = Some("opus".to_string());
+        let cases = [
+            (None, None, false),
+            (Some(ClaudeApprovalMode::Auto), Some("auto"), false),
+            (Some(ClaudeApprovalMode::Manual), Some("default"), false),
+            (
+                Some(ClaudeApprovalMode::Bypass),
+                Some("bypassPermissions"),
+                true,
+            ),
+        ];
+        for (mode, flag, bypass) in cases {
+            for resume in [None, Some("conversation-1")] {
+                let mut spec = fixture.spec();
+                spec.approval_mode = mode;
+                spec.resume_agent_session_id = resume;
+                let plan = ClaudeAdapter.plan(&spec).expect("plan");
+                let position = plan.args.iter().position(|arg| arg == "--permission-mode");
+                assert_eq!(
+                    position.map(|at| plan.args[at + 1].as_str()),
+                    flag,
+                    "{mode:?} {resume:?}"
+                );
+                if let Some(at) = position {
+                    assert_eq!(
+                        plan.args
+                            .iter()
+                            .filter(|arg| *arg == "--permission-mode")
+                            .count(),
+                        1
+                    );
+                    assert!(
+                        at > plan
+                            .args
+                            .iter()
+                            .position(|arg| arg == "--mcp-config")
+                            .unwrap()
+                    );
+                }
+                let at = plan
+                    .args
+                    .iter()
+                    .position(|arg| arg == "--settings")
+                    .unwrap();
+                let settings: serde_json::Value = serde_json::from_str(&plan.args[at + 1]).unwrap();
+                assert_eq!(
+                    settings.get("skipDangerousModePermissionPrompt"),
+                    bypass.then_some(&serde_json::Value::Bool(true)),
+                    "{mode:?} {resume:?}"
+                );
+                assert!(settings["hooks"].is_object());
+            }
+        }
     }
 
     #[test]

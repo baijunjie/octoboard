@@ -415,6 +415,17 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
             : { ...current.settings, accounts: current.settings.accounts.map((account) => account.id === body.account ? { ...account, approval_reviewer: body.reviewer } : account) } });
           return { type: "ack" };
         }
+        case "set_account_approval_mode": {
+          const current = store.getState();
+          if (body.account !== null && !current.settings.accounts.some((account) => account.id === body.account && account.agent === "claude")) {
+            return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
+          }
+          if (scenario.accountApprovalError) return fail(scenario.accountApprovalError);
+          store.setState({ settings: body.account === null
+            ? { ...current.settings, claude_default_approval_mode: body.mode }
+            : { ...current.settings, accounts: current.settings.accounts.map((account) => account.id === body.account ? { ...account, approval_mode: body.mode } : account) } });
+          return { type: "ack" };
+        }
         case "create_account":
         case "update_account": {
           const current = store.getState();

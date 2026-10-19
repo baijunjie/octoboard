@@ -107,6 +107,7 @@ the request id as if it were a record id.
 | `create_account` | `agent`, `name`, `config_dir` | Both fields are required: an account always has a name and a directory. `name` is trimmed and must be non-empty and unique within `agent` (compared trimmed, case-insensitively, including against the default account's own name); a collision is `account_name_taken`, naming the account it collides with. `config_dir` must be absolute or start with `~/`, and is stored lexically normalised; existence is not checked. The normalised directory must not equal another account's of the same `agent`, nor the default account's directory (as the daemon resolved it; until that is determined, the conventional `~/.claude`, `~/.codex` or `~/.grok`); compared lexically without following symlinks, folding case on macOS (a case-insensitive file system) and byte-exact elsewhere, the stored text staying as typed, and a collision is `config_dir_taken`, naming the account using it. Broadcasts `settings_updated` |
 | `update_account` | `account`, `name?`, `config_dir?` | Renames the account, repoints it, or both, independently; either field absent leaves it alone. Validated as in `create_account`. Broadcasts `settings_updated` when something actually changed |
 | `set_account_approval_reviewer` | `account` (id or `null`), `reviewer` (`user`, `auto_review` or `null`) | Sets the Codex account launch override; a null account names the Codex default account and a null reviewer follows the account's own configuration. An unknown account or one of another agent is `unknown_account`. Broadcasts `settings_updated` only when changed. Takes effect on the next launch or resume; running sessions keep their current reviewer |
+| `set_account_approval_mode` | `account` (id or `null`), `mode` (`auto`, `manual`, `bypass` or `null`) | Sets the Claude Code account launch override; a null account names the Claude Code default account and a null mode follows the account's own configuration. An unknown account or one of another agent is `unknown_account`. Broadcasts `settings_updated` only when changed. Takes effect on the next launch or resume; running sessions keep their current mode. The daemon does not itself ask for confirmation of `bypass`; the client does (see "Agent accounts" in `docs/product/settings.md`) |
 | `delete_account` | `account` | Clears the reference of every console and project that refers to this account — putting each console back on its agent's default account and each project back to inheriting its console's, while a project whose reference is `default` names no account and is left as it is — then removes the account. A session holding it is left alone: it already carries its own copy of the directory it launches with. Broadcasts `settings_updated`, a `console_upserted` for every console whose reference was cleared, and a `project_upserted` for every project whose reference was cleared |
 | `shutdown` | — | Terminates every session process (leaving them `interrupted`) and exits the daemon |
 
@@ -118,7 +119,7 @@ the request id as if it were a record id.
 | `agent_availability_updated` | `agent_availability` — the whole three-entry list, sent once, when the daemon's one-time determination of it lands; never again afterwards, since nothing re-determines it during a run |
 | `account_quotas_updated` | `account_quotas` — the whole list, sent whenever a reading finishes or an account's reading is dropped (the account was repointed or deleted); see "Account quotas" below |
 | `trusted_directories_updated` | `trusted_directories` — the whole list of trusted directory paths, sent when it changes |
-| `settings_updated` | `settings` — the whole `Settings` record, sent when `update_settings` actually changes it, and also whenever the account list changes (`create_account`, `update_account`, `delete_account`, `set_account_approval_reviewer`, or a console dialog's save that repoints or mints one) |
+| `settings_updated` | `settings` — the whole `Settings` record, sent when `update_settings` actually changes it, and also whenever the account list changes (`create_account`, `update_account`, `delete_account`, `set_account_approval_reviewer`, `set_account_approval_mode`, or a console dialog's save that repoints or mints one) |
 | `console_upserted` / `project_upserted` / `session_upserted` | `console` / `project` / `session` — the whole record, under that key |
 | `console_deleted` / `project_deleted` / `session_deleted` | `console` / `project` / `session` — the id of the record that was removed |
 | `project_git_status` | `status` — one project's whole `GitStatus`, sent on every change, including every transition of `activity` (so an animated icon has something to follow) and every local re-read of the branch header (see "Daemon behaviour, per project"). Nothing is sent when a project is removed; the client drops its status along with it |
@@ -344,7 +345,7 @@ Console { id, name, workdir, default_agent, project_session_agent?,   // null: p
           claude_project_session_model?, claude_project_session_effort?,      // the fallback of a project's own
           codex_project_session_model?, codex_project_session_effort?,        // unset values
           grok_project_session_model?, grok_project_session_effort?, icon?, console_session_prompt?, created_at }
-Account { id, agent, name, config_dir, approval_reviewer }
+Account { id, agent, name, config_dir, approval_reviewer, approval_mode }
 Project { id, console_id, host_id, name, path, default_agent?, source, remote_url?,
           claude_account_id, codex_account_id, grok_account_id,   // each a ProjectAccount
           claude_session_model?, claude_session_effort?,
@@ -359,7 +360,8 @@ Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
           account_id?, config_dir?, model?: string|null, effort?: string|null, pinned, locked, started_at, ended_at? }
 SessionUsage { input_tokens, output_tokens, total_tokens, cached_input_tokens?, cache_write_input_tokens? }
 Page    { id, console_session_id, html, anchor_message_id?, created_at }
-Settings  { auto_pull_repositories, default_clone_dir, accounts: Account[], codex_default_approval_reviewer }
+Settings  { auto_pull_repositories, default_clone_dir, accounts: Account[], codex_default_approval_reviewer,
+            claude_default_approval_mode }
 GitStatus { project, repository, branch?, detached, upstream?, ahead, behind,
             activity: "idle"|"checking"|"pulling"|"pushing", error? }
 AgentAvailability { agent, availability: "not_determined"|"available"|"unavailable", default_account_dir? }
@@ -441,6 +443,15 @@ account. A null override inherits the effective Codex home's `config.toml`. Non-
 approval policy. The override is looked up from the session's current account at launch time. A deleted account or a
 legacy pinned directory with no account id inherits its original home's configuration rather than the default account's
 override. These account settings stay local and are not included in configuration exports or changed by imports.
+
+`Account.approval_mode` is `null` (the default), `auto`, `manual` or `bypass`, and is settable only for Claude Code
+accounts; `Settings.claude_default_approval_mode` has the same values for the Claude Code default account. A null
+override passes no flag, so the account's own `settings.json` decides. The others become `--permission-mode auto`,
+`--permission-mode default` (not `manual`, which only Claude Code 2.1.200 and later accepts) and
+`--permission-mode bypassPermissions` on fresh launches and resumes alike, without editing any configuration file;
+`bypass` also adds `"skipDangerousModePermissionPrompt": true` to the launch's `--settings` JSON, so Claude Code's
+own first-use warning never appears. The override is looked up from the session's current account at launch time, with
+the same rules as the Codex reviewer for a deleted account or a legacy pinned directory. Neither value is exported.
 
 **Every agent also has a *default* account, which is not a row in `Settings.accounts` at all**: it is the state of
 pinning nothing, named by `Console.*_account_id` and `Session.account_id` being unset. It cannot be created, renamed

@@ -694,12 +694,30 @@ describe("the fixture daemon's account approval modes", () => {
     }
   });
 
-  it("retains both selections when saving fails", async () => {
+  it("saves and clears Claude Code's default and custom modes, refusing an account of another agent", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await daemon.request({ type: "set_account_approval_mode", account: null, mode: "auto" });
+    await daemon.request({ type: "set_account_approval_mode", account: "claude", mode: "bypass" });
+    expect(daemon.store.getState().settings).toEqual({ ...scenario.state.settings, claude_default_approval_mode: "auto", accounts: [accounts[0], { ...accounts[1], approval_mode: "bypass" }] });
+    await daemon.request({ type: "set_account_approval_mode", account: null, mode: null });
+    await daemon.request({ type: "set_account_approval_mode", account: "claude", mode: null });
+    expect(daemon.store.getState().settings.claude_default_approval_mode).toBeNull();
+    expect(daemon.store.getState().settings.accounts[1]?.approval_mode).toBeNull();
+    for (const account of ["missing", "codex"]) {
+      await expect(daemon.request({ type: "set_account_approval_mode", account, mode: "manual" })).rejects.toMatchObject({ code: "unknown_account", params: { account } });
+    }
+  });
+
+  it("retains every selection when saving fails", async () => {
     const error = { code: "store_io_failed", params: { detail: "Permission denied" }, message: "Permission denied" };
     const daemon = createFixtureDaemon({ ...scenario, accountApprovalError: error });
     const before = daemon.store.getState().settings;
     for (const account of [null, "codex"]) {
       await expect(daemon.request({ type: "set_account_approval_reviewer", account, reviewer: "auto_review" })).rejects.toMatchObject(error);
+      expect(daemon.store.getState().settings).toEqual(before);
+    }
+    for (const account of [null, "claude"]) {
+      await expect(daemon.request({ type: "set_account_approval_mode", account, mode: "bypass" })).rejects.toMatchObject(error);
       expect(daemon.store.getState().settings).toEqual(before);
     }
   });

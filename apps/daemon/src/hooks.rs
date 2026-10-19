@@ -445,6 +445,24 @@ mod tests {
         assert!(end.failed);
     }
 
+    /// Claude Code's auto mode blocks a tool call its classifier refuses without raising a prompt:
+    /// the call's `PreToolUse` is followed by the turn's `Stop`, with no `PermissionRequest` and no
+    /// `PostToolUse` between them. The session must come out of it idle and the turn reportable,
+    /// not left working or waiting.
+    #[test]
+    fn a_classifier_blocked_claude_tool_call_ends_the_turn_idle() {
+        let pre = json!({"tool_name": "Bash", "permission_mode": "auto"});
+        assert_eq!(
+            claude_status("PreToolUse", &pre),
+            Some(SessionStatus::Working)
+        );
+        let stop =
+            json!({"last_assistant_message": "That was blocked.", "permission_mode": "auto"});
+        assert_eq!(claude_status("Stop", &stop), Some(SessionStatus::Idle));
+        let end = turn_end(Agent::Claude, "Stop", &stop).expect("a reportable turn end");
+        assert!(!end.failed);
+    }
+
     /// Codex fires a tool call's `PreToolUse` and `PermissionRequest` in the same instant and its
     /// hooks are asynchronous, so a session whose approval is on screen reads as waiting for the
     /// user whichever of the two is applied last.

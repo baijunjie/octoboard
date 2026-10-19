@@ -176,17 +176,17 @@ Existence is **not** checked: a directory that does not exist yet is accepted, a
 Claude Code itself, and by Octoboard for Codex, which refuses a missing one (Grok Build excepted, see below). What is
 stored, and shown for the account, is its expanded absolute path.
 
-**A session keeps the account and the directory it last recorded until it is switched to another account.** A
-session takes its account when it is opened, in the order given in "Which account a session uses" in
-`docs/product/sessions.md`, and nothing but a switch of its account changes it afterwards: not an edit to the project's
-or the console's reference, not an edit to the account's directory. Resuming or reopening it relaunches with that same
-directory, because the agent keeps the conversation inside it. The user can move the session to another account of its
-agent from its action menu, and an owner can move a session of its own with the `switch_session_account` tool; that
-copies the conversation into the target's directory and reads that account's configuration, while keeping explicit
-model and reasoning effort choices (see `docs/product/switching-session-accounts.md`). A session opened on the default
-account holds no directory and resumes under whatever the user's shell exports at that moment.
-The Codex account's approval mode is looked up again for each launch; keeping a directory does not freeze that
-choice (see "Agent accounts" in `docs/product/settings.md`).
+**A session keeps the account and the directory it last recorded until it is switched to another account.** A session
+takes its account when it is opened, in the order given in "Which account a session uses" in `docs/product/sessions.md`,
+and nothing but a switch of its account changes it afterwards: not an edit to the project's or the console's reference,
+not an edit to the account's directory. Resuming or reopening it relaunches with that same directory, because the agent
+keeps the conversation inside it. The user can move the session to another account of its agent from its action menu,
+and an owner can move a session of its own with the `switch_session_account` tool; that copies the conversation into the
+target's directory and reads that account's configuration, while keeping explicit model and reasoning effort choices
+(see `docs/product/switching-session-accounts.md`). A session opened on the default account holds no directory and
+resumes under whatever the user's shell exports at that moment. The Codex or Claude Code account's approval mode is
+looked up again for each launch; keeping a directory does not freeze that choice (see "Agent accounts" in
+`docs/product/settings.md`).
 
 If a session's directory no longer exists when it is launched or resumed, the launch is refused rather than
 started — but only for a session that has a conversation on the agent's side to resume. A session with none yet — a

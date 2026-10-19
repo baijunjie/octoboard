@@ -36,15 +36,15 @@ use crate::open_directory;
 use crate::open_terminal;
 use crate::protocol::{
     error_code, error_parts, notice_code, now_millis, Account, Agent, ApprovalReviewer,
-    Availability, CodedError, Console, ConsoleSessionColour, Event, Notice, Origin, Present,
-    Project, ProjectAccount, ProjectSource, RequestBody, Role, Session, SessionBranchItem,
-    SessionBranchTarget, SessionStatus,
+    Availability, ClaudeApprovalMode, CodedError, Console, ConsoleSessionColour, Event, Notice,
+    Origin, Present, Project, ProjectAccount, ProjectSource, RequestBody, Role, Session,
+    SessionBranchItem, SessionBranchTarget, SessionStatus,
 };
 use crate::relocate;
 use crate::reporting;
 use crate::session::LiveSession;
 use crate::state::{AppState, Deletion};
-use crate::store::LOCAL_HOST_ID;
+use crate::store::{Store, LOCAL_HOST_ID};
 use crate::term;
 use crate::trust;
 
@@ -978,7 +978,12 @@ async fn handle_inner(
         }
 
         RequestBody::SetAccountApprovalReviewer { account, reviewer } => {
-            set_account_approval_reviewer(state, account.as_deref(), reviewer)?;
+            CODEX_REVIEWER.set(state, account.as_deref(), reviewer)?;
+            Ok(None)
+        }
+
+        RequestBody::SetAccountApprovalMode { account, mode } => {
+            CLAUDE_MODE.set(state, account.as_deref(), mode)?;
             Ok(None)
         }
 
@@ -3200,7 +3205,8 @@ async fn start_process(
         task: task.map(str::to_string),
         resume_agent_session_id: resume_agent_session_id.map(str::to_string),
         config_dir: session.config_dir.as_ref().map(PathBuf::from),
-        approval_reviewer: session_approval_reviewer(state, session)?,
+        approval_reviewer: CODEX_REVIEWER.for_session(state, session)?,
+        approval_mode: CLAUDE_MODE.for_session(state, session)?,
         model,
         effort,
         preresolved_shell_env: None,
@@ -4425,48 +4431,71 @@ fn broadcast_settings(state: &Arc<AppState>) -> Result<()> {
     Ok(())
 }
 
-/// Resolves the current account override at every launch. Deleted pinned accounts keep their
-/// original configuration rather than adopting the default account's override.
-fn session_approval_reviewer(
-    state: &Arc<AppState>,
-    session: &Session,
-) -> Result<Option<ApprovalReviewer>> {
-    if session.agent != Agent::Codex {
-        return Ok(None);
-    }
-    match session.account_id.as_deref() {
-        Some(id) => Ok(state
-            .store
-            .get_account(id)?
-            .and_then(|account| account.approval_reviewer)),
-        None if session.config_dir.is_none() => state.store.codex_default_approval_reviewer(),
-        None => Ok(None),
-    }
+/// Where one agent's launch override is kept: the account's own column and the default account's
+/// setting. Codex's approval reviewer and Claude Code's approval mode are handled alike through it.
+struct LaunchOverride<T> {
+    agent: Agent,
+    of_account: fn(&Account) -> Option<T>,
+    set_account: fn(&Store, &str, Option<T>) -> Result<()>,
+    get_default: fn(&Store) -> Result<Option<T>>,
+    set_default: fn(&Store, Option<T>) -> Result<()>,
 }
 
-fn set_account_approval_reviewer(
-    state: &Arc<AppState>,
-    id: Option<&str>,
-    reviewer: Option<ApprovalReviewer>,
-) -> Result<()> {
-    if let Some(id) = id {
-        checked_account_reference(state, Agent::Codex, Some(id.to_string()))?;
-        let account = state
-            .store
-            .get_account(id)?
-            .ok_or_else(|| CodedError::unknown_account(id))?;
-        if account.approval_reviewer == reviewer {
-            return Ok(());
+const CODEX_REVIEWER: LaunchOverride<ApprovalReviewer> = LaunchOverride {
+    agent: Agent::Codex,
+    of_account: |account| account.approval_reviewer,
+    set_account: Store::set_account_approval_reviewer,
+    get_default: Store::codex_default_approval_reviewer,
+    set_default: Store::set_codex_default_approval_reviewer,
+};
+
+const CLAUDE_MODE: LaunchOverride<ClaudeApprovalMode> = LaunchOverride {
+    agent: Agent::Claude,
+    of_account: |account| account.approval_mode,
+    set_account: Store::set_account_approval_mode,
+    get_default: Store::claude_default_approval_mode,
+    set_default: Store::set_claude_default_approval_mode,
+};
+
+impl<T: PartialEq + Copy> LaunchOverride<T> {
+    /// Resolves the current account override at every launch. Deleted pinned accounts keep their
+    /// original configuration rather than adopting the default account's override.
+    fn for_session(&self, state: &Arc<AppState>, session: &Session) -> Result<Option<T>> {
+        if session.agent != self.agent {
+            return Ok(None);
         }
-        state.store.set_account_approval_reviewer(id, reviewer)?;
-    } else {
-        if state.store.codex_default_approval_reviewer()? == reviewer {
-            return Ok(());
+        match session.account_id.as_deref() {
+            Some(id) => Ok(state
+                .store
+                .get_account(id)?
+                .and_then(|account| (self.of_account)(&account))),
+            None if session.config_dir.is_none() => (self.get_default)(&state.store),
+            None => Ok(None),
         }
-        state.store.set_codex_default_approval_reviewer(reviewer)?;
     }
-    broadcast_settings(state)?;
-    Ok(())
+
+    /// Sets the override of the agent's account `id`, or of its default account when `id` is
+    /// `None`, and broadcasts the settings unless it already holds that value.
+    fn set(&self, state: &Arc<AppState>, id: Option<&str>, value: Option<T>) -> Result<()> {
+        if let Some(id) = id {
+            checked_account_reference(state, self.agent, Some(id.to_string()))?;
+            let account = state
+                .store
+                .get_account(id)?
+                .ok_or_else(|| CodedError::unknown_account(id))?;
+            if (self.of_account)(&account) == value {
+                return Ok(());
+            }
+            (self.set_account)(&state.store, id, value)?;
+        } else {
+            if (self.get_default)(&state.store)? == value {
+                return Ok(());
+            }
+            (self.set_default)(&state.store, value)?;
+        }
+        broadcast_settings(state)?;
+        Ok(())
+    }
 }
 
 fn create_account(
@@ -4483,6 +4512,7 @@ fn create_account(
         name,
         config_dir,
         approval_reviewer: None,
+        approval_mode: None,
     };
     {
         // The checks and the insert are one step: another create or update cannot slip between.
@@ -5433,6 +5463,7 @@ mod tests {
                 name: "Claude work".to_string(),
                 config_dir: "/home/u/.claude-alt".to_string(),
                 approval_reviewer: None,
+                approval_mode: None,
             })
             .unwrap();
         state
@@ -5443,6 +5474,7 @@ mod tests {
                 name: "Claude other".to_string(),
                 config_dir: "/home/u/.claude-other".to_string(),
                 approval_reviewer: None,
+                approval_mode: None,
             })
             .unwrap();
         state
@@ -5453,6 +5485,7 @@ mod tests {
                 name: "Codex work".to_string(),
                 config_dir: "/home/u/.codex-alt".to_string(),
                 approval_reviewer: None,
+                approval_mode: None,
             })
             .unwrap();
         let mut console = console(Agent::Claude, Path::new("/tmp/unused"));
@@ -5569,6 +5602,7 @@ mod tests {
                     name: id.to_string(),
                     config_dir: dir.to_string(),
                     approval_reviewer: None,
+                    approval_mode: None,
                 })
                 .unwrap();
         }
@@ -5895,7 +5929,7 @@ mod tests {
         let account = only_account(&state);
         let mut session = bare_session("session-1", Role::Project);
         session.agent = Agent::Codex;
-        assert_eq!(session_approval_reviewer(&state, &session).unwrap(), None);
+        assert_eq!(CODEX_REVIEWER.for_session(&state, &session).unwrap(), None);
 
         handle(
             &state,
@@ -5908,7 +5942,7 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(
-            session_approval_reviewer(&state, &session).unwrap(),
+            CODEX_REVIEWER.for_session(&state, &session).unwrap(),
             Some(ApprovalReviewer::AutoReview)
         );
         assert_eq!(
@@ -5922,7 +5956,7 @@ mod tests {
 
         session.account_id = Some(account.id.clone());
         session.config_dir = Some(account.config_dir.clone());
-        assert_eq!(session_approval_reviewer(&state, &session).unwrap(), None);
+        assert_eq!(CODEX_REVIEWER.for_session(&state, &session).unwrap(), None);
         handle(
             &state,
             None,
@@ -5934,7 +5968,7 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(
-            session_approval_reviewer(&state, &session).unwrap(),
+            CODEX_REVIEWER.for_session(&state, &session).unwrap(),
             Some(ApprovalReviewer::User)
         );
         update_account(
@@ -5945,7 +5979,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            session_approval_reviewer(&state, &session).unwrap(),
+            CODEX_REVIEWER.for_session(&state, &session).unwrap(),
             Some(ApprovalReviewer::User)
         );
         assert_eq!(session.config_dir.as_deref(), Some("/tmp/codex-work"));
@@ -5960,21 +5994,22 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(session_approval_reviewer(&state, &session).unwrap(), None);
-        set_account_approval_reviewer(
-            &state,
-            Some(&account.id),
-            Some(ApprovalReviewer::AutoReview),
-        )
-        .unwrap();
+        assert_eq!(CODEX_REVIEWER.for_session(&state, &session).unwrap(), None);
+        CODEX_REVIEWER
+            .set(
+                &state,
+                Some(&account.id),
+                Some(ApprovalReviewer::AutoReview),
+            )
+            .unwrap();
         state.store.delete_account(&account.id).unwrap();
-        assert_eq!(session_approval_reviewer(&state, &session).unwrap(), None);
+        assert_eq!(CODEX_REVIEWER.for_session(&state, &session).unwrap(), None);
         // Legacy pinned sessions without an account id also keep their own configuration.
         session.account_id = None;
-        assert_eq!(session_approval_reviewer(&state, &session).unwrap(), None);
+        assert_eq!(CODEX_REVIEWER.for_session(&state, &session).unwrap(), None);
         session.config_dir = None;
         session.agent = Agent::Claude;
-        assert_eq!(session_approval_reviewer(&state, &session).unwrap(), None);
+        assert_eq!(CODEX_REVIEWER.for_session(&state, &session).unwrap(), None);
 
         create_account(
             &state,
@@ -6004,6 +6039,117 @@ mod tests {
                 .unwrap()
                 .unwrap()
                 .approval_reviewer,
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn claude_account_approval_modes_apply_on_the_next_launch_and_are_claude_only() {
+        let (state, _dir) = crate::test_support::app_state("account-approval-mode");
+        create_account(
+            &state,
+            Agent::Claude,
+            "Work".into(),
+            "/tmp/claude-work".into(),
+        )
+        .unwrap();
+        let account = only_account(&state);
+        let mut session = bare_session("session-1", Role::Project);
+        session.agent = Agent::Claude;
+        assert_eq!(CLAUDE_MODE.for_session(&state, &session).unwrap(), None);
+
+        handle(
+            &state,
+            None,
+            RequestBody::SetAccountApprovalMode {
+                account: None,
+                mode: Some(ClaudeApprovalMode::Auto),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            CLAUDE_MODE.for_session(&state, &session).unwrap(),
+            Some(ClaudeApprovalMode::Auto)
+        );
+        assert_eq!(
+            state
+                .store
+                .get_settings()
+                .unwrap()
+                .claude_default_approval_mode,
+            Some(ClaudeApprovalMode::Auto)
+        );
+
+        // A pinned account is independent of the default account's choice.
+        session.account_id = Some(account.id.clone());
+        session.config_dir = Some(account.config_dir.clone());
+        assert_eq!(CLAUDE_MODE.for_session(&state, &session).unwrap(), None);
+        handle(
+            &state,
+            None,
+            RequestBody::SetAccountApprovalMode {
+                account: Some(account.id.clone()),
+                mode: Some(ClaudeApprovalMode::Bypass),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            CLAUDE_MODE.for_session(&state, &session).unwrap(),
+            Some(ClaudeApprovalMode::Bypass)
+        );
+        handle(
+            &state,
+            None,
+            RequestBody::SetAccountApprovalMode {
+                account: Some(account.id.clone()),
+                mode: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(CLAUDE_MODE.for_session(&state, &session).unwrap(), None);
+
+        // Only a Claude Code session reads it, and a deleted account falls back to nothing.
+        CLAUDE_MODE
+            .set(&state, Some(&account.id), Some(ClaudeApprovalMode::Manual))
+            .unwrap();
+        session.agent = Agent::Codex;
+        assert_eq!(CLAUDE_MODE.for_session(&state, &session).unwrap(), None);
+        session.agent = Agent::Claude;
+        state.store.delete_account(&account.id).unwrap();
+        assert_eq!(CLAUDE_MODE.for_session(&state, &session).unwrap(), None);
+
+        // A Codex account or an unknown one is refused.
+        create_account(
+            &state,
+            Agent::Codex,
+            "Other".into(),
+            "/tmp/codex-other".into(),
+        )
+        .unwrap();
+        let other = only_account(&state);
+        for id in [&other.id, "missing"] {
+            let err = handle(
+                &state,
+                None,
+                RequestBody::SetAccountApprovalMode {
+                    account: Some(id.to_string()),
+                    mode: Some(ClaudeApprovalMode::Auto),
+                },
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(error_parts(&err).0, error_code::UNKNOWN_ACCOUNT);
+        }
+        assert_eq!(
+            state
+                .store
+                .get_account(&other.id)
+                .unwrap()
+                .unwrap()
+                .approval_mode,
             None
         );
     }
@@ -7542,6 +7688,7 @@ mod tests {
                     name: id.to_string(),
                     config_dir: format!("/home/u/.{id}"),
                     approval_reviewer: None,
+                    approval_mode: None,
                 })
                 .unwrap();
         }
@@ -7691,6 +7838,7 @@ mod tests {
                 name: "Codex".to_string(),
                 config_dir: "/home/u/.codex-alt".to_string(),
                 approval_reviewer: None,
+                approval_mode: None,
             })
             .unwrap();
         let repo = dir.join("repo");
@@ -8265,6 +8413,7 @@ mod tests {
                 name: "codex-b".to_string(),
                 config_dir: broken.to_string_lossy().into_owned(),
                 approval_reviewer: None,
+                approval_mode: None,
             })
             .unwrap();
         let id = "019a0000-0000-7000-8000-000000000001";
