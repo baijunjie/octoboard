@@ -124,14 +124,22 @@ the first.
 
 **A user interrupt emits no hook event**, in the thinking phase or mid-tool. Only the interrupted turn is silent; the
 next turn reports normally. The session's next `UserPromptSubmit` is the reliable sign that the previous turn is over
-and should close the dangling `PreToolUse`; until then the session reads as working, which is stale rather than wrong.
-The interrupted tool's own child process is already gone. The only machine-readable trace is in the transcript at
-`transcript_path`: a `tool_result` with `is_error: true` beginning "The user doesn't want to proceed with this tool
-use", followed by a user block `[Request interrupted by user for tool use]`. Both are entries whose `message.content` is
+and should close the dangling `PreToolUse`. The interrupted tool's own child process is already gone. The only
+machine-readable trace is in the transcript at `transcript_path`. An interrupt in the thinking or writing phase writes
+a single top-level `"type":"user"` entry whose `message.content` is `[{"type":"text","text":"[Request interrupted by
+user]"}]`, carrying `interruptedMessageId` (seen on 2.1.296, 2.1.302 and 2.1.303). Mid-tool, it writes a `tool_result`
+with `is_error: true` beginning "The user doesn't want to proceed with this tool use", followed by a user block
+`[Request interrupted by user for tool use]`. Both are entries whose `message.content` is
 an **array** of blocks, and the first of them — the one holding the `tool_result` — also carries
 `"toolDenialKind": "user-rejected"`, at entry level rather than inside the block; the
 `[Request interrupted by user for tool use]` entry carries none. A declined prompt and a declined `AskUserQuestion`
 write this same pair, which is why one mechanism recovers all three cases.
+
+**The markers are also replayed.** `api-request-blob` entries written into the main transcript while a session works
+carry the conversation so far in their `message.content`, earlier interrupt markers included (once with a trailing
+`\n`, once without), and `queue-operation` entries can carry the marker text too; only a top-level `"type":"user"`
+entry is the user's own. **A new conversation's transcript does not exist yet** when its first `UserPromptSubmit` hook
+runs (measured on 2.1.303 in print mode), so a watcher armed there has to wait for the file to appear.
 
 **Both marker strings survive 2.1.296**, re-measured byte for byte on a declined `Write` prompt: the `tool_result` has
 `is_error: true` with `content` a **plain string** beginning "The user doesn't want to proceed with this tool use.",

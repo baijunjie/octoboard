@@ -37,9 +37,10 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   list is asked of the agent itself for the account in question, how the effort levels follow the chosen model, and what
   the pickers do while that list is out or cannot be had.
 - [Sessions](product/sessions.md) — console and project sessions, their shared creation dialog, optional names,
-  agent and account selection, Advanced launch settings, the five session statuses, their
+  agent and account selection, Advanced launch settings, the session statuses, their
   glyphs and their transitions, the raised hand and its notification, how a declined Claude Code prompt lowers the
-  hand from the agent's own transcript and what that costs to keep working.
+  hand and a cancelled Claude Code turn returns to awaiting instructions, both read from the agent's own transcript,
+  and what that costs to keep working.
 - [Archiving and resuming sessions](product/archiving-and-resuming-sessions.md) — archiving and interruption, how a
   console session's archive and reopen follow the sessions bound to it, resuming a dormant session (the
   `conversation_unresumable` and `codex_unarchive_failed` refusals, an archived owner whose conversation is gone

@@ -25,19 +25,18 @@
 //!   `Interrupt`: only its `UserPromptSubmit`, with nothing after it, so that ending is read from
 //!   Codex's rollout file instead (see `crate::rollout`).
 //!
-//! Three gaps are accepted rather than worked around, all of them settled during validation: a turn
-//! that ends with a plain-text question to the user is indistinguishable from a finished turn on
-//! every agent; a user interrupt on Claude Code produces no event at all, so the session reads as
-//! working until the next `UserPromptSubmit`; and Grok's bash mode (`!`) fires
-//! no tool or turn events (only its `idle_prompt` backstop follows). None is recoverable by matching
-//! terminal text, which would need a VT emulator in the daemon and differs between an agent's own
-//! renderers.
+//! Two gaps are accepted rather than worked around, both settled during validation: a turn that
+//! ends with a plain-text question to the user is indistinguishable from a finished turn on every
+//! agent; and Grok's bash mode (`!`) fires no tool or turn events (only its `idle_prompt` backstop
+//! follows). Neither is recoverable by matching terminal text, which would need a VT emulator in
+//! the daemon and differs between an agent's own renderers.
 //!
-//! The one case not left as a gap is a Claude Code session that is *waiting on the user* when such an
-//! interrupt lands — declining a permission prompt or its `AskUserQuestion` is silent in exactly the
-//! same way, and leaving it would strand the session's raised hand with nothing to lower it. That one
-//! is recovered outside this mapping, from the agent's own transcript; see `crate::transcript`.
-//! Codex's turn that ends in an error is recovered the same way, from its rollout file.
+//! A user interrupt on Claude Code produces no event at all either, and declining a permission
+//! prompt or its `AskUserQuestion` is silent in exactly the same way. Neither is left as a gap: a
+//! working session would read as working until its next `UserPromptSubmit`, and a waiting one would
+//! keep its raised hand with nothing to lower it, so both are recovered outside this mapping, from
+//! the agent's own transcript; see `crate::transcript`. Codex's turn that ends in an error is
+//! recovered the same way, from its rollout file.
 //!
 //! For the payload fields behind these decisions — what each event carries, what it can be
 //! correlated on, and what never fires — see `docs/agent-cli-reference.md`.
@@ -318,7 +317,8 @@ pub fn turn_cancelled(agent: Agent, event: &str) -> bool {
         Agent::Codex => event == "Interrupt",
         Agent::Grok => event == "StopCancelled",
         // Claude Code emits nothing at all when the user interrupts. The turn stays open until the
-        // next `UserPromptSubmit` re-arms it, which is stale rather than wrong.
+        // next `UserPromptSubmit` re-arms it, which is stale rather than wrong; the status is
+        // recovered from the transcript instead (`crate::transcript`).
         Agent::Claude => false,
     }
 }

@@ -53,7 +53,8 @@ once.
 | `src/store.rs` | The coordinator's SQLite storage: consoles, projects, sessions, pages, agent accounts, branch origins, trusted folders, user settings and the host table |
 | `src/state.rs` | Shared daemon state: session status and turn bookkeeping, record-watch bookkeeping, each project's live git status and check claim, pending `request_session` requests, agent availability, the model cache, the account quotas and the hook queues |
 | `src/launch_settings.rs`, `src/agent_models.rs` | Normalising and checking a model and reasoning effort (`LaunchCheck`), and listing the models an agent offers for an account (`ModelCache`); fixtures in `testdata/` |
-| `src/account_quotas/` | Each account's plan quota from its agent's own CLI: `mod.rs` keeps the readings (`AccountQuotas`) and runs the background poller and the on-request refresh, `probe.rs` holds the three conversations and their reply parsers, `rfc3339.rs` reads the timestamps they carry |
+| `src/account_quotas/` | Each account's plan quota from its agent's own CLI: `mod.rs` keeps the readings (`AccountQuotas`) and runs the background poller and the on-request refresh, `probe.rs` holds the three conversations and their reply parsers |
+| `src/rfc3339.rs` | Reading the RFC 3339 timestamps the agents write into milliseconds since the epoch (`parse_rfc3339_millis`), shared by `account_quotas/probe.rs` and `transcript.rs` |
 | `src/availability.rs` | Working out, once per daemon start, which agents are available and each one's default account |
 | `src/config_export.rs`, `src/config_import.rs` | Building the configuration document `export_configuration` answers with, and reading one back (`inspect` and `apply`) |
 | `src/git_env.rs` | The base every `git` the daemon runs is built from (non-interactive, read-only, variable filtering) |

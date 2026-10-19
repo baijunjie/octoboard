@@ -1316,6 +1316,24 @@ impl AppState {
             == Some(&generation)
     }
 
+    /// Runs `write` only while `generation` is still this session's current record watch, and says
+    /// what it returned, or `None` for a watch retired or superseded meanwhile. The bookkeeping
+    /// stays locked across `write`, so a hook starting or ending a watch waits for it instead of
+    /// slipping in between the check and the write. That lock is never taken while any other lock
+    /// is held, so `write` may take any lock but this one; it must not start or end a watch.
+    pub fn while_record_watch_current<R>(
+        &self,
+        id: &str,
+        generation: u64,
+        write: impl FnOnce() -> R,
+    ) -> Option<R> {
+        let generations = self
+            .record_watch_generations
+            .lock()
+            .expect("record watch lock poisoned");
+        (generations.get(id) == Some(&generation)).then(write)
+    }
+
     /// Records that the session has had a turn, so a later resume reopens the stored conversation
     /// instead of failing on an id the agent never wrote.
     pub fn mark_conversation_started(&self, id: &str) -> Result<()> {

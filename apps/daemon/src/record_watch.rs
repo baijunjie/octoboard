@@ -1,8 +1,8 @@
 //! The mechanism behind watching an agent's own session record for something its hooks never
-//! report: `crate::transcript` (Claude Code's transcript, a declined prompt) and `crate::rollout`
-//! (Codex's rollout file, a turn that ended in an error). Each of those owns what a line means,
-//! when a watch is armed and what a finding does; this owns reading the file and the poll loop
-//! around it.
+//! report: `crate::transcript` (Claude Code's transcript, a declined prompt or an interrupted turn)
+//! and `crate::rollout` (Codex's rollout file, a turn that ended in an error). Each of those owns
+//! what a line means, when a watch is armed and what a finding does; this owns reading the file and
+//! the poll loop around it.
 //!
 //! A record is append-only JSONL that the agent flushes per line, and belongs to the agent, which
 //! rewrites its format on upgrades. So every line is judged on its own, and one that is not UTF-8,
@@ -64,8 +64,8 @@ pub fn scan_lines<T>(
 /// what it does about a file that is not there. The three go together: each is what makes its
 /// start safe.
 ///
-/// Neither start can tell a shrink from a file replaced outright by a longer, unrelated one, since
-/// length is all that is compared; that would resume the scan mid-record. Callers use both only
+/// No start can tell a shrink from a file replaced outright by a longer, unrelated one, since
+/// length is all that is compared; that would resume the scan mid-record. Callers use them only
 /// for per-session paths named for their own thread, where it does not happen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Start {
@@ -74,6 +74,11 @@ pub enum Start {
     /// never armed. A file that shrinks resumes at its new end, never from zero, which could
     /// re-read an old record still in the file as a fresh one.
     AtEnd,
+    /// As [`Self::AtEnd`], except that a file not there yet when the watch is armed is waited for
+    /// and read from its start once it appears. For a record the agent creates only once what the
+    /// watch covers has begun. A file created then can still be seeded with older lines, a copied
+    /// history for one, which the caller's line check has to tell apart for itself.
+    AtEndOrNew,
     /// Where the session's previous watch of the same file got to, and the file's start for the
     /// first. For a record that can already hold the finding by the time the watch is armed, and
     /// whose lines say for themselves which watch they belong to. A file that is not there yet is
@@ -107,8 +112,9 @@ pub struct Watch {
 /// (`AppState::begin_record_watch`) or a hook retired it (`AppState::end_record_watch`), if the
 /// process is gone, or if `owed` says `No`. Otherwise it scans the lines added since it last read,
 /// and when `line_found` recognises one it stops and, if it is still the session's current watch,
-/// calls `on_found` with what that returned. Whether a file that is not there yet is waited for
-/// is [`Start`]'s to say.
+/// calls `on_found` with what that returned and the watch's generation — for a caller whose write
+/// must not land once the watch is retired (`AppState::while_record_watch_current`). Whether a
+/// file that is not there yet is waited for is [`Start`]'s to say.
 ///
 /// The scan runs on a blocking worker: on a long session the added bytes run to megabytes, which
 /// must not sit on the runtime's threads. A read that fails for any other reason ends the watch.
@@ -123,11 +129,22 @@ pub fn spawn<T, P, A>(
 ) where
     T: Send + 'static,
     P: Fn(&str) -> Option<T> + Send + Sync + 'static,
-    A: FnOnce(&Arc<AppState>, &str, T) + Send + 'static,
+    A: FnOnce(&Arc<AppState>, &str, u64, T) + Send + 'static,
 {
     let mut offset = match watch.start {
         Start::AtEnd => match std::fs::metadata(&path) {
             Ok(meta) => meta.len(),
+            Err(err) => {
+                tracing::debug!(
+                    session = %session_id, %err,
+                    "the record could not be read; it cannot be watched"
+                );
+                return;
+            }
+        },
+        Start::AtEndOrNew => match std::fs::metadata(&path) {
+            Ok(meta) => meta.len(),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => 0,
             Err(err) => {
                 tracing::debug!(
                     session = %session_id, %err,
@@ -171,7 +188,7 @@ pub fn spawn<T, P, A>(
                     "the record shrank; resetting the watch offset"
                 );
                 match watch.start {
-                    Start::AtEnd => {
+                    Start::AtEnd | Start::AtEndOrNew => {
                         offset = len;
                         continue; // Recovers on the next append.
                     }
@@ -217,7 +234,7 @@ pub fn spawn<T, P, A>(
                 continue;
             };
             if state.record_watch_current(&session_id, generation) {
-                on_found(&state, &session_id, found);
+                on_found(&state, &session_id, generation, found);
             }
             return;
         }

@@ -12,7 +12,6 @@
 //! set beside them.
 
 mod probe;
-mod rfc3339;
 
 use std::collections::HashMap;
 use std::path::Path;

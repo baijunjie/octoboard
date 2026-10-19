@@ -545,9 +545,9 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
                 }
                 let prompt = agent.and_then(|agent| hooks::submitted_prompt(agent, &payload));
                 // The previous turn's watch goes before the new turn opens: a watch still current
-                // when it opens could find the previous turn's failure and close this one. Codex
-                // only: Claude's watch retires itself once the session leaves `WaitingUser`.
-                if agent == Some(Agent::Codex) {
+                // when it opens could find the previous turn's failure (Codex) or interrupt (Claude
+                // Code) and close this one. Grok has no watch.
+                if matches!(agent, Some(Agent::Codex | Agent::Claude)) {
                     state.end_record_watch(session_id);
                 }
                 state.turn_started(session_id, prompt);
@@ -567,34 +567,18 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
                     }
                     if let Some(status) = hooks::status_from_event(agent, &event, &payload) {
                         let status = suppress_auto_review_hook(state, session_id, status);
+                        // Read before the status lands: a Claude Code watch is armed on a move
+                        // into a status, not on more of the same.
+                        let previous = (agent == Agent::Claude)
+                            .then(|| state.session_record(session_id).ok())
+                            .flatten()
+                            .map(|session| state.agent_status(&session));
                         if let Err(err) = state.apply_hook_status(session_id, status) {
                             tracing::debug!(session = %session_id, %event, %err, "applying the hook status failed");
                         }
-                        // Claude Code emits no hook event at all for a rejected permission prompt
-                        // or a declined `AskUserQuestion` — the transcript is the only trace either
-                        // leaves. Spawned, not awaited: the watch is expected to far outlive this
-                        // response, which the adapters' few-second hook timeout would not allow.
-                        if agent == Agent::Claude && status == SessionStatus::WaitingUser {
-                            transcript::watch_for_rejection(
-                                state,
-                                session_id,
-                                payload
-                                    .get("transcript_path")
-                                    .and_then(serde_json::Value::as_str),
-                            );
-                        }
-                        // A Codex turn that ends in an error fires nothing after its
-                        // `UserPromptSubmit`, so its own rollout is the only place that says so.
-                        if agent == Agent::Codex && event == "UserPromptSubmit" {
-                            rollout::watch_for_failure(
-                                state,
-                                session_id,
-                                payload
-                                    .get("transcript_path")
-                                    .and_then(serde_json::Value::as_str),
-                                payload.get("turn_id").and_then(serde_json::Value::as_str),
-                            );
-                        }
+                        arm_record_watches(
+                            state, session_id, agent, &event, previous, status, &payload,
+                        );
                         // Releasing a message queued while the session could not take one writes
                         // into its PTY, which blocks; it must not sit on this response, where the
                         // adapters' few-second hook timeout would surface as agent-visible noise.
@@ -612,6 +596,43 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
             }
         }
         None => tracing::debug!(session = %session_id, "hook payload carried no event name"),
+    }
+}
+
+/// Starts watching the agent's own session record for what its hooks will not report after this
+/// event, which reported `status` and found the agent at `previous` (read for Claude Code alone).
+/// Claude Code reports neither a declined prompt nor an interrupted turn, so its transcript is
+/// watched (`crate::transcript` says when); a Codex turn that ends in an error fires nothing after
+/// its `UserPromptSubmit`, so its rollout is. Each watch is spawned, not awaited: it is expected to
+/// far outlive this response, which the adapters' few-second hook timeout would not allow.
+fn arm_record_watches(
+    state: &Arc<AppState>,
+    session_id: &str,
+    agent: Agent,
+    event: &str,
+    previous: Option<SessionStatus>,
+    status: SessionStatus,
+    payload: &serde_json::Value,
+) {
+    let transcript_path = payload
+        .get("transcript_path")
+        .and_then(serde_json::Value::as_str);
+    match agent {
+        Agent::Claude => transcript::watch_after_hook(
+            state,
+            session_id,
+            event,
+            previous,
+            status,
+            transcript_path,
+        ),
+        Agent::Codex if event == "UserPromptSubmit" => rollout::watch_for_failure(
+            state,
+            session_id,
+            transcript_path,
+            payload.get("turn_id").and_then(serde_json::Value::as_str),
+        ),
+        _ => {}
     }
 }
 
@@ -1139,6 +1160,110 @@ mod tests {
         );
         assert_eq!(published.last(), Some(&(SessionStatus::Working, 0)));
         assert!(state.background_tasks_of("s").is_empty());
+    }
+
+    /// A Claude Code session at `status` with a live stand-in, and the path its transcript is at,
+    /// for the interrupt-watch tests below. The stand-in is returned to keep it alive.
+    fn claude_session_with_transcript(
+        name: &str,
+        status: SessionStatus,
+    ) -> (
+        Arc<AppState>,
+        crate::test_support::ScratchDir,
+        crate::test_support::StandIn,
+        std::path::PathBuf,
+    ) {
+        let (state, dir) = app_state(name);
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        state
+            .store
+            .insert_session(&crate::test_support::console_session("s", status))
+            .unwrap();
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        let path = dir.join("transcript.jsonl");
+        std::fs::write(&path, "").unwrap();
+        (state, dir, live, path)
+    }
+
+    fn claude_hook(event: &str, transcript: &std::path::Path) -> Vec<u8> {
+        serde_json::json!({
+            "hook_event_name": event,
+            "prompt": "go",
+            "tool_name": "Bash",
+            "transcript_path": transcript,
+        })
+        .to_string()
+        .into_bytes()
+    }
+
+    /// Whether the session reaches `status` within `timeout`.
+    async fn reaches_within(
+        state: &Arc<AppState>,
+        status: SessionStatus,
+        timeout: std::time::Duration,
+    ) -> bool {
+        let state = state.clone();
+        crate::test_support::within(timeout, move || {
+            state.store.get_session("s").unwrap().unwrap().status == status
+        })
+        .await
+    }
+
+    async fn reaches(state: &Arc<AppState>, status: SessionStatus) -> bool {
+        reaches_within(state, status, PATIENCE).await
+    }
+
+    /// A Claude Code turn the user interrupts fires no hook; its prompt arms the transcript watch
+    /// that puts the session back at its prompt.
+    #[tokio::test]
+    async fn an_interrupted_claude_turn_goes_back_to_its_prompt() {
+        let (state, _dir, _live, path) =
+            claude_session_with_transcript("server-interrupt", SessionStatus::Idle);
+        apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+        apply_hook(&state, "s", &claude_hook("PreToolUse", &path));
+
+        std::fs::write(&path, crate::test_support::fresh_interrupt()).unwrap();
+
+        assert!(reaches(&state, SessionStatus::Idle).await);
+    }
+
+    /// The hand coming down on an answered prompt is a move back into work, which arms the watch
+    /// again: the one armed for the raised hand was looking for a decline.
+    #[tokio::test]
+    async fn a_claude_turn_interrupted_after_an_answered_prompt_goes_back_to_its_prompt() {
+        let (state, _dir, _live, path) =
+            claude_session_with_transcript("server-interrupt-after-hand", SessionStatus::Working);
+        apply_hook(&state, "s", &claude_hook("PermissionRequest", &path));
+        apply_hook(&state, "s", &claude_hook("PostToolUse", &path));
+
+        std::fs::write(&path, crate::test_support::fresh_interrupt()).unwrap();
+
+        assert!(reaches(&state, SessionStatus::Idle).await);
+    }
+
+    /// An interrupt the watch has not read yet when the next prompt arrives belongs to the turn
+    /// before, and must not end the new one; the new turn's own interrupt still does, though the
+    /// session never left `Working` between the two.
+    #[tokio::test]
+    async fn only_the_next_turns_own_interrupt_ends_it() {
+        let (state, _dir, _live, path) =
+            claude_session_with_transcript("server-interrupt-next-turn", SessionStatus::Idle);
+        apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+        std::fs::write(&path, crate::test_support::fresh_interrupt()).unwrap();
+        // Well inside the first watch's first poll, a second apart.
+        apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+
+        assert!(
+            !reaches_within(&state, SessionStatus::Idle, crate::transcript::TEST_TIMEOUT).await,
+            "the next turn must keep working"
+        );
+
+        std::fs::write(&path, crate::test_support::fresh_interrupt().repeat(2)).unwrap();
+        assert!(reaches(&state, SessionStatus::Idle).await);
     }
 
     /// A path no route serves is still behind the guard: hostile callers learn nothing from it.

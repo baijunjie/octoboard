@@ -118,7 +118,7 @@ pub fn watch_for_failure(
         },
         |_, _| Owed::Yes,
         move |line| ending_in_line(line, &turn_id),
-        |state, session_id, ending| match ending {
+        |state, session_id, _, ending| match ending {
             // `Stop` is on its way and ends the turn in the usual way.
             Ending::Completed => {}
             Ending::Failed(message) => end_failed_turn(state, session_id, message),

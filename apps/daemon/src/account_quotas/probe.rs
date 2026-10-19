@@ -22,11 +22,11 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
-use super::rfc3339::parse_rfc3339_millis;
 use crate::adapter;
 use crate::protocol::{
     quota_unavailable_code as code, Agent, QuotaUnavailable, QuotaWindow, QuotaWindowKind,
 };
+use crate::rfc3339::parse_rfc3339_millis;
 use crate::subprocess::{run_exchange, Bounds, ExchangeFailure};
 
 /// How long a probe may take. The CLIs answer in one to three seconds; this leaves room for a

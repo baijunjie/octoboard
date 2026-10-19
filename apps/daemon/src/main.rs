@@ -47,6 +47,7 @@ mod record_titles;
 mod record_watch;
 mod relocate;
 mod reporting;
+mod rfc3339;
 mod ringbuf;
 mod rollout;
 mod saved_output;

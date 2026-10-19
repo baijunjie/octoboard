@@ -215,6 +215,29 @@ pub(crate) fn offer_models(state: &AppState, agent: Agent, models: &[(&str, &[&s
         });
 }
 
+/// Polls `done` until it holds or `timeout` runs out, and says which. The poll runs off the async
+/// runtime, so a task the test is waiting on — a record watch, say — keeps running meanwhile.
+pub(crate) async fn within(timeout: Duration, done: impl FnMut() -> bool + Send + 'static) -> bool {
+    tokio::task::spawn_blocking(move || crate::trust::wait_for(timeout, done))
+        .await
+        .expect("the wait ran")
+}
+
+/// A real Claude Code interrupt entry, from a turn interrupted with Esc while the model was writing
+/// on 2.1.303, with only its `cwd` replaced. Stamped as it was captured: long before any watch a
+/// test arms.
+pub(crate) fn captured_interrupt() -> &'static str {
+    include_str!("../testdata/transcript_interrupt.jsonl")
+}
+
+/// [`captured_interrupt`] stamped later than any watch a test arms, since a transcript watch counts
+/// an interrupt only from the moment it was armed.
+pub(crate) fn fresh_interrupt() -> String {
+    const CAPTURED_AT: &str = "\"timestamp\":\"2026-10-19T05:22:20.382Z\"";
+    assert!(captured_interrupt().contains(CAPTURED_AT));
+    captured_interrupt().replace(CAPTURED_AT, "\"timestamp\":\"2100-01-01T00:00:00.000Z\"")
+}
+
 /// A stand-in live session that stays alive on a PTY (`sleep 30`) with nothing reading it.
 pub(crate) fn idle_stand_in(id: &str) -> StandIn {
     fake_live_session(id, Agent::Claude, 80, 24, "sleep 30")
