@@ -86,17 +86,19 @@ image = { version = "=0.25.8", default-features = false }
 # (see the comment there), in `background.rs` for hiding and unhiding the app, the Dock badge, the
 # window's Cmd+H and the notification that the app became active, in `permissions.rs` for the System
 # Settings deep link `NSWorkspace` opens, and in `tray.rs` for the notifications that a menu began
-# and ended tracking and for the template flag on the tray menu's pictures, and in `tray_lines.rs`
-# for the views of the menu's rows (`NSImageView` for a section heading's picture). Pinned to the
-# exact versions already resolved transitively through `tauri-runtime-wry`, so promoting them to
-# direct dependencies does not shift anything else this crate depends on.
+# and ended tracking, the template flag on the tray menu's pictures and the view that draws the menu
+# bar icon's raised hand over its status item's button, and in `tray_lines.rs` for the views of the
+# menu's rows (`NSImageView` for a section heading's picture). Pinned to the exact versions already
+# resolved transitively through `tauri-runtime-wry`, so promoting them to direct dependencies does
+# not shift anything else this crate depends on.
 objc2 = "=0.6.4"
-objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSAccessibilityProtocols", "NSApplication", "NSAttributedString", "NSBezierPath", "NSColor", "NSCell", "NSControl", "NSDockTile", "NSFont", "NSImage", "NSImageView", "NSMenu", "NSMenuItem", "NSResponder", "NSStatusItem", "NSStringDrawing", "NSView", "NSWindow", "NSWorkspace", "objc2-core-foundation"] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSAccessibilityProtocols", "NSApplication", "NSAttributedString", "NSBezierPath", "NSButton", "NSColor", "NSCell", "NSControl", "NSDockTile", "NSFont", "NSGraphics", "NSImage", "NSImageView", "NSMenu", "NSMenuItem", "NSResponder", "NSStatusBarButton", "NSStatusItem", "NSStringDrawing", "NSView", "NSWindow", "NSWorkspace", "objc2-core-foundation"] }
 # For the system's preferred languages in `lib.rs`, the notification observers in `background.rs`
-# and `tray.rs` (and the main queue the latter applies a held menu on), the content rule list in
-# `page_isolation.rs`, and in `permissions.rs` the Accessibility prompt's options dictionary and the
-# System Settings URL, pinned like `objc2-app-kit` above.
-objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSAttributedString", "NSDictionary", "NSGeometry", "NSLocale", "NSNotification", "NSOperation", "NSString", "NSURL", "NSValue"] }
+# and `tray.rs` (and the main queue the latter applies a held menu on, and the bytes of the raised
+# hand's picture), the content rule list in `page_isolation.rs`, and in `permissions.rs` the
+# Accessibility prompt's options dictionary and the System Settings URL, pinned like `objc2-app-kit`
+# above.
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSAttributedString", "NSData", "NSDictionary", "NSGeometry", "NSLocale", "NSNotification", "NSOperation", "NSString", "NSURL", "NSValue"] }
 # For the content rule list `page_isolation.rs` puts on the window's webview, and the block its
 # compile reports back through; `WebviewWindowBuilder::with_webview_configuration` takes this
 # crate's type. Pinned like `objc2-app-kit` above, `block2` to the version already resolved

@@ -8,17 +8,21 @@ failed to start — and whatever the user chose about keeping Octoboard running 
 
 ## The icon's look
 
-The icon has two looks, both monochrome, which macOS tints to suit a light or dark menu bar:
+The icon has two looks. In both, the octopus is monochrome, and macOS tints it to suit a light or dark menu bar:
 
 - **The octopus alone**, while no session is waiting for the user.
-- **The octopus with a raised hand** — a small hand outline over its bottom-right corner — while at least one session
-  is waiting for the user. The sessions that count are exactly those the menu lists under **Waiting for you** (see "The
-  icon's menu" below), across every console.
+- **The octopus with a raised hand** — a hand outline taking up its bottom-right corner, cut out of the octopus with a
+  clear margin around it and covering the octopus's right eye and right-hand arms — while at least one session is
+  waiting for the user. The hand is drawn in the system orange, which macOS resolves for a light or dark menu bar,
+  rather than in the octopus's tint. It is part of the icon's look and is not presented to assistive technology on
+  its own. The sessions that count are exactly those the menu lists under **Waiting for you** (see "The icon's menu"
+  below), across every console.
 
 The look changes together with the menu: a change that has to wait for an open menu to close (see the end of "The
 icon's menu" below) changes the look only when it reaches the menu, so the icon and the menu always agree on whether a
-session is waiting. Until the window's UI has sent its first menu — and throughout on the screen shown when the daemon
-failed to start — the icon is the octopus alone.
+session is waiting; the octopus with its corner cut out and the orange hand always appear and go together. Until
+the window's UI has sent its first menu — and throughout on the screen shown when the daemon failed to start — the icon
+is the octopus alone.
 
 ## Clicking the icon
 
@@ -35,9 +39,11 @@ From top to bottom:
    sessions are never listed. A session running in background is listed under **Working** (see "Running in
    background" in `docs/product/sessions.md`).
    - **Headings.** A heading is system text at the menu font's size, regular weight, in the secondary text
-     colour, with its status glyph to the left of the text. It is not dimmed the way a menu line that cannot be
-     chosen is, never highlights under the pointer, and is read by assistive technology once, as its menu item, the
-     heading's words.
+     colour, with its status glyph to the left of the text. Its glyph and text sit where the session lines below place
+     their agent marks and titles — the same left edges and the same line height, the glyph centred on the text — as
+     macOS 26 lays out a menu item; another version of macOS may place a menu item's picture and title otherwise. It
+     is not dimmed the way a menu line that cannot be chosen is, never highlights under the pointer, and is read by
+     assistive technology once, as its menu item, the heading's words.
    - **Pictures.** Each heading has a still glyph for its status — the accent dot for working, the waving hand for
      waiting for you, the speech bubble for awaiting instructions — and each session line has the mark of its agent
      (Claude Code, Codex, Grok), as the sidebar draws them. The menu cannot animate, so the working dot does not pulse.
@@ -132,15 +138,24 @@ detail right-aligned in grey and a bar whose fill is the remaining share (72% ov
 0% as a bare rounded track, and a note under an account with no quota. After the texts were drawn rather than set in
 text fields, a Claude Code account's window rows were seen again, again in a submenu popped up natively, with the
 same look and size, and read once each by assistive technology, as a menu item whose title is the whole phrase. How
-the current build renders the texts (their inset and vibrancy) has still to be seen live.
+the current build renders the texts (their inset and vibrancy) has still to be seen live. Under Simplified
+Chinese, in a light menu: the three session headings — **Waiting for you**, **Working**, **Awaiting instructions** —
+each with its status glyph (the hand, the blue dot, the speech bubble) to the left of its text, lined up with the
+session lines below: the glyphs' centres on the same vertical line as the agent marks' centres, the heading text on
+the same left edge as the session titles, and each glyph centred vertically on its text to within half a point. In
+the menu bar, with white icons over a dark wallpaper: the octopus with a raised hand as an orange hand over the
+octopus's cut-out corner, the octopus in the menu bar's tint; the orange hand still shown while the icon was
+highlighted with its menu open; the icon going back to the octopus alone, with no hand left over, when the waiting
+session stopped waiting, and the orange hand coming back when a session waited again.
 
-**Not yet observed** in the packaged application: the headings as described above — the sessions' groups' headings,
-**No sessions running**, and the account headers in a submenu — and whether a heading's glyph and text line up with
-the pictures and text of the session lines below it; the pictures in the menu (the session lines' agent marks and the
-headings' status glyphs), in a light and in a dark menu; the quota submenus opened from the icon's own menu; a Claude
-Code account's quota in a submenu; opening the menu asking for a refresh of the quotas; any quota row in a dark menu,
-and a menu changing between light and dark while the app runs; a row never highlighting under the pointer; a row
-widened by a long window name; the agent marks on the submenus' opening lines; and a left click opening the menu.
+**Not yet observed** in the packaged application: the headings' styling as described above (their colour, weight, not
+being dimmed, never highlighting, and how assistive technology reads them), **No sessions running**, and the account
+headers in a submenu; the session lines' agent marks and the headings' status glyphs in a dark menu; either look on a
+light menu bar, and the octopus alone while the icon is highlighted with its menu open; the quota submenus opened from
+the icon's own menu; a Claude Code account's quota in a submenu; opening the menu asking for a refresh of the quotas;
+any quota row in a dark menu, and a menu changing between light and dark while the app runs; a row never highlighting
+under the pointer; a row widened by a long window name; the agent marks on the submenus' opening lines; and a left
+click opening the menu.
 
 **Observed caveat:** for about the first 0.6 seconds after closing the window from native fullscreen, a click on the
 icon is lost — a right click does not even open the menu — apparently swallowed by macOS during its exit from

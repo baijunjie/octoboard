@@ -444,7 +444,7 @@ the surface around it does not forbid selection. It is accepted there because th
 - The selected row of a hand-built list or tree carries `aria-current` (as the sidebar rows do).
 - HeroUI's `Tabs` and `ListBox` mark their selection themselves with `aria-selected` and get no `aria-current` on top.
 
-### An information line in a native menu
+### The menu bar icon and its native menu
 
 A line of the menu bar icon's menu that only shows information (a heading, an account's header, a note, a quota
 window) is a menu item with a view of its own, not a plain disabled item: AppKit dims a disabled item's text whatever
@@ -456,6 +456,10 @@ an element: the view, its texts, its bar and a heading's picture are all marked 
 a view rather than set in `NSTextField`s, since marking a text field non-element leaves its cell exposed as a static
 text of its own. The view takes no role or label and the item keeps its title, or the phrase would be exposed twice, or
 the line would have no title for menu search.
+
+A decoration drawn over the menu bar icon itself, such as the raised hand while a session waits for the user, is
+likewise marked non-element, view and cell: the menu's **Waiting for you** heading is what tells assistive technology
+that state.
 
 ### Standalone errors use the shared Alert
 

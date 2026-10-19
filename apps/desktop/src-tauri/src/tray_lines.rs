@@ -10,7 +10,8 @@
 //! A row is read by assistive technology as its menu item alone: the item keeps the whole phrase
 //! as its title, and nothing inside the row is an accessibility element. The texts are therefore
 //! drawn (`RowText`), not `NSTextField`s, whose cells stay exposed as static texts of their own
-//! whatever the field is marked as.
+//! whatever the field is marked as. The non-element picture view (`picture_view`) is shared with
+//! the raised hand `tray.rs` lays over the menu bar icon.
 //!
 //! Every colour is a dynamic system colour, resolved as the view is drawn, so a menu follows the
 //! light or dark look it is shown in, and a switch between them while it is open.
@@ -43,13 +44,16 @@ const BAR_HEIGHT: f64 = 6.0;
 const TEXT_INSET: f64 = 2.0;
 /// The space above and below the single line of a note or an account's header.
 const LINE_PAD: f64 = 4.0;
-/// The space above and below a session section's heading, meant to make it, with its picture, as
-/// tall as a standard menu item (about 22 pt).
-/// TODO: this and the heading's horizontal spacing (`INSET`, `PICTURE_GAP`) are estimates of a
-/// standard item's layout; confirm them against the session lines in the live menu.
-const HEADING_PAD: f64 = 2.0;
-/// The space between a heading's picture and its text.
-const PICTURE_GAP: f64 = 6.0;
+/// Where AppKit lays out a standard menu item, which a session section's heading copies so that its
+/// picture and text line up with the session lines' below it: 24 pt tall, an 18 pt picture 16 pt in
+/// and centred, and the title's text field 4 pt after the picture, or `INSET` in on a line with no
+/// picture, centred too. Read from the views `NSMenu` lays its items out in on macOS 26, with the
+/// 18 pt pictures the UI draws for the menu (`SIZE` in
+/// `packages/ui/src/lifecycle/statusItemIcons.ts`); another version, or a picture of another size,
+/// may be placed otherwise.
+const ITEM_HEIGHT: f64 = 24.0;
+const PICTURE_X: f64 = 16.0;
+const PICTURE_GAP: f64 = 4.0;
 
 struct BarIvars {
     /// How much of the bar is filled, 0 to 1.
@@ -257,10 +261,24 @@ fn single_line_row(string: &str, small: bool, mtm: MainThreadMarker) -> Retained
     row
 }
 
+/// A view that draws `image` at its own size, laid out by frames, and that is not an accessibility
+/// element, nor is its cell: the picture is part of the look of what it sits in, which is read as a
+/// whole. `imageViewWithImage:` leaves the frame empty, to be sized by Auto Layout from the image,
+/// so the view takes the image's size itself, or it draws nothing.
+pub fn picture_view(image: &NSImage, mtm: MainThreadMarker) -> Retained<NSImageView> {
+    let view = NSImageView::imageViewWithImage(image, mtm);
+    view.setFrameSize(image.size());
+    view.setAccessibilityElement(false);
+    if let Some(cell) = view.cell() {
+        cell.setAccessibilityElement(false);
+    }
+    view
+}
+
 /// The row of a session section's heading: its `picture` (the one its menu item shows, so it
 /// keeps whether it is a template image) where a standard item's picture sits, and its text in
-/// the secondary colour after it. The row is as wide as its content, so it does not widen the menu,
-/// and grows with it.
+/// the secondary colour where a standard item's title sits (`ITEM_HEIGHT` and the constants with
+/// it). The row is as wide as its content, so it does not widen the menu, and grows with it.
 pub fn heading_row(
     heading: &str,
     picture: Option<&NSImage>,
@@ -268,26 +286,22 @@ pub fn heading_row(
 ) -> Retained<NSView> {
     let heading_text = RowText::new(heading, &NSColor::secondaryLabelColor(), false, mtm);
     let text_size = heading_text.frame().size;
-    let picture = picture.map(|image| NSImageView::imageViewWithImage(image, mtm));
+    let picture = picture.map(|image| picture_view(image, mtm));
     let picture_size = picture
         .as_ref()
         .map_or(NSSize::ZERO, |view| view.frame().size);
     let text_x = match picture {
-        Some(_) => INSET + picture_size.width + PICTURE_GAP,
+        Some(_) => PICTURE_X + picture_size.width + PICTURE_GAP,
         None => INSET,
     };
-    let line = text_size.height.max(picture_size.height);
-    let height = line + HEADING_PAD * 2.0;
+    let height = ITEM_HEIGHT.max(text_size.height).max(picture_size.height);
+    let centred = |content: f64| ((height - content) / 2.0).round();
     let row = row_view(text_x + text_size.width + INSET, height, mtm);
     if let Some(view) = picture {
-        view.setAccessibilityElement(false);
-        if let Some(cell) = view.cell() {
-            cell.setAccessibilityElement(false);
-        }
-        view.setFrameOrigin(NSPoint::new(INSET, (height - picture_size.height) / 2.0));
+        view.setFrameOrigin(NSPoint::new(PICTURE_X, centred(picture_size.height)));
         row.addSubview(&view);
     }
-    heading_text.setFrameOrigin(NSPoint::new(text_x, (height - text_size.height) / 2.0));
+    heading_text.setFrameOrigin(NSPoint::new(text_x, centred(text_size.height)));
     row.addSubview(&heading_text);
     row
 }

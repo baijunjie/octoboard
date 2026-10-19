@@ -88,7 +88,7 @@ shell open, Dock badge, window theme, window show and window drag/zoom commands 
 | `src-tauri/src/lib.rs` | `run()`: builds the Tauri app, wires the menu, exit flow, close request and reopen event, and opens the main window (overlay titlebar, translucent material, hidden until the UI reveals it) |
 | `src-tauri/src/exit.rs` | The exit-confirmation flow: `ExitState`, the two exit-flow commands, `request_quit` and `request_quit_from_window`, and the `applicationShouldTerminate:` override for Dock Quit and system shutdown |
 | `src-tauri/src/background.rs` | Running in the background: `set_run_in_background`, the close button hiding the window when chosen, and `bring_to_front` |
-| `src-tauri/src/tray.rs` | The menu bar icon: its menu rebuilt from `set_tray_menu`, its switch between the two icon images, and the `tray-session-chosen` and `tray-menu-opened` events |
+| `src-tauri/src/tray.rs` | The menu bar icon: its menu rebuilt from `set_tray_menu`, its switch between the two icon images together with the orange raised-hand overlay view, and the `tray-session-chosen` and `tray-menu-opened` events |
 | `src-tauri/src/tray_lines.rs` | The rows of the menu bar icon's menus, each a menu item with a view of its own: the sessions' section headings, an account's header, a note, and a quota window's name, detail and bar; none of them dims or highlights |
 | `src-tauri/src/menu.rs` | The native macOS menu bar built from the UI's labels, including the Settings… item |
 | `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated, and keeps `DaemonState` |
@@ -100,6 +100,7 @@ shell open, Dock badge, window theme, window show and window drag/zoom commands 
 | `src-tauri/tauri.conf.json` | Where the window's UI comes from, the `octoboardd` `externalBin`, and the bundle targets |
 | `src-tauri/Info.plist` | Merged into the bundle's `Info.plist`; declares the UI languages as `CFBundleLocalizations` |
 | `src-tauri/icons/tray-template.png` | The menu bar icon's monochrome template image, derived by hand from the app icon; no script regenerates it |
-| `src-tauri/icons/tray-attention-template.png` | The same with a raised hand in the corner, shown while a session waits for the user; drawn from `tray-template.png` and lucide's `Hand` by a one-off script not kept in the repo; no script regenerates it |
+| `src-tauri/icons/tray-attention-template.png` | The octopus with the corner cut out where the raised hand goes and no hand, a template image shown while a session waits for the user; drawn from `tray-template.png` by a one-off script not kept in the repo; no script regenerates it |
+| `src-tauri/icons/tray-attention-hand-template.png` | The raised hand alone on the same canvas, black for its alpha; `tray.rs` tints it the system orange in a view over the status item's button; drawn from lucide's `Hand` by the same one-off script; no script regenerates it |
 | `scripts/build-daemon.mjs`, `scripts/build-app.mjs`, `scripts/install-app.mjs`, `scripts/release.mjs` | The build, local-verification, local-install and release scripts above |
 | `scripts/bundle.mjs` | Where `tauri build` puts its output, and the lookup for the bundle it produced; shared by the build scripts |

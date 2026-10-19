@@ -5,10 +5,12 @@
 //! also tells the UI which one. Quit goes through the same exit flow as Cmd+Q, so it still asks
 //! while a session is running.
 //!
-//! The icon itself has two looks, both template images: the octopus, and the octopus with a
-//! raised hand in its corner, which shows while the menu's `attention` flag is set (a session is
-//! waiting for the user). Like the rest of the menu, the UI decides when, and the look changes
-//! together with the menu it came with.
+//! The icon itself has two looks: the octopus, and the octopus with an orange raised hand in its
+//! corner, which shows while the menu's `attention` flag is set (a session is waiting for the
+//! user). Like the rest of the menu, the UI decides when, and the look changes together with the
+//! menu it came with. The octopus is always a template image, so macOS keeps drawing it for the
+//! menu bar's light or dark look; a template image cannot carry a colour, so the hand is a view of
+//! its own laid over the button, in place of the octopus's cut-out corner (`show_hand`).
 //!
 //! Replacing the menu closes it if it is open, so a menu the UI sends while a menu is open is held
 //! back and applied once it closes (`MenuTracking`). The UI is told when this menu begins to open
@@ -38,7 +40,7 @@ use crate::background::show_main_window;
 use crate::exit::request_quit;
 use crate::menu::APP_NAME;
 #[cfg(target_os = "macos")]
-use crate::tray_lines::{dress_submenu, heading_row};
+use crate::tray_lines::{dress_submenu, heading_row, picture_view};
 
 const TRAY_ID: &str = "main";
 const OPEN_ITEM_ID: &str = "tray-open";
@@ -235,8 +237,9 @@ fn tracking(app: &AppHandle) -> std::sync::MutexGuard<'_, MenuTracking> {
         .unwrap_or_else(|e| e.into_inner())
 }
 
-/// The icon's picture for whether it raises its hand. Both are template images, drawn in black for
-/// their alpha alone.
+/// The icon's picture for whether it raises its hand: the octopus, or the octopus with the hand's
+/// place cut out of its bottom-right corner, which the hand is drawn into (`show_hand`). Both are
+/// template images, drawn in black for their alpha alone.
 fn icon_image(attention: bool) -> Image<'static> {
     if attention {
         tauri::include_image!("icons/tray-attention-template.png")
@@ -405,8 +408,13 @@ fn apply(app: &AppHandle, menu: &TrayMenu) -> Result<(), String> {
     show_attention(app, &tray, menu.attention)
 }
 
-/// Swaps the icon's picture when `attention` differs from the one shown, keeping it a template
-/// image, which a plain `set_icon` would drop.
+/// Swaps the icon's picture and shows or hides the hand when `attention` differs from the look
+/// shown, keeping the picture a template image, which a plain `set_icon` would drop. Both happen on
+/// the main thread in the same pass (a command and the held menu's block both run there), so the
+/// menu bar never draws the cut-out octopus without its hand, or the hand over the whole octopus.
+/// When the hand cannot be put up, the icon stays the octopus alone, which still reads as the
+/// octopus where the cut-out one would look broken, and the look shown is left as it was, so the
+/// next menu tries again.
 fn show_attention(
     app: &AppHandle,
     tray: &tauri::tray::TrayIcon,
@@ -418,8 +426,100 @@ fn show_attention(
     }
     tray.set_icon_with_as_template(Some(icon_image(attention)), true)
         .map_err(|err| err.to_string())?;
+    let hand_up = show_hand(tray, attention);
+    if attention && !hand_up {
+        return tray
+            .set_icon_with_as_template(Some(icon_image(false)), true)
+            .map_err(|err| err.to_string());
+    }
     shown.store(attention, Ordering::Relaxed);
     Ok(())
+}
+
+/// The raised hand's picture, on the same canvas as the icon's and drawn in black for its alpha
+/// alone; its ink lies inside the corner `icon_image(true)` cuts out of the octopus.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+const HAND_PNG: &[u8] = include_bytes!("../icons/tray-attention-hand-template.png");
+
+#[cfg(target_os = "macos")]
+thread_local! {
+    /// The view that draws the raised hand on the status item's button, once made. AppKit's views
+    /// live on the main thread, and so does this.
+    static HAND_VIEW: std::cell::RefCell<Option<objc2::rc::Retained<objc2_app_kit::NSImageView>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Shows or hides the raised hand over the icon, and answers whether it is up. The hand is a
+/// template picture in an image view whose tint is the system orange, a dynamic colour resolved as
+/// it is drawn, so it suits a light or dark menu bar like the octopus under it. The view is made
+/// the first time the hand shows (`make_hand_view`), and is laid over the rectangle the button
+/// draws the octopus in each time it shows.
+#[cfg(target_os = "macos")]
+fn show_hand(tray: &tauri::tray::TrayIcon, shown: bool) -> bool {
+    use objc2::MainThreadMarker;
+
+    tray.with_inner_tray_icon(move |inner| {
+        let Some(mtm) = MainThreadMarker::new() else {
+            return false;
+        };
+        let Some(button) = inner.ns_status_item().and_then(|item| item.button(mtm)) else {
+            return false;
+        };
+        HAND_VIEW.with_borrow_mut(|hand| {
+            if hand.is_none() && shown {
+                *hand = make_hand_view(&button, mtm);
+            }
+            let Some(view) = hand.as_ref() else {
+                return false;
+            };
+            if shown {
+                if let Some(cell) = button.cell() {
+                    view.setFrame(cell.imageRectForBounds(button.bounds()));
+                }
+            }
+            view.setHidden(!shown);
+            shown
+        })
+    })
+    .unwrap_or(false)
+}
+
+/// The hand is drawn only on macOS; elsewhere it is never up, so the icon keeps the octopus alone.
+#[cfg(not(target_os = "macos"))]
+fn show_hand(_tray: &tauri::tray::TrayIcon, _shown: bool) -> bool {
+    false
+}
+
+/// The hand's view on `button`, its picture at the size the button gives the octopus's, or `None`
+/// when the button has no picture yet or the hand's does not decode. It goes below the button's
+/// other subviews, as the topmost is the view through which the tray library receives the clicks
+/// that open the menu.
+#[cfg(target_os = "macos")]
+fn make_hand_view(
+    button: &objc2_app_kit::NSStatusBarButton,
+    mtm: objc2::MainThreadMarker,
+) -> Option<objc2::rc::Retained<objc2_app_kit::NSImageView>> {
+    use objc2::AnyThread;
+    use objc2_app_kit::{
+        NSAutoresizingMaskOptions, NSColor, NSImage, NSImageScaling, NSWindowOrderingMode,
+    };
+    use objc2_foundation::NSData;
+
+    let octopus = button.image()?;
+    let image = NSImage::initWithData(NSImage::alloc(), &NSData::with_bytes(HAND_PNG))?;
+    image.setSize(octopus.size());
+    image.setTemplate(true);
+    let view = picture_view(&image, mtm);
+    view.setImageScaling(NSImageScaling::ScaleNone);
+    view.setContentTintColor(Some(&NSColor::systemOrangeColor()));
+    view.setAutoresizingMask(
+        NSAutoresizingMaskOptions::ViewMinXMargin
+            | NSAutoresizingMaskOptions::ViewMaxXMargin
+            | NSAutoresizingMaskOptions::ViewMinYMargin
+            | NSAutoresizingMaskOptions::ViewMaxYMargin,
+    );
+    button.addSubview_positioned_relativeTo(&view, NSWindowOrderingMode::Below, None);
+    Some(view)
 }
 
 /// The picture a line names, or none when it names none or one the table does not hold, or one that
@@ -578,13 +678,28 @@ mod tests {
     }
 
     #[test]
-    fn both_looks_of_the_icon_are_decodable_template_pictures() {
-        for attention in [false, true] {
-            let image = icon_image(attention);
+    fn both_looks_of_the_icon_and_the_hand_are_decodable_template_pictures() {
+        let hand = Image::from_bytes(HAND_PNG).expect("the hand decodes");
+        for image in [icon_image(false), icon_image(true), hand] {
             assert_eq!((image.width(), image.height()), (44, 44));
             assert!(image.rgba().chunks(4).all(|pixel| pixel[..3] == [0, 0, 0]));
         }
         assert_ne!(icon_image(true).rgba(), icon_image(false).rgba());
+    }
+
+    #[test]
+    fn the_hand_falls_inside_the_corner_cut_out_of_the_octopus() {
+        let hand = Image::from_bytes(HAND_PNG).expect("the hand decodes");
+        let octopus = icon_image(true);
+        let alphas = |image: &Image<'_>| -> Vec<u8> {
+            image.rgba().chunks(4).map(|pixel| pixel[3]).collect()
+        };
+        let (hand, octopus) = (alphas(&hand), alphas(&octopus));
+        assert!(hand.iter().any(|&alpha| alpha > 0));
+        assert!(hand
+            .iter()
+            .zip(&octopus)
+            .all(|(&hand, &octopus)| hand == 0 || octopus == 0));
     }
 
     #[test]
