@@ -53,18 +53,18 @@ Within a section, changes are in the order the file tree would show their paths 
 
 The uncommitted sections are read from the worktree that has the branch checked out, whichever worktree that is.
 
-- **From another worktree than the one holding the project's folder**, a line above the list names that worktree by
-  its folder's name, not its path, just under the line saying what the committed part is (see "Committed changes"
-  below), or under the other lines when there is none. A copy button follows the name, its tooltip and name "Copy
+- **From another worktree than the one holding the project's folder**, a line inside the branch selector's area,
+  directly below the selector, identifies the worktree by its folder's name, not its path. The committed comparison
+  follows in the same area (see "Committed changes" below). A copy button follows the name, its tooltip and name "Copy
   worktree path", turning to "Copied" once pressed (see "Copy buttons" in `docs/product/labels-and-tooltips.md`). It
   copies the worktree's path relative to the project's folder when the worktree lies inside that folder, and its
   absolute path otherwise, either as the window shows paths (see "A row's actions" in `docs/product/project-pane.md`).
   A copy that fails raises an error alert saying the worktree's path could not be copied.
 - **A worktree in which the project's folder is not a directory** — missing there, or reached only through a symbolic
-  link — has a line above the list saying the project's folder is not in the worktree the branch is checked out in,
-  just under the line naming the worktree, where there is one.
-- **A branch checked out in no worktree** has no uncommitted changes: a line says so, naming the branch, and only what
-  it has committed is listed.
+  link — has a line in the branch selector's area saying the project's folder is not in the worktree the branch is
+  checked out in, below the worktree name where one is shown.
+- **A branch checked out in no worktree** has no uncommitted changes and no explanatory notice; only what it has
+  committed is listed.
 - **A branch with no commit yet** — checked out in a worktree whose `HEAD` has none — has a line saying there are no
   commits yet; its uncommitted changes are listed, and nothing is compared (see "Committed changes" below).
 - **A worktree found gone** while its changes are listed is no failure of the list and opens no error alert: the

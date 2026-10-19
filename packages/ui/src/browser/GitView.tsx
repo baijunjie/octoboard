@@ -118,8 +118,6 @@ const code = (text: string) => (
 function Notice({ notice, projectRoots }: { notice: ChangesNotice; projectRoots: readonly string[] }): React.ReactElement {
   const t = useT();
   switch (notice.id) {
-    case "notCheckedOut":
-      return <Message id="git.changes.notCheckedOut" params={{ branch: code(notice.branch) }} />;
     case "unborn":
       return <>{t("git.changes.unborn")}</>;
     case "worktree":
@@ -177,8 +175,8 @@ function ChangesView({
 }): React.ReactElement {
   const t = useT();
   const noticesRef = useListMotion<HTMLDivElement>();
-  // When what holds focus below the selector goes — the list replaced by a failure or an empty
-  // state — focus goes to the selector rather than falling to `<body>`; with nothing chosen in a
+  // When a focused worktree control or list row goes away, focus goes to the selector rather
+  // than falling to `<body>`; with nothing chosen in a
   // repository that has no branches the selector is disabled, and focus leaves for the top bar as
   // it does from any pane with nothing to hold it.
   const handoff = useFocusHandoff(() => selectorsRef.current?.querySelector<HTMLElement>("button:not([disabled])")?.focus());
@@ -205,7 +203,7 @@ function ChangesView({
 
   return (
     <>
-      <div ref={selectorsRef} className="shrink-0 groove-b py-2 px-(--pane-inset)">
+      <div ref={selectorsRef} className="shrink-0 groove-b py-2 px-(--pane-inset)" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
         <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3">
           <BranchSelect
             label={t("git.changes.branch")}
@@ -217,6 +215,20 @@ function ChangesView({
             onChange={onBranchChange}
           />
         </div>
+        {branch !== undefined && (
+          <div className="mt-2 flex flex-col gap-1 text-xs text-app-muted empty:hidden">
+            {notices.map((notice) => (
+              <p key={notice.id}>
+                <Notice notice={notice} projectRoots={projectRoots} />
+              </p>
+            ))}
+            {lineFailures.map((failure) => (
+              <p key={failure.key}>
+                <Message id={failure.line} params={{ message: failureParam(failure.message) }} />
+              </p>
+            ))}
+          </div>
+        )}
       </div>
       {branchesError !== undefined && !(branch === undefined && branches.state === "error") && (
         <PaneNote>
@@ -234,18 +246,6 @@ function ChangesView({
           )
         ) : (
           <>
-            <div className="flex shrink-0 flex-col gap-1 px-(--pane-inset) py-2 text-xs text-app-muted empty:hidden">
-              {notices.map((notice) => (
-                <p key={notice.id}>
-                  <Notice notice={notice} projectRoots={projectRoots} />
-                </p>
-              ))}
-              {lineFailures.map((failure) => (
-                <p key={failure.key}>
-                  <Message id={failure.line} params={{ message: failureParam(failure.message) }} />
-                </p>
-              ))}
-            </div>
             {/* Mounted for as long as the comparison is, so a notice appearing in it is announced. */}
             {shownComparison && (
               <div ref={noticesRef} role="status" className="relative flex shrink-0 flex-col gap-1 px-(--pane-inset) text-xs text-app-muted not-empty:pb-2">

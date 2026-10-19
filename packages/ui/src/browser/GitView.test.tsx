@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useState } from "react";
 import { expect, it, vi } from "vitest";
 
 import type { ProjectSourceInfo } from "../protocol";
@@ -46,9 +46,15 @@ function mountWorktreeNotice(worktreeRoot: string, project: ProjectSourceInfo) {
     changeView: changeViewFixture(),
     selectedSessionId: undefined,
   };
-  const container = mountRows(<GitView source={{ state: "loaded", source: project, sentAt: 0 }} {...props} />, { clipboard: { writeText } });
+  let uncheck = () => {};
+  function Host() {
+    const [uncommitted, setUncommitted] = useState(props.uncommitted);
+    uncheck = () => setUncommitted({ state: "notCheckedOut", branch: "feature" });
+    return <GitView source={{ state: "loaded", source: project, sentAt: 0 }} {...props} uncommitted={uncommitted} />;
+  }
+  const container = mountRows(<Host />, { clipboard: { writeText } });
   const button = container.querySelector<HTMLButtonElement>('p button[aria-label="Copy worktree path"]');
-  return { button, writeText };
+  return { button, writeText, uncheck: () => uncheck(), selector: props.selectorsRef };
 }
 
 async function copied(button: HTMLButtonElement | null): Promise<void> {
@@ -72,4 +78,13 @@ it("copies the absolute path of a worktree outside the project's folder", async 
   const { button, writeText } = mountWorktreeNotice("/work/app-2/feature", source("/work/app", "/work/app"));
   await copied(button);
   expect(writeText).toHaveBeenCalledExactlyOnceWith("/work/app-2/feature");
+});
+
+it("returns keyboard focus to the branch selector when its worktree row disappears", () => {
+  const { button, uncheck, selector } = mountWorktreeNotice("/work/app/.worktrees/feature", source("/work/app", "/work/app"));
+  act(() => button!.focus());
+  expect(document.activeElement).toBe(button);
+  act(() => uncheck());
+  expect(button!.isConnected).toBe(false);
+  expect(document.activeElement).toBe(selector.current?.querySelector("button"));
 });

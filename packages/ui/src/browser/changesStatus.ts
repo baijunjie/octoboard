@@ -12,7 +12,6 @@ import type { CommittedState, UncommittedState } from "./useGitReview";
 /** A line above the list, as the words it is made of; paths and branches are in display form, except
  * the worktree's `root`, a wire path, which the line's copy button turns into display form itself. */
 export type ChangesNotice =
-  | { id: "notCheckedOut"; branch: string }
   | { id: "unborn" }
   | { id: "worktree"; name: string; root: string }
   | { id: "scopeMissing" }
@@ -49,7 +48,7 @@ export function branchGone(branch: string | undefined, branches: BranchList, hol
 }
 
 export interface ChangesStatus {
-  /** The lines above the list, top to bottom. */
+  /** The worktree shown under the branch selector, followed by the lines above the list. */
   notices: ChangesNotice[];
   /** Every part that failed, in the order the list's parts stand. */
   failures: ChangesFailure[];
@@ -72,18 +71,12 @@ export function changesStatus({
 }): ChangesStatus {
   const notices: ChangesNotice[] = [];
   const failures: ChangesFailure[] = [];
-  // The lines about the worktree another branch's changes are read from come after the line saying
-  // what the branch is compared with, and before the transient one about listing its commits; the
-  // worktree is named by its folder's name, as its full path takes more room than it is worth.
-  const worktreeNotices: ChangesNotice[] = [];
   let listingCommits = false;
-  if (uncommitted.state === "notCheckedOut") {
-    notices.push({ id: "notCheckedOut", branch: displayWirePath(uncommitted.branch) });
-  } else if (uncommitted.state === "listed") {
+  if (uncommitted.state === "listed") {
     const { worktree, own, list } = uncommitted;
+    if (!own) notices.push({ id: "worktree", name: wireBaseName(worktree.root), root: worktree.root });
     if (worktree.head === null) notices.push({ id: "unborn" });
-    if (!own) worktreeNotices.push({ id: "worktree", name: wireBaseName(worktree.root), root: worktree.root });
-    if (!worktree.scope_present) worktreeNotices.push({ id: "scopeMissing" });
+    if (!worktree.scope_present) notices.push({ id: "scopeMissing" });
     if (list.state === "error") failures.push({ key: "uncommitted", title: "git.error.list", line: "git.changes.listError", message: list.message });
   }
   if (committed.state === "noBase") {
@@ -111,7 +104,6 @@ export function changesStatus({
     }
   }
 
-  notices.push(...worktreeNotices);
   if (listingCommits) notices.push({ id: "listingCommits" });
 
   const shown = committed.state === "compare" && committed.comparison.state === "loaded" ? committed.comparison : undefined;

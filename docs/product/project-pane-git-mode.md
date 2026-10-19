@@ -42,10 +42,11 @@ side, in every state of the Git mode, in this order: the one that shows and hide
 by folder**, and **Group by commit** (see "Filtering by file name", "Flat or grouped by folder" and "Grouped by
 commit" in `docs/product/project-pane-git-change-list.md`).
 
-At the top of the view is the **branch selector** (see "The branch selector" below); under it, lines saying what the
-list is made of and what could not be read; then the **change list**, the branch's uncommitted and committed changes
-together (see `docs/product/project-pane-git-change-list.md`). The view reads the repository only while it is on
-screen (see "Keeping the list up to date" in that doc).
+At the top of the view, the **branch selector** (see "The branch selector" below), the worktree identity when shown,
+then the lines saying what the list is made of and what could not be read share one area, with no divider between
+them. Below is the **change list**, the branch's uncommitted and committed changes together (see
+`docs/product/project-pane-git-change-list.md`). The view reads the repository only while it is on screen (see
+"Keeping the list up to date" in that doc).
 
 ## The repository and its worktrees
 
