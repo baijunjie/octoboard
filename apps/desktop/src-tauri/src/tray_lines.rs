@@ -360,8 +360,9 @@ pub fn dress_quota_openers(
             item.setAttributedTitle(Some(&opener_title(item, title, remaining, GAP)));
             if let Some(label) = &model.quota_label {
                 let label = NSString::from_str(label);
+                // The row's accessible name only, not a tooltip: AppKit's help tag would float over
+                // the submenu that opens beside the row and repeat what it shows.
                 item.setAccessibilityLabel(Some(&label));
-                item.setToolTip(Some(&label));
             }
         }
     }

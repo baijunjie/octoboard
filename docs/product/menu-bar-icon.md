@@ -121,8 +121,8 @@ From top to bottom:
    These opener bars are monochrome outlined capsules with a hollow unfilled portion, aligned at the right across
    the opening lines. Their tint follows the native row in light and dark menus and while highlighted. The row
    keeps the system's pointer, highlight and keyboard submenu behavior, including Right Arrow to open it. Its
-   tooltip and accessible name identify the agent, account, window and whole remaining percent; the bar is not
-   read separately.
+   accessible name identifies the agent, account, window and whole remaining percent; the bar is not read
+   separately. The row has no tooltip, which would float over the submenu it opens and repeat what that shows.
 
    Countdowns and the age of an out-of-date reading are as of the last time the menu was updated, which a change of
    the selected session, current console, sessions, consoles, projects, accounts, agents' availability, quotas or the UI's language causes, not the
