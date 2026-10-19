@@ -372,9 +372,9 @@ mod tests {
     fn normal_history_survives_raw_ring_eviction_and_alternate_view_is_independent() {
         let mut terminal = TerminalSnapshot::new(3, 40);
         terminal.process(b"retained history\r\nsecond\r\nthird\r\nfourth");
-        let mut ring = crate::ringbuf::RingBuffer::new(crate::session::RING_CAPACITY);
+        let mut ring = crate::ringbuf::RingBuffer::new(crate::pty::RING_CAPACITY);
         let redraw = b"\r\x1b[2Kfourth";
-        for _ in 0..(crate::session::RING_CAPACITY / redraw.len() + 1) {
+        for _ in 0..(crate::pty::RING_CAPACITY / redraw.len() + 1) {
             ring.push(redraw);
             terminal.process(redraw);
         }

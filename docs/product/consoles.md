@@ -242,8 +242,9 @@ error names the reason.
 
 When it goes through, deleting a console also deletes every project association under it, every session record
 belonging to it, archived sessions included, with the last output Octoboard kept for each, and every page its console
-sessions pushed to the report panel, and removes the console's own working directory under `~/.octoboard`. No project
-directory is touched.
+sessions pushed to the report panel, ends every shell terminal of its projects (see "Closing a shell terminal" in
+`docs/product/shell-terminals.md`), and removes the console's own working directory under `~/.octoboard`. No project
+directory is touched. A running shell terminal does not count as a running session: it never refuses the deletion.
 
 Deleting the **last** console leaves the window with none, which it shows as the welcome screen (see
 `docs/product/welcome-screen.md`); the same holds when another client deletes it.

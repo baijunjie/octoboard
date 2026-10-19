@@ -21,8 +21,11 @@ use crate::protocol::{
     Agent, BrowseBody, BrowseRequest, Event, Request, SessionStatus, TermControl,
     BROWSE_REQUEST_TYPES,
 };
+use crate::pty::PtyCore;
 use crate::reporting;
 use crate::rollout;
+use crate::session::LiveSession;
+use crate::shell_terminal::ShellProcess;
 use crate::state::{AppState, TurnClose};
 use crate::transcript;
 
@@ -350,6 +353,7 @@ fn snapshot(state: &Arc<AppState>) -> anyhow::Result<Event> {
         account_quotas: state.account_quotas.list(),
         account_logins: state.account_logins.running(),
         home_dir: crate::paths::known_home_dir().map(|home| home.to_string_lossy().into_owned()),
+        shell_terminals: state.shell_terminals.list(),
     })
 }
 
@@ -363,13 +367,39 @@ async fn term_ws(
     ws.on_upgrade(move |socket| handle_term(socket, state, session_id))
 }
 
-async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, session_id: String) {
-    let Some(session) = state.live_session(&session_id) else {
+/// What a terminal socket is attached to: an agent session's process, or a shell terminal's.
+enum Terminal {
+    Session(Arc<LiveSession>),
+    Shell(Arc<ShellProcess>),
+}
+
+impl Terminal {
+    fn pty(&self) -> &PtyCore {
+        match self {
+            Terminal::Session(session) => session,
+            Terminal::Shell(shell) => shell,
+        }
+    }
+
+    fn write_input(&self, data: &[u8]) -> Result<(), crate::ptyio::PartialWrite> {
+        match self {
+            Terminal::Session(session) => session.write_input(data),
+            Terminal::Shell(shell) => shell.write(data),
+        }
+    }
+}
+
+async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String) {
+    let terminal = if let Some(session) = state.live_session(&id) {
+        Terminal::Session(session)
+    } else if let Some(shell) = state.shell_terminals.process(&id) {
+        Terminal::Shell(shell)
+    } else {
         // Not running: what its last process printed, if that was kept, and the close. Read-only:
         // there is nothing to write input into.
         let saved = {
             let state = state.clone();
-            let session_id = session_id.clone();
+            let session_id = id.clone();
             tokio::task::spawn_blocking(move || state.saved_output(&session_id))
         };
         if let Ok(Some(output)) = saved.await {
@@ -380,10 +410,11 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, session_id: St
         let _ = socket.send(Message::Close(None)).await;
         return;
     };
+    let pty = terminal.pty();
 
     // Archiving is announced before the process finishes its graceful exit. Its frozen screen
     // is already available then, so a read-only client never replays the shutdown renderer.
-    if let Some(output) = session.frozen_output() {
+    if let Some(output) = pty.frozen_output() {
         if !output.is_empty() && socket.send(Message::Binary(output)).await.is_err() {
             return;
         }
@@ -392,9 +423,14 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, session_id: St
     }
 
     // Snapshot and subscription happen under one lock inside `attach`, so the replay cannot miss a
-    // byte or repeat one even while the agent is producing output right now.
-    let (replay, mut live) = session.attach();
+    // byte or repeat one even while the process is producing output right now. A shell that has
+    // exited answers with its replay alone, read-only, as a dormant session does.
+    let (replay, mut live) = pty.attach();
     if !replay.is_empty() && socket.send(Message::Binary(replay)).await.is_err() {
+        return;
+    }
+    if live.is_closed() {
+        let _ = socket.send(Message::Close(None)).await;
         return;
     }
 
@@ -403,24 +439,24 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, session_id: St
             incoming = socket.recv() => {
                 match incoming {
                     Some(Ok(Message::Binary(data))) => {
-                        if let Err(err) = session.write_input(&data) {
-                            tracing::debug!(session = %session_id, %err, "writing terminal input failed");
+                        if let Err(err) = terminal.write_input(&data) {
+                            tracing::debug!(terminal = %id, %err, "writing terminal input failed");
                         }
                     }
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<TermControl>(&text) {
                             Ok(TermControl::Resize { cols, rows }) => {
-                                if let Err(err) = session.resize(cols, rows) {
-                                    tracing::debug!(session = %session_id, %err, "resize failed");
+                                if let Err(err) = pty.resize(cols, rows) {
+                                    tracing::debug!(terminal = %id, %err, "resize failed");
                                 }
                             }
-                            Err(err) => tracing::debug!(session = %session_id, %err, "unreadable terminal control frame"),
+                            Err(err) => tracing::debug!(terminal = %id, %err, "unreadable terminal control frame"),
                         }
                     }
                     Some(Ok(Message::Close(_))) | None => break,
                     Some(Ok(_)) => {}
                     Some(Err(err)) => {
-                        tracing::debug!(session = %session_id, %err, "terminal socket error");
+                        tracing::debug!(terminal = %id, %err, "terminal socket error");
                         break;
                     }
                 }
@@ -432,7 +468,8 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, session_id: St
                             break;
                         }
                     }
-                    // The daemon dropped this client (it stopped draining) or the session ended.
+                    // The daemon dropped this client (it stopped draining), the session ended,
+                    // or the shell it followed exited or was closed.
                     None => break,
                 }
             }
@@ -1441,5 +1478,125 @@ mod tests {
         })
         .await
         .expect("the checks ran");
+    }
+
+    /// A client drives a shell terminal end to end over the real sockets: it creates one over the
+    /// control socket, types into it and resizes it over the terminal socket, finds its scrollback
+    /// on attaching again, and closes it, which lets the terminal socket go.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_shell_terminal_is_driven_over_the_control_and_terminal_sockets() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message as Frame;
+
+        let (state, dir) = app_state("server-shell-terminal");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        let project = crate::test_support::ScratchDir::new("server-shell-terminal-project");
+        crate::test_support::insert_project(&state, &project);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let served = state.clone();
+        let server = tokio::spawn(async move { axum::serve(listener, router(served)).await });
+
+        let (control, _) =
+            tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws/control"))
+                .await
+                .unwrap();
+        let (mut requests, mut events) = control.split();
+        type Socket = tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >;
+        async fn next_event(
+            events: &mut futures_util::stream::SplitStream<Socket>,
+        ) -> serde_json::Value {
+            let frame = tokio::time::timeout(PATIENCE, events.next())
+                .await
+                .expect("an event in time")
+                .unwrap()
+                .unwrap();
+            let Frame::Text(text) = frame else {
+                panic!("a control frame that is not text: {frame:?}");
+            };
+            serde_json::from_str(&text).unwrap()
+        }
+        let snapshot = next_event(&mut events).await;
+        assert_eq!(snapshot["type"], "snapshot");
+        assert_eq!(snapshot["shell_terminals"], serde_json::json!([]));
+
+        let create = r#"{"type":"create_shell_terminal","id":"create","project":"p1"}"#;
+        requests.send(Frame::Text(create.into())).await.unwrap();
+        let terminal = loop {
+            let event = next_event(&mut events).await;
+            if event["type"] == "shell_terminal_created" && event["id"] == "create" {
+                break event["shell_terminal"]["id"].as_str().unwrap().to_string();
+            }
+        };
+
+        let term_url = format!("ws://127.0.0.1:{port}/ws/term/{terminal}");
+        let (mut term, _) = tokio_tungstenite::connect_async(&term_url).await.unwrap();
+        async fn read_until(term: &mut Socket, needle: &str) -> String {
+            let mut seen = String::new();
+            while !seen.contains(needle) {
+                let frame = tokio::time::timeout(PATIENCE, term.next())
+                    .await
+                    .unwrap_or_else(|_| panic!("{needle:?} never arrived in {seen:?}"));
+                match frame {
+                    Some(Ok(Frame::Binary(bytes))) => {
+                        seen.push_str(&String::from_utf8_lossy(&bytes))
+                    }
+                    other => panic!(
+                        "the terminal socket ended before {needle:?}: {other:?} after {seen:?}"
+                    ),
+                }
+            }
+            seen
+        }
+        term.send(Frame::Binary(b"echo $((6*7))\r".to_vec()))
+            .await
+            .unwrap();
+        read_until(&mut term, "42").await;
+        term.send(Frame::Text(
+            r#"{"type":"resize","cols":100,"rows":40}"#.into(),
+        ))
+        .await
+        .unwrap();
+        term.send(Frame::Binary(b"stty size\r".to_vec()))
+            .await
+            .unwrap();
+        read_until(&mut term, "40 100").await;
+        drop(term);
+
+        let (mut again, _) = tokio_tungstenite::connect_async(&term_url).await.unwrap();
+        let replay = read_until(&mut again, "40 100").await;
+        assert!(replay.contains("42"), "{replay}");
+
+        let close = format!(
+            r#"{{"type":"close_shell_terminal","id":"close","shell_terminal":"{terminal}"}}"#
+        );
+        requests.send(Frame::Text(close)).await.unwrap();
+        let mut deleted = false;
+        loop {
+            let event = next_event(&mut events).await;
+            deleted |=
+                event["type"] == "shell_terminal_deleted" && event["shell_terminal"] == terminal;
+            if event["id"] == "close" {
+                assert_eq!(event["type"], "ack", "{event}");
+                break;
+            }
+        }
+        assert!(deleted, "the deletion was not broadcast before the reply");
+        let ended = tokio::time::timeout(PATIENCE, async {
+            while let Some(Ok(frame)) = again.next().await {
+                if matches!(frame, Frame::Close(_)) {
+                    break;
+                }
+            }
+        })
+        .await;
+        assert!(ended.is_ok(), "the terminal socket outlived its terminal");
+        server.abort();
+        drop(dir);
     }
 }

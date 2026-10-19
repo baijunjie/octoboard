@@ -124,10 +124,11 @@ the network.
 **Constraint: in the server form, access has to be a credential, not reachability.** Today it is reachability: the
 daemon trusts whatever connects and is safe only because it binds to loopback — the access guard (`access.rs`) keeps a
 web page on another site out, and does nothing more. That holds in the desktop form, where whoever can connect already
-has the machine. In the server form anyone who can reach the port can start agents and type into their terminals as
-the server's own user, so the daemon as it stands must not be exposed beyond loopback. What the form needs is
-authentication on every route, the UI and the WebSocket upgrades included; a credential per device, so that a device
-the owner loses or retires can be revoked without re-issuing the rest; and TLS, for the browser's own reasons above.
+has the machine. In the server form anyone who can reach the port can start agents and type into their terminals, or
+open a shell terminal and run any command, as the server's own user, so the daemon as it stands must not be exposed
+beyond loopback. What the form needs is authentication on every route, the UI and the WebSocket upgrades included; a
+credential per device, so that a device the owner loses or retires can be revoked without re-issuing the rest; and
+TLS, for the browser's own reasons above.
 None of it exists. A credential identifies a device of the owner's, never a person: the daemon stays one user's, and
 every client is that user.
 

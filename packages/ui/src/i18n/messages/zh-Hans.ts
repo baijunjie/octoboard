@@ -149,6 +149,7 @@ export const zhHans: Translation<"other"> = {
   "daemon.unknown_console": "未知控制台 {console}。",
   "daemon.unknown_project": "未知项目 {project}。",
   "daemon.unknown_session": "未知会话 {session}。",
+  "daemon.unknown_shell_terminal": "未知终端 {shell_terminal}。",
   "daemon.unknown_page": "未知页面 {page}。",
   "daemon.unknown_account": "未知账户 {account}。",
   "daemon.account_name_taken": "{agent} 已有名为 {name} 的账户。",

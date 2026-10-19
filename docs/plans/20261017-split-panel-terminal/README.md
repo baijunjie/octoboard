@@ -106,6 +106,6 @@ The user's standing instruction for whoever picks this plan up:
 1. 01 One horizontal inset for both panes (closed)
 2. 02 Shadow edges and groove dividers (closed)
 3. 03 Split right pane (closed)
-4. [Shell terminals in the daemon](04-daemon-shell-terminals.md)
+4. 04 Shell terminals in the daemon (closed)
 5. [Terminal panel](05-terminal-panel.md)
 6. [Final confirmation](06-final-confirmation.md)

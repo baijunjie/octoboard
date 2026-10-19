@@ -63,11 +63,13 @@ when the daemon failed to start, which never gets a choice to hand over — quit
 
 The daemon has no login or token, and no notion of who is connected: whoever reaches it is let in, and every client
 is the same client. In the desktop form that means **any program running on this machine can connect to it and do
-everything the application can**: create consoles and sessions, start agents, type into their terminals. It is safe
+everything the application can**: create consoles and sessions, start agents, type into their terminals, and open a
+shell terminal and run any command in it (see `docs/product/shell-terminals.md`). It is safe
 there only because the daemon listens on loopback, so whoever can reach it already has the machine.
 
-In the server form the same sentence reads **anyone who can reach the port can do everything** — start agents and
-type into terminals on the server, as the Unix user the daemon runs as — which is no access model for a machine on a
+In the server form the same sentence reads **anyone who can reach the port can do everything** — start agents, type
+into terminals and run any command in a shell terminal on the server, as the Unix user the daemon runs as — which is no
+access model for a machine on a
 network. So the daemon as it is today must not be put beyond loopback, and nothing in it lets it be: it binds to
 loopback and nowhere else, and it refuses any request whose `Host` names it by anything but a loopback address. A
 reverse proxy in front of it does not change that: the daemon also refuses a request whose `Origin` — which a browser
@@ -242,7 +244,8 @@ application on confirmation (see "Closing the window" above).
   the other cases were not yet tried by hand.
 - Once confirmed, every session process is ended and every one of those sessions is left **interrupted**, never
   archived. Clicking one next time resumes it (see "Archiving, interruption and resuming" in
-  `docs/product/archiving-and-resuming-sessions.md`).
+  `docs/product/archiving-and-resuming-sessions.md`). Every shell terminal ends too (see "Closing a shell terminal" in
+  `docs/product/shell-terminals.md`).
 - With no session *starting*, *working*, *waiting for the user* or *running in background* — none at all, or only
   ones *awaiting instructions* — quitting is immediate and asks nothing, and a window closed into the background is not brought back
   for it. Seen with the menu bar icon's Quit and no session at all; with only sessions *awaiting instructions* not yet
@@ -295,6 +298,8 @@ interrupted and resumable.
 - Agent processes do not outlive the daemon: it ends them on its way out, including when it is signalled to stop and
   when it goes down on an internal failure.
 - An agent's tool subprocesses go with the agent.
+- Shell terminals do not outlive the daemon either (see "Closing a shell terminal" in
+  `docs/product/shell-terminals.md`).
 - Should a session's process nonetheless survive, the next start still marks every non-archived session interrupted
   (see "Starting up"), so the session list never claims a session is running that this Octoboard does not own.
 
@@ -307,12 +312,14 @@ nothing that the form will need and does not have yet claimed to exist.
 - **Starting and stopping are the administrator's.** Nothing starts the daemon but the person or the service manager
   told to, and nothing stops it but a termination signal — `SIGTERM`, or `Ctrl+C` in the terminal it was started
   from. The daemon answers that exactly as the desktop form's quit does once confirmed: every session's process is
-  ended and every one of those sessions is left *interrupted*, never archived, and nobody is asked first. Started
+  ended and every one of those sessions is left *interrupted*, never archived, every shell terminal ends, and nobody
+  is asked first. Started
   without an application to follow, the daemon runs until it is stopped; exiting with the application is a watch the
   desktop form asks for and the server form never does. A command-line surface for starting it in the background,
   stopping it and asking where it listens does not exist yet.
 - **A browser is not the application.** Closing a tab, or every tab, ends nothing: the daemon, every session and its
-  agent process run on until the daemon is stopped, and a browser opened later finds them where they were. There is no
+  agent process, and every shell terminal run on until the daemon is stopped, and a browser opened later finds them
+  where they were. There is no
   quit gesture in a browser, no confirmation, and no background switch (see "Closing the window" above).
 - **A restart interrupts every session.** What "Starting up" says of a daemon start holds unchanged, whichever browser
   or device a session was opened from; each resumes with a click, as after any quit.

@@ -166,6 +166,7 @@ export const en = {
   "daemon.unknown_console": "Unknown console {console}.",
   "daemon.unknown_project": "Unknown project {project}.",
   "daemon.unknown_session": "Unknown session {session}.",
+  "daemon.unknown_shell_terminal": "Unknown terminal {shell_terminal}.",
   "daemon.unknown_page": "Unknown page {page}.",
   "daemon.unknown_account": "Unknown account {account}.",
   "daemon.account_name_taken": "{agent} already has an account named {name}.",

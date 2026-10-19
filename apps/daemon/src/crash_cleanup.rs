@@ -1,23 +1,25 @@
-//! Ending every agent process when the daemon goes down on an internal failure, and only then.
-//! `portable-pty` calls `setsid()`, so agents are not in the daemon's process group and nothing
-//! else would reach them; a failure the daemon survives must leave them running.
+//! Ending every process the daemon runs on a PTY — each agent, and each shell terminal's shell —
+//! when the daemon goes down on an internal failure, and only then. `portable-pty` calls
+//! `setsid()`, so those processes are not in the daemon's process group and nothing else would
+//! reach them; a failure the daemon survives must leave them running.
 //!
 //! The kill runs from a panic hook and from a `SIGABRT` handler, so nothing on its path may take a
-//! lock or allocate: a signal can interrupt a thread holding either. The running agents are
+//! lock or allocate: a signal can interrupt a thread holding either. The running processes are
 //! therefore kept in a fixed table of atomics rather than a collection behind a lock.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::OnceLock;
 use std::thread::ThreadId;
 
-/// How many agents the table holds at once; one past that runs uncovered, with a warning. Far
-/// above the number of agents one machine runs side by side.
+/// How many processes the table holds at once; one past that runs uncovered, with a warning. Far
+/// above the number of agents and shells one machine runs side by side.
 const CAPACITY: usize = 1024;
 
-/// Each slot is empty (0) or holds the pid of one running agent. A pid is never 0.
+/// Each slot is empty (0) or holds the pid of one running process, an agent or a shell. A pid is
+/// never 0.
 static SLOTS: [AtomicU32; CAPACITY] = [const { AtomicU32::new(0) }; CAPACITY];
 
-/// One agent's place in the table, freed when it is dropped.
+/// One process's place in the table, freed when it is dropped.
 ///
 /// The kill signals the pid by number, which is only safe while the child is unreaped: until then
 /// its pid and process group stay reserved. So the holder must drop the entry once the child has
@@ -41,14 +43,21 @@ impl Drop for Entry {
     }
 }
 
-/// Kills the process group of every registered agent outright. Safe from a signal handler: it
+/// Whether `pid` holds a place in the table.
+#[cfg(test)]
+pub fn is_registered(pid: u32) -> bool {
+    SLOTS.iter().any(|slot| slot.load(Ordering::Acquire) == pid)
+}
+
+/// Kills the process group of every registered process outright. Safe from a signal handler: it
 /// reads atomics and calls `kill`, which is async-signal-safe.
 fn kill_all() {
     for slot in &SLOTS {
         let pid = slot.load(Ordering::Acquire);
         if pid != 0 {
-            // The agent's pgid is its own pid (`setsid()`), and its tool subprocesses are in that
-            // same group.
+            // The process's pgid is its own pid (`setsid()`). An agent's tool subprocesses are in
+            // that same group; a shell's jobs each have a group of their own and are not killed
+            // here, but the daemon going down closes the PTY they are on, which hangs it up.
             // SAFETY: plain `kill(2)` on a child that was unreaped when its pid was read (see
             // `Entry`). Another thread can free the slot and reap the child between that read and
             // this call, and the pid be reused in that window; a window that narrow is accepted.
@@ -64,19 +73,20 @@ static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 ///
 /// A panic unwinds (the daemon keeps the default panic strategy), so whether it is fatal depends on
 /// the thread. On the main thread nothing catches it: it unwinds out of `main` and ends the
-/// process, so the hook kills every agent first, before anything is dropped. Anywhere else it is
-/// caught where it happens — tokio hands a task's panic to its `JoinHandle`, a plain thread just
-/// ends — and the daemon carries on, and so do its agents. A panic that cannot unwind (one raised
-/// by a destructor while another is unwinding, or in a function that cannot unwind) aborts the
-/// process from whatever thread raised it, and the hook cannot tell it apart on stable Rust. Every
-/// abort, that one included, raises `SIGABRT`, whose handler kills every agent on the way out.
+/// process, so the hook kills every registered process first, before anything is dropped. Anywhere
+/// else it is caught where it happens — tokio hands a task's panic to its `JoinHandle`, a plain
+/// thread just ends — and the daemon carries on, and so do its agents and shells. A panic that
+/// cannot unwind (one raised by a destructor while another is unwinding, or in a function that
+/// cannot unwind) aborts the process from whatever thread raised it, and the hook cannot tell it
+/// apart on stable Rust. Every abort, that one included, raises `SIGABRT`, whose handler kills
+/// every registered process on the way out.
 pub fn install() {
     MAIN_THREAD.get_or_init(|| std::thread::current().id());
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         if MAIN_THREAD.get() == Some(&std::thread::current().id()) {
             kill_all();
-            tracing::error!(%info, "the main thread panicked; every agent process was killed");
+            tracing::error!(%info, "the main thread panicked; every agent and shell process was killed");
         }
         default_hook(info);
     }));
@@ -92,11 +102,11 @@ pub fn install() {
     };
     if !installed {
         let err = std::io::Error::last_os_error();
-        tracing::warn!(%err, "installing the SIGABRT handler failed; an abort will leave agents running");
+        tracing::warn!(%err, "installing the SIGABRT handler failed; an abort will leave agents and shells running");
     }
 }
 
-/// Kills every agent, then ends the process with the signal's default action, which
+/// Kills every registered process, then ends the daemon with the signal's default action, which
 /// `SA_RESETHAND` restored on entry. Raising it again is what ends the process when the signal
 /// came from outside (`kill -ABRT`): returning would carry on as if nothing had happened.
 extern "C" fn on_abort(_signal: libc::c_int) {

@@ -43,6 +43,7 @@ mod outbox;
 mod path_links;
 mod paths;
 mod protocol;
+mod pty;
 mod ptyio;
 mod record_observed;
 mod record_titles;
@@ -58,6 +59,7 @@ mod session;
 mod session_request;
 mod session_title;
 mod sharing;
+mod shell_terminal;
 mod state;
 mod store;
 mod subprocess;
@@ -283,8 +285,7 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
         result = serve => {
             if let Err(err) = result {
                 tracing::error!(%err, "the server stopped with an error");
-                state.account_logins.stop_all().await;
-                state.stop_all_sessions().await;
+                stop_all_processes(&state).await;
                 return Err(err.into());
             }
         }
@@ -296,12 +297,17 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
         }
     }
 
-    // Every agent process is the daemon's child, so none of them may outlive it. Each is left
-    // interrupted, which is the status a click resumes from.
-    state.account_logins.stop_all().await;
-    state.stop_all_sessions().await;
+    stop_all_processes(&state).await;
     remove_port_file();
     Ok(())
+}
+
+/// Every login, agent process and shell is the daemon's child, so none of them may outlive it.
+/// Each session is left interrupted, which is the status a click resumes from; each shell terminal
+/// ends with its record.
+async fn stop_all_processes(state: &Arc<AppState>) {
+    state.account_logins.stop_all().await;
+    tokio::join!(state.stop_all_sessions(), shell_terminal::close_all(state));
 }
 
 /// Polls the application's pid and ends the daemon once it is gone. The daemon lives and dies with

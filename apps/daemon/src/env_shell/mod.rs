@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 
 pub use resolve::resolve_binary;
+pub use snapshot::{is_filtered, shell_path};
 
 static CACHE: cache::Cache = cache::Cache::new();
 

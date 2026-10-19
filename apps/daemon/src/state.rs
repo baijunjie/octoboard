@@ -6,7 +6,7 @@
 //! several clients, each ended session's saved terminal output, and the session requests waiting
 //! for the user's answer (`crate::session_request`) together with the status
 //! each of those sessions' agents is at while the request holds the record at waiting for the
-//! user.
+//! user, and the shell terminals (`crate::shell_terminal`).
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
@@ -230,6 +230,9 @@ pub struct AppState {
     pub account_quotas: crate::account_quotas::AccountQuotas,
     /// The logins running now, one per account (`crate::account_login`). Held in memory only.
     pub account_logins: crate::account_login::AccountLogins,
+    /// The shell terminals running, or exited and not yet closed (`crate::shell_terminal`). Held in
+    /// memory only: each is a process of this daemon's.
+    pub shell_terminals: crate::shell_terminal::ShellTerminals,
     /// For each session with a session request waiting, the status its agent's own events
     /// say it has, while the record shows `WaitingUser` for the request. Kept so that the daemon's
     /// decisions about the agent (can a message be written, did a turn end) keep reading the agent
@@ -427,6 +430,7 @@ impl AppState {
             agent_models: Default::default(),
             account_quotas: Default::default(),
             account_logins: Default::default(),
+            shell_terminals: Default::default(),
             events,
             account_writes: Mutex::new(()),
             session_publication: Mutex::new(()),

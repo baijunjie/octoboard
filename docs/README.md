@@ -99,6 +99,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Opening a project terminal](product/project-terminal.md) — Open in → Terminal in a project's action menu: the system
   terminal at the project's directory on the machine the daemon runs on, Terminal.app on macOS and the first installed
   emulator on Linux, when the request finishes, and when it is refused.
+- [Shell terminals](product/shell-terminals.md) — the plain login shells the daemon runs for a project: who owns them
+  and how long they live, where they start and with what environment, their title, when one counts as busy, a shell
+  that exits on its own, and what closes or ends them.
 - [Orchestration](product/hub-orchestration.md) — how an owner (a console session, or an unbound project session in
   its own project) starts and drives sessions: each one's tools, lead sessions (a project session bound to a console
   session that keeps its own sessions, two levels deep), the brief a task is handed over as, which sessions an owner

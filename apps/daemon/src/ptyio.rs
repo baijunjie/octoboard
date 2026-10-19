@@ -36,25 +36,45 @@ pub fn set_nonblocking(fd: RawFd) -> io::Result<()> {
     Ok(())
 }
 
-/// Waits for the descriptor to become readable, then reads once. Returns `Ok(0)` for end of
-/// stream, which on a PTY master is either a zero-length read or `EIO` once the child is gone.
-pub fn read_chunk(fd: RawFd, buf: &mut [u8]) -> io::Result<usize> {
+/// Waits for the descriptor to become readable, then reads once. Returns `Ok(Some(0))` for end of
+/// stream, which on a PTY master is either a zero-length read or `EIO` once the child is gone, and
+/// `Ok(None)` as soon as `wake` becomes readable instead: the reader is being asked to stop, and
+/// reads nothing more.
+pub fn read_chunk(fd: RawFd, wake: RawFd, buf: &mut [u8]) -> io::Result<Option<usize>> {
     loop {
-        match poll_once(fd, libc::POLLIN, -1) {
-            Ok(_) => {}
-            Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
-            Err(err) => return Err(err),
+        let mut pollfds = [
+            libc::pollfd {
+                fd,
+                events: libc::POLLIN,
+                revents: 0,
+            },
+            libc::pollfd {
+                fd: wake,
+                events: libc::POLLIN,
+                revents: 0,
+            },
+        ];
+        // SAFETY: two valid `pollfd`s are passed with a matching count.
+        if unsafe { libc::poll(pollfds.as_mut_ptr(), 2, -1) } < 0 {
+            let err = io::Error::last_os_error();
+            if err.kind() == io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(err);
+        }
+        if pollfds[1].revents != 0 {
+            return Ok(None);
         }
         // SAFETY: `buf` is a valid mutable slice and the length passed matches it.
         let n = unsafe { libc::read(fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len()) };
         if n >= 0 {
-            return Ok(n as usize);
+            return Ok(Some(n as usize));
         }
         let err = io::Error::last_os_error();
         match err.raw_os_error() {
             Some(libc::EAGAIN) | Some(libc::EINTR) => continue,
             // The child is gone: macOS reports the closed slave side as EIO rather than EOF.
-            Some(libc::EIO) => return Ok(0),
+            Some(libc::EIO) => return Ok(Some(0)),
             _ => return Err(err),
         }
     }

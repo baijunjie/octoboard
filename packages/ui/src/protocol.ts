@@ -350,6 +350,36 @@ export interface GitStatus {
   error?: string | null;
 }
 
+/** Whether a shell terminal's shell is still running. An `exited` terminal stays, its output still
+ * replayed on its terminal socket, until a client closes it. */
+export type ShellTerminalState = "running" | "exited";
+
+/** A plain shell the daemon runs in a project's directory, beside its agent sessions; live state,
+ * never stored, ending with the daemon. Its output is on the terminal socket under its `id`, as a
+ * session's is under the session's. */
+export interface ShellTerminal {
+  id: string;
+  project_id: string;
+  /** The worktree it was started in (as the browse requests name one); null for the project's own
+   * directory. */
+  worktree: string | null;
+  /** The directory the shell was started in, links resolved; a `cd` in the shell changes nothing
+   * here. */
+  cwd: string;
+  /** What a tab shows: the title the shell last set (OSC 0 or 2), the shell's name when it has set
+   * none, or the user's name for it once `renamed`. */
+  title: string;
+  /** The user renamed it, so the shell's own titles no longer change `title`. */
+  renamed: boolean;
+  state: ShellTerminalState;
+  /** The shell is running something: a program in the foreground, or any child process, a job in
+   * the background included. Closing a busy terminal is worth asking about; an idle one is not.
+   * Always false once exited. */
+  busy: boolean;
+  /** Milliseconds since the epoch; a project's terminals are listed in this order. */
+  created_at: number;
+}
+
 /** Whether an agent's binary resolves on the user's login shell `PATH` — the only test an agent is
  * held to. Three states: `not_determined` is where every run of the daemon begins, for every
  * agent, until its one-time login-shell snapshot for this run lands; only that snapshot ever
@@ -1124,6 +1154,16 @@ export type RequestBody =
    * one-minute floor and the `auto_pull_repositories` setting. Answered with `ack`; the status
    * follows as `project_git_status` broadcasts. */
   | { type: "pull_project_branch"; project: string }
+  /** Starts a shell terminal in the project's directory, or with `worktree` in the project's place
+   * in that worktree of its repository. Answered with `shell_terminal_created`; a `worktree` that is
+   * not one of the project's is `worktree_unavailable`. */
+  | { type: "create_shell_terminal"; project: string; worktree?: string }
+  /** Names a shell terminal; the shell's own titles no longer change it. Stored trimmed; a blank
+   * title is `field_required`. */
+  | { type: "rename_shell_terminal"; shell_terminal: string; title: string }
+  /** Ends the terminal's shell, if it still runs, and removes the terminal. Answered with `ack` once
+   * the shell is gone. */
+  | { type: "close_shell_terminal"; shell_terminal: string }
   /** Opens the system terminal at the project's directory, on the daemon's host. Answered with
    * `ack` once the terminal has been asked to open. */
   | { type: "open_project_terminal"; project: string }
@@ -1303,6 +1343,8 @@ export type Event =
        * machines — so a path under it can be shown as `~/...`. Null when the daemon cannot
        * determine one. */
     home_dir: string | null;
+    /** Every shell terminal the daemon holds, running or exited, oldest first. */
+    shell_terminals: ShellTerminal[];
   }
   /** Availability or a default account's resolved directory changed for one or more agents — the
    * whole three-entry list. Broadcast once, when the daemon's one-time determination lands; never
@@ -1322,6 +1364,14 @@ export type Event =
    * so the animated icon has something to follow. When a project is removed, no deletion event is
    * sent; the client drops the status with the project. */
   | { type: "project_git_status"; status: GitStatus }
+  /** A shell terminal was created or changed — its title, its state, whether it is busy: the whole
+   * record. */
+  | { type: "shell_terminal_upserted"; shell_terminal: ShellTerminal }
+  /** A shell terminal was closed, or ended with its project or the daemon. */
+  | { type: "shell_terminal_deleted"; shell_terminal: string }
+  /** The reply to `create_shell_terminal`. The same record is also broadcast as
+   * `shell_terminal_upserted`, which carries no request id. */
+  | { type: "shell_terminal_created"; id?: string; shell_terminal: ShellTerminal }
   | { type: "settings_updated"; settings: Settings }
   | { type: "session_upserted"; session: Session }
   | { type: "session_deleted"; session: string }

@@ -786,6 +786,44 @@ pub struct GitStatus {
     pub error: Option<String>,
 }
 
+/// Whether a shell terminal's shell is still running.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShellTerminalState {
+    Running,
+    /// The shell has exited on its own. The record stays, with its output still replayed to a
+    /// terminal client that attaches, until a client closes it.
+    Exited,
+}
+
+/// A plain shell the daemon runs in a project's directory, beside its agent sessions. Live state
+/// held in memory only, never stored in SQLite: the shell is a process of this daemon's and ends
+/// with it, so the record does too.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ShellTerminal {
+    pub id: String,
+    pub project_id: String,
+    /// The worktree of the project's repository it was started in (`worktree` of the browse
+    /// requests); null for the project's own directory.
+    pub worktree: Option<String>,
+    /// The directory the shell was started in, with its symbolic links resolved. Where the shell
+    /// is now is its own business: a `cd` in it changes nothing here.
+    pub cwd: String,
+    /// What a tab shows: the title the shell last set with an OSC 0 or 2 sequence, the shell's
+    /// name when it has set none (or set an empty one), or the user's name for it once renamed.
+    pub title: String,
+    /// The user renamed it, so the shell's own titles no longer change `title`.
+    pub renamed: bool,
+    pub state: ShellTerminalState,
+    /// The shell is running something: the terminal's foreground process group is not the
+    /// shell's own, or the shell has a child process (a job sent to the background included).
+    /// Always false once exited.
+    pub busy: bool,
+    /// When it was created, in milliseconds since the epoch; a project's terminals are listed in
+    /// this order.
+    pub created_at: i64,
+}
+
 /// The app-wide user settings the daemon stores, and the account list alongside them: a record
 /// that already grows without a new request shape or a new event for every addition, which is
 /// where the accounts belong too (see "Reusable capabilities" in `04-accounts-storage.md`).
@@ -1932,6 +1970,25 @@ pub enum RequestBody {
     PullProjectBranch {
         project: String,
     },
+    /// Starts a shell terminal in the project's directory, or with `worktree` in the project's
+    /// place in that worktree of its repository (the same scoped root as browsing). Answered with
+    /// `shell_terminal_created`, and broadcast as `shell_terminal_upserted`.
+    CreateShellTerminal {
+        project: String,
+        #[serde(default)]
+        worktree: Option<String>,
+    },
+    /// Renames a shell terminal; from then on the shell's own titles no longer change it. The
+    /// title is stored trimmed and cannot be blank.
+    RenameShellTerminal {
+        shell_terminal: String,
+        title: String,
+    },
+    /// Ends a shell terminal's shell, if it still runs, and removes the terminal; broadcast as
+    /// `shell_terminal_deleted`.
+    CloseShellTerminal {
+        shell_terminal: String,
+    },
     /// Opens the system terminal at the project's directory, on the daemon's host. Answered with
     /// `ack` once the terminal has been asked to open, not when its window closes. Refused with
     /// `terminal_unavailable` when the directory is missing, the operating system has none, or the
@@ -2149,6 +2206,9 @@ pub enum Event {
         /// is the daemon's home, not the browser's, since the two may be on different machines.
         /// Null when the daemon cannot determine one.
         home_dir: Option<String>,
+        /// Every shell terminal the daemon holds, running or exited, oldest first. Runtime state,
+        /// not stored.
+        shell_terminals: Vec<ShellTerminal>,
     },
     /// Availability or a default account's resolved directory changed for one or more agents —
     /// the whole three-entry list, like every other upsert. Broadcast once, when the daemon's
@@ -2195,6 +2255,21 @@ pub enum Event {
     },
     SessionDeleted {
         session: String,
+    },
+    /// A shell terminal was created or changed: its title, its state, whether it is busy. The whole
+    /// record, like every other upsert.
+    ShellTerminalUpserted {
+        shell_terminal: ShellTerminal,
+    },
+    /// A shell terminal was closed, or ended with its project or the daemon.
+    ShellTerminalDeleted {
+        shell_terminal: String,
+    },
+    /// The reply to `create_shell_terminal`, naming the terminal it started. The same record is
+    /// broadcast as `shell_terminal_upserted`, which carries no request id.
+    ShellTerminalCreated {
+        id: Option<String>,
+        shell_terminal: ShellTerminal,
     },
     /// A project's `GitStatus` changed, including every transition of `activity` — the animated
     /// icon has something to follow. Nothing is sent when a project is removed; the client drops
@@ -2797,6 +2872,14 @@ impl CodedError {
         )
     }
 
+    pub fn unknown_shell_terminal(id: &str) -> anyhow::Error {
+        Self::raised(
+            error_code::UNKNOWN_SHELL_TERMINAL,
+            format!("unknown shell terminal {id}"),
+            &[("shell_terminal", id)],
+        )
+    }
+
     pub fn unknown_session(id: &str) -> anyhow::Error {
         Self::raised(
             error_code::UNKNOWN_SESSION,
@@ -2895,6 +2978,8 @@ pub mod error_code {
     pub const UNKNOWN_CONSOLE: &str = "unknown_console";
     pub const UNKNOWN_PROJECT: &str = "unknown_project";
     pub const UNKNOWN_SESSION: &str = "unknown_session";
+    /// No shell terminal has that id. `params` names it as `shell_terminal`.
+    pub const UNKNOWN_SHELL_TERMINAL: &str = "unknown_shell_terminal";
     pub const UNKNOWN_PAGE: &str = "unknown_page";
     /// A request names two fields that exclude each other. `params` names them as `first` and
     /// `second`, as on the wire.
@@ -3512,6 +3597,27 @@ mod tests {
                 },
             ),
             (
+                r#"{"type":"create_shell_terminal","id":"request-1","project":"project-7"}"#,
+                |body| match body {
+                    RequestBody::CreateShellTerminal { project, .. } => Some(project),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"rename_shell_terminal","id":"request-1","shell_terminal":"terminal-7","title":"t"}"#,
+                |body| match body {
+                    RequestBody::RenameShellTerminal { shell_terminal, .. } => Some(shell_terminal),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"close_shell_terminal","id":"request-1","shell_terminal":"terminal-7"}"#,
+                |body| match body {
+                    RequestBody::CloseShellTerminal { shell_terminal } => Some(shell_terminal),
+                    _ => None,
+                },
+            ),
+            (
                 r#"{"type":"restore_project_changes","id":"request-1","project":"project-7"}"#,
                 |body| match body {
                     RequestBody::RestoreProjectChanges { project } => Some(project),
@@ -3526,6 +3632,80 @@ mod tests {
             let target = target(request.body).expect(json);
             assert!(target.ends_with("-7"), "{json} acted on `{target}`");
         }
+    }
+
+    /// A shell terminal travels in the snapshot and in events of its own in the shape
+    /// `PROTOCOL.md` and `packages/ui/src/protocol.ts` give it, and a terminal is created in the
+    /// project's own directory unless a worktree is named.
+    #[test]
+    fn shell_terminals_travel_in_the_documented_shape() {
+        let terminal = super::ShellTerminal {
+            id: "t1".to_string(),
+            project_id: "p1".to_string(),
+            worktree: Some("w1".to_string()),
+            cwd: "/work/p".to_string(),
+            title: "zsh".to_string(),
+            renamed: false,
+            state: super::ShellTerminalState::Exited,
+            busy: false,
+            created_at: 7,
+        };
+        let record = serde_json::json!({
+            "id": "t1", "project_id": "p1", "worktree": "w1", "cwd": "/work/p", "title": "zsh",
+            "renamed": false, "state": "exited", "busy": false, "created_at": 7,
+        });
+        let event = |event: super::Event| serde_json::to_value(event).unwrap();
+        assert_eq!(
+            event(super::Event::ShellTerminalUpserted {
+                shell_terminal: terminal.clone()
+            }),
+            serde_json::json!({"type": "shell_terminal_upserted", "shell_terminal": record})
+        );
+        assert_eq!(
+            event(super::Event::ShellTerminalCreated {
+                id: Some("r1".to_string()),
+                shell_terminal: terminal.clone()
+            }),
+            serde_json::json!({"type": "shell_terminal_created", "id": "r1", "shell_terminal": record})
+        );
+        assert_eq!(
+            event(super::Event::ShellTerminalDeleted {
+                shell_terminal: "t1".to_string()
+            }),
+            serde_json::json!({"type": "shell_terminal_deleted", "shell_terminal": "t1"})
+        );
+        let snapshot = event(super::Event::Snapshot {
+            hosts: vec![],
+            consoles: vec![],
+            projects: vec![],
+            sessions: vec![],
+            trusted_directories: vec![],
+            settings: super::Settings::default(),
+            git_statuses: vec![],
+            agent_availability: vec![],
+            account_quotas: vec![],
+            account_logins: vec![],
+            home_dir: None,
+            shell_terminals: vec![terminal],
+        });
+        assert_eq!(snapshot["shell_terminals"], serde_json::json!([record]));
+        assert_eq!(
+            serde_json::to_value(super::ShellTerminalState::Running).unwrap(),
+            "running"
+        );
+
+        let worktree = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::CreateShellTerminal { worktree, .. } => worktree,
+            _ => panic!("parses as create_shell_terminal"),
+        };
+        assert_eq!(
+            worktree(r#"{"type":"create_shell_terminal","project":"p"}"#),
+            None
+        );
+        assert_eq!(
+            worktree(r#"{"type":"create_shell_terminal","project":"p","worktree":"w"}"#),
+            Some("w".to_string())
+        );
     }
 
     #[test]
@@ -3610,6 +3790,7 @@ mod tests {
             account_quotas: quotas,
             account_logins: vec![],
             home_dir: None,
+            shell_terminals: vec![],
         })
         .unwrap();
         assert_eq!(snapshot["account_quotas"][0]["plan"], "max");
@@ -4123,6 +4304,7 @@ mod tests {
             account_quotas: vec![],
             account_logins: vec![],
             home_dir: Some("/Users/dev".to_string()),
+            shell_terminals: vec![],
         })
         .unwrap();
         assert_eq!(snapshot["trusted_directories"][0], "/work");

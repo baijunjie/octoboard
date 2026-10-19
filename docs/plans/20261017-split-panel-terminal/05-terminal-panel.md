@@ -66,3 +66,14 @@
   change for the panel itself, and check it.
 - A maximize hides the other cards after handing focus to the kept card; verify in the real app (WebKit) that focus
   never drops to the page body when maximizing with focus in another card.
+- The daemon's shell terminals are ready: the `ShellTerminal` record in the snapshot, `shell_terminal_upserted` /
+  `shell_terminal_deleted`, and `create_shell_terminal` (taking the Git mode's worktree id), `rename_shell_terminal`
+  and `close_shell_terminal`; the terminal socket accepts a shell terminal's id. See `apps/daemon/PROTOCOL.md`
+  "Shell terminals". The UI store does not keep these records yet.
+- The UI side of the busy rule is still to build: closing a busy tab asks first, and the quit prompt (`holdsQuit` in
+  `useAppExit.ts`) counts busy shells, never idle or exited ones. The record carries `busy`.
+- `daemonMessage.ts` resolves a `console`, `project` or `session` parameter to its name but not a `shell_terminal`
+  one, which `PROTOCOL.md` says is shown by the terminal's name.
+- Check the busy rule in the real app with a real shell setup: a prompt that keeps a long-lived child of the
+  interactive shell (powerlevel10k's `gitstatusd`, async prompt workers) would read busy at its prompt forever, and
+  every close would ask.

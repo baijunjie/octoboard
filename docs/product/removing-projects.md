@@ -32,6 +32,10 @@ lists the worktrees outside the folder, and the branches, that go with it, and o
 of their own (see "With a project's folder moved to the Trash" in `docs/product/branch-and-worktree-cleanup.md`).
 While a removal runs, the button shows as pending and the option cannot be changed.
 
+**The project's shell terminals end with it** (see "Closing a shell terminal" in `docs/product/shell-terminals.md`),
+whether their shells are busy or not; they never hold a removal up and the confirmation does not list them. They are
+ended once the removal is past its refusals below.
+
 Removal is refused while a session of the project is being launched or resumed at that moment, since that session has
 no process yet that could be ended, and, with the Trash option ticked, for the folder reasons below. A refusal is shown
 in the confirmation and names the reason; nothing is ended, moved or removed.
@@ -40,10 +44,11 @@ in the confirmation and names the reason; nothing is ended, moved or removed.
 
 - The folder is **moved to the system Trash, never deleted outright**, so it can be recovered from there. On macOS,
   Finder's Put Back may not be offered for it; the folder is still in the Trash to be taken back out.
-- Running sessions are ended first, then the folder is moved, then the project is removed. **If the move fails, the
-  removal fails** with the reason, and the project is kept with its records so the removal can be retried; sessions
-  already ended for it stay archived.
-- A session started in the project while the folder is being moved is ended as well, and goes with the project.
+- Running sessions and the project's shell terminals are ended first, then the folder is moved, then the project is
+  removed. **If the move fails, the removal fails** with the reason, and the project is kept with its records so the
+  removal can be retried; sessions already ended for it stay archived, and shell terminals already ended stay gone.
+- A session or shell terminal started in the project while the folder is being moved is ended as well, and goes with
+  the project.
 - Once the project is removed and its sessions' processes have ended, linked worktrees outside the folder that would
   be left without it, and where the repository outlives the folder the branches of the project's sessions, go too
   (which ones depends on whether the repository goes with the folder); a failure there

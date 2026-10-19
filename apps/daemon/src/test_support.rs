@@ -131,8 +131,9 @@ pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
     (state, dir)
 }
 
-/// What requests reach the host through in a test: the system `git` over [`isolated_git_env`], and
-/// a Trash that deletes, so no test runs the user's login shell or fills their Trash.
+/// What requests reach the host through in a test: the system `git` over [`isolated_git_env`], a
+/// Trash that deletes, and a plain `bash` over [`shell_env`] for a shell terminal, so no test runs
+/// the user's login shell or fills their Trash.
 pub(crate) fn host_tools() -> crate::host_tools::Tools {
     crate::host_tools::Tools {
         git: || {
@@ -149,7 +150,27 @@ pub(crate) fn host_tools() -> crate::host_tools::Tools {
             }
             Ok(())
         },
+        shell: || crate::shell_terminal::ShellCommand {
+            program: "/bin/bash".to_string(),
+            args: ["--noprofile", "--norc", "-i"].map(str::to_string).to_vec(),
+        },
+        shell_env: || Ok(shell_env()),
     }
+}
+
+/// The environment a test's shell terminal starts in: nothing of the developer's, a prompt that
+/// is plain text, and no history written anywhere.
+pub(crate) fn shell_env() -> HashMap<String, String> {
+    [
+        ("PATH", "/usr/bin:/bin:/usr/sbin:/sbin"),
+        ("PS1", "$ "),
+        ("HISTFILE", "/dev/null"),
+        // macOS's bash otherwise opens every interactive shell with a notice about zsh.
+        ("BASH_SILENCE_DEPRECATION_WARNING", "1"),
+    ]
+    .into_iter()
+    .map(|(key, value)| (key.to_string(), value.to_string()))
+    .collect()
 }
 
 /// A console whose working directory is below `dir`, for a store that needs one to hold projects
@@ -369,31 +390,15 @@ pub(crate) fn watched_live_session(
     script: &str,
     carried_trust: Option<crate::trust::CarriedTrust>,
 ) -> StandIn {
-    use portable_pty::{native_pty_system, CommandBuilder, PtySize};
-
-    let pty = native_pty_system()
-        .openpty(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .expect("a PTY");
     // Bash rather than `/bin/sh`: callers' scripts may use bash builtins and syntax that dash, the
     // `/bin/sh` of Debian and Ubuntu, lacks.
-    let mut cmd = CommandBuilder::new("/bin/bash");
+    let mut cmd = portable_pty::CommandBuilder::new("/bin/bash");
     cmd.args(["-c", script]);
-    let child = pty.slave.spawn_command(cmd).expect("the stand-in");
-    let pid = child.process_id().expect("a pid");
-    let fd = pty.master.as_raw_fd().expect("a descriptor");
-    crate::ptyio::set_nonblocking(fd).expect("non-blocking");
+    let spawned = crate::pty::spawn(cmd, rows, cols).expect("the stand-in");
     StandIn(Arc::new(LiveSession::new(NewSession {
         id: id.to_string(),
         agent,
-        pid,
-        fd,
-        master: pty.master,
-        child,
+        spawned,
         scratch_dir: None,
         resolves_approvals_itself: false,
         carried_trust,

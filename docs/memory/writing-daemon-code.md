@@ -184,17 +184,27 @@ warning in them surfaces much later, whenever something else makes that target r
 cargo withholding cached warnings: warnings are replayed for an unchanged target, so a second run does repeat them,
 and neither `cargo clean` nor touching a file is the fix.
 
-## Run Linux-only code's tests in a Linux container, since no check on macOS compiles it
+## Run the tests of Linux-only code, and of how a PTY ends, in a Linux container
 
-Applies to daemon code under `#[cfg(target_os = "linux")]` (the daemon is meant to run on a Linux host too) when you
-are developing on macOS. `cargo check`, `cargo clippy` and the test suite on macOS skip that code entirely, so a clean
-run says nothing about it, and `--target x86_64-unknown-linux-gnu` from macOS fails in rusqlite's `bundled` build
-script without a Linux C cross-compiler. So run `cargo test -p octoboardd` inside a Linux container (Docker).
+Applies when you are developing on macOS (the daemon is meant to run on a Linux host too) and change either kind of
+daemon code below, since a clean run on macOS says nothing about it:
+
+- Code under `#[cfg(target_os = "linux")]`. `cargo check`, `cargo clippy` and the test suite on macOS skip it
+  entirely, and `--target x86_64-unknown-linux-gnu` from macOS fails in rusqlite's `bundled` build script without a
+  Linux C cross-compiler.
+- How a terminal's PTY comes to an end — the reader thread, closing the master, hanging the terminal up
+  (`apps/daemon/src/pty.rs`). On macOS a session leader's exit revokes its controlling terminal, so the reader ends
+  with the shell or agent even while a background job it left behind still holds the PTY's other side; Linux revokes
+  nothing, and the reader, the master and the buffers live on until that job goes. A test of a terminal outliving its
+  process therefore cannot fail on macOS.
+
+So run `cargo test -p octoboardd` inside a Linux container (Docker).
 
 To exercise a fallback for a refused system call (the browse reads' `openat2` refused as `ENOSYS` or `EPERM`), run
 the container with a seccomp profile that returns that errno for the call.
 
-Without a container runtime, the fallback is a compile check only: copy the Linux-only functions into a scratch crate
-outside the repository that depends only on what they use (typically `libc`), and run
+Without a container runtime, Linux-only code gets a compile check only: copy the Linux-only functions into a scratch
+crate outside the repository that depends only on what they use (typically `libc`), and run
 `cargo check --target x86_64-unknown-linux-gnu` there after `rustup target add x86_64-unknown-linux-gnu`; say when
-reporting that it proves it compiles, not how it behaves.
+reporting that it proves it compiles, not how it behaves. How a PTY ends has no such fallback: report it as
+unverified on Linux.

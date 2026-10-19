@@ -257,6 +257,9 @@ async fn handle_inner(
                 crate::git_watch::remove(state, &project.id);
                 crate::branch_origin::project_deleted(state, &project.path);
             }
+            let project_ids: Vec<&str> =
+                projects.iter().map(|project| project.id.as_str()).collect();
+            crate::shell_terminal::close_projects(state, &project_ids).await;
             for session_id in &session_ids {
                 state.forget_saved_output(session_id);
                 state.forget_handoff_package(session_id);
@@ -427,6 +430,10 @@ async fn handle_inner(
             if stop_sessions {
                 stop_project_sessions(state, in_project)?;
             }
+            // Ended before the folder is moved, if it is, so no shell is left running in it (a
+            // tool still writing there by absolute path could recreate the moved folder); one
+            // started during the move is ended with the record below.
+            crate::shell_terminal::close_project(state, &id).await;
             // The directory goes first, once nothing runs in it, so a failure leaves the project
             // in place for a retry. Without `trash_directory` only the association goes away: the
             // directory is the user's. The repository is found first, as it cannot be once the
@@ -450,6 +457,7 @@ async fn handle_inner(
             state.store.delete_project(&id)?;
             state.remove_git_status(&id);
             crate::git_watch::remove(state, &id);
+            crate::shell_terminal::close_project(state, &id).await;
             crate::branch_origin::project_deleted_in(state, repository);
             for session_id in &session_ids {
                 state.forget_saved_output(session_id);
@@ -929,6 +937,33 @@ async fn handle_inner(
                 .get_project(&project)?
                 .ok_or_else(|| CodedError::unknown_project(&project))?;
             git_status::pull_project_now(state, project);
+            Ok(None)
+        }
+
+        RequestBody::CreateShellTerminal { project, worktree } => {
+            let shell_terminal = crate::shell_terminal::create(
+                state,
+                project,
+                worktree,
+                crate::browse::git::GitEnv::from_shell,
+            )
+            .await?;
+            Ok(Some(Event::ShellTerminalCreated {
+                id: request_id,
+                shell_terminal,
+            }))
+        }
+
+        RequestBody::RenameShellTerminal {
+            shell_terminal,
+            title,
+        } => {
+            crate::shell_terminal::rename(state, &shell_terminal, required_text("title", &title)?)?;
+            Ok(None)
+        }
+
+        RequestBody::CloseShellTerminal { shell_terminal } => {
+            crate::shell_terminal::close(state, &shell_terminal).await?;
             Ok(None)
         }
 

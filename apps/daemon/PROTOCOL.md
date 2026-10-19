@@ -102,6 +102,9 @@ the request id as if it were a record id.
 | `reveal_project_path` | `project`, `path`, `worktree?` | Selects an existing file or directory in its containing folder on the daemon's host. Scope and path validation match `open_project_path`; a symlink is selected by its own name. macOS uses `open -R`; Linux requires `gdbus` and a file manager implementing `org.freedesktop.FileManager1.ShowItems`. Answers `ack` after the launcher succeeds; launch failures are `directory_unavailable` |
 | `probe_path_links` | `project?`, `paths` | Asks, for each path the session's terminal showed, what it names on the daemon's host. Answered with `path_links`, one entry per path in order, `none` for anything not reachable. A path is absolute, starts with `~/` (the daemon's home), or is relative. It is reachable when it exists and, once symbolic links are resolved, lies inside a root: the project's directory or its place in a worktree of the same repository, or a temp root (`/tmp`, `/private/tmp` and the daemon's own temp directory, `$TMPDIR`; one that is `/` or holds the home directory is not used). An absolute path must also start with a root as written (or as the project's directory is stored), not only resolve into one. A relative path is tried against each project root and is reachable only when exactly one has it; one found in several is `none`. `project` absent means a relative path resolves to nothing; a project whose directory cannot be resolved leaves its paths to the temp roots alone. What the system would launch rather than show (a file with an executable bit, a path with a component of a launchable extension: `.app` and other bundles, `.command`, shell scripts, `.pkg`, `.url`/`.webloc`-style shortcuts and the like, compared without case) is never opened by a link click: in a temp root it is not reachable, and in a project a folder of that kind is not either, while a file is, with `viewer_only` true, to be shown by the file viewer alone (`open_path_link` refuses it). Inside a temp root the path and every directory from the root down to it must also belong to the daemon's user and not be writable by group or others. At most 64 paths, else `limit_exceeded` (`limit` `probed_paths`); an unknown project is `unknown_project`. The project's roots, which cost a `git` call, are looked up only for a path that is not under a temp root and are reused for a few seconds; at most four probes run at once. A file inside the project or one of its worktrees (not a temp root) also carries a `view`, where to read it with `read_project_file`: the innermost root holding it (a worktree kept below the project's directory is its own), `worktree` (absent for the project's own directory) and its wire `path` there. Nothing is read to answer: whether the viewer can show the file (text or an image, within the read cap) is for the client to find out by reading it, and it opens one it cannot show in its default application unless `viewer_only`. Folders and temp-root files have no `view` |
 | `open_path_link` | `project?`, `path` | Opens a path `probe_path_links` found reachable, resolving it again by the same rules (with the project's roots looked up afresh): a file with its default application, a folder in the file manager. Answers `ack` when the host accepts the request; a path that is not reachable, or that is `viewer_only`, is refused with `outside_scope`, a launch failure with `path_open_failed`, an unknown project with `unknown_project` |
+| `create_shell_terminal` | `project`, `worktree?` | Starts a shell terminal for the project: in the project's directory, or, with `worktree`, in the project's place in that worktree of its repository — the same scoped root `open_project_path` and browsing resolve, so a worktree that is not one of the project's repository's is refused with `worktree_unavailable` and a scope missing there with `source_unavailable`. Answered with `shell_terminal_created`, after `shell_terminal_upserted` has been broadcast. See "Shell terminals" below |
+| `rename_shell_terminal` | `shell_terminal`, `title` | Names the terminal; the shell's own titles no longer change it. The title is stored trimmed and cannot be blank (`field_required`). Broadcasts `shell_terminal_upserted` |
+| `close_shell_terminal` | `shell_terminal` | Ends the terminal's shell if it still runs (see "Shell terminals" below) and removes the terminal, broadcasting `shell_terminal_deleted`; answered with `ack` once the shell is gone. An exited terminal is removed the same way |
 | `open_project_terminal` | `project` | Opens the system terminal at the project's directory, on the daemon's host. On macOS that is Terminal.app (`open -a Terminal`), which starts a shell in the directory. On Linux there is no single system terminal, so the first installed program in a fixed list that can be given the directory is used (a program that only inherits its working directory is used when none of those is installed). Answered with `ack` once the terminal has been asked to open, not when its window closes. Refused with `terminal_unavailable` when the directory does not exist, the operating system has no system terminal Octoboard can open, no emulator is installed, or the launch fails. An unknown project is `unknown_project` |
 | `open_project_directory` | `project` | Opens the project's directory in the system file manager on the daemon's host: `/usr/bin/open -- <directory>` on macOS, or `xdg-open <directory>` on Linux (looked up in the user's login-shell `PATH`). On macOS, answered with `ack` once `open` exits successfully, bounded to 15 seconds. On Linux, `xdg-open` is detached into its own session and reaped in the background because it may run for the file manager's lifetime; `ack` means the process was spawned, and later launcher failures are not observed. Neither waits for the file manager window to close, and quitting the daemon does not close it. Refused with `directory_unavailable` when the path is not an existing absolute directory, the operating system is unsupported, the Linux login-shell environment or `xdg-open` is unavailable, the process cannot be spawned, or on macOS `open` fails or times out. An unknown project is `unknown_project` |
 | `push_project_branch` | `project` | Pushes the project's current branch and only that branch, never with `--force` and never as a bare `git push` (which would follow `push.default`). A branch that has an upstream is pushed to that remote branch. A branch with no upstream is pushed to `origin` when the repository has one, otherwise to its only remote, and that push records the upstream; several remotes and no `origin` is `no_push_remote`, and nothing is pushed. The local branch header is re-read first (no fetch) and broadcast, so the push is shown against the current ahead count even for a commit nothing had noticed yet; then it publishes `pushing` activity during the request, retaining that branch, counts and error. It takes precedence over overlapping checks and pulls until every concurrent push ends; success and failure both restore the latest underlying activity. Answered with `ack` once `git push` has exited. A success is followed by `project_git_status` from a local re-read of the branch header, with no fetch, so the badge's ahead count can drop. Also refused, with nothing pushed: `not_a_git_repository`, `not_on_a_branch` (a detached `HEAD`), `no_commits_to_push` (a branch with no commit yet), `upstream_not_a_remote` (the upstream does not name a remote of this repository) and `git_push_failed` (`git`'s own message, or a branch name that cannot be placed in a refspec). An unknown project is `unknown_project` |
@@ -123,7 +126,7 @@ the request id as if it were a record id.
 
 | `type` | Fields |
 |---|---|
-| `snapshot` | `hosts`, `consoles`, `projects`, `sessions`, `trusted_directories`, `settings`, `git_statuses`, `agent_availability`, `account_quotas`, `account_logins`, `home_dir` — sent once, unprompted, when a control socket connects. `git_statuses` is every `GitStatus` the daemon currently holds, empty on a fresh start — carried here, like the trusted directories, so a reconnecting client never has to ask for it separately. `agent_availability` is always three entries, one per agent, each `not_determined` until the daemon's one-time login-shell snapshot for this run lands — see "Agent availability" below. `account_logins` is the logins that have started and not ended, empty when none runs — see "Account login" below. `account_quotas` is the plan quota last read for each account of every available agent, empty until the first readings land — see "Account quotas" below. `home_dir` is the daemon host's home directory — not the browser's, the two may be on different machines — so a client can show a path under it as `~/...`; null when the daemon cannot determine one (`HOME` unset, relative or the filesystem root) |
+| `snapshot` | `hosts`, `consoles`, `projects`, `sessions`, `trusted_directories`, `settings`, `git_statuses`, `agent_availability`, `account_quotas`, `account_logins`, `home_dir`, `shell_terminals` — sent once, unprompted, when a control socket connects. `git_statuses` is every `GitStatus` the daemon currently holds, empty on a fresh start — carried here, like the trusted directories, so a reconnecting client never has to ask for it separately. `agent_availability` is always three entries, one per agent, each `not_determined` until the daemon's one-time login-shell snapshot for this run lands — see "Agent availability" below. `account_logins` is the logins that have started and not ended, empty when none runs — see "Account login" below. `account_quotas` is the plan quota last read for each account of every available agent, empty until the first readings land — see "Account quotas" below. `home_dir` is the daemon host's home directory — not the browser's, the two may be on different machines — so a client can show a path under it as `~/...`; null when the daemon cannot determine one (`HOME` unset, relative or the filesystem root). `shell_terminals` is every `ShellTerminal` the daemon holds, running or exited, oldest first; with the records it is all a client needs to rebuild its terminals, so one that lagged loses nothing by the fresh snapshot it is sent |
 | `agent_availability_updated` | `agent_availability` — the whole three-entry list, sent once, when the daemon's one-time determination of it lands; never again afterwards, since nothing re-determines it during a run |
 | `account_quotas_updated` | `account_quotas` — the whole list, sent whenever a reading finishes or an account's reading is dropped (the account was repointed or deleted); see "Account quotas" below |
 | `trusted_directories_updated` | `trusted_directories` — the whole list of trusted directory paths, sent when it changes |
@@ -132,6 +135,9 @@ the request id as if it were a record id.
 | `console_upserted` / `project_upserted` / `session_upserted` | `console` / `project` / `session` — the whole record, under that key |
 | `console_deleted` / `project_deleted` / `session_deleted` | `console` / `project` / `session` — the id of the record that was removed |
 | `project_git_status` | `status` — one project's whole `GitStatus`, sent on every change, including every transition of `activity` (so an animated icon has something to follow) and every local re-read of the branch header (see "Daemon behaviour, per project"). Nothing is sent when a project is removed; the client drops its status along with it |
+| `shell_terminal_upserted` | `shell_terminal` — the whole `ShellTerminal`, sent when one is created and whenever its title, `state` or `busy` changes |
+| `shell_terminal_deleted` | `shell_terminal` — the id of a terminal that was closed, or ended with its project's removal |
+| `shell_terminal_created` | `id`, `shell_terminal` — the reply to `create_shell_terminal`, the record of the terminal it started, also broadcast as `shell_terminal_upserted` |
 | `session_notice` | `session`, `code`, `params`, `message` — something about a session the user has to be told that no status field carries: an injected capability that will not apply, a setting of theirs Octoboard had to work around, a message Octoboard accepted and could not deliver. Broadcast when it is found, which may be at launch or at any point in the session's life; nothing stores it, so a client that connects later does not see it. See "Coded messages" |
 | `trust_prompt` | `session`, `agent`, `project`, `path`, `trust_dir` — a running session of a project is at its agent's folder-trust confirmation, which is asking whether `path` is trusted, and the project has no permission of its own (`trust_consent`) and does not lie under any of `trusted_directories`. `agent` is the one asking: Claude Code's workspace-trust screen, Codex's "Trust this folder?" (shown only inside a git repository, and recorded by Codex for the repository's root), or Grok Build's "Do you trust the contents of this directory?" (shown only where the folder holds content its trust gates, such as an `AGENTS.md`). `trust_dir` is the directory `confirm_trust` with `trust_parent_dir` would trust — the project's parent — or null when there is none to offer (it would be the filesystem root, the home directory or one containing it, the home directory cannot be determined, or `path` is not absolute); a client offers the choice only when it is not null. Broadcast once per confirmation, when it is recognised in the session's terminal output. A Codex or Grok Build confirmation also stops waiting once anything is typed into the session from a terminal, which is the person answering it there (Codex runs no hook after that); its prompt is then not sent again, and a `confirm_trust` for it gets `trust_not_waiting`. When the person answers Grok Build's in the terminal, the entry Grok writes is carried into the user's own trust store all the same, with no permission of Octoboard's recorded; an answer that writes no entry (a decline) changes nothing, and a failure to carry one is a `trust_not_carried_over` notice. From launch, and while a confirmation is waiting, messages Octoboard itself writes into the session are held for as long as `send_message` would refuse one with `session_trust_pending`. Each client is also sent one for every confirmation still waiting under the same condition, with the same fields, right after every `snapshot` (on connect and on lag recovery), so a client that missed the broadcast is still asked; a client already holding the prompt ignores the repeat. A client that declines ("Not now") drops the prompt locally, and a later `snapshot` may ask again. With no client connected the confirmation simply stays for the person to answer in the terminal. The client answers with `confirm_trust`, or leaves the confirmation alone. A console session's confirmation is pressed by the daemon without a prompt and without recording anything, because its working directory is the console's own; a project session's is when it meets the condition above the other way round. A client whose queue holds prompts for projects under a directory that has just become trusted drops them |
 | `session_request` | `request_id`, `session`, `role`, `console`, `project`, `agent`, `branches`, `requested_at` | A session called `request_session` and its call is waiting for the user's answer. `session` is the requesting session, which may be a console session or a project session bound or not. `role` is `project` or `console`, the kind of session it asked for; `console` is the console that session would be in, and `project` the project it would be in, or null for a console session. `agent` is the agent it would run. `branches` lists the branches an approval would hand to the new session, as wire paths below `refs/heads/`: branches the requesting session is responsible for in the project's repository, checked when it asked; empty when the request hands none over. `requested_at` is epoch ms and orders requests oldest first. Broadcast once when the call is made, and re-sent to a client after every `snapshot` (on connect and on lag recovery) for every request still waiting, oldest first, after the `trust_prompt`s. A client already holding it ignores the repeat |
@@ -175,8 +181,8 @@ never translates. `message` is the same text in English: it is what a client sho
 daemon newer than the client), so it must always be shown whole, never parsed. A code never changes its meaning or its
 params; a new reading gets a new code.
 
-A param named `console`, `project` or `session` is that record's id, and a client shows the record's current name
-instead (the raw value only when it does not know the record). A param named `count` is a number, sent as text, which
+A param named `console`, `project`, `session` or `shell_terminal` is that record's id, and a client shows the record's
+current name instead (the raw value only when it does not know the record). A param named `count` is a number, sent as text, which
 a client uses to pick the singular or plural wording. Every other param is text to be shown as is: a path, an agent's
 name, an operating-system or `git` message that cannot be translated.
 
@@ -202,7 +208,7 @@ A client also branches on some codes, instead of only showing them:
 |---|---|---|
 | `unreadable_request` | `detail` | The frame is not a request the daemon can read |
 | `internal_error` | `detail` | Any other failure |
-| `unknown_console` / `unknown_project` / `unknown_session` / `unknown_page` | `console` / `project` / `session` / `page` | The record is not there |
+| `unknown_console` / `unknown_project` / `unknown_session` / `unknown_page` / `unknown_shell_terminal` | `console` / `project` / `session` / `page` / `shell_terminal` | The record is not there |
 | `field_required` | `field` | A request lacks a field its kind needs, named as on the wire |
 | `field_too_long` | `field`, `limit` | A project name or description exceeds its character limit after trimming; `limit` is the decimal character count |
 | `conflicting_fields` | `first`, `second` | A request names two fields that exclude each other, as on the wire |
@@ -390,6 +396,7 @@ AccountLogin { agent, account: string|null, status: "starting"|"waiting"|"succee
 GitStatus { project, repository, branch?, detached, upstream?, ahead, behind,
             activity: "idle"|"checking"|"pulling"|"pushing", error? }
 AgentAvailability { agent, availability: "not_determined"|"available"|"unavailable", default_account_dir? }
+ShellTerminal { id, project_id, worktree, cwd, title, renamed, state: "running"|"exited", busy, created_at }
 ```
 
 `Project.remote_url` is the git remote URL of the project's repository, recorded for every source and absent when
@@ -1104,6 +1111,51 @@ the same way:
 Cloning a project and probing a remote (`probe_git_remote`) are the exception: they are started by the user on the spot,
 run non-interactively, and pass the whole shell environment.
 
+### Shell terminals
+
+A shell terminal is a plain shell the daemon runs for a project, beside its agent sessions, with no agent behind it
+and nothing of Octoboard's injected into it. It is live state: held in memory, never in the store, and ending with
+the daemon.
+
+- **The shell** is the user's login shell (`$SHELL`, `/bin/zsh` when it is unset), started as one (`-l`) on a PTY of
+  its own in `cwd`. It starts in the environment an agent launch takes: the snapshot of the user's login shell, under
+  the same rules for reusing one. A snapshot that cannot be taken does not refuse it: the shell then starts in the
+  daemon's own environment, less the variables that mark an agent session (as the snapshot is filtered), and reads
+  the user's profile itself. `TERM` is `xterm-256color` either way. None of the variables Octoboard sets for an
+  agent's session (its id, the daemon's port, the hook, MCP and branch reporting) is set.
+- **Where it starts** is checked when it is created: the project's own directory, or with `worktree` the project's
+  place in that worktree, which must be one `get_project_source` lists for the project's repository and is checked
+  against the repository again (see "Project sources"). `cwd` is that directory with its symbolic links resolved.
+  Afterwards the shell goes wherever the user takes it, and `cwd` does not follow.
+- **`title`** is the last title the shell set with OSC 0 or OSC 2, read from its output by the same rules as a
+  session's terminal title: surrounding whitespace trimmed, the leading activity glyphs dropped, and a title holding
+  a control character ignored. It is the shell's name, such as `zsh`, before the shell sets one or once what it sets
+  is left blank by those rules; and the user's name for it once a client renames it, from then on fixed, which
+  `renamed` says.
+- **`busy`** is judged twice a second while the shell runs: the shell is busy when the terminal's foreground process
+  group is not the shell's own, or when the shell has any child process, which covers a job left in the background
+  (a server, say). A shell at its prompt with nothing started is not. A client asks before closing a busy terminal
+  and closes an idle one without asking; one that asks before quitting while sessions run counts busy terminals too,
+  never idle or exited ones. A record is broadcast only when `busy` changes.
+- **A shell that exits on its own** (`exit`, a crash) leaves its terminal with `state` `exited` and `busy` false,
+  broadcast as `shell_terminal_upserted`. Its output stays replayable on the terminal socket until a client closes
+  the terminal.
+- **A terminal ends**, broadcast as `shell_terminal_deleted`, when a client closes it, when its project is removed
+  (`delete_project`, or `delete_console` for each of its projects; unlike a running session, a running shell does not
+  hold a removal up; a removal that moves the folder to the Trash ends them before the move), and when the daemon
+  exits on `shutdown` or a termination signal. A shell still running is sent `SIGHUP`, as a terminal closing sends,
+  which an interactive shell passes on to its jobs; one still there three seconds later is killed with its process
+  group. Then the terminal is hung up: the daemon closes its side of the PTY, so a job still on it (one left running
+  by a shell that exited, or sent off with `nohup` or `disown`) loses its terminal, and nothing of the terminal,
+  its output included, is kept. If the daemon goes down on an internal failure, the shells' process groups are
+  killed along with the agents'.
+- A project may have any number of terminals. Each is attached to on `GET /ws/term/:session` by its `id`.
+
+A shell terminal runs whatever a client types, as the daemon's own user, one request away for any client. That is no
+new kind of exposure on a daemon that already lets anything local type into an agent's terminal, but it makes the
+server form's want of credentials sharper: it must not be offered beyond loopback before that form has them (see "Why
+the daemon is split out" in `docs/architecture.md`).
+
 ### Browsing a project
 
 The browse requests — `get_project_source`, `list_project_dir`, `search_project_files`, `read_project_file`, `list_project_changes`,
@@ -1673,6 +1725,9 @@ had outstanding.
 
 ## `GET /ws/term/:session` — terminal stream
 
+`:session` is a session's id or a shell terminal's. A shell terminal is attached to with the same frames as a
+session, and its screen is never frozen; what is said below of a dormant session's preview is a session's alone.
+
 - Daemon to client: **binary** frames carrying raw PTY output. On attach the session's ring buffer is replayed first,
   then live output follows. Once the ring has dropped its oldest output, the replay opens with escape sequences that
   restore the terminal's current modes (alternate screen, mouse reporting, focus reporting, bracketed paste,
@@ -1699,6 +1754,9 @@ had outstanding.
 - Each end replaces the previous preview; starting a new process removes it, and deleting the session deletes it.
   Older saved files containing raw PTY output remain replayable as-is. A session whose process ended before previews
   were kept, or with the daemon killed outright, has none, even if an earlier process left some.
+- A shell terminal whose shell has exited answers an attach with its ring buffer replayed, as for a running one, and
+  then closes the socket, accepting no input. A client attached when the shell exits has the socket closed once the
+  shell's last output has been sent to it, and one attached when the terminal is closed has it closed then.
 - The daemon takes backpressure from each attached client: a client that stops draining for longer than the daemon's
   grace window is dropped (its socket closes) rather than allowed to make the daemon buffer without bound. A dropped
   client reconnects and gets the ring buffer replayed.

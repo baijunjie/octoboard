@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context, Result};
-use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+use anyhow::{Context, Result};
+use portable_pty::CommandBuilder;
 use uuid::Uuid;
 
 use crate::adapter::{self, LaunchSpec};
@@ -15,22 +15,8 @@ use crate::paths;
 use crate::protocol::{
     error_code, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError, Notice, Role,
 };
-use crate::ptyio;
+use crate::pty;
 use crate::session::{self, LiveSession, NewSession};
-
-/// Size the PTY starts at. The UI sends a `resize` as soon as it attaches; this only has to be
-/// something sane for the output an agent produces before that.
-const INITIAL_COLS: u16 = 120;
-const INITIAL_ROWS: u16 = 32;
-
-/// The terminal the UI actually renders with. An agent that inherits anything less — notably the
-/// snapshot shell's `TERM=dumb` — downgrades its own renderer, colour and mouse handling.
-const PTY_TERM: &str = "xterm-256color";
-
-/// Size of the buffer the PTY reader thread reads into, which also bounds the size of every
-/// daemon-to-client terminal frame. Not a tuning lever: sweeping it from 4 KiB to 256 KiB made no
-/// measurable difference to throughput at two very different source rates.
-const PTY_READ_BUF: usize = 8 * 1024;
 
 /// Bracketed paste, then the text, then the paste end, then Enter — written as one buffer, which is
 /// what makes a multi-line message arrive as a single submitted message with no delay needed
@@ -175,15 +161,6 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
 
     let binary = binary?;
 
-    let pty = native_pty_system()
-        .openpty(PtySize {
-            rows: INITIAL_ROWS,
-            cols: INITIAL_COLS,
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .context("opening a PTY")?;
-
     let mut cmd = CommandBuilder::new(&binary);
     cmd.args(&plan.args);
     cmd.env_clear();
@@ -202,22 +179,11 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
             cmd.env(key, value);
         }
     }
-    cmd.env("TERM", PTY_TERM);
+    cmd.env("TERM", pty::TERM);
     cmd.cwd(cwd);
 
-    let child = pty
-        .slave
-        .spawn_command(cmd)
+    let spawned = pty::spawn(cmd, pty::INITIAL_ROWS, pty::INITIAL_COLS)
         .with_context(|| format!("spawning `{binary}`"))?;
-    let pid = child
-        .process_id()
-        .ok_or_else(|| anyhow!("the spawned agent process has no pid"))?;
-
-    let fd = pty
-        .master
-        .as_raw_fd()
-        .ok_or_else(|| anyhow!("the PTY master has no file descriptor"))?;
-    ptyio::set_nonblocking(fd).context("putting the PTY master into non-blocking mode")?;
 
     let agent_session_id = match resume_agent_session_id {
         Some(id) => Some(id),
@@ -228,15 +194,12 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     let live = Arc::new(LiveSession::new(NewSession {
         id: session_id.to_string(),
         agent,
-        pid,
-        fd,
-        master: pty.master,
-        child,
+        spawned,
         scratch_dir: Some(scratch),
         resolves_approvals_itself: plan.resolves_approvals_itself,
         carried_trust: plan.carried_trust,
     }));
-    session::spawn_reader_thread(live.clone(), PTY_READ_BUF);
+    session::spawn_reader_thread(live.clone(), pty::READ_BUF);
 
     Ok(Launch {
         session: live,

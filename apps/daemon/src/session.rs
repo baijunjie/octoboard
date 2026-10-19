@@ -1,62 +1,22 @@
-//! One running agent process: its PTY, its output fan-out, and how it is stopped.
+//! One running agent process: its PTY (`crate::pty`), and what is the agent's own on top of it —
+//! the agent, its title, its folder-trust watch and the count of writes into its input.
 
 use std::io;
-use std::os::unix::io::RawFd;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
-use std::time::{Duration, Instant};
 
-use bytes::Bytes;
-use portable_pty::{Child, MasterPty};
-use tokio::sync::mpsc;
-
-use crate::crash_cleanup;
 use crate::protocol::Agent;
+use crate::pty::{NewPty, PtyCore, PtyOwner, Spawned};
 use crate::ptyio;
-use crate::ringbuf::RingBuffer;
-use crate::terminal_snapshot::{TerminalSnapshot, MAX_COLS, MAX_ROWS};
 use crate::trust::{CarriedTrust, TrustState};
 
-/// Terminal replay buffer per session.
-pub const RING_CAPACITY: usize = 2 * 1024 * 1024;
-
-/// Frames a single attached client may fall behind by before the PTY reader starts waiting on it.
-const SUBSCRIBER_QUEUE: usize = 64;
-
-/// How long the reader waits for one client to drain before dropping it. Until this elapses the
-/// reader does not read from the PTY at all, which is the point: the agent's own writes block, so
-/// output is throttled at the source instead of being buffered without bound in the daemon. A
-/// client that has not taken a single frame in this long is gone or wedged, and dropping it (its
-/// socket closes, and it reconnects to a fresh replay) is better than throttling the agent for it.
-const SUBSCRIBER_GRACE: Duration = Duration::from_secs(3);
+pub use crate::pty::spawn_reader_thread;
 
 /// Graceful teardown: agents are asked to exit with `SIGTERM` and only killed if they do not.
 /// This is not politeness — Grok's `Stop` hook fires with `reason: "shutdown"` on a `SIGTERM`
 /// teardown and not at all on a kill, and repeatedly killing Claude Code mid-startup trips its own
 /// renderer-fallback counter, which is machine-level state it keeps about itself.
-const TERM_GRACE: Duration = Duration::from_secs(3);
-
-/// How long [`LiveSession::keep_final_output`] waits for the PTY reader to take what the process
-/// wrote just before it exited. Bounded because the reader only finishes once nothing holds the PTY
-/// open, and a background process the agent started may hold it long after the agent is gone.
-const FINAL_OUTPUT_DRAIN: Duration = Duration::from_millis(500);
-
-struct Subscriber {
-    id: u64,
-    tx: mpsc::Sender<Bytes>,
-}
-
-/// Raw replay, parsed screen and subscribers share one lock: attaching has no output gap or
-/// duplicate, and freezing captures one exact boundary before exit cleanup can change the screen.
-struct Fan {
-    ring: RingBuffer,
-    terminal: TerminalSnapshot,
-    /// Every byte ever pushed into `ring`, which it forgets and this does not: what lets a caller
-    /// mark a point in the output and later read exactly what came after it.
-    total: u64,
-    subscribers: Vec<Subscriber>,
-    next_id: u64,
-}
+const AGENT_STOP_SIGNAL: libc::c_int = libc::SIGTERM;
 
 #[derive(Default)]
 struct TitleObserver {
@@ -85,35 +45,14 @@ impl TitleObserver {
     }
 }
 
+/// A running agent session. Everything about its process and PTY is its [`PtyCore`]'s, reached
+/// through it directly (it dereferences to it); what is here is the agent's own.
 pub struct LiveSession {
     pub id: String,
     pub agent: Agent,
+    pty: PtyCore,
     title: Mutex<TitleObserver>,
     action_required: AtomicBool,
-    pub pid: u32,
-    /// The PTY master descriptor, in non-blocking mode. Reads and writes both go through it;
-    /// `master` is kept only so the window can be resized.
-    fd: RawFd,
-    master: Mutex<Box<dyn MasterPty + Send>>,
-    /// Held, and deliberately never reaped until the exit watcher observes the exit: an unreaped
-    /// child keeps its pid and process group reserved, which is what makes signalling by number
-    /// safe here. Signalling a process group by a pid that had already been recycled is not a
-    /// theoretical hazard: it once killed the spawn helper of the editor the daemon ran under,
-    /// leaving that process unable to start any child at all until it was restarted.
-    child: Mutex<Box<dyn Child + Send + Sync>>,
-    reaped: AtomicBool,
-    /// The child's place in the cleanup that kills agents when the daemon goes down, held from
-    /// [`Self::enter_crash_cleanup`] until the child has exited, and given up before it is reaped.
-    crash_cleanup: Mutex<Option<crash_cleanup::Entry>>,
-    fan: Mutex<Fan>,
-    /// A reader thread is reading the PTY into `fan`; see [`spawn_reader_thread`].
-    reader_running: AtomicBool,
-    /// [`Self::keep_final_output`] has run. A lock rather than a flag, so that a second caller
-    /// returns only once the first has finished.
-    final_output_kept: Mutex<bool>,
-    /// Per-session scratch directory (Grok's `GROK_HOME` symlink farm), removed when the session's
-    /// process is gone.
-    scratch_dir: Mutex<Option<std::path::PathBuf>>,
     /// Permission hooks can describe automatic reviews without a dialog. Visible action prompts
     /// are observed separately, since this setting does not rule out manual approvals.
     pub resolves_approvals_itself: bool,
@@ -121,11 +60,28 @@ pub struct LiveSession {
     pub trust: TrustState,
     /// How many times anything but the trust path has written into this session's input. An
     /// attached terminal's own protocol replies (focus reports, answers to the agent's terminal
-    /// queries) are not counted, because they cannot move a cursor. See [`Self::write_input`].
+    /// queries) are not counted, because they cannot move a cursor. Changed only under the PTY's
+    /// input lock, so that the trust path's check of the count and its key are one step that no
+    /// other writer can fall between. See [`Self::write_input`].
     input_writes: AtomicU64,
-    /// Held across every write into the input and its count, so that the trust path's check of the
-    /// count and its key are one step that no other writer can fall between.
-    input_lock: Mutex<()>,
+}
+
+impl std::ops::Deref for LiveSession {
+    type Target = PtyCore;
+
+    fn deref(&self) -> &PtyCore {
+        &self.pty
+    }
+}
+
+impl PtyOwner for LiveSession {
+    fn pty(&self) -> &PtyCore {
+        &self.pty
+    }
+
+    fn on_output(&self, data: &[u8]) {
+        LiveSession::on_output(self, data);
+    }
 }
 
 /// Everything one running session is built from. A struct rather than a parameter list: these are
@@ -133,10 +89,9 @@ pub struct LiveSession {
 pub struct NewSession {
     pub id: String,
     pub agent: Agent,
-    pub pid: u32,
-    pub fd: RawFd,
-    pub master: Box<dyn MasterPty + Send>,
-    pub child: Box<dyn Child + Send + Sync>,
+    pub spawned: Spawned,
+    /// Per-session scratch directory (Grok's `GROK_HOME` symlink farm), removed when the session's
+    /// process is gone.
     pub scratch_dir: Option<std::path::PathBuf>,
     pub resolves_approvals_itself: bool,
     /// Grok's: where the trust it records when its confirmation is pressed is carried from and to;
@@ -146,37 +101,19 @@ pub struct NewSession {
 
 impl LiveSession {
     pub fn new(session: NewSession) -> Self {
-        let size = session.master.get_size().unwrap_or(portable_pty::PtySize {
-            rows: 24,
-            cols: 80,
-            pixel_width: 0,
-            pixel_height: 0,
-        });
         Self {
+            pty: PtyCore::new(NewPty {
+                label: session.id.clone(),
+                spawned: session.spawned,
+                scratch_dir: session.scratch_dir,
+            }),
             id: session.id,
             agent: session.agent,
             title: Mutex::new(TitleObserver::default()),
             action_required: AtomicBool::new(false),
-            pid: session.pid,
-            fd: session.fd,
-            master: Mutex::new(session.master),
-            child: Mutex::new(session.child),
-            reaped: AtomicBool::new(false),
-            crash_cleanup: Mutex::new(None),
-            fan: Mutex::new(Fan {
-                ring: RingBuffer::new(RING_CAPACITY),
-                terminal: TerminalSnapshot::new(size.rows, size.cols),
-                total: 0,
-                subscribers: Vec::new(),
-                next_id: 0,
-            }),
-            reader_running: AtomicBool::new(false),
-            final_output_kept: Mutex::new(false),
-            scratch_dir: Mutex::new(session.scratch_dir),
             resolves_approvals_itself: session.resolves_approvals_itself,
             trust: TrustState::new(session.agent, session.carried_trust),
             input_writes: AtomicU64::new(0),
-            input_lock: Mutex::new(()),
         }
     }
 
@@ -199,138 +136,8 @@ impl LiveSession {
         self.action_required.swap(waiting, Ordering::AcqRel) != waiting
     }
 
-    pub fn fd(&self) -> RawFd {
-        self.fd
-    }
-
-    /// Registers a terminal client. The returned snapshot is everything buffered up to this
-    /// instant, preceded by the terminal's current modes once the buffer no longer holds the
-    /// start, and the receiver picks up with the very next byte after it. Once frozen, returns the
-    /// archived screen with a closed receiver, so exit cleanup cannot replace it.
-    pub fn attach(&self) -> (Vec<u8>, mpsc::Receiver<Bytes>) {
-        let (tx, rx) = mpsc::channel(SUBSCRIBER_QUEUE);
-        let mut fan = self.fan.lock().expect("fan mutex poisoned");
-        if let Some(output) = fan.terminal.frozen() {
-            return (output.to_vec(), rx);
-        }
-        let id = fan.next_id;
-        fan.next_id += 1;
-        let mut snapshot = fan.ring.snapshot();
-        if fan.total > snapshot.len() as u64 {
-            // The ring has lost its head, and with it the mode sequences a program sends once at
-            // startup. The parsed terminal still knows them, and they describe the end of the
-            // window, which is where the replay leaves the client, so any toggles inside the
-            // window land on the same state.
-            let mut replay = fan.terminal.mode_preamble();
-            replay.append(&mut snapshot);
-            snapshot = replay;
-        }
-        fan.subscribers.push(Subscriber { id, tx });
-        (snapshot, rx)
-    }
-
-    /// The tail of what this session has printed, at most `max_bytes` of it. Taken from the same
-    /// ring buffer a terminal client replays, so it is exactly what the user would see — raw PTY
-    /// bytes, escape sequences included, which the caller is responsible for making readable.
-    pub fn recent_output(&self, max_bytes: usize) -> Vec<u8> {
-        self.fan
-            .lock()
-            .expect("fan mutex poisoned")
-            .ring
-            .tail(max_bytes)
-    }
-
-    /// Freezes a readable screen before termination can clear it. Input and the parser share
-    /// the capture boundary; later cleanup output continues to reach live subscribers.
-    pub fn freeze_output(&self) {
-        let _input = self.input_lock.lock().expect("input mutex poisoned");
-        self.fan
-            .lock()
-            .expect("fan mutex poisoned")
-            .terminal
-            .freeze();
-    }
-
-    /// Freezes before a dormant record can become observable. The closure only updates storage;
-    /// publishing happens after this returns. A failed update rolls back only this call's freeze,
-    /// while the input lock keeps termination or another update from claiming that same screen.
-    pub fn freeze_output_for(
-        &self,
-        update: impl FnOnce() -> anyhow::Result<bool>,
-    ) -> anyhow::Result<bool> {
-        let _input = self.input_lock.lock().expect("input mutex poisoned");
-        let created = self
-            .fan
-            .lock()
-            .expect("fan mutex poisoned")
-            .terminal
-            .freeze();
-        let result = update();
-        if created && !matches!(result, Ok(true)) {
-            self.fan
-                .lock()
-                .expect("fan mutex poisoned")
-                .terminal
-                .discard_frozen();
-        }
-        result
-    }
-
-    pub fn frozen_output(&self) -> Option<Vec<u8>> {
-        self.fan
-            .lock()
-            .expect("fan mutex poisoned")
-            .terminal
-            .frozen()
-            .map(<[u8]>::to_vec)
-    }
-
-    /// Hands the frozen screen, or the final parsed screen, to `keep` after exit, only once:
-    /// the exit watcher and a shutdown can both see the same exit. A later caller waits for
-    /// the first to finish, so a shutdown that returns has its output kept whichever of the two got
-    /// there first. Waits up to `FINAL_OUTPUT_DRAIN` for the reader to finish before taking the
-    /// buffer, since what an agent prints on its way out can still be in the PTY when its exit is
-    /// observed. **Blocks** for that long.
-    pub fn keep_final_output(&self, keep: impl FnOnce(&[u8])) {
-        let mut kept = self
-            .final_output_kept
-            .lock()
-            .expect("final output mutex poisoned");
-        if *kept {
-            return;
-        }
-        let deadline = Instant::now() + FINAL_OUTPUT_DRAIN;
-        while self.reader_running.load(Ordering::Acquire) && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(10));
-        }
-        let output = self
-            .fan
-            .lock()
-            .expect("fan mutex poisoned")
-            .terminal
-            .output();
-        keep(&output);
-        *kept = true;
-    }
-
-    /// How many bytes this session has printed in all. A mark for [`Self::output_since`].
-    pub fn output_total(&self) -> u64 {
-        self.fan.lock().expect("fan mutex poisoned").total
-    }
-
-    /// What this session printed after `mark`, as taken from [`Self::output_total`] — less of it if
-    /// the ring buffer has already let some go.
-    pub fn output_since(&self, mark: u64) -> Vec<u8> {
-        let fan = self.fan.lock().expect("fan mutex poisoned");
-        let wanted = fan.total.saturating_sub(mark);
-        fan.ring.tail(usize::try_from(wanted).unwrap_or(usize::MAX))
-    }
-
     /// Called from the PTY reader thread for every chunk read. Blocks while a slow client catches
-    /// up, which is how backpressure reaches the agent: with nobody reading the PTY, its own writes
-    /// block. The alternative was measured: a reader that always runs ahead fills any bounded
-    /// channel within a fraction of a second under heavy output and the client is dropped, at every
-    /// frame size tested.
+    /// up; see [`PtyCore::push_output`].
     pub fn on_output(&self, data: &[u8]) {
         {
             let mut observer = self.title.lock().expect("title observer lock poisoned");
@@ -344,35 +151,12 @@ impl LiveSession {
                 }
             }
         }
-        let chunk = Bytes::copy_from_slice(data);
-        let (targets, total): (Vec<(u64, mpsc::Sender<Bytes>)>, u64) = {
-            let mut fan = self.fan.lock().expect("fan mutex poisoned");
-            fan.ring.push(data);
-            fan.terminal.process(data);
-            fan.total += data.len() as u64;
-            let targets = fan
-                .subscribers
-                .iter()
-                .map(|sub| (sub.id, sub.tx.clone()))
-                .collect();
-            (targets, fan.total)
-        };
-
-        // The count without its lock: a writer holds that lock while the agent may be waiting for
-        // this very thread to drain its output.
-        self.trust
-            .feed(data, self.input_writes.load(Ordering::Acquire), total);
-
-        let mut dropped = Vec::new();
-        for (id, tx) in targets {
-            if !send_with_backpressure(&tx, chunk.clone()) {
-                dropped.push(id);
-            }
-        }
-        if !dropped.is_empty() {
-            let mut fan = self.fan.lock().expect("fan mutex poisoned");
-            fan.subscribers.retain(|sub| !dropped.contains(&sub.id));
-        }
+        self.pty.push_output(data, |total| {
+            // The count without its lock: a writer holds that lock while the agent may be waiting
+            // for this very thread to drain its output.
+            self.trust
+                .feed(data, self.input_writes.load(Ordering::Acquire), total);
+        });
     }
 
     /// Writes raw input. The error says how many bytes went in, because a caller deciding whether
@@ -387,15 +171,8 @@ impl LiveSession {
     /// traffic all the time and none of it answers a screen. A mouse button press is counted: it
     /// is the person acting.
     pub fn write_input(&self, data: &[u8]) -> Result<(), ptyio::PartialWrite> {
-        let _input = self.input_lock.lock().expect("input mutex poisoned");
-        if self
-            .fan
-            .lock()
-            .expect("fan mutex poisoned")
-            .terminal
-            .frozen()
-            .is_some()
-        {
+        let input = self.pty.lock_input();
+        if self.pty.is_frozen() {
             return Err(ptyio::PartialWrite {
                 written: 0,
                 error: io::Error::new(
@@ -407,7 +184,7 @@ impl LiveSession {
         if !is_terminal_protocol(data) {
             self.input_writes.fetch_add(1, Ordering::AcqRel);
         }
-        ptyio::write_all(self.fd, data)
+        self.pty.write_locked(&input, data)
     }
 
     /// Writes `data` only if nobody else has written into the input since the count read as
@@ -418,209 +195,29 @@ impl LiveSession {
         expected: u64,
         data: &[u8],
     ) -> Result<bool, ptyio::PartialWrite> {
-        let _input = self.input_lock.lock().expect("input mutex poisoned");
+        let input = self.pty.lock_input();
         if self.input_writes.load(Ordering::Acquire) != expected {
             return Ok(false);
         }
-        ptyio::write_all(self.fd, data).map(|()| true)
+        self.pty.write_locked(&input, data).map(|()| true)
     }
 
     /// How many writes anyone else has made into this session's input so far.
     pub fn input_writes(&self) -> u64 {
         // Under the lock, so that the count is never read in the middle of a write.
-        let _input = self.input_lock.lock().expect("input mutex poisoned");
+        let _input = self.pty.lock_input();
         self.input_writes.load(Ordering::Acquire)
     }
 
-    pub fn resize(&self, cols: u16, rows: u16) -> anyhow::Result<()> {
-        anyhow::ensure!(
-            (2..=MAX_COLS).contains(&cols) && (1..=MAX_ROWS).contains(&rows),
-            "terminal dimensions exceed the supported range"
-        );
-        let mut fan = self.fan.lock().expect("fan mutex poisoned");
-        anyhow::ensure!(
-            fan.terminal.frozen().is_none(),
-            "the session output has been archived"
-        );
-        let master = self.master.lock().expect("master mutex poisoned");
-        master.resize(portable_pty::PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        })?;
-        fan.terminal.resize(rows, cols);
-        Ok(())
-    }
-
-    /// Polls the child without blocking. Returns `true` once it has exited; from that point on the
-    /// pid must not be signalled again.
-    pub fn poll_exit(&self) -> bool {
-        if self.reaped.load(Ordering::Acquire) {
-            return true;
-        }
-        let child = self.child.lock().expect("child mutex poisoned");
-        self.poll_exit_locked(child)
-    }
-
-    /// The body of `poll_exit`, taking the already-held `child` lock. Reaping and the flag that
-    /// records it happen under that lock, which is what lets `signal` hold it to keep the child
-    /// from being reaped between its check and its `kill`.
-    fn poll_exit_locked(
-        &self,
-        mut child: std::sync::MutexGuard<'_, Box<dyn Child + Send + Sync>>,
-    ) -> bool {
-        if self.reaped.load(Ordering::Acquire) {
-            return true;
-        }
-        // The crash cleanup signals by number, so the child leaves it while it is exited but not
-        // yet reaped, its pid still reserved. When `waitid` cannot tell, `try_wait` decides, and
-        // the child leaves only after it is reaped.
-        match self.exited_unreaped() {
-            Some(false) => return false,
-            Some(true) => self.leave_crash_cleanup(),
-            None => {}
-        }
-        let exited = match child.try_wait() {
-            Ok(Some(_)) => true,
-            Ok(None) => false,
-            // Nothing left to wait on, so treat the child as gone rather than keep signalling a
-            // pid we can no longer account for.
-            Err(err) => {
-                tracing::warn!(session = %self.id, %err, "try_wait failed; treating the session as exited");
-                true
-            }
-        };
-        if exited {
-            self.reaped.store(true, Ordering::Release);
-            self.leave_crash_cleanup();
-            drop(child);
-            self.clean_scratch_dir();
-        }
-        exited
-    }
-
-    /// Whether the child has exited, found out without reaping it (`WNOWAIT`), or `None` when
-    /// `waitid` cannot say.
-    fn exited_unreaped(&self) -> Option<bool> {
-        // SAFETY: a zeroed `siginfo_t` is a valid buffer for `waitid` to fill in, and it is only
-        // read once `waitid` has succeeded.
-        unsafe {
-            let mut info: libc::siginfo_t = std::mem::zeroed();
-            let flags = libc::WEXITED | libc::WNOHANG | libc::WNOWAIT;
-            if libc::waitid(libc::P_PID, self.pid as libc::id_t, &mut info, flags) != 0 {
-                return None;
-            }
-            // With `WNOHANG`, a child that has not exited leaves `si_pid` as it was: 0.
-            Some(info.si_pid() != 0)
-        }
-    }
-
-    fn clean_scratch_dir(&self) {
-        let dir = self
-            .scratch_dir
-            .lock()
-            .expect("scratch dir mutex poisoned")
-            .take();
-        if let Some(dir) = dir {
-            // Every entry in it is either a symlink into the user's own agent directory or a file
-            // Octoboard wrote, so removing the directory never touches the user's configuration.
-            if let Err(err) = std::fs::remove_dir_all(&dir) {
-                tracing::warn!(session = %self.id, path = %dir.display(), %err, "removing the session scratch directory failed");
-            }
-        }
-    }
-
-    /// Asks the agent to exit, escalating to a kill only if it does not. Both signals are gated on
-    /// the child not having been reaped, which is what keeps the pid (and the process group that
-    /// the `setsid()` in `portable-pty` gave it) from being a number that now belongs to something
-    /// else.
+    /// Asks the agent to exit, escalating to a kill only if it does not, with its screen frozen
+    /// first so that what it draws on the way out does not replace it. **Blocks**; see
+    /// [`PtyCore::stop`].
     pub fn terminate(&self) {
-        if self.poll_exit() {
+        if self.pty.poll_exit() {
             return;
         }
-        self.freeze_output();
-        self.signal(libc::SIGTERM, false);
-
-        let deadline = Instant::now() + TERM_GRACE;
-        while Instant::now() < deadline {
-            if self.poll_exit() {
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(50));
-        }
-
-        // The agent did not take the hint. Kill the whole process group this time: `portable-pty`
-        // calls `setsid()`, so the agent's pgid is its own pid and its tool subprocesses are in
-        // that same group — killing the leader alone would leave them running.
-        self.signal(libc::SIGKILL, true);
-        let deadline = Instant::now() + Duration::from_secs(1);
-        while Instant::now() < deadline {
-            if self.poll_exit() {
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(50));
-        }
-        tracing::warn!(session = %self.id, pid = self.pid, "session process is still alive after SIGKILL");
-    }
-
-    /// Enters the child in the cleanup that kills agents when the daemon goes down
-    /// (`crate::crash_cleanup`). Under the lock reaping takes, so a child reaped in the meantime
-    /// is never entered: the cleanup signals by number.
-    pub fn enter_crash_cleanup(&self) {
-        let child = self.child.lock().expect("child mutex poisoned");
-        if self.reaped.load(Ordering::Acquire) {
-            return;
-        }
-        let entry = crash_cleanup::register(self.pid);
-        if entry.is_none() {
-            tracing::warn!(session = %self.id, "the crash cleanup is full; this session's process would outlive a daemon crash");
-        }
-        *self
-            .crash_cleanup
-            .lock()
-            .expect("crash cleanup mutex poisoned") = entry;
-        drop(child);
-    }
-
-    /// Takes the child out of the crash cleanup; a no-op once it is out.
-    fn leave_crash_cleanup(&self) {
-        self.crash_cleanup
-            .lock()
-            .expect("crash cleanup mutex poisoned")
-            .take();
-    }
-
-    /// Signals the process while holding the lock that reaping happens under, so the child cannot
-    /// be reaped between the check and the `kill` — which is the whole basis for signalling by
-    /// number here: an unreaped child keeps its pid and its process group reserved.
-    fn signal(&self, signal: libc::c_int, whole_group: bool) {
-        let child = self.child.lock().expect("child mutex poisoned");
-        if self.reaped.load(Ordering::Acquire) {
-            return;
-        }
-        self.send_signal(signal, whole_group);
-        drop(child);
-    }
-
-    fn send_signal(&self, signal: libc::c_int, whole_group: bool) {
-        if self.reaped.load(Ordering::Acquire) {
-            return;
-        }
-        let target = if whole_group {
-            -(self.pid as i32)
-        } else {
-            self.pid as i32
-        };
-        // SAFETY: the pid of a child this struct holds unreaped, so the number has not been
-        // recycled — `signal` guarantees that by holding the lock reaping takes.
-        if unsafe { libc::kill(target, signal) } != 0 {
-            let err = io::Error::last_os_error();
-            // ESRCH just means it exited in the meantime, which the caller finds out by polling.
-            if err.raw_os_error() != Some(libc::ESRCH) {
-                tracing::warn!(session = %self.id, pid = self.pid, %err, "signalling the session process failed");
-            }
-        }
+        self.pty.freeze_output();
+        self.pty.stop(AGENT_STOP_SIGNAL);
     }
 }
 
@@ -713,135 +310,9 @@ fn is_terminal_protocol(chunk: &[u8]) -> bool {
     true
 }
 
-/// Hands one chunk to one client, waiting out a full queue up to `SUBSCRIBER_GRACE`. Returns
-/// `false` when the client is gone or has stopped draining, meaning it should be dropped.
-fn send_with_backpressure(tx: &mpsc::Sender<Bytes>, chunk: Bytes) -> bool {
-    let deadline = Instant::now() + SUBSCRIBER_GRACE;
-    let mut pending = chunk;
-    loop {
-        match tx.try_send(pending) {
-            Ok(()) => return true,
-            Err(mpsc::error::TrySendError::Closed(_)) => return false,
-            Err(mpsc::error::TrySendError::Full(chunk)) => {
-                if Instant::now() >= deadline {
-                    return false;
-                }
-                pending = chunk;
-                std::thread::sleep(Duration::from_millis(2));
-            }
-        }
-    }
-}
-
-/// Spawns the OS thread that reads this session's PTY. A blocking reader on a dedicated thread
-/// rather than a tokio task, because the throttling in `on_output` is the mechanism that applies
-/// backpressure and must not occupy a runtime worker.
-pub fn spawn_reader_thread(session: Arc<LiveSession>, read_buf_bytes: usize) {
-    session.reader_running.store(true, Ordering::Release);
-    std::thread::spawn(move || {
-        let mut buf = vec![0u8; read_buf_bytes];
-        loop {
-            match ptyio::read_chunk(session.fd(), &mut buf) {
-                Ok(0) => break,
-                Ok(n) => session.on_output(&buf[..n]),
-                Err(err) => {
-                    tracing::debug!(session = %session.id, %err, "PTY read failed; closing the reader");
-                    break;
-                }
-            }
-        }
-        session.reader_running.store(false, Ordering::Release);
-        tracing::info!(session = %session.id, "PTY reader thread exiting");
-    });
-}
-
 #[cfg(test)]
 mod tests {
-    use std::time::Instant;
-
-    use super::{is_terminal_protocol, send_with_backpressure, SUBSCRIBER_GRACE};
-    use bytes::Bytes;
-    use tokio::sync::mpsc;
-
-    #[test]
-    fn a_wrapped_ring_replays_behind_the_modes_it_lost() {
-        let live = crate::test_support::idle_stand_in("replay-modes");
-        live.on_output(b"\x1b[?1049h\x1b[?1000h\x1b[?1006h");
-        let (replay, _rx) = live.attach();
-        assert!(replay.starts_with(b"\x1b[?1049h\x1b[?1000h\x1b[?1006h"));
-        assert_eq!(
-            replay.len(),
-            24,
-            "a ring that has not wrapped is replayed as is"
-        );
-
-        let redraw = b"\r\x1b[2Kframe";
-        for _ in 0..super::RING_CAPACITY / redraw.len() + 1 {
-            live.on_output(redraw);
-        }
-        let (replay, _rx) = live.attach();
-        let head = String::from_utf8_lossy(&replay[..80]);
-        for expected in ["?1049h", "?1000h", "?1006h"] {
-            assert!(head.contains(expected), "{expected} missing from {head:?}");
-        }
-    }
-
-    #[test]
-    fn a_failed_record_update_rolls_back_only_its_own_freeze() {
-        let live = crate::test_support::idle_stand_in("freeze-rollback");
-        live.on_output(b"before update");
-        for failed in [Ok(false), Err(anyhow::anyhow!("storage failed"))] {
-            let failed_with_error = failed.is_err();
-            let result = live.freeze_output_for(|| {
-                assert!(live.frozen_output().is_some(), "freeze precedes the write");
-                assert!(
-                    live.input_lock.try_lock().is_err(),
-                    "writes and termination wait"
-                );
-                live.on_output(b"\r\x1b[2Kafter update");
-                failed
-            });
-            assert_eq!(result.is_err(), failed_with_error);
-            assert!(live.frozen_output().is_none());
-        }
-        assert!(live.freeze_output_for(|| Ok(true)).unwrap());
-        let frozen = live.frozen_output().unwrap();
-        live.on_output(b"\x1b[2J\x1b[Hcleanup");
-        assert!(live
-            .freeze_output_for(|| Err(anyhow::anyhow!("later failure")))
-            .is_err());
-        assert!(!live.freeze_output_for(|| Ok(false)).unwrap());
-        assert_eq!(live.frozen_output().unwrap(), frozen);
-    }
-
-    #[test]
-    fn another_freeze_waits_until_an_unsuccessful_update_has_rolled_back() {
-        let live = crate::test_support::idle_stand_in("freeze-serialized");
-        live.on_output(b"original");
-        let (entered, started) = std::sync::mpsc::channel();
-        let (done, completed) = std::sync::mpsc::channel();
-        let concurrent = live.clone();
-        let freezer = std::thread::spawn(move || {
-            started.recv().expect("the update started");
-            // The main thread checks the mutex is held before releasing this worker.
-            concurrent.freeze_output();
-            done.send(()).expect("the concurrent freeze finished");
-        });
-        assert!(!live
-            .freeze_output_for(|| {
-                assert!(live.input_lock.try_lock().is_err());
-                entered.send(()).unwrap();
-                assert!(completed.try_recv().is_err());
-                live.on_output(b"\r\x1b[2Klatest");
-                Ok(false)
-            })
-            .unwrap());
-        freezer.join().expect("the concurrent freeze joined");
-        completed.recv().unwrap();
-        let frozen = String::from_utf8(live.frozen_output().unwrap()).unwrap();
-        assert!(frozen.contains("latest"), "{frozen}");
-        assert!(!frozen.contains("original"));
-    }
+    use super::is_terminal_protocol;
 
     #[test]
     fn only_a_terminals_own_protocol_traffic_is_told_apart_from_input() {
@@ -898,34 +369,5 @@ mod tests {
         ] {
             assert!(!is_terminal_protocol(input), "{input:?}");
         }
-    }
-
-    #[test]
-    fn a_client_that_keeps_draining_is_never_dropped() {
-        let (tx, mut rx) = mpsc::channel(1);
-        assert!(send_with_backpressure(&tx, Bytes::from_static(b"first")));
-        let drainer = std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(50));
-            rx.blocking_recv();
-            rx
-        });
-        // The queue is full until the drainer takes the first chunk, so this call has to wait
-        // rather than give up — waiting is what pushes backpressure onto the agent.
-        assert!(send_with_backpressure(&tx, Bytes::from_static(b"second")));
-        drainer.join().expect("the drainer thread");
-    }
-
-    #[test]
-    fn a_client_that_stops_draining_is_dropped_after_the_grace_period() {
-        // Held open but never read: the case of a client that is gone or wedged.
-        let (tx, _rx) = mpsc::channel(1);
-        assert!(send_with_backpressure(&tx, Bytes::from_static(b"first")));
-
-        let started = Instant::now();
-        assert!(!send_with_backpressure(&tx, Bytes::from_static(b"second")));
-        assert!(
-            started.elapsed() >= SUBSCRIBER_GRACE,
-            "it must wait out the whole grace period before giving up on a client"
-        );
     }
 }

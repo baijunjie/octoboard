@@ -8,7 +8,8 @@ right-click opens it too (see "Project rows" in `docs/product/sidebar.md`). Choo
 Nothing is toasted when the terminal has been opened. A failure is an error alert worded from the refusal below.
 
 The terminal is not part of Octoboard's window. The request finishes once the terminal has been asked to open, not
-when the user closes it, and quitting Octoboard or the daemon does not close it.
+when the user closes it, and quitting Octoboard or the daemon does not close it. The shells the daemon itself runs for a project are a different
+thing (see `docs/product/shell-terminals.md`).
 
 ## Which terminal opens
 

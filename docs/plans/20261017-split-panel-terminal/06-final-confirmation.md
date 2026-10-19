@@ -14,3 +14,7 @@
       dismisses it (also after pressing a control inside it); clicking the toggle docks it at once; dragging the width
       grip resizes the pane (light grip on hover, strong while dragging, "Resize" tooltip beside it); closing a focused
       panel hands focus to the agent terminal.
+- [ ] On Linux (a container will do), run the daemon's shell terminal and PTY tests and confirm busy detection (the
+      `/proc` children reading and its fallback scan) and hanging up a closed terminal whose leftover background job
+      still holds the PTY: the job loses its terminal and the reader, master and buffers are released. macOS cannot
+      show the latter, since a session leader's exit already revokes its terminal there.
