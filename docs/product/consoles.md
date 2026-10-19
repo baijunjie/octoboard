@@ -83,8 +83,10 @@ other fields, an avatar that was not touched is left as it is when the console i
 A console can carry instructions of the user's own for its console sessions — how to work, report or phrase things —
 which Octoboard adds after its built-in instructions in the console session's instruction file. The user's text takes
 precedence over the built-in instructions wherever the two disagree, with one exception: it cannot change what a console
-session does and does not do, so a console session still never changes a project itself. Where the text goes and when a
-console session reads it is in "The console session's instruction file" in `docs/product/launching-agents.md`.
+session does and does not do, so a console session still never changes a project itself. It can change how the console
+session handles work that touches no project (see the console session in `docs/product/hub-orchestration.md`). Where the
+text goes and when a console session reads it is in "The console session's instruction file" in
+`docs/product/launching-agents.md`.
 
 The console dialog's **Console session instructions** field is a multi-line text field at the bottom of the dialog's
 collapsed Advanced section, below and outside the frame around its agent tabs of model and reasoning effort pickers (see

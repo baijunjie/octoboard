@@ -22,18 +22,30 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          \n\
          You are the console session of an Octoboard console: a control board over agent sessions \
          in several projects. The user brings you a request, you work out which project it belongs \
-         to, and you dispatch it to a session there.\n\
+         to, and you dispatch it to a session there; a request that touches no project you carry \
+         out yourself.\n\
          \n\
          ## What you do, and what you do not\n\
          \n\
-         You decompose, dispatch, follow up and summarize. **You do not change a project \
-         yourself** — not a file in it, and not a command that creates, edits, moves or deletes \
-         anything in it, or changes its repository. Every change is made by a session you start \
-         in that project. You may read a project — open a file, search it, look at its git \
-         history — but that is looking, never a way into working there, and `git status` and \
-         `git diff` are not looking: they rewrite the repository's index and can fail a command \
-         the session working there is running. This working directory is Octoboard's own and \
-         holds nothing of the user's.\n\
+         On this console's projects you decompose, dispatch, follow up and summarize. **You do \
+         not change a project yourself** — one of this console's or another console's, any \
+         worktree of it included: not a file in it, and not a command that creates, edits, moves \
+         or deletes anything in it, or changes its repository. Every change to a project of this \
+         console is made by a session you start in that project; for one of another console's, \
+         ask the user, or use `request_session` there. You may read a project — open a file, \
+         search it, look at its git history — but that is looking, never a way into working \
+         there, and `git status` and `git diff` are not looking: they rewrite the repository's \
+         index and can fail a command the session working there is running. This working \
+         directory is Octoboard's own and holds nothing of the user's.\n\
+         \n\
+         ## Work that touches no project\n\
+         \n\
+         Work that touches no project is yours to carry out directly, as you would any request of \
+         the user's and within the permissions you are given: installing or removing software on \
+         this machine, say. Do not start a session in an unrelated project for it, and do not add \
+         a project just to have somewhere to run it. If such work would touch a project after \
+         all, that part still goes the way the section above sets out. Keep what it makes out of \
+         this working directory, which is removed with the console.\n\
          \n\
          ## The tools\n\
          \n\
@@ -332,6 +344,28 @@ mod tests {
         assert!(!text.contains("octoboard__"));
     }
 
+    /// The text of the instruction file's section under `heading`, up to the next section.
+    fn section(heading: &str) -> &'static str {
+        CONSOLE_SESSION_INSTRUCTIONS
+            .split(heading)
+            .nth(1)
+            .and_then(|rest| rest.split("\n## ").next())
+            .unwrap_or_else(|| panic!("no section {heading}"))
+    }
+
+    /// Only work on a project goes through a session: work that touches no project the console
+    /// session carries out itself, without borrowing or adding a project for it.
+    #[test]
+    fn work_that_touches_no_project_is_the_console_sessions_own() {
+        let boundary = section("## What you do, and what you do not");
+        assert!(boundary.contains("**You do not change a project yourself**"));
+        assert!(boundary.contains("another console's, any worktree of it included"));
+        let outside = section("## Work that touches no project");
+        assert!(outside.contains("yours to carry out directly"));
+        assert!(outside.contains("Do not start a session in an unrelated project"));
+        assert!(outside.contains("do not add a project"));
+    }
+
     /// The user's text comes last, inside the user tags under a section that says it wins over
     /// the built-in rules except on what the session does, and a console with none gets no such
     /// section. A closing tag of the user's own, in any case, cannot end their part early.
@@ -362,18 +396,14 @@ mod tests {
     /// without the text following would send the model looking for one that does not exist.
     #[test]
     fn every_tool_the_instructions_name_is_in_the_console_catalogue() {
-        let section = CONSOLE_SESSION_INSTRUCTIONS
-            .split("## The tools")
-            .nth(1)
-            .and_then(|rest| rest.split("\n## ").next())
-            .expect("a tools section");
+        let tools = section("## The tools");
         let catalogue: Vec<&str> = crate::mcp::tools_for(Role::Console, false)
             .iter()
             .map(|tool| tool.name)
             .collect();
         // Every console tool's name holds an underscore, and nothing else the section puts in
         // backticks (argument names, the server's key) does.
-        let named: Vec<&str> = section
+        let named: Vec<&str> = tools
             .split('`')
             .skip(1)
             .step_by(2)

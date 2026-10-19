@@ -44,13 +44,14 @@ pub fn role_description(role: Role, owner: Option<&Owner>, agent: Agent) -> Stri
 /// user's own text in the file is held to it by two places rather than one.
 fn console_session_pointer(agent: Agent) -> String {
     format!(
-        "You are the console session of an Octoboard console: you decompose the user's requests, \
-         dispatch them to sessions in this console's projects, follow those up and summarize. You \
-         do not change a project yourself, though you may read one. Your tools are the \
-         `{prefix}` ones; `{filename}` in this working directory holds how to use them, and is \
-         the version to follow if it ever disagrees with this. It may end with the user's own \
-         instructions, which take precedence over the rest of it wherever they disagree but \
-         never change what you do and do not do.",
+        "You are the console session of an Octoboard console: you decompose the user's requests \
+         on this console's projects, dispatch them to sessions there, follow those up and \
+         summarize, and do yourself any work that touches no project. You do not change a \
+         project yourself, though you may read one. Your tools are the `{prefix}` ones; \
+         `{filename}` in this working directory holds how to use them, and is the version to \
+         follow if it ever disagrees with this. It may end with the user's own instructions, \
+         which take precedence over the rest of it wherever they disagree but never let you \
+         change a project yourself.",
         filename = console_session_instruction_filename(agent),
         prefix = qualified_tool_name(agent, "new_session"),
     )

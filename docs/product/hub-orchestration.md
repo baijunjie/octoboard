@@ -5,12 +5,19 @@ The session doing it is the **owner** of the sessions bound to it; every session
 to it. Three kinds of session can be an owner:
 
 - A **console session** — a session the user brings a request to; a console may run several of them at once (see
-  "Several console sessions per console" below). It works out which project a request belongs to, starts sessions
-  there, follows them up, and summarizes what they came back with. **It changes no project itself**: neither a file in
-  a project, nor a command that creates, edits, moves or deletes anything in one or changes its repository — every
-  change goes through a session it starts. Reading a project is legitimate, and is how a console session checks what a
-  session reports. Besides its terminal it has one surface of its own for showing the user something — the report
-  panel, described in `docs/product/report-panel.md`.
+  "Several console sessions per console" below). It works out which of its console's projects a request belongs to,
+  starts sessions there, follows them up, and summarizes what they came back with. **It changes no project itself** —
+  one of its console's or another console's, any worktree of it included: neither a file in a project, nor a command
+  that creates, edits, moves or deletes anything in one or changes its repository. Every change to a project of its
+  console goes through a session it starts; for one of another console's it asks the user or calls `request_session`
+  there. Reading a project is legitimate, and is how a console session checks what a session reports. Work that touches
+  no project — installing or removing software on the machine, say — it carries out itself, within the permissions it
+  has, without starting a session in an unrelated project or adding a project for it; any part of such work that does
+  touch a project still goes the way above. It keeps what such work makes out of the console's working directory, which
+  is removed with the console. Unlike the rule that it changes no project itself, this rule about work that touches no
+  project can be overridden by the user's console session instructions (see "Console session instructions" in
+  `docs/product/consoles.md`). Besides its terminal it has one surface of its own for showing the user something — the
+  report panel, described in `docs/product/report-panel.md`.
 - An **unbound project session** — a project session bound to no owner: one the user opened by hand without binding it
   to a console session, or one started on another session's request (see `docs/product/session-requests.md`). It
   works in its own project and can also start sessions in that project and drive them (see "The unbound project

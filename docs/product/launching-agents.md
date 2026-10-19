@@ -77,26 +77,27 @@ environment" below):
   a child process of the agent, started fresh per session, and each session's tools are reachable
   only by that session. The agent's own and the project's own MCP servers keep working alongside it.
 - **A role description** — whether this session is a console session or a project session, and the reporting conventions
-  that go with that. A console session's is short: it is the console session, it decomposes, dispatches, follows up and
-  summarizes and does not change a project itself, and the rest is in its instruction file, which may end with the
-  user's own instructions, which take precedence over the rest of the file wherever they disagree but never change
-  what it does and does not do (see "The console session's instruction file" below). A project session bound to a console session is told that console session is waiting on its
-  result and how to `report` to it; one bound to a project session is told which project session, by its id, dispatched it and
-  that it reports there; either is told that its owner can hand it to another session, which Octoboard then tells it in
-  a message. One nobody owns — opened by hand without a console session to report to, or started on another session's
-  request — is told that no session dispatched it, that nobody but the user owns it, and not to call `report`; that it
-  may start sessions in its own project and drive them, which report back to it; and that if it binds itself to an
-  owner, that call's result tells it what changes. A lead session, bound to a console session only after it was opened,
-  is given that same unbound project session's text on every launch, as at its first (see "Lead sessions" in
-  `docs/product/hub-orchestration.md`). Every project session's text also sets out how it relates to other sessions:
-  `new_session` for a session of its own where it has it, `handoff_session`, `switch_session_account`,
-  `transfer_session` and `bind_to_session` where it has them, `request_session` for a session that is nobody's, and `list_sessions` and `share_info` for
-  information. The text is written from who the session reports to when it launches, and says that what Octoboard tells
-  it of a later change of owner replaces what it says (see "When a binding changes while a session runs" in
-  `docs/product/changing-session-owners.md`). The role and the session's binding as it stands decide which tools the
-  session is offered, so an unbound project session still has `report`, and calling it is refused while it is unbound (see
-  `docs/product/reporting-to-owners.md` and "The unbound project session's tools" in
-  `docs/product/hub-orchestration.md`).
+  that go with that. A console session's is short: it is the console session, it decomposes requests on its console's
+  projects, dispatches them, follows up and summarizes, does itself any work that touches no project, and does not
+  change a project itself, and the rest is in its instruction file, which may end with the user's own instructions,
+  which take precedence over the rest of the file wherever they disagree but never let it change a project itself (see
+  "The console session's instruction file" below). A project session bound to a console session is told that console
+  session is waiting on its result and how to `report` to it; one bound to a project session is told which project
+  session, by its id, dispatched it and that it reports there; either is told that its owner can hand it to another
+  session, which Octoboard then tells it in a message. One nobody owns — opened by hand without a console session to
+  report to, or started on another session's request — is told that no session dispatched it, that nobody but the user
+  owns it, and not to call `report`; that it may start sessions in its own project and drive them, which report back to
+  it; and that if it binds itself to an owner, that call's result tells it what changes. A lead session, bound to a
+  console session only after it was opened, is given that same unbound project session's text on every launch, as at its
+  first (see "Lead sessions" in `docs/product/hub-orchestration.md`). Every project session's text also sets out how it
+  relates to other sessions: `new_session` for a session of its own where it has it, `handoff_session`,
+  `switch_session_account`, `transfer_session` and `bind_to_session` where it has them, `request_session` for a session
+  that is nobody's, and `list_sessions` and `share_info` for information. The text is written from who the session
+  reports to when it launches, and says that what Octoboard tells it of a later change of owner replaces what it says
+  (see "When a binding changes while a session runs" in `docs/product/changing-session-owners.md`). The role and the
+  session's binding as it stands decide which tools the session is offered, so an unbound project session still has
+  `report`, and calling it is refused while it is unbound (see `docs/product/reporting-to-owners.md` and "The unbound
+  project session's tools" in `docs/product/hub-orchestration.md`).
 
 The injected hooks are built to be invisible. They never steer the agent, print nothing (with the one exception
 below), never fail the turn, and carry a short timeout (3 seconds) so a daemon that is unreachable costs a turn a
@@ -136,17 +137,19 @@ Octoboard's press of a console session's trust confirmation sees to (see `docs/p
 sessions of every agent, running together or not, read the same text, and the file names Octoboard's tools without any
 agent's prefix. Each console session's role description points it to the file by the name its own agent reads.
 
-The file holds the console session's role — decompose, dispatch, follow up, summarize, and make no change to a project
-itself, reading one being how it checks what its sessions report (see `docs/product/hub-orchestration.md`) — and how to
-use the orchestration and settings tools. When the console has console session instructions of the user's (see
-"Console session instructions" in `docs/product/consoles.md`), they are the file's last section,
-held between a `<user_instructions>` and a `</user_instructions>` tag under a heading of the file's own.
-That heading's paragraph says the tags hold the user's own text, that any heading inside them belongs to that text and
-not to the file's sections, and that the console session follows the user's text wherever it disagrees with the
-built-in part, except that it cannot change what the console session does and does not do — the console session still
-never changes a project itself. The text is kept as written, except that a closing `</user_instructions` of its own, in
-any letter case, has its `<` written as `&lt;`, so it cannot end the user's part early. A console without any has no
-such section.
+The file holds the console session's role (see the console session in `docs/product/hub-orchestration.md`) in two
+sections: one on what it does and does not do — decompose, dispatch, follow up and summarize work on the console's
+projects, and make no change to a project itself, reading one being how it checks what its sessions report — and a
+separate one on work that touches no project, which it carries out itself. The file also holds how to use the
+orchestration and settings tools. When the console has console session instructions of the user's (see "Console session
+instructions" in `docs/product/consoles.md`), they are the file's last section, held between a `<user_instructions>` and
+a `</user_instructions>` tag under a heading of the file's own. That heading's paragraph says the tags hold the user's
+own text, that any heading inside them belongs to that text and not to the file's sections, and that the console session
+follows the user's text wherever it disagrees with the built-in part, except that it cannot change the section on what
+the console session does and does not do — the console session still never changes a project itself. The section on work
+that touches no project is not covered by that exception, so the user's text can override it. The text is kept as
+written, except that a closing `</user_instructions` of its own, in any letter case, has its `<` written as `&lt;`, so
+it cannot end the user's part early. A console without any has no such section.
 
 The file is written:
 
