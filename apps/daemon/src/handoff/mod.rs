@@ -26,7 +26,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{bail, Result};
 
-use crate::agent_records::{conversation_record, Locator};
+use crate::agent_records::{conversation_branch, Branch, Locator};
 use crate::branch_origin::session_branches::{self, BranchState, Worktree};
 use crate::protocol::{Agent, Role, Session};
 use crate::state::AppState;
@@ -121,12 +121,19 @@ fn build_with(
         })
         .collect();
 
-    let record = conversation_record(&state.record_hints, locator, &accounts, session);
-    let conversation = match &record {
-        Some(path) => record::read(session.agent, path)
+    let branch = conversation_branch(&state.record_hints, locator, &accounts, session);
+    let conversation = match &branch {
+        Some(Branch {
+            stretches: Some(stretches),
+            ..
+        }) => record::read_stretches(session.agent, stretches)
             .map_err(|err| format!("the record could not be read: {err}")),
+        Some(_) => Err(
+            "the record of the conversation lacks a history segment it continues from".to_owned(),
+        ),
         None => Err("the agent's record of the conversation was not found".to_owned()),
     };
+    let record = branch.map(|branch| branch.record);
     let compaction = match (&record, &conversation) {
         (Some(record), Ok(conversation)) if conversation.compacted() => compaction_files(record),
         _ => Vec::new(),

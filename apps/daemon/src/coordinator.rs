@@ -3610,8 +3610,9 @@ struct SwitchPlan {
 /// Everything a switch can refuse before it ends the session's process: the launch rule on the
 /// target directory, and the conversation record being where it is expected. The default account
 /// pins nothing, so each side of it resolves from one shell snapshot taken here, once, and kept
-/// for the relaunch. `source` and `target` are the pinned directories, `None` for the default
-/// account. Blocking.
+/// for the relaunch; so does a Codex switch, whose environment says where a home keeps its
+/// database. `source` and `target` are the pinned directories, `None` for the default account.
+/// Blocking.
 fn prepare_switch(
     agent: Agent,
     resume_id: Option<&str>,
@@ -3622,7 +3623,8 @@ fn prepare_switch(
     // Before anything is copied: the copy would create the directory's `sessions/` and so make a
     // Grok home that was never initialized pass the same check at launch.
     adapter::refuse_unlaunchable_account(agent, target.map(Path::new))?;
-    let shell_env = if source.is_none() || target.is_none() {
+    // Codex's environment also says where a home keeps its database, which the copy must find.
+    let shell_env = if source.is_none() || target.is_none() || agent == Agent::Codex {
         Some(snapshot().context("snapshotting the user's shell environment")?)
     } else {
         None
@@ -3736,9 +3738,19 @@ pub(crate) async fn switch_session_account_with(
 
     if let Some((from, to, record, agent_session_id)) = plan.relocation {
         let agent = before.agent;
+        // The environment the relaunch will see, which with the target's `config.toml` says where
+        // a Codex home keeps its database.
+        let launch_env = plan.shell_env.clone().unwrap_or_default();
         tokio::task::spawn_blocking(move || {
+            // The process is down, so the head found now is the final one: it may have started a
+            // segment since the plan.
+            let record = match agent {
+                Agent::Codex => relocate::locate(agent, &from, &agent_session_id)?,
+                _ => record,
+            };
             let companions = relocate::companions(agent, &from, &record, &agent_session_id);
-            relocate::copy(&from, &to, &record, &companions)
+            relocate::copy(&from, &to, &record, &companions)?;
+            relocate::repoint_thread_row(agent, &to, &record, &agent_session_id, &launch_env)
         })
         .await??;
     }
@@ -8165,15 +8177,23 @@ mod tests {
                 Some(id),
                 Some(&source_dir),
                 Some(&target_dir),
-                || unreachable!("both accounts are pinned"),
+                // Both accounts are pinned, yet a Codex switch snapshots the environment: it says
+                // where the target keeps its database.
+                || {
+                    Ok(HashMap::from([(
+                        "CODEX_SQLITE_HOME".to_owned(),
+                        "db".to_owned(),
+                    )]))
+                },
             )
         };
 
-        let planned = plan(THREAD).unwrap().relocation;
+        let planned = plan(THREAD).unwrap();
         assert_eq!(
-            planned,
+            planned.relocation,
             Some((source, target, PathBuf::from(&record), THREAD.to_owned()))
         );
+        assert_eq!(planned.shell_env.unwrap()["CODEX_SQLITE_HOME"], "db");
     }
 
     /// A relaunch that is refused after the conversation was copied and the account recorded puts
@@ -8225,6 +8245,91 @@ mod tests {
             std::fs::read_to_string(dir.join("claude-a").join(record)).unwrap(),
             "conversation"
         );
+    }
+
+    /// A switch of a reverted Codex thread carries the whole chain into the target and points the
+    /// target's database row of the thread, which would otherwise name an older head, at the head;
+    /// a target whose database cannot be updated fails the switch before any relaunch and leaves
+    /// the session on its account.
+    #[tokio::test]
+    async fn a_codex_switch_carries_the_chain_and_repoints_the_targets_stale_row() {
+        use rusqlite::Connection;
+        let (state, dir) = console_with_project_and_accounts("coordinator-switch-codex-chain");
+        let (source, target) = (dir.join("codex-old"), dir.join("codex-a"));
+        let broken = dir.join("codex-b");
+        state
+            .store
+            .insert_account(&Account {
+                id: "codex-b".to_string(),
+                agent: Agent::Codex,
+                name: "codex-b".to_string(),
+                config_dir: broken.to_string_lossy().into_owned(),
+                approval_reviewer: None,
+            })
+            .unwrap();
+        let id = "019a0000-0000-7000-8000-000000000001";
+        let chain = crate::test_support::codex_chain(&source, id, false);
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::create_dir_all(&broken).unwrap();
+        std::fs::write(
+            broken.join("state_5.sqlite"),
+            "not a database at all, but long",
+        )
+        .unwrap();
+        let database = target.join("state_5.sqlite");
+        Connection::open(&database)
+            .unwrap()
+            .execute_batch(&format!(
+                "CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT);
+                 INSERT INTO threads VALUES ('{id}', 'older head');"
+            ))
+            .unwrap();
+        let mut codex = project_session("codex", Agent::Codex, SessionStatus::Idle);
+        codex.has_conversation = true;
+        codex.agent_session_id = Some(id.to_string());
+        codex.config_dir = Some(source.to_string_lossy().into_owned());
+        state.store.insert_session(&codex).unwrap();
+        let live = idle_stand_in("codex");
+        state.register_live(live.clone());
+        state.watch_exit(live.clone());
+        let switch = |account: &str| {
+            switch_session_account(&state, "codex", Some(Some(account.into())), shell_env(&dir))
+        };
+
+        let err = switch("codex-b")
+            .await
+            .expect_err("the target's database is no database");
+        assert_eq!(code_of(&err), error_code::RELOCATION_FAILED);
+        assert!(live.poll_exit(), "its process was ended");
+        assert!(
+            state.live_session("codex").is_none(),
+            "nothing was relaunched"
+        );
+        let after = state.store.get_session("codex").unwrap().unwrap();
+        assert_eq!(after.status, SessionStatus::Interrupted);
+        assert_eq!(after.config_dir, codex.config_dir, "left on its account");
+        assert!(after.account_id.is_none());
+
+        // The relaunch is refused here for the missing project directory, after the copy.
+        let err = switch("codex-a")
+            .await
+            .expect_err("the project directory does not exist");
+        assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
+        let named: String = Connection::open(&database)
+            .unwrap()
+            .query_row("SELECT rollout_path FROM threads", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(
+            Path::new(&named),
+            target.join(chain.head.strip_prefix(&source).unwrap())
+        );
+        for file in chain.all() {
+            let relative = file.strip_prefix(&source).unwrap();
+            assert!(
+                target.join(relative).is_file(),
+                "{relative:?} was not carried"
+            );
+        }
     }
 
     /// The other half of the seam: ending a console session's process for a switch is not refused
@@ -9440,6 +9545,45 @@ mod tests {
             [project_dir.join(format!("{}.jsonl", uuid("tail")))],
             "the shared copy, the unwritten record and the missing subagent directory are left"
         );
+    }
+
+    /// A Codex thread that had a turn reverted goes to the Trash whole: its first rollout and every
+    /// later segment, plain or compressed.
+    #[test]
+    fn a_reverted_codex_threads_whole_chain_is_trashed() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-delete-trash-chain");
+        let account = dir.join("codex-account");
+        let thread = "019a0000-0000-7000-8000-000000000001";
+        let mut expected = Vec::new();
+        for compressed in [false, true] {
+            expected.extend(crate::test_support::codex_chain(&account, thread, compressed).all());
+        }
+        state
+            .store
+            .insert_session(&Session {
+                agent_session_id: Some(thread.to_owned()),
+                config_dir: Some(account.to_string_lossy().into_owned()),
+                ..project_session("reverted", Agent::Codex, SessionStatus::Archived)
+            })
+            .unwrap();
+        let deleted = delete_session(&state, "reverted").unwrap();
+        let trashed = std::sync::Mutex::new(Vec::new());
+        trash_agent_records_of(
+            &state,
+            &deleted,
+            agent_records::Locator::with_shell(HashMap::from([(
+                "HOME".to_owned(),
+                dir.join("home").to_string_lossy().into_owned(),
+            )])),
+            |path| {
+                trashed.lock().unwrap().push(path.to_path_buf());
+                Ok(())
+            },
+        );
+        let mut trashed = trashed.into_inner().unwrap();
+        trashed.sort();
+        expected.sort();
+        assert_eq!(trashed, expected);
     }
 
     #[tokio::test]

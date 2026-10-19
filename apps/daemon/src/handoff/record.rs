@@ -11,10 +11,10 @@
 //! yields what could be read rather than a failure.
 
 use std::io::BufRead;
-use std::path::Path;
 
 use serde_json::Value;
 
+use crate::agent_records::Stretch;
 use crate::protocol::Agent;
 
 /// One item of a todo list.
@@ -101,29 +101,38 @@ impl Conversation {
     }
 }
 
-/// Reads the conversation held in the record file at `path`, decompressing a Codex rollout that
-/// Codex has compressed. A read that fails part-way (a compressed record cut short) yields what
-/// was read before it; one that fails before anything was read is the error.
-pub fn read(agent: Agent, path: &Path) -> std::io::Result<Conversation> {
-    let mut reader = crate::line_file::open(path, 0)?;
+/// Reads the conversation made of `stretches` in order: each file, and of it the first `cut` bytes
+/// when there is one (a Codex thread's earlier segments end where the next picks up),
+/// decompressing a Codex rollout that Codex has compressed. A stretch that fails part-way (a
+/// compressed record cut short) yields what was read before it; one that fails before anything of
+/// it was read is the error.
+pub fn read_stretches(agent: Agent, stretches: &[Stretch]) -> std::io::Result<Conversation> {
     let mut conversation = Conversation::default();
-    let mut line = Vec::new();
-    let mut lines = 0;
-    loop {
-        line.clear();
-        match reader.read_until(b'\n', &mut line) {
-            Ok(0) => return Ok(conversation),
-            Ok(_) => lines += 1,
-            Err(_) if lines > 0 => return Ok(conversation),
-            Err(err) => return Err(err),
-        }
-        let Ok(value) = serde_json::from_slice::<Value>(&line) else {
-            continue;
+    for Stretch { path, cut } in stretches {
+        let reader = crate::line_file::open(path, 0)?;
+        let mut reader: Box<dyn BufRead> = match cut {
+            Some(bytes) => Box::new(std::io::Read::take(reader, *bytes)),
+            None => reader,
         };
-        for entry in line_entries(agent, &value) {
-            conversation.fold(entry);
+        let mut line = Vec::new();
+        let mut lines = 0;
+        loop {
+            line.clear();
+            match reader.read_until(b'\n', &mut line) {
+                Ok(0) => break,
+                Ok(_) => lines += 1,
+                Err(_) if lines > 0 => break,
+                Err(err) => return Err(err),
+            }
+            let Ok(value) = serde_json::from_slice::<Value>(&line) else {
+                continue;
+            };
+            for entry in line_entries(agent, &value) {
+                conversation.fold(entry);
+            }
         }
     }
+    Ok(conversation)
 }
 
 /// The entries one line of a record holds.
@@ -471,6 +480,12 @@ fn grok_call(call: &Value) -> Option<Entry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
+
+    fn read(agent: Agent, path: &Path) -> std::io::Result<Conversation> {
+        let path = path.to_path_buf();
+        read_stretches(agent, &[Stretch { path, cut: None }])
+    }
 
     fn capture(name: &str) -> std::path::PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))

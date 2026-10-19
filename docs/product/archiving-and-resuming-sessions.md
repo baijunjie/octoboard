@@ -123,7 +123,7 @@ does not count. The answer is one of three:
   | Agent | Unresumable when |
   |---|---|
   | Claude Code | no project directory of the account holds the transcript `<id>.jsonl`; a directory of the session's subagents' transcripts left without it does not count |
-  | Codex | no rollout of the conversation, plain (`.jsonl`) or compressed (`.jsonl.zst`), is under the account's `sessions/` or `archived_sessions/` |
+  | Codex | no rollout of the conversation, plain (`.jsonl`) or compressed (`.jsonl.zst`), is under the account's `sessions/` or `archived_sessions/`; a thread that had a turn reverted is one conversation, so any of its files (the first rollout or a later history segment) keeps it from being unresumable |
   | Grok Build | never: a session directory missing locally is unknown, since Grok Build restores sessions from its own remote registry |
 
 - **Unknown**: neither can be proven — the account directory cannot be read (missing, unmounted, permission denied),

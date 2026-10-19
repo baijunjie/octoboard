@@ -16,7 +16,7 @@ use serde_json::Value;
 use crate::adapter::adapter_for;
 use crate::agent_records::Locator;
 use crate::line_file::{Change, LineFile, Signature};
-use crate::protocol::{Agent, SessionUsage};
+use crate::protocol::{Agent, Session, SessionUsage};
 use crate::record_observed::Observed;
 use crate::record_titles::{SharedTitles, Titles};
 use crate::state::AppState;
@@ -32,6 +32,9 @@ struct Cursor {
     dormant: bool,
     children: HashMap<PathBuf, Cursor>,
     titles: Titles,
+    /// The opening prompt of a Codex thread's first rollout, when the record read is a later
+    /// segment, with the path it was read from.
+    first_prompt: Option<(PathBuf, Option<String>)>,
     observed: Observed,
     /// The summary file beside the record, which Grok keeps its titles and configured model in.
     summary: SummaryFile,
@@ -161,8 +164,9 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
             cursor.path = session
                 .agent_session_id
                 .as_ref()
-                .and_then(|id| locator.newest(session.agent, &root, id));
+                .and_then(|id| locator.current_record(session.agent, &root, id));
         }
+        refresh_first_prompt(cursor, &mut locator, &session);
         let mut usage = None;
         if let Some(path) = cursor.path.clone() {
             if scan(session.agent, &path, cursor).is_ok() {
@@ -194,7 +198,10 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
             .get(&session.id)
             .zip(session.agent_session_id.as_deref())
             .and_then(|(key, id)| cursors.shared_titles.get(key)?.name(id));
-        let titles = cursor.titles.merged(shared, &session.record_titles);
+        let mut titles = cursor.titles.merged(shared, &session.record_titles);
+        if let Some((_, Some(prompt))) = &cursor.first_prompt {
+            titles.prompt = Some(prompt.clone());
+        }
         let titles = (titles != session.record_titles).then_some(titles);
         cursor.dormant = !live;
         if usage.is_some()
@@ -218,6 +225,30 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
             }
         }
     }
+}
+
+/// For a Codex record that is a later history segment, which holds only the prompts since the last
+/// revert, reads the thread's opening prompt from its first rollout (once per file).
+fn refresh_first_prompt(cursor: &mut Cursor, locator: &mut Locator, session: &Session) {
+    let (Agent::Codex, Some(id)) = (session.agent, session.agent_session_id.as_deref()) else {
+        return;
+    };
+    if !cursor
+        .path
+        .as_deref()
+        .is_some_and(crate::agent_records::is_segment)
+    {
+        return;
+    }
+    let Some(first) = locator
+        .root(session.agent, session.config_dir.as_deref())
+        .and_then(|root| locator.first_rollout(&root, id))
+        .filter(|first| cursor.first_prompt.as_ref().map(|(from, _)| from) != Some(first))
+    else {
+        return;
+    };
+    let prompt = Titles::first_prompt_of(adapter_for(session.agent).as_ref(), &first);
+    cursor.first_prompt = Some((first, prompt));
 }
 
 fn scan(agent: Agent, path: &Path, cursor: &mut Cursor) -> std::io::Result<()> {
@@ -582,6 +613,41 @@ mod tests {
                 .total_tokens,
             18_829
         );
+    }
+
+    /// A reverted Codex thread's record is its head segment: the usage is the running total the
+    /// head ends on, which already counts the segments before it, whichever segment was written
+    /// last; the prompt title is the opening one, from the thread's first rollout.
+    #[test]
+    fn a_reverted_codex_threads_usage_and_titles_come_from_its_head() {
+        const ID: &str = "019a0000-0000-7000-8000-000000000001";
+        for compressed in [false, true] {
+            let (state, directory) = crate::test_support::app_state("usage-collector-chain");
+            state
+                .store
+                .insert_console(&crate::test_support::console(&directory))
+                .unwrap();
+            let console_id = state.store.list_consoles().unwrap()[0].id.clone();
+            let root = directory.join("account");
+            crate::test_support::codex_chain(&root, ID, compressed);
+            let session: crate::protocol::Session = serde_json::from_value(json!({
+                "id":"s","agent":"codex","agent_session_id":ID,"console_id":console_id,
+                "host_id":"local","role":"console","origin":"user","title":"Session",
+                "status":"archived","has_conversation":true,"pinned":false,"started_at":0,
+                "config_dir":root.to_string_lossy()}))
+            .unwrap();
+            state.store.insert_session(&session).unwrap();
+
+            collect(&state, &mut Cursors::default());
+
+            let record = state.session_record("s").unwrap();
+            assert_eq!(
+                record.usage.unwrap().total_tokens,
+                300,
+                "compressed: {compressed}"
+            );
+            assert_eq!(record.record_titles.prompt.as_deref(), Some("first prompt"));
+        }
     }
 
     #[test]

@@ -5,6 +5,7 @@
 //! knowledge.
 
 use std::collections::{HashMap, HashSet};
+use std::io::BufRead;
 use std::path::Path;
 
 use crate::adapter::AgentAdapter;
@@ -36,9 +37,23 @@ impl Titles {
             }
         }
         if self.prompt.is_none() {
-            self.prompt = adapter
-                .prompt_text(line)
-                .and_then(|prompt| prompt_title(&prompt));
+            self.prompt = prompt_of(adapter, line);
+        }
+    }
+
+    /// The opening prompt of the record file at `path` (read whole through its decompression when
+    /// Codex compressed it), for a conversation whose record continues in a later file.
+    pub fn first_prompt_of(adapter: &dyn AgentAdapter, path: &Path) -> Option<String> {
+        let mut reader = crate::line_file::open(path, 0).ok()?;
+        let mut line = String::new();
+        loop {
+            line.clear();
+            if reader.read_line(&mut line).ok()? == 0 {
+                return None;
+            }
+            if let Some(prompt) = prompt_of(adapter, &line) {
+                return Some(prompt);
+            }
         }
     }
 
@@ -68,6 +83,13 @@ impl Titles {
             prompt: self.prompt.clone().or_else(|| stored.prompt.clone()),
         }
     }
+}
+
+/// The stand-in title one line of a record gives, when it is the user's prompt.
+fn prompt_of(adapter: &dyn AgentAdapter, line: &str) -> Option<String> {
+    adapter
+        .prompt_text(line)
+        .and_then(|prompt| prompt_title(&prompt))
 }
 
 /// One account's file that names every conversation of the account, read incrementally, of which

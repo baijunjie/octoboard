@@ -137,11 +137,16 @@ receiving session to read. It holds:
 - **the conversation**: every user message and every reply, in order, each set apart so nothing in it reads as the
   file's own structure. Tool output, file contents read, command output, the model's reasoning, and what the agent
   injects into the conversation on its own are left out. Where the agent compacted its history and rewrote its record
-  (Grok Build), the package keeps the summary it wrote and names the files holding the earlier conversation.
+  (Grok Build), the package keeps the summary it wrote and names the files holding the earlier conversation. For a
+  Codex thread that had a turn reverted, the conversation is read as it stands across the thread's rollouts: each
+  earlier file up to the point the next one continues from, then the head, which is also the record the package
+  names (see "Agent session data" in `docs/product/launching-agents.md`). The reverted turns are left out, and so are
+  the todo list updates and file changes made in them.
 
 The original's brief is not kept by Octoboard, so it is not carried separately: where the agent recorded it, it is the
-first user message of the conversation. A conversation record that is missing or cannot be read gives a package
-without the conversation, which says why; it does not stop the handoff. Building the package reads only: nothing is
+first user message of the conversation. A conversation record that is missing or cannot be read, or a reverted Codex
+thread missing an earlier rollout the head continues from, gives a package without the conversation, which says why;
+it does not stop the handoff. Building the package reads only: nothing is
 written to the agent's directories or to the project's repository.
 
 The package is written to `~/.octoboard/handoff/<receiving session id>.md`, readable by its owner alone, since a

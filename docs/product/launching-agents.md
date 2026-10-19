@@ -29,7 +29,7 @@ This is the guarantee the whole design rests on:
   A check's fetch of remote refs is separate:
   it does not move the working tree and it does not push (see "What one check does" in
   `docs/product/project-git-status.md`).
-- **The user's own agent configuration is never written to, with two narrow exceptions.** Octoboard does not edit
+- **The user's own agent configuration is never written to, with three narrow exceptions.** Octoboard does not edit
   `~/.claude.json`, `~/.codex/`, `~/.grok/`, an account's config directory, or anything else the agent reads as the
   user's global setup, and it never makes a trust decision of its own in any of them. The first exception is switching
   a session to another account: it copies that one session's conversation — its record and what the agent keeps of
@@ -38,10 +38,16 @@ This is the guarantee the whole design rests on:
   half-written item among the agent's own (what is copied for each agent, and how a failed copy is undone, are in
   "Carrying the conversation" in `docs/product/switching-session-accounts.md`). It touches no settings file of the
   agent's, nothing of other sessions in either directory, and it leaves the originals where they were.
-  The second is Grok Build's trust store: once Grok's own trust confirmation has been accepted, the one entry Grok wrote into its session's copy of the store is carried, unchanged, into the user's own (see "Carrying Grok
-  Build's trust record" in `docs/product/folder-trust.md`). Creating a Codex account's directory that does not exist
-  yet, empty, before its first launch is not an exception: Codex refuses to start without it, and nothing of the
-  user's is in it.
+  The second belongs to the same switch, for a Codex session: Codex remembers each thread in a database in its
+  home (or wherever the home's `sqlite_home` setting or `CODEX_SQLITE_HOME` puts it) and resumes the rollout that
+  database names, so a target account that held the thread earlier would resume an older branch of it however whole
+  the copied conversation is. The switch therefore updates the `rollout_path` that database keeps of that thread to
+  the carried head, and changes nothing else in it; if it cannot, the switch fails before the session is relaunched
+  (see "Carrying the conversation" in `docs/product/switching-session-accounts.md`). The third is Grok Build's trust
+  store: once Grok's own trust confirmation has been accepted, the one entry Grok wrote into its session's copy of the
+  store is carried, unchanged, into the user's own (see "Carrying Grok Build's trust record" in
+  `docs/product/folder-trust.md`). Creating a Codex account's directory that does not exist yet, empty, before its
+  first launch is not an exception: Codex refuses to start without it, and nothing of the user's is in it.
 
 Where an agent stops to ask whether to trust a folder, Octoboard decides nothing on its behalf: it presses the
 agent's own confirmation, with the keystrokes a person would type — for a project session only after the user has
@@ -357,3 +363,26 @@ Codex compresses a session's rollout once it is about a week old, replacing `rol
 session's record wherever it looks for one: the session's token usage and task title are still read from it, the
 check for a session's records before a deletion and the check for whether its conversation can still be resumed find
 it, it is moved to the Trash with the session, and an account switch copies it.
+
+Reverting a turn makes Codex continue the thread in a **history segment**, a later rollout named
+`rollout-<timestamp>-<thread id>_<segment id>.jsonl` (compressed like any other rollout once old), which records how
+much of the file before it the thread keeps. A thread reverted more than once has several, each continuing an earlier
+file. Octoboard treats a thread's first rollout and all its segments, plain or compressed, as one record. Its **head**
+is the file no other continues — of several, the one started last — which holds the conversation as it stands; it is
+not necessarily the file written to last:
+
+- the session's token usage is the total the head ends on, since Codex carries the running total over from the file
+  a segment continues;
+- the fallback task title, the user's first prompt (see "Where the task title comes from" in
+  `docs/product/session-titles.md`), is taken from the thread's first rollout when it is there, since a segment holds
+  only what came after its cut;
+- the check for a session's records before a deletion and the check for whether its conversation can still be resumed
+  find any file of the thread (so a thread is never taken for gone while part of it is there), and every one of them
+  is moved to the Trash with the session;
+- an account switch copies them all and points the target's own record of the thread at the head (see "Carrying the
+  conversation" in `docs/product/switching-session-accounts.md`);
+- a handoff package reads the conversation as it stands across them (see "The handoff package" in
+  `docs/product/handing-off-sessions.md`).
+
+A subagent's rollout is named by its own thread id, which never contains its parent's, and is no part of the parent's
+record.

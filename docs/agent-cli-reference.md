@@ -577,12 +577,65 @@ built from, never the per-session home itself, which is discarded with the proce
   newest was not settled. In the fork described under "Which rollout a home resumes, over a shared directory" below,
   a home with no row picked the segment with the later timestamp in its name. That segment was also the chain's leaf,
   while the other segment had the later mtime. So mtime does not decide it; name order or lineage might.
-  **Octoboard's switch, which carries `rollout-…-<id>.jsonl` alone and leaves `<id>_…` behind, resumes a thread that
-  was ever reverted at a stale branch**, silently; the chain has to travel whole. Subagents are separate threads: a
-  spawned agent's rollout is `rollout-<child start>-<child thread id>.jsonl`, with
+  **Octoboard's switch carries the whole chain**: the head as the record and every other file of the thread as a
+  companion, through the same staged copy. Measured with 0.162.1 on a thread made through `codex app-server` (two
+  turns, `thread/revert` of the second, a third turn, `thread/revert` of the third, a fourth: a first rollout and two
+  segments), the chain copied by that code into a fresh home, plain and compressed, resumed with the surviving first
+  and fourth turns and neither reverted one; the new database row named the head (a compressed head came back as a
+  plain `.jsonl`, the other two files stayed compressed). Octoboard reads the head for a thread's usage: the token
+  total in a segment continues from the segment before it (in a real thread the first rollout ended on 964,390 and its
+  segment began at 1,036,910), so the head's last total is the thread's. A segment holds only the lines after the
+  last cut, so the opening prompt comes from the first rollout, and the conversation as it stands is the head preceded
+  by each file it continues up to its `history_base.end_byte_offset` (decompressed bytes; in a real thread the offset
+  fell on the line boundary before the next segment's first line). Subagents are separate
+  threads: a spawned agent's rollout is `rollout-<child start>-<child thread id>.jsonl`, with
   `source.subagent.thread_spawn.parent_thread_id` in its `session_meta`, so its name never contains the parent's id. A
   home with no row resuming the parent with two such rollouts beside it opened the parent with the conversation intact
-  (and took rows for both children).
+  (and took rows for both children). An earlier reading of this section took the `_<segment id>` files for subagents'
+  and had the switch leave them behind, which resumed a reverted thread at a stale branch.
+  **A target whose own row names an older head resumes that head, with the whole chain copied.** Measured with 0.162.1:
+  a home holding the first rollout and the first segment was resumed once, so its row named that segment; the whole
+  chain was then copied in over it (the third file added, the other two replaced) and the thread resumed again. It
+  came up on the older branch (the first and third turns; the third had been reverted since, and the fourth was
+  absent), with no error, and the row still named the older segment. So a target that held the thread before it was
+  reverted elsewhere has to have that row dealt with, not only the files.
+  **The row decides, and either removing it or repointing it fixes the resume** (0.162.1, same setup, with a
+  `thread_attachments` row and a `thread_dynamic_tools` row seeded for the thread, the database edited with `sqlite3`
+  while Codex was not running):
+  - Deleting the thread's `threads` row cascades into those two tables when foreign keys are on (both are declared
+    `ON DELETE CASCADE`; the `sqlite3` shell has them off by default, and Codex's own connections turn them on). With foreign keys off the children stayed, Codex's own insert of the fresh row succeeded with no foreign-key
+    complaint, and the children were attached to it again. The resume answered "ALPHA, DELTA". The fresh row is built
+    from the rollouts, so the old row's title, pin, section and project were gone; its title and preview now came
+    from the head.
+  - Updating only `rollout_path` to the head's path (the whole chain in place) also answered "ALPHA, DELTA", and
+    kept the row's other columns and its children untouched. The row's `title`, `preview` and `first_user_message`
+    stayed those of the older branch and were not refreshed by the resume's turn. With the chain compressed, a path
+    naming the `.jsonl` that no longer exists and one naming the `.jsonl.zst` both resumed the head.
+  - Clearing only the home's `thread_history_1.sqlite` rows (the `threads` row left standing) still resumed the older
+    branch, and deleting them along with the `threads` row changed nothing: its tables (`thread_turns`, `thread_items`,
+    `thread_history_projection_state`) are keyed by the id of a rollout *file*, one set for the first segment and one
+    for the head here, not by the thread's, and Codex rebuilt them.
+  - Other tables keyed by thread id: `thread_spawn_edges`, `thread_goals` (in `goals_1.sqlite`) and the queue tables
+    were empty in the measured home and were not exercised; `thread_sections` is not per thread.
+  - **Octoboard's switch updates `rollout_path` only**, in every `state_<n>.sqlite` of the target's database
+    directory that has a `threads` table, to the head's path in the target without `.zst`, the form Codex keeps for a
+    compressed rollout (no row of 1,212 in a real database ended in `.zst`). It changes nothing else, so nothing
+    cascades and the user's title, pin and links stay. The cost is that the older branch's title and preview stay on
+    the row. A home with no row is left alone, since it resumes the head by name.
+  - **Codex can keep its databases outside the home** (0.162.1): `sqlite_home` in `config.toml` and the
+    `CODEX_SQLITE_HOME` environment variable both moved the whole set of `*.sqlite` files, and with both set the
+    configuration won. A relative `sqlite_home` (`"db"`, `"../up"`) was taken against the home, and a leading `~/`
+    was expanded with the process's `HOME`. A relative `CODEX_SQLITE_HOME` was taken against the directory Codex
+    was started in, not the home. The binary also names an enterprise requirement for
+    `sqlite_home` that overrides the environment variable; that was not looked for. The switch reads the target's
+    `config.toml` and the environment the relaunch will see (the home's `~` is that environment's `HOME`), and fails
+    with `relocation_failed`, rather than update a database it has guessed, when the configuration cannot be read or
+    parsed, `CODEX_SQLITE_HOME` is relative (the starting directory is not known there), or the directory cannot be
+    listed; a directory that does not exist means no database.
+  - **A managed daemon holding the thread was not measured.** In a scratch home the 0.162.1 TUI, started in a
+    pseudo-terminal, showed no `app-server` process, so no daemon could be made to hold the thread there (the
+    per-home daemon described under "When that can happen for real" below was seen in a real home only). Whether a
+    daemon in the target holding the thread loaded would ignore a changed row is unverified.
 - **Claude Code, beside the transcript** — `projects/<slug>/<session id>/` holds `subagents/`, `tool-results/` and
   `custom-title.json`, and `file-history/<session id>/` holds the rewind checkpoints (`<hash>@v<n>`). Both are layout
   as found on disk; a resume with the transcript alone was measured above, and what a resume without these loses

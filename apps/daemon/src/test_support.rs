@@ -808,3 +808,103 @@ pub(crate) fn session_ids(state: &Arc<AppState>) -> Vec<String> {
     ids.sort();
     ids
 }
+
+/// The rollout files of a Codex thread that had a turn reverted twice, laid out the way Codex
+/// writes them under a home's `sessions/`: the first rollout and two later history segments, each
+/// continuing the one before (`history_base`), in dated directories of their own.
+pub(crate) struct CodexChain {
+    pub first: PathBuf,
+    pub middle: PathBuf,
+    pub head: PathBuf,
+}
+
+impl CodexChain {
+    /// The segment ids the middle and head files are named with.
+    pub const MIDDLE_ID: &'static str = "019a0000-0000-7000-8000-0000000000a1";
+    pub const HEAD_ID: &'static str = "019a0000-0000-7000-8000-0000000000a2";
+
+    /// The three files, first rollout first.
+    pub fn all(&self) -> [PathBuf; 3] {
+        [self.first.clone(), self.middle.clone(), self.head.clone()]
+    }
+}
+
+/// Writes the chain of thread `thread` into `home`, compressed the way Codex does an old rollout
+/// when `compressed`. Each file holds a prompt of its own (`first prompt`, `middle prompt`, `head
+/// prompt`) and the thread's running token total as of its end (100, 200, 300 tokens), which
+/// carries on from file to file as Codex's does. Each file but the head goes on past the point the
+/// next continues from, with a prompt (`reverted turn A`, `reverted turn B`) that is not part of
+/// the conversation as it stands. The head is backdated, so a reader that took the file written
+/// last would pick another one.
+pub(crate) fn codex_chain(home: &Path, thread: &str, compressed: bool) -> CodexChain {
+    let suffix = if compressed { ".jsonl.zst" } else { ".jsonl" };
+    let path = |day: &str, time: &str, name: &str| {
+        home.join("sessions/2026/10")
+            .join(day)
+            .join(format!("rollout-2026-10-{day}T{time}-{name}{suffix}"))
+    };
+    let chain = CodexChain {
+        first: path("01", "00-00-00", thread),
+        middle: path(
+            "02",
+            "00-00-00",
+            &format!("{thread}_{}", CodexChain::MIDDLE_ID),
+        ),
+        head: path(
+            "03",
+            "00-00-00",
+            &format!("{thread}_{}", CodexChain::HEAD_ID),
+        ),
+    };
+    // Each segment continues the file before it from just after that file's prompt line.
+    let rollout = |base: Option<(&str, usize)>, prompt: &str, later: &str, total: u64| {
+        let base = base.map_or(serde_json::Value::Null, |(id, cut)| {
+            serde_json::json!({"thread_id": id, "end_ordinal_exclusive": 2, "end_byte_offset": cut})
+        });
+        let lines = [
+            serde_json::json!({"type":"session_meta","payload":{"id":thread,
+                "history_mode":"paginated","history_base":base}}),
+            serde_json::json!({"type":"event_msg","payload":{"type":"user_message",
+                "message":prompt,"images":[],"local_images":[],"text_elements":[]}}),
+            serde_json::json!({"type":"event_msg","payload":{"type":"user_message",
+                "message":later,"images":[],"local_images":[],"text_elements":[]}}),
+            serde_json::json!({"type":"event_msg","payload":{"type":"token_count","info":{
+                "total_token_usage":{"input_tokens":total,"cached_input_tokens":0,
+                    "output_tokens":0,"reasoning_output_tokens":0,"total_tokens":total}}}}),
+        ];
+        lines.map(|line| line.to_string() + "\n")
+    };
+    let cut = |lines: &[String; 4]| lines[0].len() + lines[1].len();
+    let first = rollout(None, "first prompt", "reverted turn A", 100);
+    let middle = rollout(
+        Some((thread, cut(&first))),
+        "middle prompt",
+        "reverted turn B",
+        200,
+    );
+    let head = rollout(
+        Some((CodexChain::MIDDLE_ID, cut(&middle))),
+        "head prompt",
+        "last turn",
+        300,
+    );
+    let files = [
+        (&chain.first, first.concat()),
+        (&chain.middle, middle.concat()),
+        (&chain.head, head.concat()),
+    ];
+    for (file, content) in files {
+        std::fs::create_dir_all(file.parent().expect("a rollout has a directory"))
+            .expect("the dated directory is creatable");
+        let bytes = if compressed {
+            zstd::encode_all(content.as_bytes(), 0).expect("the rollout compresses")
+        } else {
+            content.into_bytes()
+        };
+        std::fs::write(file, bytes).expect("the rollout is writable");
+    }
+    // Writing an earlier segment again (as a resume that decompressed it would) moves its
+    // modification time past the head's.
+    move_modification_time_back(&chain.head);
+    chain
+}

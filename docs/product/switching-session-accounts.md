@@ -98,14 +98,37 @@ came from:
 | Agent | What is copied |
 |---|---|
 | Claude Code | the session's transcript (`projects/<project slug>/<session id>.jsonl`), and, where they exist, the directory of the same name beside it (`projects/<project slug>/<session id>/`: subagent transcripts, tool results, the conversation's custom title) and the session's rewind checkpoints (`file-history/<session id>/`) |
-| Codex | the session's own rollout, as it is, compressed or not (see "Agent session data" in `docs/product/launching-agents.md`); Codex decompresses a compressed one when it resumes it |
+| Codex | the session's rollouts, as they are, compressed or not: the first rollout and, for a thread that had a turn reverted, every later history segment (see "Agent session data" in `docs/product/launching-agents.md`); Codex decompresses the compressed ones it reads when it resumes |
 | Grok Build | the session's directory, whole |
 
-- **Codex subagents' rollouts stay behind.** A subagent the session spawned has a rollout of its own, named with the
-  session's thread id followed by the subagent's; none of them is copied. Codex resumes a thread in an account that
-  has no entry of its own for it by the newest rollout whose name contains the thread id, so with them copied the
-  switched session would come up in a subagent's conversation instead of its own (measured with codex-cli 0.162.1).
-  Those subagents' conversations remain in the account the session came from.
+- **A Codex thread is carried whole**: its first rollout and every history segment, the head among them (see "Agent
+  session data" in `docs/product/launching-agents.md`). The head is located once the session's process has ended, so
+  a segment started while it exited is the one carried as the head. An account given the first rollout alone would
+  resume the conversation as it was before the revert, with no warning, and one given the head alone would refuse it
+  (measured with codex-cli 0.162.1).
+- **The target's own record of the thread is pointed at the head.** Codex keeps a database of its threads in each
+  account (`state_<n>.sqlite`) and resumes the rollout that database names, so an account that held the thread before
+  (the session was switched there, then reverted in another account) would follow its row to an older branch however
+  whole the copied chain is, with no sign of it (measured with codex-cli 0.162.1). Once the copy is in place,
+  Octoboard sets that thread's `rollout_path`, in every such database of the target that has a thread table, to the
+  head's path in the target (without a `.zst` ending, the form Codex keeps for a compressed rollout), where the row
+  names another file. Nothing else is changed: the row's other columns and the rows other tables keep of the thread
+  are left as they are, so the older branch's title and preview stay on the row. An account with no row of the
+  thread, no database, or none with a thread table has nothing to point.
+  - **Where the database is**: the directory `sqlite_home` names in the target's `config.toml` (a relative one taken
+    against the account's directory, a leading `~` as the home directory in the user's shell environment), else
+    `CODEX_SQLITE_HOME` in that environment, else the account's directory. A directory that does not exist holds no
+    database.
+  - **Rather than risk resuming the older branch unnoticed, the switch fails** (see "When a switch fails" below) when
+    where the database is cannot be determined (a `config.toml` that cannot be read or parsed, a relative
+    `CODEX_SQLITE_HOME`, a directory that cannot be listed), or when a database cannot be opened or written to, or
+    stays busy for 5 seconds. The conversation is already copied by then and stays in the target, and the failure
+    says so.
+
+  This is the one thing a switch writes to an agent's own state besides the copied conversation.
+- **Codex subagents' rollouts stay behind.** A subagent the session spawned is a thread of its own, with a rollout
+  named by its own id, which never contains the session's. Its conversation remains in the account the session came
+  from.
 - **Nothing else is copied**: no index, registry or per-project entry of the agent's, and none of its settings. What
   the agent keeps beside the record is gathered only once the session's process has ended, so what it wrote while
   exiting comes along.
@@ -126,14 +149,15 @@ came from:
 recorded, when the session is being launched, resumed, handed off, switched already or having its owner changed at
 that moment, when it is archived, when it is on that account already, when the target is a Grok Build directory that is not an initialized Grok home, when the user's
 shell environment could not be captured — which is read whenever either side of the switch is the default account,
-since that is what resolves its directory (see "The launch environment" in `docs/product/launching-agents.md`) — and
-when the conversation record is not where it should be; the session's process is then left running. The one further
-refusal comes after the process has been asked to end: a process that has not gone within 30 seconds stops the
-switch, with nothing copied and nothing recorded, and that process may still be running. Once the process has been
-ended, a copy that does not complete, a relaunch the launch rules refuse and a relaunch whose process ends at once
-are each reported as a failed switch, not as a success: the session is left *interrupted* on its old account,
-resumable as before, and already reads so everywhere by the time the failure is shown. Octoboard tells that last
-case from a success by the process ending within a few seconds of the relaunch, never by reading what the agent
-printed. An account that is not signed in is therefore not a failed switch: every agent, Grok Build included, comes
-up on its own sign-in rather than exiting, so the switch succeeds and the session's terminal shows that agent's
-sign-in, which may start its sign-in flow.
+since that is what resolves its directory, and for any Codex switch, since that environment says where the target
+keeps its database (see "The launch environment" in `docs/product/launching-agents.md`) — and when the conversation
+record is not where it should be; the session's process is then left running. The one further refusal comes after
+the process has been asked to end: a process that has not gone within 30 seconds stops the switch, with nothing
+copied and nothing recorded, and that process may still be running. Once the process has been ended, a copy that
+does not complete (a Codex account's database that cannot be updated included), a relaunch the launch rules refuse
+and a relaunch whose process ends at once are each reported as a failed switch, not as a success: the session is left
+*interrupted* on its old account, resumable as before, and already reads so everywhere by the time the failure is
+shown. Octoboard tells that last case from a success by the process ending within a few seconds of the relaunch,
+never by reading what the agent printed. An account that is not signed in is therefore not a failed switch: every
+agent, Grok Build included, comes up on its own sign-in rather than exiting, so the switch succeeds and the session's
+terminal shows that agent's sign-in, which may start its sign-in flow.

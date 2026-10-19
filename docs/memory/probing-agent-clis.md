@@ -127,16 +127,23 @@ objection you cannot answer.
 
 Applies whenever a change copies, links or shares an agent's files between config directories — what a session-account
 switch carries, a directory two accounts share — or decides to leave some behind. Neither "the files arrived" nor "the
-resume started without an error" settles it: carrying more of a conversation is not monotonically safer, because an
-agent can resolve a resume by matching file names, and an extra file named with the id can become what it opens — Codex
-does this with subagent rollouts (the "Moving a conversation to another config directory" section of
+resume started without an error" settles it: an agent resolves a resume from whatever it finds in the target, and what
+it finds can open a stale branch of the conversation with no error or warning. Codex does: a thread that had a turn
+reverted is a chain of rollout files, and leaving the later ones out — or a target whose own database row names an
+older head, even with every file present — resumes with the reverted turn back and the newest turns gone (the "Codex,
+history segments" note in the "Moving a conversation to another config directory" section of
 `docs/agent-cli-reference.md`).
 
-So the check is a real resume under the target directory, built from a copy of a real session's files with everything
-the source holds for that id — subagent files, compressed records — since a fixture holding only the main record cannot
-show a wrong pick. Then confirm which conversation came up: its earlier turns, or the record the agent went on to use
-(Codex writes the path of the rollout it opened into the home's database). Repeat it for every arrangement the change
-can produce, a target that already holds files of that id included.
+**Decide what each file is from its contents, never from its name, before deciding what to carry.** Codex's
+`rollout-…-<id>_<x>` files were once read from their names as subagent rollouts and left behind; their `session_meta`
+carries the thread's own id and the lineage that makes them later segments of it.
+
+So the check is a real resume under the target directory, built from a copy of a real session whose history produced
+every kind of file the agent writes for a conversation — for Codex a thread with a reverted turn, compressed files
+included — since a fixture holding only a plain, linear record cannot show a stale pick. Then confirm which branch came
+up: a turn that survives present and a reverted turn absent, and the record the agent went on to use (Codex writes the
+path of the rollout it opened into the home's database). Repeat it for every arrangement the change can produce,
+including a target that already holds the conversation and its own record of it from before the source changed.
 
 ## A permission probe cannot assume that anything prompts: set the mode yourself and read it back
 

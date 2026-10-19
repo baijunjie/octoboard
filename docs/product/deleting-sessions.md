@@ -151,7 +151,7 @@ the option is ticked; the option cannot be changed meanwhile.
   | Agent | What is moved |
   |---|---|
   | Claude Code | the session's transcript, in every project directory it appears in, with the directory of its subagents' transcripts beside it |
-  | Codex | the session's rollout files |
+  | Codex | the session's rollout files: the thread's first rollout and every later history segment, compressed or not (see "Agent session data" in `docs/product/launching-agents.md`) |
   | Grok Build | the session's directory |
 
 - **They are looked for wherever this machine's accounts of that agent could hold them**: the account the session last

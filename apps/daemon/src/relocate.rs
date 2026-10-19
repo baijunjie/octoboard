@@ -11,17 +11,20 @@
 //! the directories are the account's own (the source home a per-session home is built from), never
 //! a per-session home, which is discarded with its process.
 //!
-//! The record alone is sufficient for all three agents to resume — no index, registry or
+//! The record alone is sufficient for Claude Code and Grok Build to resume — no index, registry or
 //! per-project entry is copied with it — but it is not the whole conversation, so what the agent
 //! keeps beside it travels too ([`companions`]): Claude Code's directory of the same name (subagent
-//! transcripts, tool results) and its rewind checkpoints. Nothing else is touched in either
-//! directory: the copy only ever adds (or replaces) those items of the one session, besides a
-//! transient staging directory at the target's root that it creates and removes again. It copies
-//! rather than moves, so a switch that fails afterwards leaves the original where it was and
-//! switching back needs no second copy. The measurements are in
+//! transcripts, tool results) and its rewind checkpoints. For Codex the record alone is not
+//! sufficient: a thread that had a turn reverted is a chain of rollouts, the record is the chain's
+//! head, and the first rollout and the segments between are its companions. Nothing else is
+//! touched in either directory: the copy only ever adds (or replaces) those items of the one
+//! session, besides a transient staging directory at the target's root that it creates and
+//! removes again, and, for Codex, the one `rollout_path` its database keeps of the thread
+//! ([`repoint_thread_row`]). It copies rather than moves, so a switch that fails afterwards leaves
+//! the original where it was and switching back needs no second copy. The measurements are in
 //! `docs/agent-cli-reference.md`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::FileType;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -29,7 +32,7 @@ use std::time::SystemTime;
 
 use anyhow::Result;
 
-use crate::agent_records::{plausible_id, rollout_stem};
+use crate::agent_records::{names_thread, plausible_id, rollout_head, rollout_stem};
 use crate::protocol::{error_code, Agent, CodedError};
 
 /// Where an agent keeps its session records inside a config directory (`root`), how deep below it
@@ -52,14 +55,15 @@ fn layout(agent: Agent) -> Layout {
             is_record: |name, kind, id| kind.is_file() && name == format!("{id}.jsonl"),
         },
         // `sessions/<date directories>/rollout-<timestamp>-<thread id>.jsonl`, or `….jsonl.zst`
-        // once Codex has compressed it
+        // once Codex has compressed it, and for a thread that had a turn reverted a later segment
+        // `rollout-<timestamp>-<thread id>_<segment id>` for each
         Agent::Codex => Layout {
             root: "sessions",
             depth: 6,
             is_record: |name, kind, id| {
                 kind.is_file()
                     && name.starts_with("rollout-")
-                    && rollout_stem(name).is_some_and(|stem| stem.ends_with(&format!("-{id}")))
+                    && rollout_stem(name).is_some_and(|stem| names_thread(stem, id))
             },
         },
         // `sessions/<url-encoded cwd>/<session id>/`, a directory kept whole
@@ -72,10 +76,39 @@ fn layout(agent: Agent) -> Layout {
 }
 
 /// The path, relative to `source`, of the session's record in the account whose directory is
-/// `source`. Refused with `conversation_not_found` when there is none, which the caller meets
-/// before it has ended anything. Compared by entry name only, never joined into a path, so an id
-/// the agent reported cannot steer the search out of the directory.
+/// `source`: for Codex the head of the thread's chain of rollouts. Refused with
+/// `conversation_not_found` when there is none, which the caller meets before it has ended
+/// anything. Compared by entry name only, never joined into a path, so an id the agent reported
+/// cannot steer the search out of the directory.
 pub fn locate(agent: Agent, source: &Path, agent_session_id: &str) -> Result<PathBuf> {
+    let found = find(agent, source, agent_session_id);
+    let record = if agent == Agent::Codex {
+        let absolute: Vec<PathBuf> = found.iter().map(|relative| source.join(relative)).collect();
+        rollout_head(&absolute)
+            .and_then(|head| head.strip_prefix(source).ok().map(Path::to_path_buf))
+    } else {
+        // More than one is not expected; if it happens the one written to last is the live one.
+        found
+            .into_iter()
+            .max_by_key(|relative| modified(&source.join(relative)))
+    };
+    record.ok_or_else(|| {
+        CodedError::raised(
+            error_code::CONVERSATION_NOT_FOUND,
+            format!(
+                "no conversation record of this session was found in `{}`",
+                source.display()
+            ),
+            &[
+                ("agent", agent.label()),
+                ("path", &source.to_string_lossy()),
+            ],
+        )
+    })
+}
+
+/// Every record of the session in `source`, as paths relative to it.
+fn find(agent: Agent, source: &Path, agent_session_id: &str) -> Vec<PathBuf> {
     let layout = layout(agent);
     let mut found = Vec::new();
     if !agent_session_id.is_empty() {
@@ -88,30 +121,16 @@ pub fn locate(agent: Agent, source: &Path, agent_session_id: &str) -> Result<Pat
             &mut found,
         );
     }
-    // More than one is not expected; if it happens the one written to last is the live one.
     found
-        .into_iter()
-        .max_by_key(|relative| modified(&source.join(relative)))
-        .ok_or_else(|| {
-            CodedError::raised(
-                error_code::CONVERSATION_NOT_FOUND,
-                format!(
-                    "no conversation record of this session was found in `{}`",
-                    source.display()
-                ),
-                &[
-                    ("agent", agent.label()),
-                    ("path", &source.to_string_lossy()),
-                ],
-            )
-        })
 }
 
 /// What the agent keeps for the session besides its record, as paths relative to `source` that
-/// exist there, for a switch to carry with it. Claude Code only: the directory of the record's own
+/// exist there, for a switch to carry with it. Claude Code: the directory of the record's own
 /// name beside it (subagent transcripts, tool results, the custom title) and `file-history/<id>`
-/// (rewind checkpoints). An id that is no canonical UUID yields nothing, as it is joined into a
-/// path here.
+/// (rewind checkpoints). Codex: the other rollouts of the thread's chain, which with `record` (the
+/// head) are the whole conversation: a target given the head alone is refused, and one given the
+/// first rollout alone resumes a stale branch. An id that is no canonical UUID yields nothing,
+/// as it is joined into a path here.
 pub fn companions(
     agent: Agent,
     source: &Path,
@@ -129,12 +148,172 @@ pub fn companions(
         .into_iter()
         .filter(|relative| std::fs::symlink_metadata(source.join(relative)).is_ok())
         .collect(),
-        // Codex's subagent rollouts (`rollout-<timestamp>-<thread id>_<child id>`) stay behind:
-        // a home with no database row for the thread resumes the newest rollout whose name
-        // contains the id, which with those present is a subagent's, not the thread's (measured
-        // with 0.162.1). Grok keeps everything inside the session directory.
-        Agent::Codex | Agent::Grok => Vec::new(),
+        // A subagent's rollout is named by its own thread id and never matches the thread's, so
+        // it stays behind. Grok keeps everything inside the session directory.
+        Agent::Codex => find(agent, source, agent_session_id)
+            .into_iter()
+            .filter(|relative| relative != record)
+            .collect(),
+        Agent::Grok => Vec::new(),
     }
+}
+
+/// How long the target's database may be busy before the update gives up.
+const DATABASE_PATIENCE: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Points a Codex home's own record of `thread` at the rollout the switch just carried in, which
+/// is the one write a switch makes to an agent's own state beside the copy. Codex resumes a thread
+/// by the rollout its database row names, and falls back to the rollouts' names only for a thread
+/// with no row (measured with 0.162.1), so a home that held the thread before it was reverted
+/// elsewhere would follow its row to the stale head however whole the chain copied in is. The
+/// update changes the row's `rollout_path` and no other column or table: the row's other columns
+/// (title, pin, section, project) and the rows other tables keep of the thread (links, tools) stay
+/// as the user left them. The path written is the head's in the target without any `.zst`, the
+/// form Codex keeps for a rollout it has compressed. A home with no row of the thread has nothing
+/// to point.
+///
+/// `launch_env` is the environment the relaunch will see, which with the home's `config.toml` says
+/// where the home keeps its database ([`database_directory`]). A switch fails
+/// (`relocation_failed`, before anything is relaunched) when where the database is cannot be
+/// determined (a `config.toml` that cannot be read or parsed, a relative `CODEX_SQLITE_HOME`, a
+/// directory that cannot be listed) or it cannot be written to or stays busy: a row left standing
+/// would resume the stale branch with no sign of it.
+pub fn repoint_thread_row(
+    agent: Agent,
+    target: &Path,
+    head: &Path,
+    thread: &str,
+    launch_env: &HashMap<String, String>,
+) -> Result<()> {
+    repoint_within(agent, target, head, thread, launch_env, DATABASE_PATIENCE)
+}
+
+fn repoint_within(
+    agent: Agent,
+    target: &Path,
+    head: &Path,
+    thread: &str,
+    launch_env: &HashMap<String, String>,
+    patience: std::time::Duration,
+) -> Result<()> {
+    if agent != Agent::Codex || !plausible_id(thread) {
+        return Ok(());
+    }
+    let failed = |detail: String| {
+        let detail = format!(
+            "the conversation was copied but Codex's record of the thread was not updated: \
+             {detail}"
+        );
+        CodedError::raised(
+            error_code::RELOCATION_FAILED,
+            detail.clone(),
+            &[("path", &target.to_string_lossy()), ("detail", &detail)],
+        )
+    };
+    let directory =
+        database_directory(target, launch_env).map_err(|err| failed(format!("{err}")))?;
+    let mut rollout = target.join(head);
+    if rollout.extension().is_some_and(|ext| ext == "zst") {
+        rollout.set_extension("");
+    }
+    let listing =
+        |err: io::Error| failed(format!("listing `{}` failed: {err}", directory.display()));
+    let entries = match std::fs::read_dir(&directory) {
+        Ok(entries) => entries,
+        // No directory, no database: the home has not run Codex yet.
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(err) => return Err(listing(err)),
+    };
+    for entry in entries {
+        let entry = entry.map_err(listing)?;
+        if !entry.file_type().map_err(listing)?.is_file() {
+            continue;
+        }
+        // `state_<n>.sqlite`: the number is Codex's schema generation, which a newer Codex may
+        // raise.
+        let path = entry.path();
+        let is_database = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .and_then(|name| name.strip_prefix("state_")?.strip_suffix(".sqlite"))
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|byte| byte.is_ascii_digit()));
+        if is_database {
+            repoint_in(&path, thread, &rollout, patience)
+                .map_err(|err| failed(format!("updating `{}` failed: {err}", path.display())))?;
+        }
+    }
+    Ok(())
+}
+
+/// Where a Codex home keeps its databases: its own directory, unless its `config.toml` sets
+/// `sqlite_home`, which wins over the `CODEX_SQLITE_HOME` environment variable (measured with
+/// 0.162.1). A relative `sqlite_home` is taken against the home and a leading `~` is the launch
+/// environment's `HOME`; a relative `CODEX_SQLITE_HOME` is taken against the directory Codex is
+/// started in, which is not known here, so it is refused. Codex also lets an enterprise
+/// requirement override both, which is not looked for here.
+fn database_directory(home: &Path, launch_env: &HashMap<String, String>) -> io::Result<PathBuf> {
+    let configured = match std::fs::read_to_string(home.join("config.toml")) {
+        Ok(text) => toml::from_str::<toml::Table>(&text)
+            .map_err(|err| io::Error::other(format!("`config.toml` is not valid: {err}")))?
+            .get("sqlite_home")
+            .and_then(toml::Value::as_str)
+            .map(str::to_owned),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => None,
+        Err(err) => return Err(err),
+    };
+    if let Some(dir) = configured {
+        let user_home = launch_env.get("HOME").filter(|home| !home.is_empty());
+        return match (dir.strip_prefix('~'), user_home) {
+            (Some(rest), Some(user_home)) if rest.is_empty() || rest.starts_with('/') => {
+                Ok(PathBuf::from(user_home).join(rest.trim_start_matches('/')))
+            }
+            (Some(_), None) => Err(io::Error::other(
+                "`sqlite_home` starts with `~` and the launch environment has no HOME",
+            )),
+            _ => Ok(home.join(dir)),
+        };
+    }
+    match launch_env
+        .get("CODEX_SQLITE_HOME")
+        .filter(|dir| !dir.is_empty())
+    {
+        Some(dir) if Path::new(dir).is_absolute() => Ok(PathBuf::from(dir)),
+        Some(dir) => Err(io::Error::other(format!(
+            "`CODEX_SQLITE_HOME` is the relative path `{dir}`, which depends on the directory \
+             the session starts in"
+        ))),
+        None => Ok(home.to_path_buf()),
+    }
+}
+
+fn repoint_in(
+    database: &Path,
+    thread: &str,
+    rollout: &Path,
+    patience: std::time::Duration,
+) -> rusqlite::Result<()> {
+    use rusqlite::OptionalExtension;
+    // Never created: a file that is not a database already is an error, not a new database.
+    let connection = rusqlite::Connection::open_with_flags(
+        database,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
+    connection.busy_timeout(patience)?;
+    let has_table = connection
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'threads'",
+            [],
+            |_| Ok(()),
+        )
+        .optional()?
+        .is_some();
+    if has_table {
+        connection.execute(
+            "UPDATE threads SET rollout_path = ?1 WHERE id = ?2 AND rollout_path <> ?1",
+            rusqlite::params![rollout.to_string_lossy(), thread],
+        )?;
+    }
+    Ok(())
 }
 
 fn search(
@@ -480,40 +659,238 @@ mod tests {
     const CLAUDE_ID: &str = "11111111-2222-3333-4444-555555555555";
     const CODEX_ID: &str = "019a0000-0000-7000-8000-000000000001";
 
-    /// A Codex rollout Codex has compressed is located like a plain one and copied as it is (the
-    /// bytes stay compressed). Its subagent rollouts, plain or compressed, stay behind: a home
-    /// with no database row for the thread resumes the newest rollout whose name contains the id
-    /// (measured with 0.162.1), which with them present is a subagent's, not the thread's.
+    /// A Codex thread that had a turn reverted is carried whole: the head is the record, the
+    /// first rollout and the middle segment travel with it as companions, compressed ones as they
+    /// are (the bytes stay compressed). A subagent's rollout, named by its own thread id, stays
+    /// behind.
     #[test]
-    fn a_compressed_codex_rollout_is_carried_alone() {
-        let source = temp_dir("codex-source");
-        let target = temp_dir("codex-target");
-        let record =
-            format!("sessions/2026/10/01/rollout-2026-10-01T01-02-03-{CODEX_ID}.jsonl.zst");
-        let child = "019a0000-0000-7000-8000-00000000000a";
-        let subagents = [
-            format!("sessions/2026/10/01/rollout-2026-10-01T01-05-00-{CODEX_ID}_{child}.jsonl.zst"),
-            format!("sessions/2026/10/02/rollout-2026-10-02T00-00-01-{CODEX_ID}_{child}.jsonl"),
-        ];
-        write(&source, &record, "compressed bytes");
-        for file in &subagents {
-            write(&source, file, "subagent");
+    fn a_reverted_codex_thread_is_carried_whole() {
+        for compressed in [false, true] {
+            let source = temp_dir("codex-source");
+            let target = temp_dir("codex-target");
+            let chain = crate::test_support::codex_chain(&source, CODEX_ID, compressed);
+            let relative = |path: &Path| path.strip_prefix(&*source).unwrap().to_path_buf();
+            let child = "019a0000-0000-7000-8000-00000000000a";
+            let subagent = format!("sessions/2026/10/01/rollout-2026-10-01T01-05-00-{child}.jsonl");
+            write(&source, &subagent, "subagent");
+
+            let located = locate(Agent::Codex, &source, CODEX_ID).expect("found");
+            assert_eq!(located, relative(&chain.head), "compressed: {compressed}");
+            let mut relatives = companions(Agent::Codex, &source, &located, CODEX_ID);
+            relatives.sort();
+            assert_eq!(
+                relatives,
+                [relative(&chain.first), relative(&chain.middle)],
+                "compressed: {compressed}"
+            );
+
+            copy(&source, &target, &located, &relatives).expect("copied");
+            for file in chain.all() {
+                assert_eq!(
+                    std::fs::read(target.join(relative(&file))).unwrap(),
+                    std::fs::read(&file).unwrap(),
+                    "{file:?}"
+                );
+            }
+            assert!(
+                !target.join(&subagent).exists(),
+                "the subagent's was carried"
+            );
+            assert!(source.join(relative(&chain.head)).is_file(), "moved");
         }
+    }
 
-        let located = locate(Agent::Codex, &source, CODEX_ID).expect("found");
-        assert_eq!(located, Path::new(&record));
-        let relatives = companions(Agent::Codex, &source, &located, CODEX_ID);
-        assert!(relatives.is_empty());
+    /// The target's database row of the thread is pointed at the carried head and nothing else of
+    /// it or of the database changes; the database is found where the home's `config.toml` or the
+    /// environment puts it; a home with no database, or one with no `threads` table, has nothing to
+    /// point; a database that stays busy or is no database fails the switch, saying the
+    /// conversation was copied.
+    #[test]
+    fn a_codex_homes_row_of_the_thread_is_pointed_at_the_head_and_nothing_else() {
+        use rusqlite::Connection;
+        let target = temp_dir("point-row");
+        let other = "019a0000-0000-7000-8000-0000000000bb";
+        let head = Path::new("sessions/2026/10/03/rollout-2026-10-03T00-00-00-x_y.jsonl.zst");
+        let database = target.join("state_5.sqlite");
+        let connection = Connection::open(&database).unwrap();
+        connection
+            .execute_batch(&format!(
+                "CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT, title TEXT);
+                 CREATE TABLE thread_attachments (thread_id TEXT NOT NULL
+                     REFERENCES threads(id) ON DELETE CASCADE);
+                 INSERT INTO threads VALUES ('{CODEX_ID}', 'old', 'kept'), ('{other}', 'other', 'x');
+                 INSERT INTO thread_attachments VALUES ('{CODEX_ID}');"
+            ))
+            .unwrap();
+        let path_of = |id: &str, database: &Path| -> String {
+            Connection::open(database)
+                .unwrap()
+                .query_row(
+                    "SELECT rollout_path FROM threads WHERE id = ?1",
+                    [id],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        let patience = std::time::Duration::from_millis(50);
+        let point = |target: &Path, thread: &str, env: &[(&str, &str)]| {
+            let env = env
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .collect();
+            repoint_within(Agent::Codex, target, head, thread, &env, patience)
+        };
 
-        copy(&source, &target, &located, &relatives).expect("copied");
-        assert_eq!(
-            std::fs::read_to_string(target.join(&record)).unwrap(),
-            "compressed bytes"
+        let held = Connection::open(&database).unwrap();
+        held.execute_batch("BEGIN EXCLUSIVE").unwrap();
+        let err = point(&target, CODEX_ID, &[]).expect_err("a busy database");
+        assert_eq!(code_of(&err), error_code::RELOCATION_FAILED);
+        assert!(
+            err.to_string().contains("conversation was copied"),
+            "{err:#}"
         );
-        assert!(source.join(&record).is_file(), "moved");
-        for file in &subagents {
-            assert!(!target.join(file).exists(), "{file} was carried");
+        held.execute_batch("ROLLBACK").unwrap();
+        assert_eq!(path_of(CODEX_ID, &database), "old");
+
+        point(&target, CODEX_ID, &[]).unwrap();
+        // The head's path in the target, without the `.zst` Codex has compressed it to.
+        let expected = target
+            .join(head)
+            .with_extension("")
+            .to_string_lossy()
+            .into_owned();
+        assert_eq!(path_of(CODEX_ID, &database), expected);
+        assert_eq!(path_of(other, &database), "other");
+        let conn = Connection::open(&database).unwrap();
+        let kept: (String, i64) = conn
+            .query_row(
+                "SELECT (SELECT title FROM threads WHERE id = ?1),
+                        (SELECT count(*) FROM thread_attachments)",
+                [CODEX_ID],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(kept, ("kept".to_owned(), 1), "more than the path changed");
+
+        // A thread with no row, another agent, no database, no table, no database file.
+        point(&target, other.replace("bb", "cc").as_str(), &[]).unwrap();
+        repoint_within(
+            Agent::Claude,
+            &target,
+            head,
+            CODEX_ID,
+            &HashMap::new(),
+            patience,
+        )
+        .unwrap();
+        point(&temp_dir("point-none"), CODEX_ID, &[]).unwrap();
+        let bare = temp_dir("point-bare");
+        Connection::open(bare.join("state_9.sqlite"))
+            .unwrap()
+            .execute_batch("CREATE TABLE unrelated (id TEXT)")
+            .unwrap();
+        point(&bare, CODEX_ID, &[]).unwrap();
+        let broken = temp_dir("point-broken");
+        write(
+            &broken,
+            "state_5.sqlite",
+            "not a database, but long enough to be read as one",
+        );
+        point(&broken, CODEX_ID, &[]).expect_err("a file that is no database");
+
+        // The database lives where `config.toml` says, else where the environment says; the
+        // configuration wins. `~` is the launch environment's HOME.
+        let moved = temp_dir("point-moved");
+        let elsewhere = moved.join("elsewhere");
+        let (elsewhere_text, user_home) = (elsewhere.to_string_lossy(), moved.join("user"));
+        let user_home_text = user_home.to_string_lossy();
+        // (name, config.toml, launch environment, where the database is)
+        type Case<'a> = (&'a str, Option<&'a str>, Vec<(&'a str, &'a str)>, PathBuf);
+        let cases: [Case; 4] = [
+            (
+                "config",
+                Some("sqlite_home = \"db\""),
+                vec![],
+                moved.join("config/db"),
+            ),
+            (
+                "env",
+                None,
+                vec![("CODEX_SQLITE_HOME", &elsewhere_text)],
+                elsewhere.clone(),
+            ),
+            (
+                "both",
+                Some("sqlite_home = \"db\""),
+                vec![("CODEX_SQLITE_HOME", &elsewhere_text)],
+                moved.join("both/db"),
+            ),
+            (
+                "tilde",
+                Some("sqlite_home = \"~/tdb\""),
+                vec![("HOME", &user_home_text)],
+                user_home.join("tdb"),
+            ),
+        ];
+        for (name, config, env, directory) in cases {
+            let home = moved.join(name);
+            std::fs::create_dir_all(&directory).unwrap();
+            std::fs::create_dir_all(&home).unwrap();
+            if let Some(config) = config {
+                write(&home, "config.toml", config);
+            }
+            let moved_database = directory.join("state_5.sqlite");
+            std::fs::copy(&database, &moved_database).unwrap();
+            Connection::open(&moved_database)
+                .unwrap()
+                .execute("UPDATE threads SET rollout_path = 'old'", [])
+                .unwrap();
+            point(&home, CODEX_ID, &env).unwrap();
+            let expected = home
+                .join(head)
+                .with_extension("")
+                .to_string_lossy()
+                .into_owned();
+            assert_eq!(path_of(CODEX_ID, &moved_database), expected, "{name}");
         }
+
+        // Where the database is cannot be told: not guessed past. Nor can an unlistable
+        // directory (the setting names a file) be taken for "no database"; a missing one can.
+        for (name, config, env) in [
+            ("unreadable", "sqlite_home = [", vec![]),
+            ("no-home", "sqlite_home = \"~/db\"", vec![]),
+            ("relative-env", "", vec![("CODEX_SQLITE_HOME", "db")]),
+            (
+                "not-a-directory",
+                "sqlite_home = \"state_5.sqlite\"",
+                vec![],
+            ),
+        ] {
+            let home = moved.join(name);
+            write(&home, "config.toml", config);
+            let in_home = home.join("state_5.sqlite");
+            if name == "not-a-directory" {
+                write(&home, "state_5.sqlite", "a file where a directory is named");
+            } else {
+                // A valid database in the home itself: a fallback to it would be caught.
+                std::fs::copy(&database, &in_home).unwrap();
+                Connection::open(&in_home)
+                    .unwrap()
+                    .execute("UPDATE threads SET rollout_path = 'old'", [])
+                    .unwrap();
+            }
+            point(&home, CODEX_ID, &env).expect_err(name);
+            if name != "not-a-directory" {
+                assert_eq!(
+                    path_of(CODEX_ID, &in_home),
+                    "old",
+                    "{name} fell back to the home"
+                );
+            }
+        }
+        let absent = moved.join("absent");
+        write(&absent, "config.toml", "sqlite_home = \"nowhere\"");
+        point(&absent, CODEX_ID, &[]).unwrap();
     }
 
     /// Claude Code's directory beside the transcript and the rewind checkpoints travel with it

@@ -91,6 +91,40 @@ fn a_compressed_codex_rollout_is_read_for_the_package() {
     }
 }
 
+/// A Codex thread that had a turn reverted is handed over as its current branch: each earlier
+/// file up to the point the next continues from, then the head.
+#[test]
+fn a_reverted_codex_threads_whole_branch_is_read_for_the_package() {
+    for compressed in [false, true] {
+        let (state, dir) = app_state("handoff-chain");
+        state.store.insert_console(&console(&dir)).unwrap();
+        let repo = repo_with("handoff-chain-repo", &[(b"a.txt", b"one\n")]);
+        insert_project(&state, &repo);
+        let account = dir.join("account");
+        let id = "019a0000-0000-7000-8000-000000000001";
+        crate::test_support::codex_chain(&account, id, compressed);
+        let mut original = session("chain", Agent::Codex, Some(&account));
+        original.agent_session_id = Some(id.to_owned());
+        state.store.insert_session(&original).unwrap();
+
+        let text = build_with(&state, &original, None, &mut locator(&dir))
+            .unwrap()
+            .render();
+
+        let at = |prompt: &str| {
+            text.find(prompt)
+                .unwrap_or_else(|| panic!("lacks {prompt:?}:\n{text}"))
+        };
+        assert!(
+            at("first prompt") < at("middle prompt") && at("middle prompt") < at("head prompt")
+        );
+        assert!(at("head prompt") < at("last turn"));
+        for reverted in ["reverted turn A", "reverted turn B"] {
+            assert!(!text.contains(reverted), "{reverted:?} was read:\n{text}");
+        }
+    }
+}
+
 #[test]
 fn the_package_of_each_agent_holds_the_conversation_and_no_tool_output() {
     let (state, dir) = app_state("handoff-agents");
