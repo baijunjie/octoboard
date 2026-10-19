@@ -602,7 +602,9 @@ const SessionCard = memo(function SessionCard({
       <RowIconLine icon={<StatusIcon status={session.status} decorative />}>
         <span className="text-xs font-medium text-app-muted">{statusLabel(t, session.status)}</span>
         <span className="flex-1" />
-        <RowControls always fixed={session.locked || showPin ? <>{session.locked && <LockButton name={sessionDisplayTitle(t, session)} onUnlock={() => handlers.onSetLocked(session, false)} returnFocusTo={rowRef} />}{showPin && <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}</> : undefined}>
+        {/* The controls reach 4px past the status line above and below so it keeps the agent line's
+            height, leaving the card's top and bottom edges the same distance from their text. */}
+        <RowControls always className="-my-1" fixed={session.locked || showPin ? <>{session.locked && <LockButton name={sessionDisplayTitle(t, session)} onUnlock={() => handlers.onSetLocked(session, false)} returnFocusTo={rowRef} />}{showPin && <PinButton name={sessionDisplayTitle(t, session)} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={rowRef} />}</> : undefined}>
           <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={hasBound} rowRef={rowRef} placement={own ? "focused" : undefined} />
         </RowControls>
       </RowIconLine>
