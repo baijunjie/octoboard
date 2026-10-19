@@ -61,7 +61,7 @@ export function ChangeTree({
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
 }): React.ReactElement {
   const language = useCurrentLanguage();
-  const groups = useMemo(() => changeGroups(items, layout).map((group) => ({ id: group.section, ...group })), [items, layout]);
+  const groups = useMemo(() => changeGroups(items, layout).map((group, index, all) => ({ id: group.section, previousSection: all[index - 1]?.section, ...group })), [items, layout]);
   // Only the commits and directories of the sections on screen: a folded section renders none of
   // its rows, so whether a row inside one is folded is not this list's to decide. react-aria hands
   // an expanded key it knows nothing of back unchanged, so those keys would survive either way;
@@ -159,7 +159,13 @@ export function ChangeTree({
             {(group) => (
               <TreeSection className="h-full" id={group.section}>
                 <TreeHeader data-list-motion={`heading:${group.section}`} className={HEADING_CLASS}>
-                  <ChangeSectionHeading section={group.section} count={group.items.length} collapsed={collapsed} onCollapsedChange={onCollapsedChange} />
+                  <ChangeSectionHeading
+                    section={group.section}
+                    count={group.items.length}
+                    collapsed={collapsed}
+                    onCollapsedChange={onCollapsedChange}
+                    topDivider={group.previousSection === undefined || !collapsed.has(sectionKey(group.previousSection))}
+                  />
                 </TreeHeader>
                 {/* A folded section is its heading and nothing else, still counting what it holds. */}
                 <Collection items={collapsed.has(sectionKey(group.section)) ? [] : group.nodes} dependencies={[language, selected, layout]}>

@@ -716,6 +716,21 @@ const reviewScenarios: Scenario[] = [
     steps: openGit,
   },
   {
+    id: "git-changes-folded-sections",
+    group: GROUP,
+    category: "normal",
+    title: "Adjacent folded change sections",
+    description: "Unstaged and Committed are folded to adjacent bands: the first keeps its top groove and the boundary between them has one shared groove. Reopen Unstaged to see Committed regain its top groove below the file row.",
+    state,
+    preferences,
+    steps: [
+      ...selecting(rankingSession),
+      (ui) => ui.press(`${ui.t("git.group.committed")}9`),
+      (ui) => ui.press(`${ui.t("git.group.unstaged")}1`),
+      (ui) => ui.wait(300),
+    ],
+  },
+  {
     id: "git-changes-never-pushed",
     group: GROUP,
     category: "normal",

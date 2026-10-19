@@ -17,7 +17,7 @@ export const HEADING_HEIGHT = 30;
  * `h-[30px]` is `HEADING_HEIGHT`.
  * What the band holds is one control filling it (`ChangeSectionHeading`), so the line's own layout and
  * padding sit there rather than here. */
-export const HEADING_CLASS = "flex h-[30px] bg-default text-xs font-medium text-app-muted";
+export const HEADING_CLASS = "flex h-[30px] groove-b bg-default text-xs font-medium text-app-muted";
 
 /** The virtualizer's sticky wrapper must stay within its own section, whose overflow is visible.
  * Render copies leave the layout's original positions intact for keyboard navigation and row offsets. */
@@ -123,12 +123,15 @@ export function ChangeSectionHeading({
   count,
   collapsed,
   onCollapsedChange,
+  topDivider,
 }: {
   section: ChangeSection;
   count: number;
   /** The row keys folded away, the heading's own among them when the section is folded. */
   collapsed: ReadonlySet<string>;
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
+  /** Adjacent headings share the preceding band's bottom divider. */
+  topDivider: boolean;
 }): React.ReactElement {
   const button = useRef<HTMLButtonElement>(null);
   const key = sectionKey(section);
@@ -156,7 +159,7 @@ export function ChangeSectionHeading({
       excludeFromTabOrder
       preventFocusOnPress
       onPress={toggle}
-      className="flex h-full w-full min-w-0 items-center gap-2 px-(--pane-inset) text-start outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-app-focus data-[focus-visible]:ring-inset"
+      className={`flex h-full w-full min-w-0 items-center gap-2 border-t border-transparent ${topDivider ? "groove-t" : ""} px-(--pane-inset) text-start outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-app-focus data-[focus-visible]:ring-inset`}
     >
       {/* The chevron mirrors under right-to-left while it points along the text. */}
       {isCollapsed ? (

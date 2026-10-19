@@ -116,12 +116,17 @@ it.each([
   const unfolded = rows(container);
   const band = heading(container, "Staged");
   expect(band.getAttribute("aria-expanded")).toBe("true");
+  expect(band.classList.contains("groove-t")).toBe(true);
+  expect(heading(container, "Unstaged").classList.contains("groove-t")).toBe(true);
   act(() => band.click());
   expect(rows(container)).toEqual(left);
   expect(band.textContent).toBe("Staged2");
   expect(band.getAttribute("aria-expanded")).toBe("false");
+  expect(band.classList.contains("groove-t")).toBe(true);
+  expect(heading(container, "Unstaged").classList.contains("groove-t")).toBe(false);
   act(() => band.click());
   expect(rows(container)).toEqual(unfolded);
+  expect(heading(container, "Unstaged").classList.contains("groove-t")).toBe(true);
 
   // A press takes no focus itself, and a row of the section it folds away hands focus to the
   // heading, which stands for it.
