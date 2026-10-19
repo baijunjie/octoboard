@@ -16,8 +16,8 @@ export function GeneralSection(): React.ReactElement {
   return (
     <>
       <AppearanceSetting />
-      <MarkdownStyleSetting />
       <LanguageSetting />
+      <MarkdownStyleSetting />
       <CloneDirSetting />
       <ArchiveCleanupSetting />
       {backgroundRun && <BackgroundRunSetting />}

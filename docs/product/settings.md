@@ -81,7 +81,7 @@ every path is shown in full.
 
 ## General
 
-Small app-wide settings: an **Appearance** row, a **Markdown style** row, a **Language** row, a **Default clone
+Small app-wide settings: an **Appearance** row, a **Language** row, a **Markdown style** row, a **Default clone
 directory** row, then an **Automatically delete archived sessions whose conversation is gone** row, and last, in the
 macOS application only, a **Keep running in the background** row.
 
@@ -91,18 +91,18 @@ The Light / Dark / System choice for the window's appearance, as a three-way seg
 an icon — a sun for Light, a moon for Dark, a monitor for System — named by its word. What each option means,
 which one is the default and where the choice is kept are in `docs/product/appearance.md`.
 
+### Language
+
+The language of the UI, chosen from a drop-down of the offered languages, each named in its own language. What the
+options are, how the first launch picks a language, what follows the choice and where it is kept are in
+`docs/product/language.md`.
+
 ### Markdown style
 
 How a rendered Markdown document in the project pane's file viewer looks, chosen from a drop-down of the styles:
 **Tailwind**, **GitHub**, **Newsprint** and **LaTeX**. The styles are named for what they are modelled on, so their
 names are proper names, the same in every language. What each style looks like, which one is the default and where
 the choice is kept are in "A Markdown file as a document" in `docs/product/file-viewer.md`.
-
-### Language
-
-The language of the UI, chosen from a drop-down of the offered languages, each named in its own language. What the
-options are, how the first launch picks a language, what follows the choice and where it is kept are in
-`docs/product/language.md`.
 
 ### Default clone directory
 

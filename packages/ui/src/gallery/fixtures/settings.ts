@@ -262,7 +262,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Browser General settings",
-    description: "The Markdown style row sits between Appearance and Language and starts on Tailwind. The clone-directory explanation describes when the chosen directory is used; the path appears in the input. The archive-cleanup switch sits right below it, on, with the description that says what is deleted and when.",
+    description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The clone-directory explanation describes when the chosen directory is used; the path appears in the input. The archive-cleanup switch sits right below it, on, with the description that says what is deleted and when.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
