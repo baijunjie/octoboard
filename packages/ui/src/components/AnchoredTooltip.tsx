@@ -47,7 +47,7 @@ export function AnchoredTooltip({
   return (
     <Tooltip>
       <OpenWhileMounted />
-      <Tooltip.Content triggerRef={anchor} className="pointer-events-none" data-anchored-tooltip="">
+      <Tooltip.Content triggerRef={anchor} className="control-fills pointer-events-none" data-anchored-tooltip="">
         {tooltip}
       </Tooltip.Content>
     </Tooltip>

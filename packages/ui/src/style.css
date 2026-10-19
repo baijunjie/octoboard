@@ -428,6 +428,8 @@ html {
   --control-fill: oklch(0.92 0.004 286);
   --control-fill-hover: oklch(0.89 0.004 286);
   --tooltip-on-dialog: var(--overlay);
+  --tooltip-on-dialog-fill: var(--control-fill);
+  --tooltip-on-dialog-fill-hover: var(--control-fill-hover);
 }
 
 .dark,
@@ -450,6 +452,8 @@ html {
   --control-fill: oklch(0.33 0.006 286);
   --control-fill-hover: oklch(0.36 0.006 286);
   --tooltip-on-dialog: oklch(0.3 0.006 286);
+  --tooltip-on-dialog-fill: oklch(0.36 0.006 286);
+  --tooltip-on-dialog-fill-hover: oklch(0.39 0.006 286);
 }
 
 /* The fills of HeroUI's `--default` family inside the sidebar and report panel. A ghost button's hover and pressed
@@ -475,7 +479,7 @@ html {
    the page background (dark L 0.12), and these are lighter (dark L 0.21 and 0.27): a control drawn
    from `--default` lands almost on its surface (1.19:1 and 1.08:1 in light, 1.19:1 and 1.01:1 in dark,
    against a dialog and the panel), and a neutral soft chip, half of `--default` over it, no longer
-   reads as a tag (1.10:1 in light, 1.08:1 in dark on a dialog). `--control-fill` and
+   reads as a tag (1.09:1 in light, 1.08:1 in dark on a dialog). `--control-fill` and
    `--control-fill-hover` are opaque steps off the surface instead: 1.27:1 resting and 1.39:1
    hovered against a light dialog, 1.15:1 and 1.26:1 against the light panel, 1.45:1 and 1.63:1
    against a dark dialog and 1.23:1 and 1.39:1 against the dark panel. The family is overridden
@@ -488,12 +492,15 @@ html {
    fill, and `--field-border` and `--field-focus`, which are still computed from the root's
    `--default`, would give a field edges that do not match its fill.
 
-   Everything a dialog, the pane or the project filter's tooltip (also on `--overlay`) draws from
-   `--default` takes the fills: a neutral tag, a secondary button, a tab list, a ghost button's
-   hover, a toggle button, a search field and a select in their secondary variant, and the file
-   viewer's image checkerboard (`.viewer-checkerboard`), whose squares step 1.10:1 from its ground
-   in light and 1.28:1 in dark (1.04:1 and 1.05:1 on HeroUI's own fill), inside the viewer's frame
-   surface like every other frame. */
+   A tooltip or popover is portalled to the end of `<body>`, outside the pane or dialog that carries
+   this class, so the shared tooltip and popover components carry it themselves (see "Confirmed
+   visual choices" in docs/ui-accessibility.md); a tooltip over a dialog then takes its own fills in
+   `--tooltip-on-dialog-fill`, below. Everything a dialog, the pane or such a tooltip or popover (also
+   on `--overlay`) draws from `--default` takes the fills: a neutral tag, a secondary button, a tab
+   list, a ghost button's hover, a toggle button, a search field and a select in their secondary
+   variant, and the file viewer's image checkerboard (`.viewer-checkerboard`), whose squares step
+   1.10:1 from its ground in light and 1.28:1 in dark (1.04:1 and 1.05:1 on HeroUI's own fill),
+   inside the viewer's frame surface like every other frame. */
 .control-fills {
   --default: var(--control-fill);
   --default-hover: var(--control-fill-hover);
@@ -766,9 +773,19 @@ html {
    would lose its background. A tooltip is portalled to the document's end rather than drawn
    inside the dialog, so the dialog is found from the root. While a modal is open, everything
    outside it but the toast region and the connection banner is inert; a tooltip on those sits on
-   the same colour in dark, so the step fits it as well. */
+   the same colour in dark, so the step fits it as well.
+
+   The `--default` family moves with the surface: the dark step above leaves `--control-fill`
+   (L 0.33) only 1.12:1 from the tooltip (1.04:1 on HeroUI's own), against 1.45:1 on the plain
+   `--overlay`. `--tooltip-on-dialog-fill` is the control fill one hover step lighter (L 0.36,
+   hovered 0.39), 1.27:1 resting, which is what the light fill gives on either surface. This rule
+   outranks the `.control-fills` a tooltip carries. */
 html:has(.modal__backdrop, .alert-dialog__backdrop) .tooltip {
   --overlay: var(--tooltip-on-dialog);
+  --default: var(--tooltip-on-dialog-fill);
+  --default-hover: var(--tooltip-on-dialog-fill-hover);
+  --default-soft: var(--tooltip-on-dialog-fill);
+  --default-soft-hover: var(--tooltip-on-dialog-fill-hover);
 }
 
 /* A checkbox's box sits on its label's first line, centred in that line, whether the label wraps or

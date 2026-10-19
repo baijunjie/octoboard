@@ -62,6 +62,12 @@ it("opens the explanation in a popover when pressed, leaving the tooltip out of 
   expect(openTooltip()).toBeNull();
 });
 
+// A popover is portalled out of the pane that carries the fills, so it carries them itself.
+it("gives its popover the control fills of a dialog's surface", () => {
+  press(mount());
+  expect(dialog()?.closest(".control-fills")).not.toBeNull();
+});
+
 it("closes the popover on Escape and returns focus to the button", () => {
   const button = mount();
   // A real press focuses the button before it opens the popover; synthetic events do not.

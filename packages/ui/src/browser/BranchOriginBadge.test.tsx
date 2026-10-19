@@ -104,6 +104,8 @@ it("shows the responsible session in a tooltip after the delay while the pointer
   settle();
   expect(openTooltip()?.textContent).toBe("Session Fix the layout, renamed is working on this branch");
   expect(openTooltip()?.querySelector("[data-inline-chip]")?.textContent).toBe("Fix the layout, renamed");
+  // Portalled out of the pane that carries the fills, so the chip would barely show without its own.
+  expect(openTooltip()?.classList.contains("control-fills")).toBe(true);
 
   leave(ringOf("worked-by-session"));
   settle();

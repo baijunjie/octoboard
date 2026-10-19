@@ -86,7 +86,7 @@ export function HelpTip({ label, children }: { label: string; children: React.Re
           <CircleHelp className="size-3.5" aria-hidden />
         </Button>
       </TitledControl>
-      <Popover.Content placement="top" className="max-w-64">
+      <Popover.Content placement="top" className="control-fills max-w-64">
         <Popover.Dialog aria-label={label} className="p-3 text-sm">{children}</Popover.Dialog>
       </Popover.Content>
     </Popover>

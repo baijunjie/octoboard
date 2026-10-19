@@ -36,6 +36,11 @@ it("opens its tooltip when the control takes keyboard focus", () => {
   expect(document.querySelector('[role="tooltip"]')?.textContent).toBe("Refresh");
 });
 
+it("gives its tooltip the control fills, which it does not inherit from where it is portalled", () => {
+  openTooltip("Refresh", <Button aria-label="Refresh">R</Button>);
+  expect(document.querySelector('[role="tooltip"]')?.classList.contains("control-fills")).toBe(true);
+});
+
 it("does not describe a control by a tooltip that only repeats its name", () => {
   const button = openTooltip("Refresh", <Button aria-label="Refresh">R</Button>);
   expect(document.querySelector('[role="tooltip"]')).not.toBeNull();

@@ -249,13 +249,11 @@ function Chip({ kind, fit, children, motionKey }: {
 
 /** The whole filter as a tooltip: the same chips as the heading's line, wrapped onto as many lines
  * as the tooltip's width needs instead of clipped at one. Each chip is capped at the tooltip's
- * width, so a tag longer than a line breaks inside itself. The tooltip's surface
- * is a dialog's `--overlay`, so the chips take the fills of `.control-fills`: HeroUI's own
- * `--default` lands at 1.19:1 against it and the keyword would barely read as a chip. */
+ * width, so a tag longer than a line breaks inside itself. */
 function ProjectFilterTooltip({ filter }: { filter: ProjectFilter }): React.ReactElement {
   const listRef = useListMotion<HTMLDivElement>();
   return (
-    <div ref={listRef} className="control-fills relative flex flex-wrap gap-1.5">
+    <div ref={listRef} className="relative flex flex-wrap gap-1.5">
       {filter.keyword !== "" && <Chip kind="keyword" fit="wrapping" motionKey="keyword">{filter.keyword}</Chip>}
       {filter.tags.map((tag) => <Chip key={tag} kind="tag" fit="wrapping" motionKey={`tag:${tag}`}>{tag}</Chip>)}
     </div>

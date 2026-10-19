@@ -35,6 +35,15 @@ HeroUI's `--overlay`: HeroUI draws both on that one colour and gives the tooltip
 line, so it cannot be told from the dialog under it. In light it keeps HeroUI's own surface, whose drop shadow already
 sets it apart. The rule is the `.tooltip` one under `html:has(.modal__backdrop, …)` in `packages/ui/src/style.css`.
 
+A tooltip or popover is portalled to the end of `<body>`, so it never inherits the `.control-fills` that the pane or
+dialog around its trigger carries, and a neutral soft chip inside it would sit at about 1.09:1 against its `--overlay`
+surface. The shared tooltip and popover components (`IndicatorTooltip`, `AnchoredTooltip`, `TitledControl`,
+`HelpTip`'s popover) therefore carry `control-fills` themselves, giving 1.27:1 in light and 1.45:1 in dark. A dark
+tooltip over a dialog sits a step lighter, so it takes its own fill (`--tooltip-on-dialog-fill`, 1.27:1) from the same
+`.tooltip` rule as `--tooltip-on-dialog`. A new tooltip or popover that can hold a chip carries `control-fills` too.
+The project filter's popover keeps HeroUI's own fills: it holds a search field, and the remap would leave the field's
+`--field-border` and `--field-focus`, computed from the root's `--default`, no longer matching its fill.
+
 ## Keyboard
 
 Every interactive control is reachable from the keyboard and operable with Enter / Space, with one exception inside a

@@ -45,7 +45,7 @@ export function TitledControl({
   return (
     <Tooltip trigger={focusOnly ? "focus" : undefined} isDisabled={isDisabled}>
       {repeatsName ? React.cloneElement(children, { "aria-describedby": "" }) : children}
-      <Tooltip.Content placement={placement} className="pointer-events-none">{title}</Tooltip.Content>
+      <Tooltip.Content placement={placement} className="control-fills pointer-events-none">{title}</Tooltip.Content>
     </Tooltip>
   );
 }

@@ -56,6 +56,8 @@ it("renders nothing until the pointer arrives, waits out the tooltip delay, and 
   expect(tooltip()?.textContent).toBe("The whole name");
   // Marked, for the one thing that has to tell it from a tooltip with a trigger element.
   expect(tooltip()?.hasAttribute("data-anchored-tooltip")).toBe(true);
+  // Portalled out of the pane that carries the control fills, it carries them itself.
+  expect(tooltip()?.classList.contains("control-fills")).toBe(true);
   // The tooltip is portalled, so the anchor's own markup is untouched: no wrapper, no tab stop.
   expect(container.innerHTML).toBe(anchored);
 

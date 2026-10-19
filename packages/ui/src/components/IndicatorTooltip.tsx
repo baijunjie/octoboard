@@ -37,7 +37,7 @@ export function IndicatorTooltip({
       <Tooltip.Trigger {...naming} tabIndex={-1} className={className} onMouseDown={(event) => event.preventDefault()}>
         {children}
       </Tooltip.Trigger>
-      <Tooltip.Content className="pointer-events-none">{tooltip}</Tooltip.Content>
+      <Tooltip.Content className="control-fills pointer-events-none">{tooltip}</Tooltip.Content>
     </Tooltip>
   );
 }
