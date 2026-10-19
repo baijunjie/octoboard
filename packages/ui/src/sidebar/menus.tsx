@@ -60,7 +60,7 @@ export function consoleMenu(
 ): ActionMenuEntry[] {
   return [
     { label: t("sidebar.console.addProject"), icon: FolderPlus, onClick: () => handlers.onOpenDialog({ kind: "new-project", console }) },
-    { label: t("sidebar.console.edit"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "edit-console", console }) },
+    { label: t("sidebar.console.edit"), icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-console", console }) },
     archiveSubmenu(t, t("sidebar.archive.consoleSessions"), archived, archived, handlers.onSelectSession, () =>
       handlers.onOpenArchive({ console: console.id }),
     ),
