@@ -70,6 +70,19 @@ const unreadState = railQuotaState(
   ],
 );
 
+/** Three tabs whose lists all sit under the panel's scroll limit and differ in height: Claude Code's default account and
+ * Work with two windows each, Codex's default account with two, and Grok Build's default account with its one. */
+const shortTabsState = railQuotaState(
+  [{ id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" }],
+  [
+    quotaOf("claude", null, "max", [quotaWindow("session", 18, 117), quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60)]),
+    quotaOf("claude", "a-work", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)]),
+    quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60 + 2 * 60)]),
+    quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 23, 4 * 24 * 60 + 11 * 60)]),
+  ],
+  ["claude", "codex", "grok"],
+);
+
 export const railQuotaScenarios: Scenario[] = [
   {
     id: "rail-quota-hover",
@@ -91,6 +104,21 @@ export const railQuotaScenarios: Scenario[] = [
       (ui) => ui.focusControl(ui.t("rail.quota")),
       (ui) => ui.key("Enter"),
       // The arrow key a keyboard user takes to the next tab; it selects it and moves the focus ring along.
+      (ui) => ui.key("ArrowRight"),
+    ],
+  },
+  {
+    id: "rail-quota-short-tabs",
+    group: GROUP,
+    category: "normal",
+    title: "Rail quota panel, tabs whose lists are all short, on the shortest",
+    description: "Grok Build's tab is selected and lists a single account, with empty space under it: the panel keeps the height of the tallest tab (Claude Code's two accounts) even though none of the lists reaches the scroll limit. Switch to Codex and Claude Code: the panel's top edge and the tab strip stay where they are and only the space under the list changes.",
+    state: shortTabsState,
+    steps: [
+      (ui) => ui.focusControl(ui.t("rail.quota")),
+      (ui) => ui.key("Enter"),
+      // Two arrow keys from Claude Code's tab to Grok Build's, the last of the three.
+      (ui) => ui.key("ArrowRight"),
       (ui) => ui.key("ArrowRight"),
     ],
   },

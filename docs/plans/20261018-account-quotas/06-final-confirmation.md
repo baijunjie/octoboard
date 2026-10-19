@@ -13,7 +13,7 @@
       top fade below it; switching tabs plays no list motion; removing an account animates.
 - [ ] A help tip (the "?" on Settings → Git → Automatically pull repositories) opens its popover on a trackpad tap
       and on a touch tap where available.
-- [ ] Creating an account with the default account's directory, written as `~/…` and as the absolute path, is
+- [x] Creating an account with the default account's directory, written as `~/…` and as the absolute path, is
       refused once the daemon has determined the agent's default directory.
 - [ ] In the desktop app's WebKit view, the rail's account quota panel floats in on hover beside the rail above
       Settings, plays its open and close motion, and stays within the window at the narrowest window width.

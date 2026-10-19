@@ -12,7 +12,7 @@ import { EmptyPanel } from "../components/EmptyPanel";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 import { useStableHandler } from "../components/useLatest";
 import { Message, useT } from "../i18n/react";
-import type { Agent } from "../protocol";
+import type { Account, Agent } from "../protocol";
 import type { SettingsSectionId } from "../settings/SettingsDialog";
 import { useDaemon, useDaemonStore } from "../store";
 import { AccountNameLine, AccountQuotaSummary } from "./AccountQuotaSummary";
@@ -214,7 +214,6 @@ function QuotaPanel({ focusSelectedTab, onOpenAccounts }: { focusSelectedTab: bo
   // The tab elements exist only after the tabs have built their collection, so focus is given as
   // the selected one mounts, once.
   const focused = useRef(false);
-  const region = useFadeRegion({ label: t("rail.quota.accounts") });
   const available = accountsByAgent(accounts).filter(({ agent }) => availability.get(agent)?.availability === "available");
   const selected = available.find(({ agent }) => agent === chosen)?.agent ?? available[0]?.agent;
   const focusOnce = (tab: HTMLElement | null) => {
@@ -236,25 +235,27 @@ function QuotaPanel({ focusSelectedTab, onOpenAccounts }: { focusSelectedTab: bo
             tabRef={(agent) => (focusSelectedTab && agent === selected ? focusOnce : undefined)}
             className="groove-b"
           />
-          {available.map(({ agent, accounts: owned }) => (
-            <Tabs.Panel key={agent} id={agent} className="px-0">
-              <div className={region.focused ? "ring-2 ring-inset ring-app-focus" : ""}>
-                <FadedScroller region={region} className="max-h-[min(24rem,60vh)]">
-                  <div className="flex flex-col px-4">
-                    <QuotaAccount agent={agent} account={null} name={t("settings.accounts.defaultName")} />
-                    {owned.map((account) => (
-                      <QuotaAccount
-                        key={account.id}
-                        agent={agent}
-                        account={account.id}
-                        name={<FadeOverflow dir="auto" titleWhenClipped={account.name}>{account.name}</FadeOverflow>}
-                      />
-                    ))}
-                  </div>
-                </FadedScroller>
-              </div>
-            </Tabs.Panel>
-          ))}
+          {/* The panel is anchored by its bottom edge to the rail's button and closes once the pointer
+              is off it, so a tab with fewer accounts must not make it shorter: its top edge, and the
+              tab strip with it, would drop out from under the pointer that just chose the tab. Every
+              tab's panel is therefore kept mounted in one grid cell, the unselected ones invisible
+              (react-aria also makes them inert, out of the tab order and of assistive technology),
+              so the cell is as tall as the tallest list the scroll limit allows. The panels carry no
+              padding or margin of their own, which would make a panel's height differ from the
+              others': the container carries it. */}
+          <div className="grid grid-cols-1 py-2">
+            {available.map(({ agent, accounts: owned }) => (
+              <Tabs.Panel
+                key={agent}
+                id={agent}
+                shouldForceMount
+                // Not the library's exit placement out of the flow, which would drop the cell's height.
+                className="col-start-1 row-start-1 m-0 self-start p-0 data-[exiting=true]:static data-[inert=true]:invisible"
+              >
+                <AgentAccounts agent={agent} owned={owned} />
+              </Tabs.Panel>
+            ))}
+          </div>
         </Tabs>
       )}
       <div className="groove-t flex justify-end p-2">
@@ -262,6 +263,31 @@ function QuotaPanel({ focusSelectedTab, onOpenAccounts }: { focusSelectedTab: bo
           {t("rail.quota.manage")}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** An agent's accounts, the default one first, in a faded scroller that is a region of its own while it
+ * overflows. Each panel keeps its own region, since the scroller reports its overflow only when it
+ * changes, so one shared by the panels would follow whichever panel last reported, not the selected one. */
+function AgentAccounts({ agent, owned }: { agent: Agent; owned: Account[] }): React.ReactElement {
+  const t = useT();
+  const region = useFadeRegion({ label: t("rail.quota.accounts") });
+  return (
+    <div className={region.focused ? "ring-2 ring-inset ring-app-focus" : ""}>
+      <FadedScroller region={region} className="max-h-[min(24rem,60vh)]">
+        <div className="flex flex-col px-4">
+          <QuotaAccount agent={agent} account={null} name={t("settings.accounts.defaultName")} />
+          {owned.map((account) => (
+            <QuotaAccount
+              key={account.id}
+              agent={agent}
+              account={account.id}
+              name={<FadeOverflow dir="auto" titleWhenClipped={account.name}>{account.name}</FadeOverflow>}
+            />
+          ))}
+        </div>
+      </FadedScroller>
     </div>
   );
 }

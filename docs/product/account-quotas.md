@@ -136,9 +136,11 @@ the accounts' quotas without opening Settings.
   its name, its plan chip and its quota beneath, in the states of "Quota states" above, as "How an account's quota is
   shown" above describes. A name too long for its space fades as in "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`. The panel shows no directories and offers nothing to edit.
-- The list of accounts is at most 384 px high, or 60% of the window's height where that is less; beyond that it
-  scrolls and fades at its edges, and while it scrolls it is a tab stop of its own (see "Scrolling a surface from the
-  keyboard" in `docs/product/scrolling-surfaces.md`).
+- The list of accounts is at most 384 px high, or 60% of the window's height where that is less, and the panel is as
+  tall as the tallest agent's list, so choosing a tab with fewer accounts never moves the tab strip from under the
+  pointer (which would close a panel opened by hover). Beyond that height a list scrolls and fades at its edges, and
+  while it scrolls it is a tab stop of its own (see "Scrolling a surface from the keyboard" in
+  `docs/product/scrolling-surfaces.md`).
 - **With no available agent** there are no tabs: an empty state titled "No agent available" stands in their place,
   with a line saying an agent's quota is shown once its command is found on the user's `PATH`.
 - At the panel's foot, **Manage accounts…** closes the panel and opens Settings on its Agent accounts section (see

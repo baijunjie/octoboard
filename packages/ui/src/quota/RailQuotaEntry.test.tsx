@@ -10,6 +10,25 @@ import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { MODAL_OPEN, useRegionCycle } from "../layout/useRegionCycle";
 import { RailQuotaEntry } from "./RailQuotaEntry";
 
+// jsdom has no layout, so a scroller never reports overflow. This one reports the way the library's
+// does, once when it mounts: overflowing when its list holds the marked account.
+const overflowing = vi.hoisted(() => ({ marker: "" }));
+vi.mock("../components/scrollFade", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../components/scrollFade")>();
+  const { useEffect, useRef } = await import("react");
+  return {
+    ...original,
+    FadedScroller: ({ region, children }: { region?: import("../components/scrollFade").FadeRegion; children: React.ReactNode }) => {
+      const ref = useRef<HTMLDivElement>(null);
+      useEffect(() => {
+        const overflows = overflowing.marker !== "" && ref.current!.textContent!.includes(overflowing.marker);
+        region?.onVisibilityChange?.(overflows ? "bottom" : "none");
+      }, []);
+      return <div ref={ref} {...region?.props}>{children}</div>;
+    },
+  };
+});
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const MINUTE = 60_000;
@@ -242,7 +261,7 @@ it("has one tab per available agent and lists each agent's accounts with plan an
   const { button } = mount();
   click(button);
   expect(tabs().map((tab) => tab.textContent)).toEqual(["Claude Code", "Codex"]);
-  const text = () => panel()!.textContent!.replace(/[⁨⁩]/g, "");
+  const text = () => document.querySelector('[role="tabpanel"]')!.textContent!.replace(/[⁨⁩]/g, "");
   expect(text()).toContain("Default");
   expect(text()).toContain("Max");
   expect(text()).toContain("Work");
@@ -255,6 +274,56 @@ it("has one tab per available agent and lists each agent's accounts with plan an
   expect(text()).toContain("Plus");
   expect(text()).toContain("Codex Work");
   expect(text()).not.toContain("Pro");
+});
+
+it("holds the panel's height across tabs, so that choosing a tab with fewer accounts moves nothing under the pointer", () => {
+  withFakeTimers();
+  const { button } = mount();
+  click(button);
+  // jsdom has no layout, so the guarantee is checked in its structure: every tab's panel stands in
+  // one grid cell with the same classes (so the same padding), and the unselected ones are hidden.
+  const panels = () => Array.from(document.querySelectorAll<HTMLElement>('[data-slot="tabs-panel"]'));
+  const clean = (element: Element) => element.textContent!.replace(/[⁨⁩]/g, "");
+  const check = (selected: number) => {
+    expect(panels()).toHaveLength(2);
+    const [first] = panels();
+    for (const [index, element] of panels().entries()) {
+      expect(element.parentElement).toBe(first!.parentElement);
+      expect(element.className).toBe(first!.className);
+      expect(element.classList.contains("col-start-1") && element.classList.contains("row-start-1")).toBe(true);
+      expect(element.classList.contains("p-0") && element.classList.contains("m-0")).toBe(true);
+      const isSelected = index === selected;
+      expect(element.hasAttribute("inert")).toBe(!isSelected);
+      expect(element.getAttribute("data-inert")).toBe(isSelected ? null : "true");
+      expect(element.getAttribute("role")).toBe(isSelected ? "tabpanel" : null);
+    }
+    expect(document.querySelectorAll('[role="tabpanel"]')).toHaveLength(1);
+  };
+  expect(panels()[0]!.className).toContain("data-[inert=true]:invisible");
+  check(0);
+  expect(clean(panels()[1]!)).toContain("Codex Work");
+
+  click(tabs()[1]!);
+  check(1);
+});
+
+it("makes the list a scroll region only on a tab whose own list overflows", () => {
+  withFakeTimers();
+  overflowing.marker = "Codex Work";
+  onTestFinished(() => void (overflowing.marker = ""));
+  const { button } = mount();
+  click(button);
+  const regions = () => Array.from(document.querySelectorAll<HTMLElement>('[role="region"]'));
+  // The hidden panels' scrollers have reported too, but their regions are inert.
+  const reachable = () => regions().filter((region) => !region.closest("[inert]"));
+  expect(reachable()).toHaveLength(0);
+
+  click(tabs()[1]!);
+  expect(reachable()).toHaveLength(1);
+  expect(reachable()[0]!.getAttribute("aria-label")).toBe("Accounts");
+
+  click(tabs()[0]!);
+  expect(reachable()).toHaveLength(0);
 });
 
 it("says so when no agent is available", () => {
