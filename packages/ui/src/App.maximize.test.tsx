@@ -224,6 +224,9 @@ it("orders the top bar's panel toggles Terminal first, the stack keeping Files a
   expect(cards).toEqual(["panel-files", "panel-terminal"]);
 });
 
+/** Whether the archive view is open, not just still on screen for its exit. */
+const archiveShown = () => document.querySelector(".archive-layer[data-state=open]") !== null;
+
 /** Presses a menu item of the open menu by its text; a submenu opens on ArrowRight. */
 async function pressMenuItem(label: string) {
   const item = Array.from(document.querySelectorAll<HTMLElement>("[role=menuitem]")).find((element) => element.textContent === label);
@@ -250,4 +253,22 @@ it("restores the maximized Terminal panel when a project's archive view is opene
   expect(document.querySelector("[data-region=archive]")).not.toBeNull();
   expect(terminalCard()!.hasAttribute("data-panel-maximized")).toBe(false);
   expect(filesCard()).not.toBeNull();
+});
+
+it("restores the maximized Terminal panel when Back or Forward arrives at an archive view, and keeps it for any other view", async () => {
+  mountApp();
+  await maximizeTerminal();
+  await pressElement(byLabel(`Actions for project ${isolate("Website")}`));
+  await pressMenuItem("View archive");
+  await pressMenuItem("View all");
+  expect(terminalCard()!.hasAttribute("data-panel-maximized")).toBe(false);
+
+  await pressElement(byLabel("Maximize panel", terminalCard()!));
+  await pressElement(byLabel("Back"));
+  expect(archiveShown()).toBe(false);
+  expect(terminalCard()!.hasAttribute("data-panel-maximized")).toBe(true);
+
+  await pressElement(byLabel("Forward"));
+  expect(archiveShown()).toBe(true);
+  expect(terminalCard()!.hasAttribute("data-panel-maximized")).toBe(false);
 });

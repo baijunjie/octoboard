@@ -47,7 +47,8 @@ the **100** most recent places; older ones are dropped.
   place in its direction is passed over or there is none.
 - **Moving shows the place as it was, without acting on it**: going back to an interrupted session shows it without
   resuming it, and going back to a place with the archive view open opens it again. Selecting a session, by contrast,
-  resumes an interrupted one (see "Selecting a session" in `docs/product/sidebar.md`).
+  resumes an interrupted one (see "Selecting a session" in `docs/product/sidebar.md`). Arriving at an archive view does restore a maximized
+  Terminal panel that would cover it (see "Maximizing the Terminal panel" in `docs/product/right-pane-panels.md`).
 - **An archive view comes back as it was left**: moving to a place with the archive view open shows as many rows as
   were loaded when that scope's view was last left, scrolled to the same offset — or as far as the list now goes, if it
   has since become shorter. This is kept per scope (a project, a console session or a console), in memory alone, for as

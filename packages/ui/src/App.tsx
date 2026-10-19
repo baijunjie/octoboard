@@ -552,6 +552,12 @@ export function App(): React.ReactElement {
     return entries;
   };
 
+  // The archive view is in the agent terminal's area, which a maximized panel covers: restoring
+  // it is how the user sees what was asked for, whether opened or arrived at through the history.
+  const revealArchive = () => {
+    if (ownerKind && ownerStack && maximizedKind(ownerStack, ownerOrder) !== undefined) setPanelStack(ownerKind, restoreStack(ownerStack), { persist: false });
+  };
+
   const openArchive = (scope: ArchiveScope) => {
     // Asking for the archive already open changes nothing, so what Back would restore stays.
     const alreadyOpen = archiveOpen && archiveScope !== undefined && archiveKey(archiveScope) === archiveKey(scope);
@@ -560,9 +566,7 @@ export function App(): React.ReactElement {
       setArchiveRestore(undefined);
     }
     setArchiveScope(scope);
-    // The archive view is in the agent terminal's area, which a maximized panel covers: restoring
-    // it is how the user sees what was asked for.
-    if (ownerKind && ownerStack && maximizedKind(ownerStack, ownerOrder) !== undefined) setPanelStack(ownerKind, restoreStack(ownerStack), { persist: false });
+    revealArchive();
     // Below the `docked` breakpoint the sidebar is a drawer over the terminal, and would keep
     // covering the archive that was just asked for.
     if (panes.sidebarOpen) panes.closeSidebar();
@@ -650,6 +654,7 @@ export function App(): React.ReactElement {
       setAsideOwner(ownerAfterMove(owner, session, target.console, projects));
       setArchiveRestore(target.archive && archiveViewStates.current.get(archiveKey(target.archive)));
       setArchiveScope(target.archive);
+      if (target.archive) revealArchive();
     },
     focusTerminal,
   });
