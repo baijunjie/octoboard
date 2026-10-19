@@ -101,7 +101,9 @@ const sameSide = (listed: ChangeSide, asked: SideRef) =>
  * one of them.
  */
 export function createGitReplies(git: FixtureGit | null | undefined, fail: (error: FixtureError) => never) {
-  /** Whether a comparison has been made, after which the branch list tells of the branches gone. */
+  /** Whether a comparison of a branch that is to go has been made, after which the branch list tells
+   * of the branches gone: a comparison of any other branch, the default one's with its upstream
+   * included, does not take them away. */
   let compared = false;
   /** The daemon's refusal of a change whose patch has no lines to expand. */
   const noBodies = (): never => fail({ code: "invalid_change", params: {}, message: "no patch to expand" });
@@ -273,7 +275,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
         // Compared with the empty tree, `left` is ignored and the pair is keyed by an empty name.
         const left = body.left_empty ? { branch: "", commit: EMPTY_TREE, empty: true } : resolve(body.left, body.left_remote === true);
         const right = resolve(body.right, false);
-        compared = true;
+        compared ||= [body.left, body.right].some((name) => git?.gone?.includes(name));
         const key = `${body.left_empty ? "" : body.left}..${body.right}`;
         const fork = forkOf(key, left.commit, right.commit);
         if (fork === null) {

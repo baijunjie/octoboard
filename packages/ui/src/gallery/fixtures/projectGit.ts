@@ -965,10 +965,11 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "A branch deleted after it was compared",
-    description: "The selector names chore/update-dependencies as no longer existing and a notice under the lines says the comparison still uses the commits it was made at; its committed changes stay listed. The list is also cut short, which a note under it says.",
+    description:
+      "The selected session's branch, chore/update-dependencies, was deleted after the comparison was made: the selector is back on main, the branch checked out where the project's folder is, and main's changes are listed with no error alert.",
     state,
     preferences,
-    git: { ...SAMPLE_GIT, gone: ["chore/update-dependencies"], cutShort: true },
+    git: { ...SAMPLE_GIT, gone: ["chore/update-dependencies"] },
     steps: [...selecting(dependenciesSession), (ui) => ui.wait(BRANCH_LIST_REREAD_MS)],
   },
   {

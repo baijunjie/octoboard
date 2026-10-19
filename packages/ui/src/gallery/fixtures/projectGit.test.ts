@@ -268,6 +268,13 @@ describe("the sample repository's changes", () => {
     await expect(daemon.request(compare)).rejects.toMatchObject({ code: "unknown_branch", params: { branch: "feature/ranking-experiments" } });
   });
 
+  it("keep a gone branch listed while only other branches have been compared", async () => {
+    const daemon = sampleDaemon({ ...SAMPLE_GIT, gone: ["chore/update-dependencies"] });
+    await expect(daemon.request({ type: "compare_project_branches", project: "p-1", left: "origin/main", left_remote: true, right: "main" })).resolves.toMatchObject({ type: "project_comparison" });
+    await expect(daemon.request({ type: "list_project_branches", project: "p-1" })).resolves.toMatchObject({ branches: SAMPLE_GIT.branches });
+    await expect(daemon.request({ type: "compare_project_branches", project: "p-1", left: "main", right: "chore/update-dependencies" })).resolves.toMatchObject({ type: "project_comparison" });
+  });
+
   // A side with no line count leaves an expandable diff ending in a bar promising unmodified lines
   // it may have none of, which a count takes away (`docs/product/project-pane-git-change-viewer.md`,
   // "Expanding the collapsed lines"). The daemon counts every side it reads, so a sample change whose

@@ -404,9 +404,9 @@ const bodiesOf = (text: (side: "old" | "new") => string): Event => ({
 });
 
 /** Opens a staged change of a file on both sides and answers its patch, returning what the viewer holds. */
-async function openedChange() {
+async function openedChange(onWorktreeGone?: () => void) {
   const { daemon, pending } = controlledDaemon();
-  const hook = mount<ChangeReader>(daemon, () => useChangeReader("p"));
+  const hook = mount<ChangeReader>(daemon, () => useChangeReader("p", onWorktreeGone));
   const item = changeItem({ group: "staged", old: indexSide("o"), new: indexSide("n") });
   act(() => hook.current().open(item, { kind: "worktree", worktree: undefined }));
   await act(async () =>
@@ -423,7 +423,7 @@ async function openedChange() {
   );
   const content = hook.current().subject?.content;
   if (content?.state !== "change" || !content.change.loadBodies) throw new Error("the change offers no bodies");
-  return { pending, loadBodies: content.change.loadBodies };
+  return { hook, pending, loadBodies: content.change.loadBodies };
 }
 
 it("reads a change's whole bodies only when asked, from the versions its patch reported", async () => {
@@ -453,6 +453,33 @@ it.each([
   const outcome = expect(loadBodies()).rejects.toMatchObject({ reason });
   await act(async () => pending[0].reject(new DaemonRequestError("daemon said so", code, params)));
   await outcome;
+});
+
+it("closes on a change whose worktree a read finds gone, saying nothing, and tells whoever opened it", async () => {
+  const { daemon, pending } = controlledDaemon();
+  let gone = 0;
+  const hook = mount<ChangeReader>(daemon, () => useChangeReader("p", () => gone++));
+  const side: ChangeOrigin = { kind: "worktree", worktree: "w" };
+  act(() => hook.current().open(item("a.ts"), side));
+  await act(async () => pending.splice(0)[0].reject(new DaemonRequestError("gone", "worktree_unavailable", { worktree: "w" })));
+  expect(hook.current().subject).toBeUndefined();
+  expect(gone).toBe(1);
+
+  // Any other failure is shown in the viewer.
+  act(() => hook.current().open(item("a.ts"), side));
+  await act(async () => pending.splice(0)[0].reject(new DaemonRequestError("broken", "git_failed", { detail: "no object" })));
+  expect(hook.current().subject?.content).toMatchObject({ state: "change", change: { unavailable: expect.anything() } });
+  expect(gone).toBe(1);
+});
+
+it("closes, saying nothing, when a change's bodies are asked of a worktree that is gone", async () => {
+  let gone = 0;
+  const { hook, pending, loadBodies } = await openedChange(() => gone++);
+  const outcome = expect(loadBodies()).rejects.toMatchObject({ reason: "superseded" });
+  await act(async () => pending[0].reject(new DaemonRequestError("gone", "worktree_unavailable", { worktree: "w" })));
+  await outcome;
+  expect(hook.current().subject).toBeUndefined();
+  expect(gone).toBe(1);
 });
 
 it("counts branch lists and comparisons in the window's bound of two Git list requests", async () => {

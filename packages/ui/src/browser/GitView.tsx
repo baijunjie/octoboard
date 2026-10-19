@@ -166,7 +166,7 @@ function ChangesView({
   // Nothing chosen in a repository that has no branches: the selector has nothing to offer, and the
   // panel below says so.
   const noBranches = branch === undefined && branches.state === "loaded" && listed.length === 0;
-  const gone = branchGone(branch, branches, uncommitted);
+  const gone = branchGone(branch, branches, uncommitted.state === "listed" ? uncommitted.worktree : undefined);
   // A list that failed to refresh stays, and says why; one that never came says so in its place.
   const branchesError = branches.state === "error" ? branches.message : branches.state === "loaded" ? branches.error : undefined;
 

@@ -67,7 +67,7 @@ export const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
  * for a pair (`null` for two branches with no commit in common, which a comparison refuses, as a
  * shallow clone's refusal when `shallow` is set), and a pair it does not name forks at `<left>`'s
  * own tip, as a branch made from it does. `missing` are branches the list has that a comparison no
- * longer finds. `gone` are branches deleted once a comparison has been made: from then on neither
+ * longer finds. `gone` are branches deleted once a comparison involving one of them has been made: from then on neither
  * the list nor a new comparison finds them, where `missing` ones are refused from the start. With
  * `comparing: "pending"` a comparison is never answered. With `upstreamsCut` the branch list leaves
  * the main working copy's branch without an upstream and says the lookup was past a budget. */

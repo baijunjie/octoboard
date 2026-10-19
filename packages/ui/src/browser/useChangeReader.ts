@@ -19,6 +19,7 @@ import type {
   SideRef,
   SideVersion,
 } from "../protocol";
+import { WORKTREE_UNAVAILABLE } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import {
   bodyFromFileContent,
@@ -54,6 +55,11 @@ export type ChangeOrigin =
   | { kind: "worktree"; worktree: string | undefined }
   | { kind: "comparison"; left: ComparisonEndpoint; right: ComparisonEndpoint; base: string }
   | ({ kind: "commit" } & CommitRef);
+
+/** Whether `err` says the worktree an uncommitted change from `origin` is read from is gone. */
+function isWorktreeGone(err: unknown, origin: ChangeOrigin): boolean {
+  return origin.kind === "worktree" && err instanceof DaemonRequestError && err.code === WORKTREE_UNAVAILABLE;
+}
 
 function sameOrigin(a: ChangeOrigin, b: ChangeOrigin): boolean {
   switch (a.kind) {
@@ -157,8 +163,12 @@ type Opened = { item: ChangeItem; origin: ChangeOrigin };
  * The subject's key is the project, where the change is read from (the worktree, or the two
  * commits) and the change's own key (its group and both sides), so a file staged and changed again
  * is two subjects, and never one of another worktree or another pair of commits.
+ *
+ * An uncommitted change whose worktree a read finds gone is no longer anywhere to be shown: no
+ * other worktree's change is shown in its place, so the viewer closes, saying nothing, and
+ * `onWorktreeGone` is told.
  */
-export function useChangeReader(project: string): ChangeReader {
+export function useChangeReader(project: string, onWorktreeGone?: () => void): ChangeReader {
   const t = useT();
   const language = useCurrentLanguage();
   // The wording a failure is given when it happens, not when the patch it belongs to arrived: a
@@ -169,6 +179,7 @@ export function useChangeReader(project: string): ChangeReader {
   const [opened, setOpened] = useState<Opened>();
   const [shown, setShown] = useState<Shown>();
   const live = useRef({ alive: true, sequence: 0, opened: undefined as Opened | undefined });
+  const worktreeGone = useLatest(onWorktreeGone);
 
   const subjectKey = (item: ChangeItem, origin: ChangeOrigin) => {
     switch (origin.kind) {
@@ -265,6 +276,10 @@ export function useChangeReader(project: string): ChangeReader {
         return { old: oldText, new: newText };
       } catch (err) {
         if (err instanceof ChangeBodiesError) throw err;
+        if (isWorktreeGone(err, origin)) {
+          closeGone(item, origin);
+          throw new ChangeBodiesError("superseded");
+        }
         if (err instanceof DaemonRequestError && BODIES_NEVER_DELIVERED.has(err.code)) throw new ChangeBodiesError("unavailable");
         if (err instanceof DaemonRequestError && err.code === "limit_exceeded" && BODY_LIMITS.has(err.params.limit ?? "")) {
           throw new ChangeBodiesError("unavailable");
@@ -311,6 +326,7 @@ export function useChangeReader(project: string): ChangeReader {
       })
       .catch((err: unknown) => {
         if (!current()) return;
+        if (isWorktreeGone(err, origin)) return closeGone(item, origin);
         const state = store.getState();
         const root = state.projects.get(project)?.path;
         const failure = browseFailure(t, language, err, state, root && abbreviateHome(root, state.homeDir));
@@ -352,6 +368,15 @@ export function useChangeReader(project: string): ChangeReader {
     setOpened(undefined);
     setShown(undefined);
   };
+
+  /** Closes the viewer on `item` from `origin`, whose worktree a read found gone, while it is still
+   * the change shown. */
+  function closeGone(item: ChangeItem, origin: ChangeOrigin) {
+    const opened = live.current.opened;
+    if (!live.current.alive || opened?.item.key !== item.key || !sameOrigin(opened.origin, origin)) return;
+    close();
+    worktreeGone.current?.();
+  }
 
   const firstEpoch = useRef(snapshotEpoch);
   useEffect(() => {

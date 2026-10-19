@@ -131,9 +131,12 @@ function harness(id: string) {
   let latest!: { browser: ReturnType<typeof useProjectBrowserState>; git: ReturnType<typeof useGitReview> };
   let root!: Root;
   let selected: string | undefined;
+  // The branch every render showed, in order.
+  const shown: (string | undefined)[] = [];
   const Probe = ({ session, active }: { session: string | undefined; active: boolean }) => {
     const browser = useProjectBrowserState(id);
     latest = { browser, git: useGitReview(id, browser, active, session, useFileFilterState()) };
+    shown.push(latest.git.view.branch);
     return null;
   };
   const render = (session: string | undefined, active: boolean) =>
@@ -174,7 +177,7 @@ function harness(id: string) {
     return found;
   };
   const selection = () => ({ branch: latest.git.view.branch, worktree: latest.git.worktree });
-  return { mount, select, show, settle, items, item, selection, get latest() { return latest; }, unmount: () => act(() => root.unmount()) };
+  return { mount, select, show, settle, items, item, selection, shown, get latest() { return latest; }, unmount: () => act(() => root.unmount()) };
 }
 const MAIN: Tree = { id: "m", branch: "main", main: true };
 const TOPIC: Tree = { id: "w", branch: "topic" };
@@ -183,7 +186,7 @@ it("lists the default branch's uncommitted changes from its worktree, then what 
   const h = harness("p1");
   // The project's directory is in the worktree that has `topic` checked out.
   h.mount();
-  await h.settle(source("p1", [MAIN, TOPIC], "w"), branchList("p1", [{ name: "main" }, { name: "topic" }]), changeList("p1", [live("a.txt")]), comparison("p1", "c3", ["b.txt"]));
+  await h.settle(source("p1", [MAIN, TOPIC], "w"), branchList("p1", [{ name: "loose" }, { name: "main" }, { name: "topic" }]), changeList("p1", [live("a.txt")]), comparison("p1", "c3", ["b.txt"]));
   expect(h.selection()).toEqual({ branch: "topic", worktree: undefined });
   expect(h.items().map((i) => `${i.section} ${i.path}`)).toEqual(["unstaged a.txt", "committed b.txt"]);
   expect(h.latest.git.view.committed).toMatchObject({ state: "compare", base: "main" });
@@ -451,7 +454,7 @@ it("follows a comparison made again with the change still in it, and closes on o
   const h = harness("p5");
   h.mount();
   act(() => h.latest.browser.setBranch("topic"));
-  const replies = (tip: string, paths: string[]) => [source("p5", [MAIN]), branchList("p5", []), comparison("p5", tip, paths)];
+  const replies = (tip: string, paths: string[]) => [source("p5", [MAIN]), branchList("p5", [{ name: "main", commit: "c1" }, { name: "topic", commit: tip }]), comparison("p5", tip, paths)];
   await h.settle(...replies("c2", ["a.txt", "b.txt"]));
   act(() => h.latest.git.view.onOpen(h.items()[0]));
   const read: Replies = {
@@ -564,11 +567,11 @@ it("sets the branch from the selected session's once it is known, unless the use
 
   // Another session with no branch goes back to the default; a choice made since settles it.
   h.show("s2");
-  await h.settle(...around("f1", [MAIN, TOPIC], [{ name: "main" }, { name: "topic", responsible: "s1" }]));
+  await h.settle(...around("f1", [MAIN, TOPIC], [{ name: "loose" }, { name: "main" }, { name: "topic", responsible: "s1" }]));
   expect(h.selection()).toEqual(DEFAULT);
   act(() => h.latest.git.view.onBranchChange("loose"));
   act(() => void h.latest.git.refresh());
-  await h.settle(...around("f1", [MAIN, TOPIC], [{ name: "topic", responsible: "s2" }]));
+  await h.settle(...around("f1", [MAIN, TOPIC], [{ name: "loose" }, { name: "topic", responsible: "s2" }]));
   expect(h.selection().branch).toBe("loose");
 });
 
@@ -674,4 +677,72 @@ it("follows a branch that shows up later in a worktree made since, on a clock th
   } finally {
     clock.mockRestore();
   }
+});
+
+it("goes back to the default branch once a complete branch list no longer has the chosen one, whoever chose it", async () => {
+  const h = harness("g1");
+  const branches = [{ name: "main" }, { name: "topic", responsible: "s1" }];
+  h.mount(undefined);
+  await h.settle(...around("g1", [MAIN, TOPIC], branches));
+  act(() => h.latest.git.view.onBranchChange("topic"));
+  await h.settle(changeList("g1"), comparison("g1", "c2", []));
+  expect(h.selection()).toEqual({ branch: "topic", worktree: "w" });
+  act(() => void h.latest.git.refresh());
+  await h.settle(source("g1", [MAIN]));
+  h.shown.length = 0;
+  await h.settle(...around("g1", [MAIN], [{ name: "main" }]));
+  expect(h.selection()).toEqual(DEFAULT);
+  expect(h.latest.browser.branch).toBeUndefined();
+  // Not even one render shows the gone branch as the one chosen.
+  expect(h.shown).not.toContain("topic");
+
+  // Set by following the session, and merged and deleted since.
+  h.show("s1");
+  await h.settle(...around("g1", [MAIN, TOPIC], branches));
+  expect(h.selection()).toEqual({ branch: "topic", worktree: "w" });
+  act(() => void h.latest.git.refresh());
+  await h.settle(...around("g1", [MAIN], [{ name: "main" }]));
+  expect(h.selection()).toEqual(DEFAULT);
+});
+
+it("reads the worktrees again for a worktree found gone, the list still being read meanwhile, and keeps a branch that is still there", async () => {
+  const h = harness("g2");
+  const branches = [{ name: "main" }, { name: "topic" }];
+  h.mount(undefined);
+  await h.settle(...around("g2", [MAIN, TOPIC], branches));
+  act(() => h.latest.git.view.onBranchChange("topic"));
+  const index = pending.findIndex((request) => request.body.type === "list_project_changes");
+  const [request] = pending.splice(index, 1);
+  await act(async () => request.reject(new DaemonRequestError("gone", "worktree_unavailable", { worktree: "w" })));
+  expect(h.latest.git.view.uncommitted).toMatchObject({ state: "listed", list: { state: "loading" } });
+  expect(asked("get_project_source")).toHaveLength(1);
+  // The branch may have gone with its worktree: the branches are read again with the worktrees.
+  let branchReads = 0;
+  const counted: Replies = { list_project_branches: (body) => (branchReads++, branchList("g2", branches).list_project_branches!(body)) };
+  await h.settle(...around("g2", [MAIN], branches), counted);
+  expect(branchReads).toBe(1);
+  expect(h.selection()).toEqual({ branch: "topic", worktree: undefined });
+  expect(h.latest.git.view.uncommitted).toEqual({ state: "notCheckedOut", branch: "topic" });
+});
+
+it("closes an open uncommitted change, saying nothing, once its worktree is found gone", async () => {
+  const h = harness("g3");
+  const branches = [{ name: "main" }, { name: "topic" }];
+  h.mount(undefined);
+  await h.settle(...around("g3", [MAIN, TOPIC], branches));
+  act(() => h.latest.git.view.onBranchChange("topic"));
+  await h.settle(changeList("g3", [live("a.txt")]), comparison("g3", "c2", []));
+  act(() => h.latest.git.view.onOpen(h.item((i) => i.path === "a.txt")));
+  await h.settle(readBack);
+  expect(h.latest.git.viewer).toBeDefined();
+
+  // The worktree is removed while the branch stays: the change is read again, from where it was.
+  act(() => void h.latest.git.refresh());
+  await h.settle(source("g3", [MAIN]));
+  const index = pending.findIndex((request) => request.body.type === "read_project_change");
+  expect(pending[index]?.body).toMatchObject({ worktree: "w" });
+  const [read] = pending.splice(index, 1);
+  await act(async () => read.reject(new DaemonRequestError("gone", "worktree_unavailable", { worktree: "w" })));
+  expect(h.latest.git.viewer).toBeUndefined();
+  expect(h.latest.browser.selectedChange).toBeUndefined();
 });

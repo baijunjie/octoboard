@@ -3,6 +3,7 @@
 import type { ErrorPresentation } from "../errorPresentation";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { abbreviateHome } from "../pathDisplay";
+import type { WorktreeInfo } from "../protocol";
 import { displayWirePath } from "../wirePath";
 import { comparisonNews } from "./comparisonNews";
 import { shortCommit } from "./shortCommit";
@@ -39,10 +40,11 @@ export function partsLoading({ uncommitted, committed }: { uncommitted: Uncommit
 }
 
 /** Whether `branch` is one the repository no longer has: a complete branch list lacks it. A branch
- * checked out in a worktree with no commit yet is not in any list and is not gone. */
-export function branchGone(branch: string | undefined, branches: BranchList, uncommitted: UncommittedState): boolean {
+ * checked out in a worktree with no commit yet (`holder`, the worktree that has it checked out) is
+ * not in any list and is not gone. */
+export function branchGone(branch: string | undefined, branches: BranchList, holder: WorktreeInfo | undefined): boolean {
   if (branch === undefined || branches.state !== "loaded" || !branches.complete) return false;
-  if (uncommitted.state === "listed" && uncommitted.worktree.head === null) return false;
+  if (holder?.head === null) return false;
   return !branches.branches.some((b) => b.name === branch);
 }
 

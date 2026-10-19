@@ -108,11 +108,12 @@ it("tells which parts are still being read", () => {
 });
 
 it("takes a branch for gone only when a complete list lacks it and no worktree has it checked out with no commit yet", () => {
-  expect(branchGone("topic", branchesOf(["main"]), listed())).toBe(true);
-  expect(branchGone("topic", branchesOf(["main", "topic"]), listed())).toBe(false);
-  expect(branchGone("topic", branchesOf(["main"], false), listed())).toBe(false);
-  expect(branchGone("topic", { state: "loading" }, listed())).toBe(false);
-  expect(branchGone(undefined, branchesOf([]), { state: "none" })).toBe(false);
+  expect(branchGone("topic", branchesOf(["main"]), tree("c1"))).toBe(true);
+  expect(branchGone("topic", branchesOf(["main"]), undefined)).toBe(true);
+  expect(branchGone("topic", branchesOf(["main", "topic"]), tree("c1"))).toBe(false);
+  expect(branchGone("topic", branchesOf(["main"], false), tree("c1"))).toBe(false);
+  expect(branchGone("topic", { state: "loading" }, tree("c1"))).toBe(false);
+  expect(branchGone(undefined, branchesOf([]), undefined)).toBe(false);
   // The repository's first branch is in no list until it has a commit.
-  expect(branchGone("topic", branchesOf([]), listed("loaded", { worktree: tree(null) }))).toBe(false);
+  expect(branchGone("topic", branchesOf([]), tree(null))).toBe(false);
 });

@@ -18,8 +18,8 @@ import { shortCommit } from "./shortCommit";
 const BRANCH_ROW_HEIGHT = 32;
 
 /** A choice of one of the repository's local branches: its label in the grid's first column, its
- * trigger in the second. A branch the list no longer has stays the value, named as gone, until the
- * user picks another. */
+ * trigger in the second. A value the list does not have is named as gone (`gone`), as a branch read
+ * from worktrees older than the list can be. */
 export function BranchSelect({
   label,
   branches,
