@@ -1,8 +1,8 @@
 # Configuration export and import
 
 Octoboard can lift its configuration out of one machine and build it again on another. What travels is a **configuration
-document**: one console or every console, the projects associated with them and, for a full export, one application
-setting. Nothing of what a machine is doing goes with it, so what arrives on the other side is the layout of consoles
+document**: one console or every console, the projects associated with them and, for a full export, the application
+settings. Nothing of what a machine is doing goes with it, so what arrives on the other side is the layout of consoles
 and projects, with its agents still to be signed in and its directories still to be trusted.
 
 A **machine**, here, is the host the daemon runs on, which is where the projects, the accounts and the default clone
@@ -28,7 +28,8 @@ daemon, one larger than 64 MiB, as too large to be a configuration file, and one
 file; either is told in the import dialog, and another file can be chosen.
 
 **Exporting** opens a dialog that asks what to export: the console the sidebar shows, or everything; with no console
-there is only everything. Under that choice, before anything is saved, the dialog says that the file contains the path
+there is only everything. Each choice says whether the application settings go with it: everything carries them, a
+single console does not. Under that choice, before anything is saved, the dialog says that the file contains the path
 of each project on the machine running Octoboard, which may not be the one the window is on, so sharing it is a choice
 made knowing so. The dialog's **Export** button then asks the daemon for the document and opens the save dialog. In the
 desktop app a toast names the file it was saved as. A browser files a download itself, under its own name and wherever
@@ -36,30 +37,34 @@ its settings say, and does not report one that was blocked or cancelled, so ther
 configuration was downloaded and names no file. Dismissing the desktop app's save dialog saves nothing and leaves the
 export dialog open; a file that could not be written is said in the dialog.
 
-**Importing** opens a dialog in three steps. The user picks a file, and the window sends its document to the daemon to
-be inspected; a file that is not JSON, or that the daemon refuses (not a configuration, a version this Octoboard does
-not read, unreadable), is told with its reason, and another can be chosen. A browser too old to report a dismissed file
-picker never answers for one, so the dialog is not held while the picker is open: it can be closed, or the picker opened
-again. What the daemon answers is then **reviewed before anything is created**: for each console, a row for each of its
-projects, with its name and, at the end of the same line, the choice of where the project goes; under them the path the
-project had on the exporting machine and the directory the choice would use, or where a clone would come from and go to.
-A row offers only the choices its state allows, with the daemon's default preselected, and always offers **Another
-directory**, which asks for a path (typed or browsed to) and refuses one that is not absolute or does not start with
-`~/`, and **Leave out**. A project left out says nothing more, unless it was found nowhere on the daemon's host, which
-the row then says. Four buttons apply one way to every project that offers it (exported paths, the default clone
-directory, clone from remotes) or leave every project out, and a project they do not reach keeps its row. The account
-references that would fall back to a default account are listed on the console or the project that holds them. A
-document with application settings gets a checkbox for them, unchecked, whose note says what applying would change from
-what is set now.
+**Importing** opens a dialog in three steps. The user picks a file — the step says beforehand that a file of every
+console also holds the application settings and a file of a single console does not — and the window sends its document
+to the daemon to be inspected; a file that is not JSON, or that the daemon refuses (not a configuration, a version this
+Octoboard does not read, unreadable), is told with its reason, and another can be chosen. A browser too old to report a
+dismissed file picker never answers for one, so the dialog is not held while the picker is open: it can be closed, or
+the picker opened again. What the daemon answers is then **reviewed before anything is created**: for each console, a
+row for each of its projects, with its name and, at the end of the same line, the choice of where the project goes;
+under them the path the project had on the exporting machine and the directory the choice would use, or where a clone
+would come from and go to. A row offers only the choices its state allows, with the daemon's default preselected, and
+always offers **Another directory**, which asks for a path (typed or browsed to) and refuses one that is not absolute or
+does not start with `~/`, and **Leave out**. A project left out says nothing more, unless it was found nowhere on the
+daemon's host, which the row then says. Four buttons apply one way to every project that offers it (exported paths, the
+default clone directory, clone from remotes) or leave every project out, and a project they do not reach keeps its row.
+The account references that would fall back to a default account are listed on the console or the project that holds
+them. A document with application settings gets a checkbox for them, unchecked, whose note has a line for each setting
+the document carries, saying what applying it would change from what is set now: that it turns the setting on, and what
+Octoboard then does by itself; that it turns it off; or that it is already as the document has it, so applying changes
+nothing.
 
 The review's **Import** button sends the document unchanged, with the choice of every project that is placed, in one
 request; a project left out is sent none. A directory the user typed that is not usable stops the import before any
 request and is marked on its row. The dialog cannot be dismissed while the request runs, which with clones can be long.
 The **result** replaces the review. It opens with a summary of the totals (only what happened, and that nothing failed
-when so) and, for a document that had application settings, whether they were applied. Under it a table has a line for
-each project, under its console, with its result (created, left out, failed, not tried) and a detail: how a created
-project was placed (at its exported path, in the default clone directory, cloned, in the directory chosen), why a failed
-one failed, or that a project was not tried because its console could not be created. A console that could not be
+when so) and, when the application settings were applied, a line for each setting applied, saying it is now on or off;
+when they could not be applied, a line saying so with the reason. Under it a table has a line for each project, under
+its console, with its result (created, left out, failed, not tried) and a detail: how a created project was placed (at
+its exported path, in the default clone directory, cloned, in the directory chosen), why a failed one failed, or that a
+project was not tried because its console could not be created. A console that could not be
 created, or that came out with no projects, has a line of its own. In a narrow dialog each line becomes a block that
 names every value. Each account that fell back to a default account is listed under its own heading below.
 
@@ -144,12 +149,20 @@ accounts', also stay local: exports omit them and imports leave the importing ma
 readings are not stored at all and are in no document either (see "How a quota is read" in
 `docs/product/account-quotas.md`).
 
-### The application setting a full export carries
+### The application settings a full export carries
 
-One: **Automatically pull repositories** (see "Automatically pulling repositories" in
-`docs/product/project-git-status.md`), under the key `auto_pull_repositories`. An import also reads it from a document
-that carries it under the key `auto_sync_repositories`; an export writes only `auto_pull_repositories`. A single
-console's document carries no application settings at all.
+Two, each under its own key:
+
+- **Automatically pull repositories** (see "Automatically pulling repositories" in
+  `docs/product/project-git-status.md`), under `auto_pull_repositories`. An import also reads it from a document that
+  carries it under the key `auto_sync_repositories`; an export writes only `auto_pull_repositories`.
+- **Automatically delete archived sessions whose conversation is gone** (see "Deleting archived sessions whose
+  conversation is gone" in `docs/product/deleting-sessions.md`), under `auto_delete_unresumable_archives`. A document
+  exported before the setting existed does not carry it, and applying that document's settings leaves the importing
+  machine's value as it is.
+
+A single console's document carries no application settings at all. The settings that belong to one machine or to its
+accounts stay out of every document (see "What is not configuration and never travels" above).
 
 ### Versions
 
@@ -236,11 +249,13 @@ fills the window in as it goes.
 
 A document's application settings are applied **only when the import is explicitly asked to apply them**, and are not
 applied by default. Automatically pull repositories makes the daemon fast-forward the user's own repositories by itself,
-so applying it changes how the daemon's host behaves rather than only adding to what it holds. The inspection says both
+and automatically deleting archived sessions makes it delete sessions by itself, so applying them changes how the
+daemon's host behaves rather than only adding to what it holds. The inspection says both
 what the document sets and what is set now, so what applying would change can be shown before anything is done. The
-settings are applied last, through the same path as a change made in Settings — so an import that turns the switch on
-runs the same immediate fast-forward pass turning it on by hand does (see "Turning the switch on" in
-`docs/product/project-git-status.md`) — and the result of the import reports what was applied. Asking to apply the
+settings are applied last, through the same path as a change made in Settings — so an import that turns automatic
+pulling on runs the same immediate fast-forward pass turning it on by hand does (see "Turning the switch on" in
+`docs/product/project-git-status.md`), and one that turns the automatic deletion on deletes nothing until the next
+scheduled check, as the switch does — and the result of the import reports what was applied. Asking to apply the
 settings of a document that carries none is refused rather than quietly ignored, so a request never does less than it
 was told to.
 

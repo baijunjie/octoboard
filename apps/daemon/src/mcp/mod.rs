@@ -271,9 +271,10 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "get_settings",
         description: "The application-wide settings: `auto_pull_repositories`, \
-                      `default_clone_dir`, the `accounts` (each agent also has a default account, \
-                      listed with the id `default`), and the `trusted_directories`. Accounts and \
-                      trusted directories are read-only here.",
+                      `auto_delete_unresumable_archives`, `default_clone_dir`, the `accounts` \
+                      (each agent also has a default account, listed with the id `default`), and \
+                      the `trusted_directories`. Accounts and trusted directories are read-only \
+                      here.",
         schema: || object_schema(json!({}), &[]),
     },
     ToolDef {
@@ -290,6 +291,12 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                         "type": "boolean",
                         "description": "Whether projects behind their upstream are pulled \
                                         (fast-forwarded) automatically.",
+                    },
+                    "auto_delete_unresumable_archives": {
+                        "type": "boolean",
+                        "description": "Whether archived sessions whose agent conversation is \
+                                        gone are deleted automatically (pinned and locked ones \
+                                        are kept).",
                     },
                     "default_clone_dir": {
                         "type": "string",

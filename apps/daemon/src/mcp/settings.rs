@@ -17,7 +17,7 @@ use super::args::{
     optional_agent, optional_bool, optional_string_list, own_console, own_project, parse_agent,
     present_agent, present_text, raw_text, required_str, resolve_project,
 };
-use crate::coordinator::{self, ConsoleChanges, ProjectChanges};
+use crate::coordinator::{self, ConsoleChanges, ProjectChanges, SettingsChanges};
 use crate::git_remote;
 use crate::launch_settings::LaunchChange;
 use crate::protocol::{
@@ -103,6 +103,7 @@ pub(super) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
         .collect();
     Ok(json!({
         "auto_pull_repositories": state.store.auto_pull_repositories()?,
+        "auto_delete_unresumable_archives": state.store.auto_delete_unresumable_archives()?,
         "default_clone_dir": state.store.default_clone_dir()?,
         "accounts": listed,
         "trusted_directories": state.store.trusted_directories()?,
@@ -115,8 +116,14 @@ pub(super) fn update_settings(
 ) -> Result<Value> {
     coordinator::update_settings(
         state,
-        optional_bool(arguments, "auto_pull_repositories")?,
-        raw_text(arguments, "default_clone_dir")?,
+        SettingsChanges {
+            auto_pull_repositories: optional_bool(arguments, "auto_pull_repositories")?,
+            auto_delete_unresumable_archives: optional_bool(
+                arguments,
+                "auto_delete_unresumable_archives",
+            )?,
+            default_clone_dir: raw_text(arguments, "default_clone_dir")?,
+        },
     )?;
     get_settings(state)
 }

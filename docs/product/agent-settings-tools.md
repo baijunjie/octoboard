@@ -12,11 +12,15 @@ tool is in the tool tables of `docs/product/hub-orchestration.md`; this document
 - **A project session**, bound or not, reads its own project's settings with `get_project`, which takes no argument and
   answers for no other project. It changes no setting.
 
-Never through these tools, by any session: changing a project's directory, source, host or remote URL; giving or
-taking away a project's trust permission; removing a project; creating or deleting a console; setting or removing a
-console's avatar; reading, setting or clearing a console's console session instructions (see "Console session
-instructions" in `docs/product/consoles.md`); adding, editing or removing an account; adding or removing
-a trusted folder. Each of those stays the user's own, in the UI.
+**One rule decides which settings the tools expose: an agent may help the user configure most of Octoboard, but not what
+must be done by the user personally.** Every setting of a console, its projects and the application that the sections
+below list is exposed under that rule. What must be done by the user personally is never available through these tools,
+to any session: changing a project's directory, source, host or remote URL; giving or taking away a project's trust
+permission; removing a project; creating or deleting a console; setting or removing a console's avatar; reading, setting
+or clearing a console's console session instructions (see "Console session instructions" in `docs/product/consoles.md`);
+adding, editing or removing an account; adding or removing a trusted folder. Each of those stays the user's own, in the
+UI. Nor do the tools reach what a window keeps for itself rather than the daemon, such as the appearance, Markdown style
+and language.
 
 The console session's instructions tell it that projects, its console and the application settings belong to the
 user: it changes one only when asked to, says what it changed, and treats accounts and trusted folders as read-only.
@@ -125,15 +129,18 @@ working directory. Neither the avatar itself nor the console's console session i
 | Field | Contents |
 |---|---|
 | `auto_pull_repositories` | Whether projects behind their upstream are pulled (fast-forwarded) on their own (see "Automatically pulling repositories" in `docs/product/project-git-status.md`). |
+| `auto_delete_unresumable_archives` | Whether archived sessions whose conversation is gone are deleted on their own (see "Deleting archived sessions whose conversation is gone" in `docs/product/deleting-sessions.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
 | `accounts` | Every account, each with `id`, `agent`, `name` and `default`. Each agent's default account is listed first among that agent's, with the id `default`. An account's directory is never given. |
 | `trusted_directories` | The trusted folders (see "Trusted folders" in `docs/product/folder-trust.md`). Read-only. |
 
-`update_settings` takes `auto_pull_repositories` and `default_clone_dir`, under the rules of the same settings in
-Settings: a clone directory must be absolute or start with `~/`, and a blank one goes back to the built-in default.
-A refused value leaves the other one unapplied too. Turning `auto_pull_repositories` on fast-forwards the projects
-already known to be behind at once, as turning the switch on in Settings does, which changes files in the user's
-repositories. The call answers as `get_settings` does.
+`update_settings` takes `auto_pull_repositories`, `auto_delete_unresumable_archives` and `default_clone_dir`, under
+the rules of the same settings in Settings: the two switches take `true` or `false`, a clone directory must be absolute
+or start with `~/`, and a blank one goes back to the built-in default. A refused value leaves the others unapplied
+too. Turning `auto_pull_repositories` on fast-forwards the projects already known to be behind at once, as turning the
+switch on in Settings does, which changes files in the user's repositories. Turning
+`auto_delete_unresumable_archives` on deletes nothing at once, and turning it off stops a deletion pass under way,
+exactly as the switch in Settings does. The call answers as `get_settings` does.
 
 ## When a change takes effect
 

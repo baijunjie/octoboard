@@ -17,6 +17,7 @@ import { GeneralSection } from "./GeneralSection";
 vi.mock("./AppearanceSetting", () => ({ AppearanceSetting: () => null }));
 vi.mock("./LanguageSetting", () => ({ LanguageSetting: () => null }));
 vi.mock("./CloneDirSetting", () => ({ CloneDirSetting: () => null }));
+vi.mock("./ArchiveCleanupSetting", () => ({ ArchiveCleanupSetting: () => null }));
 
 function Sync() {
   useBackgroundRunSync();

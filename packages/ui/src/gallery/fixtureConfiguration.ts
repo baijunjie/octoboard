@@ -89,7 +89,12 @@ export function exportedDocument(state: State, consoleId?: string): Configuratio
   return {
     format: "octoboard-configuration",
     version: 1,
-    ...(consoleId === undefined && { settings: { auto_pull_repositories: state.settings.auto_pull_repositories } }),
+    ...(consoleId === undefined && {
+      settings: {
+        auto_pull_repositories: state.settings.auto_pull_repositories,
+        auto_delete_unresumable_archives: state.settings.auto_delete_unresumable_archives,
+      },
+    }),
     consoles,
   };
 }

@@ -18,7 +18,7 @@ function railQuotaState(accounts: Account[], accountQuotas: AccountQuota[], avai
       consoles: [console_],
       projects: [web, api],
       sessions,
-      settings: { auto_pull_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts },
+      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", accounts },
       accountQuotas,
     }),
     agentAvailability: new Map<Agent, AgentAvailability>(

@@ -3,6 +3,7 @@
 //! when reopened, so a daemon task scans the archive at start and about once a day after, and
 //! deletes what is proven unresumable the way the user's own delete does. Whether a conversation
 //! can be resumed is `agent_records.rs`'s business; this module decides what that lets it delete.
+//! The user can turn the cleanup off in the settings (`Settings.auto_delete_unresumable_archives`).
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -80,13 +81,24 @@ fn scan_due(last_scan: Option<i64>, now: i64, every_millis: i64) -> bool {
 
 /// One scan: deletes the archived sessions the agent has proven gone
 /// ([`Resumability::Unresumable`]; unknown never counts), then removes the branches and worktrees
-/// they bound with nothing forced and moves the agent's remaining records to the Trash. What the
-/// branch removal leaves is logged and no client is told, as nobody asked for the deletion.
-/// Pinned and locked sessions are skipped before judging. A group (an archived session with the
-/// sessions bound to it, at both levels) goes only whole: one member that is resumable, unknown,
-/// pinned, locked or not archived keeps all of it, as a delete of its owner would take the member
-/// along. Failures are logged and never stop the scan.
+/// they bound with nothing forced and moves the agent's remaining records to the Trash. Nothing is
+/// scanned while the user has turned the cleanup off, and a setting that cannot be read counts as
+/// off, as the scan only destroys; it is read on each scan and again before each delete, so a
+/// change needs no restart and takes hold mid-scan. What the branch removal leaves is logged and
+/// no client is told, as nobody asked for the deletion. Pinned and locked sessions are skipped
+/// before judging. A group (an archived session with the sessions bound to it, at both levels)
+/// goes only whole: one member that is resumable, unknown, pinned, locked or not archived keeps
+/// all of it, as a delete of its owner would take the member along. Failures are logged and never
+/// stop the scan.
 async fn scan(state: &Arc<AppState>, locator: LocatorSource, trash: TrashRecord) {
+    match state.store.auto_delete_unresumable_archives() {
+        Ok(true) => {}
+        Ok(false) => return,
+        Err(err) => {
+            tracing::warn!(%err, "reading whether to delete unresumable archived sessions failed");
+            return;
+        }
+    }
     let deleting = {
         let (state, locator) = (state.clone(), locator.clone());
         tokio::task::spawn_blocking(move || delete_unresumable_groups(&state, &locator()))
@@ -107,7 +119,8 @@ async fn scan(state: &Arc<AppState>, locator: LocatorSource, trash: TrashRecord)
 
 /// Deletes each group of archived sessions that is wholly unresumable and returns every session
 /// deleted. A group starts at an archived session whose owner is not archived, as the sessions
-/// below an archived owner go with it.
+/// below an archived owner go with it. The groups after one that found the setting off are not
+/// judged.
 fn delete_unresumable_groups(state: &Arc<AppState>, locator: &Locator) -> Vec<Session> {
     let mut deleted = Vec::new();
     let sessions = match state.store.list_sessions() {
@@ -131,7 +144,8 @@ fn delete_unresumable_groups(state: &Arc<AppState>, locator: &Locator) -> Vec<Se
     });
     for root in roots {
         match delete_group_if_unresumable(state, locator, &coordinator::group_in(&sessions, root)) {
-            Ok(gone) => {
+            Ok(Judged::SwitchedOff) => break,
+            Ok(Judged::Deleted(gone)) => {
                 for session in &gone {
                     tracing::info!(
                         session = %session.id,
@@ -156,6 +170,14 @@ fn deletable(session: &Session) -> bool {
     session.status == SessionStatus::Archived && !session.pinned && !session.locked
 }
 
+/// What [`delete_judged`] found.
+enum Judged {
+    /// The setting is off or cannot be read, so nothing was deleted and nothing more should be.
+    SwitchedOff,
+    /// The sessions deleted: none when the group no longer matched the judging.
+    Deleted(Vec<Session>),
+}
+
 /// Deletes `group` (the root first, then the sessions below it) when every member is deletable and
 /// unresumable, and returns the sessions deleted; nothing otherwise. The group comes from a list
 /// read before the judging, so the root is read again first, and [`delete_judged`] checks the
@@ -164,18 +186,18 @@ fn delete_group_if_unresumable(
     state: &Arc<AppState>,
     locator: &Locator,
     group: &[&Session],
-) -> Result<Vec<Session>> {
+) -> Result<Judged> {
     let root = group[0];
     match state.store.get_session(&root.id)? {
         Some(current) if same_standing(&current, root) => {}
-        _ => return Ok(Vec::new()),
+        _ => return Ok(Judged::Deleted(Vec::new())),
     }
     let unresumable = |session: &Session| {
         deletable(session)
             && agent_records::resumability(locator, session) == Resumability::Unresumable
     };
     if !group.iter().all(|session| unresumable(session)) {
-        return Ok(Vec::new());
+        return Ok(Judged::Deleted(Vec::new()));
     }
     delete_judged(state, group)
 }
@@ -206,11 +228,21 @@ fn same_standing(a: &Session, b: &Session) -> bool {
 /// group now has the same members, each in the same standing: a session archived, reopened,
 /// pinned, bound or unbound since the judging was never judged, and keeps the whole group, as does
 /// a member that is launching or has a process. The claim keeps a lock from changing meanwhile.
-fn delete_judged(state: &Arc<AppState>, judged: &[&Session]) -> Result<Vec<Session>> {
+/// The setting is read again under the claim, as a scan can run long after it read the setting:
+/// turned off meanwhile, or unreadable, it deletes nothing and says so ([`Judged::SwitchedOff`]).
+fn delete_judged(state: &Arc<AppState>, judged: &[&Session]) -> Result<Judged> {
     let _removal = state.claim_session_removal();
+    match state.store.auto_delete_unresumable_archives() {
+        Ok(true) => {}
+        Ok(false) => return Ok(Judged::SwitchedOff),
+        Err(err) => {
+            tracing::warn!(%err, "reading whether to delete unresumable archived sessions failed");
+            return Ok(Judged::SwitchedOff);
+        }
+    }
     let sessions = state.store.list_sessions()?;
     let Some(root) = sessions.iter().find(|session| session.id == judged[0].id) else {
-        return Ok(Vec::new());
+        return Ok(Judged::Deleted(Vec::new()));
     };
     let current = coordinator::group_in(&sessions, root);
     let unchanged = current.len() == judged.len()
@@ -224,14 +256,14 @@ fn delete_judged(state: &Arc<AppState>, judged: &[&Session]) -> Result<Vec<Sessi
     // having the delete skip that member and take the rest.
     let busy = current.iter().any(|session| state.has_process(&session.id));
     if !unchanged || busy {
-        return Ok(Vec::new());
+        return Ok(Judged::Deleted(Vec::new()));
     }
     let mut gone = Vec::new();
     // What was deleted before a failure still needs its branches and records cleaned up.
     if let Err(err) = coordinator::delete_archived_group(state, root, &mut gone) {
         tracing::warn!(session = %root.id, %err, "deleting an unresumable archived group stopped partway");
     }
-    Ok(gone)
+    Ok(Judged::Deleted(gone))
 }
 
 #[cfg(test)]
@@ -243,6 +275,7 @@ mod tests {
     };
     use std::collections::HashMap;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// An account whose records the tests read, with a transcript for each id in `kept`.
     struct Account {
@@ -356,6 +389,14 @@ mod tests {
         }
     }
 
+    /// The sessions a [`delete_judged`] deleted; it fails the test when the setting was found off.
+    fn gone(judged: Judged) -> Vec<Session> {
+        match judged {
+            Judged::Deleted(gone) => gone,
+            Judged::SwitchedOff => panic!("the setting was found off"),
+        }
+    }
+
     /// The ids of the `session_deleted` events waiting in `events`, sorted.
     fn deleted_in(events: &mut tokio::sync::broadcast::Receiver<Event>) -> Vec<String> {
         let mut deleted = Vec::new();
@@ -401,6 +442,43 @@ mod tests {
             session_ids(&state),
             ["locked", "not-archived", "pinned", "resumable", "unknown"]
         );
+        assert_eq!(*trashed.lock().unwrap(), [leftover]);
+    }
+
+    /// With the setting off a scan deletes nothing, trashes nothing and does not even look for the
+    /// agents' records; turning it back on lets the next scan delete as before.
+    #[tokio::test]
+    async fn the_cleanup_deletes_nothing_while_the_setting_is_off() {
+        let (state, dir) = console_with_project_and_accounts("archive-cleanup-off");
+        let account = Account::new(&dir, &[]);
+        let leftover = account.leftover("gone");
+        state
+            .store
+            .insert_session(&account.session("gone", None))
+            .unwrap();
+        state
+            .store
+            .set_auto_delete_unresumable_archives(false)
+            .unwrap();
+        let (trashed, trash) = recording_trash();
+        let consulted = Arc::new(AtomicUsize::new(0));
+        let counting: LocatorSource = {
+            let (consulted, locator) = (consulted.clone(), account.locator());
+            Arc::new(move || {
+                consulted.fetch_add(1, Ordering::SeqCst);
+                locator()
+            })
+        };
+        scan(&state, counting, trash.clone()).await;
+        assert_eq!(consulted.load(Ordering::SeqCst), 0);
+        assert_eq!(session_ids(&state), ["gone"]);
+        assert!(trashed.lock().unwrap().is_empty());
+        state
+            .store
+            .set_auto_delete_unresumable_archives(true)
+            .unwrap();
+        scan(&state, account.locator(), trash).await;
+        assert!(session_ids(&state).is_empty());
         assert_eq!(*trashed.lock().unwrap(), [leftover]);
     }
 
@@ -528,15 +606,18 @@ mod tests {
             state.store.insert_session(&session).unwrap();
         };
         leaf(&|session| session.status = SessionStatus::Idle);
-        assert!(delete_judged(&state, &judged_group()).unwrap().is_empty());
+        assert!(gone(delete_judged(&state, &judged_group()).unwrap()).is_empty());
         leaf(&|session| {
             session.status = SessionStatus::Archived;
             session.pinned = true;
         });
-        assert!(delete_judged(&state, &judged_group()).unwrap().is_empty());
+        assert!(gone(delete_judged(&state, &judged_group()).unwrap()).is_empty());
         assert_eq!(session_ids(&state), ["hub", "leaf"]);
         leaf(&|session| session.pinned = false);
-        assert_eq!(delete_judged(&state, &judged_group()).unwrap().len(), 2);
+        assert_eq!(
+            gone(delete_judged(&state, &judged_group()).unwrap()).len(),
+            2
+        );
         assert!(session_ids(&state).is_empty());
     }
 
@@ -559,8 +640,62 @@ mod tests {
             .store
             .insert_session(&account.session("late", Some("hub")))
             .unwrap();
-        assert!(delete_judged(&state, &group).unwrap().is_empty());
+        assert!(gone(delete_judged(&state, &group).unwrap()).is_empty());
         assert_eq!(session_ids(&state), ["hub", "late", "leaf"]);
+    }
+
+    /// The setting turned off between the judging and the delete stops the delete, and turned back
+    /// on lets the same judged group go.
+    #[test]
+    fn a_group_judged_before_the_setting_was_turned_off_is_not_deleted() {
+        let (state, dir) = console_with_project_and_accounts("archive-cleanup-turned-off");
+        let account = Account::new(&dir, &[]);
+        state
+            .store
+            .insert_session(&account.session("lone", None))
+            .unwrap();
+        let judged = state.store.list_sessions().unwrap();
+        let group: Vec<&Session> = judged.iter().collect();
+        state
+            .store
+            .set_auto_delete_unresumable_archives(false)
+            .unwrap();
+        assert!(matches!(
+            delete_judged(&state, &group).unwrap(),
+            Judged::SwitchedOff
+        ));
+        assert_eq!(session_ids(&state), ["lone"]);
+        state
+            .store
+            .set_auto_delete_unresumable_archives(true)
+            .unwrap();
+        assert_eq!(gone(delete_judged(&state, &group).unwrap()).len(), 1);
+    }
+
+    /// A group that finds the setting off under the claim ends the pass: the groups after it are
+    /// not judged, and nothing is deleted.
+    #[test]
+    fn a_pass_stops_at_the_first_group_that_finds_the_setting_off() {
+        let (state, dir) = console_with_project_and_accounts("archive-cleanup-pass-stops");
+        let account = Account::new(&dir, &[]);
+        for id in ["first", "second"] {
+            state
+                .store
+                .insert_session(&account.session(id, None))
+                .unwrap();
+        }
+        state
+            .store
+            .set_auto_delete_unresumable_archives(false)
+            .unwrap();
+        let judged = state.store.list_sessions().unwrap();
+        let group: Vec<&Session> = judged.iter().collect();
+        assert!(matches!(
+            delete_judged(&state, &group).unwrap(),
+            Judged::SwitchedOff
+        ));
+        assert!(delete_unresumable_groups(&state, &(account.locator())()).is_empty());
+        assert_eq!(session_ids(&state), ["first", "second"]);
     }
 
     /// A member being launched, or with a process, keeps the group: the delete would refuse it and
@@ -579,10 +714,10 @@ mod tests {
         let hub = judged.iter().find(|session| session.id == "hub").unwrap();
         let group = coordinator::group_in(&judged, hub);
         let claim = state.begin_launch("leaf").unwrap();
-        assert!(delete_judged(&state, &group).unwrap().is_empty());
+        assert!(gone(delete_judged(&state, &group).unwrap()).is_empty());
         assert_eq!(session_ids(&state), ["hub", "leaf"]);
         drop(claim);
-        assert_eq!(delete_judged(&state, &group).unwrap().len(), 2);
+        assert_eq!(gone(delete_judged(&state, &group).unwrap()).len(), 2);
     }
 
     /// What the branch removal leaves is not told to any client: no error alert is broadcast.

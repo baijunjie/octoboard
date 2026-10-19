@@ -19,6 +19,7 @@ const browserState: Scenario["state"] = {
   ...state,
   settings: {
     auto_pull_repositories: false,
+    auto_delete_unresumable_archives: true,
     default_clone_dir: "/Users/dev/Projects",
     accounts: [
       { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
@@ -160,8 +161,19 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Browser General settings",
-    description: "The Markdown style row sits between Appearance and Language and starts on Tailwind. The clone-directory explanation describes when the chosen directory is used; the path appears in the input.",
+    description: "The Markdown style row sits between Appearance and Language and starts on Tailwind. The clone-directory explanation describes when the chosen directory is used; the path appears in the input. The archive-cleanup switch sits right below it, on, with the description that says what is deleted and when.",
     state: browserState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+    ],
+  },
+  {
+    id: "settings-general-archive-cleanup-off",
+    group: GROUP,
+    category: "normal",
+    title: "General, archive cleanup switched off",
+    description: "The archive-cleanup switch below the clone-directory row is off, and its description now starts with \"Once this is on\" instead of stating the behaviour.",
+    state: { ...browserState, settings: { ...browserState.settings!, auto_delete_unresumable_archives: false } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
     ],

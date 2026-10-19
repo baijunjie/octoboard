@@ -858,9 +858,17 @@ async fn handle_inner(
 
         RequestBody::UpdateSettings {
             auto_pull_repositories,
+            auto_delete_unresumable_archives,
             default_clone_dir,
         } => {
-            update_settings(state, auto_pull_repositories, default_clone_dir)?;
+            update_settings(
+                state,
+                SettingsChanges {
+                    auto_pull_repositories,
+                    auto_delete_unresumable_archives,
+                    default_clone_dir,
+                },
+            )?;
             Ok(None)
         }
 
@@ -4695,14 +4703,23 @@ fn normalize_icon(text: Option<&str>) -> Result<Option<String>> {
     Ok(Some(text))
 }
 
-/// Applies the settable fields of `update_settings`: absent means "leave it alone", as in
-/// `update_project`. Broadcasts `settings_updated` only when something actually changed, the
-/// trusted-directories pattern.
-pub(crate) fn update_settings(
-    state: &Arc<AppState>,
-    auto_pull_repositories: Option<bool>,
-    default_clone_dir: Option<String>,
-) -> Result<()> {
+/// What `update_settings` changes; a field left at its default is left alone.
+#[derive(Default)]
+pub struct SettingsChanges {
+    pub auto_pull_repositories: Option<bool>,
+    pub auto_delete_unresumable_archives: Option<bool>,
+    /// Blank text goes back to the built-in default.
+    pub default_clone_dir: Option<String>,
+}
+
+/// Applies `changes`: absent means "leave it alone", as in `update_project`. Broadcasts
+/// `settings_updated` only when something actually changed, the trusted-directories pattern.
+pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -> Result<()> {
+    let SettingsChanges {
+        auto_pull_repositories,
+        auto_delete_unresumable_archives,
+        default_clone_dir,
+    } = changes;
     // Checked before anything is written, so a refused directory leaves the other field unapplied
     // too rather than half the request taking effect.
     let default_clone_dir = match default_clone_dir {
@@ -4716,6 +4733,9 @@ pub(crate) fn update_settings(
         let updated = state.store.set_auto_pull_repositories(value)?;
         pull_turned_on = updated && value;
         changed |= updated;
+    }
+    if let Some(value) = auto_delete_unresumable_archives {
+        changed |= state.store.set_auto_delete_unresumable_archives(value)?;
     }
     if let Some(value) = default_clone_dir {
         changed |= state.store.set_default_clone_dir(value.as_deref())?;
@@ -4797,16 +4817,62 @@ mod tests {
         let (state, _dir) = crate::test_support::app_state("coordinator-update-settings");
         let built_in = state.store.default_clone_dir().unwrap();
 
-        update_settings(&state, None, Some("/work/repos/".to_string())).unwrap();
+        update_settings(
+            &state,
+            SettingsChanges {
+                default_clone_dir: Some("/work/repos/".to_string()),
+                ..SettingsChanges::default()
+            },
+        )
+        .unwrap();
         assert_eq!(state.store.default_clone_dir().unwrap(), "/work/repos");
 
         // A refused directory leaves the other field of the same request unapplied too.
-        assert!(update_settings(&state, Some(true), Some("relative".to_string())).is_err());
+        assert!(update_settings(
+            &state,
+            SettingsChanges {
+                auto_pull_repositories: Some(true),
+                default_clone_dir: Some("relative".to_string()),
+                ..SettingsChanges::default()
+            },
+        )
+        .is_err());
         assert!(!state.store.get_settings().unwrap().auto_pull_repositories);
         assert_eq!(state.store.default_clone_dir().unwrap(), "/work/repos");
 
-        update_settings(&state, None, Some("  ".to_string())).unwrap();
+        update_settings(
+            &state,
+            SettingsChanges {
+                default_clone_dir: Some("  ".to_string()),
+                ..SettingsChanges::default()
+            },
+        )
+        .unwrap();
         assert_eq!(state.store.default_clone_dir().unwrap(), built_in);
+
+        let mut events = state.subscribe();
+        update_settings(
+            &state,
+            SettingsChanges {
+                auto_delete_unresumable_archives: Some(false),
+                ..SettingsChanges::default()
+            },
+        )
+        .unwrap();
+        assert!(!state.store.auto_delete_unresumable_archives().unwrap());
+        assert!(matches!(
+            events.try_recv(),
+            Ok(Event::SettingsUpdated { settings }) if !settings.auto_delete_unresumable_archives
+        ));
+        update_settings(
+            &state,
+            SettingsChanges {
+                auto_delete_unresumable_archives: Some(false),
+                ..SettingsChanges::default()
+            },
+        )
+        .unwrap();
+        assert!(events.try_recv().is_err(), "a repeat changes nothing");
     }
 
     #[tokio::test]

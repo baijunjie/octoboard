@@ -94,7 +94,14 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
   const failureNode = useFailureNode();
   const fallbacksId = useId();
   const outcome = outcomeOf(result.consoles);
-  const setting = <InlineChip dir="auto" wrap size="inherit">{t("settings.git.autoPull.label")}</InlineChip>;
+  const settingLine = (label: string, on: boolean) => (
+    <p>
+      <Message
+        id={on ? "configuration.import.result.settings.on" : "configuration.import.result.settings.off"}
+        params={{ setting: <InlineChip dir="auto" wrap size="inherit">{label}</InlineChip> }}
+      />
+    </p>
+  );
   // Every project in the order of the document, under its console; a console is a line of its
   // own only when something came of it that its projects do not already say: it failed, or it was
   // created with nothing in it.
@@ -170,14 +177,9 @@ export function ImportResult({ result }: { result: Imported }): React.ReactEleme
   return (
     <>
       <p>{summary.join(t("configuration.import.result.summary.join"))}</p>
-      {result.settings_applied && (
-        <p>
-          <Message
-            id={result.settings_applied.auto_pull_repositories ? "configuration.import.result.settings.on" : "configuration.import.result.settings.off"}
-            params={{ setting }}
-          />
-        </p>
-      )}
+      {result.settings_applied && settingLine(t("settings.git.autoPull.label"), result.settings_applied.auto_pull_repositories)}
+      {typeof result.settings_applied?.auto_delete_unresumable_archives === "boolean" &&
+        settingLine(t("settings.archiveCleanup.label"), result.settings_applied.auto_delete_unresumable_archives)}
       {result.settings_error && (
         <CodeToneContext.Provider value="danger">
           <p className="flex items-start gap-2 text-app-danger">

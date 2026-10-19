@@ -66,8 +66,16 @@ resumable or unknown (see "When a conversation can no longer be resumed" in
   client, and its bound branches and worktrees are removed with nothing forced. In addition, what is left of its
   agent's own records — a Claude Code subagents' directory left without its transcript, say — is moved to the Trash,
   as if the confirmation's cleanup option had been ticked (see "Moving the agent's own records to the Trash" below).
-- **Nobody is told**: no confirmation, alert or notice is shown, and there is no setting to turn it off. Each
-  deletion, and any branch or worktree that could not be removed, is only written to the daemon's log.
+- **Nobody is told**: no confirmation, alert or notice is shown. Each deletion, and any branch or worktree that could
+  not be removed, is only written to the daemon's log.
+- **It can be turned off** with the switch in Settings' General section (see "Automatically delete archived sessions
+  whose conversation is gone" in `docs/product/settings.md`), which is on unless the user has turned it off. While it
+  is off, a check deletes nothing. The switch is read at every check and again right before each deletion, so turning
+  it off while a check is running stops that check before its next deletion; what it had already deleted stays
+  deleted. Turning it on starts no check of its own: deleting resumes at the next check on the schedule above, at most
+  about a day later, or when the daemon next starts. The switch does not affect reopening: a session whose
+  conversation is gone is refused when reopened either way (see "When a conversation can no longer be resumed" in
+  `docs/product/archiving-and-resuming-sessions.md`).
 
 ## Deleting an unused session
 

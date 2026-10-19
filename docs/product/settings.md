@@ -7,9 +7,10 @@ control on the right; under a right-to-left language the sides swap (see "Right-
 folders**, **Permissions**, **Notifications** and **Configuration**; the dialog opens on General unless it was asked to
 open on another section.
 
-A console session can read the default clone directory, the automatic pulling of repositories, the agent accounts (without
-their directories) and the trusted folders, and change the first two (see "Application settings: `get_settings` and
-`update_settings`" in `docs/product/agent-settings-tools.md`).
+A console session can read the default clone directory, the automatic pulling of repositories, the automatic deletion of
+archived sessions whose conversation is gone, the agent accounts (without their directories) and the trusted folders,
+and change the first three (see "Application settings: `get_settings` and `update_settings`" in
+`docs/product/agent-settings-tools.md`).
 
 ## In a narrow window
 
@@ -76,8 +77,9 @@ every path is shown in full.
 
 ## General
 
-Small app-wide settings: an **Appearance** row, a **Markdown style** row, a **Language** row, then a **Default clone
-directory** row, and last, in the macOS application only, a **Keep running in the background** row.
+Small app-wide settings: an **Appearance** row, a **Markdown style** row, a **Language** row, a **Default clone
+directory** row, then an **Automatically delete archived sessions whose conversation is gone** row, and last, in the
+macOS application only, a **Keep running in the background** row.
 
 ### Appearance
 
@@ -115,13 +117,24 @@ refused with an error alert and the field returns to the stored one, and a blank
 browser opens on the nearest existing ancestor when the directory does not exist yet (see "Browsing directories" in
 `docs/product/projects.md`). Where the directory applies is in "Associating a project" in the same document.
 
+### Automatically delete archived sessions whose conversation is gone
+
+A switch, **on to begin with** — installations from before the switch existed included: whether Octoboard deletes on
+its own the archived sessions whose conversation their agent no longer keeps. While the switch is off the row's
+description says what turning it on will do, and while it is on it says what is happening now: such an archived
+session is deleted automatically, Octoboard checks each time it starts and then about once a day, and pinned and locked
+sessions are kept. The value is kept by the daemon, so every window shows the same. What the deletion does, when it
+runs and what turning the switch off or on changes are in "Deleting archived sessions whose conversation is gone" in
+`docs/product/deleting-sessions.md`.
+
 ### Keep running in the background
 
 A switch, the section's last row, labelled for what turning it on does: keep Octoboard running in the background when
 the window is closed. It is **off to begin with**, so closing the window quits.
 
 **Only the macOS application has this row.** A browser has no native window to close into the background, so the row
-is absent there — the section then ends with the Default clone directory row.
+is absent there — the section then ends with the Automatically delete archived sessions whose conversation is gone
+row.
 
 The row's description says what the choice means and never mentions quitting, which the label already carries: while
 the switch is off it says what turning it on will do, and while it is on it says what is happening now — closing the

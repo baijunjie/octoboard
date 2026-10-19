@@ -54,6 +54,7 @@ const accountsState = snapshotState({
   sessions,
   settings: {
     auto_pull_repositories: false,
+    auto_delete_unresumable_archives: true,
     default_clone_dir: "/Users/dev/Projects",
     accounts: [
       { id: "a-work", agent: "claude", name: "Work account for release coordination across all production services", config_dir: "/Users/dev/.claude-work" },

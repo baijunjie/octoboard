@@ -47,6 +47,10 @@ pub struct DocumentSettings {
     /// Documents exported before the setting was renamed carry it as `auto_sync_repositories`.
     #[serde(alias = "auto_sync_repositories")]
     pub auto_pull_repositories: bool,
+    /// Absent in a document exported before the setting existed: importing it leaves the setting
+    /// as it is.
+    #[serde(default)]
+    pub auto_delete_unresumable_archives: Option<bool>,
 }
 
 /// A reference to an account: its name, which is unique within its agent. The agent is the one
@@ -153,6 +157,7 @@ pub fn build(store: &Store, console: Option<&str>) -> Result<ConfigurationDocume
         Some(_) => None,
         None => Some(DocumentSettings {
             auto_pull_repositories: store.auto_pull_repositories()?,
+            auto_delete_unresumable_archives: Some(store.auto_delete_unresumable_archives()?),
         }),
     };
 
@@ -363,6 +368,7 @@ mod tests {
             store.insert_console(&tied).unwrap();
         }
         store.set_auto_pull_repositories(true).unwrap();
+        store.set_auto_delete_unresumable_archives(false).unwrap();
 
         let mut cloned = project("project-1", "console-1", "cloned");
         cloned.source = ProjectSource::Git;
@@ -417,7 +423,8 @@ mod tests {
         assert_eq!(
             document.settings,
             Some(DocumentSettings {
-                auto_pull_repositories: true
+                auto_pull_repositories: true,
+                auto_delete_unresumable_archives: Some(false),
             })
         );
         let names = |console: &DocumentConsole| {

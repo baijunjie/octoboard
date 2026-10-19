@@ -88,7 +88,7 @@ export const en = {
   "error.recovery.lostMessages": "Open the session they were meant for, or the one that took over, and check its terminal. Send again anything that did not arrive.",
   "error.recovery.trust": "Open the affected session’s terminal and answer its pending prompt. For folder trust, choose only the project’s folder, then retry.",
   "error.recovery.conversation": "Check the conversation ID and selected account. Resume the existing session when one is named above, or start a new session.",
-  "error.recovery.unresumable": "Archive this session if it isn't already, delete it, and start a new session to carry on the work.",
+  "error.recovery.unresumable": "Archive this session if it is not already, delete it, and start a new session to carry on the work.",
   "error.recovery.unarchive": "Check that Codex runs in the login shell and can read its account directory, then reopen the session. If it still fails, delete the session and start a new one.",
   "error.recovery.session": "Select the current session in the sidebar. Reopen it from the archive if archived, or create a new session if it has been removed.",
   "error.recovery.configuration": "Choose a configuration file exported by a compatible {appName} version and review the project destinations before importing again.",
@@ -1181,7 +1181,7 @@ export const en = {
   "configuration.export.failed": "Could not save the file: {detail}",
   "configuration.import.title": "Import configuration",
   "configuration.import.choose.intro":
-    "Choose a file exported from {appName}. You will review what it holds, and decide where each project goes on the machine running {appName}, before anything is created.",
+    "Choose a file exported from {appName}. You will review what it holds, and decide where each project goes on the machine running {appName}, before anything is created. A file of every console also holds the application settings; a file of a single console does not.",
   "configuration.import.choose.submit": "Choose file",
   "configuration.import.readFailed": "Could not read the file: {detail}",
   "configuration.file.tooLarge": "The file is too large to be a configuration file.",
@@ -1205,6 +1205,8 @@ export const en = {
   "configuration.import.settings.label": "Also apply the application settings",
   "configuration.import.settings.turnsOn":
     "Turns on {setting}, which is currently off. {appName} then pulls your repositories by itself.",
+  "configuration.import.settings.archiveCleanup.turnsOn":
+    "Turns on {setting}, which is currently off. {appName} then deletes such archived sessions by itself.",
   "configuration.import.settings.turnsOff": "Turns off {setting}, which is currently on.",
   "configuration.import.settings.alreadyOn":
     "{setting} is on in the file and already on, so applying changes nothing.",
@@ -1305,6 +1307,11 @@ export const en = {
   "settings.cloneDir.description.gitUrl":
     "Projects added from a Git URL are cloned into this directory unless you choose another.",
   "settings.cloneDir.placeholder": "~/Projects",
+  "settings.archiveCleanup.label": "Automatically delete archived sessions whose conversation is gone",
+  "settings.archiveCleanup.description.off":
+    "Once this is on, an archived session is deleted automatically when its agent no longer keeps its conversation. {appName} checks each time it starts, then about once a day. Pinned and locked sessions are kept.",
+  "settings.archiveCleanup.description.on":
+    "An archived session is deleted automatically when its agent no longer keeps its conversation. {appName} checks each time it starts, then about once a day. Pinned and locked sessions are kept.",
   "settings.background.label": "Keep running in the background when the window is closed",
   "settings.background.description.off":
     "Once this is on, closing the window keeps sessions and their agents running and notifications arriving. The menu bar icon brings the window back.",

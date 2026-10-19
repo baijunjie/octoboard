@@ -11,10 +11,10 @@ describe("snapshotState", () => {
   it("defaults to an empty git statuses map and auto-pull off, and threads a given settings object through", () => {
     const empty = snapshotState({});
     expect(empty.gitStatuses).toEqual(new Map());
-    expect(empty.settings).toEqual({ auto_pull_repositories: false, default_clone_dir: "/Users/dev/Projects", accounts: [] });
+    expect(empty.settings).toEqual({ auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", accounts: [] });
 
     expect(
-      snapshotState({ settings: { auto_pull_repositories: true, default_clone_dir: "/p", accounts: [] } }).settings,
-    ).toEqual({ auto_pull_repositories: true, default_clone_dir: "/p", accounts: [] });
+      snapshotState({ settings: { auto_pull_repositories: true, auto_delete_unresumable_archives: true, default_clone_dir: "/p", accounts: [] } }).settings,
+    ).toEqual({ auto_pull_repositories: true, auto_delete_unresumable_archives: true, default_clone_dir: "/p", accounts: [] });
   });
 });

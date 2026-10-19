@@ -435,6 +435,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   checked-out submodule; why a diff between two specific versions names each one `<revision>:<path>` and ends its
   arguments with `--`; what a test proving a read leaves the repository alone has to set up first (a stale-stat
   fixture and a positive control); and why a test fixture is built only from Git 2.36's commands.
+- [Adding a user setting](memory/adding-a-user-setting.md) — the checklist for adding a user setting: exposing it in
+  the agents' settings tools unless only the user may change it, and carrying a portable application setting through a
+  full configuration export and import.
 - [Writing daemon code](memory/writing-daemon-code.md) — conventions for the Rust daemon: live state the daemon derives
   held on `AppState` and published by its own event rather than as a field on a stored record, with the cleanups that
   follow from there being no deletion event for it; why a repeating refresh is timed by the client and has to be bounded

@@ -175,3 +175,21 @@ it.each([false, true])("keeps each batch item's remedy and adds Issue guidance o
   expect(alert.textContent?.includes("Take a screenshot")).toBe(unexpected);
   if (unexpected) expect(rows[2].textContent).toContain("This failure may be a bug");
 });
+
+it("tells of each application setting that was applied, and of none the file did not carry", () => {
+  const daemon = { store: createStateStore({}) } as Daemon;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const render = (settings_applied: { auto_pull_repositories: boolean; auto_delete_unresumable_archives?: boolean }) =>
+    act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles: [], settings_applied }} /></DaemonProvider>));
+  render({ auto_pull_repositories: true, auto_delete_unresumable_archives: false });
+  expect(container.textContent).toContain("Automatically pull repositories is now on");
+  expect(container.textContent).toContain("Automatically delete archived sessions whose conversation is gone is now off");
+  render({ auto_pull_repositories: true });
+  expect(container.textContent).toContain("Automatically pull repositories is now on");
+  expect(container.textContent).not.toContain("archived sessions");
+});

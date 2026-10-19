@@ -94,7 +94,7 @@ the request id as if it were a record id.
 | `confirm_trust` | `session`, `remember`, `trust_parent_dir?` | The user's go-ahead to a `trust_prompt`, whichever agent is asking: Octoboard may press that session's own folder-trust confirmation, which it does by typing at the session's terminal after checking that the confirmation is still up — for Claude Code a Down and an Enter, once the cursor is seen to move to "Yes, I trust this folder"; for Codex an Enter, with the cursor seen on "1. Trust and continue" and nothing written into the session since the confirmation was sighted; for Grok Build a `y`, while no hook has run, the process is still there and nothing has been written into the session since the confirmation was sighted. Pressing it is what makes the agent record the trust in its own configuration, so its later launches do not ask; for Grok Build the entry Grok wrote into the session's own copy of its trust store is then carried over, unchanged, into the user's own store, and the press counts only once that is done. `remember` also records the project's permission (`Project.trust_consent`) once the confirmation has been pressed, so a later confirmation of any agent in that project is pressed without a prompt, and broadcasts the updated `project_upserted`. `trust_parent_dir` (absent means false) records the project's parent directory as trusted instead, once the confirmation has been pressed, and then `remember` adds nothing. Every project whose path lies under that directory is covered by it, for every agent — those already there, those added later by any means, repositories the console session clones or adds into it included — and each agent then applies that project's own configuration once it has recorded its trust. The confirmations already waiting under it are pressed at once. The daemon derives the directory from the session's project (it is the prompt's `trust_dir`); a client never names one. A parent that is the filesystem root, the user's home directory (however it is spelled or linked) or a directory containing it is refused, before anything is pressed, with `error` code `trust_directory_too_broad`; so is a project whose path is not absolute (`trust_path_not_absolute`), and so is any case where the home directory cannot be determined to check against (`trust_home_unknown`). Refused, with nothing recorded and nothing sent, unless `session` is a running project session that is still waiting at its own agent's confirmation and has not been answered (one that is no longer waiting is answered with `error` code `trust_not_waiting`, which a client shows nothing for); a failure to press once it was accepted (the confirmation is not as expected, or something else typed into the session meanwhile) is an `error` with code `trust_answer_failed`, and a Grok Build press whose entry could not be carried over is one with code `trust_not_carried_over`; either records no permission and is also broadcast as a `session_notice` so that it is seen even if the requesting dialog has closed. Octoboard never writes a trust decision into an agent's configuration itself; the one file it writes is the user's Grok Build trust store, with the entry Grok wrote |
 | `remove_trusted_directory` | `path` | Stops trusting a directory (compared after lexical normalisation, so a trailing slash does not matter) and broadcasts `trusted_directories_updated`. Projects' own permissions, sessions already running and the trust each agent has already recorded are untouched. Removing one that is not trusted does nothing. Directories are added only by `confirm_trust` |
 | `answer_session_request` | `request_id`, `approve` | The user's answer to a `session_request`. `approve` true starts the session the request describes — a project session in its project, or a console session in its console — as `open_session` would, with no `bound_to`: it has no owner and reports to the user, and the requesting session carries on unchanged, neither bound to it nor owning it. False refuses it and changes nothing (a client sends false when the dialog is dismissed). Approval is answered with `session_opened` carrying the new session, refusal with `ack`. The first answer wins. An answer for a request that has already been answered, or that the daemon does not know, gets `session_request_answered`. An approval for one that was withdrawn or timed out, or whose session's process ended before it could be carried out, gets `session_request_not_waiting`; a refusal for one gets the same code. An approval that fails while launching returns that launch's own error |
-| `update_settings` | `auto_pull_repositories?`, `default_clone_dir?` | Each settable field absent means "leave it alone". `default_clone_dir` follows the path rules of `add_project`'s `path` (absolute or `~/`, stored lexically normalised, a relative one refused), and a blank value goes back to the built-in default; a refused value leaves the whole request unapplied. Broadcasts `settings_updated` only when something actually changed, as `remove_trusted_directory` does. A change that turns `auto_pull_repositories` on also starts the immediate fast-forward pass described in "Fast-forwarding when the setting is turned on" below, whose statuses follow as `project_git_status` broadcasts; an update that leaves the value as it was starts nothing. Turning it off starts nothing and undoes nothing |
+| `update_settings` | `auto_pull_repositories?`, `auto_delete_unresumable_archives?`, `default_clone_dir?` | Each settable field absent means "leave it alone". Turning `auto_delete_unresumable_archives` on starts no scan; the next scheduled one (at most a day away) deletes again. `default_clone_dir` follows the path rules of `add_project`'s `path` (absolute or `~/`, stored lexically normalised, a relative one refused), and a blank value goes back to the built-in default; a refused value leaves the whole request unapplied. Broadcasts `settings_updated` only when something actually changed, as `remove_trusted_directory` does. A change that turns `auto_pull_repositories` on also starts the immediate fast-forward pass described in "Fast-forwarding when the setting is turned on" below, whose statuses follow as `project_git_status` broadcasts; an update that leaves the value as it was starts nothing. Turning it off starts nothing and undoes nothing |
 | `refresh_git_status` | `console` | Checks every project of `console` against its remote, a few at a time; answered with `ack` at once, and the statuses follow as `project_git_status` broadcasts, one per project as its own check finishes. A project whose check is already running — this call raced ahead of an earlier one, or another client is watching the same console — is not started again, and nor is one whose last check completed less than a minute ago: several clients can each be polling this console on their own 5-minute interval and phase, and without this floor their sweeps would interleave into several checks per project every 5 minutes instead of one. Either way nothing is broadcast for the project that was skipped — it keeps whatever status it already had. An unknown console is `unknown_console`. See "Daemon behaviour, per project" below for what one project's check does |
 | `open_project_path` | `project`, `path`, `worktree?` | Opens an existing project-relative wire path with its default application on the daemon's host; a directory opens in the file manager. `worktree` selects the same scoped live root as browsing; absent means the project's own directory. The path and its symlink target must remain inside that scope. Answers `ack` when the host accepts the request (Linux starts `xdg-open` detached, so later launcher failures cannot be observed). Invalid, missing and outside-scope paths use the browse errors; launch failures are `path_open_failed` |
 | `reveal_project_path` | `project`, `path`, `worktree?` | Selects an existing file or directory in its containing folder on the daemon's host. Scope and path validation match `open_project_path`; a symlink is selected by its own name. macOS uses `open -R`; Linux requires `gdbus` and a file manager implementing `org.freedesktop.FileManager1.ShowItems`. Answers `ack` after the launcher succeeds; launch failures are `directory_unavailable` |
@@ -360,8 +360,8 @@ Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
           account_id?, config_dir?, model?: string|null, effort?: string|null, pinned, locked, started_at, ended_at? }
 SessionUsage { input_tokens, output_tokens, total_tokens, cached_input_tokens?, cache_write_input_tokens? }
 Page    { id, console_session_id, html, anchor_message_id?, created_at }
-Settings  { auto_pull_repositories, default_clone_dir, accounts: Account[], codex_default_approval_reviewer,
-            claude_default_approval_mode }
+Settings  { auto_pull_repositories, auto_delete_unresumable_archives, default_clone_dir, accounts: Account[],
+            codex_default_approval_reviewer, claude_default_approval_mode }
 GitStatus { project, repository, branch?, detached, upstream?, ahead, behind,
             activity: "idle"|"checking"|"pulling"|"pushing", error? }
 AgentAvailability { agent, availability: "not_determined"|"available"|"unavailable", default_account_dir? }
@@ -546,6 +546,11 @@ off, the periodic check still fetches the remote and reports how far ahead or be
 it; on, a branch that is behind and can fast-forward is fast-forwarded. It never pushes, and it never merges
 non-fast-forward. Turning it on also fast-forwards straight away, without waiting for the next check — see
 "Fast-forwarding when the setting is turned on" below.
+`auto_delete_unresumable_archives` (default `true`, also for a database from before it existed) governs the daemon's
+automatic deletion of archived sessions whose conversation record is proven gone: while it is `false` that scan
+deletes nothing. The scan reads it when it starts and again before each delete, so a change needs no restart and takes
+hold mid-scan. It does not affect `resume_session` refusing a session whose conversation is gone
+(`conversation_unresumable`).
 `GitStatus` is one project's live git state, derived from its working directory on request and never stored; see
 "Daemon behaviour, per project" below for how it is built. `repository` is `false` when the project's directory is
 not a git repository, and every other field is then at its empty value. `branch` is the branch name, the short
@@ -692,8 +697,9 @@ input of the import as much as a file the user keeps, so its shape is part of th
 
 ```
 Document { format: "octoboard-configuration", version: 1,
-           settings?: { auto_pull_repositories },     // present in a full export only; an older document
+           settings?: { auto_pull_repositories,       // present in a full export only; an older document
                                                       // may carry it as `auto_sync_repositories`, read alike
+                        auto_delete_unresumable_archives? },   // absent or null in an older document: left as it is
            consoles: DocumentConsole[] }
 DocumentConsole { name, icon?, default_agent,
                   project_session_agent?,                           // absent in an older document: follows default_agent
@@ -716,11 +722,12 @@ AccountName       { name }
 ProjectAccountRef { kind: "inherit" } | { kind: "default" } | { kind: "account", name }
 ```
 
-- **Scope.** With `console`, the document holds that console alone and no `settings`; without it, it holds every
-  console and `settings`. The shape is the same either way: a full export is a list of consoles that happens to hold
-  all of them. Consoles are ordered by creation time and a console's `projects` by name, with the stored id breaking
-  a tie, so the order is the same on every export; the id itself is not in the document. `projects` is all of a
-  console's projects, whether or not a project is a git repository.
+- **Scope.** With `console`, the document holds that console alone and no `settings`; without it, it holds every console
+  and `settings`, which are the portable application settings (`auto_pull_repositories` and
+  `auto_delete_unresumable_archives`). The shape is the same either way: a full export is a list of consoles that
+  happens to hold all of them. Consoles are ordered by creation time and a console's `projects` by name, with the stored
+  id breaking a tie, so the order is the same on every export; the id itself is not in the document. `projects` is all
+  of a console's projects, whether or not a project is a git repository.
 - **Nothing is an id.** No console, project or account carries an `id`. A console's `workdir` is not in the document
   either: the daemon derives it from the console's id when it creates the console, so it would carry that id and the
   daemon's own layout, and an import creates its console, and so its directory, itself. A console's `*_account` is
@@ -736,7 +743,8 @@ ProjectAccountRef { kind: "inherit" } | { kind: "default" } | { kind: "account",
   its field, is dropped as deleting the account would have left it: `null` on a console, `inherit` on a project.
   Sessions, pages, transcripts, trust state (a project's `trust_consent`, the trusted directories) and
   `Settings.default_clone_dir` are not configuration and are not in the document; the last is the importing
-  machine's own to choose, and an import places projects under it.
+  machine's own to choose, and an import places projects under it. The accounts and `codex_default_approval_reviewer`
+  of `Settings` are not in it either, being bound to this machine's accounts.
 - **Machine-local paths.** `Project.path` is an absolute path of the exporting machine, as stored, and is only a
   starting point for an import to resolve against its own filesystem. It is the one machine-local path in the
   document.
@@ -757,7 +765,9 @@ project, and creates. A client sends the same `document` to both and does not al
 untrusted input: its paths and URLs are data this machine checks, and nothing in it is acted on as it stands.
 
 ```
-configuration_inspected { settings?: { auto_pull_repositories, current_auto_pull_repositories },
+configuration_inspected { settings?: { auto_pull_repositories, current_auto_pull_repositories,
+                                      auto_delete_unresumable_archives?,   // absent or null: the document predates it
+                                      current_auto_delete_unresumable_archives },
                           consoles: InspectedConsole[] }
 InspectedConsole  { name, account_fallbacks: AccountFallback[], projects: InspectedProject[] }
 InspectedProject  { name, path, remote_url?,            // as the document records them
@@ -771,7 +781,7 @@ ProjectResolution { console, project,                   // indexes into the docu
                     choice: { kind: "exported_path" } | { kind: "default_clone_dir" } | { kind: "clone" }
                           | { kind: "directory", path } }
 
-configuration_imported { settings_applied?: { auto_pull_repositories },
+configuration_imported { settings_applied?: { auto_pull_repositories, auto_delete_unresumable_archives? },
                          settings_error?: Failure,   // the settings asked for could not be applied
                          consoles: ImportedConsole[] }
 ImportedConsole   { name, status: "created" | "failed",
@@ -830,12 +840,13 @@ Failure           { code, params, message }             // as an `error` reply c
 - **Application settings.** A full export carries `settings`; a single console's does not. `settings` of the inspection
   is present when the document has them, with the document's value and the value this machine has now, so a client can
   show what applying would change. They are applied only when `import_configuration` is sent `apply_settings: true`,
-  because `auto_pull_repositories` makes the daemon fast-forward the user's repositories on its own, which changes how
-  this machine behaves. They are applied last, through the same path as `update_settings` (so they are normalised and
-  `settings_updated` is broadcast when the value changes), and `settings_applied` in the result reports what was
-  applied. Asking for them of a document that has none is refused (`import_settings_missing`) rather than ignored, so a
-  request never silently does less than it was told to. Settings that could not be applied are `settings_error`, and the
-  import is reported all the same.
+  because `auto_pull_repositories` makes the daemon fast-forward the user's repositories on its own and
+  `auto_delete_unresumable_archives` makes it delete archived sessions on its own, which changes how this machine
+  behaves. A document without `auto_delete_unresumable_archives` leaves that setting as it is. They are applied last,
+  through the same path as `update_settings` (so they are normalised and `settings_updated` is broadcast when the value
+  changes), and `settings_applied` in the result reports what was applied. Asking for them of a document that has none
+  is refused (`import_settings_missing`) rather than ignored, so a request never silently does less than it was told to.
+  Settings that could not be applied are `settings_error`, and the import is reported all the same.
 - **In the result.** A project with no resolution is `left_out`. One whose directory cannot be obtained (the path is
   gone, a clone fails or its target exists, the choice has nothing to use) is `failed` with its `error`, and the rest
   carry on; its console is still created. A console that cannot be created (the disk is full, the data directory cannot
@@ -1735,9 +1746,10 @@ console, changes a project's path, source, host, remote or `trust_consent`, or w
   changed model or effort reaches the calling session on its next launch unless it was opened with its own. A changed
   `project_session_launch` reaches project sessions at their next launch, unless their project or the session sets
   its own.
-- `get_settings` answers `auto_pull_repositories`, `default_clone_dir`, `accounts` (`id`, `agent`, `name`, `default`;
-  never a config directory) and `trusted_directories`. `update_settings` takes `auto_pull_repositories` and
-  `default_clone_dir` (blank resets it) through the function `update_settings` runs, so enabling the automatic pull
+- `get_settings` answers `auto_pull_repositories`, `auto_delete_unresumable_archives`, `default_clone_dir`,
+  `accounts` (`id`, `agent`, `name`, `default`; never a config directory) and `trusted_directories`.
+  `update_settings` takes `auto_pull_repositories`, `auto_delete_unresumable_archives` and `default_clone_dir`
+  (blank resets it) through the function `update_settings` runs, so enabling the automatic pull
   fast-forwards the projects already behind at once.
 - `new_session` takes `account` (id or name, `default`), `model` and `effort` besides the brief; the account is read
   among the accounts of the agent the session will be of.

@@ -21,7 +21,9 @@ use crate::config_export::{
     self, AccountName, ConfigurationDocument, DocumentConsole, DocumentProject, DocumentSettings,
     ProjectAccountRef,
 };
-use crate::coordinator::{self, AddProjectRequest, NewConsole, NewProjectSettings};
+use crate::coordinator::{
+    self, AddProjectRequest, NewConsole, NewProjectSettings, SettingsChanges,
+};
 use crate::git_remote;
 use crate::git_remote::read_bounded;
 use crate::hostfs;
@@ -135,6 +137,9 @@ pub struct InspectedProject {
 pub struct InspectedSettings {
     pub auto_pull_repositories: bool,
     pub current_auto_pull_repositories: bool,
+    /// Absent when the document predates the setting, which applying it then leaves as it is.
+    pub auto_delete_unresumable_archives: Option<bool>,
+    pub current_auto_delete_unresumable_archives: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -467,6 +472,10 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
         Some(settings) => Some(InspectedSettings {
             auto_pull_repositories: settings.auto_pull_repositories,
             current_auto_pull_repositories: state.store.auto_pull_repositories()?,
+            auto_delete_unresumable_archives: settings.auto_delete_unresumable_archives,
+            current_auto_delete_unresumable_archives: state
+                .store
+                .auto_delete_unresumable_archives()?,
         }),
         None => None,
     };
@@ -650,7 +659,12 @@ pub async fn apply(
 
     let (mut settings_applied, mut settings_error) = (None, None);
     if let Some(settings) = document.settings.filter(|_| apply_settings) {
-        match coordinator::update_settings(state, Some(settings.auto_pull_repositories), None) {
+        let changes = SettingsChanges {
+            auto_pull_repositories: Some(settings.auto_pull_repositories),
+            auto_delete_unresumable_archives: settings.auto_delete_unresumable_archives,
+            default_clone_dir: None,
+        };
+        match coordinator::update_settings(state, changes) {
             Ok(()) => settings_applied = Some(settings),
             Err(err) => settings_error = Some(ImportFailure::of(&err)),
         }
@@ -889,8 +903,15 @@ mod tests {
         Ok(apply(state, document, resolutions, false).await?.consoles)
     }
 
-    fn with_settings(mut document: serde_json::Value, auto_pull: bool) -> serde_json::Value {
-        document["settings"] = json!({ "auto_pull_repositories": auto_pull });
+    fn with_settings(
+        mut document: serde_json::Value,
+        auto_pull: bool,
+        auto_delete: bool,
+    ) -> serde_json::Value {
+        document["settings"] = json!({
+            "auto_pull_repositories": auto_pull,
+            "auto_delete_unresumable_archives": auto_delete,
+        });
         document
     }
 
@@ -1624,14 +1645,18 @@ mod tests {
     #[tokio::test]
     async fn the_documents_settings_are_shown_by_inspecting_and_applied_only_when_asked_for() {
         let (state, _dir) = app_state("import-settings");
-        let full = with_settings(document(vec![console("Hub", Vec::new())]), true);
+        let full = with_settings(document(vec![console("Hub", Vec::new())]), true, false);
         assert!(!state.store.auto_pull_repositories().unwrap());
+        assert!(state.store.auto_delete_unresumable_archives().unwrap());
 
         let inspection = inspect(&state, &full).await.unwrap();
         let settings = inspection.settings.expect("the document carries settings");
         assert!(settings.auto_pull_repositories);
         assert!(!settings.current_auto_pull_repositories);
+        assert_eq!(settings.auto_delete_unresumable_archives, Some(false));
+        assert!(settings.current_auto_delete_unresumable_archives);
         assert!(!state.store.auto_pull_repositories().unwrap());
+        assert!(state.store.auto_delete_unresumable_archives().unwrap());
         assert!(inspect(&state, &document(Vec::new()))
             .await
             .unwrap()
@@ -1641,15 +1666,78 @@ mod tests {
         let imported = apply(&state, &full, Vec::new(), false).await.unwrap();
         assert_eq!(imported.settings_applied, None);
         assert!(!state.store.auto_pull_repositories().unwrap());
+        assert!(state.store.auto_delete_unresumable_archives().unwrap());
 
         let imported = apply(&state, &full, Vec::new(), true).await.unwrap();
         assert_eq!(
             imported.settings_applied,
             Some(DocumentSettings {
-                auto_pull_repositories: true
+                auto_pull_repositories: true,
+                auto_delete_unresumable_archives: Some(false),
             })
         );
         assert!(state.store.auto_pull_repositories().unwrap());
+        assert!(!state.store.auto_delete_unresumable_archives().unwrap());
+    }
+
+    /// A full export carries both application settings and a single console's carries none, and
+    /// importing the full one on another machine sets both.
+    #[tokio::test]
+    async fn a_full_export_round_trips_both_settings_and_a_console_export_carries_none() {
+        let (source, source_dir) = app_state("import-round-trip-source");
+        source.store.set_auto_pull_repositories(true).unwrap();
+        source
+            .store
+            .set_auto_delete_unresumable_archives(false)
+            .unwrap();
+        let hub = crate::test_support::console(&source_dir);
+        source.store.insert_console(&hub).unwrap();
+        let full = serde_json::to_value(crate::config_export::build(&source.store, None).unwrap())
+            .unwrap();
+        let single = serde_json::to_value(
+            crate::config_export::build(&source.store, Some(&hub.id)).unwrap(),
+        )
+        .unwrap();
+        assert!(single
+            .get("settings")
+            .is_none_or(|settings| settings.is_null()));
+
+        let (target, _target_dir) = app_state("import-round-trip-target");
+        apply(&target, &single, Vec::new(), false).await.unwrap();
+        assert!(!target.store.auto_pull_repositories().unwrap());
+        assert!(target.store.auto_delete_unresumable_archives().unwrap());
+        apply(&target, &full, Vec::new(), true).await.unwrap();
+        assert!(target.store.auto_pull_repositories().unwrap());
+        assert!(!target.store.auto_delete_unresumable_archives().unwrap());
+    }
+
+    /// A document from before the cleanup setting existed leaves it as the importing machine has
+    /// it.
+    #[tokio::test]
+    async fn a_document_without_the_cleanup_setting_leaves_it_as_it_is() {
+        let (state, _dir) = app_state("import-older-settings");
+        state
+            .store
+            .set_auto_delete_unresumable_archives(false)
+            .unwrap();
+        let mut older = document(vec![console("Hub", Vec::new())]);
+        older["settings"] = json!({ "auto_pull_repositories": true });
+
+        let inspection = inspect(&state, &older).await.unwrap();
+        let settings = inspection.settings.unwrap();
+        assert_eq!(settings.auto_delete_unresumable_archives, None);
+        assert!(!settings.current_auto_delete_unresumable_archives);
+
+        let imported = apply(&state, &older, Vec::new(), true).await.unwrap();
+        assert_eq!(
+            imported.settings_applied,
+            Some(DocumentSettings {
+                auto_pull_repositories: true,
+                auto_delete_unresumable_archives: None,
+            })
+        );
+        assert!(state.store.auto_pull_repositories().unwrap());
+        assert!(!state.store.auto_delete_unresumable_archives().unwrap());
     }
 
     #[tokio::test]
@@ -1662,7 +1750,8 @@ mod tests {
         assert_eq!(
             imported.settings_applied,
             Some(DocumentSettings {
-                auto_pull_repositories: true
+                auto_pull_repositories: true,
+                auto_delete_unresumable_archives: None,
             })
         );
         assert!(state.store.auto_pull_repositories().unwrap());
@@ -1774,7 +1863,7 @@ mod tests {
         std::fs::write(dir.join("consoles"), "").unwrap();
         let repo = directory(&area, "repo");
         let hub = console("Hub", vec![project("p", &repo.to_string_lossy())]);
-        let applied = with_settings(document(vec![hub]), true);
+        let applied = with_settings(document(vec![hub]), true, false);
 
         let imported = apply(
             &state,

@@ -423,6 +423,10 @@ export interface Settings {
    * but nothing in the repository changes. On: a branch that is behind and can fast-forward is
    * also fast-forwarded. Never pushes and never merges a non-fast-forward either way. */
   auto_pull_repositories: boolean;
+  /** On (the default): the daemon deletes an archived session on its own once the agent has
+   * dropped its conversation record, so the session could only fail when reopened. Off: that
+   * cleanup deletes nothing. Reopening such a session is refused either way. */
+  auto_delete_unresumable_archives: boolean;
   /** Where a `git` association clones into when no directory is named: the one the user set, or
    * `~/Projects` expanded while none is. Always an absolute path. */
   default_clone_dir: string;
@@ -498,6 +502,8 @@ export interface DocumentConsole {
 /** The application settings a full export carries. */
 export interface DocumentSettings {
   auto_pull_repositories: boolean;
+  /** Absent in a file exported before the setting existed; applying then leaves it as it is. */
+  auto_delete_unresumable_archives?: boolean | null;
 }
 
 /** What `export_configuration` answers and a user keeps as a file. The client saves it as it is
@@ -565,6 +571,9 @@ export interface InspectedConsole {
 export interface InspectedSettings {
   auto_pull_repositories: boolean;
   current_auto_pull_repositories: boolean;
+  /** Absent when the document predates the setting. */
+  auto_delete_unresumable_archives?: boolean | null;
+  current_auto_delete_unresumable_archives: boolean;
 }
 
 /** An `error` reply's `code`, `params` and `message`, for something an import could not do. */
@@ -1030,7 +1039,7 @@ export type RequestBody =
   /** Each settable field is optional: absent means leave it as it is. Answered with `ack`;
    * broadcasts `settings_updated` only when something actually changed (the trusted-folders
    * pattern). */
-  | { type: "update_settings"; auto_pull_repositories?: boolean; default_clone_dir?: string }
+  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; default_clone_dir?: string }
   /** Answered with `ack` at once; each reading that finishes arrives as `account_quotas_updated`.
    * Re-reads the quotas of the accounts it selects whose last attempt is older than the polling
    * interval: `agent` limits it to one agent's accounts, `account` (an account id) to that one

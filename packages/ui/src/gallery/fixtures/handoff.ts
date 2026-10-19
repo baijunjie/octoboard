@@ -26,6 +26,7 @@ const hubOwned = [
 // Codex has two named accounts beside its default one, which the dialog's joined picker offers.
 const settings = {
   auto_pull_repositories: false,
+  auto_delete_unresumable_archives: true,
   default_clone_dir: "/Users/dev/Projects",
   accounts: [
     { id: "a-codex-work", agent: "codex" as const, name: "Work account", config_dir: "/Users/dev/.codex-work" },

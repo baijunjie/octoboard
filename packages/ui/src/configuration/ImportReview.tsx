@@ -58,6 +58,34 @@ const APPLY_ALL: {
   { choice: "skip", label: "configuration.import.all.skip" },
 ];
 
+type SettingMessage =
+  | "configuration.import.settings.turnsOn"
+  | "configuration.import.settings.archiveCleanup.turnsOn"
+  | "configuration.import.settings.turnsOff"
+  | "configuration.import.settings.alreadyOn"
+  | "configuration.import.settings.alreadyOff";
+
+/** What applying the document's value of one application setting does on this machine. Only
+ * `turnsOn` differs between settings, as it says what the setting then makes {appName} do. */
+function SettingNote({
+  label,
+  wanted,
+  current,
+  turnsOn,
+}: {
+  label: string;
+  wanted: boolean;
+  current: boolean;
+  turnsOn: SettingMessage;
+}): React.ReactElement {
+  const setting = <InlineChip dir="auto" wrap size="inherit">{label}</InlineChip>;
+  const id: SettingMessage =
+    wanted === current
+      ? wanted ? "configuration.import.settings.alreadyOn" : "configuration.import.settings.alreadyOff"
+      : wanted ? turnsOn : "configuration.import.settings.turnsOff";
+  return <span className="block"><Message id={id} params={{ setting }} /></span>;
+}
+
 /** An account reference that names no account of this machine, and what happens to it. */
 function FallbackNote({ fallback }: { fallback: AccountFallback }): React.ReactElement {
   return (
@@ -253,12 +281,14 @@ export function ImportReview({
   const t = useT();
   const [announcement, setAnnouncement] = useState<string>();
   const settings = inspection.settings;
-  const setting = <InlineChip dir="auto" wrap size="inherit">{t("settings.git.autoPull.label")}</InlineChip>;
-  const settingsNote = settings
-    ? settings.auto_pull_repositories === settings.current_auto_pull_repositories
-      ? <Message id={settings.auto_pull_repositories ? "configuration.import.settings.alreadyOn" : "configuration.import.settings.alreadyOff"} params={{ setting }} />
-      : <Message id={settings.auto_pull_repositories ? "configuration.import.settings.turnsOn" : "configuration.import.settings.turnsOff"} params={{ setting }} />
-    : undefined;
+  const settingsNote = settings && (
+    <>
+      <SettingNote label={t("settings.git.autoPull.label")} wanted={settings.auto_pull_repositories} current={settings.current_auto_pull_repositories} turnsOn="configuration.import.settings.turnsOn" />
+      {typeof settings.auto_delete_unresumable_archives === "boolean" && (
+        <SettingNote label={t("settings.archiveCleanup.label")} wanted={settings.auto_delete_unresumable_archives} current={settings.current_auto_delete_unresumable_archives} turnsOn="configuration.import.settings.archiveCleanup.turnsOn" />
+      )}
+    </>
+  );
   const cloning = review.some((rows) => rows.some((row) => row.choice === "clone"));
 
   return (

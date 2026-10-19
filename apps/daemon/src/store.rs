@@ -248,6 +248,7 @@ impl Store {
             CREATE TABLE IF NOT EXISTS settings (
                 id                     TEXT PRIMARY KEY,
                 auto_pull_repositories INTEGER NOT NULL DEFAULT 0,
+                auto_delete_unresumable_archives INTEGER NOT NULL DEFAULT 1,
                 -- NULL until the user sets one; see `Store::default_clone_dir`.
                 default_clone_dir      TEXT
             );
@@ -320,6 +321,13 @@ impl Store {
         tx.commit()?;
         if !column_exists(&conn, "settings", "default_clone_dir")? {
             conn.execute("ALTER TABLE settings ADD COLUMN default_clone_dir TEXT", [])?;
+        }
+        if !column_exists(&conn, "settings", "auto_delete_unresumable_archives")? {
+            conn.execute(
+                "ALTER TABLE settings \
+                 ADD COLUMN auto_delete_unresumable_archives INTEGER NOT NULL DEFAULT 1",
+                [],
+            )?;
         }
         for (table, column) in [
             ("accounts", "approval_reviewer"),
@@ -939,6 +947,7 @@ impl Store {
     pub fn get_settings(&self) -> Result<Settings> {
         Ok(Settings {
             auto_pull_repositories: self.auto_pull_repositories()?,
+            auto_delete_unresumable_archives: self.auto_delete_unresumable_archives()?,
             default_clone_dir: self.default_clone_dir()?,
             accounts: self.list_accounts()?,
             codex_default_approval_reviewer: self.codex_default_approval_reviewer()?,
@@ -1005,6 +1014,24 @@ impl Store {
             params![SETTINGS_ID, value],
         )?;
         Ok(true)
+    }
+
+    pub fn auto_delete_unresumable_archives(&self) -> Result<bool> {
+        Ok(self.lock().query_row(
+            "SELECT auto_delete_unresumable_archives FROM settings WHERE id = ?1",
+            params![SETTINGS_ID],
+            |row| row.get(0),
+        )?)
+    }
+
+    /// Whether the setting actually changed.
+    pub fn set_auto_delete_unresumable_archives(&self, value: bool) -> Result<bool> {
+        let changed = self.lock().execute(
+            "UPDATE settings SET auto_delete_unresumable_archives = ?2 \
+             WHERE id = ?1 AND auto_delete_unresumable_archives != ?2",
+            params![SETTINGS_ID, value],
+        )?;
+        Ok(changed > 0)
     }
 
     /// The directory a clone lands in when none is named: the stored one, else `~/Projects`
@@ -3663,6 +3690,36 @@ mod tests {
             "a repeat write changes nothing"
         );
         assert!(store.get_settings().unwrap().auto_pull_repositories);
+    }
+
+    /// The automatic archive cleanup is on in a fresh database and in one from before the setting
+    /// existed, round-trips, and a repeat write reports no change.
+    #[test]
+    fn the_archive_cleanup_setting_defaults_on_and_round_trips() {
+        let path = temp_db("archive-cleanup-setting");
+        let store = Store::open(&path).expect("store");
+        assert!(
+            store
+                .get_settings()
+                .unwrap()
+                .auto_delete_unresumable_archives
+        );
+
+        assert!(store.set_auto_delete_unresumable_archives(false).unwrap());
+        assert!(!store.set_auto_delete_unresumable_archives(false).unwrap());
+        assert!(!store.auto_delete_unresumable_archives().unwrap());
+        assert!(store.set_auto_delete_unresumable_archives(true).unwrap());
+
+        store
+            .lock()
+            .execute(
+                "ALTER TABLE settings DROP COLUMN auto_delete_unresumable_archives",
+                [],
+            )
+            .unwrap();
+        drop(store);
+        let store = Store::open(&path).expect("store");
+        assert!(store.auto_delete_unresumable_archives().unwrap());
     }
 
     /// The default clone directory is the built-in one until set, a blank value goes back to it,

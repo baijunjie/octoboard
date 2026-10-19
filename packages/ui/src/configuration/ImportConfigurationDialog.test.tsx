@@ -147,6 +147,19 @@ it("applies the application settings only once they are asked for", async () => 
   expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: true });
 });
 
+it("notes what applying each application setting would change", async () => {
+  await reviewing();
+  expect(text()).toContain("Turns on Automatically pull repositories");
+  expect(text()).toContain("Turns off Automatically delete archived sessions whose conversation is gone");
+});
+
+it("leaves out the setting a file from before it existed does not carry", async () => {
+  const older = { ...REVIEW, settings: { ...REVIEW.settings!, auto_delete_unresumable_archives: null } };
+  await reviewing({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...older }) : reply(body)) });
+  expect(text()).toContain("Turns on Automatically pull repositories");
+  expect(text()).not.toContain("archived sessions whose conversation is gone");
+});
+
 it("stops before any request when a project is to go to a directory that is missing or not a path", async () => {
   const mounted = await reviewing();
   await choose("Notes", "Another directory");

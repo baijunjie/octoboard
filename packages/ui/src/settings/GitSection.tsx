@@ -1,10 +1,9 @@
-import { Switch } from "@heroui/react";
-import { errorPresentation } from "../errorPresentation";
 import React from "react";
 
+import { errorPresentation } from "../errorPresentation";
 import { useT } from "../i18n/react";
 import { useDaemon, useDaemonStore } from "../store";
-import { SettingRow } from "./SettingRow";
+import { SwitchSettingRow } from "./SettingRow";
 
 /** Whether the daemon fast-forwards a project's branch on its own, rather than only reporting how
  * far ahead or behind it is (see `Settings.auto_pull_repositories` in protocol.ts). The row's
@@ -18,14 +17,6 @@ export function GitSection(): React.ReactElement {
     void request({ type: "update_settings", auto_pull_repositories: value }).catch((err) => toastError(errorPresentation(err as Error)));
 
   return (
-    <SettingRow label={t("settings.git.autoPull.label")} description={t("settings.git.autoPull.description")}>
-      <Switch aria-label={t("settings.git.autoPull.label")} isSelected={autoPull} onChange={setAutoPull}>
-        <Switch.Content>
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-        </Switch.Content>
-      </Switch>
-    </SettingRow>
+    <SwitchSettingRow label={t("settings.git.autoPull.label")} description={t("settings.git.autoPull.description")} isSelected={autoPull} onChange={setAutoPull} />
   );
 }

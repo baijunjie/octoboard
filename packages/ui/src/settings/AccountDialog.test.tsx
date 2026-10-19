@@ -25,7 +25,7 @@ function render(
   agentAvailability = new Map<Agent, AgentAvailability>(),
 ) {
   const daemon: Daemon = {
-    store: createStateStore({ settings: { auto_pull_repositories: false, default_clone_dir: "", accounts: [work] }, agentAvailability }),
+    store: createStateStore({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "", accounts: [work] }, agentAvailability }),
     request: vi.fn(request) as Daemon["request"],
     toastError: vi.fn(),
     toastNotice: vi.fn(),

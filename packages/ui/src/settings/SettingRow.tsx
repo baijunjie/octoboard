@@ -1,3 +1,4 @@
+import { Switch } from "@heroui/react";
 import React from "react";
 
 /** One setting: its name and a line saying what it does at the start, its control at the end,
@@ -23,5 +24,30 @@ export function SettingRow({
       </div>
       {children && <div className="shrink-0">{children}</div>}
     </div>
+  );
+}
+
+/** A `SettingRow` whose control is an on/off switch. The switch is named by the visible label. */
+export function SwitchSettingRow({
+  label,
+  description,
+  isSelected,
+  onChange,
+}: {
+  label: string;
+  description: React.ReactNode;
+  isSelected: boolean;
+  onChange: (value: boolean) => void;
+}): React.ReactElement {
+  return (
+    <SettingRow label={label} description={description}>
+      <Switch aria-label={label} isSelected={isSelected} onChange={onChange}>
+        <Switch.Content>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+        </Switch.Content>
+      </Switch>
+    </SettingRow>
   );
 }

@@ -12,6 +12,7 @@ const request = vi.fn(() => Promise.resolve({}));
 const toastError = vi.fn();
 const settings: Settings = {
   auto_pull_repositories: false,
+  auto_delete_unresumable_archives: true,
   default_clone_dir: "/home/dev/Projects",
   accounts: [],
 };

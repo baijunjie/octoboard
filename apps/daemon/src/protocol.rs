@@ -757,9 +757,12 @@ pub struct GitStatus {
 /// The app-wide user settings the daemon stores, and the account list alongside them: a record
 /// that already grows without a new request shape or a new event for every addition, which is
 /// where the accounts belong too (see "Reusable capabilities" in `04-accounts-storage.md`).
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Settings {
     pub auto_pull_repositories: bool,
+    /// Whether the daemon's scan deletes the archived sessions whose conversation is proven gone
+    /// (see `archive_cleanup.rs`). On unless the user turned it off.
+    pub auto_delete_unresumable_archives: bool,
     /// The directory a `git` association clones into when none is named: the one the user set, or
     /// `~/Projects` (expanded) while none is. Always an absolute, lexically normalised path.
     pub default_clone_dir: String,
@@ -770,6 +773,20 @@ pub struct Settings {
     pub codex_default_approval_reviewer: Option<ApprovalReviewer>,
     /// Launch override for Claude Code sessions that use the default account.
     pub claude_default_approval_mode: Option<ClaudeApprovalMode>,
+}
+
+impl Default for Settings {
+    /// The settings of a fresh install: the cleanup of archived sessions is on, the rest empty.
+    fn default() -> Self {
+        Self {
+            auto_pull_repositories: false,
+            auto_delete_unresumable_archives: true,
+            default_clone_dir: String::new(),
+            accounts: Vec::new(),
+            codex_default_approval_reviewer: None,
+            claude_default_approval_mode: None,
+        }
+    }
 }
 
 /// Where a project's files are read from, as `project_source` reports it. See "Project sources" in
@@ -1757,6 +1774,7 @@ pub enum RequestBody {
     /// something actually changed, as `remove_trusted_directory` does.
     UpdateSettings {
         auto_pull_repositories: Option<bool>,
+        auto_delete_unresumable_archives: Option<bool>,
         /// A blank value goes back to the built-in default.
         default_clone_dir: Option<String>,
     },
