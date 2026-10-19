@@ -37,7 +37,7 @@ function ScrollingCountArrow({ direction }: { direction: "up" | "down" }): React
  * The whole badge is one `IndicatorTooltip` (hover only, so it adds no tab stop to its row) whose
  * text is the accessible-name sentence itself: one tooltip for the glyph, the branch and both
  * counts, rather than one per part, so the branch name and the error can still be read once the
- * badge is squeezed down to the glyph and a clipped line. The one state with no tooltip is the one
+ * branch name is squeezed away. The one state with no tooltip is the one
  * showing "No commits yet" as visible text, which a tooltip would only repeat.
  *
  * `decorative` drops the composed `role="img"` accessible name for a badge sitting inside a tree
@@ -55,9 +55,8 @@ function ScrollingCountArrow({ direction }: { direction: "up" | "down" }): React
  * row would announce each project's `checking` → `idle` roundtrip every five minutes, for every
  * project, which is noise rather than news. Left unannounced on purpose.
  *
- * The branch and upstream counts share one line: as the badge is squeezed, they fade and run as
- * a marquee together from the branch's beginning to the last count. The activity glyph stays
- * outside that line so it remains visible even when none of the text fits.
+ * Only the branch name gives way and runs as a marquee. The grid reserves room for the state
+ * glyph and upstream counts, keeping them visible even when none of the branch name fits.
  */
 export function GitBadge({ status, decorative }: { status: GitStatus | undefined; decorative?: boolean }): React.ReactElement | null {
   const t = useT();
@@ -69,10 +68,9 @@ export function GitBadge({ status, decorative }: { status: GitStatus | undefined
   // case where the badge falls back to the catalog's own wording, shown as visible text. That text
   // is all the badge says, so this is also the one state with no tooltip repeating it.
   const noCommitsYet = !status.branch && status.activity === "idle" && !status.error;
-  // The project name has its own floor; this badge keeps giving way while the activity glyph
-  // remains fixed. No cap: use the room the row offers before fading the shared text line. The
-  // tooltip's trigger is the badge's own box, so it is the trigger that carries these.
-  const className = "flex min-w-0 items-center gap-1 overflow-hidden px-1 text-xs text-app-muted";
+  // A zero-minimum branch track lets the badge shrink to its glyph and counts. Its automatic
+  // minimum width reserves those fixed tracks even when the surrounding row is squeezed.
+  const className = "grid grid-flow-col grid-cols-[auto_minmax(0,1fr)] auto-cols-max items-center gap-1 px-1 text-xs text-app-muted";
   const content = (
     <>
       {status.activity !== "idle" ? (
@@ -84,24 +82,26 @@ export function GitBadge({ status, decorative }: { status: GitStatus | undefined
       ) : (
         <GitBranch aria-hidden="true" className="size-3.5 shrink-0" />
       )}
-      {(status.branch || noCommitsYet || status.ahead > 0 || status.behind > 0) && (
-        <FadeOverflow as="span" dir={status.branch || status.ahead > 0 || status.behind > 0 ? "ltr" : undefined} className="min-w-0 flex-1">
-          <span className="inline-flex items-center gap-1">
-            {status.branch ? <span>{status.branch}</span> : noCommitsYet && <span dir="auto">{t("sidebar.git.noCommitsYet")}</span>}
-            {status.ahead > 0 && (
-              <span className="inline-flex shrink-0 items-center">
-                {status.activity === "pushing" ? <ScrollingCountArrow direction="up" /> : <ArrowUp aria-hidden="true" className="size-3 shrink-0" />}
-                {status.ahead.toLocaleString(language)}
-              </span>
-            )}
-            {status.behind > 0 && (
-              <span className="inline-flex shrink-0 items-center">
-                {status.activity === "pulling" ? <ScrollingCountArrow direction="down" /> : <ArrowDown aria-hidden="true" className="size-3 shrink-0" />}
-                {status.behind.toLocaleString(language)}
-              </span>
-            )}
-          </span>
+      {(status.branch || noCommitsYet) && (
+        <FadeOverflow as="span" dir={status.branch ? "ltr" : undefined} className="min-w-0">
+          {status.branch || <span dir="auto">{t("sidebar.git.noCommitsYet")}</span>}
         </FadeOverflow>
+      )}
+      {(status.ahead > 0 || status.behind > 0) && (
+        <span dir="ltr" className="col-start-3 flex shrink-0 items-center gap-1 whitespace-nowrap">
+          {status.ahead > 0 && (
+            <span className="inline-flex shrink-0 items-center">
+              {status.activity === "pushing" ? <ScrollingCountArrow direction="up" /> : <ArrowUp aria-hidden="true" className="size-3 shrink-0" />}
+              {status.ahead.toLocaleString(language)}
+            </span>
+          )}
+          {status.behind > 0 && (
+            <span className="inline-flex shrink-0 items-center">
+              {status.activity === "pulling" ? <ScrollingCountArrow direction="down" /> : <ArrowDown aria-hidden="true" className="size-3 shrink-0" />}
+              {status.behind.toLocaleString(language)}
+            </span>
+          )}
+        </span>
       )}
     </>
   );
@@ -115,7 +115,7 @@ export function GitBadge({ status, decorative }: { status: GitStatus | undefined
   }
   return (
     <IndicatorTooltip tooltip={label} label={decorative ? undefined : label} className={className}>
-      {/* `contents` keeps the glyph and the shared text line the trigger's own flex items. */}
+      {/* `contents` keeps the glyph, branch and counts the trigger's own grid items. */}
       {decorative ? (
         <span aria-hidden="true" className="contents">
           {content}

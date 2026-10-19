@@ -426,7 +426,7 @@ it.each(["idle", "checking", "pulling", "pushing"] as const)("hoverGitBadge puts
     document.body.replaceChildren();
   }
   expect(targets.map((target) => target.tagName.toLowerCase())).toEqual(["svg", "span"]);
-  expect(targets[1]!.textContent).toBe("main32");
+  expect(targets[1]!.textContent).toBe("main");
   expect(targets[1]!.getAttribute("dir")).toBe("ltr");
   expect(targets[0]!.classList.contains(activity === "idle" ? "lucide-git-branch" : "lucide-refresh-cw")).toBe(true);
 });

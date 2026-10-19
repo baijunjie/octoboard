@@ -767,7 +767,7 @@ const ProjectNode = memo(function ProjectNode({
       >
         {/* `min-w-16` is the floor itself: it has to sit on this flex item (`flex-1`'s basis is
             0%, so it never shrinks "from" anything the floor could clamp if placed on a child
-            instead), leaving `GitBadge`'s own `min-w-0` as the one that keeps giving way once
+            instead), leaving `GitBadge`'s branch track as the part that keeps giving way once
             this is reached. */}
         <div className="flex min-w-16 flex-1 items-center">
           <RowLabel title={project.name} className="min-w-0 shrink">

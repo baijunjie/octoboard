@@ -189,8 +189,8 @@ export interface Ui {
    * if its anchored tooltip survives the press that opens the change viewer. */
   pressChangeStatus: (row: Matcher) => Promise<void>;
   /** Moves the pointer onto one part of the branch badge whose state is `status`, and leaves it
-   * there, as `hoverIndicator` does. The badge has one tooltip for the glyph and the text line
-   * (the branch and both counts, which fade and run together), so which of the two the pointer
+   * there, as `hoverIndicator` does. The badge has one tooltip for the glyph, branch and fixed
+   * counts. Only the branch line fades and runs, so which of glyph or line the pointer
    * lands on is the scenario's to choose (`over`); it fails where the badge has no line, such as a
    * lone glyph. With `row` it is the badge of the sidebar project row named `row`, whose own name
    * must fold the badge's sentence in; without it, the badge in focus mode's header, found by its
@@ -659,8 +659,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
           }
           const mark = trigger?.querySelector(glyph);
           if (!mark) return undefined;
-          // The branch and counts share the LTR line even when the activity glyph is nested
-          // separate from the animated arrows inside that line.
+          // The branch has its own LTR line; upstream counts stay outside its fade and marquee.
           const part = over === "glyph" ? mark : trigger?.querySelector("[dir=ltr]");
           // Found, so waiting would not change it: the badge has no line, only its glyph.
           if (!part) throw new Error(`The git badge has no ${over} to hover`);

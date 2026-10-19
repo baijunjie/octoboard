@@ -242,19 +242,19 @@ follows the operating system's rules instead.
 cut at its start, mirrored: it rests pinned to its end, fades at its start, and carries its full text as its tooltip
 while it is cut.
 
-A project's branch badge also follows these fade and marquee rules, with its branch and upstream counts sharing one
-line. Its tooltip is not one of this section's, though: the whole badge carries one tooltip describing the full git
-state, shown whether or not the line is cut (see "The branch badge" in `docs/product/project-git-status.md`).
+A project's branch name in its branch badge also follows these fade and marquee rules. The badge's tooltip is not
+one of this section's, though: the whole badge carries one tooltip describing the full git state, shown whether or
+not the branch name is cut (see "The branch badge" in `docs/product/project-git-status.md`).
 
 **While the pointer is over it, such a label runs as a marquee**, so all of it can be read:
 
 - The pointer has to be over the label itself. In sidebar rows, focus headers and session cards, and archive headers
-  and rows, each text label runs independently: a project's name and branch-and-count line, a console name and focus
+  and rows, each text label runs independently: a project's name and branch name, a console name and focus
   title, a session title and its model line or agent name, or an archive heading and count do not start one another's
   marquee.
-  Pointing at a status or agent icon, a branch glyph, a row or header button, or the surrounding space starts none of
-  those labels. The branch and its counts remain one line and run together; session usage and time fields remain
-  separate from the model line's and the agent name's marquees.
+  Pointing at a status or agent icon, a branch glyph or upstream count, a row or header button, or the surrounding
+  space starts none of those labels. Session usage and time fields remain separate from the model line's and the
+  agent name's marquees.
 - An action-menu item or submenu item, a select's option or directory-picker row runs its one label while the pointer
   is anywhere over that item or row. A select's current choice or placeholder runs while the pointer is over its
   trigger, and a picked tag while it is over the tag. The project filter's strip of conditions runs as a whole while

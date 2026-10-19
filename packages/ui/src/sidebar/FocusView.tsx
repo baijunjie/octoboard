@@ -83,7 +83,7 @@ function FocusHeader({
  * the project groups inside those a level under them again.
  * `min-w-16` is the floor itself: this is the flex item (`flex-1`'s basis is 0%, so a floor on the
  * label inside `PaneTitle` would clamp nothing), leaving, in a project's header,
- * `GitBadge`'s own `min-w-0` as the one that keeps giving way once this is reached. */
+ * `GitBadge`'s branch track as the part that keeps giving way once this is reached. */
 function FocusTitle({ heading, overline }: { heading: string; overline?: string }): React.ReactElement {
   return <PaneTitle className="min-w-16 flex-1 px-1" heading={heading} overline={overline} />;
 }

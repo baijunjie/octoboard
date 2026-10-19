@@ -61,13 +61,12 @@ window showing the project sees the pushing state, including one that connects w
 pushes of the project end, successfully or otherwise, the badge shows the latest check or pull state, or its
 idle glyph if neither is running (see "Pushing the current branch" in `docs/product/project-git-actions.md`).
 
-**As the row gets tight the branch and counts give way together**: the branch name (or short commit id) and both
-upstream counts form one line, showing its beginning and fading at its right edge. This line reads left to right
-even under a right-to-left language. The glyph stays in place while the whole line runs as a marquee, through the
-branch and the last count (see "Names too long for their space" in `docs/product/labels-and-tooltips.md`). The text
-can disappear entirely, leaving the glyph (the warning triangle after a failed check). The project's name keeps a
-floor of its own and never vanishes. When the line only says that the repository has no commits yet, it follows the
-window's reading direction instead.
+**As the row gets tight only the branch name gives way**: the branch name (or short commit id) shows its
+beginning and fades at its right edge. The state glyph, upstream arrows and counts remain visible, even when none of
+the branch name fits. Only the branch name runs as a marquee while the pointer is over it (see "Names too long for
+their space" in `docs/product/labels-and-tooltips.md`). The branch and counts read left to right even under a
+right-to-left language. The project's name keeps a floor of its own and never vanishes. The text saying that the
+repository has no commits yet follows the same fade and marquee rules, but follows the window's reading direction.
 
 **One tooltip for the whole badge.** Resting the mouse anywhere on the badge — the state glyph, the branch name or
 either count — shows one tooltip, after the window's usual wait and on pointer hover only, since the badge is no tab

@@ -62,10 +62,10 @@ function mountOver(status: GitStatus, view: React.ReactElement): HTMLElement {
 }
 
 /** The badge's trigger: the box around the state glyph that gives way when the row is squeezed. */
-const badgeOf = (container: HTMLElement, glyph: string): HTMLElement => container.querySelector(`svg.lucide-${glyph}`)!.closest<HTMLElement>(".overflow-hidden")!;
+const badgeOf = (container: HTMLElement, glyph: string): HTMLElement => container.querySelector(`svg.lucide-${glyph}`)!.closest<HTMLElement>(".grid")!;
 
-/** The shared line the branch and the counts run in, which fades and runs as a marquee together. */
-const lineOf = (badge: HTMLElement): HTMLElement => badge.querySelector<HTMLElement>("[dir=ltr]")!;
+/** The branch name alone, which fades and runs as a marquee. */
+const lineOf = (badge: HTMLElement): HTMLElement => badge.querySelector<HTMLElement>(".overflow-hidden")!;
 
 /** What the badge lays out: its own children, or those of the `aria-hidden` box inside it that a
  * badge on a row wraps them in without a box of its own. */
@@ -136,7 +136,7 @@ const FAILED = ALL_STATES.find(([name]) => name === "failed")!;
 
 // The text and the glyph do not vary with where the badge sits, so the states run once, on the
 // sidebar row; each placement is held below to one full sentence, over the glyph and over the
-// shared text line alike.
+// branch text and counts alike.
 it.each(STATES)("says its whole state in one tooltip: %s", (_, extra, glyph, sentence) => {
   const badge = PLACEMENTS[0].mount(gitStatusOf(web.id, extra), glyph);
   expect(hoverAndRead(badge.querySelector(`svg.lucide-${glyph}`)!)).toBe(sentence);
@@ -148,23 +148,25 @@ for (const placement of PLACEMENTS) {
     const [, extra, glyph, sentence] = FAILED;
     const badge = placement.mount(gitStatusOf(web.id, { ...extra, branch: "feature/long-branch-name" }), glyph);
     const line = lineOf(badge);
-    expect(line.textContent).toBe("feature/long-branch-name32");
+    expect(line.textContent).toBe("feature/long-branch-name");
     const full = sentence.replace(BRANCH, isolate("feature/long-branch-name"));
     expect(hoverAndRead(badge.querySelector(`svg.lucide-${glyph}`)!)).toBe(full);
     expect(hoverAndRead(line)).toBe(full);
+    expect(hoverAndRead(badge.querySelector(".col-start-3")!)).toBe(full);
   });
 
-  it(`keeps the badge the part that gives way, its shared text line the one thing inside it that shrinks, on ${placement.name}`, () => {
+  it(`keeps the badge the part that gives way, its branch the only part that fades, on ${placement.name}`, () => {
     const badge = placement.mount(gitStatusOf(web.id, { ahead: 1, behind: 1 }), "git-branch");
-    expect(badge.classList.contains("min-w-0")).toBe(true);
-    expect(badge.classList.contains("overflow-hidden")).toBe(true);
-    expect(badge.classList.contains("flex")).toBe(true);
+    expect(badge.classList.contains("grid")).toBe(true);
+    expect(badge.classList.contains("overflow-hidden")).toBe(false);
     expect(badge.getAttribute("tabindex")).toBe("-1");
     const shrinking = partsOf(badge).filter((child) => !child.classList.contains("shrink-0"));
     expect(shrinking).toEqual([lineOf(badge)]);
     expect(lineOf(badge).classList.contains("min-w-0")).toBe(true);
-    // The branch and both counts share that one line.
-    expect(lineOf(badge).textContent).toBe("main11");
+    expect(lineOf(badge).textContent).toBe("main");
+    const counts = badge.querySelector(".col-start-3")!;
+    expect(counts.textContent).toBe("11");
+    expect(lineOf(badge).contains(counts)).toBe(false);
   });
 
   it(`shows no tooltip for the state whose visible text already says it, on ${placement.name}`, () => {
@@ -213,5 +215,5 @@ it.each(PLACEMENTS)("runs only the hovered project name or branch in $name, leav
   const consoleName = Array.from(surface.querySelectorAll<HTMLElement>(".overflow-hidden"))
     .find((element) => element.textContent === main.name);
   if (consoleName) labels.unshift(consoleName);
-  expectIndependentMarquees(labels, [surface, badge.querySelector("svg")!, ...surface.querySelectorAll("button")]);
+  expectIndependentMarquees(labels, [surface, badge.querySelector("svg")!, badge.querySelector(".col-start-3")!, ...surface.querySelectorAll("button")]);
 });
