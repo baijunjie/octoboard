@@ -154,6 +154,7 @@
   "demoRules": "Instructions du projet · Skills · Hooks",
   "demoStatusWorking": "Au travail",
   "demoStatusIdle": "En attente d’instructions",
+  "demoStatusBackground": "En cours d’exécution en arrière-plan",
   "demoReportsTitle": "L’agent coordinateur rassemble les résultats",
   "demoReportsDescription": "Rassemblez les résultats de tous les projets participants et vérifiez qu’ils répondent à la même demande.",
   "demoDeliveryTitle": "Une fonctionnalité, livrée ensemble",

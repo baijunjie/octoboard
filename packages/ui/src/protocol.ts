@@ -239,6 +239,14 @@ export interface SessionUsage {
   total_tokens: number;
 }
 
+/** One piece of work an agent left running in the background when its turn ended. */
+export interface BackgroundTask {
+  id: string;
+  /** The agent's name for the kind of task, such as a shell command or an MCP call. */
+  type?: string;
+  description?: string;
+}
+
 export interface Session {
   id: string;
   agent: Agent;
@@ -251,6 +259,9 @@ export interface Session {
   title: string;
   terminal_title?: string | null;
   status: SessionStatus;
+  /** What an `idle` session has left running in the background; absent when none, and for every
+   * other status. The session takes a message like any idle one, but its work is not over. */
+  background_tasks?: BackgroundTask[];
   has_conversation: boolean;
   /** The console session this session is bound to, or absent for one outside the orchestration.
    * Set when the session is created and never changed afterwards; a console session is never

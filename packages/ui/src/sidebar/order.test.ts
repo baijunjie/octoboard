@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Project, Session, SessionStatus } from "../protocol";
-import { archiveNeedsConfirmation, isUnusedSession, consoleActivity, INACTIVE_PROJECT_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sortProjects, switchStrip } from "./order";
+import { archiveNeedsConfirmation, countsAsWorking, isUnusedSession, consoleActivity, INACTIVE_PROJECT_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sortProjects, switchStrip } from "./order";
 
 const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to?: string): Session => ({
   id,
@@ -59,6 +59,31 @@ describe("liveSessions", () => {
   it("does not offer a console session that is still starting as an owner", () => {
     const owners = ["starting", "idle", "archived"].map((status) => ({ ...session(status, status as SessionStatus, 1), role: "console" as const }));
     expect(liveConsoleSessions(owners, "c").map((s) => s.id)).toEqual(["idle"]);
+  });
+});
+
+describe("countsAsWorking", () => {
+  it("counts a working session and one running in the background as working, and nothing else", () => {
+    const tasks = [{ id: "b1" }];
+    expect(countsAsWorking(session("w", "working", 1))).toBe(true);
+    expect(countsAsWorking({ ...session("bg", "idle", 1), background_tasks: tasks })).toBe(true);
+    expect(countsAsWorking(session("i", "idle", 1))).toBe(false);
+    expect(countsAsWorking({ ...session("u", "waiting_user", 1), background_tasks: tasks })).toBe(false);
+  });
+});
+
+describe("a session running in the background", () => {
+  const background = { ...session("bg", "idle", 1), background_tasks: [{ id: "b1" }] };
+
+  it("sorts with the working sessions", () => {
+    const ordered = liveSessions([session("working", "working", 2), background, session("idle", "idle", 3), session("interrupted", "interrupted", 4)]);
+    expect(ordered.map((s) => s.id)).toEqual(["idle", "working", "bg", "interrupted"]);
+  });
+
+  it("makes a project rank and a console show work", () => {
+    expect(projectRank([background])).toBe(projectRank([session("w", "working", 1)]));
+    expect(projectRank([background, session("i", "idle", 2)])).toBeLessThan(projectRank([session("i", "idle", 2)]));
+    expect(consoleActivity([background])).toBe("working");
   });
 });
 
@@ -154,6 +179,11 @@ describe("archiveNeedsConfirmation", () => {
     ];
     const needs = (id: string) => archiveNeedsConfirmation(sessions.values(), sessions.find((s) => s.id === id)!);
     expect(["idle", "interrupted", "waiting", "working", "owner", "owner-archived-child", "lead"].map(needs)).toEqual([false, false, true, true, true, false, true]);
+  });
+
+  it("asks for an idle session with work left running in the background, which archiving ends", () => {
+    const busy = { ...session("busy", "idle", 1), background_tasks: [{ id: "b1" }] };
+    expect(archiveNeedsConfirmation([busy].values(), busy)).toBe(true);
   });
 });
 

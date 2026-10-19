@@ -154,6 +154,7 @@
   "demoRules": "Instruksi proyek · Skills · Hooks",
   "demoStatusWorking": "Sedang bekerja",
   "demoStatusIdle": "Menunggu instruksi",
+  "demoStatusBackground": "Berjalan di latar belakang",
   "demoReportsTitle": "Agen koordinator menyatukan hasil",
   "demoReportsDescription": "Kumpulkan hasil semua proyek yang terlibat dan periksa kesesuaiannya dengan permintaan yang sama.",
   "demoDeliveryTitle": "Satu fitur, diselesaikan bersama",

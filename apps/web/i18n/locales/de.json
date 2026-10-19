@@ -154,6 +154,7 @@
   "demoRules": "Projektanweisungen · Skills · Hooks",
   "demoStatusWorking": "In Arbeit",
   "demoStatusIdle": "Wartet auf Anweisungen",
+  "demoStatusBackground": "Läuft im Hintergrund",
   "demoReportsTitle": "Der koordinierende Agent führt alles zusammen",
   "demoReportsDescription": "Sammle die Ergebnisse aller beteiligten Projekte und prüfe sie anhand derselben Anforderung.",
   "demoDeliveryTitle": "Eine Funktion, gemeinsam umgesetzt",

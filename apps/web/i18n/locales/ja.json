@@ -154,6 +154,7 @@
   "demoRules": "プロジェクトの指示 · Skills · Hooks",
   "demoStatusWorking": "作業中",
   "demoStatusIdle": "指示待ち",
+  "demoStatusBackground": "バックグラウンド実行中",
   "demoReportsTitle": "統括エージェントが成果をまとめる",
   "demoReportsDescription": "各プロジェクトの成果を集め、同じ要望に対する実装内容を確認します。",
   "demoDeliveryTitle": "1つの機能を、協力して完成へ",

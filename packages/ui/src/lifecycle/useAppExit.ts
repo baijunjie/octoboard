@@ -4,7 +4,8 @@ import { useLatest } from "../components/useLatest";
 import { isolate } from "../i18n/isolate";
 import { t } from "../i18n/language";
 import { usePlatform } from "../platform/react";
-import type { Session, SessionStatus } from "../protocol";
+import type { Session } from "../protocol";
+import { type StatusKind, sessionStatusKind } from "../sessionLabel";
 
 /** How long `doQuit` waits for `shutdown`'s `ack` before giving up on it. The daemon drops the
  * serving future as soon as it starts shutting down, so the ack usually never arrives at all — that
@@ -14,14 +15,15 @@ import type { Session, SessionStatus } from "../protocol";
  * later, or never settle at all, leaving the exit confirmation dialog wedged with no way out. */
 const SHUTDOWN_TIMEOUT_MS = 2000;
 
-/** The statuses a quit asks about: a session starting, working, or waiting for the user. One
- * awaiting instructions is in the middle of nothing that is reported, so it does not hold a quit
- * up, though the quit still ends it and leaves it interrupted and resumable like the rest. */
-const BUSY_STATUSES: ReadonlySet<SessionStatus> = new Set(["starting", "working", "waiting_user"]);
+/** The statuses a quit asks about: a session starting, working, or waiting for the user, and one
+ * running in the background, which the quit would end. One awaiting instructions with no work left
+ * running is in the middle of nothing that is reported, so it does not hold a quit up, though the
+ * quit still ends it and leaves it interrupted and resumable like the rest. */
+const BUSY_STATUSES: ReadonlySet<StatusKind> = new Set(["starting", "working", "waiting_user", "background"]);
 
 /** Whether quitting with these sessions asks for confirmation first. */
 export function holdsQuit(sessions: readonly Session[]): boolean {
-  return sessions.some((s) => BUSY_STATUSES.has(s.status));
+  return sessions.some((s) => BUSY_STATUSES.has(sessionStatusKind(s)));
 }
 
 interface UseAppExitOptions {

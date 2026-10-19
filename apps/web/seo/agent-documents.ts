@@ -107,6 +107,11 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
   const messages = catalog(copy, locale.code);
   const params = valuesFor(copy);
   const text = (key: string) => message(messages, key, params);
+  const statusLegend = [
+    text("demoStatusWorking"),
+    text("demoStatusIdle"),
+    text("demoStatusBackground"),
+  ].join(" · ");
   const canonical = languageHomeUrl(copy.siteUrl, locale.code);
   const privacy = markdownUrl(
     copy.siteUrl,
@@ -149,11 +154,11 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     text("demoWorkspace"),
     `**${text("demoYou")}:** ${text("demoRequest")}`,
     `**${text("demoCoordinator")}:** ${text("demoCoordinatorText")}`,
-    `${text("demoStatusWorking")} · ${text("demoStatusIdle")}`,
+    statusLegend,
     ...workflowNodes.flatMap(({ project, path }) => [
       heading(4, `${text(`demo${project.key}`)} — ${project.agent}`),
       `\`${path}\``,
-      `${text("demoStatusWorking")} · ${text("demoStatusIdle")}`,
+      statusLegend,
       text("demoContext"),
       text("demoRules"),
       text(`demo${project.key}Task`),

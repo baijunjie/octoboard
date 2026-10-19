@@ -374,6 +374,15 @@ const archiveConsoleSession: Scenario = {
   ],
 };
 
+// An idle session whose turn ended with a dev server still running, beside one sitting at its prompt
+// with nothing left running, which archives without asking.
+const watcher = sessionOf("s-web-watch", console_.id, web.id, "Serve the preview", "idle", { background_tasks: [{ id: "task-dev", type: "shell", description: "pnpm dev" }] });
+const backgroundArchiveState = snapshotState({
+  consoles: [console_],
+  projects: [web],
+  sessions: [watcher, sessionOf("s-web-quiet", console_.id, web.id, "Fix the summary layout", "idle")],
+});
+
 export const dialogScenarios: Scenario[] = [
   {
     id: "sidebar-session-menu-unused",
@@ -773,6 +782,18 @@ export const dialogScenarios: Scenario[] = [
     description: "The sessions warning is shown at once, but Confirm is pending and cannot be pressed until the inspection of bound branches and worktrees answers, so nothing is archived before the user has seen what would be left. The same hold applies to every archive, delete and remove-project confirmation.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),
+      (ui) => ui.press(ui.t("sidebar.session.archive")),
+    ],
+  },
+  {
+    id: "dialog-archive-session-background",
+    group: "Archive view",
+    category: "normal",
+    title: "Archive a session running in the background",
+    description: "The session is idle, yet archiving it asks first, as it does a working one, and the message adds that the work it is running in the background is stopped: Its process ends, and the work it is running in the background is stopped. You can reopen it later. The row behind the dialog shows the pinging hollow green ring, listed below the idle Fix the summary layout as a working session is; that one, with nothing running, has an Archive shortcut that archives at once, and this one has none.",
+    state: backgroundArchiveState,
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: watcher.title })),
       (ui) => ui.press(ui.t("sidebar.session.archive")),
     ],
   },

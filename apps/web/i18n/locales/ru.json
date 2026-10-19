@@ -154,6 +154,7 @@
   "demoRules": "Инструкции проекта · Skills · Hooks",
   "demoStatusWorking": "Работает",
   "demoStatusIdle": "Ожидает указаний",
+  "demoStatusBackground": "Работает в фоне",
   "demoReportsTitle": "Агент-координатор объединяет результаты",
   "demoReportsDescription": "Соберите результаты всех участвующих проектов и проверьте их соответствие одному запросу.",
   "demoDeliveryTitle": "Одна функция — общий результат",

@@ -154,6 +154,7 @@
   "faqNineAnswer": "Chưa có. Hỗ trợ máy chủ từ xa nằm trong kế hoạch và chưa có sẵn.",
   "demoStatusWorking": "Đang làm việc",
   "demoStatusIdle": "Đang chờ chỉ dẫn",
+  "demoStatusBackground": "Đang chạy nền",
   "demoReportsTitle": "Agent điều phối tổng hợp kết quả",
   "demoReportsDescription": "Tổng hợp kết quả của tất cả các dự án tham gia và đối chiếu với cùng một yêu cầu.",
   "demoDeliveryTitle": "Một tính năng, cùng nhau hoàn thành",

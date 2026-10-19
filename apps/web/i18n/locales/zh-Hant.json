@@ -154,6 +154,7 @@
   "demoRules": "專案指令 · Skills · Hooks",
   "demoStatusWorking": "工作中",
   "demoStatusIdle": "等待指示",
+  "demoStatusBackground": "背景執行中",
   "demoReportsTitle": "統籌代理彙整成果",
   "demoReportsDescription": "彙整各專案的成果，並對照同一個需求核對交付內容。",
   "demoDeliveryTitle": "同一個需求，共同交付",

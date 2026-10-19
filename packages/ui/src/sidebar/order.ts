@@ -1,4 +1,5 @@
 import { type Console, type Project, type Session, type SessionStatus } from "../protocol";
+import { sessionStatusKind } from "../sessionLabel";
 
 /** How urgently a status asks for the user's attention: a raised hand first, then one sitting
  * at its prompt or still coming up (it is about to be one), then a session at work, then one with
@@ -13,11 +14,28 @@ const STATUS_RANK: Record<SessionStatus, number> = {
   archived: 4,
 };
 
+/** The status `session` is ranked and summed up by: one running in the background has work under
+ * way, so it sits with the working sessions. Its wire status stays `idle`, so everything else about
+ * it (input, notifications) is an idle one's. */
+export function rankedStatus(session: Pick<Session, "status" | "background_tasks">): SessionStatus {
+  return sessionStatusKind(session) === "background" ? "working" : session.status;
+}
+
+/** Whether `session` has work under way, by `rankedStatus`. */
+export function countsAsWorking(session: Pick<Session, "status" | "background_tasks">): boolean {
+  return rankedStatus(session) === "working";
+}
+
+/** A session's `STATUS_RANK`, by `rankedStatus`. */
+function rankOf(session: Session): number {
+  return STATUS_RANK[rankedStatus(session)];
+}
+
 /** Pinned first; then by status (`STATUS_RANK`); then newest first. */
 export function compareSessions(a: Session, b: Session): number {
   return (
     Number(b.pinned) - Number(a.pinned) ||
-    STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
+    rankOf(a) - rankOf(b) ||
     b.started_at - a.started_at
   );
 }
@@ -29,7 +47,7 @@ export const INACTIVE_PROJECT_RANK = 4;
  * session, then an interrupted session. Projects with no unarchived session end the list. */
 export function projectRank(sessions: Session[]): number {
   if (sessions.some((s) => s.status === "waiting_user")) return 0;
-  if (sessions.some((s) => s.status === "working")) return 1;
+  if (sessions.some(countsAsWorking)) return 1;
   if (sessions.some((s) => s.status === "idle" || s.status === "starting")) return 2;
   if (sessions.some((s) => s.status === "interrupted")) return 3;
   return INACTIVE_PROJECT_RANK;
@@ -162,12 +180,14 @@ export function isUnusedSession(session: Session, hasBoundSessions: boolean): bo
 
 /** Whether archiving `session` asks the user first, as far as the sessions say. One sitting at its
  * prompt (`idle`) or with no process (`interrupted`) is archived at once, since nothing is cut
- * short; one at work or raising a hand asks, and so does one with an unarchived session bound to it
- * or to one bound to it, since the archive reaches both levels and ends their processes too. A
- * bound branch or worktree git refuses to remove makes it ask as well, which only the daemon can
- * say. */
+ * short; one at work, raising a hand or with work left running in the background asks, and so
+ * does one with an unarchived session bound to it or to one bound to it, since the archive
+ * reaches both levels and ends their processes too. A bound branch or worktree git refuses to
+ * remove makes it ask as well, which only the daemon can say. */
 export function archiveNeedsConfirmation(sessions: Iterable<Session>, session: Session): boolean {
   if (session.status !== "idle" && session.status !== "interrupted") return true;
+  // Its background work ends with it.
+  if (sessionStatusKind(session) === "background") return true;
   // One pass, so that a one-shot iterator such as a Map's `values()` serves too.
   const archivedChildren = new Set<string>();
   const unarchivedElsewhere: string[] = [];
@@ -293,7 +313,7 @@ export type Activity = (typeof ACTIVITIES)[number] | undefined;
 
 export function consoleActivity(sessions: Session[]): Activity {
   if (sessions.some((s) => s.status === "waiting_user")) return "waiting";
-  if (sessions.some((s) => s.status === "working")) return "working";
+  if (sessions.some(countsAsWorking)) return "working";
   if (sessions.some((s) => s.status === "idle" || s.status === "starting")) return "running";
   return undefined;
 }

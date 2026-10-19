@@ -2,17 +2,18 @@
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 
-import type { SessionStatus } from "../protocol";
+import type { StatusKind } from "../sessionLabel";
 import { StatusIcon } from "./StatusIcon";
 import { enter, leave, mountForTooltip, openTooltip, trigger, withFakeTimers } from "./tooltipTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const STATUS_TEXT: Array<[SessionStatus, string]> = [
+const STATUS_TEXT: Array<[StatusKind, string]> = [
   ["starting", "Starting"],
   ["working", "Working"],
   ["waiting_user", "Waiting for you"],
   ["idle", "Awaiting instructions"],
+  ["background", "Running in background"],
   ["interrupted", "Interrupted"],
   ["archived", "Archived"],
 ];

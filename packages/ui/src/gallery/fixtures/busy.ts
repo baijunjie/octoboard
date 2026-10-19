@@ -56,6 +56,8 @@ projects.slice(0, projectNames.length).forEach((project, p) => {
         agent: AGENTS[(p + i) % 3],
         pinned: p === 0 && i === 1,
         started_at: minutesAgo(10 + p * 7 + i * 3),
+        // An idle session whose turn ended with work still running.
+        ...(p === 1 && i === 0 ? { background_tasks: [{ id: "task-watch", type: "shell", description: "pnpm dev" }] } : {}),
       }),
     );
   }
@@ -74,7 +76,7 @@ export const busyScenarios: Scenario[] = [
     category: "normal",
     title: "Many consoles, projects and sessions",
     description:
-      "Twelve projects with long and pinned names and paths, a pinned session and every status the list shows, including Starting with its muted turning arc. A session of Media gateway with a title far wider than the sidebar row is selected, with its project's pane open at the end edge: the breadcrumb in the top bar fades out where that pane begins with its status icon still visible, and the row fits the sidebar.",
+      "Twelve projects with long and pinned names and paths, a pinned session and every status the list shows, including Starting with its muted turning arc and a session running in the background with its pinging hollow green ring, Fix task 1-0 of Search API, listed after that project's Waiting for you row. A session of Media gateway with a title far wider than the sidebar row is selected, with its project's pane open at the end edge: the breadcrumb in the top bar fades out where that pane begins with its status icon still visible, and the row fits the sidebar.",
     state,
     steps: [(ui) => ui.press(ui.session(SECOND_LONG_TITLE))],
   },

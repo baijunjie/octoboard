@@ -2,8 +2,7 @@ import { Archive, LoaderCircle, MessageCircleMore, Pause } from "lucide-react";
 import React from "react";
 
 import { useT } from "../i18n/react";
-import type { SessionStatus } from "../protocol";
-import { statusLabel } from "../sessionLabel";
+import { type StatusKind, statusLabel } from "../sessionLabel";
 import { IndicatorTooltip } from "./IndicatorTooltip";
 import { WavingHand, WorkingDot } from "./statusGlyphs";
 
@@ -17,9 +16,10 @@ type Naming = { "aria-hidden": true } | { role: "img"; "aria-label": string };
  * lucide glyphs and dots rather than emoji (the project keeps user-facing UI free of decorative
  * emoji, the same convention `CLAUDE.md` sets for committed prose). Idle is a speech bubble
  * (sitting at the prompt, waiting to be told), starting a turning arc (the agent is still being
- * launched), and interrupted a pause sign (stopped where it was,
- * and can be resumed from there). */
-function statusGlyph(status: SessionStatus, naming: Naming): React.ReactElement {
+ * launched), interrupted a pause sign (stopped where it was, and can be resumed from there), and
+ * running in the background the working dot as a hollow ring in idle's green: at the prompt, but
+ * with work still going. */
+function statusGlyph(status: StatusKind, naming: Naming): React.ReactElement {
   switch (status) {
     case "starting":
       // An arc turning in the muted ink: coming up, with nothing to answer for yet. The arc's
@@ -42,6 +42,14 @@ function statusGlyph(status: SessionStatus, naming: Naming): React.ReactElement 
       // a meaningful glyph needs. The exception is deliberate: the green is only a secondary cue, as
       // the bubble's shape tells idle apart from the working dot and the accessible name says it.
       return <MessageCircleMore {...naming} className={`${ICON_CLASS} text-success`} />;
+    case "background":
+      // The same green and the same exception as the bubble above; the hollow ring's shape tells it
+      // from the bubble and from the filled working dot, and the accessible name says it.
+      return (
+        <span {...naming} className="flex shrink-0">
+          <WorkingDot background />
+        </span>
+      );
     case "interrupted":
       return <Pause {...naming} className={`${ICON_CLASS} text-app-muted`} />;
     case "archived":
@@ -66,7 +74,7 @@ export function StatusIcon({
   decorative,
   withTooltip,
 }: {
-  status: SessionStatus;
+  status: StatusKind;
   decorative?: boolean;
   withTooltip?: boolean;
 }): React.ReactElement {

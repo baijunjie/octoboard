@@ -154,6 +154,7 @@
   "demoRules": "项目指令 · Skills · Hooks",
   "demoStatusWorking": "工作中",
   "demoStatusIdle": "等待指示",
+  "demoStatusBackground": "后台运行中",
   "demoReportsTitle": "统筹智能体汇总成果",
   "demoReportsDescription": "汇总各项目的成果，并对照同一个需求核对交付内容。",
   "demoDeliveryTitle": "同一个需求，共同交付",

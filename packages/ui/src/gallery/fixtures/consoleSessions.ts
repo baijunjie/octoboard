@@ -25,7 +25,9 @@ const sessions = [
   hub3,
   hub4,
   sessionOf("s-web-1", console_.id, web.id, "Fix the summary layout", "working", { bound_to: hub1.id, terminal_title: "Explain the differences between the three galleries" }),
-  sessionOf("s-web-2", console_.id, web.id, "Update the dependencies", "idle"),
+  // Its turn ended with a watcher still running, so it sits idle but has work under way, which ranks it
+  // with the working sessions: after Fix the summary layout, below the idle lead session.
+  sessionOf("s-web-2", console_.id, web.id, "Update the dependencies", "idle", { background_tasks: [{ id: "task-watch", type: "shell", description: "pnpm test --watch" }] }),
   sessionOf("s-web-3", console_.id, web.id, "Asks which region to use", "waiting_user"),
   sessionOf("s-web-4", console_.id, web.id, "Old layout draft", "interrupted"),
   sessionOf("s-api-1", console_.id, api.id, "Add idempotency keys", "waiting_user", { bound_to: hub2.id }),
@@ -45,9 +47,9 @@ export const consoleSessionsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Console sessions, and project sessions bound, unbound and nested",
-    description: "The headings show Console sessions (4) and Projects (2), each counting only its own rows. Agent task titles come before the original session names. Hub 3, the release-plan task under Hub, Hub 2 and Hub 4 show the status order Waiting for you, Awaiting instructions, Working, Interrupted, each in its own colour. Website shows the same order. Its bound sessions carry the owner's colour as a binding badge, while its unbound ones, and Search API's Plan the reindex, carry none. Sessions bound to a lead session are listed under it, a level below, with no badge. The pointer rests on the status glyph of \"Add idempotency keys\". Every row's glyph has a tooltip, here Waiting for you.",
+    description: "The headings show Console sessions (4) and Projects (2), each counting only its own rows. Agent task titles come before the original session names. Hub 3, the release-plan task under Hub, Hub 2 and Hub 4 show the status order Waiting for you, Awaiting instructions, Working, Interrupted, each in its own colour. Website shows the same order, with Update the dependencies, idle with a test watcher still running, listed among the Working rows right after Explain the differences, below the Awaiting instructions ones and above Interrupted: its glyph is a pinging hollow green ring, the same green as the speech bubble of the Awaiting instructions rows, right below the pinging filled blue dot of Explain the differences, the working row above it, so the two can be compared: both the shape and the colour tell them apart. Its bound sessions carry the owner's colour as a binding badge, while its unbound ones, and Search API's Plan the reindex, carry none. Sessions bound to a lead session are listed under it, a level below, with no badge. The pointer rests on the status glyph of \"Update the dependencies\". Every row's glyph has a tooltip, here Running in background; compare it with the Waiting for you, Awaiting instructions, Working and Interrupted ones.",
     state,
-    steps: [(ui) => ui.hoverRowStatus(ui.session("Add idempotency keys"))],
+    steps: [(ui) => ui.hoverRowStatus(ui.session("Update the dependencies"))],
   },
   {
     id: "console-session-colour-submenu",

@@ -154,6 +154,7 @@
   "demoRules": "Project instructions · Skills · Hooks",
   "demoStatusWorking": "Working",
   "demoStatusIdle": "Awaiting instructions",
+  "demoStatusBackground": "Running in background",
   "demoReportsTitle": "The coordinator brings it together",
   "demoReportsDescription": "Collect results from all participating projects and check the deliverables against the same request.",
   "demoDeliveryTitle": "One feature, delivered together",

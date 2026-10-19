@@ -16,7 +16,7 @@ use crate::browse::git::GitEnv;
 use crate::browse::lane::{Frame, Lane};
 use crate::coordinator::Followup;
 use crate::hook_queue::Push;
-use crate::hooks;
+use crate::hooks::{self, BackgroundTasksChange};
 use crate::protocol::{
     Agent, BrowseBody, BrowseRequest, Event, Request, SessionStatus, TermControl,
     BROWSE_REQUEST_TYPES,
@@ -555,6 +555,16 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
             if let Some(agent) = agent {
                 let believable = read_turn_boundary(state, session_id, agent, &event, &payload);
                 if believable {
+                    // A whole new list goes in before the status, so the record the status
+                    // change publishes already carries it. A completion notification goes in
+                    // after: it arrives as a prompt while the session is still idle, and trimming
+                    // the list first would publish a plain idle record before the turn starts.
+                    let mut finished = None;
+                    match hooks::background_tasks_change(agent, &event, &payload) {
+                        Some(BackgroundTasksChange::Finished(ids)) => finished = Some(ids),
+                        Some(change) => state.apply_background_tasks_change(session_id, change),
+                        None => {}
+                    }
                     if let Some(status) = hooks::status_from_event(agent, &event, &payload) {
                         let status = suppress_auto_review_hook(state, session_id, status);
                         if let Err(err) = state.apply_hook_status(session_id, status) {
@@ -589,6 +599,12 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
                         // into its PTY, which blocks; it must not sit on this response, where the
                         // adapters' few-second hook timeout would surface as agent-visible noise.
                         state.spawn_flush_outbox(session_id, status);
+                    }
+                    if let Some(ids) = finished {
+                        state.apply_background_tasks_change(
+                            session_id,
+                            BackgroundTasksChange::Finished(ids),
+                        );
                     }
                 }
             } else {
@@ -1085,6 +1101,44 @@ mod tests {
         })
         .await
         .expect("the checks ran");
+    }
+
+    /// A completion notification trims the list once the session is working: trimmed while it is
+    /// still idle, the record it publishes would show a plain idle between the finished work and
+    /// the turn it started.
+    #[tokio::test]
+    async fn a_completion_notification_does_not_publish_a_plain_idle_before_the_turn_starts() {
+        let (state, dir) = app_state("server-notification-order");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        state
+            .store
+            .insert_session(&crate::test_support::console_session(
+                "s",
+                SessionStatus::Idle,
+            ))
+            .unwrap();
+        let stop =
+            br#"{"hook_event_name": "Stop", "background_tasks": [{"id": "b1", "type": "shell"}]}"#;
+        apply_hook(&state, "s", stop);
+        assert_eq!(state.background_tasks_of("s").len(), 1);
+        let mut events = state.subscribe();
+
+        let notified = br#"{"hook_event_name": "UserPromptSubmit", "prompt": "<task-notification><task-id>b1</task-id></task-notification>"}"#;
+        apply_hook(&state, "s", notified);
+
+        let mut published = Vec::new();
+        while let Ok(Event::SessionUpserted { session }) = events.try_recv() {
+            published.push((session.status, session.background_tasks.len()));
+        }
+        assert!(
+            !published.contains(&(SessionStatus::Idle, 0)),
+            "{published:?}"
+        );
+        assert_eq!(published.last(), Some(&(SessionStatus::Working, 0)));
+        assert!(state.background_tasks_of("s").is_empty());
     }
 
     /// A path no route serves is still behind the guard: hostile callers learn nothing from it.

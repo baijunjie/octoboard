@@ -17,6 +17,12 @@ describe("holdsQuit", () => {
     expect(holdsQuit([sessionOf("s", "c", "p", "S", status)])).toBe(expected);
   });
 
+  it("asks for a session awaiting instructions only while it has work running in the background", () => {
+    const idle = sessionOf("s", "c", "p", "S", "idle");
+    expect(holdsQuit([{ ...idle, background_tasks: [{ id: "b1" }] }])).toBe(true);
+    expect(holdsQuit([{ ...idle, background_tasks: [] }])).toBe(false);
+  });
+
   it("asks when any one session holds it up", () => {
     expect(holdsQuit([sessionOf("a", "c", "p", "A", "idle"), sessionOf("b", "c", "p", "B", "working")])).toBe(true);
   });

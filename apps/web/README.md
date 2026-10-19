@@ -68,8 +68,9 @@ Run these commands from the repository root:
   center, project selection, task/report details, status and signal legends, and measured animated connectors. It
   also supplies the initial server-rendered connector geometry.
 - [`apps/web/app/components/WorkflowStatus.vue`](app/components/WorkflowStatus.vue) supplies localized working and
-  idle indicators matching the application's status glyphs: a working ping and Lucide's `MessageCircleMore` for idle.
-  The original SVG paths come from `lucide-react` 1.52.0, with attribution in the component and license text in
+  idle indicators matching the application's status glyphs: a working ping, the same ping drawn as a hollow ring in
+  idle's green for a session running in the background, and Lucide's `MessageCircleMore` for idle. The original SVG
+  paths come from `lucide-react` 1.52.0, with attribution in the component and license text in
   [`apps/web/public/licenses/lucide-icons.txt`](public/licenses/lucide-icons.txt).
 - [`apps/web/app/components/SiteIcon.vue`](app/components/SiteIcon.vue) supplies shared decorative icons from the local
   SVG assets in [`apps/web/app/assets/icons/`](app/assets/icons/): platform and GitHub brand icons come from Font Awesome Free

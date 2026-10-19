@@ -49,19 +49,29 @@ export function sessionWithLocation(
   return t("session.withLocation", { session: isolate(title), location });
 }
 
+/** What a status glyph and label stand for: the wire statuses, and *running in background*, which
+ * is `idle` with work left running (`Session.background_tasks`) and has a glyph and a name of its
+ * own. It is not a status of the daemon's: the session is as ready for a message as any idle one. */
+export type StatusKind = SessionStatus | "background";
+
+export function sessionStatusKind(session: Pick<Session, "status" | "background_tasks">): StatusKind {
+  return session.status === "idle" && session.background_tasks?.length ? "background" : session.status;
+}
+
 /** The catalog message naming each status, for the "Session statuses" table in
  * docs/product/sessions.md. A row's own `aria-label` wins over one on an element nested inside it,
  * so the wire enum must never be the only place a status is put into words. */
 const STATUS_KEY = {
+  background: "session.status.background",
   starting: "session.status.starting",
   working: "session.status.working",
   waiting_user: "session.status.waitingUser",
   idle: "session.status.idle",
   interrupted: "session.status.interrupted",
   archived: "session.status.archived",
-} as const satisfies Record<SessionStatus, MessageKey>;
+} as const satisfies Record<StatusKind, MessageKey>;
 
-export function statusLabel(t: Translate, status: SessionStatus): string {
+export function statusLabel(t: Translate, status: StatusKind): string {
   return t(STATUS_KEY[status]);
 }
 
@@ -98,7 +108,7 @@ export function sessionAriaLabel(
   const base = t(session.pinned ? "sidebar.session.ariaLabelPinned" : "sidebar.session.ariaLabel", {
     title: isolate(sessionDisplayTitle(t, session)),
     agent: sessionAgentLabel(t, session, accounts),
-    status: statusLabel(t, session.status),
+    status: statusLabel(t, sessionStatusKind(session)),
   });
   return owner ? joinPhrases(language, [base, t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, owner)) })]) : base;
 }

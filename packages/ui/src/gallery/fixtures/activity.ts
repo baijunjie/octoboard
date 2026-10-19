@@ -10,9 +10,16 @@ const billing = projectOf("p-billing", console_.id, "Billing");
 const docs = projectOf("p-docs", console_.id, "Docs");
 const archived = projectOf("p-archived", console_.id, "Archived only", { pinned: true });
 const empty = projectOf("p-empty", console_.id, "No sessions yet", { pinned: true });
+const mobile = projectOf("p-mobile", console_.id, "Mobile app");
+// A second console whose only session is idle with a watcher still running: work under way, not just a
+// session waiting at its prompt.
+const staging = consoleOf("c-staging", "Staging");
+const preview = projectOf("p-preview", staging.id, "Preview site");
+const watching = { background_tasks: [{ id: "task-watch", type: "shell", description: "pnpm dev" }] };
 
 // One project per activity a collapsed row can show. Website has sessions in all three states and
-// shows the most pressing; interrupted-only Docs stays undimmed without an activity marker.
+// shows the most pressing; Mobile app has one session, idle with a watcher still running, which counts as
+// work; interrupted-only Docs stays undimmed without an activity marker.
 // Pinned projects with no unarchived sessions still follow every unarchived project.
 const sessions = [
   sessionOf("s-web-1", console_.id, website.id, "Fix the summary layout", "working"),
@@ -20,12 +27,14 @@ const sessions = [
   sessionOf("s-web-3", console_.id, website.id, "Asks which region to use", "waiting_user"),
   sessionOf("s-api-1", console_.id, api.id, "Add idempotency keys", "working"),
   sessionOf("s-api-2", console_.id, api.id, "Plan the reindex", "interrupted"),
+  sessionOf("s-mobile-1", console_.id, mobile.id, "Serve the preview", "idle", watching),
   sessionOf("s-bill-1", console_.id, billing.id, "Reconcile March", "idle"),
   sessionOf("s-docs-1", console_.id, docs.id, "Old draft", "interrupted"),
   sessionOf("s-archived-1", console_.id, archived.id, "Completed draft", "archived"),
+  sessionOf("s-preview-1", staging.id, preview.id, "Serve the preview", "idle", watching),
 ];
 
-const state = snapshotState({ consoles: [console_], projects: [archived, empty, website, api, billing, docs], sessions });
+const state = snapshotState({ consoles: [console_, staging], projects: [archived, empty, website, api, mobile, billing, docs, preview], sessions });
 
 export const activityScenarios: Scenario[] = [
   {
@@ -33,7 +42,7 @@ export const activityScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Projects open only when they have unarchived sessions",
-    description: "Website, Search API and Billing open with their sessions visible. Docs also opens because its interrupted session is unarchived. The pinned Archived only and No sessions yet projects start folded and follow the expanded projects. Toggle a project to change its fold state.",
+    description: "Website, Mobile app, Search API and Billing open with their sessions visible. Docs also opens because its interrupted session is unarchived. The pinned Archived only and No sessions yet projects start folded and follow the expanded projects. Toggle a project to change its fold state.",
     state,
   },
   {
@@ -41,7 +50,7 @@ export const activityScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Collapsed project rows, by what is going on beneath them",
-    description: "Each collapsed row's marker shows the most pressing activity beneath it: a waving hand for Website (waiting beats working), a pinging dot for Search API, a speech bubble for Billing and none for Docs. Hover a marker to read its tooltip. Docs, whose only session is interrupted, stays undimmed. The pinned Archived only and No sessions yet projects sort after the active ones, dimmed together. Expand from the Projects heading: only the four active projects open, and those two stay folded.",
+    description: "Each collapsed row's marker shows the most pressing activity beneath it: a waving hand for Website (waiting beats working), a pinging dot for Mobile app and Search API, a speech bubble for Billing and none for Docs. Mobile app's only session is idle with a dev server still running, so it shows work and sorts with Search API, ahead of Billing, rather than showing the speech bubble. The rail shows the same for the second console, Staging, whose only session is that kind: a pinging dot on its avatar. Hover a marker to read its tooltip. Docs, whose only session is interrupted, stays undimmed. The pinned Archived only and No sessions yet projects sort after the active ones, dimmed together. Expand from the Projects heading: only the five active projects open, and those two stay folded.",
     state,
     steps: [
       (ui) => ui.press(ui.t("sidebar.collapseAll")),

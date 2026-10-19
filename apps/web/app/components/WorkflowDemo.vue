@@ -225,6 +225,7 @@ onBeforeUnmount(() => observer?.disconnect());
       >
       <WorkflowStatus status="working" :animating="running && !paused" />
       <WorkflowStatus status="idle" :animating="false" />
+      <WorkflowStatus status="background" :animating="running && !paused" />
     </div>
     <p class="workflow-footer">
       <SiteIcon name="chat-circle-dots" />{{ t("demoDirect") }}

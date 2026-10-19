@@ -41,6 +41,14 @@ hold state against.
   it. `background_tasks` lists work still running, and a `Stop` with a non-empty list means paused, not finished. An
   entry's id is the same value as the `backgroundTaskId` in the matching `PostToolUse`'s `tool_response`, so a
   background task can be joined to the call that started it without reading the transcript.
+  A backgrounded shell command (`run_in_background`, measured on 2.1.303) is listed as `id`, `type` `"shell"`,
+  `status` `"running"`, `description` and `command`. The list is the complete current one on every `Stop`, so it
+  can be replaced wholesale rather than patched (measured on 2.1.303: with two backgrounded sleeps finishing at
+  different times, each `Stop` listed exactly the ones still running, and the last listed none). A finished task
+  is reported to the session as a `UserPromptSubmit` whose prompt is a `<task-notification>` carrying its
+  `<task-id>`, followed by a `Stop` of its own. `/clear` does not end a running background shell: the next `Stop`
+  after the `SessionStart` with source `clear` still listed it (measured through `-p --input-format stream-json`;
+  the interactive TUI is unmeasured).
 - `StopFailure` — mutually exclusive with `Stop`: a turn that ends in an API error fires only `StopFailure`, so a
   mapping keyed on `Stop` alone leaves that session looking busy forever. It does not mean the session died; in the
   interactive TUI it stays alive at the prompt. It carries `error`, an optional `error_details` (the raw HTTP status
@@ -60,7 +68,9 @@ hold state against.
 - `Notification` carries its state in `notification_type`. Two were seen firing: `permission_prompt`, a fixed 6.0 s
   after the `PermissionRequest` it belongs to, and `idle_prompt`, exactly 60.0 s after a `Stop`. The idle timer is
   **armed by `Stop`**, so a turn that never fires one never produces an `idle_prompt` either, and `idle_prompt` is no
-  use as a general backstop.
+  use as a general backstop. It is **not suppressed by a paused `Stop`** except for background *agent* tasks (2.1.303):
+  with a shell, Monitor or MCP task still running, `idle_prompt` fires 60 s after the `Stop` that listed it, so the
+  notification cannot be read as "nothing is running".
 
 **A configuration that names no permission mode does not ask.** On 2.1.296 a config directory whose `settings.json`
 carries no `permissions` block runs in *auto mode* (status line `⏵⏵ auto mode on (shift+tab to cycle)`), and a `Write`

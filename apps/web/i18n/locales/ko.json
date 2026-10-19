@@ -154,6 +154,7 @@
   "demoRules": "프로젝트 지침 · Skills · Hooks",
   "demoStatusWorking": "작업 중",
   "demoStatusIdle": "지시 대기 중",
+  "demoStatusBackground": "백그라운드 실행 중",
   "demoReportsTitle": "조율 에이전트가 결과 취합",
   "demoReportsDescription": "참여한 모든 프로젝트의 결과를 모아 같은 요구사항에 맞게 구현되었는지 확인합니다.",
   "demoDeliveryTitle": "하나의 기능을 함께 완성",

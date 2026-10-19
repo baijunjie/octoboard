@@ -2,7 +2,7 @@ import type { Translate } from "../i18n/catalog";
 import type { StatusItemEntry, StatusItemMenu, StatusItemSection } from "../platform";
 import type { Console, Project, Session, SessionStatus } from "../protocol";
 import { sessionWithLocation, statusLabel } from "../sessionLabel";
-import { sessionsInTreeOrder } from "../sidebar/order";
+import { rankedStatus, sessionsInTreeOrder } from "../sidebar/order";
 import { agentIconKey, statusIconKey } from "./statusItemIconKeys";
 import { buildQuotaSubmenus, type StatusItemQuotaSource } from "./statusItemQuota";
 
@@ -31,7 +31,7 @@ export interface StatusItemMenuSource {
  * raises its hand (`attention`) while any session waits for the user. */
 export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource): StatusItemMenuDraft {
   const { consoles, projects, sessions, consoleMap, projectMap, quota } = source;
-  const byStatus = SECTION_ORDER.map((status) => ({ status, listed: sessionsInTreeOrder(consoles, projects, sessions, (s) => s.status === status) }));
+  const byStatus = SECTION_ORDER.map((status) => ({ status, listed: sessionsInTreeOrder(consoles, projects, sessions, (s) => rankedStatus(s) === status) }));
   const sections = byStatus.flatMap(({ status, listed }): StatusItemSection[] => {
     if (listed.length === 0) return [];
     const items: StatusItemEntry[] = listed

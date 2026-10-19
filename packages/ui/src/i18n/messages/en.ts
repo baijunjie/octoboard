@@ -371,6 +371,7 @@ export const en = {
   "session.status.working": "Working",
   "session.status.waitingUser": "Waiting for you",
   "session.status.idle": "Awaiting instructions",
+  "session.status.background": "Running in background",
   "session.status.interrupted": "Interrupted",
   "session.status.archived": "Archived",
 
@@ -961,6 +962,7 @@ export const en = {
   },
   "dialog.archiveSession.title": "Archive {title}?",
   "dialog.archiveSession.message": "Its process ends. You can reopen it later.",
+  "dialog.archiveSession.messageBackground": "Its process ends, and the work it is running in the background is stopped. You can reopen it later.",
   "dialog.archiveSession.boundAndEnded": {
     one: "{count} session under it is archived with it. Its process ends.",
     other: "{count} sessions under it are archived with it. Their processes end.",

@@ -6,12 +6,15 @@
 //! naive mapping wrong in a way nothing reports. What is handled here:
 //!
 //! - **Claude Code**: `Stop` and `StopFailure` are mutually exclusive, so both mean "turn over"; a
-//!   `Stop` carrying a non-empty `background_tasks` means paused on background work, not finished;
-//!   and `Notification` carries the state in `notification_type`, of which `idle_prompt` is the only
-//!   one worth mapping: its `permission_prompt` does fire, but a fixed six seconds after the
-//!   `PermissionRequest` that already raised the hand, so it says nothing new. `idle_prompt` is no
-//!   use as a general backstop either, being armed by `Stop` — a turn that fires no `Stop` never
-//!   produces one.
+//!   `Stop` carrying a non-empty `background_tasks` means paused on background work, not finished.
+//!   That is an idle session with those tasks running (see [`background_tasks_change`]), not a
+//!   working one: `idle_prompt` fires 60 s after such a `Stop` for a shell, monitor or MCP task,
+//!   and only an agent task suppresses it, so a session read as working would flip to idle at an
+//!   arbitrary moment. `Notification` carries the state in `notification_type`, of which
+//!   `idle_prompt` is the only one worth mapping: its `permission_prompt` does fire, but a fixed
+//!   six seconds after the `PermissionRequest` that already raised the hand, so it says nothing
+//!   new. `idle_prompt` is no use as a general backstop either, being armed by `Stop`: a turn that
+//!   fires no `Stop` never produces one.
 //! - **Grok**: `Stop` fires twice per session — once per turn with `reason: "end_turn"` and again
 //!   at teardown with `reason: "shutdown"` — so an unfiltered mapping ends every session with a
 //!   phantom finished turn. Payload keys exist in both camelCase and snake_case.
@@ -41,7 +44,7 @@
 
 use serde_json::Value;
 
-use crate::protocol::{Agent, SessionStatus};
+use crate::protocol::{Agent, BackgroundTask, SessionStatus};
 
 /// What one hook event says about the session, or `None` when it says nothing Octoboard tracks.
 /// A session's end is deliberately not taken from a hook at all: the process exit is observed
@@ -84,21 +87,75 @@ fn claude_status(event: &str, payload: &Value) -> Option<SessionStatus> {
             Some("idle_prompt") => Some(SessionStatus::Idle),
             _ => None,
         },
-        "Stop" => {
-            let paused = payload
-                .get("background_tasks")
-                .and_then(Value::as_array)
-                .map(|tasks| !tasks.is_empty())
-                .unwrap_or(false);
-            Some(if paused {
-                SessionStatus::Working
-            } else {
-                SessionStatus::Idle
-            })
-        }
-        "StopFailure" => Some(SessionStatus::Idle),
+        // Idle even when paused on background work: the tasks are tracked beside the status.
+        "Stop" | "StopFailure" => Some(SessionStatus::Idle),
         _ => None,
     }
+}
+
+/// What one hook event says about the background work a session has left running.
+#[derive(Debug, PartialEq, Eq)]
+pub enum BackgroundTasksChange {
+    /// The complete list now running. A `Stop` always carries the whole list, so this also
+    /// corrects anything missed since the last one; an empty list means nothing is running.
+    Replace(Vec<BackgroundTask>),
+    /// These tasks have finished: the agent reports each completion to itself as a turn of its
+    /// own, whose prompt carries the task's id.
+    Finished(Vec<String>),
+}
+
+/// The change an event makes to the session's background tasks, or `None` when it makes none.
+/// Claude Code's alone: Grok's `Stop` also carries a `backgroundTasks`, but nothing records how it
+/// is shaped or whether the work outlives the turn, and Codex has none.
+pub fn background_tasks_change(
+    agent: Agent,
+    event: &str,
+    payload: &Value,
+) -> Option<BackgroundTasksChange> {
+    if agent != Agent::Claude {
+        return None;
+    }
+    match event {
+        "Stop" => Some(BackgroundTasksChange::Replace(claude_background_tasks(
+            payload,
+        ))),
+        "StopFailure" => Some(BackgroundTasksChange::Replace(Vec::new())),
+        "UserPromptSubmit" => {
+            let prompt = submitted_prompt(agent, payload)?;
+            prompt
+                .contains("<task-notification>")
+                .then(|| BackgroundTasksChange::Finished(task_ids(prompt)))
+        }
+        _ => None,
+    }
+}
+
+/// The background tasks a Claude Code `Stop` lists; an entry without an id is not one.
+fn claude_background_tasks(payload: &Value) -> Vec<BackgroundTask> {
+    payload
+        .get("background_tasks")
+        .and_then(Value::as_array)
+        .map(|tasks| tasks.iter().filter_map(background_task).collect())
+        .unwrap_or_default()
+}
+
+fn background_task(entry: &Value) -> Option<BackgroundTask> {
+    Some(BackgroundTask {
+        id: text_field(entry, "id")?,
+        kind: text_field(entry, "type"),
+        description: text_field(entry, "description"),
+    })
+}
+
+/// The ids of every `<task-id>…</task-id>` in a prompt.
+fn task_ids(prompt: &str) -> Vec<String> {
+    prompt
+        .split("<task-id>")
+        .skip(1)
+        .filter_map(|rest| rest.split_once("</task-id>"))
+        .map(|(id, _)| id.trim().to_string())
+        .filter(|id| !id.is_empty())
+        .collect()
 }
 
 fn codex_status(event: &str) -> Option<SessionStatus> {
@@ -331,13 +388,10 @@ pub fn turn_end(agent: Agent, event: &str, payload: &Value) -> Option<TurnEnd> {
     }
 }
 
-/// Whether a Claude Code `Stop` is only paused on background work.
+/// Whether a Claude Code `Stop` is only paused on background work: the same list
+/// [`background_tasks_change`] records, so the two agree.
 fn claude_paused(payload: &Value) -> bool {
-    payload
-        .get("background_tasks")
-        .and_then(Value::as_array)
-        .map(|tasks| !tasks.is_empty())
-        .unwrap_or(false)
+    !claude_background_tasks(payload).is_empty()
 }
 
 fn text_field(payload: &Value, key: &str) -> Option<String> {
@@ -512,5 +566,102 @@ mod tests {
         )
         .expect("a turn end");
         assert!(end.last_assistant_message.is_none());
+    }
+
+    fn task(id: &str, kind: &str, description: &str) -> BackgroundTask {
+        BackgroundTask {
+            id: id.to_string(),
+            kind: Some(kind.to_string()),
+            description: Some(description.to_string()),
+        }
+    }
+
+    /// A `Stop` paused on background work leaves the session idle, not working: the `idle_prompt`
+    /// that follows it a minute later would otherwise flip it at an arbitrary moment. The tasks
+    /// are carried beside the status, and the turn is still not a reportable end.
+    #[test]
+    fn a_paused_claude_stop_is_idle_with_its_tasks() {
+        let stop = json!({"background_tasks": [
+            {"id": "b1", "type": "shell", "status": "running", "description": "npm run dev"},
+            {"id": "b2"},
+            {"type": "shell"},
+        ]});
+        assert_eq!(claude_status("Stop", &stop), Some(SessionStatus::Idle));
+        assert!(turn_end(Agent::Claude, "Stop", &stop).is_none());
+        assert_eq!(
+            background_tasks_change(Agent::Claude, "Stop", &stop),
+            Some(BackgroundTasksChange::Replace(vec![
+                task("b1", "shell", "npm run dev"),
+                BackgroundTask {
+                    id: "b2".to_string(),
+                    kind: None,
+                    description: None,
+                },
+            ]))
+        );
+    }
+
+    /// `idle_prompt` is the same idle whether or not tasks run, and says nothing about them.
+    #[test]
+    fn idle_prompt_leaves_the_background_tasks_alone() {
+        let idle = json!({"notification_type": "idle_prompt"});
+        assert_eq!(
+            claude_status("Notification", &idle),
+            Some(SessionStatus::Idle)
+        );
+        assert_eq!(
+            background_tasks_change(Agent::Claude, "Notification", &idle),
+            None
+        );
+    }
+
+    /// A `Stop` with no list, or an empty one, and a `StopFailure` all leave nothing running.
+    #[test]
+    fn a_stop_without_tasks_and_a_failed_turn_clear_them() {
+        let cleared = Some(BackgroundTasksChange::Replace(Vec::new()));
+        for payload in [json!({}), json!({"background_tasks": []})] {
+            assert_eq!(
+                background_tasks_change(Agent::Claude, "Stop", &payload),
+                cleared
+            );
+        }
+        assert_eq!(
+            background_tasks_change(Agent::Claude, "StopFailure", &json!({})),
+            cleared
+        );
+    }
+
+    /// A completion arrives as a prompt of its own, pasted or not, naming each finished task.
+    #[test]
+    fn a_task_notification_prompt_names_the_tasks_that_finished() {
+        let prompt = json!({
+            "prompt": "<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>\n</task-notification>",
+        });
+        assert_eq!(
+            background_tasks_change(Agent::Claude, "UserPromptSubmit", &prompt),
+            Some(BackgroundTasksChange::Finished(vec!["b1".to_string()]))
+        );
+        let pasted = json!({
+            "prompt": "\n<pasted_content id=\"1\">\n<task-notification>\n<task-id>b1</task-id>\n<task-id>b2</task-id>\n",
+        });
+        assert_eq!(
+            background_tasks_change(Agent::Claude, "UserPromptSubmit", &pasted),
+            Some(BackgroundTasksChange::Finished(vec![
+                "b1".to_string(),
+                "b2".to_string()
+            ]))
+        );
+        let typed = json!({"prompt": "run the tests"});
+        assert_eq!(
+            background_tasks_change(Agent::Claude, "UserPromptSubmit", &typed),
+            None
+        );
+    }
+
+    #[test]
+    fn only_claude_codes_stop_carries_background_tasks() {
+        let stop = json!({"backgroundTasks": [{"id": "g1"}], "background_tasks": [{"id": "g1"}]});
+        assert_eq!(background_tasks_change(Agent::Grok, "Stop", &stop), None);
+        assert_eq!(background_tasks_change(Agent::Codex, "Stop", &stop), None);
     }
 }

@@ -28,6 +28,7 @@ fn session(id: &str, status: SessionStatus) -> Session {
         status,
         terminal_title: None,
         record_titles: Default::default(),
+        background_tasks: Vec::new(),
         usage: None,
         observed_model: None,
         observed_effort: None,

@@ -356,8 +356,10 @@ Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
           role: "console"|"project", origin: "console"|"user", title, terminal_title?, usage?: SessionUsage,
           observed_model?: string, observed_effort?: string,
           status: "starting"|"working"|"waiting_user"|"idle"|"interrupted"|"archived",
+          background_tasks?: BackgroundTask[],   // only with status "idle"; absent when none
           has_conversation, bound_to?, colour?: "<family>", ordinal?,
           account_id?, config_dir?, model?: string|null, effort?: string|null, pinned, locked, started_at, ended_at? }
+BackgroundTask { id, type?, description? }
 SessionUsage { input_tokens, output_tokens, total_tokens, cached_input_tokens?, cache_write_input_tokens? }
 Page    { id, console_session_id, html, anchor_message_id?, created_at }
 Settings  { auto_pull_repositories, auto_delete_unresumable_archives, default_clone_dir, accounts: Account[],
@@ -414,6 +416,15 @@ record that names one wins, and a value the records do not show stays unknown ra
 `payload.effort` of `turn_context` records. Grok reads the summary file's `current_model_id` and `reasoning_effort`, the
 configured ids rather than the ones a request was served by. They are stored and collected like `usage`, retained when
 archived, and cleared with it when the native conversation id changes.
+
+`Session.background_tasks` lists the work a Claude Code session has left running in the background after a turn that
+ended without finishing it; it is `BackgroundTask { id, type?, description? }` as the agent's `Stop` hook names each
+entry. It is Claude Code only, and held in the daemon's memory only: it is lost at daemon restart and dropped when the
+session's process exits. Every `Stop` replaces the list with the one it carries, so a `Stop` without tasks empties it; a
+`StopFailure` clears it; and a completion notification, which Claude Code delivers to the session as a prompt naming the
+finished tasks, removes just those. The list is present on the record, and published, only while the session is `idle`:
+for any other status it is absent, though the daemon keeps what it was told for the next time the session is idle. An
+idle session with tasks takes messages like any idle session; the tasks only say that its work is not over.
 
 One daemon collector checks live sources at a one-second interval, reading only newly completed JSONL lines and skipping
 unchanged ledgers. Updates appear when the agent writes its own usage, which may be after a model call or turn completes;

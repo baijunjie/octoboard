@@ -154,6 +154,7 @@
   "demoRules": "Proje yönergeleri · Skills · Hooks",
   "demoStatusWorking": "Çalışıyor",
   "demoStatusIdle": "Talimat bekliyor",
+  "demoStatusBackground": "Arka planda çalışıyor",
   "demoReportsTitle": "Koordinatör ajan sonuçları birleştirir",
   "demoReportsDescription": "Katılan tüm projelerin sonuçlarını toplayın ve aynı isteği karşıladıklarını doğrulayın.",
   "demoDeliveryTitle": "Tek özellik, ortak teslim",

@@ -114,7 +114,13 @@ export function createPreviewScenario(
       projects[3].id,
       copy.review,
       "idle",
-      { agent: "claude", bound_to: coordinator.id },
+      {
+        agent: "claude",
+        bound_to: coordinator.id,
+        background_tasks: [
+          { id: "preview-order-watch", type: "shell", description: "pnpm test --watch" },
+        ],
+      },
     ),
     sessionOf(
       "preview-order-checks",

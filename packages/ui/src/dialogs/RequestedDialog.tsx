@@ -13,7 +13,7 @@ import { ImportConfigurationDialog } from "../configuration/ImportConfigurationD
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { isLive, type Project, type Session, type SessionBranchItem } from "../protocol";
-import { sessionAgentLabel, sessionDisplayTitle } from "../sessionLabel";
+import { sessionAgentLabel, sessionDisplayTitle, sessionStatusKind } from "../sessionLabel";
 import {
   boundArchivedSessions,
   boundSessionsArchivedWith,
@@ -59,7 +59,7 @@ function ConfirmWarning({ title, sessions, lines = [] }: { title?: string; sessi
           <ul ref={sessionsRef} className="relative mt-1 flex min-w-0 flex-col gap-1 self-stretch text-sm text-foreground">
             {sessions.map((session) => (
               <li key={session.id} data-list-motion={session.id} className="flex min-w-0 items-center gap-2">
-                {session.status !== "archived" && <StatusIcon status={session.status} withTooltip />}
+                {session.status !== "archived" && <StatusIcon status={sessionStatusKind(session)} withTooltip />}
                 <AgentIcon agent={session.agent} tooltip={sessionAgentLabel(t, session, accounts)} />
                 {/* The icon is decorative, and nothing else here names the agent. */}
                 <span className="sr-only">{sessionAgentLabel(t, session, accounts)}</span>
@@ -133,7 +133,7 @@ function ArchiveSessionDialog({ session, withIt, branches, onClose }: {
   return (
     <ConfirmDialog
       title={<Message id="dialog.archiveSession.title" params={{ title: <InlineChip dir="auto" wrap size="inherit">{sessionDisplayTitle(t, session)}</InlineChip> }} />}
-      message={t("dialog.archiveSession.message")}
+      message={t(sessionStatusKind(session) === "background" ? "dialog.archiveSession.messageBackground" : "dialog.archiveSession.message")}
       warning={<ConfirmWarning title={withIt.length > 0 ? t("dialog.archiveSession.boundAndEnded", { count: withIt.length }) : undefined} sessions={withIt.length > 0 ? withIt : undefined} lines={cleanup.consequences} />}
       confirmLabel={t(cleanup.forcing ? "dialog.archiveSession.confirmDelete" : "dialog.archiveSession.confirm")}
       destructive={cleanup.forcing}
@@ -397,9 +397,11 @@ export function RequestedDialog({
       );
     case "archive-session": {
       // Read live: every unarchived session under this owner goes along, with running
-      // processes ended too. Sessions opened or bound while the dialog is open join the list.
+      // processes ended too. Sessions opened or bound while the dialog is open join the list, and
+      // the message follows background work starting or finishing in the session itself.
       const withIt = boundSessionsArchivedWith(Array.from(sessions.values()), dialog.session.id);
-      return <ArchiveSessionDialog session={dialog.session} withIt={withIt} branches={dialog.branches} onClose={onClose} />;
+      const session = sessions.get(dialog.session.id) ?? dialog.session;
+      return <ArchiveSessionDialog session={session} withIt={withIt} branches={dialog.branches} onClose={onClose} />;
     }
     case "switch-account":
       return (

@@ -142,15 +142,14 @@ Each page file states `Canonical:` and then that page's HTML URL. A link from on
 another page of the site points at the Markdown file. Links that leave the site — the releases page,
 the repository, the license, the GitHub privacy statement, and email — stay on those targets.
 
-The Markdown carries the page's localized wording. It includes the visible text, including the license
-caption, the preview scene names and sample-data explanation, and every workflow node's task, report, and
-Working and Awaiting instructions labels. It does not include the embedded application's sample screens. Download links are
-the releases links in "Homepage and navigation" and sit beside the statement that the macOS app is an
-early prototype still in development. The workflow is identified as an illustration. The copies omit
-the header, the footer, decorative art, the labels and numbers that mark a section, the scroll cue,
-the MIT badge, and interactive controls. The brand slogan stays, and the homepage Markdown also includes
-the sentence that states the slogan's two meanings. The privacy page's introductory line and the workflow's
-participant labels stay.
+The Markdown carries the page's localized wording. It includes the visible text, including the license caption, the
+preview scene names and sample-data explanation, and every workflow node's task, report, and Working, Awaiting
+instructions and Running in background labels. It does not include the embedded application's sample screens. Download
+links are the releases links in "Homepage and navigation" and sit beside the statement that the macOS app is an early
+prototype still in development. The workflow is identified as an illustration. The copies omit the header, the footer,
+decorative art, the labels and numbers that mark a section, the scroll cue, the MIT badge, and interactive controls. The
+brand slogan stays, and the homepage Markdown also includes the sentence that states the slogan's two meanings. The
+privacy page's introductory line and the workflow's participant labels stay.
 
 ## Homepage and navigation
 
@@ -254,7 +253,9 @@ The preview shows the actual application's interface populated with fictional da
 sample. Three buttons select project management, team reports, or code review; project management is the initial
 scene. All three scenes follow the restaurant meal deal promotion across the eight independent example projects
 named in "Homepage and navigation", using the same concrete project names. They show the coordinating and project
-sessions, a delivery report, and a selected order-validation diff. Choosing a scene resets the demonstration to that
+sessions, a delivery report, and a selected order-validation diff. In every scene, Restaurant order API's
+order-validation review session awaits instructions while a test watcher (`pnpm test --watch`) runs in the
+background, so it shows as running in background. Choosing a scene resets the demonstration to that
 scene's prepared state.
 
 Each of the eight projects has its own sample repository, with a distinct root, feature branch, business files and
@@ -356,16 +357,19 @@ swing independently, its body floats up and down and rocks from side to side, an
 Red and silver pixel particles move through the surrounding
 space without covering content or intercepting interaction. Sections reveal as they enter view.
 
-A control beside the mascot pauses and resumes the homepage's decorative animation, including the mascot,
-particles and workflow signals. The mascot and particles pause when their area is offscreen or the page is in the
-background; workflow signals and the working-status pulse do the same for the diagram. They resume when visible
-again unless the visitor has paused them. The workflow's signals repeat along the connections rather than implying
-a real task's progress; selecting a project remains available while motion is paused.
+A control beside the mascot pauses and resumes the homepage's decorative animation, including the mascot, particles and
+workflow signals. The mascot and particles pause when their area is offscreen or the page is in the background; workflow
+signals and the working and running-in-background pulses do the same for the diagram. They resume when visible again
+unless the visitor has paused them. The workflow's signals repeat along the connections rather than implying a real
+task's progress; selecting a project remains available while motion is paused.
 
-The illustration's legend shows Working with the application's dark-theme blue pulse and label, alongside the
-awaiting-instructions speech bubble. Both have visible labels and accessible names. They retain the meanings in
-`docs/product/sessions.md`, "Session statuses"; awaiting instructions is not a task-completion indicator. The sample reports and shared delivery describe the outcome
-separately. Question expansion and control state changes also have visual transitions.
+The illustration's legend has three entries: Working with the application's dark-theme blue pulse, the
+awaiting-instructions speech bubble, and Running in background, a hollow ring in the awaiting-instructions green that
+pulses like Working. The Running in background pulse pauses with the other motion and stands still under a
+reduced-motion preference. All three have visible labels and accessible names. They retain the meanings of Working,
+Awaiting instructions and Running in background in `docs/product/sessions.md`, "Session statuses"; awaiting instructions
+is not a task-completion indicator. The sample reports and shared delivery describe the outcome separately. Question
+expansion and control state changes also have visual transitions.
 
 A reduced-motion preference disables decorative animations and transitions, hides the particles and motion control,
 and leaves the content visible. The header keeps a static blurred glass surface without refraction or a moving sheen.

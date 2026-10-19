@@ -38,6 +38,8 @@ sessions, its console sessions included, so a raised hand in a console that is n
 | A green speech bubble | otherwise, at least one session is running and awaiting instructions, or still starting |
 | none | no session has a running process or is starting |
 
+A session *running in background* counts as working here (see "Running in background" in `docs/product/sessions.md`).
+
 The name assistive technology announces for an avatar is the console's name together with what its badge means, and
 **the avatar's tooltip is that same text** — the bare console name while nothing is going on. When that tooltip opens,
 and why a mouse user with the docked sidebar hidden does not get to read it, is in "Tooltips on icon-only controls" in
@@ -534,7 +536,7 @@ and a project session has no colour to choose.
 1. projects with at least one unarchived session first, including interrupted sessions;
 2. within each group, pinned projects first;
 3. then a project with a session waiting for the user;
-4. then a project with a session working;
+4. then a project with a session working, a session running in background included;
 5. then a project with a session running and awaiting instructions, or still starting;
 6. then a project whose unarchived sessions are all interrupted;
 7. within each of those, by name, case-insensitively and in natural order, so that "item 2" comes before "item 10".
@@ -549,8 +551,8 @@ keyboard focus inside one, or an open menu in one brings the whole inactive grou
 **Sessions** within a project are listed, by the same scheme:
 
 1. pinned sessions first;
-2. then by status: waiting for the user, then awaiting instructions and starting alike, then working, then
-   interrupted;
+2. then by status: waiting for the user, then awaiting instructions and starting alike, then working and running in
+   background alike, then interrupted;
 3. then the most recently started first.
 
 The console sessions section lists its console sessions by that same session scheme.

@@ -15,10 +15,11 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use tokio::sync::broadcast;
 
+use crate::hooks::BackgroundTasksChange;
 use crate::outbox::{Drain, Outbox};
 use crate::protocol::{
-    error_code, notice_code, now_millis, Agent, AgentAvailability, Availability, CodedError, Event,
-    GitActivity, GitStatus, Notice, Session, SessionStatus,
+    error_code, notice_code, now_millis, Agent, AgentAvailability, Availability, BackgroundTask,
+    CodedError, Event, GitActivity, GitStatus, Notice, Session, SessionStatus,
 };
 use crate::saved_output::SavedOutput;
 use crate::session::LiveSession;
@@ -120,6 +121,11 @@ pub struct AppState {
     /// rather than the hand, and so the status can be restored when the request ends. Always taken
     /// before `session_requests`, never after. Dropped with the session's other bookkeeping.
     request_hands: Mutex<HashMap<String, SessionStatus>>,
+    /// The background work each session's agent last said it left running
+    /// (`Session::background_tasks`). Held in memory only: the work belongs to the agent process
+    /// and goes with it, so nothing is worth keeping across a daemon restart. Dropped with the
+    /// session's other bookkeeping.
+    background_tasks: Mutex<HashMap<String, Vec<BackgroundTask>>>,
     events: broadcast::Sender<Event>,
     /// Held by `create_account` and `update_account` from their uniqueness checks to their write,
     /// so two requests cannot both pass the checks and then both write. A plain mutex and never
@@ -265,6 +271,7 @@ impl AppState {
             mcp_tokens: RwLock::new(HashMap::new()),
             turns: Mutex::new(HashMap::new()),
             request_hands: Mutex::new(HashMap::new()),
+            background_tasks: Mutex::new(HashMap::new()),
             record_watch_generations: Mutex::new(HashMap::new()),
             next_record_watch_generation: std::sync::atomic::AtomicU64::new(0),
             record_offsets: Mutex::new(HashMap::new()),
@@ -597,8 +604,67 @@ impl AppState {
         {
             session.status = SessionStatus::WaitingUser;
         }
+        session.background_tasks = self.shown_background_tasks(&session);
         session.terminal_title = self.resolved_title(&session, &std::cell::OnceCell::new());
         session
+    }
+
+    /// Applies what a hook event says about the session's background tasks, and tells every client
+    /// when the list changed while it is shown.
+    pub fn apply_background_tasks_change(&self, id: &str, change: BackgroundTasksChange) {
+        let changed = {
+            let mut all = self
+                .background_tasks
+                .lock()
+                .expect("background tasks lock poisoned");
+            let mut tasks = all.get(id).cloned().unwrap_or_default();
+            match change {
+                BackgroundTasksChange::Replace(list) => tasks = list,
+                BackgroundTasksChange::Finished(ids) => {
+                    tasks.retain(|task| !ids.contains(&task.id))
+                }
+            }
+            let before = if tasks.is_empty() {
+                all.remove(id)
+            } else {
+                all.insert(id.to_string(), tasks.clone())
+            };
+            before.unwrap_or_default() != tasks
+        };
+        if !changed {
+            return;
+        }
+        match self.store.get_session(id) {
+            Ok(Some(session)) if session.status == SessionStatus::Idle => {
+                self.publish_session(&session)
+            }
+            Ok(_) => {}
+            Err(err) => {
+                tracing::debug!(session = %id, %err, "reading the session for its background tasks failed")
+            }
+        }
+    }
+
+    /// The background tasks a client is shown for the session: its list while it is idle, where
+    /// work still running is told apart from nothing left, and none for any other status.
+    pub(crate) fn shown_background_tasks(&self, session: &Session) -> Vec<BackgroundTask> {
+        if session.status == SessionStatus::Idle {
+            self.background_tasks_of(&session.id)
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// The background work the agent last listed for the session; empty when none, or when the
+    /// session has not been seen to leave any. Whether it is worth showing depends on the status:
+    /// see [`Self::shown_background_tasks`].
+    pub fn background_tasks_of(&self, id: &str) -> Vec<BackgroundTask> {
+        self.background_tasks
+            .lock()
+            .expect("background tasks lock poisoned")
+            .get(id)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Drops a session from the live map — but only if it is still *this* session. Comparing by id
@@ -1181,6 +1247,10 @@ impl AppState {
         self.revoke_mcp_tokens(id);
         self.turns.lock().expect("turn lock poisoned").remove(id);
         self.forget_request_hand(id);
+        self.background_tasks
+            .lock()
+            .expect("background tasks lock poisoned")
+            .remove(id);
         self.record_watch_generations
             .lock()
             .expect("record watch lock poisoned")
@@ -1862,6 +1932,7 @@ mod tests {
             status,
             terminal_title: None,
             record_titles: Default::default(),
+            background_tasks: Vec::new(),
             usage: None,
             observed_model: None,
             observed_effort: None,
@@ -1900,6 +1971,66 @@ mod tests {
             assert!(Instant::now() < deadline, "the exit was never recorded");
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
+    }
+
+    fn task(id: &str) -> BackgroundTask {
+        BackgroundTask {
+            id: id.to_string(),
+            kind: Some("shell".to_string()),
+            description: None,
+        }
+    }
+
+    /// An idle session shows what it has left running, and only while it is idle: the tasks are
+    /// tracked beside the status, so a message still goes in like it does for any idle session.
+    #[test]
+    fn background_tasks_show_on_an_idle_session_until_they_finish_or_the_session_goes() {
+        let (state, dir) = app_state("background-tasks");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let mut events = state.subscribe();
+
+        let both = vec![task("a"), task("b")];
+        state.apply_background_tasks_change("s", BackgroundTasksChange::Replace(both.clone()));
+        let Event::SessionUpserted { session } = events.try_recv().unwrap() else {
+            panic!("a new list must be published")
+        };
+        assert_eq!(session.background_tasks, both);
+        // The same list again says nothing new.
+        state.apply_background_tasks_change("s", BackgroundTasksChange::Replace(both));
+        assert!(events.try_recv().is_err());
+
+        // A hook's idle changes nothing about them.
+        state.apply_hook_status("s", SessionStatus::Idle).unwrap();
+        let record = state.session_record("s").unwrap();
+        assert_eq!(state.wire_session(record).background_tasks.len(), 2);
+
+        state.apply_background_tasks_change(
+            "s",
+            BackgroundTasksChange::Finished(vec!["a".to_string()]),
+        );
+        let record = state.session_record("s").unwrap();
+        assert_eq!(state.wire_session(record).background_tasks, vec![task("b")]);
+
+        // Working again: the session is not idle, so nothing is shown, but the list is kept for
+        // the next idle.
+        state
+            .apply_hook_status("s", SessionStatus::Working)
+            .unwrap();
+        let record = state.session_record("s").unwrap();
+        assert!(state.wire_session(record).background_tasks.is_empty());
+        state.apply_hook_status("s", SessionStatus::Idle).unwrap();
+        let record = state.session_record("s").unwrap();
+        assert_eq!(state.wire_session(record).background_tasks, vec![task("b")]);
+
+        // An empty list, as a `Stop` with nothing left running brings, clears them.
+        state.apply_background_tasks_change("s", BackgroundTasksChange::Replace(Vec::new()));
+        let record = state.session_record("s").unwrap();
+        assert!(state.wire_session(record).background_tasks.is_empty());
+
+        // The session going away takes them with it.
+        state.apply_background_tasks_change("s", BackgroundTasksChange::Replace(vec![task("c")]));
+        state.forget_session_bookkeeping("s");
+        assert!(state.background_tasks_of("s").is_empty());
     }
 
     #[test]

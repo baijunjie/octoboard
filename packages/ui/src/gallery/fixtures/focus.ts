@@ -34,7 +34,8 @@ const settings = {
 // them under it. Its archived child stays in project archives in both modes. `s-3`, unbound, has one of its own,
 // which the project's focus mode nests under it. `s-console-old` is an archived console session, which the
 // switch strip leaves out. For the strip's three kinds of activity: `hub1` waits through `s-2`, `hub2` is
-// working itself and `hub3` works through `s-3d`, while `hub4` has nothing going on.
+// working itself and `hub3` works through `s-3d` (in `consoleFocusState`, idle with a watcher still running),
+// while `hub4` has nothing going on.
 const lead = sessionOf("s-lead", console_.id, project.id, "Rework the result ranking", "idle", { bound_to: hub1.id, account_id: "a-work", terminal_title: "Compare ranking strategies", usage: { input_tokens: 2_450_000, output_tokens: 75_320, cached_input_tokens: 2_100_000, total_tokens: 2_525_320 } });
 const sessions = [
   hub1,
@@ -220,6 +221,12 @@ const singleTokenUsageState = {
   sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, id === "s-1" ? { ...session, usage: { input_tokens: 1, output_tokens: 0, total_tokens: 1 } } : session])),
 };
 
+// "Write the migration" ended its turn with a build watcher still running: idle, but with work under way.
+const runningInBackgroundState = {
+  ...scrollingFocusState,
+  sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, id === "s-3" ? { ...session, background_tasks: [{ id: "task-watch", type: "shell", description: "cargo watch -x check" }] } : session])),
+};
+
 const addIdempotencyKeys = (ui: Ui) => ui.session(ui.t("session.displayTitle", { title: "Prevent duplicate API requests", name: "Add idempotency keys" }));
 
 const hierarchyState = {
@@ -257,9 +264,11 @@ const consoleFocusState = {
   sessions: new Map([
     ...[...scrollingFocusState.sessions].map(([id, session]) => [
       id,
-      id === hub1.id ? { ...session, locked: true, usage: { input_tokens: 1_240_000, output_tokens: 48_000, cached_input_tokens: 980_000, total_tokens: 1_288_000 } }
-        : id === "s-1" ? { ...session, locked: true }
-          : session,
+      // `hub3`'s only bound session is idle with a watcher still running, which counts as work.
+      id === "s-3d" ? { ...session, status: "idle" as const, background_tasks: [{ id: "task-watch", type: "shell", description: "cargo watch -x test" }] }
+        : id === hub1.id ? { ...session, locked: true, usage: { input_tokens: 1_240_000, output_tokens: 48_000, cached_input_tokens: 980_000, total_tokens: 1_288_000 } }
+          : id === "s-1" ? { ...session, locked: true }
+            : session,
     ] as const),
     ...unusedBoundSessions.map((session) => [session.id, session] as const),
   ]),
@@ -281,10 +290,10 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Project focus",
-    state: scrollingFocusState,
+    state: runningInBackgroundState,
     sessionRecords: { "s-scroll-unused": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    description: "The switch beside the Sessions count starts off. Hover or focus it for its tooltip. The cards of project sessions bound to console sessions (Rework the result ranking and the working and waiting ones) join the list once it is on. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height Archived pushes it away at the top, its preview hiding child sessions and retaining View all. Idle and interrupted cards show an Archive button beside the menu, the pinned Review search improvement 1 after its pin. Write the migration has none, as an unarchived session is bound under it. The unused Draft the release notes has a Delete shortcut instead. Compare the selected card's and the project header's actions buttons at rest, with muted glyphs, then hover or open each menu for the subtle tint every actions button shares. Set Modifier to Held to see the header's new-session button as the bolt.",
+    description: "The switch beside the Sessions count starts off. Hover or focus it for its tooltip. The cards of project sessions bound to console sessions (Rework the result ranking and the working and waiting ones) join the list once it is on. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height Archived pushes it away at the top, its preview hiding child sessions and retaining View all. Idle and interrupted cards show an Archive button beside the menu, the pinned Review search improvement 1 after its pin. Write the migration, selected, has none, as an unarchived session is bound under it and its build watcher is still running: its card reads Running in background with a pinging hollow green ring, unlike the filled blue dot of the working cards that join once the switch is on, as does the glyph at the end of the top bar's breadcrumb, whose tooltip says the same. Scroll down to it: it sits below the Awaiting instructions cards, with work, and above the interrupted Profile the slow query. The unused Draft the release notes has a Delete shortcut instead. Compare the selected card's and the project header's actions buttons at rest, with muted glyphs, then hover or open each menu for the subtle tint every actions button shares. Set Modifier to Held to see the header's new-session button as the bolt.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Plan the database migration", name: "Write the migration" }))),
     ],
@@ -319,7 +328,7 @@ export const focusScenarios: Scenario[] = [
     state: consoleFocusState,
     sessionRecords: unusedBoundRecords,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "The header holds only the back button, the console name Main as a single-line heading and the plus menu; Hub's title is on the card below, not in the header. Below the switch strip, fixed above the scrolling list, Hub's own card is not selected: its status, a colour dot, its agent, creation time and 1.3M token count, and its persistent Unlock control before the actions menu, whose items have no Pin or Focus mode. The pinned Add idempotency keys card has a persistent Unlock control too, without lock borders; unlocking either keeps their order. Draft the changelog and Start the benchmark run are both bound to Hub and were never used; the first was opened by the user, so its shortcut and menu offer Delete, while the second was started by an agent and keeps Archive. The switch strip includes waiting, working and inactive sessions; hover markers for details. Set Modifier to Held to see the header plus menu and each project group's new-session button as the bolt; choosing a project from the menu then creates with defaults.",
+    description: "The header holds only the back button, the console name Main as a single-line heading and the plus menu; Hub's title is on the card below, not in the header. Below the switch strip, fixed above the scrolling list, Hub's own card is not selected: its status, a colour dot, its agent, creation time and 1.3M token count, and its persistent Unlock control before the actions menu, whose items have no Pin or Focus mode. The pinned Add idempotency keys card has a persistent Unlock control too, without lock borders; unlocking either keeps their order. Draft the changelog and Start the benchmark run are both bound to Hub and were never used; the first was opened by the user, so its shortcut and menu offer Delete, while the second was started by an agent and keeps Archive. The switch strip includes waiting, working and inactive sessions; hover markers for details. Hub 3's marker shows work although its only bound session, Document the retry policy, is idle with a test watcher still running. Set Modifier to Held to see the header plus menu and each project group's new-session button as the bolt; choosing a project from the menu then creates with defaults.",
     steps: [
       (ui) => ui.press(addIdempotencyKeys(ui)),
     ],

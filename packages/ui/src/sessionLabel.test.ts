@@ -5,7 +5,7 @@ import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
 import type { Account } from "./protocol";
-import { sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, sessionWithLocation } from "./sessionLabel";
+import { sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, sessionStatusKind, sessionWithLocation } from "./sessionLabel";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
 const accounts: Account[] = [{ id: "w", agent: "claude", name: "Work", config_dir: "/home/w" }];
@@ -21,6 +21,20 @@ describe("sessionAgentLabel", () => {
   });
 });
 
+
+describe("sessionStatusKind", () => {
+  it("reads idle with work left running as running in the background, and nothing else", () => {
+    const tasks = [{ id: "b1" }];
+    expect(sessionStatusKind(sessionOf("s", "c", "p", "T", "idle", { background_tasks: tasks }))).toBe("background");
+    expect(sessionStatusKind(sessionOf("s", "c", "p", "T", "idle", { background_tasks: [] }))).toBe("idle");
+    expect(sessionStatusKind(sessionOf("s", "c", "p", "T", "working", { background_tasks: tasks }))).toBe("working");
+  });
+
+  it("puts the name into the row's accessible name", () => {
+    const session = sessionOf("s", "c", "p", "T", "idle", { background_tasks: [{ id: "b1" }] });
+    expect(sessionAriaLabel(t, "en", session, accounts)).toContain("Running in background");
+  });
+});
 
 describe("sessionDisplayTitle", () => {
   it.each([undefined, null, "", " \n ", "octoboard", " octoboard "])("keeps the created name for an absent or identical title: %s", (terminal_title) => {

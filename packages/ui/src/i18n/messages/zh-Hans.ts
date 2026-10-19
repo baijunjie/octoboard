@@ -327,6 +327,7 @@ export const zhHans: Translation<"other"> = {
   "session.status.working": "工作中",
   "session.status.waitingUser": "等你回应",
   "session.status.idle": "等待指示",
+  "session.status.background": "后台运行中",
   "session.status.interrupted": "已中断",
   "session.status.archived": "已归档",
 
@@ -882,6 +883,7 @@ export const zhHans: Translation<"other"> = {
   },
   "dialog.archiveSession.title": "确认归档 {title}？",
   "dialog.archiveSession.message": "会话进程将结束。之后可以重新打开。",
+  "dialog.archiveSession.messageBackground": "会话进程将结束，它在后台运行的工作会被中止。之后可以重新打开。",
   "dialog.archiveSession.boundAndEnded": {
     other: "它名下的 {count} 个会话将一并归档，进程将结束。",
   },

@@ -5,8 +5,8 @@ information shared by another session, a report panel form submission — and wh
 
 ## Messages held until a session can take them
 
-A session that is working or awaiting instructions takes a message straight away; every agent queues
-one written mid-turn and consumes it when the turn ends.
+A session that is working, awaiting instructions or running in background takes a message straight away; every agent
+queues one written mid-turn and consumes it when the turn ends.
 
 **A message is not written verbatim.** Every control character except newline and tab is removed from its text, and a
 message that would otherwise begin with `/` is written with a single leading space, so it reaches the model as text

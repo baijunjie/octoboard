@@ -154,6 +154,7 @@
   "demoRules": "تعليمات المشروع · Skills · Hooks",
   "demoStatusWorking": "يعمل",
   "demoStatusIdle": "بانتظار التعليمات",
+  "demoStatusBackground": "يعمل في الخلفية",
   "demoReportsTitle": "الوكيل المنسّق يجمع النتائج",
   "demoReportsDescription": "اجمع نتائج جميع المشاريع المشاركة وتحقق من أنها تلبي الطلب نفسه.",
   "demoDeliveryTitle": "ميزة واحدة بجهد مشترك",

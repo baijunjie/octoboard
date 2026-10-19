@@ -32,7 +32,8 @@ From top to bottom:
 1. **The running sessions**, one group per status, each group under a heading that cannot be chosen and that names the
    status with the number of sessions in it: **Waiting for you (n)**, then **Working (n)**, then **Awaiting
    instructions (n)**. A group with no session is left out. Sessions still starting, interrupted and archived
-   sessions are never listed.
+   sessions are never listed. A session running in background is listed under **Working** (see "Running in
+   background" in `docs/product/sessions.md`).
    - **Headings.** A heading is system text at the menu font's size, regular weight, in the secondary text
      colour, with its status glyph to the left of the text. It is not dimmed the way a menu line that cannot be
      chosen is, never highlights under the pointer, and is read by assistive technology once, as its menu item, the
@@ -112,9 +113,9 @@ opened only brings the window back.
 
 ### Quit Octoboard
 
-Quit Octoboard is a quit like `Cmd+Q`: with a session starting, working or waiting for the user it asks the same
-confirmation, bringing a window closed into the background back to ask it, and otherwise it quits at once (see
-"Quitting" in `docs/product/application-lifecycle.md`).
+Quit Octoboard is a quit like `Cmd+Q`: while a session holds a quit up it asks the same confirmation, bringing a window
+closed into the background back to ask it, and otherwise it quits at once (see "Quitting" in
+`docs/product/application-lifecycle.md`, which says which sessions hold a quit up).
 
 ## What has been tried by hand
 

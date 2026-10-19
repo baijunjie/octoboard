@@ -88,6 +88,13 @@ outright before the output was kept, or a new process has since taken the sessio
 discarded it (see "`GET /ws/term/:session` — terminal stream" in `apps/daemon/PROTOCOL.md`). A
 session that is waiting for the user carries a note saying so.
 
+Every session record these tools give — `list_projects`' sessions, `get_session`, `list_sessions`, `list_archived`,
+and the record `rename_session` and `set_session_pinned` answer with — carries `background_tasks`: for a Claude Code
+session running in background, the work it left running, each entry with `id` and, where Claude Code gives them,
+`type` and `description`; an empty list for every other session. Such a session's `status` is `idle`: it takes a
+message like any session awaiting instructions, but its work is not over (see "Running in background" in
+`docs/product/sessions.md`).
+
 **Reads are wide, writes are the caller's own.** `list_projects` and `list_archived` cover the sessions of the
 console's own projects, whoever owns them; `get_session` reads any session of any console, and `list_sessions` lists
 every running one. Each carries `owner` (the id of the session it is bound to, or null when it is unbound — always

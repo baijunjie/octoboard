@@ -1,12 +1,15 @@
 <script setup lang="ts">
 const props = defineProps<{
-  status: "working" | "idle";
+  status: "working" | "idle" | "background";
   animating: boolean;
 }>();
 const { t } = useSiteCopy();
-const label = computed(() =>
-  t(props.status === "working" ? "demoStatusWorking" : "demoStatusIdle"),
-);
+const labelKeys = {
+  working: "demoStatusWorking",
+  idle: "demoStatusIdle",
+  background: "demoStatusBackground",
+} as const;
+const label = computed(() => t(labelKeys[props.status]));
 
 // MessageCircleMore uses the original lucide-react 1.52.0 paths, as in the application StatusIcon.
 // Copyright 2026 Lucide Icons and Contributors; ISC license in public/licenses/lucide-icons.txt.
@@ -21,12 +24,16 @@ const messagePaths = [
 <template>
   <span
     class="workflow-status"
-    :class="{ working: status === 'working', paused: !animating }"
+    :class="{
+      working: status === 'working',
+      background: status === 'background',
+      paused: !animating,
+    }"
     role="img"
     :aria-label="label"
   >
     <span class="status-glyph" aria-hidden="true">
-      <span v-if="status === 'working'" class="working-dot"
+      <span v-if="status !== 'idle'" class="working-dot"
       ><span class="working-ping"
       /></span>
       <svg
@@ -41,14 +48,7 @@ const messagePaths = [
         <path v-for="path in messagePaths" :key="path" :d="path" />
       </svg>
     </span>
-    <span class="status-label" aria-hidden="true">
-      <span :class="{ current: status === 'working' }">{{
-        t("demoStatusWorking")
-      }}</span>
-      <span :class="{ current: status === 'idle' }">{{
-        t("demoStatusIdle")
-      }}</span>
-    </span>
+    <span class="status-label" aria-hidden="true">{{ label }}</span>
   </span>
 </template>
 
@@ -82,6 +82,13 @@ const messagePaths = [
   border-radius: 50%;
   background: currentColor;
 }
+/* A session running in the background draws the working dot as a hollow ring in the idle green. */
+.background .working-dot,
+.background .working-ping {
+  background: none;
+  border: 2px solid currentColor;
+  box-sizing: border-box;
+}
 .working-dot {
   position: relative;
 }
@@ -93,18 +100,9 @@ const messagePaths = [
 .paused .working-ping {
   animation-play-state: paused;
 }
-/* Reserve both labels so status changes never move diagram endpoints. */
 .status-label {
-  display: grid;
   min-width: 0;
   overflow-wrap: anywhere;
-}
-.status-label > span {
-  grid-area: 1 / 1;
-  visibility: hidden;
-}
-.status-label > .current {
-  visibility: visible;
 }
 @keyframes status-ping {
   75%,

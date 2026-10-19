@@ -38,6 +38,11 @@ is reported as such, with the suggestion that the owner check it with `get_sessi
 
 A synthesised report never archives the session: only a session's own `done` report does that.
 
+**No report is synthesised for a Claude Code turn that ends with work still running in the background** — the session
+is then running in background (see "Running in background" in `docs/product/sessions.md`): its work is not over. The
+turn in which Claude Code tells the session that work has finished is judged like any other: reported on, unless it
+too ends with work still running.
+
 **No report is synthesised for a lead session's turn while any session bound to it has a process** — running, or being
 launched or resumed: it has stopped to wait for its sessions, not stopped working. With none of them running, its turn
 is reported on as any bound session's is.

@@ -623,10 +623,10 @@ html {
    blue in dark, where `--app-accent` is 2.56:1 on a selected sidebar row (this one 4.48 there, its
    floor). The filled ring that marks the selected session's branches in a branch selector's popover
    (`BranchOriginBadge.tsx`) takes it as well: 4.66:1 on `--overlay` and 3.91:1 on a hovered row
-   (`--default`) in light, 6.63 and 5.58 in dark. Idle's speech bubble keeps HeroUI's `--success`,
-   below 3:1 (see `StatusIcon.tsx`'s idle case). The import result's "created" glyph
-   (`ImportResult.tsx`) is an icon on a dialog's `--overlay` and so cannot do that: light takes a
-   deeper green (4.54:1 on white, `--success` being 2.19:1), dark keeps `--success` (8.08:1 on
+   (`--default`) in light, 6.63 and 5.58 in dark. Idle's speech bubble and the hollow ring of a
+   session running in the background keep HeroUI's `--success`, below 3:1 (see `StatusIcon.tsx`'s
+   idle case). The import result's "created" glyph (`ImportResult.tsx`) is an icon on a dialog's
+   `--overlay` and so cannot do that: light takes a deeper green (4.54:1 on white, `--success` being 2.19:1), dark keeps `--success` (8.08:1 on
    `--overlay`). Its failed glyph is `--app-danger` (4.83:1 light, 5.63:1 dark), and the skipped one
    `--app-muted`. */
 :root {

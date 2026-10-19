@@ -60,6 +60,15 @@ describe("buildStatusItemMenu", () => {
     expect(menuOf([orphan]).attention).toBe(false);
   });
 
+  it("lists a session running in the background with the working ones", () => {
+    const background = sessionOf("b", "c", "p", "b", "idle", { background_tasks: [{ id: "t1" }] });
+    const { sections } = menuOf([inProject("i", "idle"), inProject("w", "working"), background]);
+    expect(sections.map((s) => [s.heading, s.items.map((item) => item.session)])).toEqual([
+      ["Working (2)", ["w", "b"]],
+      ["Awaiting instructions (1)", ["i"]],
+    ]);
+  });
+
   it("gives each heading its status glyph and each session its agent's mark", () => {
     const { sections } = menuOf([inProject("h", "waiting_user"), sessionOf("w", "c", "p", "w", "working", { agent: "codex" })]);
     expect(sections.map((s) => [s.icon, s.items.map((item) => item.icon)])).toEqual([

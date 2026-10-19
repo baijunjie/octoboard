@@ -111,7 +111,9 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       and `yours`; a project session with `owner: null` is unbound, which the user \
                       opened themselves and kept outside the orchestration. A session with \
                       `yours: false` is not this caller's to drive — it is unbound, or reports \
-                      to a different session — leave it alone.",
+                      to a different session — leave it alone. An idle session with a \
+                      non-empty `background_tasks` takes messages like any idle session but still \
+                      has work running in the background.",
         schema: || object_schema(json!({}), &[]),
     },
     ToolDef {
@@ -332,7 +334,8 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       project session) or reports to a different session, console or project: \
                       leave it alone. `owner` says whose it is, `owner_kind` whether that is a \
                       console or a project session, and `role` whether the session itself is a \
-                      console session.",
+                      console session. An idle session with a non-empty `background_tasks` takes \
+                      messages like any idle session but still has work running in the background.",
         schema: || {
             object_schema(
                 json!({
@@ -647,7 +650,9 @@ const LIST_SESSIONS: ToolDef = ToolDef {
                   console or a project session; null when nobody owns it and it reports to the \
                   user). `yours` marks a session that reports to you, and `your_owner` the \
                   session you report to, which is also given at the top level. Use it to find \
-                  who to share information with, or an owner to hand a session to or bind to.",
+                  who to share information with, or an owner to hand a session to or bind to. An \
+                  idle session with a non-empty `background_tasks` takes messages like any idle \
+                  session but still has work running in the background.",
     schema: || object_schema(json!({}), &[]),
 };
 
@@ -807,7 +812,9 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
                       be read, in any project or console, but one with `yours: false` is not \
                       yours to act on, whether nobody owns it (`owner: null`) or it reports to a \
                       different session: leave it alone. `owner` says whose it is and \
-                      `owner_kind` whether that is a console or a project session.",
+                      `owner_kind` whether that is a console or a project session. An idle \
+                      session with a non-empty `background_tasks` takes messages like any idle \
+                      session but still has work running in the background.",
         schema: || {
             object_schema(
                 json!({

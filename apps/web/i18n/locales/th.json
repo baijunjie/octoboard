@@ -154,6 +154,7 @@
   "faqNineAnswer": "ยังไม่พร้อมใช้งาน การรองรับโฮสต์ระยะไกลยังอยู่ในแผน",
   "demoStatusWorking": "กำลังทำงาน",
   "demoStatusIdle": "รอคำสั่ง",
+  "demoStatusBackground": "กำลังทำงานเบื้องหลัง",
   "demoReportsTitle": "เอเจนต์ผู้ประสานงานรวบรวมผลงาน",
   "demoReportsDescription": "รวบรวมผลงานจากทุกโปรเจกต์ที่เกี่ยวข้อง แล้วตรวจสอบว่าตอบโจทย์คำขอเดียวกัน",
   "demoDeliveryTitle": "ร่วมกันส่งมอบฟีเจอร์เดียว",

@@ -584,6 +584,20 @@ pub struct SessionUsage {
     pub cache_write_input_tokens: Option<u64>,
 }
 
+/// One piece of work a session's agent left running in the background when its turn ended: a
+/// shell command, a monitor, an MCP call or an agent, as the agent itself lists it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BackgroundTask {
+    /// The agent's id for the task; the same id its completion notification names.
+    pub id: String,
+    /// The agent's name for the kind of task (`type` in its payload), absent when it gave none.
+    #[serde(default, rename = "type", skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    /// What the task is, as the agent describes it, absent when it gave none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: String,
@@ -614,6 +628,13 @@ pub struct Session {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub observed_effort: Option<String>,
     pub status: SessionStatus,
+    /// The work the agent has left running in the background while the session is `Idle`: the
+    /// session is then waiting for instructions and, at the same time, not finished. Never stored:
+    /// it is filled in on the record a client receives (`AppState::wire_session`) from what the
+    /// agent's last `Stop` listed, trimmed by completion notifications and cleared by a
+    /// `StopFailure`, and is empty for every other status.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub background_tasks: Vec<BackgroundTask>,
     /// Whether this session has a conversation on the agent's side: a turn taken, or one resumed
     /// at open. Until it has, the agent has stored no conversation to resume: `claude --resume`
     /// on such an id fails outright with "No conversation found", and a session the user opened

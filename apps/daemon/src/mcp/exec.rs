@@ -933,6 +933,9 @@ fn describe_session(state: &Arc<AppState>, session: &Session, caller: &Session) 
         "title": session.title,
         "agent": session.agent,
         "status": session.status,
+        // What an idle session has left running in the background: it takes a message like any
+        // idle session, but its work is not over. Empty for every other status.
+        "background_tasks": state.shown_background_tasks(session),
         "role": session.role,
         "console": session.console_id,
         "project": session.project_id,
@@ -1065,6 +1068,7 @@ pub(super) mod tests {
             status: SessionStatus::Idle,
             terminal_title: None,
             record_titles: Default::default(),
+            background_tasks: Vec::new(),
             usage: None,
             observed_model: None,
             observed_effort: None,
@@ -2878,6 +2882,37 @@ pub(super) mod tests {
             assert!(message.contains(expected), "{message}");
         }
         assert_eq!(state.store.list_sessions().unwrap().len(), 8);
+    }
+
+    /// What an idle session has left running is part of its description, and only while it is
+    /// idle: any other status describes none, whatever the daemon still remembers.
+    #[test]
+    fn a_description_lists_the_background_tasks_of_an_idle_session_only() {
+        let (state, _dir) = crate::test_support::app_state("mcp-exec-describe-background");
+        state.store.insert_console(&console()).unwrap();
+        let caller = console_session("hub");
+        let session = crate::test_support::project_session("s", Agent::Claude, SessionStatus::Idle);
+        let describe = |session: &Session| {
+            describe_session(&state, session, &caller).unwrap()["background_tasks"].clone()
+        };
+
+        assert_eq!(describe(&session), json!([]));
+
+        state.apply_background_tasks_change(
+            "s",
+            crate::hooks::BackgroundTasksChange::Replace(vec![crate::protocol::BackgroundTask {
+                id: "b1".to_string(),
+                kind: Some("shell".to_string()),
+                description: None,
+            }]),
+        );
+        assert_eq!(describe(&session), json!([{"id": "b1", "type": "shell"}]));
+
+        let working = Session {
+            status: SessionStatus::Working,
+            ..session
+        };
+        assert_eq!(describe(&working), json!([]));
     }
 
     #[test]
