@@ -247,11 +247,12 @@ menu at the pointer** (Control-click also works in the desktop app).
   neither action**, since it names versions in commits rather than in a live worktree: its only action is Copy path.
 - **Copy path** puts the file or folder's path on the clipboard, slash separated, as a path within the project. For a
   change it is the path the row names, which for a rename is its new path — the old one only where the new side is
-  absent (a deletion) or outside the project (see "What is listed" in `docs/product/project-pane-git-change-list.md`). The path
-  is copied **as the window shows it**, for a human to paste: a byte of a name that is not valid UTF-8 is copied as the
-  replacement character U+FFFD, the character the name is displayed with. A **toast** then confirms that the path was
-  copied; where the clipboard refuses it, an error alert says it could not be copied (see "Error alerts" in `docs/product/error-alerts.md`). The
-  file viewer's header offers the same action (see "The file viewer" below).
+  absent (a deletion) or outside the project (see "What is listed" in `docs/product/project-pane-git-change-list.md`).
+  The path is copied **as the window shows it**, for a human to paste: a byte of a name that is not valid UTF-8 is
+  copied as the replacement character U+FFFD, the character the name is displayed with. A **toast** then confirms that
+  the path was copied; where neither the clipboard nor the browser's selection copy allows it, an error alert says it
+  could not be copied (see "Error alerts" in `docs/product/error-alerts.md`). The file viewer's header offers the same
+  action (see "The file viewer" below).
 - **The Git mode's grouping folders and commit rows have no button**, and neither does a row that says something about a folder instead
   of listing an entry (loading, empty, unreadable, cut short; see "Rows and the keyboard" above).
 - **The button shows while its row is hovered, holds keyboard focus, is the selected file or change, or has its menu
@@ -272,9 +273,9 @@ menu at the pointer** (Control-click also works in the desktop app).
 - Its **accessible name names the file or folder** — "Actions for file server.ts" or "Actions for folder src" — so each
   row's button is told apart, while its tooltip is the short one every such button has (see "Tooltips on icon-only
   controls" in `docs/product/labels-and-tooltips.md`).
-- **Where the platform has no clipboard, Copy path is omitted**. Default application and File manager remain available in
-  Files and on uncommitted changes. A committed change then has no row button or action menu. A plain browser whose page is not a secure
-  context — served over `http` from anywhere but `localhost` — has no clipboard; the packaged desktop app always does.
+- **Where the platform has no clipboard, Copy path still works**, through the browser's selection copy. A plain browser
+  whose page is not a secure context — served over `http` from anywhere but `localhost` — has no clipboard; the
+  packaged desktop app always does.
 
 Default application and File manager raise no success toast; failures raise an error alert with the reason. A missing
 live entry, such as a deleted file that is still absent on disk, is refused with `file_not_found`; an entry or
@@ -334,10 +335,10 @@ Markdown file's body and the unified-or-split choice to a two-sided diff, and a 
 alone. So the header never holds more than Copy path and two view choices, and Copy path being first, the order on
 screen is also the order the keyboard moves through them.
 
-**Copy path** is the same action a file's row offers, on the same path and in the same form, with the same toast
-saying the path was copied or that it could not be (see "A row's actions" above). It is a single icon button, named
-"Copy path" in its tooltip and in what assistive technology announces. **Where the platform has no clipboard the
-button is not there at all**, as no row offers the action there either.
+**Copy path** is the same action a file's row offers, on the same path and in the same form (see "A row's actions"
+above), but as a copy button, which says the path was copied on itself rather than in a toast: its tooltip and name
+turn from "Copy path" to "Path copied" (see "Copy buttons" in `docs/product/labels-and-tooltips.md`). A copy that
+fails raises an error alert saying the path could not be copied, as on a row.
 
 **Each of the three view choices is a single icon button**: its icon shows the view on screen, pressing it switches to
 the other view, and its name — the tooltip and what assistive technology announces — says what pressing will do, so it

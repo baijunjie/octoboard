@@ -20,13 +20,12 @@ export function RowActions({ path, name, directory = false, reserve = false, con
   /** Keep the button's room while it is hidden, for a row that has content laid out before it. */
   reserve?: boolean;
   contextTargetRef?: React.RefObject<HTMLElement | null>;
-}): React.ReactElement | null {
+}): React.ReactElement {
   const t = useT();
   const copyPath = useCopyPath();
   const scope = useContext(RowPathScope);
   const { request, toastError } = useDaemon();
-  const items: ActionMenuEntry[] = [];
-  if (copyPath) items.push({ label: t("common.copyPath"), icon: Copy, onClick: () => copyPath(path) });
+  const items: ActionMenuEntry[] = [{ label: t("common.copyPath"), icon: Copy, onClick: () => copyPath(path) }];
   if (scope) {
     const run = (type: "open_project_path" | "reveal_project_path") => {
       void request({ type, ...scope, path }).catch((error: Error) => toastError(error));
@@ -41,7 +40,6 @@ export function RowActions({ path, name, directory = false, reserve = false, con
       },
     );
   }
-  if (items.length === 0) return null;
   return (
     <RowControls reserve={reserve} className="ms-auto">
       <ActionMenu

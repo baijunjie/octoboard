@@ -898,6 +898,14 @@ html.pane-resizing * {
   to { transform: translateY(-100%); }
 }
 
+/* The icon that enters a copy button, the check once the text is copied and the copy glyph on the
+   way back (`CopyButton.tsx`); applied through `motion-safe:` only, so it simply appears where the
+   system asks for reduced motion. */
+@keyframes copy-icon-in {
+  from { opacity: 0; transform: scale(0.5); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 @theme {
   /* A spinning glyph showing work in progress (`ConnectionBanner.tsx`, `GitBadge.tsx`,
      `ProjectBrowser.tsx`): the stock spin, slower. Defined as a whole animation because
@@ -906,6 +914,7 @@ html.pane-resizing * {
   --animate-status-wave: status-wave 2.4s ease-in-out infinite;
   --animate-pull-scroll: pull-scroll 1.2s linear infinite;
   --animate-push-scroll: push-scroll 1.2s linear infinite;
+  --animate-copy-icon-in: copy-icon-in 200ms ease;
 }
 
 /* The sidebar's view changes (`Sidebar.tsx`, played with the Web Animations API so the view is

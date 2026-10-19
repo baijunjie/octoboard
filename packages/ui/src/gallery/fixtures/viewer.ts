@@ -780,16 +780,6 @@ function compared(parts: LiveParts, t: Translate): ViewerSubject {
   };
 }
 
-/** Subjects for a header on a platform with no clipboard, one for each way the control group can then
- * be: a Markdown file (the view choice, and the wrap choice once it is in source), an image (no
- * control left, so the group is empty) and a compared change (the layout and wrap choices, with the
- * subtitle). */
-async function withoutClipboard(language: Language): Promise<ViewerSubject[]> {
-  const parts = await loadLiveParts();
-  const t: Translate = (key, ...args) => format(language, key, ...args);
-  return [file("docs/guide.md", text("docs/guide.md", GUIDE)), file("assets/before.png", binary("assets/before.png", IMAGES.before_png)), compared(parts, t)];
-}
-
 async function allChanges(language: Language): Promise<ViewerSubject[]> {
   const parts = await loadLiveParts();
   const t: Translate = (key, ...args) => format(language, key, ...args);
@@ -1123,14 +1113,5 @@ export const viewerScenarios: Scenario[] = [
     title: "Changes",
     description: "Successful modified, added, deleted, renamed, type-changed, untracked and compared changes. Includes images, binary notices, large-patch fallbacks and empty diffs. Previous / Next stays within normal subjects; compare stage tags, long comparison subtitles and layout controls.",
     viewer: { subjects: changes },
-  },
-  {
-    id: "viewer-no-clipboard",
-    group: GROUP,
-    category: "normal",
-    title: "Header on a platform with no clipboard",
-    description: "A Markdown file, an image and a committed change from the Changes view on a platform with no clipboard: Previous / Next remain to the left of the title, and the metadata controls start at the view choices with no copy button (switch the Markdown file to source for the wrap choice beside the view choice). The image has no metadata controls.",
-    clipboard: "unavailable",
-    viewer: { subjects: withoutClipboard },
   },
 ];

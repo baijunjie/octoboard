@@ -57,7 +57,7 @@ interface ToastSpies {
 
 interface MountRowsOptions {
   request?: Daemon["request"];
-  /** The platform the rows render on; without a `clipboard` they offer no Copy path. */
+  /** The platform the rows render on. */
   clipboard?: PlatformAdapter["clipboard"];
   /** Where the daemon's toasts go. */
   toasts?: ToastSpies;

@@ -309,6 +309,13 @@ same text. Which control's tooltip repeats its name and which one's is the short
 the "Tooltips on icon-only controls" section of `docs/product/labels-and-tooltips.md`; `ActionMenu` gives its trigger a
 name of that shape by default.
 
+A copy button (`CopyButton`) takes its accessible name from its tooltip, which changes to "Copied" once the text is on
+the clipboard. A control that keeps focus is not reliably re-read when its name changes, so the button also announces
+the copied text through a `role="status"` region beside it. Its tooltip stays open through the press (`keepOpenOnPress`
+on `TitledControl`), and the icon changes, both ways, are played with `motion-safe:` only, so under reduced motion the
+icon simply appears. It is drawn where the platform has no clipboard too, copying through a hidden text it selects
+(`copyText`), which never moves focus: a focus change would blur the button and close its tooltip.
+
 The exception is a control inside a react-aria collection row, such as a tag's remove button. react-aria already
 composes its accessible name from the button and the row through `aria-labelledby`, so there the `aria-label` is the
 bare verb with no placeholder, or the row's own text is announced twice.

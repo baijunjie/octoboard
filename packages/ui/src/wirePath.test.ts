@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { displayWirePath, wireBaseName } from "./wirePath";
+import { displayWirePath, wireBaseName, wireRelativeOrAbsolute } from "./wirePath";
 
 it.each([
   ["src/main.ts", "src/main.ts"],
@@ -13,4 +13,18 @@ it.each([
 
 it("names a path by its last component", () => {
   expect(wireBaseName("docs/100%25.md")).toBe("100%.md");
+});
+
+it.each([
+  ["/work/app/.worktrees/topic", ["/work/app"], ".worktrees/topic"],
+  ["/work/app/.worktrees/topic/", ["/work/app/"], ".worktrees/topic"],
+  ["/work/app", ["/work/app/"], "."],
+  ["/work/app-2", ["/work/app"], "/work/app-2"],
+  ["/work/other/topic", ["/work/app"], "/work/other/topic"],
+  ["/work/app/100%25", ["/work/app"], "100%"],
+  ["/real/app/topic", ["/link/app", "/real/app"], "topic"],
+  ["/anything", ["/"], "anything"],
+  ["/anything", [], "/anything"],
+])("copies %s below %j as %s", (path, roots, copied) => {
+  expect(wireRelativeOrAbsolute(path, roots)).toBe(copied);
 });

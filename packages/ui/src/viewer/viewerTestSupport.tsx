@@ -8,8 +8,7 @@ import { createStateStore, DaemonProvider, type Daemon } from "../store";
 
 const NO_TOASTS = { notice: () => {}, error: () => {} };
 
-/** The platform and daemon a `FileViewer` renders inside. Without a `clipboard` the header offers
- * no Copy path; `toasts` is where the daemon's toasts go. */
+/** The platform and daemon a `FileViewer` renders inside. `toasts` is where the daemon's toasts go. */
 export function ViewerHost({
   clipboard,
   links,

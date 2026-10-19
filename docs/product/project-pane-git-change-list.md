@@ -55,7 +55,11 @@ The uncommitted sections are read from the worktree that has the branch checked 
 
 - **From another worktree than the one holding the project's folder**, a line above the list names that worktree by
   its folder's name, not its path, just under the line saying what the committed part is (see "Committed changes"
-  below), or under the other lines when there is none.
+  below), or under the other lines when there is none. A copy button follows the name, its tooltip and name "Copy
+  worktree path", turning to "Copied" once pressed (see "Copy buttons" in `docs/product/labels-and-tooltips.md`). It
+  copies the worktree's path relative to the project's folder when the worktree lies inside that folder, and its
+  absolute path otherwise, either as the window shows paths (see "A row's actions" in `docs/product/project-pane.md`).
+  A copy that fails raises an error alert saying the worktree's path could not be copied.
 - **A worktree in which the project's folder is not a directory** — missing there, or reached only through a symbolic
   link — has a line above the list saying the project's folder is not in the worktree the branch is checked out in,
   just under the line naming the worktree, where there is one.

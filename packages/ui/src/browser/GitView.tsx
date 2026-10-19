@@ -1,6 +1,7 @@
 import { FileCheck, GitBranch, GitFork, TriangleAlert } from "lucide-react";
 import React from "react";
 
+import { CopyButton } from "../components/CopyButton";
 import { failureParam } from "../components/DaemonErrorMessage";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
@@ -12,7 +13,7 @@ import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useListMotion } from "../components/useListMotion";
 import type { Translate } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
-import { displayWirePath } from "../wirePath";
+import { displayWirePath, wireRelativeOrAbsolute } from "../wirePath";
 import { BranchSelect } from "./BranchSelect";
 import { ChangeList } from "./ChangeList";
 import type { ChangeViewState } from "./changeView";
@@ -104,7 +105,7 @@ function GitContent(props: { source: SourceState } & ChangesViewProps): React.Re
       <CenteredEmptyPanel icon={GitFork} message={t("git.notARepository")} />
     );
   }
-  return <ChangesView {...props} />;
+  return <ChangesView {...props} projectRoots={[source.source.root, source.source.resolved_root]} />;
 }
 
 const code = (text: string) => (
@@ -114,7 +115,7 @@ const code = (text: string) => (
 );
 
 /** A line above the list, said in the words of the message it is. */
-function Notice({ notice }: { notice: ChangesNotice }): React.ReactElement {
+function Notice({ notice, projectRoots }: { notice: ChangesNotice; projectRoots: readonly string[] }): React.ReactElement {
   const t = useT();
   switch (notice.id) {
     case "notCheckedOut":
@@ -122,7 +123,23 @@ function Notice({ notice }: { notice: ChangesNotice }): React.ReactElement {
     case "unborn":
       return <>{t("git.changes.unborn")}</>;
     case "worktree":
-      return <Message id="git.changes.worktree" params={{ name: code(notice.name) }} />;
+      return (
+        <>
+          <Message id="git.changes.worktree" params={{ name: code(notice.name) }} />
+          {/* Drawn 20 px, with a 24 px target from the pseudo-element. Top-aligned with a 2 px negative
+              margin each way, its margin box is exactly the 16 px line, so the line is no taller than
+              its neighbours and the button's centre is the line's, level with the chip. The glyph is
+              the chip's height rather than the button's default. */}
+          <CopyButton
+            text={wireRelativeOrAbsolute(notice.root, projectRoots)}
+            beforeCopyText={t("git.changes.copyWorktreePath")}
+            failedText={t("git.changes.copyWorktreePathFailed")}
+            size="sm"
+            variant="ghost"
+            className="relative ms-1 -my-0.5 size-5 min-w-0 align-top after:absolute after:-inset-0.5 after:content-[''] [&_svg]:size-3.5"
+          />
+        </>
+      );
     case "scopeMissing":
       return <>{t("git.changes.scopeMissing")}</>;
     case "noRemote":
@@ -152,7 +169,12 @@ function ChangesView({
   selectorsRef,
   changeView,
   selectedSessionId,
-}: ChangesViewProps): React.ReactElement {
+  projectRoots,
+}: ChangesViewProps & {
+  /** The project's directory as stored and as it resolves, either of which a worktree's root may be
+   * relative to. */
+  projectRoots: readonly string[];
+}): React.ReactElement {
   const t = useT();
   const noticesRef = useListMotion<HTMLDivElement>();
   // When what holds focus below the selector goes — the list replaced by a failure or an empty
@@ -215,7 +237,7 @@ function ChangesView({
             <div className="flex shrink-0 flex-col gap-1 px-(--pane-inset) py-2 text-xs text-app-muted empty:hidden">
               {notices.map((notice) => (
                 <p key={notice.id}>
-                  <Notice notice={notice} />
+                  <Notice notice={notice} projectRoots={projectRoots} />
                 </p>
               ))}
               {lineFailures.map((failure) => (

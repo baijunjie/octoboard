@@ -9,11 +9,12 @@ import { shortCommit } from "./shortCommit";
 import type { BranchList } from "./useBranchList";
 import type { CommittedState, UncommittedState } from "./useGitReview";
 
-/** A line above the list, as the words it is made of; paths and branches are in display form. */
+/** A line above the list, as the words it is made of; paths and branches are in display form, except
+ * the worktree's `root`, a wire path, which the line's copy button turns into display form itself. */
 export type ChangesNotice =
   | { id: "notCheckedOut"; branch: string }
   | { id: "unborn" }
-  | { id: "worktree"; name: string }
+  | { id: "worktree"; name: string; root: string }
   | { id: "scopeMissing" }
   | { id: "noRemote"; branch: string }
   | { id: "noBase" }
@@ -81,7 +82,7 @@ export function changesStatus({
   } else if (uncommitted.state === "listed") {
     const { worktree, own, list } = uncommitted;
     if (worktree.head === null) notices.push({ id: "unborn" });
-    if (!own) worktreeNotices.push({ id: "worktree", name: wireBaseName(worktree.root) });
+    if (!own) worktreeNotices.push({ id: "worktree", name: wireBaseName(worktree.root), root: worktree.root });
     if (!worktree.scope_present) worktreeNotices.push({ id: "scopeMissing" });
     if (list.state === "error") failures.push({ key: "uncommitted", title: "git.error.list", line: "git.changes.listError", message: list.message });
   }

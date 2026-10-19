@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import type { ClipboardCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
@@ -107,6 +107,22 @@ it.each(["read", "input", "clipboard"])("disables Paste without %s", async (miss
   render();
   await open();
   expect(item("Paste").getAttribute("aria-disabled")).toBe("true");
+});
+
+it("copies the selection through the document without a clipboard, keeping Copy enabled", async () => {
+  const copied: string[] = [];
+  const execCommand = vi.fn(() => copied.push(document.getSelection()!.toString()) > 0);
+  Object.assign(document, { execCommand });
+  onTestFinished(() => { Reflect.deleteProperty(document, "execCommand"); });
+  clipboard = undefined;
+  controller.selectedText = "selection";
+  render();
+  await open();
+  expect(item("Copy").getAttribute("aria-disabled")).not.toBe("true");
+  await choose("Copy");
+  expect(execCommand).toHaveBeenCalledWith("copy");
+  expect(copied).toEqual(["selection"]);
+  expect(toastError).not.toHaveBeenCalled();
 });
 
 it.each(["Copy", "Paste"])("reports %s failures with localized text", async (action) => {

@@ -45,10 +45,8 @@ export interface SidebarHandlers {
   onOpenProjectTerminal: (project: Project) => void;
   /** Opens a validated repository web URL; absent without browser-link support. */
   onOpenRepository?: (url: string) => void;
-  /** Copies the project name; absent without a clipboard capability. */
-  onCopyProjectName?: (project: Project) => void;
-  /** Absent without a clipboard capability. */
-  onCopySessionId?: (session: Session) => void;
+  onCopyProjectName: (project: Project) => void;
+  onCopySessionId: (session: Session) => void;
   /** Checks the project against its remote and fast-forwards it now, whatever the automatic pull
    * setting says. */
   onPullProjectBranch: (project: Project) => void;

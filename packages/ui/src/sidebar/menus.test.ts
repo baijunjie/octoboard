@@ -155,7 +155,7 @@ describe("a project's menu", () => {
   });
 
   it("puts Pin first, then groups viewing in the app, outside tools, managing the project, and removing it", () => {
-    const handlers = { onCopyProjectName: () => {} } as unknown as SidebarHandlers;
+    const handlers = {} as unknown as SidebarHandlers;
     const menu = projectMenu(t, handlers, { id: "p", pinned: false } as Project, [], [], { gitRepository: true });
     expect(menu.map((entry) => (entry === "separator" ? entry : entry.label))).toEqual([
       "Pin", "Focus mode", "Browse files", "View archive", "separator",

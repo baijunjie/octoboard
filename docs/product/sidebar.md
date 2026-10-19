@@ -320,9 +320,10 @@ and **Remove project**. An item a view does not offer is left out without moving
   local branch" in `docs/product/project-git-actions.md`. Restore file changes asks for confirmation before discarding tracked changes
   (see "Restoring file changes" in `docs/product/project-git-actions.md`).
 - **Rename** — a dialog with the name alone; an empty name is rejected.
-- **Copy project name** — copies the project's name exactly to the clipboard. Available in all the
-  project-menu placements above, including right-click menus, when the platform offers a clipboard; otherwise the
-  item is absent. Success raises a notice toast; a refused copy raises an error alert.
+- **Copy project name** — copies the project's name exactly to the clipboard. Available in all the project-menu
+  placements above, including right-click menus. Where the platform has no clipboard, or it refuses, the name is copied
+  through the browser's selection copy instead (see "Copy buttons" in `docs/product/labels-and-tooltips.md`). Success
+  raises a notice toast; a copy neither way allows raises an error alert.
 - **Project settings** — the project dialog, see "Editing a project" in `docs/product/projects.md`.
 - **Remove project** — see `docs/product/removing-projects.md`; it asks for confirmation
   first.
@@ -388,8 +389,9 @@ action menu offers:
 - **Rename** — see "Renaming a session" in `docs/product/sessions.md`.
 - **Copy session ID** — immediately after Rename, copies the session's ID exactly to the clipboard. Available for
   project and console sessions wherever their action menus are offered, including right-click menus, focus mode and
-  nested sessions. An archived session's menu offers it after Reopen. When the platform offers no clipboard, the item
-  is absent. Success raises a notice toast; a refused copy raises an error alert.
+  nested sessions. An archived session's menu offers it after Reopen. Where the platform has no clipboard, or it
+  refuses, the ID is copied through the browser's selection copy instead. Success raises a notice toast; a copy neither
+  way allows raises an error alert.
 - **Colour** — a console session's row only: a submenu of swatches where the user chooses the console session's colour
   (see "The binding badge" below). A project session's row has no such entry, and neither has an archived console
   session's.

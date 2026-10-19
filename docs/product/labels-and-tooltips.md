@@ -67,8 +67,11 @@ buttons, the pin buttons and the session Delete or Archive shortcuts below. Thes
   `docs/product/settings.md`);
 - the report panel's previous-page and next-page buttons;
 - the project pane's Refresh button, a folder's arrow button in its file tree and in the Git mode's change list, and a
-  commit row's arrow button there ("Expand" / "Collapse"), the file viewer's Copy path button and its Previous file
-  and Next file buttons (see `docs/product/project-pane.md`);
+  commit row's arrow button there ("Expand" / "Collapse"), and the file viewer's Previous file and Next file buttons
+  (see `docs/product/project-pane.md`);
+- the copy buttons — the file viewer's Copy path and the Git mode's Copy worktree path, on the change list's line
+  naming the worktree — whose tooltip, and the name announced with it, turns to the copied wording after a press (see
+  "Copy buttons" below);
 - the file viewer's three view controls and the Git mode's three view toggles — the one that shows and hides the
   change filter field, Group by folder and Group by commit — whose tooltip is the name they announce and alternates with their state (see
   "Two-state icon toggles" below);
@@ -141,6 +144,31 @@ or grouped by folder" in the same doc) and Group by commit (see "Grouped by comm
 Settings' Appearance choice is not one of these: being a choice among three, it stays a three-way segmented control,
 where the chosen option is marked by a fill of its own rather than by its icon (see "Appearance" in
 `docs/product/settings.md`).
+
+## Copy buttons
+
+A copy button is an icon button that puts a text on the clipboard and says it did so on the button itself rather than
+in a toast. These are the file viewer's Copy path (see "The file viewer" in `docs/product/project-pane.md`) and the
+button after the worktree's name on the Git mode's change list (see "Uncommitted changes" in
+`docs/product/project-pane-git-change-list.md`). For both:
+
+- Before a press, its tooltip and name say what it copies — "Copy path", "Copy worktree path" — and its icon is the
+  copy glyph.
+- Once the text is on the clipboard, **the tooltip turns to the copied wording and stays open through the press**:
+  "Path copied" for Copy path, "Copied" for the worktree's. The name assistive technology is given changes with it, and
+  the copied wording is also announced as a status message, since a control that keeps focus is not reliably read
+  again. The icon changes to a check that fades in.
+- **It goes back once the tooltip has closed** — the pointer or keyboard focus leaving it — its copy glyph fading in
+  again. After a press that showed no tooltip, such as a tap, it goes back after about two seconds.
+- Where the system asks for reduced motion, the icons change without fading.
+- Where the platform has no clipboard, or it refuses, the button copies through the browser's selection copy instead: a
+  hidden text is selected and copied by the document, without moving focus off the button and with the page's own
+  selection put back. A copy that neither way allows changes nothing on the button and raises an error alert saying the
+  text could not be copied (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
+
+Copy actions in action menus (a row's Copy path, Copy project name, Copy session ID, the terminal's Copy) are not copy
+buttons, and fall back the same way; a row's Copy path, for one, confirms in a toast (see "A row's actions" in
+`docs/product/project-pane.md`).
 
 ## Tooltips on indicators
 

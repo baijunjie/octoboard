@@ -49,7 +49,7 @@ it("says a branch no worktree has checked out has no uncommitted changes, and an
 
 it("names the worktree another branch's changes are read from by its folder's name, and a scope it lacks", () => {
   expect(status(listed("loaded", { own: false, worktree: tree("c1", false) }), { state: "none" }).notices).toEqual([
-    { id: "worktree", name: "repo" },
+    { id: "worktree", name: "repo", root: "/home/me/code/repo" },
     { id: "scopeMissing" },
   ]);
 });
@@ -78,10 +78,10 @@ it("names another branch's worktree under the line saying what the branch is com
   const other = listed("loaded", { own: false });
   expect(status(other, compare(loadedComparison(), { state: "loading" })).notices).toEqual([
     { id: "base", base: "main", baseCommit: "c100000", tip: "c2" },
-    { id: "worktree", name: "repo" },
+    { id: "worktree", name: "repo", root: "/home/me/code/repo" },
     { id: "listingCommits" },
   ]);
-  expect(status(other, { state: "noBase" }).notices).toEqual([{ id: "noBase" }, { id: "worktree", name: "repo" }]);
+  expect(status(other, { state: "noBase" }).notices).toEqual([{ id: "noBase" }, { id: "worktree", name: "repo", root: "/home/me/code/repo" }]);
 });
 
 it("collects the parts that failed, in the order of the list", () => {

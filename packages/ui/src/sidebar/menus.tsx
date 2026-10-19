@@ -130,9 +130,7 @@ export function projectMenu(
       : []),
     "separator",
     { label: t("sidebar.project.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-project", project }) },
-    ...(handlers.onCopyProjectName
-      ? [{ label: t("sidebar.project.copyName"), icon: Copy, onClick: () => handlers.onCopyProjectName!(project) }]
-      : []),
+    { label: t("sidebar.project.copyName"), icon: Copy, onClick: () => handlers.onCopyProjectName(project) },
     { label: t("sidebar.project.edit"), icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-project", project }) },
     "separator",
     { label: t("sidebar.project.remove"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-project", project }), destructive: true },
@@ -238,9 +236,7 @@ export function sessionMenu(
     ...(archived ? [{ label: t("sidebar.session.reopen"), icon: RotateCcw, onClick: () => handlers.onReopenSession(session) }] : []),
     ...(archived || focused ? [] : [pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned))]),
     ...(!archived ? [{ label: t("sidebar.session.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }] : []),
-    ...(handlers.onCopySessionId
-      ? [{ label: t("sidebar.session.copyId"), icon: Copy, onClick: () => handlers.onCopySessionId!(session) }]
-      : []),
+    { label: t("sidebar.session.copyId"), icon: Copy, onClick: () => handlers.onCopySessionId(session) },
     ...(session.role === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
     ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <FocusShortcutKbd />, onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
     ...(switchAccount ? [switchAccount] : []),

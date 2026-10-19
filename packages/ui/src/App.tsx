@@ -1,4 +1,5 @@
 import { reportExternalLinkFailure } from "./components/ExternalLink";
+import { copyText } from "./components/copyText";
 import { ActionableError } from "./errorRecovery";
 import { FadeOverflow } from "./components/FadeOverflow";
 import { GitBranch } from "lucide-react";
@@ -403,23 +404,19 @@ export function App(): React.ReactElement {
     request({ type: "open_project_directory", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
   };
 
-  const copyProjectName = clipboard
-    ? (project: Project) => {
-      clipboard.writeText(project.name).then(
-        () => toastNotice(t("sidebar.project.nameCopied")),
-        () => toastError(new ActionableError(t("sidebar.project.copyNameFailed"), "clipboard")),
-      );
-    }
-    : undefined;
+  const copyProjectName = (project: Project) => {
+    copyText(project.name, { clipboard }).then(
+      () => toastNotice(t("sidebar.project.nameCopied")),
+      (cause: unknown) => toastError(new ActionableError(t("sidebar.project.copyNameFailed"), "clipboard", { cause })),
+    );
+  };
 
-  const copySessionId = clipboard
-    ? (session: Session) => {
-      clipboard.writeText(session.id).then(
-        () => toastNotice(t("sidebar.session.idCopied")),
-        () => toastError(new ActionableError(t("sidebar.session.copyIdFailed"), "clipboard")),
-      );
-    }
-    : undefined;
+  const copySessionId = (session: Session) => {
+    copyText(session.id, { clipboard }).then(
+      () => toastNotice(t("sidebar.session.idCopied")),
+      (cause: unknown) => toastError(new ActionableError(t("sidebar.session.copyIdFailed"), "clipboard", { cause })),
+    );
+  };
 
   const openProjectTerminal = (project: Project) => {
     request({ type: "open_project_terminal", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
@@ -663,8 +660,8 @@ export function App(): React.ReactElement {
   const stableOpenProjectDirectory = useStableHandler(openProjectDirectory);
   const stableOpenRepository = useStableHandler(openRepository);
   const stableOpenProjectTerminal = useStableHandler(openProjectTerminal);
-  const stableCopySessionId = useStableHandler((session: Session) => copySessionId?.(session));
-  const stableCopyProjectName = useStableHandler((project: Project) => copyProjectName?.(project));
+  const stableCopySessionId = useStableHandler(copySessionId);
+  const stableCopyProjectName = useStableHandler(copyProjectName);
   const stablePullProjectBranch = useStableHandler(pullProjectBranch);
   const stablePushProjectBranch = useStableHandler(pushProjectBranch);
   const stableLoadProjectBranches = useStableHandler(loadProjectBranches);
@@ -778,8 +775,8 @@ export function App(): React.ReactElement {
                 onOpenProjectDirectory={stableOpenProjectDirectory}
                 onOpenProjectTerminal={stableOpenProjectTerminal}
                 onOpenRepository={links ? stableOpenRepository : undefined}
-                onCopyProjectName={clipboard ? stableCopyProjectName : undefined}
-                onCopySessionId={clipboard ? stableCopySessionId : undefined}
+                onCopyProjectName={stableCopyProjectName}
+                onCopySessionId={stableCopySessionId}
                 onPullProjectBranch={stablePullProjectBranch}
                 onPushProjectBranch={stablePushProjectBranch}
                 onLoadProjectBranches={stableLoadProjectBranches}

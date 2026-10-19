@@ -107,6 +107,21 @@ export const connectionScenarios: Scenario[] = [
     ],
   },
   {
+    id: "terminal-edit-menu-no-clipboard",
+    group: TERMINAL,
+    category: "normal",
+    title: "Terminal edit menu on a platform with no clipboard",
+    description: "With output selected, Copy is still enabled and Paste is disabled: only reading the clipboard needs the platform's clipboard.",
+    clipboard: "unavailable",
+    state: connected("open"),
+    steps: [
+      (ui) => ui.press(ui.session("Fix the summary layout")),
+      (ui) => ui.terminalContextMenu(),
+      (ui) => ui.press(ui.t("terminal.selectAll")),
+      (ui) => ui.terminalContextMenu(),
+    ],
+  },
+  {
     id: "terminal-fullscreen-links",
     group: TERMINAL,
     category: "normal",

@@ -1,7 +1,8 @@
 import { Button } from "@heroui/react";
-import { ChevronLeft, ChevronRight, Copy } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { CopyButton } from "../components/CopyButton";
 import { FileTypeIcon } from "../components/FileTypeIcon";
 import { InlineChip } from "../components/InlineChip";
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -9,7 +10,6 @@ import { PlainMarkedPath } from "../components/MarkedPath";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { TitledControl } from "../components/TitledControl";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
-import { useCopyPath } from "../components/useCopyPath";
 import { useErrorAcknowledgement } from "../components/useErrorAcknowledgement";
 import { useLatest } from "../components/useLatest";
 import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
@@ -198,7 +198,6 @@ export function FileViewer({
   const statusLabel = status ? t(STATUS_LABELS[status]) : undefined;
   const tags = [statusLabel, subject.stage].filter((tag): tag is string => tag !== undefined);
   const titleName = tags.length > 0 ? `${name}${t("viewer.titleSeparator")}${tags.join(t("viewer.tagSeparator"))}` : name;
-  const copyPath = useCopyPath();
   return (
     <Dialog
       size="viewer"
@@ -264,7 +263,7 @@ export function FileViewer({
             independent, separately labelled facts, and Copy path and the other controls are labelled
             on their own. */}
         <RowIconGroup className="float-end h-8">
-          {copyPath && <CopyPathButton onPress={() => copyPath(subject.path)} />}
+          <CopyPathButton path={subject.path} />
           <div ref={setMarkdownViewSlot} className="contents" />
           <div ref={setLayoutSlot} className="contents" />
           {wrapClaimed && <WrapToggleHost />}
@@ -328,15 +327,19 @@ function NavigationButton({
 
 /** Copy path leads the view controls at the detail row's end, an icon button that
  * takes no focus from a press, as the view controls do. */
-function CopyPathButton({ onPress }: { onPress: () => void }): React.ReactElement {
+function CopyPathButton({ path }: { path: string }): React.ReactElement {
   const t = useT();
-  const label = t("common.copyPath");
   return (
-    <TitledControl title={label}>
-      <Button isIconOnly size="sm" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={label} onPress={onPress} preventFocusOnPress>
-        <Copy aria-hidden="true" className="size-4" />
-      </Button>
-    </TitledControl>
+    <CopyButton
+      text={displayWirePath(path)}
+      beforeCopyText={t("common.copyPath")}
+      afterCopyText={t("common.pathCopied")}
+      failedText={t("common.copyFailed")}
+      size="sm"
+      variant="ghost"
+      className={ROW_ICON_BUTTON_CLASS}
+      preventFocusOnPress
+    />
   );
 }
 

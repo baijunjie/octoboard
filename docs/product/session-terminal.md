@@ -29,18 +29,18 @@ On macOS, Control-click opens it too. With keyboard focus in the terminal, the c
 opens the same menu; neither key is sent to the agent. Opening it preserves the terminal's selection, and closing it
 returns keyboard focus to the terminal. There is no separate menu button.
 
-- **Copy** copies the terminal text selected when the menu opened. It is disabled without a selection or clipboard
-  writing support.
+- **Copy** copies the terminal text selected when the menu opened. It is disabled without a selection. Where the
+  platform has no clipboard, or it refuses, the text is copied through the browser's selection copy instead.
 - **Paste** reads text from the clipboard and sends it as terminal input, respecting the running program's bracketed
   paste mode. It is disabled without clipboard reading support or while the selected session cannot accept input.
   Pasting into an archived session reopens it and holds the pasted input until it connects, as typing does (see
   "Interrupted, archived and dormant sessions" below).
 - **Select all** selects the terminal's contents, including its available scrollback, for copying.
 
-The clipboard is read only when Paste is chosen, so merely opening the menu does not request clipboard access.
-If clipboard access completes after the user switches sessions or the original session can no longer accept input,
-the paste is discarded. It is never redirected to another session. A failed clipboard read or write shows an error
-alert.
+The clipboard is read only when Paste is chosen, so merely opening the menu does not request clipboard access. If
+clipboard access completes after the user switches sessions or the original session can no longer accept input, the
+paste is discarded. It is never redirected to another session. A failed clipboard read, or a copy that neither way
+allows, shows an error alert.
 
 ## Output, scrollback and size
 

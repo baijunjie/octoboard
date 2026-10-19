@@ -140,10 +140,18 @@ it("reports a clipboard failure", async () => {
   expect(daemon.toastNotice).not.toHaveBeenCalled();
 });
 
-it("omits copying the project name without clipboard support", async () => {
-  const { project } = mountApp();
+it("copies the project name through the selection without clipboard support", async () => {
+  const copied: string[] = [];
+  const execCommand = vi.fn(() => copied.push(document.getSelection()!.toString()) > 0);
+  Object.assign(document, { execCommand });
+  onTestFinished(() => { Reflect.deleteProperty(document, "execCommand"); });
+  const { daemon, project } = mountApp();
   await openProjectMenu(project.name);
-  expect(menuHas("Copy project name")).toBe(false);
+  expect(menuHas("Copy project name")).toBe(true);
+  await press("Copy project name");
+  expect(execCommand).toHaveBeenCalledWith("copy");
+  expect(copied).toEqual([project.name]);
+  expect(daemon.toastNotice).toHaveBeenCalledWith("Project name copied");
 });
 
 it("copies the session ID unchanged and reports success", async () => {
@@ -164,10 +172,18 @@ it("reports a session ID clipboard failure", async () => {
   expect(daemon.toastNotice).not.toHaveBeenCalled();
 });
 
-it("omits copying the session ID without clipboard support", async () => {
-  mountApp(false, undefined, true);
+it("copies the session ID through the selection without clipboard support", async () => {
+  const copied: string[] = [];
+  const execCommand = vi.fn(() => copied.push(document.getSelection()!.toString()) > 0);
+  Object.assign(document, { execCommand });
+  onTestFinished(() => { Reflect.deleteProperty(document, "execCommand"); });
+  const { daemon } = mountApp(false, undefined, true);
   await press(`Actions for session ${isolate("Fix bug")}`);
-  expect(menuHas("Copy session ID")).toBe(false);
+  expect(menuHas("Copy session ID")).toBe(true);
+  await press("Copy session ID");
+  expect(execCommand).toHaveBeenCalledWith("copy");
+  expect(copied).toEqual(["s-archive"]);
+  expect(daemon.toastNotice).toHaveBeenCalledWith("Session ID copied");
 });
 
 async function openRestoreConfirmation() {

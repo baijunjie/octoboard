@@ -404,16 +404,6 @@ export const dialogScenarios: Scenario[] = [
     steps: [openUnusedMenu],
   },
   {
-    id: "sidebar-session-menu-no-clipboard",
-    group: "Sidebar sessions",
-    category: "normal",
-    title: "Session actions without a clipboard",
-    description: "Copy session ID is absent on a platform without clipboard access; Rename and the remaining session actions stay available.",
-    state: unusedState,
-    clipboard: "unavailable",
-    steps: [openUnusedMenu],
-  },
-  {
     id: "dialog-switch-account",
     group: "Sidebar sessions",
     category: "normal",

@@ -17,15 +17,14 @@ one never checks what else is running in the console, and the sidebar lists ever
 not archived, each as its own row, in the console sessions section above the project list (see "The
 console sessions section and the project list" in `docs/product/sidebar.md`).
 
-A console session's row follows a session row exactly — the same status glyph, its agent's icon, its
-title, a pin button when pinned, and selecting it resumes it when it is interrupted, as selecting an
-interrupted session's row does. Its action menu offers **Lock**/**Unlock**, **Pin**/**Unpin**, **Rename**, **Copy session ID** when a clipboard
-is available (see "Session rows" in `docs/product/sidebar.md`), **Colour** (see "The binding badge" in
-`docs/product/sidebar.md`), **Focus mode** (see
-`docs/product/focus-mode.md`), **Switch account**, **Hand off** and **Archive** — **Delete** in its place while the console session
-has never been used (see "Deleting an unused session" in `docs/product/deleting-sessions.md`); there is no Resume item, for the same reason. A
-console session's title is renameable, like a project session's; its default is under **Name** in "Opening a session"
-below.
+A console session's row follows a session row exactly — the same status glyph, its agent's icon, its title, a pin button
+when pinned, and selecting it resumes it when it is interrupted, as selecting an interrupted session's row does. Its
+action menu offers **Lock**/**Unlock**, **Pin**/**Unpin**, **Rename**, **Copy session ID** (see "Session rows" in
+`docs/product/sidebar.md`), **Colour** (see "The binding badge" in `docs/product/sidebar.md`), **Focus mode** (see
+`docs/product/focus-mode.md`), **Switch account**, **Hand off** and **Archive** — **Delete** in its place while the
+console session has never been used (see "Deleting an unused session" in `docs/product/deleting-sessions.md`); there is
+no Resume item, for the same reason. A console session's title is renameable, like a project session's; its default is
+under **Name** in "Opening a session" below.
 
 The user archives a console session from its own row's menu, as any session is archived; the console session can also
 archive itself once every session under it is archived (see "A session archiving itself" in

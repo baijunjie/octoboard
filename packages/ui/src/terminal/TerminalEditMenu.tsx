@@ -2,6 +2,7 @@ import { ClipboardPaste, Copy, TextSelect } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { ActionMenu } from "../components/ActionMenu";
+import { copyText } from "../components/copyText";
 import { useLatest } from "../components/useLatest";
 import { ActionableError } from "../errorRecovery";
 import { useT } from "../i18n/react";
@@ -51,8 +52,8 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
       }}
       items={[
         {
-          label: t("terminal.copy"), icon: Copy, disabled: !clipboard || !selection,
-          onClick: () => { void clipboard?.writeText(selection).catch((cause: unknown) => toastError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }))); },
+          label: t("terminal.copy"), icon: Copy, disabled: !selection,
+          onClick: () => { void copyText(selection, { clipboard }).catch((cause: unknown) => toastError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }))); },
         },
         { label: t("terminal.paste"), icon: ClipboardPaste, disabled: !clipboard?.readText || inputSession !== sessionId, onClick: paste },
         { label: t("terminal.selectAll"), icon: TextSelect, onClick: () => controllerRef.current?.selectAll() },

@@ -199,16 +199,6 @@ export const projectFilesScenarios: Scenario[] = [
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.contextMenu("main.ts"), (ui) => ui.press(ui.t("common.openIn"))],
   },
   {
-    id: "files-row-no-clipboard",
-    group: GROUP,
-    category: "normal",
-    title: "File actions without a clipboard",
-    description: "Copy path is absent on a platform without clipboard access. The Open in submenu retains File manager and Default application; folders offer the same two destinations.",
-    state,
-    clipboard: "unavailable",
-    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.contextMenu("main.ts"), (ui) => ui.press(ui.t("common.openIn"))],
-  },
-  {
     id: "files-viewer",
     group: "File viewer",
     category: "normal",

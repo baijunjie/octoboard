@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { isolate } from "../i18n/isolate";
 import type { PlatformAdapter } from "../platform";
@@ -94,11 +94,24 @@ it("says so when the clipboard refuses", async () => {
   expect(toasts.error).toHaveBeenCalledWith("Could not copy the path");
 });
 
-it("draws no button where the platform has no clipboard", () => {
+it("offers Copy path where the platform has no clipboard, copying through the selection", async () => {
+  const copied: string[] = [];
+  const execCommand = vi.fn(() => copied.push(document.getSelection()!.toString()) > 0);
+  Object.assign(document, { execCommand });
+  onTestFinished(() => { Reflect.deleteProperty(document, "execCommand"); });
   const { container } = render("flat", undefined);
-  expect(container.querySelector("button[aria-haspopup]")).toBeNull();
+  act(() => actionsOf(rowOf(container, "alpha.ts")).click());
+  const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
+  expect(item.textContent).toBe("Copy path");
+  act(() => item.click());
+  await flush();
+  expect(execCommand).toHaveBeenCalledWith("copy");
+  expect(copied).toEqual(["src/alpha.ts"]);
+  expect(toasts.notice).toHaveBeenCalledWith("Path copied");
 });
 
+
+const openIn = () => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent === "Open in")!;
 
 it.each(["open_project_path", "reveal_project_path"] as const)("sends %s with the live scope and wire path even without a clipboard", async (type) => {
   const request = vi.fn(async () => ({ type: "ack" as const }));
@@ -109,8 +122,8 @@ it.each(["open_project_path", "reveal_project_path"] as const)("sends %s with th
     { request, toasts },
   );
   act(() => actionsOf(container).click());
-  expect([...document.querySelectorAll<HTMLElement>("[role=menuitem]")].map((entry) => entry.textContent)).toEqual(["Open in"]);
-  act(() => document.querySelector<HTMLElement>("[role=menuitem]")!.click());
+  expect([...document.querySelectorAll<HTMLElement>("[role=menuitem]")].map((entry) => entry.textContent)).toEqual(["Copy path", "Open in"]);
+  act(() => openIn().click());
   const entries = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")];
   const entry = entries.find((item) => item.textContent === (type === "open_project_path" ? "Default application" : "File manager"))!;
   expect(entry).toBeDefined();
@@ -125,7 +138,7 @@ it("reports a system-open failure through the existing error toast", async () =>
     { request: async () => { throw new Error("File not found"); }, toasts },
   );
   act(() => actionsOf(container).click());
-  act(() => document.querySelector<HTMLElement>("[role=menuitem]")!.click());
+  act(() => openIn().click());
   act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent === "Default application")!.click());
   await flush();
   expect(toasts.error).toHaveBeenCalledWith("File not found");

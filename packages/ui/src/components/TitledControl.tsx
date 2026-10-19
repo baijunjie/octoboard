@@ -27,6 +27,8 @@ export function TitledControl({
   placement,
   focusOnly,
   isDisabled,
+  keepOpenOnPress,
+  onOpenChange,
 }: {
   title: React.ReactNode;
   children: React.ReactElement<{ "aria-label"?: string; "aria-describedby"?: string }>;
@@ -39,11 +41,16 @@ export function TitledControl({
   /** Holds the tooltip back, closing it if open, while the control is showing what it says some other way,
    * such as in a popover the control opened. */
   isDisabled?: boolean;
+  /** A press does not close the tooltip, for a control whose tooltip answers the press (a copy
+   * button's changes to "Copied"). It still closes as the pointer or focus leaves. */
+  keepOpenOnPress?: boolean;
+  /** Told when the tooltip opens or closes. */
+  onOpenChange?: (isOpen: boolean) => void;
 }): React.ReactElement {
   if (!title) return children;
   const repeatsName = children.props["aria-label"] === title && children.props["aria-describedby"] === undefined;
   return (
-    <Tooltip trigger={focusOnly ? "focus" : undefined} isDisabled={isDisabled}>
+    <Tooltip trigger={focusOnly ? "focus" : undefined} isDisabled={isDisabled} shouldCloseOnPress={keepOpenOnPress ? false : undefined} onOpenChange={onOpenChange}>
       {repeatsName ? React.cloneElement(children, { "aria-describedby": "" }) : children}
       <Tooltip.Content placement={placement} className="control-fills pointer-events-none">{title}</Tooltip.Content>
     </Tooltip>

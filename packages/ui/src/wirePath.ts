@@ -28,3 +28,22 @@ export function displayWirePath(wire: string): string {
 export function wireBaseName(wire: string): string {
   return displayWirePath(wire.slice(wire.lastIndexOf("/") + 1));
 }
+
+/** What to copy for the absolute wire path `path`, in display form: the path relative to the first
+ * of `roots` that holds it (`.` for the root itself), or the absolute path when none does. A root
+ * holds only paths below a whole component of it, so a sibling that merely shares its prefix
+ * (`/work/app-2` beside `/work/app`) is not inside it; trailing slashes on either side are ignored. */
+export function wireRelativeOrAbsolute(path: string, roots: readonly string[]): string {
+  const trimmed = trimTrailingSlashes(path);
+  for (const root of roots) {
+    const base = trimTrailingSlashes(root);
+    if (trimmed === base) return ".";
+    const prefix = base.endsWith("/") ? base : `${base}/`;
+    if (trimmed.startsWith(prefix)) return displayWirePath(trimmed.slice(prefix.length));
+  }
+  return displayWirePath(path);
+}
+
+function trimTrailingSlashes(wire: string): string {
+  return wire.length > 1 ? wire.replace(/\/+$/, "") || "/" : wire;
+}

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../errorAlerts";
 import { isolate } from "../i18n/isolate";
@@ -473,7 +473,7 @@ it("says a lost connection in neutral text, not as a failure", () => {
   expect(dialog()?.textContent).not.toContain("Could not open this file");
   // The stand-in is hidden from screen readers, so the status region says the whole state, not
   // only the heading the stand-in shows.
-  expect(dialog()?.querySelector("[role=status]:not([aria-hidden])")?.textContent).toBe(
+  expect(dialog()?.querySelector("div[role=status]:not([aria-hidden])")?.textContent).toBe(
     "The connection to the daemon was lost. This file is read again when the connection is back.",
   );
   expect(dialog()?.textContent).toContain("Daemon connection lost");
@@ -494,7 +494,7 @@ it("says a change whose patch has no lines has no diff, rather than loading for 
   expect(dialog()?.textContent).toContain("No diff to show");
   expect(dialog()?.querySelector("[data-renderer]")).toBeNull();
   expect(layoutToggles()).toHaveLength(0);
-  expect(dialog()?.querySelector("[role=status]:not([aria-hidden])")?.textContent).toBe("");
+  expect(dialog()?.querySelector("div[role=status]:not([aria-hidden])")?.textContent).toBe("");
 });
 
 // The same subject's content can be replaced under the viewer — read again, or the connection lost
@@ -641,12 +641,11 @@ it("draws the size as a chip after the path", () => {
   expect(items[1].querySelector(".chip")!.textContent).toBe("3 bytes");
 });
 
-// The header offers Copy path only where the platform has a clipboard, as a row does, and copies
-// the path the path item shows. Its button is the first control of the group at the row's end.
-it("copies the project-relative path from the view-control group's first button, and says so", async () => {
+// The header offers Copy path, as a row does, and copies the path the path item shows.
+// Its button is the first control of the group at the row's end.
+it("copies the project-relative path from the view-control group's first button, and says so on the button", async () => {
   const writeText = vi.fn(async () => {});
-  const toasts = { notice: vi.fn(), error: vi.fn() };
-  show(modified("src/dir/c.ts"), undefined, { clipboard: { writeText }, toasts });
+  show(modified("src/dir/c.ts"), undefined, { clipboard: { writeText } });
   const copy = button("Copy path");
   const [group, pathItem] = [...dialog()!.querySelector("[data-viewer-description]")!.children];
   expect(group.className).toContain("float-end");
@@ -655,7 +654,7 @@ it("copies the project-relative path from the view-control group's first button,
   expect(controlNamed("Copy path").length).toBe(1);
   await act(async () => copy.click());
   expect(writeText).toHaveBeenCalledWith("src/dir/c.ts");
-  expect(toasts.notice).toHaveBeenCalledWith("Path copied");
+  expect(copy.getAttribute("aria-label")).toBe("Path copied");
 });
 
 it("says when the path could not be copied", async () => {
@@ -666,10 +665,16 @@ it("says when the path could not be copied", async () => {
   expect(toasts.notice).not.toHaveBeenCalled();
 });
 
-it("shows no copy button where the platform has no clipboard", () => {
+it("keeps the copy button where the platform has no clipboard, copying through the selection", async () => {
+  const copied: string[] = [];
+  const execCommand = vi.fn(() => copied.push(document.getSelection()!.toString()) > 0);
+  Object.assign(document, { execCommand });
+  onTestFinished(() => { Reflect.deleteProperty(document, "execCommand"); });
   show(modified());
-  expect(document.querySelector('button[aria-label="Copy path"]')).toBeNull();
-  expect(dialog()!.querySelector("[data-viewer-description]")!.textContent).toContain("src/c.ts");
+  await act(async () => button("Copy path").click());
+  expect(execCommand).toHaveBeenCalledWith("copy");
+  expect(copied).toEqual(["src/c.ts"]);
+  expect(button("Path copied")).not.toBeNull();
 });
 
 it("has no status chip for a file, and none for a loading change whose caller gives no status", () => {
@@ -725,20 +730,20 @@ it("reads the stored layout, and falls back to unified for anything else", async
 it("says loading and a lost connection from one status region that stays mounted", () => {
   vi.useFakeTimers();
   show({ key: "l", path: "src/l.ts", content: { state: "loading" } });
-  const region = dialog()!.querySelector("[role=status]:not([aria-hidden])")!;
+  const region = dialog()!.querySelector("div[role=status]:not([aria-hidden])")!;
   expect(region.textContent).toBe("");
-  expect(dialog()!.querySelectorAll("[role=status]:not([aria-hidden])")).toHaveLength(1);
+  expect(dialog()!.querySelectorAll("div[role=status]:not([aria-hidden])")).toHaveLength(1);
   act(() => void vi.advanceTimersByTime(1400));
   expect(region.textContent).toBe("");
   act(() => void vi.advanceTimersByTime(200));
   expect(region.textContent).toBe("Loading…");
 
   show({ key: "d", path: "src/l.ts", content: { state: "disconnected", what: "file" } });
-  expect(dialog()!.querySelector("[role=status]:not([aria-hidden])")).toBe(region);
+  expect(dialog()!.querySelector("div[role=status]:not([aria-hidden])")).toBe(region);
   expect(region.textContent).toContain("The connection to the daemon was lost.");
 
   show({ key: "f", path: "src/l.ts", content: { state: "file", body: { kind: "text", text: "a\n", size: 2 } } });
-  expect(dialog()!.querySelector("[role=status]:not([aria-hidden])")).toBe(region);
+  expect(dialog()!.querySelector("div[role=status]:not([aria-hidden])")).toBe(region);
   expect(region.textContent).toBe("");
 });
 
@@ -747,7 +752,7 @@ it("says nothing for a loading that ends before the first text is written", () =
   show({ key: "q", path: "src/q.ts", content: { state: "loading" } });
   show({ key: "q", path: "src/q.ts", content: { state: "file", body: { kind: "text", text: "a\n", size: 2 } } });
   act(() => void vi.advanceTimersByTime(1600));
-  expect(dialog()!.querySelector("[role=status]:not([aria-hidden])")!.textContent).toBe("");
+  expect(dialog()!.querySelector("div[role=status]:not([aria-hidden])")!.textContent).toBe("");
 });
 
 // One wrap choice serves files and diffs: nothing is wrapped until the user asks, and what they chose
@@ -776,7 +781,7 @@ it("wraps nothing by default, then wraps files and diffs alike once chosen, and 
 // brings the layout choice in after it.
 it.each([
   ["with a clipboard", { clipboard: { writeText: async () => {} } }, ["Copy path"]],
-  ["without a clipboard", undefined, []],
+  ["without a clipboard", undefined, ["Copy path"]],
 ])("keeps Copy path, then the layout choice, then the wrap choice, when the layout choice mounts second, %s", (_, host, leading) => {
   const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
   const change = (key: string, patch: string, old: ViewerChangeSide): ViewerSubject => ({

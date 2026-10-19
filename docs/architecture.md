@@ -94,9 +94,10 @@ same UI to a browser. To keep one build working in both places, the UI reaches n
 exit heartbeat, system notifications, the Dock badge, the native window's own appearance and visibility, the window
 chrome the top bar must keep clear, the app menu's items and the menu bar icon's menu) only through a platform adapter
 chosen at startup, with a Tauri implementation and a browser one; in a browser a capability that is not there means
-the feature is absent, not an error. It finds the daemon without Tauri as well: by an address handed to it, or at the
-origin it was loaded from. Its state is one store fed by the daemon client's events, readable outside React too. The
-phone's browser is not a design target — the native mobile apps have their own UI.
+the feature is absent, not an error (copying instead falls back to the browser's selection copy). It finds the daemon
+without Tauri as well: by an address handed to it, or at the origin it was loaded from. Its state is one store fed by
+the daemon client's events, readable outside React too. The phone's browser is not a design target — the native mobile
+apps have their own UI.
 
 **A browser is a client Octoboard does not control, and it grants two of the capabilities the UI is built on only to a
 secure context**: the Notifications API, which the raised hand's notification goes through, and the async Clipboard
