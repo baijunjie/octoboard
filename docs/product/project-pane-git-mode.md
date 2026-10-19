@@ -12,7 +12,8 @@ header, switching modes and the file viewer in general are in `docs/product/proj
 
 Failures to load branches, list changes or compare commits open an error alert requiring acknowledgement; the
 pane retains its failure explanation and recovery controls afterwards (see "Error alerts" in
-`docs/product/error-alerts.md`).
+`docs/product/error-alerts.md`). A worktree found gone while its changes are listed is not such a failure and opens no
+alert (see "Uncommitted changes" in `docs/product/project-pane-git-change-list.md`).
 
 ## Reading only
 
@@ -90,8 +91,8 @@ from the repository (see "Committed changes" in `docs/product/project-pane-git-c
 - **The default branch** is the one checked out in the worktree holding the project's folder, and the selector shows
   it as chosen. While no branch has been chosen, the view follows that default as it is now: a checkout of another
   branch there, once the worktrees are read again, shows that branch's changes. **A branch chosen in the selector
-  stands** — for as long as the window is open — whatever is checked out where. Selecting one of the project's sessions
-  can set it (see "Following the selected session" below).
+  stands** — for as long as the window is open, whatever is checked out where — until the repository no longer has it
+  (see below). Selecting one of the project's sessions can set it (see "Following the selected session" below).
 - **No branch** — the worktree holding the project's folder has a detached `HEAD`, and none has been chosen — leaves
   the selector saying to choose a branch, and the view says no branch is chosen and to choose one to see its
   uncommitted changes and what it has committed since it forked. A repository with no branches at all says it has none
@@ -100,9 +101,15 @@ from the repository (see "Committed changes" in `docs/product/project-pane-git-c
   change is cleared and the viewer closes.
 - A chosen branch's name too long for its space fades out (see "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`), in the selector and in its list.
-- **A chosen branch that a complete branch list no longer has** stays chosen, its name marked as no longer existing,
-  until another one is chosen (see "A branch that goes away" in `docs/product/project-pane-git-change-list.md`). A branch checked out with no commit yet, which no
-  branch list has, is not taken for gone.
+- **A chosen branch that a complete branch list no longer has** — merged and deleted, say — is chosen no more,
+  whether it was chosen in the selector or set by following a session: the view goes back to the default branch,
+  following it as when no branch has been chosen, its selected change is cleared and the viewer closes, before
+  anything of the gone branch is shown. A branch checked out with no commit yet, which no branch list has, is not
+  taken for gone. A branch whose worktree alone is removed is still there and stays chosen, checked out in no worktree
+  (see "Uncommitted changes" in `docs/product/project-pane-git-change-list.md`).
+- **The default branch, as read from the worktrees, that a complete branch list does not have** — a list newer than
+  the worktrees it was read from — is named in the selector as no longer existing (see "A branch that goes away" in
+  `docs/product/project-pane-git-change-list.md`).
 - A broken branch — its reference names an object the repository does not have, or one that is not a commit — is
   offered with the id its reference names, and comparing it fails (see "What the list says instead" in
   `docs/product/project-pane-git-change-list.md`).
@@ -111,7 +118,8 @@ The branches are read while the Git mode is on screen, once the repository is fo
 after the project pane is put in the right pane, and then the way the uncommitted changes are listed again (see
 "Keeping the list up to date" in `docs/product/project-pane-git-change-list.md`) — every 10 seconds while it is on screen and the window is visible, when it comes
 back more than 5 seconds after the last reading, on Refresh, and after the connection to the daemon comes back; and, as
-the worktrees are, when one of the project's sessions is selected. A branch created, moved or deleted in the meantime
+the worktrees are, when one of the project's sessions is selected and when the worktree the changes are read from is
+found gone. A branch created, moved or deleted in the meantime
 shows in the selector then.
 
 When the branches cannot be read, the view says so with the reason: in place of the change list, with **Try again**,
@@ -129,8 +137,8 @@ branch's: its uncommitted changes from the worktree that has it checked out, and
 - **A session with no branch of its own** sets the selector back to the default (see "The branch selector" above),
   which then follows what is checked out where the project's folder is. A branch list that could not be read counts as
   naming no branch for the session.
-- A branch set this way is as one chosen by the user: it stands, and moving it clears the selected change and closes
-  the viewer.
+- A branch set this way is as one chosen by the user: it stands until the repository no longer has it (see "The
+  branch selector" above), and moving it clears the selected change and closes the viewer.
 
 When the selector is set:
 
@@ -154,7 +162,8 @@ When the selector is set:
 
 ## What is remembered
 
-**Per project, for as long as the window is open**: the chosen branch, the selected change, the sections folded away
+**Per project, for as long as the window is open**: the chosen branch (dropped once the repository no longer has it:
+see "The branch selector" above), the selected change, the sections folded away
 (see "Folding a section" in `docs/product/project-pane-git-change-list.md`), the commit rows folded away (see "Grouped
 by commit" in that doc) and, grouped by folder, the folders folded away. Reloading the window, or restarting the application, starts every project on its default
 branch, with no change selected and every section, commit and folder unfolded. Selecting one of the project's sessions sets the branch anew, once for that selection; the pane put back in

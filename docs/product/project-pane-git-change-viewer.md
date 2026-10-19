@@ -172,7 +172,8 @@ While the lines are being read the separator says so, and no other expansion sta
 control of the diff reads as unavailable meanwhile. That, and each notice below, is announced to assistive technology.
 Then:
 
-- **A failed read** leaves the diff as it is: the separator says the lines could not be loaded and to try again, a
+- **A failed read** — but for one that finds the change's worktree gone, which closes the viewer (see "When the open
+  change changes" below) — leaves the diff as it is: the separator says the lines could not be loaded and to try again, a
   failure notice above the diff gives the reason — that the connection to the daemon was lost, among them — and the
   next expansion reads again. A read of the change itself that follows — on a listing with news of it, or once the
   connection to the daemon is back — clears the failure without another expansion.
@@ -239,16 +240,21 @@ For an uncommitted change, the listings that keep the change list up to date (se
   gone from a list that is not cut short — reads it again, and it shows as it is now;
 - a change that kept changing while it was read, after two more tries, says so, and is read again at each new listing
   that still has it, until a read succeeds;
-- a change whose worktree is found gone, by its list or by the worktrees read again, is read again and then says that
-  worktree is no longer available;
+- a change whose worktree is found gone, by its list or by the worktrees read again, is read again from that
+  worktree;
 - a change from a worktree the branch is no longer found checked out in counts as gone from the list, and is read
-  again.
+  again;
+- **a read that finds the change's worktree gone closes the viewer**, saying nothing and opening no error alert, as a
+  committed change the list no longer has closes (see below) — whether it read the change, a path in conflict, or the
+  lines a diff is expanded from, and even where the branch is checked out in another worktree by then: another
+  worktree's change is never shown in its place.
 
 A committed change, its two commits being fixed, is not read again when the branches are read. When the comparison is
 made again at other commits while a change from the Committed section listed together is open (see "Keeping the list up to date"
 in `docs/product/project-pane-git-change-list.md`), the change is read again from the new commits if the new comparison lists
-it; if it does not, there is no such change between those commits: the viewer closes, no change is selected, and keyboard focus goes
-to the first row of the list, or to the branch selector when the list has no rows. A change from under a commit's row
+it; if it does not, there is no such change between those commits: the viewer closes, no change is selected, and keyboard focus,
+unless it is somewhere outside the list and the viewer, goes to the first row of the list, or to the branch selector
+when the list has no rows. A change from under a commit's row
 stays that commit's whatever the branch does; when the commits are listed again for a new comparison and no longer
 have it, the viewer closes the same way. The viewer never shows a change from other commits than the list's.
 
@@ -267,7 +273,9 @@ in place of the diff, in the current language. The cases beyond those of a file 
 |---|---|
 | Its patch is larger than 4 MiB | it is too large to show as a diff, its patch being more than can be opened |
 | A file it has to show whole (an untracked file, the inside version of a rename across the boundary, a binary side) is larger than 4 MiB | its size, and the most that can be opened |
-| Its worktree is gone | that worktree is no longer available |
 | It kept changing while it was being read, after two more tries | it kept changing, and is read again at the next refresh |
 | A committed change's commit is one the repository no longer has (a deleted branch's, once Git has pruned it) | the repository has no such commit |
 | A committed change's content is missing from the repository | Git could not read it, with Git's own message |
+
+A change whose worktree is gone is none of these: the viewer closes instead (see "When the open change changes"
+above).

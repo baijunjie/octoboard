@@ -61,8 +61,11 @@ The uncommitted sections are read from the worktree that has the branch checked 
   it has committed is listed.
 - **A branch with no commit yet** — checked out in a worktree whose `HEAD` has none — has a line saying there are no
   commits yet; its uncommitted changes are listed, and nothing is compared (see "Committed changes" below).
-- **A worktree found gone** has the worktrees read again; the uncommitted sections then follow the branch to wherever
-  it is checked out, if anywhere. Another worktree's changes are never shown in its place.
+- **A worktree found gone** while its changes are listed is no failure of the list and opens no error alert: the
+  uncommitted changes count as still being read while the worktrees and the branches are read again, and then follow
+  the branch to wherever it is checked out, if anywhere — a branch still there but checked out in no worktree as above,
+  a branch gone with its worktree as "A branch that goes away" below says. Another worktree's changes are never shown
+  in its place. Any other failure to list them is reported as "What the list says instead" below says.
 
 ## Committed changes
 
@@ -366,7 +369,8 @@ leaves (see "Moving between changes" in `docs/product/project-pane-git-change-vi
 - **Only the newest commits are listed**, with how many, in a line under the list, grouped by commit, only when the
   branch has more than 100 commits since the fork, or in all when listed with its whole history (see "Grouped by
   commit" above).
-- **A failure** of a part — the uncommitted changes could not be listed, the branch could not be compared (a branch
+- **A failure** of a part — the uncommitted changes could not be listed (a worktree found gone is not one: see
+  "Uncommitted changes" above), the branch could not be compared (a branch
   that no longer exists or is broken, or two branches with no commit in common, say), or the commits could not be
   listed — names the reason **in a line above the list**, announced to assistive technology, while the rest of the
   list is shown. When nothing is listed, the first failure, in the list's order, takes the list's place instead, with
@@ -376,7 +380,8 @@ leaves (see "Moving between changes" in `docs/product/project-pane-git-change-vi
 - **The repository could not be read** takes the whole view's place, with Try again.
 
 A list on screen stays while it is listed again, and so does a failure, with its Try again and keyboard focus: a
-background refresh never replaces either with the loading line. Only Try again, Refresh and choosing another branch do.
+background refresh never replaces either with the loading line. Only Try again, Refresh, choosing another branch and,
+for the uncommitted changes, their worktree found gone do.
 When the list goes away while one of its rows holds keyboard focus — nothing is left to list, or the list failed —
 focus goes to the branch selector, or, when the selector is unavailable because the repository has no branches, leaves
 the pane as it does from any pane with nothing to hold it.
@@ -409,12 +414,18 @@ lost, the list on screen stays until it is back.
 
 ## A branch that goes away
 
-The comparison on screen stays on the commits it was made at. Once a complete branch list no longer has the branch or
-its base, a line under the others says that branch no longer exists and that the comparison still uses the commits it
-was made at, announced to assistive technology as it appears; a chosen branch that is gone is named as no longer
-existing in the selector too, and nothing compares it again on its own. A branch list cut short says nothing of a
-branch it does not have. Refresh then fails, saying there is no such branch. A remote branch that was the base is not
-reported this way: a branch list that no longer has it gives the main working copy's branch another base, or its whole
-history, which is then compared (see "Committed changes" above). A change opened from the comparison
-still on screen reads from its commits for as long as the repository has them (see "Errors" in
+**A chosen branch** that a complete branch list no longer has is chosen no more: the view goes back to the default
+branch, with no change selected and the viewer closed (see "The branch selector" in
+`docs/product/project-pane-git-mode.md`), so nothing of the gone branch stays on screen, and Refresh does not fail for
+it.
+
+Any other branch the comparison is of — the default branch, as read from the worktrees, or the base of whichever
+branch is shown — is not dropped: the comparison on screen stays on the commits it was made at. Once a complete branch
+list no longer has the branch or its base, a line under the others says that branch no longer exists and that the
+comparison still uses the commits it was made at, announced to assistive technology as it appears; a default branch
+that is gone is named as no longer existing in the selector too, and nothing compares it again on its own. A branch
+list cut short says nothing of a branch it does not have. Refresh then fails, saying there is no such branch. A remote
+branch that was the base is not reported this way: a branch list that no longer has it gives the main working copy's
+branch another base, or its whole history, which is then compared (see "Committed changes" above). A change opened
+from the comparison still on screen reads from its commits for as long as the repository has them (see "Errors" in
 `docs/product/project-pane-git-change-viewer.md`).
