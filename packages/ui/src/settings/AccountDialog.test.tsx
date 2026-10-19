@@ -106,3 +106,14 @@ it("lifts the directory's refusal when a directory is picked", async () => {
   expect(input("Config directory").value).toBe("/home/dev/.claude-picked");
   expect(document.body.textContent).not.toContain("already uses this config directory");
 });
+
+it("shows the config directory hint as a visible description", () => {
+  render(work, () => Promise.resolve());
+  expect(document.body.textContent).toContain("does not require the directory to exist yet.");
+  expect(document.body.textContent).not.toContain("sessions only keep their login");
+});
+
+it("adds the Grok home note to the config directory hint for Grok", () => {
+  render({ ...work, agent: "grok" as const }, () => Promise.resolve());
+  expect(document.body.textContent).toContain("but sessions only keep their login and conversation");
+});

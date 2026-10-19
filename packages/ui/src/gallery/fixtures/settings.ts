@@ -246,6 +246,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: git",
+    description: "Automatically pull repositories shows its first two sentences under the label, and a small muted \"?\" at the end of the label holds the sentence about the remote being checked. It is the only row on this page with a help tip.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -519,11 +520,24 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: trustedFolders",
-    description: "Remove the first trusted folder: its row fades out while sliding to the right while the remaining path slides into place.",
+    description: "Each folder row is only its path and Remove, with no second line. Remove the first trusted folder and confirm: its row fades out while sliding to the right while the remaining path slides into place.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.trustedFolders")),
+    ],
+  },
+  {
+    id: "settings-trustedFolders-remove-confirm",
+    group: GROUP,
+    category: "normal",
+    title: "Remove a trusted folder confirmation",
+    description: "Remove on the first folder asks first: the title is \"Remove trusted folder\" followed by the home-abbreviated path (~/code) as a chip, the message says trust confirmations under it are asked about again unless the project's own permission or another trusted folder covers them and then what is kept, and the confirming button is destructive.",
+    state: browserState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.trustedFolders")),
+      (ui) => ui.press(ui.t("settings.trusted.removeLabel", { path: "/Users/dev/code" })),
     ],
   },
   {

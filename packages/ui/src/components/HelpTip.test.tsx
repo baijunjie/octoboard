@@ -166,3 +166,21 @@ it("keeps the tooltip shut after Escape closes a keyboard-opened popover althoug
   act(() => button.focus());
   expect(openTooltip()).toBeNull();
 });
+
+it("shows rich content in the tooltip, as the button's description, and again in the popover", () => {
+  const container = mountForTooltip(
+    <HelpTip label="About detecting the agent">
+      Looks for <code>CLAUDE.md</code> in each repository.
+    </HelpTip>,
+  );
+  const button = container.querySelector("button")!;
+  act(() => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    button.focus();
+  });
+  const tooltip = openTooltip();
+  expect(tooltip?.querySelector("code")?.textContent).toBe("CLAUDE.md");
+  expect(button.getAttribute("aria-describedby")).toBe(tooltip?.id);
+  press(button);
+  expect(dialog()?.querySelector("code")?.textContent).toBe("CLAUDE.md");
+});

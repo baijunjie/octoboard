@@ -638,3 +638,9 @@ it("opens a console session on the console session value, not the project sessio
   await act(async () => buttons().find((button) => button.textContent === "Advanced")!.click());
   expect(pickerNamed("Model").textContent).toContain("Opus");
 });
+
+it("keeps the Name hint visible", () => {
+  const { container, root } = renderDialog([], {}, {}, undefined, null);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  expect(document.body.textContent).toContain("Leave this empty to use the default session name.");
+});

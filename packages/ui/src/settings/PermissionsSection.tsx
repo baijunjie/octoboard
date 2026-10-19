@@ -67,10 +67,9 @@ export function PermissionsSection(): React.ReactElement {
   return (
     <>
       <p className="pb-2 text-sm text-app-muted">{t("settings.permissions.lead")}</p>
-      {/* `SettingRow` rules between its rows but not above the first, and the lead
-          paragraph above would otherwise run straight into a description in the same muted text —
-          here several lines of it. The wrapper draws that rule, as `TrustedFoldersSection` and
-          `AgentAccountsSection` do for the same reason. */}
+      {/* `SettingRow` rules between its rows but not above the first, and the lead paragraph above would
+          otherwise run straight into a description in the same muted text, here several lines of it.
+          The wrapper draws that rule. */}
       <div className="groove-t">
         {PERMISSIONS.map(({ kind, label, description, refused: refusedKey }) => {
           const granted = status[kind];

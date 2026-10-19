@@ -1,11 +1,14 @@
 # Settings
 
-Settings is a large dialog over the whole window. A list of sections runs down its left side and the selected
-section's settings fill the right, one row per setting: its name and a line saying what it does on the left, its
-control on the right; under a right-to-left language the sides swap (see "Right-to-left layout" in
-`docs/product/window-layout.md`). The sections, in order, are **General**, **Git**, **Agent accounts**, **Trusted
-folders**, **Permissions**, **Notifications** and **Configuration**; the dialog opens on General unless it was asked to
-open on another section.
+Settings is a large dialog over the whole window. A list of sections runs down its left side and the selected section's
+settings fill the right under the section's heading, one row per setting: on the left its name and a line of text under
+it saying what it does — a trusted folder's row has its path alone — and on the right its control. Under a right-to-left
+language the sides swap (see "Right-to-left layout" in `docs/product/window-layout.md`). A section that explains itself
+as a whole does so in a paragraph under its heading, and no section heading has a "?" help tip; help tips are on one
+row in "Git" and on each agent's default account in "Agent accounts" below (see "Explanations in help tips" in
+`docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **Git**, **Agent accounts**,
+**Trusted folders**, **Permissions**, **Notifications** and **Configuration**; the dialog opens on General unless it
+was asked to open on another section.
 
 A console session can read the default clone directory, the automatic pulling of repositories, the automatic deletion of
 archived sessions whose conversation is gone, the agent accounts (without their directories) and the trusted folders,
@@ -24,18 +27,18 @@ While the connection banner's strip is on screen the dialog keeps that 16 px cle
 the window's bottom edge, and is that much shorter (see "What an open dialog, menu or popover covers" in
 `docs/product/window-layout.md`).
 
-Below 640 px each setting row puts its control under its name and description instead of beside them.
+Below 640 px each setting row puts its control under its name and its line of text instead of beside them.
 
 ## Moving between sections
 
 The list of sections is a tab list — vertical, or the row along the top in a narrow window — with the selected
 section marked. Opening Settings puts keyboard focus on the selected section's tab. Only that tab is reached with Tab:
-the arrow keys move to the previous or next section and show it at once, wrapping around at either end, and Tab from
-the list moves on into the section's settings. In the row along the top only Left and Right move, mirrored under a
-right-to-left language; in the vertical list Up and Down do too. When a control holding keyboard focus disappears
-from a section — a trusted folder's or an account's Remove button, which goes with its folder or account, the
-Notifications Enable button once the browser has answered, or a Permissions row's button, which goes once the
-permission is granted or its request has been answered — focus goes back to the selected section's tab rather than
+the arrow keys move to the previous or next section and show it at once, wrapping around at either end, and Tab from the
+list moves on into the section's settings. In the row along the top only Left and Right move, mirrored under a
+right-to-left language; in the vertical list Up and Down do too. When a control holding keyboard focus disappears from a
+section — a trusted folder's or an account's Remove button, which goes with its folder or account once the removal is
+confirmed, the Notifications Enable button once the browser has answered, or a Permissions row's button, which goes once
+the permission is granted or its request has been answered — focus goes back to the selected section's tab rather than
 leaving the dialog.
 
 ## Opening and closing Settings
@@ -147,29 +150,32 @@ in `docs/product/application-lifecycle.md`.
 ## Git
 
 One row, **Automatically pull repositories**, a switch, off to begin with: whether a project's branch is pulled
-(fast-forwarded) on its own when it is behind its upstream, rather than only reported as behind. What it does, what it
+(fast-forwarded) on its own when it is behind its upstream, rather than only reported as behind. The row's line of
+text says that it pulls a branch that is behind its upstream and can be fast-forwarded, never pushes, and leaves a
+branch with commits of its own alone; a "?" at the end of its name says that the remote is checked every few minutes
+whichever way the switch is set, so the branch always shows how far ahead or behind it is. What it does, what it
 never does and where the value is kept are in "Automatically pulling repositories" in
 `docs/product/project-git-status.md`.
 
 ## Agent accounts
 
-Every account, grouped by agent. The section says what an account is — a named config directory of an agent, where it
-keeps its login and conversation history — and that an agent has to be on the user's `PATH` for its accounts to be
-usable.
+Every account, grouped by agent. The section opens with a paragraph saying what an account is — a named config
+directory of an agent, where it keeps its login and conversation history — and that an agent has to be on the user's
+`PATH` for its accounts to be usable.
 
-Beneath that, each agent has a tab of its own, in the order the agents are listed elsewhere, each tab showing the
-agent's icon and name; only the selected agent's accounts are shown, in its tab's panel. The agent tabs are an
-underlined strip, set apart from the list of Settings' sections, and scroll sideways when they do not fit. Once the
-section is scrolled far enough for the strip to reach the top of the section's area, at any window width, the strip
-stays pinned there, opaque, and the accounts scroll beneath it; the top fade then begins below the strip (see "The
-edge that hides content fades" in `docs/product/scrolling-surfaces.md`). Every agent keeps its tab whether or not it
-is installed. The section always opens on the first agent's tab, Claude Code, however
-it was opened. An agent that is not available has a muted line at the top of its panel saying it is not installed, and
-its accounts are marked not usable; one whose availability is not yet determined has no such line.
+Below that paragraph and the **Add account** button, each agent has a tab of its own, in the order the agents are listed
+elsewhere, each tab showing the agent's icon and name; only the selected agent's accounts are shown, in its tab's panel.
+The agent tabs are an underlined strip, set apart from the list of Settings' sections, and scroll sideways when they do
+not fit. Once the section is scrolled far enough for the strip to reach the top of the section's area, at any window
+width, the strip stays pinned there, opaque, and the accounts scroll beneath it; the top fade then begins below the
+strip (see "The edge that hides content fades" in `docs/product/scrolling-surfaces.md`). Every agent keeps its tab
+whether or not it is installed. The section always opens on the first agent's tab, Claude Code, however it was opened.
+An agent that is not available has a muted line at the top of its panel saying it is not installed, and its accounts are
+marked not usable; one whose availability is not yet determined has no such line.
 
 Each agent's panel starts with the agent's **default account**, with the directory it currently resolves to. A "?"
 ends its name line, after the plan, and says in its tooltip, or in a popover once pressed, that the default account is
-the setup a session runs under when nothing is pinned. Its name is Octoboard's own; its name and directory cannot be
+the setup a session runs under when no account is pinned. Its name is Octoboard's own; its name and directory cannot be
 edited, and it cannot be removed. The accounts the user owns follow, each with its name, its directory, an **Edit**
 button and a **Remove** button. Both kinds of directory are shown as in "How paths are shown" above.
 
@@ -241,8 +247,9 @@ an account is and how consoles, projects and sessions use one are in "Agent conf
 ## Trusted folders
 
 The folders under which Octoboard presses every agent's trust confirmation without asking, for every project — the
-folder form of the trust permission all agents share — with a way to stop trusting each one. What the list shows and
-what removing a folder does are in "Trusted folders" in `docs/product/folder-trust.md`.
+folder form of the trust permission all agents share — with a way to stop trusting each one. What the section's
+opening paragraph says, what the list shows and what removing a folder does are in "Trusted folders" in
+`docs/product/folder-trust.md`.
 
 ## Permissions
 
@@ -251,9 +258,10 @@ agents use to take screenshots of what they built, and **Accessibility**, which 
 interface. macOS attributes such a request to the application responsible for the process that made it, which is
 Octoboard rather than the agent, so the system's own prompt names Octoboard, appears in the middle of a task and says
 nothing about why — and Octoboard cannot intercept a prompt one of its agents raised. This section is therefore the
-place to grant them deliberately beforehand, and it opens with a paragraph saying as much. A grant the user gave
-another application does not count for Octoboard; macOS ties a grant to one application. These two are the only macOS
-permissions Octoboard ever asks for.
+place to grant them deliberately beforehand, and a paragraph above the rows says as much — shown only together with the
+rows, so not outside the macOS application, not when the read of the grants failed and not before the first read is
+in. A grant the user gave another application does not count for Octoboard; macOS ties a grant
+to one application. These two are the only macOS permissions Octoboard ever asks for.
 
 One row per permission, naming it, what agents use it for and its current state. What the row offers follows that
 state:

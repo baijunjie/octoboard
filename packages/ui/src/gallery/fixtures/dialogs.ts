@@ -479,7 +479,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "New console advanced settings",
-    description: "Without named accounts every agent in the accounts table states its default account. Advanced opens on the console sessions' agent among tabs for every agent, each with a Console sessions and a Project sessions group of model and reasoning effort settings, and at its foot the empty Console session instructions field with its placeholder and note.",
+    description: "Without named accounts every agent in the accounts table states its default account. Advanced opens on the console sessions' agent among tabs for every agent, each with a Console sessions and a Project sessions group of model and reasoning effort settings, and at its foot the empty Console session instructions field with its placeholder and note. No line about each agent having its own models sits above the tabs.",
     steps: [
       (ui) => ui.press(ui.t("rail.newConsole")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
@@ -948,7 +948,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Parent directory source",
-    description: "Detect from files explains the recognized instruction files and directories as code; the agent picker is a single field. There are no Name and Description fields: both apply to a single project only.",
+    description: "Default agent is a single field with a \"?\" at the end of its label and the visible line that an agent chosen here applies to every repository; the way Detect from files decides is in the tip. There are no Name and Description fields: both apply to a single project only.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
@@ -958,11 +958,26 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
+    id: "dialog-add-project-parent-detect-help",
+    group: "Projects",
+    category: "normal",
+    title: "Parent directory source, Detect help popover open",
+    description: "The \"?\" at the end of Default agent has been pressed, so its popover stays open: Detect from files is a chip within the sentence, and CLAUDE.md, AGENTS.md, .claude and .codex are set as code in chips; the sentence ends with what is inherited from the console.",
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.local"))),
+      (ui) => ui.press((name) => name.includes(ui.t("dialog.project.source.parent"))),
+      (ui) => ui.press(ui.t("dialog.project.agentDetectHelp")),
+    ],
+  },
+  {
+    ...dialogFixture,
     id: "dialog-add-project-parent-account",
     group: "Projects",
     category: "normal",
     title: "Parent directory with a chosen agent and account",
-    description: "The instruction-file hint remains below the joined agent and account fields when Detect from files is replaced by a chosen agent.",
+    description: "The line that an agent chosen here applies to every repository remains below the joined agent and account fields when Detect from files is replaced by a chosen agent, with the \"?\" still at the end of the label.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),

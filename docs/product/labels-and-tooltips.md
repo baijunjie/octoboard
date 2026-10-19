@@ -75,8 +75,9 @@ buttons, the pin buttons and the session Delete or Archive shortcuts below. Thes
 - the two controls of the console dialog's Avatar field (see "Avatar" in
   `docs/product/consoles.md`) — the round control itself, named for choosing an image while it is empty
   and for replacing it once one is picked, and the delete button over its corner, named for removing the image;
-- the "?" help tip, a small muted icon button that takes an explanation out of a row's visible text: its tooltip is the
-  explanation, and the name announced for it says what it explains ("About the default account"), so the explanation
+- the "?" help tip, a small muted icon button that takes an explanation out of the visible text (see "Explanations in
+  help tips" below): its tooltip is the explanation — plain text, or text with literals such as file names set apart
+  as chips — and the name announced for it says what it explains ("About automatic pulling"), so the explanation
   is the control's description while the tooltip is open. Pressing it (a click, a tap, Enter or Space) opens the same
   explanation in a popover instead, which holds the tooltip back while it is open, stays until an outside press,
   Escape or another press of the "?" closes it, and gives focus back to the "?" — the way a touch screen, which has no
@@ -93,18 +94,31 @@ card lists, each with its own status glyph and that glyph's tooltip (see "Toolti
 
 ## Explanations in help tips
 
-An explanation that only needs to be read once, and that is not needed on screen while operating what it explains,
-goes into a "?" help tip rather than a line of text of its own (for how the help tip behaves see "Tooltips on
-icon-only controls" above). What stays in the visible text instead:
+Explanatory text stays visible by default. Only two kinds move into a "?" help tip (for how the help tip behaves see
+"Tooltips on icon-only controls" above):
 
-- status and warnings — an agent that is not installed, an account that is not usable, an error;
-- the consequences and timing the user has to weigh before acting — when a change takes effect, an extra cost, what
-  is lost;
-- what the user needs to read while operating the control — a format, a limit, the meaning of the current value.
+1. A principle-level explanation: how something works underneath, technical, and not something the user needs to care
+   about while operating it.
+2. An explanation only one item in a set carries: in a group of like items, the line that only one of them has. It sets
+   that item apart from its siblings, and once understood it need not be read again.
 
-The help tip sits at the very end of the line it explains, after the label and anything else on that line, such as
-an account's plan. It is used on the default account's row in Settings (see "Agent accounts" in
-`docs/product/settings.md`).
+Every other helping description stays visible, even one that only needs reading once. That includes the note under a
+field or a setting row, the note at the foot of a form, a section's lead paragraph, status and warnings, and the
+consequences and timing of an action.
+
+An explanation can be split: the part of either kind above goes into the help tip, and the rest stays visible. The help
+tip sits at the end of the line it explains, beside the label rather than inside it, so the name announced for that
+label or field does not include it. A section heading carries no help tip.
+
+Help tips are used in three places:
+
+- Settings' **Automatically pull repositories** row, at the end of the row's name: that the remote is checked every few
+  minutes whichever way the switch is set (see "Git" in `docs/product/settings.md`);
+- the project dialog's **Default agent** field while associating a parent directory, beside the field's label: what
+  "Detect from files" looks for in each repository and what happens to one it cannot decide on (see "The project's
+  default agent" in `docs/product/projects.md`);
+- each agent's **default account** in Settings' Agent accounts section, at the end of its name line: that it is the
+  setup a session runs under when no account is pinned (see "Agent accounts" in `docs/product/settings.md`).
 
 ## Two-state icon toggles
 

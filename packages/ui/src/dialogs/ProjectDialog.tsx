@@ -14,6 +14,7 @@ import {
 } from "../agents";
 import { agentIconPickerOptions, AgentIcon } from "../components/AgentIcon";
 import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
+import { HelpTip } from "../components/HelpTip";
 import { InlineChip } from "../components/InlineChip";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
@@ -298,20 +299,23 @@ export function ProjectDialog({
           options={defaultAgentOptions}
           value={defaultAgent}
           onChange={setDefaultAgent}
-          description={
+          help={
             addsParent ? (
-              <Message
-                id="dialog.project.agentDetectHint"
-                params={{
-                  detect: <InlineChip dir="auto" wrap size="inherit">{t("dialog.project.agentDetect")}</InlineChip>,
-                  claudeFile: <InlineChip monospace wrap size="inherit">CLAUDE.md</InlineChip>,
-                  agentsFile: <InlineChip monospace wrap size="inherit">AGENTS.md</InlineChip>,
-                  claudeDir: <InlineChip monospace wrap size="inherit">.claude</InlineChip>,
-                  codexDir: <InlineChip monospace wrap size="inherit">.codex</InlineChip>,
-                }}
-              />
+              <HelpTip label={t("dialog.project.agentDetectHelp")}>
+                <Message
+                  id="dialog.project.agentDetectMechanism"
+                  params={{
+                    detect: <InlineChip dir="auto" wrap size="inherit">{t("dialog.project.agentDetect")}</InlineChip>,
+                    claudeFile: <InlineChip monospace wrap size="inherit">CLAUDE.md</InlineChip>,
+                    agentsFile: <InlineChip monospace wrap size="inherit">AGENTS.md</InlineChip>,
+                    claudeDir: <InlineChip monospace wrap size="inherit">.claude</InlineChip>,
+                    codexDir: <InlineChip monospace wrap size="inherit">.codex</InlineChip>,
+                  }}
+                />
+              </HelpTip>
             ) : undefined
           }
+          description={addsParent ? t("dialog.project.agentDetectHint") : undefined}
           isDisabled={locked}
           account={
             agent && accountField && ownAccounts.length > 0

@@ -129,16 +129,19 @@ directory or a git URL the form has already done this before submitting and show
 (a choice made by hand stays only until the path or URL changes, which reads it again); "Inherit from console" chosen
 after that means none, and the project follows the console's default for project sessions. For a parent directory
 there is no pre-read, and the field offers one more choice, "Detect from files", listed first and selected on arriving
-at that source (and given up when the source changes): each repository found is detected on its own at association,
-and one that cannot be decided follows the console's default for project sessions. "Inherit from console" keeps its
-meaning of following that default with no detection, and choosing an agent applies it to every repository found. The form explains the detect choice under the
-field. The same rules apply to what is read: `CLAUDE.md` or `.claude` means Claude Code, `.codex` means Codex, and
-`.grok` means Grok Build; `AGENTS.md` or `.agents` mean Codex too, but only when `.grok` is absent, since Grok Build
-reads them as well. When no marker is found, or markers of more than one agent are (a directory with both `CLAUDE.md`
-and `AGENTS.md`, say), nothing is stored and the project keeps following the console's default for project sessions.
-Nothing is stored either when the detected agent is known not to be on the login shell's `PATH`. A default chosen by the user is never
-replaced by detection, and this holds for every association source and for projects the console session associates,
-which always detect when they give none.
+at that source (and given up when the source changes): each repository found is detected on its own at association, and
+one that cannot be decided follows the console's default for project sessions. "Inherit from console" keeps its meaning
+of following that default with no detection, and choosing an agent applies it to every repository found. For this source
+a line under the field says that an agent chosen here applies to every repository, and a "?" beside the field's label
+explains the detect choice: what it looks for in each repository — `CLAUDE.md`, `AGENTS.md` and agent folders such as
+`.claude` or `.codex` — and that a repository it cannot decide on inherits from the console. The same rules apply to
+what is read: `CLAUDE.md` or `.claude` means Claude Code, `.codex` means Codex, and `.grok` means Grok Build;
+`AGENTS.md` or `.agents` mean Codex too, but only when `.grok` is absent, since Grok Build reads them as well. When no
+marker is found, or markers of more than one agent are (a directory with both `CLAUDE.md` and `AGENTS.md`, say), nothing
+is stored and the project keeps following the console's default for project sessions. Nothing is stored either when the
+detected agent is known not to be on the login shell's `PATH`. A default chosen by the user is never replaced by
+detection, and this holds for every association source and for projects the console session associates, which always
+detect when they give none.
 
 ## The project's account, model and reasoning effort
 

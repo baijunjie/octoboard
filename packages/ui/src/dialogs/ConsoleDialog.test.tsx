@@ -724,3 +724,14 @@ it("names each Advanced picker by its sessions and its setting, and describes it
   expect(headers.length).toBeGreaterThan(0);
   expect(headers.every((el) => el.closest('[aria-hidden="true"]'))).toBe(true);
 });
+
+it("keeps the default agent, accounts and session instructions notes visible, and no per-agent models line", async () => {
+  render();
+  await openAdvanced();
+  const text = document.body.textContent ?? "";
+  expect(text).toContain("A project with its own default agent uses that instead.");
+  expect(text).toContain("Every session of an agent in this console uses its account here");
+  expect(text).toContain("take precedence over them where the two conflict. Applies to new console sessions.");
+  expect(text).not.toContain("Each agent has its own models");
+  expect(buttons().some((b) => b.getAttribute("aria-label")?.startsWith("About"))).toBe(false);
+});

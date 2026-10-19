@@ -8,9 +8,10 @@ import { OptionSelect, type Option } from "./OptionSelect";
 /** An agent picker, joined to an account picker with it when `account` is given. The agent and its
  * account read as one setting, so they are one input group under one label: the agent at the start
  * settles which accounts the part at the end offers. Without `account` — an agent with nothing to
- * choose between — it is the agent picker alone. */
+ * choose between — it is the agent picker alone. `help` is a help tip at the end of the label's line. */
 export function AgentAccountField<T extends string>({
   label,
+  help,
   options,
   value,
   onChange,
@@ -19,6 +20,7 @@ export function AgentAccountField<T extends string>({
   description,
 }: {
   label: string;
+  help?: React.ReactNode;
   options: Option<T>[];
   value: T;
   onChange: (value: T) => void;
@@ -30,7 +32,7 @@ export function AgentAccountField<T extends string>({
   const agentTrigger = () => controls.current?.querySelector<HTMLElement>('[data-slot="select-trigger"]');
   const focusHandoff = useFocusHandoff(() => agentTrigger()?.focus());
   return (
-    <LabelledGroup label={label} description={account ? description : undefined} isDisabled={isDisabled}>
+    <LabelledGroup label={label} help={help} description={account ? description : undefined} isDisabled={isDisabled}>
       <div ref={controls} {...focusHandoff} className="flex items-stretch">
         {/* Keeping the agent picker mounted lets its popover restore focus when the next agent
             has no accounts to choose between. */}

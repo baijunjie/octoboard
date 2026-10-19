@@ -452,34 +452,39 @@ it("locks the launch settings and dims the group's label with the rest of the fo
   expect(group("Default agent").hasAttribute("data-disabled")).toBe(false);
 });
 
-it("keeps the dynamic rich detection hint attached to the single agent picker", async () => {
+const detectionHelp = () => document.querySelector<HTMLElement>('button[aria-label="About detecting the agent"]');
+
+it("keeps what the detection leaves to the user described, and the mechanism in a help tip, for a single agent picker", async () => {
   render();
   await chooseSource("A parent directory");
   const picker = pickerNamed("Default agent");
   const described = picker.getAttribute("aria-describedby")?.split(" ").map((id) => document.getElementById(id));
   const hint = described?.find((el) => el?.textContent?.includes("applies to every repository"));
-  expect(hint).toBeDefined();
-  expect(Array.from(hint!.querySelectorAll("code")).map((el) => el.textContent)).toEqual([
+  expect(hint?.textContent).toBe("An agent chosen here applies to every repository.");
+  expect(detectionHelp()).not.toBeNull();
+  await click(detectionHelp() ?? undefined);
+  const popover = document.querySelector('[role="dialog"][aria-label="About detecting the agent"]');
+  expect(popover?.textContent).toContain("looks for");
+  expect(Array.from(popover!.querySelectorAll("code")).map((el) => el.textContent)).toEqual([
     "CLAUDE.md", "AGENTS.md", ".claude", ".codex",
   ]);
+  await act(async () => void popover!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   await click(buttons().find((b) => b.textContent?.includes("A parent directory")));
   await choose("A single directory");
   expect(pickerNamed("Default agent")).toBe(picker);
   expect(picker.hasAttribute("aria-describedby")).toBe(false);
   expect(document.getElementById(hint!.id)).toBeNull();
+  expect(detectionHelp()).toBeNull();
 });
 
-it("describes the joined agent and account group by the parent-directory hint", async () => {
+it("describes the joined agent and account group by what the parent-directory choice leaves to the user", async () => {
   render(undefined, [work, personal]);
   await chooseSource("A parent directory");
   await click(buttons().find((b) => b.textContent?.includes("Detect from files")));
   await choose("Claude Code");
   const described = group("Default agent").getAttribute("aria-describedby");
-  const hint = document.getElementById(described ?? "");
-  expect(hint?.textContent).toContain("applies to every repository");
-  expect(Array.from(hint!.querySelectorAll("code")).map((el) => el.textContent)).toEqual([
-    "CLAUDE.md", "AGENTS.md", ".claude", ".codex",
-  ]);
+  expect(document.getElementById(described ?? "")?.textContent).toBe("An agent chosen here applies to every repository.");
+  expect(detectionHelp()).not.toBeNull();
 });
 
 it("asks for the models only once Advanced is opened, under the account the project resolves to", async () => {

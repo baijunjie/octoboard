@@ -340,10 +340,15 @@ text it replaced was.
 - The tooltip is held back while the popover is open, and after it closes for as long as the tooltip would otherwise
   reopen at once (focus returned from the keyboard, or the pointer still on the "?"). Without that, the explanation
   just dismissed comes straight back, and the next Escape closes the dialog around it instead.
+- It sits beside the label it explains, never inside it: a button nested in a `<label>` is nested interactive
+  content, and its name would become part of the label's.
+- The explanation may carry inline chips (a file name such as `CLAUDE.md`); it reaches assistive technology the same
+  way as plain text.
 
 What it does not give: the explanation is not part of the surrounding row's accessible name, so a screen reader hears
-it only on reaching the "?". That is why only an explanation a user needs once moves there; a status, a warning or
-anything needed while operating a control stays visible text.
+it only on reaching the "?". That is why only a principle-level explanation, which operating the control does not
+need, or the extra line one item in a set of like items carries, moves there; every other description, a status and a
+warning among them, stays visible text.
 
 ### Hover marquees belong to one text label
 

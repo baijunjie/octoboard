@@ -1,5 +1,6 @@
 import React from "react";
 
+import { HelpTip } from "../components/HelpTip";
 import { errorPresentation } from "../errorPresentation";
 import { useT } from "../i18n/react";
 import { useDaemon, useDaemonStore } from "../store";
@@ -17,6 +18,12 @@ export function GitSection(): React.ReactElement {
     void request({ type: "update_settings", auto_pull_repositories: value }).catch((err) => toastError(errorPresentation(err as Error)));
 
   return (
-    <SwitchSettingRow label={t("settings.git.autoPull.label")} description={t("settings.git.autoPull.description")} isSelected={autoPull} onChange={setAutoPull} />
+    <SwitchSettingRow
+      label={t("settings.git.autoPull.label")}
+      help={<HelpTip label={t("settings.git.autoPull.help")}>{t("settings.git.autoPull.remoteCheck")}</HelpTip>}
+      description={t("settings.git.autoPull.description")}
+      isSelected={autoPull}
+      onChange={setAutoPull}
+    />
   );
 }

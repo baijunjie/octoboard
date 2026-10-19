@@ -867,7 +867,6 @@ export const en = {
   "dialog.console.avatarUnreadable": "That file could not be read as an image.",
   "dialog.console.launchSettingsNote": "Console sessions opened or resumed from now on use this model and reasoning effort.",
   "dialog.console.launchAgent": "Agent",
-  "dialog.console.launchAgentNote": "Each agent has its own models and reasoning efforts.",
   "dialog.console.launchConsole": "Console sessions",
   "dialog.console.launchProject": "Project sessions",
   "dialog.console.projectLaunchSettingsNote": "Project sessions opened or resumed from now on use this model and reasoning effort unless their project or the session sets its own.",
@@ -900,8 +899,10 @@ export const en = {
   "dialog.project.agentInheritBare": "Inherit from console",
   "dialog.project.accountInherit": "{account} (from the console)",
   "dialog.project.agentDetect": "Detect from files",
-  "dialog.project.agentDetectHint":
-    "{detect} looks for {claudeFile}, {agentsFile} and agent folders such as {claudeDir} or {codexDir} in each repository; one it cannot decide on inherits from the console. An agent chosen here applies to every repository.",
+  "dialog.project.agentDetectHint": "An agent chosen here applies to every repository.",
+  "dialog.project.agentDetectHelp": "About detecting the agent",
+  "dialog.project.agentDetectMechanism":
+    "{detect} looks for {claudeFile}, {agentsFile} and agent folders such as {claudeDir} or {codexDir} in each repository; one it cannot decide on inherits from the console.",
   "dialog.project.launchSettingsNote": "Used by sessions, from the next one opened or resumed.",
   "dialog.project.directoryRequired": "A directory is required.",
   "dialog.project.pathChecking": "Checking the directory…",
@@ -1319,14 +1320,17 @@ export const en = {
     "Sessions and their agents keep running with the window closed, and notifications keep arriving. The menu bar icon brings the window back.",
   "settings.git.autoPull.label": "Automatically pull repositories",
   "settings.git.autoPull.description":
-    "Pulls a project's branch when it is behind its upstream and can be fast-forwarded. It never pushes, and it leaves a branch that has commits of its own alone. The remote is checked every few minutes whichever way this is set, so the branch always shows how far ahead or behind it is.",
+    "Pulls a project's branch when it is behind its upstream and can be fast-forwarded. It never pushes, and it leaves a branch that has commits of its own alone.",
+  "settings.git.autoPull.help": "About automatic pulling",
+  "settings.git.autoPull.remoteCheck":
+    "The remote is checked every few minutes whichever way this is set, so the branch always shows how far ahead or behind it is.",
   "settings.trusted.description":
     "Under these folders, {appName} presses every agent's trust confirmation without asking, for every project, including projects added later. Each agent then records the trust in its own configuration and applies the project's own permission rules and hooks. A folder is trusted from a session's trust dialog. Trust a folder only if you trust everything that ends up inside it.",
   "settings.trusted.empty": "No trusted folders yet",
-  "settings.trusted.rowDescription":
-    "Every agent's trust confirmation is pressed without asking for projects under this folder.",
-  "settings.trusted.removeTooltip":
-    "Stop trusting this folder. Projects' own permissions, running sessions and the trust each agent has already recorded are kept.",
+  "settings.trusted.removeTooltip": "Stop trusting this folder",
+  "settings.trusted.removeTitle": "Remove trusted folder {path}?",
+  "settings.trusted.removeMessage":
+    "Later trust confirmations for projects under this folder are asked about again, unless the project's own permission or another trusted folder covers them. Projects' own permissions, running sessions and the trust each agent has already recorded are kept.",
   "settings.trusted.removeLabel": "Stop trusting {path}",
   "settings.accounts.description":
     "An account is a named config directory of an agent: the directory it keeps its login and conversation history in. An agent has to be on your {pathVar} for its accounts to be usable.",

@@ -792,7 +792,6 @@ export const zhHans: Translation<"other"> = {
   "dialog.console.avatarUnreadable": "无法将该文件作为图片读取。",
   "dialog.console.launchSettingsNote": "控制台会话使用的模型与推理强度，对之后打开或恢复的会话生效。",
   "dialog.console.launchAgent": "智能体",
-  "dialog.console.launchAgentNote": "每个智能体有各自的模型和推理强度。",
   "dialog.console.launchConsole": "控制台会话",
   "dialog.console.launchProject": "项目会话",
   "dialog.console.projectLaunchSettingsNote": "项目会话使用的模型与推理强度，对之后打开或恢复的会话生效，项目或会话另行指定时以其为准。",
@@ -825,8 +824,10 @@ export const zhHans: Translation<"other"> = {
   "dialog.project.agentInheritBare": "继承控制台",
   "dialog.project.accountInherit": "{account}（继承自控制台）",
   "dialog.project.agentDetect": "根据文件检测",
-  "dialog.project.agentDetectHint":
-    "{detect} 会在每个仓库中查找 {claudeFile}、{agentsFile} 以及 {claudeDir}、{codexDir} 等智能体目录；无法判定的仓库将继承控制台的默认值。在此选择的智能体将应用到所有仓库。",
+  "dialog.project.agentDetectHint": "在此选择的智能体将应用到所有仓库。",
+  "dialog.project.agentDetectHelp": "关于检测智能体",
+  "dialog.project.agentDetectMechanism":
+    "{detect} 会在每个仓库中查找 {claudeFile}、{agentsFile} 以及 {claudeDir}、{codexDir} 等智能体目录；无法判定的仓库将继承控制台的默认值。",
   "dialog.project.launchSettingsNote": "对之后打开或恢复的会话生效。",
   "dialog.project.directoryRequired": "必须提供目录。",
   "dialog.project.pathChecking": "正在检查目录…",
@@ -1183,13 +1184,16 @@ export const zhHans: Translation<"other"> = {
   "settings.background.description.on":
     "关闭窗口后，会话及其智能体仍会继续运行，通知也会照常送达。点按菜单栏图标即可重新打开窗口。",
   "settings.git.autoPull.label": "自动拉取仓库",
-  "settings.git.autoPull.description":
-    "当项目分支落后于其上游且可以快进时，自动以快进方式拉取该分支。从不推送，也不会改动有本地提交的分支。无论此设置如何，都会每隔几分钟检查一次远程，因此分支始终会显示领先或落后的提交数。",
+  "settings.git.autoPull.description": "当项目分支落后于其上游且可以快进时，自动以快进方式拉取该分支。从不推送，也不会改动有本地提交的分支。",
+  "settings.git.autoPull.help": "关于自动拉取",
+  "settings.git.autoPull.remoteCheck": "无论此设置如何，都会每隔几分钟检查一次远程，因此分支始终会显示领先或落后的提交数。",
   "settings.trusted.description":
     "对于这些文件夹下的每个项目（包括之后添加的项目），{appName} 会直接按下每个智能体的信任确认，而不再询问。随后各智能体会在自己的配置中记录信任，并应用项目自身的权限规则和钩子。在会话的信任对话框中可以信任某个文件夹。只有当你信任文件夹内最终出现的所有内容时，才应信任该文件夹。",
   "settings.trusted.empty": "还没有受信任的文件夹",
-  "settings.trusted.rowDescription": "此文件夹下的项目，每个智能体的信任确认都会直接按下，无需询问。",
-  "settings.trusted.removeTooltip": "停止信任此文件夹。各项目自身的授权、运行中的会话以及各智能体已记录的信任都会保留。",
+  "settings.trusted.removeTooltip": "停止信任此文件夹",
+  "settings.trusted.removeTitle": "确认移除受信任的文件夹 {path}？",
+  "settings.trusted.removeMessage":
+    "此文件夹下项目之后出现的信任确认将重新询问，除非项目自身已授权或另有受信任的文件夹涵盖。各项目自身的授权、运行中的会话以及各智能体已记录的信任都会保留。",
   "settings.trusted.removeLabel": "停止信任 {path}",
   "settings.accounts.description":
     "账户是智能体的一个命名配置目录，即它保存登录信息和对话记录的目录。智能体必须已配置到 {pathVar} 中，其账户才能使用。",

@@ -28,7 +28,7 @@ export function TitledControl({
   focusOnly,
   isDisabled,
 }: {
-  title: string | undefined;
+  title: React.ReactNode;
   children: React.ReactElement<{ "aria-label"?: string; "aria-describedby"?: string }>;
   /** Where the tooltip opens relative to the control; HeroUI's default is above it. `end` is the
    * reading direction's, so a control on a vertical strip at the window's start edge opens it

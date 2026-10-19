@@ -80,7 +80,6 @@ export function ConsoleLaunchFields({
 
   return (
     <AdvancedSection expanded={expanded} onExpandedChange={setExpanded} status={launch.modelText}>
-      <Description>{t("dialog.console.launchAgentNote")}</Description>
       <div ref={rootRef} {...focusHandoff} className="rounded-xl border border-separator p-4">
         <Tabs selectedKey={agent} onSelectionChange={(key) => setPicked(key as Agent)} className="gap-4">
           <Tabs.ListContainer render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>

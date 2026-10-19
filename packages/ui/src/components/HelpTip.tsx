@@ -19,8 +19,9 @@ import { TitledControl } from "./TitledControl";
  *   coming back would show it, and a second Escape would then close the dialog around it instead), until focus
  *   or the pointer leaves the "?".
  *
- * `label` is the control's accessible name and has to say what it explains. */
-export function HelpTip({ label, children }: { label: string; children: string }): React.ReactElement {
+ * `label` is the control's accessible name and has to say what it explains. The explanation is text, or rich
+ * content such as a `<Message>` with literals in chips; the tooltip and the popover show the same content. */
+export function HelpTip({ label, children }: { label: string; children: React.ReactNode }): React.ReactElement {
   const [open, setOpen] = useState(false);
   const [justClosed, setJustClosed] = useState(false);
   const { isFocusVisible } = useFocusVisible();

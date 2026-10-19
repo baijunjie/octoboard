@@ -2,20 +2,24 @@ import { Description, Label } from "@heroui/react";
 import React, { useId } from "react";
 
 /** A visible label over a group of controls that read as one field, named for assistive technology
- * as the group, with an optional `description` under them that the group is described by. HeroUI's
- * `Fieldset` is not used: its legend is drawn a size up from `Label` and flush against what follows
- * it, and a native `<fieldset>` lays its legend out by rules of its own rather than as a flex item,
- * so matching the labels of the fields beside it would take an override on the root and on the
- * legend alike — more than the `div`, `Label` and `Description` this assembles. HeroUI dims a
- * field's label through `[data-disabled=true] .label`, which a label outside the controls never
- * sits under, so `isDisabled` marks the group `div` for it. */
+ * as the group, with an optional `description` under them that the group is described by and an
+ * optional `help` tip at the end of the label's line, beside the label rather than inside it so it is
+ * not part of the group's accessible name. HeroUI's `Fieldset` is not used: its legend
+ * is drawn a size up from `Label` and flush against what follows it, and a native `<fieldset>` lays
+ * its legend out by rules of its own rather than as a flex item, so matching the labels of the
+ * fields beside it would take an override on the root and on the legend alike — more than the
+ * `div`, `Label` and `Description` this assembles. HeroUI dims a field's label through
+ * `[data-disabled=true] .label`, which a label outside the controls never sits under, so
+ * `isDisabled` marks the group `div` for it. */
 export function LabelledGroup({
   label,
+  help,
   description,
   isDisabled,
   children,
 }: {
   label: string;
+  help?: React.ReactNode;
   description?: React.ReactNode;
   isDisabled?: boolean;
   children: React.ReactNode;
@@ -30,7 +34,14 @@ export function LabelledGroup({
       data-disabled={isDisabled || undefined}
       className="flex flex-col gap-1.5"
     >
-      <Label id={labelId}>{label}</Label>
+      {help ? (
+        <div className="flex items-center gap-2">
+          <Label id={labelId}>{label}</Label>
+          {help}
+        </div>
+      ) : (
+        <Label id={labelId}>{label}</Label>
+      )}
       {children}
       {description && <Description id={descriptionId}>{description}</Description>}
     </div>

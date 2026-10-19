@@ -46,22 +46,21 @@ them; changing a field applies only to that session, including its later resumes
 agent's values and retains edits separately, but only the selected agent's edits apply to the opened session. Changing
 accounts keeps those edits.
 
-In the console dialog it starts with a note that each agent has its own models and reasoning efforts, and holds a row of
-tabs, one per agent, each with the agent's icon and name; the row of tabs and the shown tab's content sit together
-inside a bordered frame. An agent that is not installed (see "Agents that are not installed" in
-`docs/product/consoles.md`) has a tab, labelled as not installed, only while the console stores a console
+In the console dialog it holds a row of tabs, one per agent, each with the agent's icon and name; the row of tabs and
+the shown tab's content sit together inside a bordered frame. An agent that is not installed (see "Agents that are not
+installed" in `docs/product/consoles.md`) has a tab, labelled as not installed, only while the console stores a console
 session or project session value for it, until every one of them is cleared; before availability has been determined
 every agent has a tab. Until the user picks a tab, the one shown follows the agent the Default agent group's Console
 sessions field holds; a picked tab stays shown until that tab goes away, which forgets the pick. From a window 768 px
 wide up, each tab holds a table: a column for each kind of session, headed **Console sessions** and **Project
 sessions**, and a **Model** row and a **Reasoning effort** row, named in a leading column, with a picker in each cell.
-Below the whole table, two notes say whose sessions each kind applies to — for project sessions, those opened or
-resumed from now on, unless their project or the session sets its own. In a narrower window the cells stack: each kind
-under its own heading, then its Model and Reasoning effort pickers, each with the setting's name above it. Either way,
-Tab moves through one kind's pickers before the other's: Console sessions' Model and Reasoning effort, then Project
-sessions'. Edits on one tab are kept while another is shown, and each value is saved only when changed. Below the frame
-and outside it, since it applies whichever tab is shown, is the console session instructions field (see "Console
-session instructions" in `docs/product/consoles.md`).
+Below the whole table, two notes say whose sessions each kind applies to — for project sessions, those opened or resumed
+from now on, unless their project or the session sets its own. In a narrower window the cells stack: each kind under its
+own heading, then its Model and Reasoning effort pickers, each with the setting's name above it. Either way, Tab moves
+through one kind's pickers before the other's: Console sessions' Model and Reasoning effort, then Project sessions'.
+Edits on one tab are kept while another is shown, and each value is saved only when changed. Below the frame and outside
+it, since it applies whichever tab is shown, is the console session instructions field (see "Console session
+instructions" in `docs/product/consoles.md`).
 
 An unset picker is empty, showing a placeholder instead of a value. The placeholder stands for the agent's own setting,
 except in the project dialog, where it stands for what the project inherits: "Inherit from console", naming the

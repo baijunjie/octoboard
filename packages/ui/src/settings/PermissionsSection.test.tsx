@@ -17,8 +17,9 @@ const SCREEN_RECORDING_MISSING = { screenRecording: false, accessibility: true, 
 /**
  * Mounts the section over a platform whose shell answers `statuses` one per read, the last of them
  * for every read after that — the grant changes outside the app, so a case can hand over the
- * sequence the user's trip to System Settings produces. `request` resolves `granted`, `reads`
- * rejecting stands for a shell that cannot be asked, and `macosPermissions` absent for a browser.
+ * sequence the user's trip to System Settings produces. `request` resolves `granted`, `unreadable`
+ * makes the read reject, which stands for a shell that cannot be asked, and `absent` leaves out
+ * `macosPermissions`, as in a browser.
  */
 async function mount({
   statuses = [undefined],
@@ -119,4 +120,18 @@ it.each([
 ])("%s", async (_name, status, expected) => {
   const { container } = await mount({ statuses: [status] });
   expect(container.textContent?.includes("take effect")).toBe(expected);
+});
+
+it("leads with the reason for granting ahead of time once the permissions can be read", async () => {
+  const { container } = await mount({ statuses: [SCREEN_RECORDING_MISSING] });
+  expect(container.querySelector("p")!.textContent).toContain("stops a system prompt from appearing");
+});
+
+it.each([
+  ["a browser, without the capability", { absent: true }],
+  ["a shell that is not macOS", { statuses: [undefined] }],
+  ["a shell that cannot be asked", { unreadable: true }],
+])("shows no lead for %s", async (_name, options) => {
+  const { container } = await mount(options);
+  expect(container.textContent).not.toContain("stops a system prompt");
 });
