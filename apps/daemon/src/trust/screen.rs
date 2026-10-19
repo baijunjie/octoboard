@@ -27,13 +27,25 @@ pub(super) struct Screen {
     /// longer waiting for Octoboard: the person is answering it in the terminal. For an agent that
     /// runs no hook right after its screen is answered, this is the only way to tell.
     pub(super) input_ends_wait: bool,
-    /// The agent runs a hook as it starts, once it is past this screen. Its messages are then held
-    /// until that hook, whatever else happens: after Claude Code's trust screen another startup
-    /// modal can follow (approving a project's `.mcp.json` servers, say), which a message's Enter
-    /// would answer, and only the hook says the session is ready. An agent that runs none until
-    /// its first prompt (Codex) has its messages released by Octoboard's press of its screen, or
-    /// by the watch ending with none sighted.
-    pub(super) hook_at_start: bool,
+    /// What the agent does first once it is past its startup, which ends the watch for the screen:
+    /// everything before it, however long, may still be the screen's to come.
+    pub(super) start_signal: StartSignal,
+}
+
+/// How an agent shows that its startup, the trust screen included, is behind it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum StartSignal {
+    /// It runs a hook as it starts, once it is past the screen. Its messages are then held until
+    /// that hook, whatever else happens: after Claude Code's trust screen another startup modal
+    /// can follow (approving a project's `.mcp.json` servers, say), which a message's Enter would
+    /// answer, and only the hook says the session is ready.
+    Hook,
+    /// It runs no hook until its first prompt (Codex) but writes the terminal title as its
+    /// session starts, after the screen and after the login screen that can come before it, and
+    /// never before either. Its messages are released by Octoboard's press of its screen, or by
+    /// the watch ending with none sighted. A title the agent is configured never to write is no
+    /// signal ([`TrustState::new`]), and the watch is bounded instead.
+    TerminalTitle,
 }
 
 /// The keys that accept a screen, and what is checked around them.
@@ -60,7 +72,7 @@ pub(super) const CLAUDE: Screen = Screen {
     // the cursor again right before each key; a key the person pressed without answering, such as
     // a Down, is caught there.
     input_ends_wait: false,
-    hook_at_start: true,
+    start_signal: StartSignal::Hook,
 };
 
 /// Codex 0.161.0: the question, then "› 1. Trust and continue" and "2. Quit". Codex redraws only
@@ -78,7 +90,7 @@ pub(super) const CODEX: Screen = Screen {
     // Codex runs no hook until its first prompt, so an Enter pressed in the terminal would
     // otherwise leave the screen looking unanswered until then.
     input_ends_wait: true,
-    hook_at_start: false,
+    start_signal: StartSignal::TerminalTitle,
 };
 
 /// Grok Build 1.0.50: the question, then "Yes, proceed y" and "No, quit n", with no cursor.
@@ -93,7 +105,7 @@ pub(super) const GROK: Screen = Screen {
     press: Press::Yes,
     next_screen: None,
     input_ends_wait: true,
-    hook_at_start: true,
+    start_signal: StartSignal::Hook,
 };
 
 pub(super) fn screen_of(agent: Agent) -> &'static Screen {
@@ -109,14 +121,19 @@ pub(super) fn screen_of(agent: Agent) -> &'static Screen {
 /// arrive in pieces and for what comes before it.
 pub(super) const WINDOW: usize = 16 * 1024;
 
-/// How long the watch for the screen lasts for an agent that runs no hook at start (Codex): it is
-/// among the first things that agent prints, so a session that has printed this much or has been
-/// running this long and has not shown it, will not. An agent that does run one
-/// (`Screen::hook_at_start`) has no such bound, since it can print a good deal first — Claude
-/// Code's onboarding on an account's first launch, with its browser login, comes before the
-/// screen — and its first hook ends the watch instead.
+/// How long the watch for the screen lasts for an agent whose start signal is switched off in its
+/// configuration (Codex with `tui.terminal_title = []`) or whose configuration cannot be read: the
+/// screen is among the first things the agent prints, so a session that has printed this much or
+/// has been running this long, or has written its first terminal title, and has not shown it, will
+/// not. With a start signal there is no such bound, since the agent can print a good deal first —
+/// Claude Code's onboarding or Codex's login on an account's first launch, each with a browser
+/// login, comes before the screen — and the signal ends the watch instead.
+///
+/// The 64 KiB covers Codex's whole first launch through login and trust screen (measured 34 KiB,
+/// the screens before the trust screen being static) and still bounds how much output a transcript
+/// quoting the screen can be taken for it in; the time is long enough for a login in a browser.
 pub(super) const WATCH_BYTES: usize = 64 * 1024;
-pub(super) const WATCH_SECONDS: u64 = 30;
+pub(super) const WATCH_SECONDS: u64 = 5 * 60;
 
 /// Which option holds the cursor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -177,6 +194,12 @@ pub(super) fn normalise(raw: &[u8]) -> String {
 }
 
 impl Screen {
+    /// Whether the agent's hook is what ends the watch and releases its messages, and nothing else
+    /// does ([`StartSignal::Hook`]).
+    pub(super) fn hook_at_start(&self) -> bool {
+        self.start_signal == StartSignal::Hook
+    }
+
     /// Whether this output holds the screen as it is first drawn.
     pub(super) fn is_shown_in(&self, raw: &[u8]) -> bool {
         let text = normalise(raw);
@@ -286,18 +309,20 @@ pub struct TrustState {
     pub(super) screen: &'static Screen,
     /// Grok's: where its trust entry is carried from and to after a press.
     pub(super) carried: Option<CarriedTrust>,
-    /// The output not yet identified as anything, at most [`WINDOW`] bytes of it, and, for an
-    /// agent that runs no hook at start, what the watch has seen in all. Released when the watch
-    /// ends.
+    /// The output not yet identified as anything, at most [`WINDOW`] bytes of it, and, for a
+    /// bounded watch, what it has seen in all. Released when the watch ends.
     pub(super) window: Mutex<Watched>,
-    /// When the watch began, and how much output and how long it lasts, for an agent that runs no
-    /// hook at start.
+    /// When the watch began, and how much output and how long it lasts, when it is bounded
+    /// ([`Self::limited`]).
     pub(super) started: Instant,
     pub(super) watch_bytes: usize,
     pub(super) watch_age: Mutex<Duration>,
-    /// The watch has ended without a sighting: too much output or too long a time. Never set for an
-    /// agent that runs a hook at start.
+    /// The watch has ended without a sighting: the agent's terminal title came, or a bounded watch
+    /// saw too much output or ran too long. Never set for an agent that runs a hook at start.
     pub(super) expired: AtomicBool,
+    /// The watch has a bound: the agent's start signal is a terminal title, and its configuration
+    /// switches that off or cannot be read.
+    pub(super) limited: bool,
     /// The screen has been sighted, once, and `sightings` told.
     pub(super) sighted: AtomicBool,
     /// The screen needs a person rather than an automatic press.
@@ -324,10 +349,15 @@ pub struct TrustState {
 }
 
 impl TrustState {
-    pub fn new(agent: Agent, carried: Option<CarriedTrust>) -> Self {
+    /// `start_signal_missing`: the agent's configuration switches off the signal that would end
+    /// the watch, which only matters for a terminal title ([`StartSignal::TerminalTitle`]); the
+    /// watch is then bounded. Also the case when the configuration cannot be read, the safe side
+    /// being messages that are never held for good.
+    pub fn new(agent: Agent, carried: Option<CarriedTrust>, start_signal_missing: bool) -> Self {
         Self::with_limits(
             agent,
             carried,
+            start_signal_missing,
             WATCH_BYTES,
             Duration::from_secs(WATCH_SECONDS),
         )
@@ -336,18 +366,21 @@ impl TrustState {
     pub(super) fn with_limits(
         agent: Agent,
         carried: Option<CarriedTrust>,
+        start_signal_missing: bool,
         bytes: usize,
         age: Duration,
     ) -> Self {
         let (sightings, receiver) = unbounded_channel();
+        let screen = screen_of(agent);
         Self {
-            screen: screen_of(agent),
+            screen,
             carried,
             window: Mutex::new(Watched::default()),
             started: Instant::now(),
             watch_bytes: bytes,
             watch_age: Mutex::new(age),
             expired: AtomicBool::new(false),
+            limited: screen.start_signal == StartSignal::TerminalTitle && start_signal_missing,
             sighted: AtomicBool::new(false),
             needs_user: AtomicBool::new(false),
             writes_at_sighting: AtomicU64::new(0),
@@ -375,7 +408,7 @@ impl TrustState {
             return;
         }
         let mut watched = self.window.lock().expect("trust window mutex poisoned");
-        if !self.screen.hook_at_start {
+        if self.limited {
             watched.total += chunk.len();
             if watched.total > self.watch_bytes || self.started.elapsed() > self.watch_age() {
                 self.expired.store(true, Ordering::Release);
@@ -399,6 +432,23 @@ impl TrustState {
                 let _ = self.sightings.send(());
             }
         }
+    }
+
+    /// The session's output has completed a terminal title, which [`normalise`] strips from what
+    /// [`Self::feed`] sees, so the session reads it off the raw output. For an agent whose start
+    /// signal is the title ([`StartSignal::TerminalTitle`]) that ends the watch if no screen has
+    /// been sighted: its startup is behind it and nothing comes that is the screen. Called after
+    /// [`Self::feed`] has seen the same chunk, so a chunk that holds both sights the screen.
+    pub fn note_title(&self) {
+        if self.screen.start_signal != StartSignal::TerminalTitle {
+            return;
+        }
+        let mut watched = self.window.lock().expect("trust window mutex poisoned");
+        if self.hook_seen.load(Ordering::Acquire) || self.sighted.load(Ordering::Acquire) {
+            return;
+        }
+        self.expired.store(true, Ordering::Release);
+        *watched = Watched::default();
     }
 
     fn watch_age(&self) -> Duration {
@@ -428,14 +478,15 @@ impl TrustState {
     /// Claude Code's. For an agent that runs a hook at start (`Screen::hook_at_start`) messages are
     /// held until that hook, so a session whose hooks never arrive holds them for as long as it
     /// runs. For one that runs none (Codex) they are held while the watch is still looking for the
-    /// screen — it ends on its own after [`WATCH_SECONDS`], with no output arriving to notice it —
-    /// and, once the screen is up, until Octoboard's press of it has succeeded, the person's own
-    /// answer in the terminal has been seen to take it away, or a hook arrives.
+    /// screen — it ends with the agent's terminal title or, for a watch that is bounded, on its own
+    /// after [`WATCH_SECONDS`], with no output arriving to notice it — and, once the screen is up,
+    /// until Octoboard's press of it has succeeded, the person's own answer in the terminal has
+    /// been seen to take it away, or a hook arrives.
     pub fn holds_writes(&self) -> bool {
         if self.hook_seen.load(Ordering::Acquire) {
             return false;
         }
-        if self.screen.hook_at_start {
+        if self.screen.hook_at_start() {
             return true;
         }
         if self.pressed.load(Ordering::Acquire) || self.dismissed.load(Ordering::Acquire) {
@@ -447,7 +498,8 @@ impl TrustState {
         if self.sighted.load(Ordering::Acquire) {
             return true;
         }
-        !self.expired.load(Ordering::Acquire) && self.started.elapsed() <= self.watch_age()
+        !self.expired.load(Ordering::Acquire)
+            && (!self.limited || self.started.elapsed() <= self.watch_age())
     }
 
     /// Ends the watch as if the session had run its first hook, for a test's stand-in that stands

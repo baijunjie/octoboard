@@ -160,10 +160,15 @@ for it:
   confirmation. There is no limit on output or time before that, so a confirmation that comes after a long stretch of
   other screens is still recognised — Claude Code's onboarding on an account's first launch, with its sign-in through
   the browser, comes before its confirmation;
-- for Codex, which sends no hook report until its first prompt, until its first hook report or until it has printed
-  64 KiB or run for 30 seconds, whichever comes first, the confirmation being among the first things Codex prints. A
-  confirmation Codex shows after that is not recognised: it raises no hand and is left for the person to answer in
-  the terminal.
+- for Codex, which sends no hook report until its first prompt, until the first terminal title it sets or its first
+  hook report, whichever comes first. Codex sets its terminal title only once its session has started — past the
+  confirmation, and on an account's first launch past its sign-in screen, which comes before the confirmation — so
+  there is no limit on output or time before that either;
+- for Codex when the `config.toml` in the Codex home that launch uses sets `tui.terminal_title` to an empty list (no
+  title at all) or to anything other than a list, or that file exists but cannot be read or parsed, until its first hook
+  report, its first terminal title if it sets one, or until it has printed 64 KiB or run for 5 minutes, whichever comes
+  first. A confirmation Codex shows after that is not recognised: it raises no hand and is left for the person to answer
+  in the terminal. A missing file, or one without that key, leaves the terminal title on.
 
 What Octoboard writes into a session while its confirmation may be up is held; see "Messages held until a session can
 take them" in `docs/product/message-delivery.md`.

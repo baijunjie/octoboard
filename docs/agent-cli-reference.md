@@ -1327,14 +1327,17 @@ Octoboard recognizes it in the terminal output and presses it; what pressing it 
   Codex records `[projects."<repository root>"] trust_level = "trusted"` in `$CODEX_HOME/config.toml`: from a
   subdirectory it records the repository root, and from a linked worktree the main repository's root, so the record can
   cover more than the folder asked about. A trusted parent directory in that file does not cover a repository below it.
-  No hook fires before or right after the confirmation, so only a bound on time and output can end a watch for it. Codex
-  redraws only the cells that changed, so text read off the screen can lose characters wherever the frame before held
-  the same one; the confirmation's own phrases came through intact in its first drawing, a path above it did not. The
-  review Codex raises for new hooks without `--dangerously-bypass-hook-trust` reads "Hooks need review … 2. Trust all
-  and continue" and is a different modal. On 0.161.0 a key the confirmation ignores (a letter, Right, Tab, `?`) draws
-  nothing but a bare synchronized-update frame (`ESC[?2026h ESC[39m ESC[49m ESC[0m ESC[?2026l`); accepting it clears the
-  screen and redraws it whole, starting with the ">_ OpenAI Codex (v…)" banner, which is how an answer given in the
-  terminal is told apart.
+  No hook fires before or right after the confirmation, and none at startup at all until the first prompt is submitted.
+  Codex sets no terminal title before the confirmation or the sign-in screen that precedes it on an account's first
+  launch; its first title (OSC 0/2) comes once its session starts (0.160.0–0.163.0), so that title marks it past both.
+  With `[tui] terminal_title = []` it never sets one. The ">_ OpenAI Codex (v…)" banner is drawn before the sign-in
+  screen and the confirmation alike, so it marks neither. Codex redraws only the cells that changed, so text read off
+  the screen can lose characters wherever the frame before held the same one; the confirmation's own phrases came
+  through intact in its first drawing, a path above it did not. The review Codex raises for new hooks without
+  `--dangerously-bypass-hook-trust` reads "Hooks need review … 2. Trust all and continue" and is a different modal. On
+  0.161.0 a key the confirmation ignores (a letter, Right, Tab, `?`) draws nothing but a bare synchronized-update frame
+  (`ESC[?2026h ESC[39m ESC[49m ESC[0m ESC[?2026l`); accepting it clears the screen and redraws it whole, starting with
+  the ">_ OpenAI Codex (v…)" banner, which is how an answer given in the terminal is told apart.
 - **Grok Build** shows its confirmation only when the folder holds content its trust gates, such as an `AGENTS.md`,
   whether or not it is a git repository, so a console directory holding an instruction file is asked about too. The
   screen reads "Do you trust the contents of this directory?", "Grok Build may run or modify contents in this

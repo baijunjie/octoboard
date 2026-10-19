@@ -4,7 +4,9 @@ use super::*;
 use crate::protocol::{Console, Origin, ProjectAccount, ProjectSource, SessionStatus};
 use crate::session::spawn_reader_thread;
 use crate::store::LOCAL_HOST_ID;
-use crate::test_support::{watched_live_session, ScratchDir, StandIn, PATIENCE};
+use crate::test_support::{
+    unsignalled_live_session, watched_live_session, ScratchDir, StandIn, PATIENCE,
+};
 
 // What Claude Code 2.1.289 actually printed, captured from a real PTY in a directory it had
 // never seen; only the directory's name and the account's plan were replaced. The screen as
@@ -252,11 +254,11 @@ fn a_transcript_quoting_both_options_beside_a_cursor_glyph_is_not_the_screen() {
     assert!(!CLAUDE.is_shown_in(reversed.as_bytes()));
 }
 
-/// Codex runs no hook before its screen, so a screen that has not appeared within the limits is
-/// not coming.
+/// A Codex whose title is switched off has no start signal, so a screen that has not appeared
+/// within the limits is not coming; a title it writes after all is past the screen as well.
 #[test]
-fn the_watch_for_codex_ends_after_too_much_output_or_too_long() {
-    let state = TrustState::new(Agent::Codex, None);
+fn the_watch_for_codex_without_a_title_ends_after_too_much_output_or_too_long() {
+    let state = TrustState::new(Agent::Codex, None, true);
     let mut sightings = state.take_sightings().expect("receiver");
     state.feed(&vec![b'.'; WATCH_BYTES + 1], 0, 0);
     state.feed(CODEX_SCREEN, 0, 0);
@@ -268,20 +270,29 @@ fn the_watch_for_codex_ends_after_too_much_output_or_too_long() {
         "the window is released"
     );
 
-    let state = TrustState::with_limits(Agent::Codex, None, WATCH_BYTES, Duration::ZERO);
+    let state = TrustState::with_limits(Agent::Codex, None, true, WATCH_BYTES, Duration::ZERO);
     let mut sightings = state.take_sightings().expect("receiver");
     std::thread::sleep(Duration::from_millis(5));
     state.feed(CODEX_SCREEN, 0, 0);
     assert!(sightings.try_recv().is_err(), "too late by time");
+
+    let state = TrustState::new(Agent::Codex, None, true);
+    assert!(state.holds_writes());
+    state.note_title();
+    assert!(!state.holds_writes(), "ended by a title");
 }
 
-/// Claude Code and Grok can print a good deal before the screen (Claude Code's onboarding on an
-/// account's first launch, a browser login among it); neither the output nor the time limit ends
-/// their watch.
+/// Claude Code, Grok and Codex can print a good deal before the screen (Claude Code's onboarding
+/// and Codex's login on an account's first launch, a browser login among it); neither the output
+/// nor the time limit ends their watch while they have a start signal to wait for.
 #[test]
-fn the_watch_for_an_agent_with_a_hook_at_start_outlasts_the_limits() {
-    for (agent, screen) in [(Agent::Claude, SCREEN), (Agent::Grok, GROK_SCREEN)] {
-        let state = TrustState::with_limits(agent, None, WATCH_BYTES, Duration::ZERO);
+fn the_watch_for_an_agent_with_a_start_signal_outlasts_the_limits() {
+    for (agent, screen) in [
+        (Agent::Claude, SCREEN),
+        (Agent::Grok, GROK_SCREEN),
+        (Agent::Codex, CODEX_SCREEN),
+    ] {
+        let state = TrustState::with_limits(agent, None, false, WATCH_BYTES, Duration::ZERO);
         let mut sightings = state.take_sightings().expect("receiver");
         std::thread::sleep(Duration::from_millis(5));
         for _ in 0..3 {
@@ -293,9 +304,53 @@ fn the_watch_for_an_agent_with_a_hook_at_start_outlasts_the_limits() {
     }
 }
 
+/// The first terminal title Codex writes means its startup is behind it, a screen it showed
+/// included, so the watch ends and what was held is let through ([`TrustState::holds_writes`]);
+/// whatever else it prints before that, the color queries of its first drawing and a hyperlink
+/// among them, does not.
+#[test]
+fn the_first_title_of_codex_ends_the_watch_with_no_screen() {
+    let live = stand_in("s", Agent::Codex, "sleep 30");
+    let mut sightings = live.trust.take_sightings().expect("receiver");
+    live.on_output(b"\x1b]10;?\x1b\\\x1b]11;?\x07\x1b]8;;https://example.com\x07login");
+    assert!(
+        live.trust.holds_writes(),
+        "nothing before the title ends it"
+    );
+    live.on_output(b"\x1b]0;project\x07");
+    assert!(!live.trust.holds_writes());
+    live.on_output(CODEX_SCREEN);
+    assert!(sightings.try_recv().is_err(), "too late by title");
+    assert!(!live.trust.waiting());
+}
+
+/// A title that follows a sighting says nothing about the screen: it ends no wait, so the hold
+/// stays until the screen is answered. A session notes a title after feeding the chunk it came
+/// in, so a chunk that holds the screen and a title is a sighting.
+#[test]
+fn a_title_in_the_chunk_of_the_screen_does_not_end_the_wait_for_it() {
+    let live = stand_in("s", Agent::Codex, "sleep 30");
+    live.on_output(&[CODEX_SCREEN, b"\x1b]0;project\x07"].concat());
+    assert!(live.trust.waiting());
+    assert!(live.trust.holds_writes());
+}
+
+/// Only Codex's start signal is a title: Claude Code and Grok write one as they draw their
+/// screens, and their watch runs on to the first hook.
+#[test]
+fn a_title_ends_no_watch_but_codexs() {
+    for (agent, screen) in [(Agent::Claude, SCREEN), (Agent::Grok, GROK_SCREEN)] {
+        let state = TrustState::new(agent, None, false);
+        state.note_title();
+        assert!(state.holds_writes(), "{agent:?}");
+        state.feed(screen, 0, 0);
+        assert!(state.waiting(), "{agent:?}");
+    }
+}
+
 #[test]
 fn a_hook_releases_the_window() {
-    let state = TrustState::new(Agent::Claude, None);
+    let state = TrustState::new(Agent::Claude, None, false);
     state.feed(b"some output", 0, 0);
     state.note_hook();
     assert_eq!(state.window.lock().unwrap().window.capacity(), 0);
@@ -327,7 +382,7 @@ fn the_screen_is_sighted_once_however_it_is_cut_into_reads() {
         (Agent::Grok, GROK_SCREEN, GROK_ANIMATION),
     ] {
         for size in [1, 3, 7, 200, screen.len()] {
-            let state = TrustState::new(agent, None);
+            let state = TrustState::new(agent, None, false);
             let mut sightings = state.take_sightings().expect("receiver");
             for chunk in screen.chunks(size) {
                 state.feed(chunk, 0, 0);
@@ -347,7 +402,7 @@ fn the_screen_is_sighted_once_however_it_is_cut_into_reads() {
 
 #[test]
 fn nothing_is_sighted_before_the_screen_is_complete() {
-    let state = TrustState::new(Agent::Claude, None);
+    let state = TrustState::new(Agent::Claude, None, false);
     let mut sightings = state.take_sightings().expect("receiver");
     // Everything up to, and including, the first option.
     let cut = SCREEN
@@ -363,7 +418,7 @@ fn nothing_is_sighted_before_the_screen_is_complete() {
 #[test]
 fn each_agent_is_watched_for_its_own_screen_and_a_hook_ends_the_watch() {
     for agent in [Agent::Codex, Agent::Grok] {
-        let state = TrustState::new(agent, None);
+        let state = TrustState::new(agent, None, false);
         let mut sightings = state.take_sightings().expect("receiver");
         state.feed(SCREEN, 0, 0);
         assert!(
@@ -373,7 +428,7 @@ fn each_agent_is_watched_for_its_own_screen_and_a_hook_ends_the_watch() {
         assert!(!state.claim_answer(), "{agent:?} is not answered for it");
     }
 
-    let state = TrustState::new(Agent::Claude, None);
+    let state = TrustState::new(Agent::Claude, None, false);
     let mut sightings = state.take_sightings().expect("receiver");
     state.feed(DISMISSED, 0, 0);
     state.note_hook();
@@ -385,7 +440,7 @@ fn each_agent_is_watched_for_its_own_screen_and_a_hook_ends_the_watch() {
 
 #[test]
 fn a_session_is_answered_at_most_once_and_only_after_the_screen_was_sighted() {
-    let state = TrustState::new(Agent::Claude, None);
+    let state = TrustState::new(Agent::Claude, None, false);
     assert!(!state.claim_answer(), "nothing sighted yet");
     state.feed(SCREEN, 0, 0);
     assert!(state.waiting());
@@ -511,15 +566,19 @@ fn scratch(name: &str) -> ScratchDir {
 /// prints what the script says to and records every byte it is sent, so a test sees exactly
 /// what reached the terminal.
 fn stand_in(id: &str, agent: Agent, script: &str) -> StandIn {
+    stand_in_with(id, agent, script, false)
+}
+
+/// [`stand_in`], for a session whose agent's configuration switches off the signal that ends its
+/// watch when `start_signal_missing`, so that the watch is bounded.
+fn stand_in_with(id: &str, agent: Agent, script: &str, start_signal_missing: bool) -> StandIn {
     // Raw first, so the fixtures reach the terminal as captured and the keys are read as sent.
-    let live = watched_live_session(
-        id,
-        agent,
-        120,
-        32,
-        &format!("stty raw -echo; {script}"),
-        None,
-    );
+    let script = format!("stty raw -echo; {script}");
+    let live = if start_signal_missing {
+        unsignalled_live_session(id, agent, 120, 32, &script)
+    } else {
+        watched_live_session(id, agent, 120, 32, &script, None)
+    };
     spawn_reader_thread(live.clone(), 8 * 1024);
     live
 }
@@ -760,12 +819,24 @@ fn state_with_project(name: &str) -> (Arc<AppState>, ScratchDir) {
 /// Starts a stand-in session of the given kind under a stored record and registers it, as a
 /// launch would; the caller decides whether it is supervised.
 fn start(state: &Arc<AppState>, dir: &Path, record: Session, script: &str) -> (StandIn, PathBuf) {
+    start_with(state, dir, record, script, false)
+}
+
+/// [`start`] with [`stand_in_with`]'s `start_signal_missing`.
+fn start_with(
+    state: &Arc<AppState>,
+    dir: &Path,
+    record: Session,
+    script: &str,
+    start_signal_missing: bool,
+) -> (StandIn, PathBuf) {
     let received = dir.join(format!("received-{}", record.id));
     state.store.insert_session(&record).expect("session");
-    let live = stand_in(
+    let live = stand_in_with(
         &record.id,
         record.agent,
         &script.replace("%RECEIVED%", &received.to_string_lossy()),
+        start_signal_missing,
     );
     state.register_live(live.clone());
     (live, received)
@@ -1709,10 +1780,10 @@ async fn trusting_a_project_presses_its_other_waiting_screens_and_no_others() {
     assert!(sent(&other_received).is_empty(), "not another project's");
 }
 
-/// A Codex session that shows no trust screen runs no hook until its first prompt, so what was
-/// queued for it is let through when its watch ends.
+/// A Codex session with its title switched off shows no trust screen and no start signal, so what
+/// was queued for it is let through when its bounded watch ends.
 #[tokio::test]
-async fn a_message_for_codex_is_let_through_when_its_watch_ends_with_no_screen() {
+async fn a_message_for_codex_without_a_title_is_let_through_when_its_watch_ends() {
     let (state, dir) = state_with_project("watch-ends");
     let message = crate::term::frame_message("hello");
     let record = session("codex-1", Agent::Codex, Role::Project, Some("project-1"));
@@ -1720,7 +1791,7 @@ async fn a_message_for_codex_is_let_through_when_its_watch_ends_with_no_screen()
         "printf 'ready'; {}; sleep 30",
         take(message.len(), "'%RECEIVED%'")
     );
-    let (live, received) = start(&state, &dir, record, &script);
+    let (live, received) = start_with(&state, &dir, record, &script, true);
     live.trust.shorten_watch(Duration::from_millis(300));
     supervise(&state, &live);
 
@@ -1732,6 +1803,37 @@ async fn a_message_for_codex_is_let_through_when_its_watch_ends_with_no_screen()
     )
     .expect("accepted");
     assert!(matches!(delivery, crate::reporting::Delivery::Queued));
+    let delivered =
+        tokio::task::spawn_blocking(move || wait_for(PATIENCE, || sent(&received) == message));
+    assert!(delivered.await.unwrap());
+}
+
+/// A Codex session that shows no trust screen writes its terminal title as it starts, which ends
+/// its watch, and what was queued for it is let through then.
+#[tokio::test]
+async fn a_message_for_codex_is_let_through_at_its_first_title_with_no_screen() {
+    let (state, dir) = state_with_project("title-ends");
+    let message = crate::term::frame_message("hello");
+    let record = session("codex-1", Agent::Codex, Role::Project, Some("project-1"));
+    let script = format!(
+        "printf 'ready'; {}; sleep 30",
+        take(message.len(), "'%RECEIVED%'")
+    );
+    let (live, received) = start(&state, &dir, record, &script);
+    supervise(&state, &live);
+
+    let delivery = crate::reporting::write_message(
+        &state,
+        "codex-1",
+        "hello",
+        crate::reporting::WhenBlocked::Queue,
+    )
+    .expect("accepted");
+    assert!(matches!(delivery, crate::reporting::Delivery::Queued));
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    assert!(sent(&received).is_empty(), "held while there is no title");
+
+    live.on_output(b"\x1b]0;project\x07");
     let delivered =
         tokio::task::spawn_blocking(move || wait_for(PATIENCE, || sent(&received) == message));
     assert!(delivered.await.unwrap());

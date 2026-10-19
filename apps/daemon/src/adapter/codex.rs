@@ -296,6 +296,7 @@ impl AgentAdapter for CodexAdapter {
             }
         }
 
+        let config = read_config(spec, pinned);
         // Set only for a pinned directory; otherwise the shell snapshot's own value, if any, stands.
         let env = pinned
             .map(|dir| vec![("CODEX_HOME".to_string(), dir.to_string_lossy().into_owned())])
@@ -304,7 +305,8 @@ impl AgentAdapter for CodexAdapter {
         Ok(LaunchPlan {
             args,
             env,
-            resolves_approvals_itself: resolves_approvals_itself(spec, pinned),
+            resolves_approvals_itself: resolves_approvals_itself(spec, &config),
+            start_signal_missing: !terminal_title_enabled(&config),
             ..LaunchPlan::default()
         })
     }
@@ -361,23 +363,59 @@ pub fn unarchive(
 /// auto-review marker rather than one key path being assumed. Unreadable or absent means "the user
 /// will be asked", which is the safe way to be wrong: a hand raised needlessly is visible, while
 /// one never raised leaves a session looking busy while it waits.
-fn resolves_approvals_itself(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> bool {
+fn resolves_approvals_itself(spec: &LaunchSpec<'_>, config: &ConfigFile) -> bool {
     if let Some(reviewer) = spec.approval_reviewer {
         return reviewer == crate::protocol::ApprovalReviewer::AutoReview;
     }
     const AUTO_REVIEW: &str = "auto_review";
-    let config = codex_home(spec, pinned).join("config.toml");
-    let Ok(text) = std::fs::read_to_string(&config) else {
-        return false;
-    };
-    // A `Table`, not a `Value`: in `toml` 1.x parsing into `Value` expects a bare value rather
-    // than a whole document, and silently fails on the first key.
-    let Ok(parsed) = text.parse::<toml::Table>() else {
+    let ConfigFile::Parsed(parsed) = config else {
         return false;
     };
     parsed
         .get("approvals_reviewer")
         .is_some_and(|value| mentions(value, AUTO_REVIEW))
+}
+
+/// Whether Codex writes a terminal title, which the trust watch ends at (`crate::trust`): it does
+/// by default, with a `config.toml` that has no `tui.terminal_title` or one that is a non-empty
+/// list. An absent file is the default, as on an account's first launch. A file that cannot be read
+/// or parsed, or a `tui.terminal_title` that is not a list, says nothing sure, and the title is
+/// then taken as off: the watch ends on a bound, so that messages are never held for good.
+fn terminal_title_enabled(config: &ConfigFile) -> bool {
+    let parsed = match config {
+        ConfigFile::Absent => return true,
+        ConfigFile::Unreadable => return false,
+        ConfigFile::Parsed(parsed) => parsed,
+    };
+    match parsed.get("tui").and_then(|tui| tui.get("terminal_title")) {
+        None => true,
+        Some(toml::Value::Array(items)) => !items.is_empty(),
+        Some(_) => false,
+    }
+}
+
+/// What the user's `config.toml` in the Codex home in effect came to, for each reader to take its
+/// own safe side of.
+enum ConfigFile {
+    Absent,
+    /// It exists but cannot be read or parsed.
+    Unreadable,
+    Parsed(toml::Table),
+}
+
+fn read_config(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> ConfigFile {
+    let config = codex_home(spec, pinned).join("config.toml");
+    let text = match std::fs::read_to_string(&config) {
+        Ok(text) => text,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return ConfigFile::Absent,
+        Err(_) => return ConfigFile::Unreadable,
+    };
+    // A `Table`, not a `Value`: in `toml` 1.x parsing into `Value` expects a bare value rather
+    // than a whole document, and silently fails on the first key.
+    match text.parse::<toml::Table>() {
+        Ok(parsed) => ConfigFile::Parsed(parsed),
+        Err(_) => ConfigFile::Unreadable,
+    }
 }
 
 /// Whether `wanted` appears as a string anywhere inside this value.
@@ -679,6 +717,42 @@ mod tests {
                 .expect("plan")
                 .resolves_approvals_itself
         );
+    }
+
+    /// Codex's terminal title is what ends the trust watch, so a configuration that switches it
+    /// off, or that cannot be read, makes the plan say the signal is missing.
+    #[test]
+    fn a_switched_off_terminal_title_is_noticed() {
+        let mut fixture = spec_fixture();
+        let home = fixture.scratch.join("codex-home");
+        std::fs::create_dir_all(&home).expect("codex home");
+        fixture.shell_env.insert(
+            "CODEX_HOME".to_string(),
+            home.to_string_lossy().into_owned(),
+        );
+        let missing = |fixture: &crate::adapter::tests::SpecFixture| {
+            CodexAdapter
+                .plan(&fixture.spec())
+                .expect("plan")
+                .start_signal_missing
+        };
+
+        assert!(!missing(&fixture), "no configuration is the default");
+        for (config, expected) in [
+            ("model = \"gpt\"\n", false),
+            ("[tui]\ntheme = \"dark\"\n", false),
+            ("[tui]\nterminal_title = [\"project\"]\n", false),
+            ("[tui]\nterminal_title = []\n", true),
+            ("[tui]\nterminal_title = \"project\"\n", true),
+            ("[tui\nterminal_title =", true),
+        ] {
+            std::fs::write(home.join("config.toml"), config).expect("config");
+            assert_eq!(missing(&fixture), expected, "{config:?}");
+        }
+
+        std::fs::remove_file(home.join("config.toml")).expect("remove");
+        std::fs::create_dir(home.join("config.toml")).expect("a directory in its place");
+        assert!(missing(&fixture), "unreadable");
     }
 
     /// The approval setting is read from the Codex home in effect, which is the pinned directory

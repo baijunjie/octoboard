@@ -21,20 +21,25 @@
 //! **Detection.** Every session's output is watched by a [`TrustState`], fed from the PTY reader
 //! thread whether or not a client is attached, against its own agent's [`Screen`]. The screen is
 //! recognised by how it is first drawn after the output has been reduced to bare text
-//! ([`normalise`]): the agents do not print a space between words, they move the cursor, so the
-//! raw bytes never contain the words a person reads. A sighting is signalled once per session.
-//! That is enough for "once per occurrence" because the confirmation cannot come back within one
-//! process. Claude Code and Grok run no hook before it is answered and Grok runs `SessionStart`
-//! right after, so the first hook callback retires the watch; Codex runs none around it, so for
-//! Codex and Grok anything written into the session's input since the sighting — the person
-//! answering in the terminal — also means the screen is no longer waiting: its prompt is not put
-//! to a client again and a go-ahead for it is refused as stale. Codex's watch is also bounded: it
-//! ends after [`WATCH_BYTES`] of output or [`WATCH_SECONDS`] seconds, the confirmation being among
-//! the first things it prints. Claude Code's and Grok's is not, since either can print a good deal
-//! first (Claude Code's onboarding on an account's first launch) and runs no hook until past the
-//! screen, so nothing a transcript quotes can precede the first hook. A transcript that quotes a
-//! screen is not taken for it unless it reproduces the first-draw pattern inside the output window
-//! before any hook has run; and whatever is sighted, keys are sent only if the checks below pass.
+//! ([`normalise`]): the agents do not print a space between words, they move the cursor, so the raw
+//! bytes never contain the words a person reads. A sighting is signalled once per session. That is
+//! enough for "once per occurrence" because the confirmation cannot come back within one process.
+//! Claude Code and Grok run no hook before it is answered and Grok runs `SessionStart` right after,
+//! so the first hook callback retires the watch; Codex runs none around it, so for Codex and Grok
+//! anything written into the session's input since the sighting — the person answering in the
+//! terminal — also means the screen is no longer waiting: its prompt is not put to a client again
+//! and a go-ahead for it is refused as stale. The watch ends at the agent's start signal
+//! ([`StartSignal`]), never at a limit of output or time, since an agent can print a good deal
+//! first (Claude Code's onboarding or Codex's login on an account's first launch, each with a login
+//! in a browser) and shows the signal only once past the screen: the first hook for Claude Code and
+//! Grok, and for Codex, which runs none until its first prompt, the first terminal title it writes,
+//! which it does as its session starts and never before. Nothing a transcript quotes can precede
+//! it. The exception is a Codex whose configuration switches the title off
+//! (`tui.terminal_title = []`) or cannot be read: its watch is bounded, ending after
+//! [`WATCH_BYTES`] of output or [`WATCH_SECONDS`] seconds, or at its first title, if it sets one. A
+//! transcript that quotes a screen is not taken for it unless it reproduces the first-draw pattern
+//! inside the output window before the watch has ended; and whatever is sighted, keys are sent only
+//! if the checks below pass.
 //!
 //! **Octoboard's own messages are held** for as long as a screen may be up
 //! ([`TrustState::holds_writes`]), since a message's trailing Enter would otherwise answer it —
@@ -45,10 +50,11 @@
 //!   modal can follow Claude Code's screen, and only the hook says the session is ready. A session
 //!   whose hooks never arrive holds its messages for as long as it runs.
 //! - Codex runs none until its first prompt, so its messages are held while the watch is still
-//!   looking and, once its screen is sighted, until Octoboard's press of it succeeds, a hook
-//!   arrives, or the person's own answer in the terminal is seen to take the screen away. The
-//!   press releases them itself; the end of the watch with nothing sighted and the person's answer
-//!   are watched for by [`supervise`] (`release_when_the_screen_goes`).
+//!   looking (until its first terminal title, or the bound of a watch that has one) and, once its
+//!   screen is sighted, until Octoboard's press of it succeeds, a hook arrives, or the person's own
+//!   answer in the terminal is seen to take the screen away. The press releases them itself; the
+//!   end of the watch with nothing sighted and the person's answer are watched for by
+//!   [`supervise`] (`release_when_the_screen_goes`).
 //!
 //! So none of Octoboard's own writes can be what ends a wait, and the input counted since a
 //! sighting is the person's alone.
@@ -230,7 +236,7 @@ pub fn supervise(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     let Some(mut sightings) = live.trust.take_sightings() else {
         return;
     };
-    if !live.trust.screen.hook_at_start {
+    if !live.trust.screen.hook_at_start() {
         release_when_the_screen_goes(state, live);
     }
     let state = state.clone();
@@ -415,7 +421,7 @@ async fn answer_and_report(state: &Arc<AppState>, live: &Arc<LiveSession>) {
 /// agents' are let through by their first hook ([`on_hook`]).
 async fn answer_off_the_runtime(state: &Arc<AppState>, live: Arc<LiveSession>) -> Result<()> {
     let id = live.id.clone();
-    let hook_at_start = live.trust.screen.hook_at_start;
+    let hook_at_start = live.trust.screen.hook_at_start();
     let answering = live.clone();
     let outcome = tokio::task::spawn_blocking(move || answer(&answering))
         .await

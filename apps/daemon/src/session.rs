@@ -97,6 +97,8 @@ pub struct NewSession {
     /// Grok's: where the trust it records when its confirmation is pressed is carried from and to;
     /// see `adapter::LaunchPlan::carried_trust`.
     pub carried_trust: Option<CarriedTrust>,
+    /// See `adapter::LaunchPlan::start_signal_missing`.
+    pub start_signal_missing: bool,
 }
 
 impl LiveSession {
@@ -113,7 +115,11 @@ impl LiveSession {
             title: Mutex::new(TitleObserver::default()),
             action_required: AtomicBool::new(false),
             resolves_approvals_itself: session.resolves_approvals_itself,
-            trust: TrustState::new(session.agent, session.carried_trust),
+            trust: TrustState::new(
+                session.agent,
+                session.carried_trust,
+                session.start_signal_missing,
+            ),
             input_writes: AtomicU64::new(0),
         }
     }
@@ -140,24 +146,29 @@ impl LiveSession {
     /// Called from the PTY reader thread for every chunk read. Blocks while a slow client catches
     /// up; see [`PtyCore::push_output`].
     pub fn on_output(&self, data: &[u8]) {
-        {
+        let titled = {
             let mut observer = self.title.lock().expect("title observer lock poisoned");
-            if let Some(title) = observer.parser.feed(data) {
+            let completed = observer.parser.feed(data);
+            if let Some(title) = &completed {
                 // A title that only spun since the last one changes nothing, so it does not reach
                 // the store's lock.
-                let changed = observer.latest.as_ref() != Some(&title);
+                let changed = observer.latest.as_ref() != Some(title);
                 observer.latest = Some(title.clone());
                 if changed {
                     observer.publish(self);
                 }
             }
-        }
+            completed.is_some()
+        };
         self.pty.push_output(data, |total| {
             // The count without its lock: a writer holds that lock while the agent may be waiting
             // for this very thread to drain its output.
             self.trust
                 .feed(data, self.input_writes.load(Ordering::Acquire), total);
         });
+        if titled {
+            self.trust.note_title();
+        }
     }
 
     /// Writes raw input. The error says how many bytes went in, because a caller deciding whether

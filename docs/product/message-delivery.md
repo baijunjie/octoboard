@@ -37,9 +37,12 @@ until the confirmation can no longer be on screen:
 - for Claude Code and Grok Build, until the session's first hook report, which each sends only once it is past the
   confirmation (and, for Claude Code, past any other startup screen that follows it). A session whose hook reports
   never arrive holds its messages for as long as it runs;
-- for Codex, which reports nothing until its first prompt, until about 30 seconds have passed since the launch (or
-  64 KiB of output has been printed) with no confirmation shown; once one is shown, until Octoboard's press of it
-  succeeds, a hook report arrives, or the person's own answer in the terminal is seen to replace it on screen.
+- for Codex, which reports nothing until its first prompt, until Octoboard's watch for the confirmation ends with none
+  shown — normally at the first terminal title Codex sets, once its session has started; when that watch ends is in
+  "Recognition is limited to the start of a session" in `docs/product/folder-trust.md`. Once a confirmation is shown,
+  they are held until Octoboard's press of it succeeds, a hook report arrives, or the person's own answer in the
+  terminal is seen to replace it on screen. A session whose terminal title is left on but which never sets one nor
+  sends a hook report holds its messages for as long as it runs.
 
 The user's own typing in the session's terminal is never held. A client's direct request to write into a session
 (`send_message` in the daemon's client protocol) is refused instead of queued, with the error code
