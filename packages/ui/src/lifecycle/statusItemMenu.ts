@@ -27,11 +27,12 @@ export interface StatusItemMenuSource {
 }
 
 /** The live sessions — waiting for the user, working, awaiting instructions — in the sidebar's
- * order, each status under its own heading, then a quota submenu per available agent. */
+ * order, each status under its own heading, then a quota submenu per available agent. The icon
+ * raises its hand (`attention`) while any session waits for the user. */
 export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource): StatusItemMenuDraft {
   const { consoles, projects, sessions, consoleMap, projectMap, quota } = source;
-  const sections = SECTION_ORDER.flatMap((status): StatusItemSection[] => {
-    const listed = sessionsInTreeOrder(consoles, projects, sessions, (s) => s.status === status);
+  const byStatus = SECTION_ORDER.map((status) => ({ status, listed: sessionsInTreeOrder(consoles, projects, sessions, (s) => s.status === status) }));
+  const sections = byStatus.flatMap(({ status, listed }): StatusItemSection[] => {
     if (listed.length === 0) return [];
     const items: StatusItemEntry[] = listed
       .slice(0, MAX_PER_SECTION)
@@ -48,5 +49,7 @@ export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource):
     submenus: buildQuotaSubmenus(t, quota),
     open: t("statusItem.open"),
     quit: t("menu.quit"),
+    // Taken from the listed sessions, so the hand is never up over a menu with no waiting section.
+    attention: byStatus.some(({ status, listed }) => status === "waiting_user" && listed.length > 0),
   };
 }

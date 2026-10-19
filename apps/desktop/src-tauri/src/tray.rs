@@ -5,6 +5,11 @@
 //! also tells the UI which one. Quit goes through the same exit flow as Cmd+Q, so it still asks
 //! while a session is running.
 //!
+//! The icon itself has two looks, both template images: the octopus, and the octopus with a
+//! raised hand in its corner, which shows while the menu's `attention` flag is set (a session is
+//! waiting for the user). Like the rest of the menu, the UI decides when, and the look changes
+//! together with the menu it came with.
+//!
 //! Replacing the menu closes it if it is open, so a menu the UI sends while a menu is open is held
 //! back and applied once it closes (`MenuTracking`). The UI is told when this menu begins to open
 //! (`MENU_OPENED_EVENT`) so it can ask for fresh quotas, which reach the menu on its next update.
@@ -16,6 +21,7 @@
 //! submenu their rows (`tray_lines.rs`).
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use base64::Engine;
@@ -52,12 +58,13 @@ const MENU_OPENED_EVENT: &str = "tray-menu-opened";
 
 /// The tray menu as the UI words it, already in its language: sections of sessions, each under a
 /// heading, submenus of rows (headers, quota windows, notes) that cannot be chosen, then the Open
-/// and Quit labels. Text, opaque session ids and the pictures beside the lines — the UI decides
-/// what is listed and how it reads, the same way it decides the Dock badge's count. The pictures
-/// are drawn by the UI, which already has every agent's mark and status glyph, so a new agent
-/// needs nothing here for its pictures: `icons` holds each distinct one once, as a base64 PNG under
-/// a key the lines name, at twice the size they show at. Only a quota bar's colour is the shell's,
-/// and an agent it does not know gets the text colour (`AgentKind::Other`).
+/// and Quit labels, and whether the icon should raise its hand. Text, opaque session ids and the
+/// pictures beside the lines — the UI decides what is listed and how it reads, the same way it
+/// decides the Dock badge's count. The pictures are drawn by the UI, which already has every
+/// agent's mark and status glyph, so a new agent needs nothing here for its pictures: `icons` holds
+/// each distinct one once, as a base64 PNG under a key the lines name, at twice the size they show
+/// at. Only a quota bar's colour is the shell's, and an agent it does not know gets the text colour
+/// (`AgentKind::Other`).
 #[derive(Deserialize)]
 pub struct TrayMenu {
     sections: Vec<TraySection>,
@@ -67,6 +74,9 @@ pub struct TrayMenu {
     icons: HashMap<String, LineIcon>,
     open: String,
     quit: String,
+    /// Whether the icon shows the raised hand, which asks for the user's attention.
+    #[serde(default)]
+    attention: bool,
 }
 
 /// A picture: a base64 PNG, and whether it is a template image, drawn in black for its alpha alone
@@ -156,6 +166,7 @@ impl Default for TrayMenu {
             icons: HashMap::new(),
             open: format!("Open {APP_NAME}"),
             quit: format!("Quit {APP_NAME}"),
+            attention: false,
         }
     }
 }
@@ -204,22 +215,37 @@ impl MenuTracking {
     }
 }
 
+/// The menu tracking, and whether the icon now shows the raised hand, so that the picture is
+/// replaced only when that changes.
 #[derive(Default)]
-pub struct TrayState(Mutex<MenuTracking>);
+pub struct TrayState {
+    tracking: Mutex<MenuTracking>,
+    attention_shown: AtomicBool,
+}
 
 fn tracking(app: &AppHandle) -> std::sync::MutexGuard<'_, MenuTracking> {
     app.state::<TrayState>()
         .inner()
-        .0
+        .tracking
         .lock()
         .unwrap_or_else(|e| e.into_inner())
+}
+
+/// The icon's picture for whether it raises its hand. Both are template images, drawn in black for
+/// their alpha alone.
+fn icon_image(attention: bool) -> Image<'static> {
+    if attention {
+        tauri::include_image!("icons/tray-attention-template.png")
+    } else {
+        tauri::include_image!("icons/tray-template.png")
+    }
 }
 
 /// Puts the icon in the menu bar. It is a template image, so macOS tints it for a light or dark
 /// menu bar itself.
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
     TrayIconBuilder::with_id(TRAY_ID)
-        .icon(tauri::include_image!("icons/tray-template.png"))
+        .icon(icon_image(false))
         .icon_as_template(true)
         .tooltip(APP_NAME)
         .menu(&build_menu(app, &TrayMenu::default())?)
@@ -363,6 +389,23 @@ fn apply(app: &AppHandle, menu: &TrayMenu) -> Result<(), String> {
     tray.set_menu(Some(built)).map_err(|err| err.to_string())?;
     #[cfg(target_os = "macos")]
     finish_menu(&tray, template_order(menu), menu.submenus.clone());
+    show_attention(app, &tray, menu.attention)
+}
+
+/// Swaps the icon's picture when `attention` differs from the one shown, keeping it a template
+/// image, which a plain `set_icon` would drop.
+fn show_attention(
+    app: &AppHandle,
+    tray: &tauri::tray::TrayIcon,
+    attention: bool,
+) -> Result<(), String> {
+    let shown = &app.state::<TrayState>().inner().attention_shown;
+    if shown.load(Ordering::Relaxed) == attention {
+        return Ok(());
+    }
+    tray.set_icon_with_as_template(Some(icon_image(attention)), true)
+        .map_err(|err| err.to_string())?;
+    shown.store(attention, Ordering::Relaxed);
     Ok(())
 }
 
@@ -488,6 +531,26 @@ mod tests {
             open: open.to_string(),
             ..TrayMenu::default()
         }
+    }
+
+    #[test]
+    fn a_menu_asks_for_attention_only_when_the_ui_says_so() {
+        let bare = parsed(r#"{"sections": [], "open": "Open", "quit": "Quit"}"#);
+        assert!(!bare.attention);
+        let raised =
+            parsed(r#"{"sections": [], "open": "Open", "quit": "Quit", "attention": true}"#);
+        assert!(raised.attention);
+        assert!(!TrayMenu::default().attention);
+    }
+
+    #[test]
+    fn both_looks_of_the_icon_are_decodable_template_pictures() {
+        for attention in [false, true] {
+            let image = icon_image(attention);
+            assert_eq!((image.width(), image.height()), (44, 44));
+            assert!(image.rgba().chunks(4).all(|pixel| pixel[..3] == [0, 0, 0]));
+        }
+        assert_ne!(icon_image(true).rgba(), icon_image(false).rgba());
     }
 
     #[test]

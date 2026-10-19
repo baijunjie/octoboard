@@ -1,10 +1,24 @@
 # Menu bar icon
 
-The macOS application puts an icon in the system menu bar: a monochrome octopus, which macOS tints to suit a light or
-dark menu bar, with the tooltip "Octoboard". It is there for as long as the application runs — while the window is
-shown, while it is closed into the background, and on the screen shown when the daemon failed to start — and whatever
-the user chose about keeping Octoboard running when the window is closed (see "Closing the window" in
-`docs/product/application-lifecycle.md`). A browser has no such icon.
+The macOS application puts an icon in the system menu bar: an octopus, which raises a hand while a session waits for
+the user (see "The icon's look" below), with the tooltip "Octoboard". It is there for as long as the application
+runs — while the window is shown, while it is closed into the background, and on the screen shown when the daemon
+failed to start — and whatever the user chose about keeping Octoboard running when the window is closed (see
+"Closing the window" in `docs/product/application-lifecycle.md`). A browser has no such icon.
+
+## The icon's look
+
+The icon has two looks, both monochrome, which macOS tints to suit a light or dark menu bar:
+
+- **The octopus alone**, while no session is waiting for the user.
+- **The octopus with a raised hand** — a small hand outline over its bottom-right corner — while at least one session
+  is waiting for the user. The sessions that count are exactly those the menu lists under **Waiting for you** (see "The
+  icon's menu" below), across every console.
+
+The look changes together with the menu: a change that has to wait for an open menu to close (see the end of "The
+icon's menu" below) changes the look only when it reaches the menu, so the icon and the menu always agree on whether a
+session is waiting. Until the window's UI has sent its first menu — and throughout on the screen shown when the daemon
+failed to start — the icon is the octopus alone.
 
 ## Clicking the icon
 
@@ -77,10 +91,10 @@ From top to bottom:
 The menu follows the sessions as they change, including while the window is closed into the background. It is never
 replaced while open, though: while any of Octoboard's menus is open — this one or the application menu — changes
 wait, and once no menu is open the icon's menu takes on the latest of them, so an open menu stays open and unchanged
-until it is dismissed or an item is chosen. It is worded in the UI's current language (see
-"What follows the language" in `docs/product/language.md`). Until the window's UI has loaded and received the
-daemon's state — and throughout on the screen shown when the daemon failed to start — the menu holds only Open
-Octoboard and Quit Octoboard, in English, with no quota submenus.
+until it is dismissed or an item is chosen. The icon's look waits with them (see "The icon's look" above). It is
+worded in the UI's current language (see "What follows the language" in `docs/product/language.md`). Until the
+window's UI has loaded and received the daemon's state — and throughout on the screen shown when the daemon failed to
+start — the menu holds only Open Octoboard and Quit Octoboard, in English, with no quota submenus.
 
 ### Choosing a session
 

@@ -137,7 +137,8 @@ export interface AppMenuCapability {
   setLabels(labels: Record<string, string>): Promise<void>;
 }
 
-/** The menu bar icon's menu, already in the UI's language. */
+/** The menu bar icon's menu, already in the UI's language; it also decides the icon's picture,
+ * through `attention`. */
 export interface StatusItemMenu {
   sections: StatusItemSection[];
   /** Submenus after the sessions and before Open, such as an agent's quota; none until the UI has
@@ -147,6 +148,8 @@ export interface StatusItemMenu {
   icons: Record<string, StatusItemIcon>;
   open: string;
   quit: string;
+  /** Whether the icon raises its hand: a live session is waiting for the user. */
+  attention: boolean;
 }
 
 export interface StatusItemIcon {
@@ -188,7 +191,7 @@ export type StatusItemSubmenuItem =
   | { kind: "separator" };
 
 export interface StatusItemCapability {
-  /** Replaces the menu bar icon's menu. */
+  /** Replaces the menu bar icon's menu, and with it whether the icon raises its hand. */
   setMenu(menu: StatusItemMenu): Promise<void>;
   /** Subscribes to a session being chosen in that menu, returning the function that undoes it. The
    * shell has already brought the window to the front. */

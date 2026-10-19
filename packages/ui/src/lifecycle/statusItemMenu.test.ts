@@ -47,6 +47,18 @@ describe("buildStatusItemMenu", () => {
     ]);
   });
 
+  it("raises the icon's hand only while a live session waits for the user", () => {
+    expect(menuOf([inProject("w", "working"), inProject("i", "idle")]).attention).toBe(false);
+    expect(menuOf([inProject("a", "archived"), inProject("b", "interrupted")]).attention).toBe(false);
+    expect(menuOf([inProject("w", "working"), inProject("h", "waiting_user")]).attention).toBe(true);
+    expect(menuOf([]).attention).toBe(false);
+  });
+
+  it("leaves the hand down for a waiting session that sits in no console the source holds", () => {
+    const orphan = sessionOf("o", "gone", "p", "o", "waiting_user");
+    expect(menuOf([orphan]).attention).toBe(false);
+  });
+
   it("gives each heading its status glyph and each session its agent's mark", () => {
     const { sections } = menuOf([inProject("h", "waiting_user"), sessionOf("w", "c", "p", "w", "working", { agent: "codex" })]);
     expect(sections.map((s) => [s.icon, s.items.map((item) => item.icon)])).toEqual([
