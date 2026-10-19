@@ -1,5 +1,5 @@
 import { Button, Popover, Tabs } from "@heroui/react";
-import { Gauge } from "lucide-react";
+import { Gauge, KeyRound } from "lucide-react";
 import React, { useEffect, useId, useRef, useState } from "react";
 import { useFocusVisible, type PressEvent } from "react-aria";
 
@@ -271,6 +271,7 @@ function QuotaPanel({ focusSelectedTab, onOpenAccounts }: { focusSelectedTab: bo
       )}
       <div className="groove-t flex justify-end p-2">
         <Button size="sm" variant="ghost" className="text-app-muted hover:text-foreground data-[focus-visible=true]:text-foreground" preventFocusOnPress onPress={onOpenAccounts}>
+          <KeyRound aria-hidden="true" className="size-4 shrink-0" />
           {t("rail.quota.manage")}
         </Button>
       </div>
