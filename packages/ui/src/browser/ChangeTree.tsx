@@ -164,7 +164,7 @@ export function ChangeTree({
                     count={group.items.length}
                     collapsed={collapsed}
                     onCollapsedChange={onCollapsedChange}
-                    topDivider={group.previousSection === undefined || !collapsed.has(sectionKey(group.previousSection))}
+                    topDivider={group.previousSection !== undefined && !collapsed.has(sectionKey(group.previousSection))}
                   />
                 </TreeHeader>
                 {/* A folded section is its heading and nothing else, still counting what it holds. */}

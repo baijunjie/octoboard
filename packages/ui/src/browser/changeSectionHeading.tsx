@@ -130,7 +130,7 @@ export function ChangeSectionHeading({
   /** The row keys folded away, the heading's own among them when the section is folded. */
   collapsed: ReadonlySet<string>;
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
-  /** Adjacent headings share the preceding band's bottom divider. */
+  /** The first heading shares the selector's divider; adjacent headings share the preceding band's. */
   topDivider: boolean;
 }): React.ReactElement {
   const button = useRef<HTMLButtonElement>(null);

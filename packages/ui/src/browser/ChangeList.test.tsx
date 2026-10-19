@@ -116,13 +116,13 @@ it.each([
   const unfolded = rows(container);
   const band = heading(container, "Staged");
   expect(band.getAttribute("aria-expanded")).toBe("true");
-  expect(band.classList.contains("groove-t")).toBe(true);
+  expect(band.classList.contains("groove-t")).toBe(false);
   expect(heading(container, "Unstaged").classList.contains("groove-t")).toBe(true);
   act(() => band.click());
   expect(rows(container)).toEqual(left);
   expect(band.textContent).toBe("Staged2");
   expect(band.getAttribute("aria-expanded")).toBe("false");
-  expect(band.classList.contains("groove-t")).toBe(true);
+  expect(band.classList.contains("groove-t")).toBe(false);
   expect(heading(container, "Unstaged").classList.contains("groove-t")).toBe(false);
   act(() => band.click());
   expect(rows(container)).toEqual(unfolded);
