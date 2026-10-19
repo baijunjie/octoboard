@@ -14,12 +14,22 @@ interface ListMotionOptions {
   virtualized?: boolean;
   /** Logical visible identities, including rows outside the virtualizer's DOM window. */
   keys?: ReadonlySet<string>;
+  /** How those identities nest, so that rows a parent folds in or out appear and vanish with it. */
+  folds?: ListFolds;
+}
+
+/** A tree's rows by their parent row, and the parents whose rows are shown. A row added or removed
+ * under a parent listed on both sides but not shown on both folds with it, as do the rows under a
+ * parent that folds; the others, top-level rows among them, enter or leave. */
+export interface ListFolds {
+  parents: ReadonlyMap<string, string>;
+  open: ReadonlySet<string>;
 }
 
 interface Point { x: number; y: number }
 interface Position extends Point { element: HTMLElement; parent: HTMLElement | null; width: number; height: number; columns?: string }
 interface Slide extends Point { animation: Animation }
-interface ListWatch { list: HTMLElement; prepare: (keys: ReadonlySet<string>) => void; rendered: () => void; stop: () => void }
+interface ListWatch { list: HTMLElement; prepare: (keys: ReadonlySet<string>, folds?: ListFolds) => void; rendered: () => void; stop: () => void }
 
 /** Layout coordinates ignore running translations and scrolling. The list and rows share the
  * same offset-parent chain; subtracting their origins also supports display:contents wrappers. */
@@ -42,8 +52,18 @@ function presenceFrames(transform: string, entering: boolean): Keyframe[] {
     : [{ opacity: 1, transform: base || "none" }, { opacity: 0, transform: shifted }];
 }
 
-function watchList(list: HTMLElement, { descendants = false, virtualized = false, keys }: ListMotionOptions): ListWatch {
+/** Whether `key`, listed on one side of a change and not the other, folds with its parent: the
+ * parent is listed on both sides but not shown on both, or is itself missing from the other side and folds. */
+function folded(key: string, side: ListFolds, other: ListFolds, otherKeys: ReadonlySet<string>): boolean {
+  const parent = side.parents.get(key);
+  if (parent === undefined) return false;
+  if (!otherKeys.has(parent)) return folded(parent, side, other, otherKeys);
+  return !(side.open.has(parent) && other.open.has(parent));
+}
+
+function watchList(list: HTMLElement, { descendants = false, virtualized = false, keys, folds }: ListMotionOptions): ListWatch {
   let logical = keys;
+  let logicalFolds = folds;
   const added = new Set<string>();
   const departing = new Map<string, Position>();
   let additionTimer: ReturnType<typeof setTimeout> | undefined;
@@ -246,10 +266,11 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
   query?.addEventListener?.("change", onReducedMotion);
   return {
     list,
-    prepare(nextKeys) {
+    prepare(nextKeys, nextFolds) {
       if (!virtualized || !logical) return;
+      const previousFolds = logicalFolds;
       for (const key of nextKeys) {
-        if (!logical.has(key)) added.add(key);
+        if (!logical.has(key) && !(previousFolds && nextFolds && folded(key, nextFolds, previousFolds, logical))) added.add(key);
         departing.delete(key);
       }
       for (const key of added) if (!nextKeys.has(key)) added.delete(key);
@@ -257,7 +278,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
         const base = list.getBoundingClientRect();
         for (const element of children()) {
           const key = element.dataset.listMotion ?? element.dataset.flip!;
-          if (!logical.has(key) || nextKeys.has(key)) continue;
+          if (!logical.has(key) || nextKeys.has(key) || (previousFolds && nextFolds && folded(key, previousFolds, nextFolds, nextKeys))) continue;
           // Capture only real removals, before React can recycle their elements or wrappers.
           // The viewport rectangle already includes every virtual wrapper's transform.
           const rect = element.getBoundingClientRect();
@@ -267,6 +288,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
         }
       }
       logical = nextKeys;
+      logicalFolds = nextFolds;
       clearTimeout(additionTimer);
       additionTimer = setTimeout(() => added.clear(), 0);
     },
@@ -290,7 +312,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
 }
 
 export interface ListMotionRef<T extends HTMLElement> extends React.RefObject<T | null> {
-  prepare: (keys: ReadonlySet<string>) => void;
+  prepare: (keys: ReadonlySet<string>, folds?: ListFolds) => void;
 }
 
 interface ListFollower<T extends HTMLElement> {
@@ -319,7 +341,7 @@ function followList<T extends HTMLElement>(initial: ListMotionOptions): ListFoll
     ref.current = list;
     attach();
     watch?.rendered();
-  }, { current: null as T | null, prepare: (keys: ReadonlySet<string>) => watch?.prepare(keys) });
+  }, { current: null as T | null, prepare: (keys: ReadonlySet<string>, folds?: ListFolds) => watch?.prepare(keys, folds) });
   return {
     ref,
     rendered(next) {
@@ -338,8 +360,8 @@ function followList<T extends HTMLElement>(initial: ListMotionOptions): ListFoll
 /** Keyed rows enter, leave and slide to their new positions in either axis. Removed controls
  * leave only inert visual copies; actions and focus handoffs take effect immediately. Virtual
  * collections distinguish logical changes from newly rendered or recycled identities when supplied keys. */
-export function useListMotion<T extends HTMLElement>({ descendants = false, virtualized = false, keys }: ListMotionOptions = {}): ListMotionRef<T> {
-  const [motion] = useState(() => followList<T>({ descendants, virtualized, keys }));
+export function useListMotion<T extends HTMLElement>({ descendants = false, virtualized = false, keys, folds }: ListMotionOptions = {}): ListMotionRef<T> {
+  const [motion] = useState(() => followList<T>({ descendants, virtualized, keys, folds }));
   const focused = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     const onFocus = (event: FocusEvent) => {
@@ -367,7 +389,7 @@ export function useListMotion<T extends HTMLElement>({ descendants = false, virt
     };
   }, [motion, virtualized]);
   useLayoutEffect(() => {
-    motion.rendered({ descendants, virtualized, keys });
+    motion.rendered({ descendants, virtualized, keys, folds });
     const list = motion.ref.current;
     const lost = focused.current;
     if (!virtualized && lost?.isConnected && list?.contains(lost) && document.activeElement === document.body) lost.focus({ preventScroll: true });

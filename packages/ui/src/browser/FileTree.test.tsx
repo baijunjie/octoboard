@@ -160,32 +160,46 @@ it.each(["file", "directory"] as const)("opens a %s row's context menu without a
 });
 
 
-it("animates actual virtual tree folder children entering and leaving", async () => {
+it("folds a directory's rows in and out without presence, and animates rows a listing adds or removes", async () => {
   const animate = vi.fn(() => ({ cancel: vi.fn(), effect: { getComputedTiming: () => ({ progress: 1 }) }, onfinish: null, oncancel: null }));
   const previous = HTMLElement.prototype.animate;
   HTMLElement.prototype.animate = animate as unknown as typeof HTMLElement.prototype.animate;
   onTestFinished(() => { HTMLElement.prototype.animate = previous; });
-  const directory: TreeNode = {
+  const directory = (children: TreeNode[]): TreeNode => ({
     type: "directory", key: rowKey("src"), path: "src",
     entry: { name: "src", kind: "directory", size: 0, version: "v1", target: null },
-    children: [fileNode("src/child.ts", false)],
-  };
+    children,
+  });
+  let list: (children: TreeNode[]) => void = () => {};
+  // A stable ref, as the browser hands it: a new one each render would restart the motion's watch.
+  const treeRef = () => {};
   function Folder() {
     const [expanded, setExpanded] = useState(new Set<string | number>());
-    return <FileTree nodes={[directory]} expanded={new Set([...expanded].map(String))} label="Files" onExpandedChange={setExpanded} onOpenFile={() => {}} onRetry={() => {}} treeRef={() => {}} />;
+    const [children, setChildren] = useState<TreeNode[]>([fileNode("src/child.ts", false)]);
+    list = (next) => act(() => setChildren(next));
+    const open = new Set([...expanded].map(String));
+    return <FileTree nodes={[directory(open.has(rowKey("src")) ? children : [])]} expanded={open} label="Files" onExpandedChange={setExpanded} onOpenFile={() => {}} onRetry={() => {}} treeRef={treeRef} />;
   }
   const container = mountRows(<Folder />);
   await act(async () => {});
-  expect(animate).not.toHaveBeenCalled();
+  const presences = () => animate.mock.calls.filter((call) => (call as unknown as [Keyframe[]])[0][0].opacity !== undefined);
   const toggle = () => act(() => container.querySelector<HTMLElement>("[slot=chevron]")!.click());
   toggle();
   await act(async () => {});
   expect(container.querySelector(`[data-list-motion="${rowKey("src/child.ts")}"]`)).not.toBeNull();
-  expect(animate.mock.calls.some((call) => (call as unknown as [Keyframe[]])[0][0].opacity === 0)).toBe(true);
-  toggle();
+  expect(presences()).toHaveLength(0);
+  list([fileNode("src/child.ts", false), fileNode("src/added.ts", false)]);
   await act(async () => {});
-  expect(container.querySelector(`[data-list-motion="${rowKey("src/child.ts")}"]`)).toBeNull();
+  expect(presences().map((call) => (call as unknown as [Keyframe[]])[0][0].opacity)).toEqual([0]);
+  list([fileNode("src/added.ts", false)]);
+  await act(async () => {});
   const ghost = container.querySelector<HTMLElement>("[data-list-motion-ghost]")!;
   expect(ghost.textContent).toContain("child.ts");
   expect(ghost.hasAttribute("inert")).toBe(true);
+  animate.mockClear();
+  toggle();
+  await act(async () => {});
+  expect(container.querySelector(`[data-list-motion="${rowKey("src/added.ts")}"]`)).toBeNull();
+  expect(presences()).toHaveLength(0);
+  expect(container.querySelector("[data-list-motion-ghost]")?.textContent ?? "").not.toContain("added.ts");
 });

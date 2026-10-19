@@ -382,3 +382,35 @@ it("captures logical virtual exits before recycled DOM changes and ignores viewp
   render(["e", "offscreen"], ["offscreen"]);
   expect(animate).toHaveBeenCalledTimes(2);
 });
+
+it("folds virtual rows in and out with their parent, nested rows included, and enters rows added under an open parent", () => {
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    const [x, y] = points[this.dataset.listMotion ?? ""] ?? [0, 0];
+    return { x, y, top: y, left: x, right: x + 180, bottom: y + 28, width: 180, height: 28, toJSON: () => ({}) };
+  });
+  onTestFinished(() => { vi.restoreAllMocks(); });
+  // Rows are `parent/child` paths; a parent's rows are shown while it is open.
+  function Virtual({ rows, open }: { rows: string[]; open: string[] }) {
+    const keys = new Set(rows);
+    const parents = new Map(rows.filter((key) => key.includes("/")).map((key) => [key, key.slice(0, key.lastIndexOf("/"))]));
+    const folds = { parents, open: new Set(open) };
+    const { ref, prepare } = useBrowserListMotion(null, keys, folds);
+    return <BrowserListMotion keys={keys} folds={folds} prepare={prepare}><div ref={ref} data-root="">{rows.map((key, index) => <div key={key} style={{ transform: `translateY(${index * 32}px)` }}><button data-list-motion={key}>{key}</button></div>)}</div></BrowserListMotion>;
+  }
+  const host = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => { act(() => root.unmount()); host.remove(); });
+  const render = (rows: string[], open: string[]) => act(() => root.render(<Virtual rows={rows} open={open} />));
+  const presences = () => animate.mock.calls.filter(([frames]) => frames[0].opacity !== undefined).map(([frames]) => frames[0].opacity);
+  render(["a"], []);
+  render(["a", "a/b", "a/b/c"], ["a", "a/b"]);
+  expect(presences()).toEqual([]);
+  render(["a", "a/b", "a/b/c", "a/d", "a/d/e"], ["a", "a/b", "a/d"]);
+  expect(presences()).toEqual([0, 0]);
+  animate.mockClear();
+  render(["a"], []);
+  expect(presences()).toEqual([]);
+  expect(host.querySelector("[data-list-motion-ghost]")).toBeNull();
+  render(["a", "f"], []);
+  expect(presences()).toEqual([0]);
+});

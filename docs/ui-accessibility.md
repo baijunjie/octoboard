@@ -968,7 +968,9 @@ surface's focus handoff when the focused item is removed.
 
 Initial rendering, scrolling, viewport recycling and container resizing do not trigger item movement animations.
 Virtualized collections keep virtualization and animate only surviving rendered identities whose layout changes.
-Static choices, a replacement page or directory listing, and fixed result snapshots do not require collection
+In a tree, rows that appear or vanish because their parent expands or folds move with the fold and play no entry or
+exit; only rows added to or removed from a parent that stays expanded do. Pass the tree's parents and expanded rows
+to the list motion so it can tell the two apart. Static choices, a replacement page or directory listing, and fixed result snapshots do not require collection
 motion. Collections whose component already provides the same behavior, such as the toast stack, keep that behavior.
 With reduced motion requested, update positions immediately, cancel any entry or movement already running and
 remove exit copies.

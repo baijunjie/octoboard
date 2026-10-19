@@ -102,21 +102,30 @@ export function FileTree({
 }): React.ReactElement {
   const language = useCurrentLanguage();
   const items = useStableNodes(nodes);
-  const visibleKeys = useMemo(() => {
+  const { visibleKeys, folds } = useMemo(() => {
     const keys = new Set<string>();
-    const walk = (rows: TreeNode[]) => {
+    const parents = new Map<string, string>();
+    // A directory opens once its rows are listed: rows that arrive while it is still loading, or
+    // after it failed to list, unfold with it rather than entering one by one.
+    const open = new Set<string>();
+    const walk = (rows: TreeNode[], parent?: string) => {
       for (const node of rows) {
         keys.add(node.key);
+        if (parent !== undefined) parents.set(node.key, parent);
         if (node.type === "directory" && expanded.has(node.key)) {
-          if (node.children.length > 0) walk(node.children);
-          else keys.add(`collapsed:${node.path}`);
+          if (node.children.some((child) => child.type !== "status" || (child.status !== "loading" && child.status !== "error"))) open.add(node.key);
+          if (node.children.length > 0) walk(node.children, node.key);
+          else {
+            keys.add(`collapsed:${node.path}`);
+            parents.set(`collapsed:${node.path}`, node.key);
+          }
         }
       }
     };
     walk(items);
-    return keys;
+    return { visibleKeys: keys, folds: { parents, open } };
   }, [items, expanded]);
-  const motion = useBrowserListMotion(treeRef, visibleKeys);
+  const motion = useBrowserListMotion(treeRef, visibleKeys, folds);
   const fade = useScrollFade({ ref: motion.ref, className: "min-h-0 flex-1 overflow-auto py-1 outline-none" });
   // react-aria-components 1.21.1 decides whether a row can expand — its `aria-expanded` and Left /
   // Right — from the children it holds, not from `hasChildItems`, which it hands only to the
@@ -169,7 +178,7 @@ export function FileTree({
   };
 
   return (
-    <BrowserListMotion keys={visibleKeys} prepare={motion.prepare}>
+    <BrowserListMotion keys={visibleKeys} folds={folds} prepare={motion.prepare}>
       <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT }}>
         <Tree
           {...fade}

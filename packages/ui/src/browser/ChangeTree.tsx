@@ -80,21 +80,31 @@ export function ChangeTree({
   }, [shown]);
   const expanded = useMemo(() => new Set<Key>(foldable.filter((key) => !collapsed.has(key))), [foldable, collapsed]);
 
-  const visibleKeys = useMemo(() => {
+  const { visibleKeys, folds } = useMemo(() => {
     const keys = new Set<string>();
-    const walk = (nodes: readonly ChangeNode[]) => {
+    const parents = new Map<string, string>();
+    const open = new Set<string>();
+    const walk = (nodes: readonly ChangeNode[], parent: string) => {
       for (const node of nodes) {
         keys.add(node.key);
-        if (node.type !== "change" && expanded.has(node.key)) walk(node.children);
+        parents.set(node.key, parent);
+        if (node.type !== "change" && expanded.has(node.key)) {
+          open.add(node.key);
+          walk(node.children, node.key);
+        }
       }
     };
     for (const group of groups) {
-      keys.add(`heading:${group.section}`);
-      if (!collapsed.has(sectionKey(group.section))) walk(group.nodes);
+      const heading = `heading:${group.section}`;
+      keys.add(heading);
+      if (!collapsed.has(sectionKey(group.section))) {
+        open.add(heading);
+        walk(group.nodes, heading);
+      }
     }
-    return keys;
+    return { visibleKeys: keys, folds: { parents, open } };
   }, [groups, expanded, collapsed]);
-  const motion = useBrowserListMotion(listRef, visibleKeys);
+  const motion = useBrowserListMotion(listRef, visibleKeys, folds);
   const { props: fade, wrap } = useStickyScrollFade({ ref: motion.ref, className: "min-h-0 flex-1 overflow-auto pb-1 outline-none " + CHANGE_SCROLL_CLASS, stickyHeadingHeight: HEADING_HEIGHT });
 
   // Only the commits and directories this list shows are decided here: the sections' own keys and
@@ -132,7 +142,7 @@ export function ChangeTree({
   };
 
   return (
-    <BrowserListMotion keys={visibleKeys} prepare={motion.prepare}>
+    <BrowserListMotion keys={visibleKeys} folds={folds} prepare={motion.prepare}>
       <ChangeSectionHeadingStops>
         {wrap(<Virtualizer layout={ChangeListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT, headingHeight: HEADING_HEIGHT }}>
           <Tree
