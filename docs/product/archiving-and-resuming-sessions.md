@@ -8,7 +8,17 @@ in `docs/product/deleting-sessions.md`.
 ## Archiving, interruption and resuming
 
 **Archiving** ends the agent's process and keeps the session and its record. The agent is asked to
-exit first and is killed only if it does not; a kill takes the agent's tool subprocesses with it.
+exit first (`SIGTERM`) and is killed only if it is still there 3 seconds later.
+
+**Nothing an agent started outlives its process.** However an agent's process ends — it exits on its own, exits when
+asked, or is killed — once it has exited every process still in its terminal session is killed outright (`SIGKILL`):
+its tool subprocesses, including helpers that moved to a process group of their own or ignore the hangup, such as
+background tasks, MCP or REPL helpers and dev servers it started. Work an agent sent off to run in the background
+therefore ends with it. A process that detached into a session of its own (`setsid`) is out of reach and keeps
+running. Shell terminals do not work this way (see "Closing a shell terminal" in `docs/product/shell-terminals.md`);
+a daemon going down on an internal failure is in "Crashes and forced termination" in
+`docs/product/application-lifecycle.md`.
+
 Archiving is available for a session that is not already archived, including an interrupted one, subject to
 "Locking a session" in `docs/product/sessions.md`. A console session is archived from its own row's menu, like any other
 (see "Console sessions and project sessions" in `docs/product/sessions.md`). The user archives a session from its row's menu. A session at its prompt or

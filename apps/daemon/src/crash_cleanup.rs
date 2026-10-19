@@ -5,9 +5,11 @@
 //!
 //! The kill runs from a panic hook and from a `SIGABRT` handler, so nothing on its path may take a
 //! lock or allocate: a signal can interrupt a thread holding either. The running processes are
-//! therefore kept in a fixed table of atomics rather than a collection behind a lock.
+//! therefore kept in a fixed table of atomics rather than a collection behind a lock, and listing
+//! the processes of a session reads into static buffers.
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::cell::UnsafeCell;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::OnceLock;
 use std::thread::ThreadId;
 
@@ -15,9 +17,12 @@ use std::thread::ThreadId;
 /// above the number of agents and shells one machine runs side by side.
 const CAPACITY: usize = 1024;
 
-/// Each slot is empty (0) or holds the pid of one running process, an agent or a shell. A pid is
-/// never 0.
-static SLOTS: [AtomicU32; CAPACITY] = [const { AtomicU32::new(0) }; CAPACITY];
+/// Each slot is empty (0) or holds the pid of one running process, an agent or a shell, in its low
+/// 32 bits, and in [`SWEEP`] whether its whole session is killed. A pid is never 0.
+static SLOTS: [AtomicU64; CAPACITY] = [const { AtomicU64::new(0) }; CAPACITY];
+
+/// Set in a slot whose process has its session killed, helpers in groups of their own included.
+const SWEEP: u64 = 1 << 32;
 
 /// One process's place in the table, freed when it is dropped.
 ///
@@ -28,10 +33,12 @@ pub struct Entry {
     index: usize,
 }
 
-/// Takes a slot for `pid`, or returns `None` when the table is full.
-pub fn register(pid: u32) -> Option<Entry> {
+/// Takes a slot for `pid`, or returns `None` when the table is full. With `sweep_session`, the
+/// kill reaches every process in the session `pid` leads, not just its process group.
+pub fn register(pid: u32, sweep_session: bool) -> Option<Entry> {
+    let value = u64::from(pid) | if sweep_session { SWEEP } else { 0 };
     SLOTS.iter().enumerate().find_map(|(index, slot)| {
-        slot.compare_exchange(0, pid, Ordering::AcqRel, Ordering::Relaxed)
+        slot.compare_exchange(0, value, Ordering::AcqRel, Ordering::Relaxed)
             .ok()
             .map(|_| Entry { index })
     })
@@ -46,24 +53,175 @@ impl Drop for Entry {
 /// Whether `pid` holds a place in the table.
 #[cfg(test)]
 pub fn is_registered(pid: u32) -> bool {
-    SLOTS.iter().any(|slot| slot.load(Ordering::Acquire) == pid)
+    SLOTS
+        .iter()
+        .any(|slot| slot.load(Ordering::Acquire) & !SWEEP == u64::from(pid))
 }
 
-/// Kills the process group of every registered process outright. Safe from a signal handler: it
-/// reads atomics and calls `kill`, which is async-signal-safe.
+/// Kills every registered process outright: its process group, and for a slot that asks for it
+/// the rest of its session. Safe from a signal handler in practice: it reads atomics and calls
+/// plain system calls, and allocates nothing.
 fn kill_all() {
+    let mut sweeping = false;
     for slot in &SLOTS {
-        let pid = slot.load(Ordering::Acquire);
+        let value = slot.load(Ordering::Acquire);
+        let pid = value & !SWEEP;
         if pid != 0 {
-            // The process's pgid is its own pid (`setsid()`). An agent's tool subprocesses are in
-            // that same group; a shell's jobs each have a group of their own and are not killed
-            // here, but the daemon going down closes the PTY they are on, which hangs it up.
+            sweeping |= value & SWEEP != 0;
+            // The process's pgid is its own pid (`setsid()`). What it started without moving it
+            // is in that same group; a shell's jobs each have a group of their own and are not
+            // killed here, but the daemon going down closes the PTY they are on, which hangs it
+            // up.
             // SAFETY: plain `kill(2)` on a child that was unreaped when its pid was read (see
             // `Entry`). Another thread can free the slot and reap the child between that read and
             // this call, and the pid be reused in that window; a window that narrow is accepted.
             unsafe { libc::kill(-(pid as libc::pid_t), libc::SIGKILL) };
         }
     }
+    if sweeping {
+        kill_sessions();
+    }
+}
+
+/// What listing the system's processes reads into, so that doing it allocates nothing. Handed out
+/// by [`SCRATCH_CLAIMED`].
+struct Scratch {
+    /// `proc_listallpids` fills this; its length bounds the processes seen, far above what a
+    /// machine runs.
+    #[cfg(target_os = "macos")]
+    pids: UnsafeCell<[libc::pid_t; 65536]>,
+    /// `getdents64` of `/proc` fills this; aligned for the entries' 8-byte fields.
+    #[cfg(target_os = "linux")]
+    entries: UnsafeCell<Aligned>,
+}
+
+#[cfg(target_os = "linux")]
+#[repr(align(8))]
+struct Aligned([u8; 32 * 1024]);
+
+// SAFETY: only the holder of `SCRATCH_CLAIMED` touches the contents.
+unsafe impl Sync for Scratch {}
+
+static SCRATCH: Scratch = Scratch {
+    #[cfg(target_os = "macos")]
+    pids: UnsafeCell::new([0; 65536]),
+    #[cfg(target_os = "linux")]
+    entries: UnsafeCell::new(Aligned([0; 32 * 1024])),
+};
+
+/// Whether something is using [`SCRATCH`]: a second kill, from another thread or from a signal
+/// that interrupted the first, does without the sweep and keeps to the group kills.
+static SCRATCH_CLAIMED: AtomicBool = AtomicBool::new(false);
+
+/// Kills every process in the session of a registered process that asks for it, the process
+/// itself included. This reaches helpers that moved to a process group of their own, which the
+/// group kill misses; one that called `setsid()` has left the session and is out of reach. The
+/// session id is that of an unreaped process, so no other process can have it (see `Entry`).
+///
+/// One pass over one listing: the daemon is going down, and a process that forks while it is
+/// killed is not chased. The listing is its own rather than the one in `crate::pty` because that
+/// one allocates.
+fn kill_sessions() {
+    if SCRATCH_CLAIMED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    for_each_process(|pid| {
+        // SAFETY: `getsid` only reads; a pid that is gone in the meantime reports an error.
+        let sid = unsafe { libc::getsid(pid) };
+        if sid > 0 && leads_a_swept_session(sid) {
+            // SAFETY: the process is in the session of an unreaped leader, as above.
+            unsafe { libc::kill(pid, libc::SIGKILL) };
+        }
+    });
+    SCRATCH_CLAIMED.store(false, Ordering::Release);
+}
+
+/// Whether a registered process that has its session killed has the pid `sid`.
+fn leads_a_swept_session(sid: libc::pid_t) -> bool {
+    SLOTS.iter().any(|slot| {
+        let value = slot.load(Ordering::Acquire);
+        value & SWEEP != 0 && value & !SWEEP == sid as u64
+    })
+}
+
+/// Calls `visit` with the pid of every process there is, reading into [`SCRATCH`], which the
+/// caller has claimed. `proc_listallpids` and `getdents64` are plain system calls.
+#[cfg(target_os = "macos")]
+fn for_each_process(mut visit: impl FnMut(libc::pid_t)) {
+    let pids = SCRATCH.pids.get();
+    // SAFETY: the caller holds `SCRATCH_CLAIMED`, so nothing else reads or writes the buffer, and
+    // it is writable for the size given.
+    let filled = unsafe {
+        libc::proc_listallpids(
+            pids.cast(),
+            std::mem::size_of::<[libc::pid_t; 65536]>() as i32,
+        )
+    };
+    // SAFETY: as above; the call filled `filled` entries.
+    let pids = unsafe { &(*pids)[..(filled.max(0) as usize).min(65536)] };
+    // Pid 0 is the kernel, which `getsid(0)` would answer for the caller instead.
+    pids.iter()
+        .filter(|&&pid| pid > 0)
+        .for_each(|&pid| visit(pid));
+}
+
+/// As the macOS one, from the numeric entries of `/proc`.
+#[cfg(target_os = "linux")]
+fn for_each_process(mut visit: impl FnMut(libc::pid_t)) {
+    // Offsets in a `linux_dirent64`: `d_reclen` after the 8-byte `d_ino` and `d_off`, then
+    // `d_type`, then the NUL-terminated `d_name`.
+    const RECLEN: usize = 16;
+    const NAME: usize = 19;
+    let buf = SCRATCH.entries.get();
+    // SAFETY: a plain `open(2)` of a constant NUL-terminated path.
+    let dir = unsafe {
+        libc::open(
+            c"/proc".as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC,
+        )
+    };
+    if dir < 0 {
+        return;
+    }
+    loop {
+        // SAFETY: the caller holds `SCRATCH_CLAIMED`, so the buffer is ours, and it is writable
+        // for the length given.
+        let filled =
+            unsafe { libc::syscall(libc::SYS_getdents64, dir, buf.cast::<u8>(), 32 * 1024usize) };
+        if filled <= 0 {
+            break;
+        }
+        // SAFETY: as above; the call filled `filled` bytes.
+        let bytes = unsafe { &(*buf).0[..filled as usize] };
+        let mut at = 0;
+        while at + NAME < bytes.len() {
+            let reclen = u16::from_ne_bytes([bytes[at + RECLEN], bytes[at + RECLEN + 1]]) as usize;
+            // A record never ends before its name starts; anything shorter would make the name
+            // slice panic, here in a signal handler.
+            if reclen < NAME {
+                break;
+            }
+            let name = &bytes[at + NAME..(at + reclen).min(bytes.len())];
+            let digits = name.iter().take_while(|&&byte| byte != 0);
+            let mut pid: libc::pid_t = 0;
+            let mut numeric = name.first().is_some_and(|&byte| byte != 0);
+            for &byte in digits {
+                if !byte.is_ascii_digit() {
+                    numeric = false;
+                    break;
+                }
+                pid = pid
+                    .saturating_mul(10)
+                    .saturating_add(libc::pid_t::from(byte - b'0'));
+            }
+            if numeric && pid > 0 {
+                visit(pid);
+            }
+            at += reclen;
+        }
+    }
+    // SAFETY: closing the descriptor opened above.
+    unsafe { libc::close(dir) };
 }
 
 /// The thread [`install`] ran on: the daemon's main thread.
@@ -123,7 +281,8 @@ mod tests {
 
     use crate::protocol::Agent;
     use crate::test_support::{
-        assert_gone_by, fake_live_session, read_pid_file, ScratchDir, PATIENCE,
+        assert_gone_by, fake_live_session, is_running, read_pid_file, KillOnDrop, ScratchDir,
+        PATIENCE,
     };
 
     /// Where [`crash_cleanup_child`] reads its case and writes its stand-in's pid.
@@ -137,6 +296,9 @@ mod tests {
     ///
     /// The stand-in ignores `SIGHUP`, so the end of the process holding its PTY does not end it
     /// too: the case where it survives that is what makes its death in the others the cleanup's.
+    /// It has a helper in a process group of its own, which only a registration that asks for the
+    /// session to be killed reaches; the `_shell` case registers without that, as a shell
+    /// terminal does, and the helper survives.
     #[test]
     fn agents_are_killed_when_the_daemon_goes_down_and_only_then() {
         for (case, goes_down) in [
@@ -144,6 +306,7 @@ mod tests {
             ("main_thread", true),
             ("abort", true),
             ("signal", true),
+            ("signal_shell", true),
         ] {
             let dir = ScratchDir::new("crash-cleanup");
             let pid_file = dir.join("pid");
@@ -161,6 +324,9 @@ mod tests {
                 .expect("the child test ran");
             let pid = read_pid_file(&pid_file)
                 .unwrap_or_else(|| panic!("{case}: no stand-in pid; child said {output:?}"));
+            let helper = read_pid_file(&dir.join("helper"))
+                .unwrap_or_else(|| panic!("{case}: no helper pid; child said {output:?}"));
+            let mut helper_guard = KillOnDrop(vec![helper]);
             // The child got as far as its case: a clean exit, a failed test, or a `SIGABRT`.
             let reached = match case {
                 "recoverable" => output.status.success(),
@@ -171,7 +337,14 @@ mod tests {
 
             if goes_down {
                 assert_gone_by(pid, Instant::now() + PATIENCE);
+                if case.ends_with("_shell") {
+                    assert!(is_running(helper), "{case}: the helper was killed");
+                } else {
+                    assert_gone_by(helper, Instant::now() + PATIENCE);
+                    helper_guard.0.clear();
+                }
             } else {
+                assert!(is_running(helper), "{case}: the helper was killed");
                 let alive = is_running(pid);
                 // SAFETY: the stand-in's own group; nothing reaps it before this signal lands.
                 unsafe { libc::kill(-pid, libc::SIGKILL) };
@@ -179,17 +352,6 @@ mod tests {
                 assert_gone_by(pid, Instant::now() + PATIENCE);
             }
         }
-    }
-
-    /// Whether `pid` is a running process rather than gone or a zombie, which `kill(pid, 0)` alone
-    /// cannot tell apart.
-    fn is_running(pid: i32) -> bool {
-        let ps = std::process::Command::new("ps")
-            .args(["-o", "stat=", "-p", &pid.to_string()])
-            .output()
-            .expect("ps ran");
-        let stat = String::from_utf8_lossy(&ps.stdout);
-        !stat.trim().is_empty() && !stat.trim_start().starts_with('Z')
     }
 
     /// One case of [`agents_are_killed_when_the_daemon_goes_down_and_only_then`], run by it in a
@@ -209,6 +371,8 @@ mod tests {
         else {
             return;
         };
+        let helper_file = Path::new(&pid_file).with_file_name("helper");
+        let helper_file = helper_file.display();
         super::install();
         // Outlives `PATIENCE`, so a stand-in still there when the parent looks was left running
         // rather than not yet killed.
@@ -217,7 +381,10 @@ mod tests {
             Agent::Claude,
             80,
             24,
-            &format!("trap '' HUP; echo $$ > '{pid_file}'; exec sleep 600"),
+            &format!(
+                "trap '' HUP; set -m; sleep 600 & echo $! > '{helper_file}'; set +m; \
+                 echo $$ > '{pid_file}'; exec sleep 600"
+            ),
         );
         // The pid is written after the trap is set, so from here the stand-in ignores `SIGHUP`.
         let deadline = Instant::now() + PATIENCE;
@@ -225,7 +392,11 @@ mod tests {
             assert!(Instant::now() < deadline, "the stand-in never started");
             std::thread::sleep(Duration::from_millis(20));
         }
-        stand_in.enter_crash_cleanup();
+        match case.strip_suffix("_shell") {
+            // Registered as a shell terminal is: its group is killed, its session is not.
+            Some(_) => std::mem::forget(super::register(stand_in.pid, false)),
+            None => stand_in.enter_crash_cleanup(),
+        }
         // Left running when this process ends, whichever way it does: the parent checks on it.
         std::mem::forget(stand_in);
 
@@ -233,7 +404,7 @@ mod tests {
             .enable_all()
             .build()
             .expect("a runtime");
-        match case.as_str() {
+        match case.trim_end_matches("_shell") {
             "recoverable" => {
                 let joined = runtime.block_on(runtime.spawn_blocking(|| {
                     panic!("a blocking task panics");

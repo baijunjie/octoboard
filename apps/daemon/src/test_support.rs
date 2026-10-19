@@ -472,6 +472,31 @@ fn errno_is_esrch() -> bool {
     std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH)
 }
 
+/// Kills the pids it holds when dropped, so a failing test leaves nothing running.
+pub(crate) struct KillOnDrop(pub Vec<libc::pid_t>);
+
+impl Drop for KillOnDrop {
+    fn drop(&mut self) {
+        for &pid in &self.0 {
+            // SAFETY: a test's own helpers. The guard is cleared once they are observed gone,
+            // so a pid that may have been reused is signalled only when the test is already
+            // failing.
+            unsafe { libc::kill(pid, libc::SIGKILL) };
+        }
+    }
+}
+
+/// Whether `pid` is a running process rather than gone or a zombie, which `kill(pid, 0)` alone
+/// cannot tell apart.
+pub(crate) fn is_running(pid: i32) -> bool {
+    let ps = Command::new("ps")
+        .args(["-o", "stat=", "-p", &pid.to_string()])
+        .output()
+        .expect("ps ran");
+    let stat = String::from_utf8_lossy(&ps.stdout);
+    !stat.trim().is_empty() && !stat.trim_start().starts_with('Z')
+}
+
 /// Waits for `pid` to no longer exist, failing the test if it outlives `deadline`. Used to
 /// confirm a process the fixture backgrounded was actually reaped rather than leaked, whether
 /// by the production code's own group kill or by a test cleaning up after a successful

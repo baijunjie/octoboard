@@ -83,6 +83,6 @@ The same ending happens, without anyone being asked, to:
 - **every shell terminal when the daemon exits**: on a quit, and on a termination signal when the daemon runs on its
   own (see "Quitting" and "The daemon on its own" in `docs/product/application-lifecycle.md`).
 
-If the daemon goes down on an internal failure, each shell is killed with its process group, as the agents are (see
-"Crashes and forced termination" in `docs/product/application-lifecycle.md`), and the jobs still on its terminal lose
-it as the daemon goes.
+If the daemon goes down on an internal failure, each shell is killed with its process group — not its whole terminal
+session, as an agent is (see "Crashes and forced termination" in `docs/product/application-lifecycle.md`) — and the
+jobs still on its terminal lose it as the daemon goes.

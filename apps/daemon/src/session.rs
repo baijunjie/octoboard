@@ -106,6 +106,7 @@ impl LiveSession {
                 label: session.id.clone(),
                 spawned: session.spawned,
                 scratch_dir: session.scratch_dir,
+                kill_session_leftovers: true,
             }),
             id: session.id,
             agent: session.agent,

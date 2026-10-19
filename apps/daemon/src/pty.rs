@@ -189,6 +189,9 @@ pub struct PtyCore {
     final_output_kept: Mutex<bool>,
     /// A scratch directory of the process's own, removed once the process is gone.
     scratch_dir: Mutex<Option<std::path::PathBuf>>,
+    /// Whether what the process leaves running in its session is killed once it exits; see
+    /// [`NewPty::kill_session_leftovers`].
+    kill_session_leftovers: bool,
     /// Held across every write into the input, and by a freeze, so that a write and the capture
     /// boundary of a frozen screen never interleave. An owner that keeps bookkeeping about its
     /// writes takes it for that bookkeeping too; see [`Self::lock_input`].
@@ -201,6 +204,10 @@ pub struct NewPty {
     pub label: String,
     pub spawned: Spawned,
     pub scratch_dir: Option<std::path::PathBuf>,
+    /// Kill every process still in the process's session once it has exited, including helpers
+    /// that moved to a process group of their own. Left off, whatever the process started and
+    /// detached (`nohup`, `disown`) keeps running after it.
+    pub kill_session_leftovers: bool,
 }
 
 impl PtyCore {
@@ -234,6 +241,7 @@ impl PtyCore {
             reader_running: AtomicBool::new(false),
             final_output_kept: Mutex::new(false),
             scratch_dir: Mutex::new(new.scratch_dir),
+            kill_session_leftovers: new.kill_session_leftovers,
             input_lock: Mutex::new(()),
         }
     }
@@ -543,7 +551,12 @@ impl PtyCore {
         // the child leaves only after it is reaped.
         match self.exited_unreaped() {
             Some(false) => return false,
-            Some(true) => self.leave_crash_cleanup(),
+            Some(true) => {
+                self.leave_crash_cleanup();
+                if self.kill_session_leftovers {
+                    self.kill_session_members();
+                }
+            }
             None => {}
         }
         let exited = match child.try_wait() {
@@ -563,6 +576,52 @@ impl PtyCore {
             self.clean_scratch_dir();
         }
         exited
+    }
+
+    /// Kills every process left in the child's session, which the child itself leads. Called only
+    /// while the child is exited but not reaped: its zombie keeps its pid, and with it the session
+    /// id, from being handed to anything else, so a process found in that session is the child's.
+    /// This reaches what a signal to the child's process group does not: a helper that moved to a
+    /// process group of its own still has the session. One that called `setsid()` has left the
+    /// session and is out of reach.
+    fn kill_session_members(&self) {
+        // A process killed in one pass may have forked just before it died, and the child is in
+        // the session too, so passes repeat until one signals no process it had not already
+        // signalled. A killed process can stay in the list as a zombie, which is why those are
+        // remembered.
+        const MAX_PASSES: usize = 3;
+        let leader = self.pid as libc::pid_t;
+        let mut signalled = std::collections::HashSet::new();
+        for _ in 0..MAX_PASSES {
+            let Some(candidates) = session_candidates() else {
+                tracing::warn!(terminal = %self.label, pid = self.pid, killed = signalled.len(), "listing processes failed; the sweep of the exited process's session may be incomplete");
+                return;
+            };
+            let before = signalled.len();
+            for pid in candidates {
+                if pid == leader || signalled.contains(&pid) {
+                    continue;
+                }
+                // SAFETY: `getsid` only reads; a pid that is gone in the meantime reports an error.
+                if unsafe { libc::getsid(pid) } != leader {
+                    continue;
+                }
+                // SAFETY: the pid was in the session of the unreaped leader a moment ago. It may
+                // have exited since, which is the `ESRCH` that is ignored.
+                if unsafe { libc::kill(pid, libc::SIGKILL) } == 0 {
+                    signalled.insert(pid);
+                }
+            }
+            if signalled.len() == before {
+                break;
+            }
+        }
+        let killed = signalled.len();
+        if killed > 0 {
+            tracing::info!(terminal = %self.label, pid = self.pid, killed, "killed processes the exited process left in its session");
+        } else {
+            tracing::debug!(terminal = %self.label, pid = self.pid, "no process left in the exited process's session");
+        }
     }
 
     /// Whether the child has exited, found out without reaping it (`WNOWAIT`), or `None` when
@@ -638,7 +697,7 @@ impl PtyCore {
         if self.reaped.load(Ordering::Acquire) {
             return;
         }
-        let entry = crash_cleanup::register(self.pid);
+        let entry = crash_cleanup::register(self.pid, self.kill_session_leftovers);
         if entry.is_none() {
             tracing::warn!(terminal = %self.label, "the crash cleanup is full; this process would outlive a daemon crash");
         }
@@ -688,6 +747,41 @@ impl PtyCore {
             }
         }
     }
+}
+
+/// Every process id on the system, a superset of the session's members for the caller to filter
+/// with `getsid`, or `None` when the system cannot list them.
+#[cfg(target_os = "linux")]
+fn session_candidates() -> Option<Vec<libc::pid_t>> {
+    let entries = std::fs::read_dir("/proc").ok()?;
+    Some(
+        entries
+            .flatten()
+            .filter_map(|entry| entry.file_name().to_str()?.parse().ok())
+            .collect(),
+    )
+}
+
+/// As the Linux one, from `libproc`.
+#[cfg(target_os = "macos")]
+fn session_candidates() -> Option<Vec<libc::pid_t>> {
+    // SAFETY: a null buffer of size 0 only asks how many processes there are.
+    let count = unsafe { libc::proc_listallpids(std::ptr::null_mut(), 0) };
+    if count <= 0 {
+        return None;
+    }
+    // Room beyond that count for processes started since.
+    let mut pids = vec![0 as libc::pid_t; count as usize + 256];
+    let size = (pids.len() * std::mem::size_of::<libc::pid_t>()) as libc::c_int;
+    // SAFETY: `pids` is writable for `size` bytes.
+    let filled = unsafe { libc::proc_listallpids(pids.as_mut_ptr().cast(), size) };
+    if filled <= 0 {
+        return None;
+    }
+    pids.truncate(filled as usize);
+    // Pid 0 is the kernel, which `getsid(0)` would answer for the caller instead.
+    pids.retain(|&pid| pid > 0);
+    Some(pids)
 }
 
 /// Hands one chunk to one client, waiting out a full queue up to `SUBSCRIBER_GRACE`. Returns
@@ -752,6 +846,7 @@ mod tests {
     use std::time::Instant;
 
     use super::{send_with_backpressure, SUBSCRIBER_GRACE};
+    use crate::test_support::{is_running, KillOnDrop};
     use bytes::Bytes;
     use tokio::sync::mpsc;
 
@@ -867,6 +962,85 @@ mod tests {
             !live.poll_exit(),
             "the process ignores the hang-up and runs on"
         );
+    }
+
+    /// Starts a process that leaves two helpers running, one in the leader's process group and one
+    /// in a group of its own, and exits at once on `SIGTERM`. Returns it with the pids of the
+    /// helpers, which `guard` kills if the test ends without having.
+    fn start_leader(
+        kill_session_leftovers: bool,
+        guard: &mut KillOnDrop,
+    ) -> (super::PtyCore, libc::pid_t, libc::pid_t) {
+        let dir = std::env::temp_dir().join(format!(
+            "octoboardd-leftovers-{}-{kill_session_leftovers}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let pids = dir.join("pids");
+        std::fs::remove_file(&pids).ok();
+        // The first helper stays in the leader's process group and ignores the hang-up; the
+        // second is moved to a group of its own by job control, as a background task of an agent
+        // is. Both keep the session.
+        let script = format!(
+            "trap 'exit 0' TERM; (trap '' HUP; exec sleep 300) & same=$!; set -m; sleep 300 & own=$!; \
+             set +m; echo \"$same $own\" > {pids}.tmp; mv {pids}.tmp {pids}; while :; do sleep 0.1; done",
+            pids = pids.display()
+        );
+        let mut cmd = portable_pty::CommandBuilder::new("/bin/bash");
+        cmd.args(["-c", &script]);
+        let spawned = super::spawn(cmd, 24, 80).expect("the leader");
+        let core = super::PtyCore::new(super::NewPty {
+            label: "leftovers".to_string(),
+            spawned,
+            scratch_dir: None,
+            kill_session_leftovers,
+        });
+        let deadline = Instant::now() + crate::test_support::PATIENCE;
+        let listed = loop {
+            if let Ok(listed) = std::fs::read_to_string(&pids) {
+                break listed;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the leader never listed its helpers"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
+        std::fs::remove_dir_all(&dir).ok();
+        let helpers: Vec<libc::pid_t> = listed
+            .split_whitespace()
+            .map(|pid| pid.parse().unwrap())
+            .collect();
+        guard.0.extend(&helpers);
+        (core, helpers[0], helpers[1])
+    }
+
+    #[test]
+    fn an_agent_leaves_nothing_running_in_its_session_after_a_graceful_exit() {
+        let mut guard = KillOnDrop(Vec::new());
+        let (core, same_group, own_group) = start_leader(true, &mut guard);
+        assert!(is_running(same_group) && is_running(own_group));
+        core.stop(libc::SIGTERM);
+        let deadline = Instant::now() + crate::test_support::PATIENCE;
+        while is_running(same_group) || is_running(own_group) {
+            assert!(
+                Instant::now() < deadline,
+                "a helper outlived the agent: same group running {}, own group running {}",
+                is_running(same_group),
+                is_running(own_group)
+            );
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        guard.0.clear();
+    }
+
+    #[test]
+    fn a_shell_terminal_leaves_a_job_it_started_running_when_it_exits() {
+        let mut guard = KillOnDrop(Vec::new());
+        let (core, same_group, own_group) = start_leader(false, &mut guard);
+        core.stop(libc::SIGTERM);
+        // The sweep, if there were one, runs before the shell is reaped, which `stop` waited for.
+        assert!(is_running(same_group) && is_running(own_group));
     }
 
     #[test]

@@ -92,6 +92,18 @@ So look for a route with no process first: read what is wanted from where it is 
 takes HTTP hooks posts to the hook route with no forwarder process behind it). Where a process cannot be avoided, run
 it off the path the user waits on, cache what it returns, and bound how many run at once.
 
+## Ending everything an agent CLI started takes its session, not its process group
+
+Applies to daemon code that has to end whatever an agent CLI left running — when it exits, when it is stopped, when the
+daemon goes down — however the CLI was started. Agent CLIs move some helpers (a REPL or code-execution host, a
+background shell task) into process groups of their own, so signalling the CLI's process group, the stop every other
+subprocess in the daemon gets (`apps/daemon/src/subprocess.rs`), leaves them running. They keep the CLI's session: start
+the CLI as a session leader (`setsid()`; a PTY spawn already is one, while `process_group(0)` leaves it in the daemon's
+session) and kill every process whose `getsid` is the leader's pid. Do it only after the leader has exited and before
+it is reaped: the unreaped zombie keeps its pid, and with it the session id, from passing to an unrelated process. A
+helper that called `setsid()` itself has left the session and is out of reach. `PtyCore::kill_session_members` in
+`apps/daemon/src/pty.rs` is this for a process on a PTY.
+
 ## A request handler or daemon task is never alone with the state: re-check after a step, or hold a claim
 
 Every control request is handled on a task of its own (`apps/daemon/src/server.rs`) on a multi-threaded runtime
@@ -198,7 +210,10 @@ daemon code below, since a clean run on macOS says nothing about it:
   nothing, and the reader, the master and the buffers live on until that job goes. A test of a terminal outliving its
   process therefore cannot fail on macOS.
 
-So run `cargo test -p octoboardd` inside a Linux container (Docker).
+So run `cargo test -p octoboardd`, and `cargo clippy --all-targets` for the Linux-only code, inside a Linux container
+(Docker). Start the container with `docker run --init`: without an init that reaps, orphans reparented to PID 1 (here
+cargo) stay zombies, and every test that waits for a process to be gone (`test_support::assert_gone_by`, which waits for
+`ESRCH`) fails, on `main` as on the change.
 
 To exercise a fallback for a refused system call (the browse reads' `openat2` refused as `ENOSYS` or `EPERM`), run
 the container with a seccomp profile that returns that errno for the call.

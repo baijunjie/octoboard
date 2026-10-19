@@ -297,7 +297,10 @@ interrupted and resumable.
   daemon on its own" below).
 - Agent processes do not outlive the daemon: it ends them on its way out, including when it is signalled to stop and
   when it goes down on an internal failure.
-- An agent's tool subprocesses go with the agent.
+- Nothing an agent started outlives it: whatever is left in its terminal session is killed once its process ends
+  (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). When the daemon
+  goes down on an internal failure, it kills every process in each agent's terminal session along with the agent,
+  helpers in process groups of their own included; one that detached into a session of its own is out of reach.
 - Shell terminals do not outlive the daemon either (see "Closing a shell terminal" in
   `docs/product/shell-terminals.md`).
 - Should a session's process nonetheless survive, the next start still marks every non-archived session interrupted

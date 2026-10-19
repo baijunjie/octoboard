@@ -10,8 +10,8 @@ use crate::protocol::{error_code, CodedError, Event, Request, ShellTerminal, She
 use crate::pty::PtyCore;
 use crate::state::AppState;
 use crate::test_support::{
-    app_state, assert_gone_by, console, git, insert_project, isolated_git_env, repo_with, within,
-    ScratchDir, PATIENCE, SYSTEM_GIT,
+    app_state, assert_gone_by, console, git, insert_project, is_running, isolated_git_env,
+    repo_with, within, ScratchDir, PATIENCE, SYSTEM_GIT,
 };
 
 /// No test here reads a worktree but the one that names one, which passes a `git` of its own.
@@ -444,16 +444,6 @@ async fn printed_pid(shell: &Arc<ShellProcess>, marker: &'static str) -> i32 {
     let output = screen(shell);
     assert!(printed, "no pid after {marker} in {output:?}");
     pid_in(&output).unwrap()
-}
-
-/// Whether `pid` is a running process rather than gone or a zombie.
-fn is_running(pid: i32) -> bool {
-    let ps = std::process::Command::new("ps")
-        .args(["-o", "stat=", "-p", &pid.to_string()])
-        .output()
-        .expect("ps ran");
-    let stat = String::from_utf8_lossy(&ps.stdout);
-    !stat.trim().is_empty() && !stat.trim_start().starts_with('Z')
 }
 
 #[tokio::test(flavor = "multi_thread")]

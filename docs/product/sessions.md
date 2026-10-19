@@ -477,7 +477,8 @@ of work: `id`, and `type` and `description` where Claude Code gives them.
   handing over to the next does not make the session flash to *awaiting instructions* in between; a turn end, a
   subagent starting, or another subagent stop within that time decides the list instead.
 - The list goes when the session's process ends — archived, interrupted, switched to another account or handed off —
-  and the work goes with the process.
+  and the work goes with the process, as it does when the agent exits on its own (see "Archiving, interruption and
+  resuming" in `docs/product/archiving-and-resuming-sessions.md`).
 - It is given only while the session is at its prompt: in any other status the session shows that status and no
   list, and what was last listed shows again if it comes back to its prompt without a new turn end.
 - Clearing the conversation with `/clear` does not end work running in the background (measured on Claude Code

@@ -274,6 +274,7 @@ fn launch(
             label: id.to_string(),
             spawned,
             scratch_dir: None,
+            kill_session_leftovers: false,
         }),
         shell_name,
         titles: Mutex::new(TitleWatch::default()),
