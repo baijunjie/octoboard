@@ -49,6 +49,10 @@ const URL_POLL: Duration = Duration::from_millis(100);
 /// How long a CLI's last words are waited for after it exits.
 const LAST_WORDS: Duration = Duration::from_millis(300);
 
+/// How long a CLI that could not be written to is given to exit, so that its exit, and what it
+/// said, is what the login reports.
+const WRITE_FAILURE_GRACE: Duration = Duration::from_secs(1);
+
 /// How long Codex's app server is given to answer a cancel before it is killed anyway.
 const CANCEL_GRACE: Duration = Duration::from_secs(2);
 
@@ -327,6 +331,29 @@ impl Flow {
         }
     }
 
+    /// Writes `request` to the CLI, or says how the login ends when that fails. A CLI that exits
+    /// at once, on a bad configuration say, can close its stdin before it is written to, and what
+    /// it said is why the login failed, not the broken pipe: a failed write is reported as the
+    /// CLI's exit, with `last_words` (what it has said so far) brought up to date. Only a CLI still
+    /// running after [`WRITE_FAILURE_GRACE`] is reported as not taking the write.
+    async fn send(
+        &self,
+        process: &mut Process,
+        request: &Value,
+        last_words: &mut String,
+    ) -> Result<(), Outcome> {
+        let Err(err) = process.send(request).await else {
+            return Ok(());
+        };
+        match tokio::time::timeout(WRITE_FAILURE_GRACE, process.child.wait()).await {
+            Ok(Ok(status)) => {
+                process.last_words(last_words).await;
+                Err(self.ended(status, last_words))
+            }
+            _ => Err(self.failed(&format!("it could not be written to: {err}"))),
+        }
+    }
+
     async fn codex(&self, progress: &Progress, cancel: &Notify) -> Outcome {
         // Codex refuses a home that does not exist, the default account's included.
         if let Some(dir) = self.config_dir.as_ref().or(self.resolved_dir.as_ref()) {
@@ -350,14 +377,14 @@ impl Flow {
             json!({"jsonrpc": "2.0", "id": 2, "method": "account/login/start",
                 "params": {"type": "chatgpt"}}),
         ];
+        let mut last_words = String::new();
         for request in &requests {
-            if let Err(err) = process.send(request).await {
-                return self.failed(&format!("it could not be written to: {err}"));
+            if let Err(outcome) = self.send(&mut process, request, &mut last_words).await {
+                return outcome;
             }
         }
 
         let mut login_id: Option<String> = None;
-        let mut last_words = String::new();
         loop {
             tokio::select! {
                 Some(line) = process.lines.recv() => {
@@ -375,8 +402,10 @@ impl Flow {
                         CodexEvent::Completed => {
                             let read = json!({"jsonrpc": "2.0", "id": 3, "method": "account/read",
                                 "params": {}});
-                            if let Err(err) = process.send(&read).await {
-                                return self.failed(&format!("it could not be written to: {err}"));
+                            if let Err(outcome) =
+                                self.send(&mut process, &read, &mut last_words).await
+                            {
+                                return outcome;
                             }
                         }
                         CodexEvent::Confirmed(true) => return Outcome::Succeeded,
@@ -711,7 +740,7 @@ mod tests {
     use super::*;
     use crate::test_support::{
         assert_stops_running, helper_in_its_own_group, is_running, read_pid_file, KillOnDrop,
-        ScratchFile, PATIENCE,
+        ScratchDir, ScratchFile, PATIENCE,
     };
 
     #[test]
@@ -881,6 +910,59 @@ mod tests {
         assert!(
             is_running(helper),
             "the helper of a CLI that exited was killed"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_write_to_a_cli_that_has_exited_reports_what_it_said_last() {
+        let scratch = ScratchDir::new("login-write-after-exit");
+        let flow = Flow {
+            agent: Agent::Codex,
+            binary: String::new(),
+            shell_env: HashMap::new(),
+            config_dir: None,
+            resolved_dir: None,
+            scratch: Scratch(scratch.to_path_buf()),
+        };
+        let mut command = std::process::Command::new("/bin/sh");
+        command.args(["-c", "echo 'Error: bad configuration' >&2; exit 1"]);
+        let mut process = Process::spawn(command, "stand-in", true).expect("the stand-in starts");
+        // Exited, found out without reaping it, so the write below meets a closed pipe.
+        let pid = process.child.id().expect("not reaped") as libc::pid_t;
+        let deadline = tokio::time::Instant::now() + PATIENCE;
+        while process_session::exited_unreaped(pid) != Some(true) {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "the stand-in never exited"
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        // The pipe can still have a reader for a moment: a process forked by another thread
+        // while this one was spawning the stand-in inherited both ends, and holds them until it
+        // execs. A write that lands meanwhile is retried, the stand-in still unreaped, until one
+        // meets the closed pipe.
+        let mut last_words = String::new();
+        let outcome = loop {
+            match flow
+                .send(&mut process, &json!({"id": 1}), &mut last_words)
+                .await
+            {
+                Err(outcome) => break outcome,
+                Ok(()) => {
+                    assert!(
+                        tokio::time::Instant::now() < deadline,
+                        "something kept reading the stand-in's stdin"
+                    );
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            }
+        };
+        let Outcome::Failed(failure) = outcome else {
+            panic!("the login did not fail");
+        };
+        assert_eq!(
+            failure.params.get("detail").map(String::as_str),
+            Some("Error: bad configuration")
         );
     }
 }
