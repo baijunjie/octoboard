@@ -116,3 +116,11 @@ it("says a single group of leftovers by its own lead alone", () => {
   const items = JSON.stringify([{ kind: "branch", name: "fix/a", branch: "fix/a", state: "unmerged", uncommitted: false, detail: null }]);
   expect(daemonMessage("en", "session_branches_not_removed", { count: "1", items }, "fallback", records)).toBe(`This branch is not merged: ${isolate("fix/a")}.`);
 });
+
+it.each([
+  ["name", "100", "Name must be 100 characters or fewer.", "名称不能超过 100 个字符。"],
+  ["description", "2000", "Description must be 2,000 characters or fewer.", "描述不能超过 2,000 个字符。"],
+])("localizes the field and limit for an overlong %s", (field, limit, english, chinese) => {
+  expect(daemonMessage("en", "field_too_long", { field, limit }, "x", records)).toBe(english);
+  expect(daemonMessage("zh-Hans", "field_too_long", { field, limit }, "x", records)).toBe(chinese);
+});

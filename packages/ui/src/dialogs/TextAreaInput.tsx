@@ -1,5 +1,8 @@
-import { Description, Label, TextArea, TextField } from "@heroui/react";
+import { FieldError, Label, TextArea, TextField } from "@heroui/react";
 import React from "react";
+
+import { CodeToneContext } from "../components/codeTone";
+import { TextFieldDescription, TextLengthHint } from "./TextFieldDescription";
 
 /** A labelled multi-line text field, in HeroUI's variant for a field on a surface, for free text
  * the user writes at length. It does not trim what is typed, so leading and trailing whitespace
@@ -14,6 +17,8 @@ export function TextAreaInput({
   description,
   isDisabled,
   rows = 6,
+  errorMessage,
+  characterLimit,
 }: {
   label: string;
   value: string;
@@ -22,12 +27,23 @@ export function TextAreaInput({
   description?: string;
   isDisabled?: boolean;
   rows?: number;
+  errorMessage?: string;
+  characterLimit?: number;
 }): React.ReactElement {
+  const invalid = !!errorMessage;
   return (
-    <TextField fullWidth variant="secondary" value={value} onChange={onChange} isDisabled={isDisabled}>
+    <TextField fullWidth variant="secondary" value={value} onChange={onChange} isDisabled={isDisabled} isInvalid={invalid} validationBehavior="aria">
       <Label>{label}</Label>
       <TextArea rows={rows} placeholder={placeholder} />
-      {description && <Description>{description}</Description>}
+      <TextFieldDescription value={value} characterLimit={characterLimit} description={description} />
+      <FieldError>
+        <CodeToneContext.Provider value="danger">
+          <span role="alert">
+            {invalid ? errorMessage : null}
+            {invalid && characterLimit !== undefined && <TextLengthHint value={value} limit={characterLimit} />}
+          </span>
+        </CodeToneContext.Provider>
+      </FieldError>
     </TextField>
   );
 }

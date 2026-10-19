@@ -2709,6 +2709,8 @@ pub mod error_code {
     pub const CONFLICTING_FIELDS: &str = "conflicting_fields";
     /// A request lacks a field its kind needs.
     pub const FIELD_REQUIRED: &str = "field_required";
+    /// Project text exceeds its character limit. `params` names the `field` and `limit`.
+    pub const FIELD_TOO_LONG: &str = "field_too_long";
     /// A model or effort the agent does not offer. `params` names the `agent`, the `field`
     /// (`model` or `effort`) and the `value`.
     pub const INVALID_LAUNCH_SETTING: &str = "invalid_launch_setting";

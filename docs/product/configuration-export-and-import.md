@@ -110,7 +110,9 @@ Its name, its description if it has one, the directory it points at, how it was 
 it, its own default agent if it has one, whether it is pinned, its tags (see `docs/product/project-tags.md`), and — one
 set per agent — the account its sessions run under and the model and reasoning effort they launch with (see
 `docs/product/projects.md`). An import stores the description trimmed, and a project of a document that carries no
-description is imported with none.
+description is imported with none. Export and import preserve the full length of project names and descriptions,
+including values beyond the editing limits in "Project names" and "The project's description" in
+`docs/product/projects.md`; an import neither rejects nor truncates them for their length.
 
 A project's path is **the one path of the exporting machine anywhere in the document**, which is the thing to look at
 before handing the file to someone else. An import treats it as a starting point and never as a place to write (see

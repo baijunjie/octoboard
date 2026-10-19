@@ -137,7 +137,7 @@ mod tests {
         assert_eq!(git(&repo, &["branch", "--show-current"]), b"main\n");
         git(&repo, &["worktree", "add", "other", "feature"]);
         std::fs::write(repo.join("a.txt"), "one\n").unwrap();
-        assert!(!run(&repo, "feature").is_ok());
+        assert!(run(&repo, "feature").is_err());
         assert_eq!(git(&repo, &["branch", "--show-current"]), b"main\n");
     }
     #[test]

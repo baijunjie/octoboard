@@ -86,6 +86,10 @@ directory beneath which exactly one git repository is found; it then overrides t
 none given. Otherwise, and for every project a parent-directory association produces when it finds more than one
 repository, the name is the directory's own name.
 
+An explicit name is trimmed and limited to 100 characters, counted as Unicode scalar values: a Chinese character or
+an ordinary emoji counts as one; a sequence of several code points counts as several. Directory-derived names keep
+their full length. Text ignored for a parent-directory association that finds several repositories is not checked.
+
 The project dialog has a Name field when associating a single directory or a git URL, and hides it while the source is
 a parent directory: a parent-directory association made from the dialog gives no name, so every project it creates is
 named after its directory. Only the console session can give a name to a parent-directory association (see "Adding a
@@ -93,9 +97,9 @@ project with its settings" in `docs/product/agent-settings-tools.md`), and it ap
 
 ## The project's description
 
-A project may carry a description: free text, over as many lines as the user likes, saying what the project is for. It
-has no length limit, it is stored trimmed, and a blank one means the project has none. A project starts with none
-unless its association gives one.
+A project may carry a description: free text, over multiple lines, saying what the project is for. It is stored trimmed
+and limited to 2,000 characters, counted as for names in "Project names" above; a blank one means the project has none.
+A project starts with none unless its association gives one.
 
 The project dialog shows it as the **Description** field right after the name, both when associating and when editing a
 project, with a note under it saying what it is for and that agent sessions read it; empty, it shows a placeholder
@@ -240,7 +244,17 @@ URL is not editable either, and saving an edit never overwrites it: Octoboard ke
 repository itself (see "The project's remote URL" above).
 
 The name cannot be cleared: saving an empty name is rejected. The description can be emptied, which leaves the project
-with none. The default agent can be cleared, which puts the project
+with none. New or changed text follows the limits in "Project names" and "The project's description" above, counted
+after trimming. The name and description fields, including Rename, show the current count and limit from 90% of the
+limit onward. Submitting overlong text shows an error at the field, keeps the input and its counter, and saves nothing;
+text is never truncated.
+
+An existing overlong name or description can be left unchanged while other settings are edited. Resubmitting the same
+text after trimming is also accepted and preserves its stored text, including any surrounding whitespace; changing it
+requires meeting the limit. Configuration import also preserves overlong values (see "What each project carries" in
+`docs/product/configuration-export-and-import.md`).
+
+The default agent can be cleared, which puts the project
 back to following the console's default for project sessions; the account can be put on any of its three states,
 inheriting the console's reference among them, and the model and the effort back to unset.
 

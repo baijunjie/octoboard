@@ -768,6 +768,7 @@ async fn place_project(
                     description: project.description,
                     // The document's values were chosen on the machine it came from.
                     check_launch: false,
+                    check_text_limits: false,
                 },
             )
             .await
@@ -1769,6 +1770,36 @@ mod tests {
         apply(&state, &older, Vec::new(), false).await.unwrap();
         let stored = state.store.list_consoles().unwrap().remove(0);
         assert_eq!(stored.console_session_prompt, None);
+    }
+
+    #[tokio::test]
+    async fn importing_preserves_legacy_project_text_beyond_editing_limits() {
+        let area = ScratchDir::new("import-legacy-project-text-area");
+        let (state, _dir) = app_state("import-legacy-project-text");
+        let repo = directory(&area, "repo");
+        let mut legacy = project(&"界".repeat(101), &repo.to_string_lossy());
+        legacy.description = Some("😀".repeat(2_001));
+        let original = document(vec![console("Hub", vec![legacy.clone()])]);
+        import(
+            &state,
+            &original,
+            vec![at(0, 0, DirectoryChoice::ExportedPath)],
+        )
+        .await
+        .unwrap();
+        let exported =
+            serde_json::to_value(config_export::build(&state.store, None).unwrap()).unwrap();
+        let (target, _target_dir) = app_state("import-legacy-project-text-target");
+        import(
+            &target,
+            &exported,
+            vec![at(0, 0, DirectoryChoice::ExportedPath)],
+        )
+        .await
+        .unwrap();
+        let restored = stored_projects(&target).remove(0);
+        assert_eq!(restored.name, legacy.name);
+        assert_eq!(restored.description, legacy.description);
     }
 
     #[tokio::test]

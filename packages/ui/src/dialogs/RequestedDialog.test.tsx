@@ -866,3 +866,21 @@ it("describes the Trash option by the line saying more may go, while it shows", 
   checkAll();
   expect((checkbox().getAttribute("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent ?? "").join(" ")).not.toContain("deleted permanently");
 });
+
+it("validates a project rename before requesting it, retaining excess Unicode text", async () => {
+  const { daemon } = mount({ kind: "rename-project", project }, []);
+  const field = document.querySelector<HTMLInputElement>("input")!;
+  const setName = (value: string) => act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, value);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const save = () => act(async () => document.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
+  setName("😀".repeat(101));
+  await save();
+  expect(daemon.request).not.toHaveBeenCalled();
+  expect(field.value).toBe("😀".repeat(101));
+  expect(document.body.textContent).toContain("Name must be 100 characters or fewer.");
+  setName("😀".repeat(100));
+  await save();
+  expect(daemon.request).toHaveBeenCalledWith({ type: "update_project", project: project.id, name: "😀".repeat(100) });
+});

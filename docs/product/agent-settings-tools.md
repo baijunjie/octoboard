@@ -83,6 +83,9 @@ adds takes the same settings, except that `name` and `description` apply only wh
 "Project names" in `docs/product/projects.md`). A blank `name` or `description` counts as none given, and
 so does a `description` of `null`. The call answers with each added project's settings.
 
+Explicit text follows "Project names" and "The project's description" in `docs/product/projects.md`. Overlong text is
+refused before anything is cloned or stored; text ignored for several parent-directory projects is not checked.
+
 A `git` association's `remote_url` is held to a stricter rule than the form's:
 
 - it must be a URL a configuration document may be cloned from (see "What may be cloned from" in
@@ -108,6 +111,9 @@ Takes `project` — an id, or a name that names exactly one project of the conso
 
 `tags` beside `add_tags` or `remove_tags` is refused. Tags end up normalised as in `docs/product/project-tags.md`.
 Anything left out is left as it is, and the call answers with the project's settings as stored.
+
+Changed text follows the limits and unchanged-text compatibility rules in "Editing a project" in
+`docs/product/projects.md`.
 
 ## The console's own settings: `get_console` and `update_console`
 

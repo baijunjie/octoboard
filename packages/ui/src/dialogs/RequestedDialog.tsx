@@ -34,6 +34,7 @@ import { useBranchCleanup, useProjectRemovalCleanup, type WarningLine } from "./
 import { ConfirmOption } from "./ConfirmOption";
 import { KeepFocusInDialog } from "./KeepFocusInDialog";
 import { useSessionRecords } from "./useSessionRecords";
+import { PROJECT_NAME_LIMIT } from "./textLength";
 
 /** The one warning a confirmation shows, under its options, for what it is about to take along:
  * `title` over the list of sessions when there is one to show — each with its agent's icon and
@@ -376,6 +377,8 @@ export function RequestedDialog({
           label={t("common.name")}
           initialValue={dialog.project.name}
           requiredMessage={t("dialog.renameProject.nameRequired")}
+          characterLimit={PROJECT_NAME_LIMIT}
+          tooLongMessage={t("daemon.field_too_long.name", { limit: PROJECT_NAME_LIMIT })}
           onSubmit={async (name) => {
             await request({ type: "update_project", project: dialog.project.id, name });
           }}

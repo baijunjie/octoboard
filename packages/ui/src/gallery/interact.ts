@@ -467,18 +467,19 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async type(text) {
       const field = await waitFor(
-        () => (doc.activeElement instanceof HTMLInputElement ? doc.activeElement : undefined),
+        () => (doc.activeElement instanceof HTMLInputElement || doc.activeElement instanceof HTMLTextAreaElement ? doc.activeElement : undefined),
         "No text field took focus to type into",
       );
       // React tracks the value through the element's own setter, so it is set through the prototype's.
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, text);
+      const prototype = field instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(field, text);
       field.dispatchEvent(new Event("input", { bubbles: true }));
       await wait(150);
     },
     async focus(label) {
       const field = await waitFor(
         () =>
-          Array.from(doc.querySelectorAll("input")).find(
+          Array.from(doc.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")).find(
             (input) => withoutIsolates(input.labels?.[0]?.textContent ?? input.getAttribute("aria-label") ?? "") === label,
           ),
         `No text field labelled ${label}`,

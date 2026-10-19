@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { useT } from "../i18n/react";
 import { Dialog, DialogError, useDialogAction, useSubmitValidation } from "./Dialog";
 import { TextInput } from "./TextInput";
+import { exceedsTextLimit } from "./textLength";
 
 /** The one-field dialog that renames a session or a project: the caller says what the field is
  * called, what a blank value is told, and how the new value is sent. */
@@ -13,6 +14,8 @@ export function RenameDialog({
   requiredMessage,
   onSubmit,
   onClose,
+  characterLimit,
+  tooLongMessage,
 }: {
   title: string;
   label: string;
@@ -21,12 +24,15 @@ export function RenameDialog({
   /** Sends the new value; the dialog closes when it resolves and shows its rejection otherwise. */
   onSubmit: (value: string) => Promise<void>;
   onClose: () => void;
+  characterLimit?: number;
+  tooLongMessage?: string;
 }): React.ReactElement {
   const t = useT();
   const [value, setValue] = useState(initialValue);
   const { error, busy, run } = useDialogAction();
   const { shown, attempt } = useSubmitValidation();
-  const valueError = value ? undefined : requiredMessage;
+  const valueError = !value.trim() ? requiredMessage
+    : characterLimit !== undefined && exceedsTextLimit(value, characterLimit, initialValue) ? tooLongMessage : undefined;
 
   const submit = () => {
     if (!attempt(valueError)) return;
@@ -43,6 +49,7 @@ export function RenameDialog({
         value={value}
         onChange={setValue}
         errorMessage={shown(valueError)}
+        characterLimit={characterLimit}
         autoFocus
       />
       <DialogError message={error} />

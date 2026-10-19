@@ -166,6 +166,9 @@ export const en = {
   "daemon.unknown_page": "Unknown page {page}.",
   "daemon.unknown_account": "Unknown account {account}.",
   "daemon.account_name_taken": "{agent} already has an account named {name}.",
+  "daemon.field_too_long": "{field} must be {limit} characters or fewer.",
+  "daemon.field_too_long.name": "Name must be {limit} characters or fewer.",
+  "daemon.field_too_long.description": "Description must be {limit} characters or fewer.",
   "daemon.field_required": "{field} is required.",
   "daemon.conflicting_fields": "{first} and {second} cannot both be given.",
   "daemon.invalid_launch_setting": "{value} is not a {field} that {agent} offers.",
@@ -836,6 +839,7 @@ export const en = {
   "viewer.change.submodule": "Separate repository",
   "viewer.change.submodule.description": "The content of a separate repository is not shown here.",
 
+  "dialog.characterCount": "{count} / {limit} characters",
   "dialog.nameRequired": "Name is required.",
   "dialog.chooseDirectory": "Choose a directory",
   "dialog.agentSettings.account": "{agent} account",

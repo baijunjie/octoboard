@@ -1,8 +1,9 @@
-import { Description, FieldError, Input, Label, TextField } from "@heroui/react";
+import { FieldError, Input, Label, TextField } from "@heroui/react";
 import React from "react";
 
 import { CodeToneContext } from "../components/codeTone";
 import { useTrimmedField } from "./useTrimmedField";
+import { TextFieldDescription, TextLengthHint } from "./TextFieldDescription";
 
 /** A labelled single-line text field, in HeroUI's variant for a field on a surface, since it is
  * always in a dialog. `ltr` lays out a value that always reads left to right (a
@@ -22,6 +23,7 @@ export function TextInput({
   autoFocus,
   dir,
   isDisabled,
+  characterLimit,
 }: {
   label: string;
   value: string;
@@ -33,6 +35,7 @@ export function TextInput({
   autoFocus?: boolean;
   dir?: "ltr";
   isDisabled?: boolean;
+  characterLimit?: number;
 }): React.ReactElement {
   const field = useTrimmedField(value, onChange);
   const invalid = errorMessage !== undefined && errorMessage !== null && errorMessage !== false && errorMessage !== "";
@@ -65,14 +68,17 @@ export function TextInput({
       ) : (
         input
       )}
-      {description && <Description>{description}</Description>}
+      <TextFieldDescription value={value} characterLimit={characterLimit} description={description} />
       {/* Renders nothing while the field is valid. The alert is on an element of its own because
           react-aria drops a `role` given to the error itself: the message appears on a submit that
           gives the user no other feedback, so it has to be announced as a dialog-wide failure is. */}
       <FieldError>
         {/* The error is danger-toned text, so a literal inside it is too, as in a danger alert. */}
         <CodeToneContext.Provider value="danger">
-          <span role="alert">{invalid ? errorMessage : null}</span>
+          <span role="alert">
+            {invalid ? errorMessage : null}
+            {invalid && characterLimit !== undefined && <TextLengthHint value={value} limit={characterLimit} />}
+          </span>
         </CodeToneContext.Provider>
       </FieldError>
     </TextField>

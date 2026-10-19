@@ -30,6 +30,7 @@ import { TagsInput } from "./TagsInput";
 import { TextAreaInput } from "./TextAreaInput";
 import { TextInput } from "./TextInput";
 import { useDetectedAgent } from "./useDetectedAgent";
+import { exceedsTextLimit, PROJECT_DESCRIPTION_LIMIT, PROJECT_NAME_LIMIT } from "./textLength";
 
 const SOURCE_OPTIONS: { value: ProjectSource; label: PlainMessageKey }[] = [
   { value: "local", label: "dialog.project.source.local" },
@@ -145,7 +146,10 @@ export function ProjectDialog({
   // `name: name || undefined` below means "blank leaves it alone" everywhere else this pattern is
   // used (the field is genuinely optional on creation), but here blanking it out and saving would
   // silently keep the old name instead of doing what the empty field visually suggests.
-  const nameError = editing && !name ? t("dialog.nameRequired") : undefined;
+  const nameError = addsParent ? undefined : editing && !name.trim() ? t("dialog.nameRequired")
+    : exceedsTextLimit(name, PROJECT_NAME_LIMIT, editing?.name) ? t("daemon.field_too_long.name", { limit: PROJECT_NAME_LIMIT }) : undefined;
+  const descriptionError = !addsParent && exceedsTextLimit(description, PROJECT_DESCRIPTION_LIMIT, editing?.description ?? "")
+    ? t("daemon.field_too_long.description", { limit: PROJECT_DESCRIPTION_LIMIT }) : undefined;
   const { shown, attempt } = useSubmitValidation();
 
   // The agent the account and the launch settings belong to: the one picked, else the console's
@@ -164,7 +168,7 @@ export function ProjectDialog({
   const launchAccount = resolveProjectAccount(picked, consoleAccountId);
 
   const submit = () => {
-    if (locked || !attempt(pathError, nameError)) return;
+    if (locked || !attempt(pathError, nameError, descriptionError)) return;
     void run(async () => {
       // Under "Detect from files" the controls are out of sight, so what was set in them is not sent.
       const sent = defaultAgent === "detect" ? initial : fields;
@@ -272,6 +276,7 @@ export function ProjectDialog({
             placeholder={editing ? undefined : t("dialog.project.nameExample")}
             description={editing ? undefined : t("dialog.project.nameHint")}
             errorMessage={shown(nameError)}
+            characterLimit={PROJECT_NAME_LIMIT}
             isDisabled={locked}
           />
         )}
@@ -282,6 +287,8 @@ export function ProjectDialog({
             onChange={setDescription}
             placeholder={t("dialog.project.descriptionPlaceholder")}
             description={t("dialog.project.descriptionNote")}
+            errorMessage={shown(descriptionError)}
+            characterLimit={PROJECT_DESCRIPTION_LIMIT}
             rows={3}
             isDisabled={locked}
           />

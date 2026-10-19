@@ -174,6 +174,7 @@ export const UI_PARAMS: Record<string, MessageParams> = {
  * for a variant its params name (`unsupported_file_type` of an `unmerged` file, worded as
  * `daemon.unsupported_file_type.unmerged`, like `daemon.trust_reason.<code>`). */
 export function messageCode(code: string, params: MessageParams): string {
+  if (code === "field_too_long" && (params.field === "name" || params.field === "description")) return `${code}.${params.field}`;
   return code === "unsupported_file_type" && params.file_type === "unmerged" ? "unsupported_file_type.unmerged" : code;
 }
 
@@ -231,6 +232,7 @@ export function daemonParams<V = never>(
   }
   // A count arrives as text; as a number it selects the singular or plural wording.
   if (/^\d+$/.test(all.count ?? "")) shown.count = Number(all.count);
+  if (code === "field_too_long" && /^\d+$/.test(all.limit ?? "")) shown.limit = Number(all.limit);
   const reasonKey = `daemon.trust_reason.${all.reason_code}`;
   if (isMessageKey(reasonKey)) shown.reason = format(language, reasonKey, shown);
   const failureKey = `daemon.${messageCode(all.reason_code ?? "", all)}`;

@@ -18,6 +18,20 @@ function exiting(text: string): HTMLElement {
   return element;
 }
 
+it.each(["input", "textarea"])("focus and type replace a labelled %s and emit its input event", async (tag) => {
+  document.body.innerHTML = `<label for="description">Description</label><${tag} id="description"></${tag}>`;
+  const field = document.getElementById("description") as HTMLInputElement | HTMLTextAreaElement;
+  const seen: string[] = [];
+  field.addEventListener("input", () => seen.push(field.value));
+  const ui = createUi(document, "en");
+  await ui.focus("Description");
+  const done = ui.type("Project notes\nwith another line");
+  await vi.advanceTimersByTimeAsync(200);
+  await done;
+  expect(document.activeElement).toBe(field);
+  expect(seen).toEqual([tag === "textarea" ? "Project notes\nwith another line" : "Project noteswith another line"]);
+});
+
 it("stuckExit names what is still closing once the wait is spent", async () => {
   exiting("General Appearance");
   const result = stuckExit(document);

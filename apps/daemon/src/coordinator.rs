@@ -315,6 +315,7 @@ async fn handle_inner(
                     tags,
                     description,
                     check_launch: true,
+                    check_text_limits: true,
                 },
             )
             .await?;
@@ -1318,6 +1319,20 @@ fn required_text(field: &str, text: &str) -> Result<String> {
     Ok(trimmed.to_string())
 }
 
+const PROJECT_NAME_LIMIT: usize = 100;
+const PROJECT_DESCRIPTION_LIMIT: usize = 2_000;
+
+fn check_text_length(field: &str, text: &str, limit: usize) -> Result<()> {
+    if text.chars().count() > limit {
+        return Err(CodedError::raised(
+            error_code::FIELD_TOO_LONG,
+            format!("`{field}` must be at most {limit} characters"),
+            &[("field", field), ("limit", &limit.to_string())],
+        ));
+    }
+    Ok(())
+}
+
 /// What the user typed for a project's directory, as the absolute, lexically normalised path that is
 /// stored. A relative path is refused: it would mean a different directory whenever the daemon's own
 /// working directory differed, and nothing that compares project paths — the trusted directories
@@ -1365,6 +1380,8 @@ pub struct AddProjectRequest {
     /// an imported document, whose values were chosen on the machine it came from, and which must
     /// not lose a project because this one's agent no longer lists a model.
     pub check_launch: bool,
+    /// Imported legacy text must survive configuration roundtrips, including overlong values.
+    pub check_text_limits: bool,
 }
 
 /// What a project is associated with beyond where it is, as the request carries it: an account
@@ -1463,6 +1480,7 @@ pub async fn add_project(
         tags,
         description,
         check_launch,
+        check_text_limits,
     } = request;
     let console = state
         .store
@@ -1473,6 +1491,23 @@ pub async fn add_project(
     let name = name
         .map(|name| name.trim().to_string())
         .filter(|name| !name.is_empty());
+    let description = trimmed_or_none(description.as_deref());
+    let check_text = || -> Result<()> {
+        if check_text_limits {
+            if let Some(name) = &name {
+                check_text_length("name", name, PROJECT_NAME_LIMIT)?;
+            }
+            if let Some(description) = &description {
+                check_text_length("description", description, PROJECT_DESCRIPTION_LIMIT)?;
+            }
+        }
+        Ok(())
+    };
+    // A clone must not leave a directory behind after a text validation failure. Parent requests
+    // first discover how many projects there are, because several ignore the supplied text.
+    if source != ProjectSource::Parent {
+        check_text()?;
+    }
     // Checked before anything is cloned or stored, so a refusal leaves nothing behind.
     let claude_account_id =
         checked_project_account(state, Agent::Claude, settings.claude_account_id.clone())?;
@@ -1502,6 +1537,9 @@ pub async fn add_project(
                     &[("path", &parent.to_string_lossy())],
                 ));
             }
+            if repos.len() == 1 {
+                check_text()?;
+            }
             check_new_project_launch(state, &console, &settings, accounts, check_launch).await?;
             repos
         }
@@ -1526,7 +1564,7 @@ pub async fn add_project(
 
     let tags = normalise_tags(tags.unwrap_or_default());
     let description = if directories.len() == 1 {
-        trimmed_or_none(description.as_deref())
+        description
     } else {
         None
     };
@@ -1673,8 +1711,21 @@ pub async fn update_project(
             .store
             .get_console(&project.console_id)?
             .ok_or_else(|| CodedError::unknown_console(&project.console_id))?;
+        // Compare against the latest record on every pass: unchanged legacy text must not block
+        // unrelated settings, including after a launch check has yielded.
         if let Some(name) = &name {
-            project.name = name.clone();
+            if name != project.name.trim() {
+                check_text_length("name", name, PROJECT_NAME_LIMIT)?;
+                project.name = name.clone();
+            }
+        }
+        if let Some(description) = &description {
+            if description != &trimmed_or_none(project.description.as_deref()) {
+                if let Some(description) = description {
+                    check_text_length("description", description, PROJECT_DESCRIPTION_LIMIT)?;
+                }
+                project.description = description.clone();
+            }
         }
         // Absent means "leave it alone", an explicit null means "go back to inheriting the
         // console's project session agent" — the two have to stay distinguishable, or a project's
@@ -1720,9 +1771,6 @@ pub async fn update_project(
             tags.retain(|tag| !removed.contains(&tag.to_lowercase()));
             tags.extend(changes.add_tags.iter().cloned());
             project.tags = normalise_tags(tags);
-        }
-        if let Some(description) = &description {
-            project.description = description.clone();
         }
         state.store.update_project(&project)?;
         // Read back rather than sent as `project`: the stored record carries what this write
@@ -5364,6 +5412,7 @@ mod tests {
                     tags: None,
                     description: None,
                     check_launch: true,
+                    check_text_limits: true,
                 },
             )
         };
@@ -5417,6 +5466,7 @@ mod tests {
                     tags: None,
                     description: Some("  Billing.  ".to_string()),
                     check_launch: true,
+                    check_text_limits: true,
                 },
             )
         };
@@ -5433,6 +5483,198 @@ mod tests {
         let added = add(ProjectSource::Parent, &parent).await.unwrap();
         assert_eq!(added.len(), 2);
         assert!(added.iter().all(|project| project.description.is_none()));
+    }
+
+    #[tokio::test]
+    async fn adding_project_text_checks_trimmed_character_limits_before_storing_or_cloning() {
+        let (state, dir) = crate::test_support::app_state("coordinator-add-project-text-limits");
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &console_workdir(&dir)))
+            .unwrap();
+        let repo = dir.join("repo");
+        std::fs::create_dir(&repo).unwrap();
+        let request = |name, description| AddProjectRequest {
+            console_id: "console-1".to_string(),
+            source: ProjectSource::Local,
+            path: Some(repo.to_string_lossy().into_owned()),
+            remote_url: None,
+            name: Some(name),
+            default_agent: None,
+            settings: NewProjectSettings::default(),
+            detect_default_agent: false,
+            tags: None,
+            description: Some(description),
+            check_launch: true,
+            check_text_limits: true,
+        };
+        for (field, name, description, limit) in [
+            ("name", "界".repeat(101), "ok".to_string(), "100"),
+            ("description", "ok".to_string(), "😀".repeat(2_001), "2000"),
+        ] {
+            for source in [ProjectSource::Local, ProjectSource::Git] {
+                let mut given = request(name.clone(), description.clone());
+                given.source = source;
+                given.remote_url = Some("invalid-remote-that-must-not-be-cloned".to_string());
+                let err = add_project(&state, given).await.unwrap_err();
+                let coded = err.downcast_ref::<CodedError>().expect("coded refusal");
+                assert_eq!(coded.code, error_code::FIELD_TOO_LONG);
+                assert_eq!(coded.params["field"], field);
+                assert_eq!(coded.params["limit"], limit);
+                assert!(state.store.list_projects().unwrap().is_empty());
+            }
+        }
+        let name = "界".repeat(100);
+        let description = "😀".repeat(2_000);
+        let added = add_project(
+            &state,
+            request(format!("  {name}  "), format!("\n{description}\n")),
+        )
+        .await
+        .unwrap();
+        assert_eq!(added[0].name, name);
+        assert_eq!(added[0].description.as_deref(), Some(description.as_str()));
+    }
+
+    #[tokio::test]
+    async fn derived_names_and_ignored_parent_text_do_not_block_association() {
+        let (state, dir) = crate::test_support::app_state("coordinator-derived-project-text");
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &console_workdir(&dir)))
+            .unwrap();
+        let long_name = "a".repeat(101);
+        let repo = dir.join(&long_name);
+        std::fs::create_dir(&repo).unwrap();
+        let request = AddProjectRequest {
+            console_id: "console-1".to_string(),
+            source: ProjectSource::Local,
+            path: Some(repo.to_string_lossy().into_owned()),
+            remote_url: None,
+            name: None,
+            default_agent: None,
+            settings: NewProjectSettings::default(),
+            detect_default_agent: false,
+            tags: None,
+            description: None,
+            check_launch: true,
+            check_text_limits: true,
+        };
+        assert_eq!(
+            add_project(&state, request).await.unwrap()[0].name,
+            long_name
+        );
+        let parent = dir.join("parent");
+        std::fs::create_dir_all(parent.join("one").join(".git")).unwrap();
+        let request = || AddProjectRequest {
+            console_id: "console-1".to_string(),
+            source: ProjectSource::Parent,
+            path: Some(parent.to_string_lossy().into_owned()),
+            remote_url: None,
+            name: Some(long_name.clone()),
+            default_agent: None,
+            settings: NewProjectSettings::default(),
+            detect_default_agent: false,
+            tags: None,
+            description: Some("x".repeat(2_001)),
+            check_launch: true,
+            check_text_limits: true,
+        };
+        let err = add_project(&state, request()).await.unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<CodedError>().unwrap().code,
+            error_code::FIELD_TOO_LONG
+        );
+        std::fs::create_dir_all(parent.join("two").join(".git")).unwrap();
+        let added = add_project(&state, request()).await.unwrap();
+        assert_eq!(added.len(), 2);
+        assert!(added
+            .iter()
+            .all(|project| project.name != long_name && project.description.is_none()));
+    }
+
+    #[tokio::test]
+    async fn project_text_updates_preserve_legacy_values_and_reject_new_overlong_text() {
+        let (state, dir) = crate::test_support::app_state("coordinator-update-project-text-limits");
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &console_workdir(&dir)))
+            .unwrap();
+        let mut legacy = project_of("console-1", "project-1");
+        legacy.name = format!("  {}  ", "n".repeat(101));
+        legacy.description = Some(format!("\n{}\n", "d".repeat(2_001)));
+        state.store.insert_project(&legacy).unwrap();
+        let updated = update_project(
+            &state,
+            &legacy.id,
+            ProjectChanges {
+                pinned: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated.name, legacy.name);
+        assert_eq!(updated.description, legacy.description);
+        let updated = update_project(
+            &state,
+            &legacy.id,
+            ProjectChanges {
+                name: Some(legacy.name.clone()),
+                description: Some(legacy.description.clone()),
+                pinned: Some(false),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert!(!updated.pinned);
+        assert_eq!(updated.name, legacy.name);
+        assert_eq!(updated.description, legacy.description);
+        for (field, changes) in [
+            (
+                "name",
+                ProjectChanges {
+                    name: Some("m".repeat(101)),
+                    pinned: Some(true),
+                    ..Default::default()
+                },
+            ),
+            (
+                "description",
+                ProjectChanges {
+                    description: Some(Some("e".repeat(2_001))),
+                    pinned: Some(true),
+                    ..Default::default()
+                },
+            ),
+        ] {
+            let err = update_project(&state, &legacy.id, changes)
+                .await
+                .unwrap_err();
+            let coded = err.downcast_ref::<CodedError>().expect("coded refusal");
+            assert_eq!(coded.code, error_code::FIELD_TOO_LONG);
+            assert_eq!(coded.params["field"], field);
+            let stored = state.store.get_project(&legacy.id).unwrap().unwrap();
+            assert_eq!(stored.name, legacy.name);
+            assert_eq!(stored.description, legacy.description);
+            assert!(!stored.pinned);
+        }
+        let name = "😀".repeat(100);
+        let description = "界".repeat(2_000);
+        let updated = update_project(
+            &state,
+            &legacy.id,
+            ProjectChanges {
+                name: Some(format!(" {name} ")),
+                description: Some(Some(format!("\n{description}\n"))),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated.name, name);
+        assert_eq!(updated.description.as_deref(), Some(description.as_str()));
     }
 
     /// A session whose resolved agent has been determined unavailable is refused before anything
@@ -7570,6 +7812,7 @@ mod tests {
                     tags: None,
                     description: None,
                     check_launch: true,
+                    check_text_limits: true,
                 },
             )
         };
@@ -7924,6 +8167,7 @@ mod tests {
             tags: None,
             description: None,
             check_launch: true,
+            check_text_limits: true,
         };
         // What Grok Build offers, so the effort below is checked against this and not against
         // whatever is installed on the machine running the test.

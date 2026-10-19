@@ -178,6 +178,7 @@ async fn add_project(
             settings,
             detect_default_agent: true,
             check_launch: true,
+            check_text_limits: true,
             tags: optional_string_list(arguments, "tags")?,
             description: present_text(arguments, "description")?.flatten(),
         },

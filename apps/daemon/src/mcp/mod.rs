@@ -148,7 +148,8 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                     "name": {
                         "type": "string",
                         "description": "Display name. Only applies when a single project is being \
-                                        associated; defaults to the directory's own name.",
+                                        associated; defaults to the directory's own name. When given, at most \
+                                        100 Unicode scalar values after trimming.",
                     },
                     "default_agent": {
                         "type": "string",
@@ -163,7 +164,8 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                     "description": {
                         "type": "string",
                         "description": "What the project is for, in free text. Blank is none. Only applies \
-                                        when a single project is being associated.",
+                                        when a single project is being associated. At most 2,000 Unicode \
+                                        scalar values after trimming.",
                     },
                     "tags": tags_schema("The project's tags."),
                     "accounts": accounts_schema(true),
@@ -192,11 +194,17 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                         "type": "string",
                         "description": "The project's id, or its name when that is unambiguous.",
                     },
-                    "name": { "type": "string", "description": "The display name. Not blank." },
+                    "name": {
+                        "type": "string",
+                        "description": "The display name. Not blank. Changed text is limited to 100 \
+                                        Unicode scalar values after trimming; unchanged legacy text \
+                                        is accepted even when longer.",
+                    },
                     "description": {
                         "type": ["string", "null"],
                         "description": "What the project is for, in free text; `null` or blank \
-                                        clears it.",
+                                        clears it. Changed text is limited to 2,000 Unicode scalar values \
+                                        after trimming; unchanged legacy text is accepted even when longer.",
                     },
                     "tags": tags_schema("Replaces the project's whole tag list. Not to be \
                                          combined with `add_tags` or `remove_tags`."),

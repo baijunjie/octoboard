@@ -149,6 +149,9 @@ export const zhHans: Translation<"other"> = {
   "daemon.unknown_page": "未知页面 {page}。",
   "daemon.unknown_account": "未知账户 {account}。",
   "daemon.account_name_taken": "{agent} 已有名为 {name} 的账户。",
+  "daemon.field_too_long": "{field} 不能超过 {limit} 个字符。",
+  "daemon.field_too_long.name": "名称不能超过 {limit} 个字符。",
+  "daemon.field_too_long.description": "描述不能超过 {limit} 个字符。",
   "daemon.field_required": "必须提供 {field}。",
   "daemon.conflicting_fields": "不能同时提供 {first} 和 {second}。",
   "daemon.invalid_launch_setting": "{agent} 不提供 {field} {value}。",
@@ -761,6 +764,7 @@ export const zhHans: Translation<"other"> = {
   "viewer.change.submodule": "独立仓库",
   "viewer.change.submodule.description": "此处不显示独立仓库的内容。",
 
+  "dialog.characterCount": "{count} / {limit} 字符",
   "dialog.nameRequired": "必须填写名称。",
   "dialog.chooseDirectory": "选取目录",
   "dialog.agentSettings.account": "{agent} 账户",

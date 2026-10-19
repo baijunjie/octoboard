@@ -610,3 +610,53 @@ it("sends an explicit null when editing clears the description", async () => {
   await click(buttonText("Save"));
   expect(sentOf(pending, "update_project")).toMatchObject({ description: null });
 });
+
+it.each([
+  { label: "Name", limit: 100, sample: "😀", message: "Name must be 100 characters or fewer." },
+  { label: "Description", limit: 2000, sample: "中", message: "Description must be 2,000 characters or fewer." },
+])("counts $label as trimmed Unicode characters, keeps excess text, and blocks saving until corrected", async ({ label, limit, sample, message }) => {
+  const pending = render();
+  await fillDirectory(pending);
+  const field = label === "Name" ? input(label) : document.querySelector<HTMLTextAreaElement>("textarea")!;
+  type(field, `  ${sample.repeat(limit + 1)}  `);
+  expect(document.body.textContent).toContain(`${(limit + 1).toLocaleString("en")} / ${limit.toLocaleString("en")} characters`);
+  await click(buttonText("Add"));
+  expect(pending.some((p) => p.body.type === "add_project")).toBe(false);
+  expect(document.body.textContent).toContain(message);
+  expect(field.value.trim()).toBe(sample.repeat(limit + 1));
+  expect(field.getAttribute("aria-invalid")).toBe("true");
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain(`${(limit + 1).toLocaleString("en")} / ${limit.toLocaleString("en")} characters`);
+  const errorId = field.getAttribute("aria-describedby")?.split(" ").find((id) => document.getElementById(id)?.textContent?.includes(message));
+  expect(errorId).toBeDefined();
+  type(field, sample.repeat(limit));
+  expect(document.body.textContent).not.toContain(message);
+  await click(buttonText("Add"));
+  expect(sentOf(pending, "add_project")).toMatchObject({ [label.toLowerCase()]: sample.repeat(limit) });
+});
+
+it("keeps legacy overlong fields while saving other settings, but rejects changed overlong text", async () => {
+  const legacy = projectOf("p-long", "c-1", "中".repeat(101), { description: "😀".repeat(2001) });
+  const pending = render(legacy);
+  await click(buttonText("Save"));
+  expect(sentOf(pending, "update_project")).toMatchObject({ name: legacy.name });
+  expect(sentOf(pending, "update_project")).not.toHaveProperty("description");
+  await act(async () => pending.find((p) => p.body.type === "update_project")!.resolve({ type: "project_upserted", project: legacy }));
+  typeDescription(`${legacy.description}a`);
+  await click(buttonText("Save"));
+  expect(pending.filter((p) => p.body.type === "update_project")).toHaveLength(1);
+  expect(document.body.textContent).toContain("Description must be 2,000 characters or fewer.");
+});
+
+it("shows the name counter only near the limit and leaves hidden parent fields out of validation", async () => {
+  const pending = render();
+  await fillDirectory(pending);
+  type(input("Name"), "a".repeat(89));
+  expect(document.body.textContent).not.toContain("/ 100 characters");
+  type(input("Name"), "a".repeat(90));
+  expect(document.body.textContent).toContain("90 / 100 characters");
+  type(input("Name"), "a".repeat(101));
+  typeDescription("a".repeat(2001));
+  await chooseSource("A parent directory");
+  await click(buttonText("Add"));
+  expect(sentOf(pending, "add_project")).toMatchObject({ source: "parent" });
+});

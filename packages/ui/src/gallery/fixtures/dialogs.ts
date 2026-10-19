@@ -170,8 +170,17 @@ const editTaggedProject = [
   (ui: Ui) => ui.press(ui.t("sidebar.project.edit")),
 ];
 
-const editBillingProject = [
-  (ui: Ui) => projectActions(ui, tagged[1].name),
+// Long fields share one view: the textarea scrolls while both counters approach their limits.
+const nearLimitProject = projectOf("p-near-limit", console_.id,
+  "Release coordination for documentation billing subscriptions deployment and support tools".padEnd(90, "."), {
+    description: tagged[1].description!.repeat(3).slice(0, 1_800).trimEnd().padEnd(1_800, "."),
+  });
+const legacyProject = projectOf("p-legacy-text", console_.id, `${nearLimitProject.name} before limits`, {
+  description: `${nearLimitProject.description}\n${"Earlier project notes. ".repeat(10)}`,
+});
+const textProjectState = (project: typeof nearLimitProject) => snapshotState({ consoles: [console_], projects: [project], sessions: [] });
+const editTextProject = (project: typeof nearLimitProject) => [
+  (ui: Ui) => ui.press((name) => name === ui.t("sidebar.project.actions", { name: project.name })),
   (ui: Ui) => ui.press(ui.t("sidebar.project.edit")),
 ];
 
@@ -825,9 +834,52 @@ export const dialogScenarios: Scenario[] = [
     id: "dialog-edit-project-long-description",
     group: "Projects",
     category: "normal",
-    title: "Project settings with a long description",
-    description: "The description is several paragraphs, taller than the field: the field keeps its three-row height and scrolls inside, with the note and Tags still below it.",
-    steps: editBillingProject,
+    title: "Project fields approaching their character limits",
+    description: "Name shows 90 / 100 and Description 1800 / 2000. The long description keeps its three-row height and scrolls inside, with its note, counter and Tags still below it.",
+    state: textProjectState(nearLimitProject),
+    steps: editTextProject(nearLimitProject),
+  },
+  {
+    ...dialogFixture,
+    id: "dialog-edit-project-legacy-text",
+    group: "Projects",
+    category: "normal",
+    title: "Existing project fields beyond the character limits",
+    description: "Both counters exceed their limits, but unchanged stored text has no validation error. Other project settings remain editable without shortening the original name or description.",
+    state: textProjectState(legacyProject),
+    steps: editTextProject(legacyProject),
+  },
+  {
+    ...dialogFixture,
+    id: "dialog-edit-project-text-too-long",
+    group: "Projects",
+    category: "exceptional",
+    title: "Project name and description beyond their limits",
+    description: "After Save, both fields show their own length errors and counters together. The full input remains editable.",
+    state: textProjectState(nearLimitProject),
+    steps: [
+      ...editTextProject(nearLimitProject),
+      (ui) => ui.focus(ui.t("common.name")),
+      (ui) => ui.type(`${nearLimitProject.name} extended name`),
+      (ui) => ui.focus(ui.t("dialog.project.description")),
+      (ui) => ui.type(legacyProject.description!),
+      (ui) => ui.confirm(),
+    ],
+  },
+  {
+    ...dialogFixture,
+    id: "dialog-rename-project-text-too-long",
+    group: "Projects",
+    category: "exceptional",
+    title: "Rename project beyond the name limit",
+    description: "The compact rename dialog shows the name error and character counter after Save, keeping the complete name editable.",
+    steps: [
+      (ui) => projectActions(ui, tagged[0].name),
+      (ui) => ui.press(ui.t("sidebar.project.rename")),
+      (ui) => ui.focus(ui.t("common.name")),
+      (ui) => ui.type(legacyProject.name),
+      (ui) => ui.confirm(),
+    ],
   },
   {
     ...dialogFixture,
