@@ -1368,6 +1368,11 @@ export const en = {
     "Once this is on, an archived session is deleted automatically when its agent no longer keeps its conversation. {appName} checks each time it starts, then about once a day. Pinned and locked sessions are kept.",
   "settings.archiveCleanup.description.on":
     "An archived session is deleted automatically when its agent no longer keeps its conversation. {appName} checks each time it starts, then about once a day. Pinned and locked sessions are kept.",
+  "settings.autoApprove.label": "Automatically approve session requests",
+  "settings.autoApprove.description.off":
+    "Once this is on, a session can start a session that reports to you without asking you first. Nobody owns the new session but you.",
+  "settings.autoApprove.description.on":
+    "A session can start a session that reports to you without asking you first. Nobody owns the new session but you.",
   "settings.background.label": "Keep running in the background when the window is closed",
   "settings.background.description.off":
     "Once this is on, closing the window keeps sessions and their agents running and notifications arriving. The menu bar icon brings the window back.",

@@ -1233,6 +1233,11 @@ export const zhHans: Translation<"other"> = {
     "开启后，智能体不再保留已归档会话的对话时，将自动删除该会话。{appName} 每次启动时检查一次，之后约每天检查一次。置顶和锁定的会话会保留。",
   "settings.archiveCleanup.description.on":
     "智能体不再保留已归档会话的对话时，将自动删除该会话。{appName} 每次启动时检查一次，之后约每天检查一次。置顶和锁定的会话会保留。",
+  "settings.autoApprove.label": "自动批准会话请求",
+  "settings.autoApprove.description.off":
+    "开启后，会话可以直接启动向你汇报的新会话，无需先征得你的同意。新会话除你之外没有其他所有者。",
+  "settings.autoApprove.description.on":
+    "会话可以直接启动向你汇报的新会话，无需先征得你的同意。新会话除你之外没有其他所有者。",
   "settings.background.label": "关闭窗口后在后台继续运行",
   "settings.background.description.off":
     "开启后，关闭窗口时会话及其智能体会继续运行，通知也会照常送达。点按菜单栏图标即可重新打开窗口。",

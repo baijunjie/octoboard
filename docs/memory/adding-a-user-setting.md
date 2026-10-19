@@ -18,7 +18,10 @@ An application setting that describes how Octoboard should behave, rather than s
 accounts, is carried by a full ("everything") export and applied on import; a single console's export carries no
 application settings, and machine-local settings (such as the default clone directory) and account settings never
 travel (`docs/product/configuration-export-and-import.md`, section "The application settings a full export carries").
-So a new portable application setting is added, in the same change, to:
+The exception is a setting that lets agents act without asking the user (such as approving session requests
+automatically): a shared document must not be able to switch it on, so it is neither exported nor applied on import,
+just as the agents' settings tools leave it out; if you are unsure whether a new setting is of that kind, ask. So a new
+portable application setting is added, in the same change, to:
 
 - `DocumentSettings` in `apps/daemon/src/config_export.rs`, as an `Option` with `#[serde(default)]`, so a document
   exported before the setting existed still imports and applying it leaves the setting as it is; filled in `build` for

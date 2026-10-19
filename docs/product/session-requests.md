@@ -7,7 +7,8 @@ session. A session the caller wants to drive itself is one its `new_session` sta
 request is for a session that should be nobody's, or for one in a place `new_session` does not reach.
 
 **The user's confirmation is enforced by Octoboard, not by a prompt.** Nothing is started on the call alone: the call
-waits while the user is asked, and only the user's approval starts anything.
+waits while the user is asked, and only the user's approval starts anything — or the user's standing approval, where
+they have chosen to have session requests approved automatically (see "Approving requests automatically" below).
 
 ## Who is offered the tool
 
@@ -52,6 +53,41 @@ while that determination is still pending), a model or effort the agent does not
 value, a `project` or `console` given for the other kind, a project or console that does not exist, a name that names
 more than one, a console session asking for a project session without naming the project, and `branches` the request
 cannot hand over (see "Handing branches over" below).
+
+## Approving requests automatically
+
+The application setting **Automatically approve session requests** (see "Automatically approve session requests" in
+`docs/product/settings.md`) is **off by default**. While it is on, a call that passes every check made before the user
+is asked is **approved at once**, without asking:
+
+- **No one is asked.** No confirmation dialog is shown in any window, the session does not read *waiting for the user*
+  and raises no hand, and no notification is fired. The call does not wait for an answer, so nothing in "Waiting for
+  the answer" below applies to it: it returns once the approval has been carried out.
+- **The approval is carried out exactly as an approval from the dialog** (see "On approval" below): the session is
+  started as `new_session` would start it, with no owner, the branches the request named are handed over, the call
+  returns the same result and the same outcome message is written into the caller's session. The only difference in
+  what is said is who approved: the paragraph opening the new session's prompt, and the result's note, say the request
+  was approved automatically under the user's setting to approve session requests without asking, rather than by the
+  user. An automatic approval that cannot be carried out fails as described in "When an approval cannot be carried
+  out" below.
+- **The setting is read once, when the call is made.** A request already waiting in its dialog when the setting is
+  turned on stays there, waiting for the user's answer; turning the setting off does not stop an automatic approval
+  already being carried out.
+- **The rules on one request per session still hold** (see "How a request ends" below): an automatic request takes
+  the place of a request the same session has waiting, which is withdrawn — its dialog closes and the hand comes down —
+  and a call made while an approval of the same session's earlier request is being carried out is refused.
+- **Carrying the approval out does not depend on the call.** Once the call is approved, cancelling it — the user
+  pressing Escape in the agent mid-call, the agent cancelling the call over MCP, or the call's connection to the
+  daemon dropping — does not stop it: the session is still started, the branches still handed over, and the outcome
+  message still reaches the caller's session.
+
+The tool's description tells the agent that the call waits for the user's answer unless the user has chosen to have
+such requests approved automatically, in which case the result says so and the call does not wait.
+
+Only the user changes the setting, in Settings. An agent can neither read nor change it through the settings tools
+(see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), so a
+session cannot approve its own requests, and a configuration document neither carries nor applies it (see "The
+application settings a full export carries" in `docs/product/configuration-export-and-import.md`).
 
 ## Waiting for the answer
 
@@ -128,16 +164,17 @@ A request is **withdrawn** on the signals Octoboard sees for every agent alike:
 **A session has at most one request waiting.** A new request takes the place of the one the session already has
 waiting, which is withdrawn; the hand stays up through the change.
 
-A request made while an approval of the same session's earlier request is being carried out is refused, saying the
-earlier request has just been approved and is being carried out, and that its outcome will arrive in the session's
-terminal as a message.
+A request made while an approval of the same session's earlier request — from the dialog or automatic — is being
+carried out is refused, saying the earlier request has just been approved and is being carried out, and that its
+outcome will arrive in the session's terminal as a message.
 
 Nothing about a request is persisted. Every agent process ends with the daemon, so a daemon restart leaves no call
 waiting.
 
 ## On approval
 
-Once the user approves, the dialog closes everywhere at once, and then:
+Once the user approves, the dialog closes everywhere at once, and then — as for an automatic approval, which has no
+dialog (see "Approving requests automatically" above):
 
 1. **The session is started where the request named, exactly as `new_session` would start it** with the same brief
    and overrides: titled from its goal, the overrides applied, listed as *starting* until its launch settles, and its
@@ -149,8 +186,9 @@ Once the user approves, the dialog closes everywhere at once, and then:
    start and drive sessions of its own project (see "The unbound project session's tools" in
    `docs/product/hub-orchestration.md`); a console session is an ordinary console session of its console.
 3. **Its opening prompt says who asked for it.** The brief is preceded by a paragraph naming the requesting session by
-   id and title, saying the session was started at that session's request with the user's approval, that nobody owns
-   it but the user, and that the requesting session is not its owner and the two can only share information with each
+   id and title, saying the session was started at that session's request with the user's approval — or, for an
+   automatic approval, automatically under the user's setting to approve session requests without asking — that
+   nobody owns it but the user, and that the requesting session is not its owner and the two can only share information with each
    other. Where the request named branches, the paragraph also says the requesting session handed it those branches,
    naming each, with the same approval, that it is now the session responsible for them and is to carry on the work
    on them. The paragraph is written when the request is made, so it names every branch the request named, whatever
@@ -172,7 +210,7 @@ The call returns:
 | `title` | Its title. |
 | `console` | The console it is in. |
 | `project` | The project it is in, or null for a console session. |
-| `note` | Prose telling the caller that the user approved and which session was started — its kind, id, title, agent and project or console; that it has no owner and reports to the user, not to the caller; that it is not the caller's to drive and the caller should follow the user's direction on continuing its own work or ending after the handover; where the request named branches, what became of them (see "Handing branches over" below); that `share_info` tells it something that touches its work, and, where the caller has `get_session`, that it reads it. Where the caller is unbound, has `bind_to_session`, and could be bound to the new session under the rules a binding keeps, the note adds that `bind_to_session` with the new session as `owner` makes the caller one of its sessions — the way a project session comes to be driven by a console session it asked for (see "Lead sessions" in `docs/product/hub-orchestration.md`). |
+| `note` | Prose telling the caller that the user approved — or, for an automatic approval, that Octoboard approved the request automatically because the user has chosen to have session requests approved without asking — and which session was started — its kind, id, title, agent and project or console; that it has no owner and reports to the user, not to the caller; that it is not the caller's to drive and the caller should follow the user's direction on continuing its own work or ending after the handover; where the request named branches, what became of them (see "Handing branches over" below); that `share_info` tells it something that touches its work, and, where the caller has `get_session`, that it reads it. Where the caller is unbound, has `bind_to_session`, and could be bound to the new session under the rules a binding keeps, the note adds that `bind_to_session` with the new session as `owner` makes the caller one of its sessions — the way a project session comes to be driven by a console session it asked for (see "Lead sessions" in `docs/product/hub-orchestration.md`). |
 
 **No window follows the new session.** Approving selects nothing and changes no window's view or focus mode.
 
@@ -205,7 +243,7 @@ under the same name while the first one's record stands. Elsewhere, a branch ren
 the branches still has its record under its old name, so handing it over is refused, by either name, until the Git
 mode lists the branches again and the record moves to the new name.
 
-**Nothing moves until the user approves.** A request refused, timed out or withdrawn leaves every branch with the
+**Nothing moves until the request is approved.** A request refused, timed out or withdrawn leaves every branch with the
 requester, and so does an approval that cannot be carried out.
 
 **On approval, the session is started first, and only then do the branches move** to it: each moves only where the
@@ -244,7 +282,9 @@ is not spared: that turn is reported on as any other, whether the caller continu
 
 When an approval cannot be carried out, nothing is started and no branch is handed over, the call returns a tool
 error saying the user approved but it could not be carried out, with the reason, and the window that approved shows
-the reason in an error alert about the requesting session. It is for one of these reasons:
+the reason in an error alert about the requesting session. For an automatic approval the error says instead that the
+request was approved automatically but could not be carried out, and no window shows an alert. It is for one of these
+reasons:
 
 - the caller's process ended before the session could be started, which gives the same error as an approval after a
   withdrawal (see "The confirmation dialog" below);

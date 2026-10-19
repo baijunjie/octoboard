@@ -749,25 +749,11 @@ async fn request_session(
         None => None,
     };
     let open = session_in(state, &console, project, arguments)?;
-    // Whoever reads the brief is to know who wrote it, and that it is not that session's to drive.
-    let handed = handover.as_ref().map_or_else(String::new, |handover| {
-        let (noun, them) = session_request::branch_noun_and_pronoun(&handover.branches);
-        format!(
-            " It also handed the {noun} {} over to you, with the same approval: you are now the \
-             session responsible for {them}, so carry on the work on {them}.",
-            session_request::named_branches(&handover.branches)
-        )
-    });
-    let task = open.task.map(|brief| {
-        format!(
-            "You were started at the request of the session `{id}` (\"{title}\"), with the user's \
-             approval. Nobody owns you but the user: that session is not your owner, and it and \
-             you can only share information with each other.{handed} This is the brief it \
-             wrote:\n\n{brief}",
-            id = caller.id,
-            title = sharing::one_line(&caller.title),
-        )
-    });
+    // Read once: the opening prompt says how the request was approved, and the call acts on it.
+    let automatic = state.store.auto_approve_session_requests()?;
+    let task = open
+        .task
+        .map(|brief| request_opening_prompt(caller, handover.as_ref(), automatic, &brief));
     let asked = OpenRequest {
         task,
         // The user's own, not the caller's: nobody owns it but them.
@@ -779,9 +765,40 @@ async fn request_session(
         caller,
         asked,
         handover,
+        automatic,
         session_request::ANSWER_TIME_LIMIT,
     )
     .await
+}
+
+/// The opening prompt of a session started at `caller`'s request: whoever reads the brief is to
+/// know who wrote it, how the request was approved, and that it is not that session's to drive.
+fn request_opening_prompt(
+    caller: &Session,
+    handover: Option<&Handover>,
+    automatic: bool,
+    brief: &str,
+) -> String {
+    let approval = if automatic {
+        "automatically, under the user's setting to approve session requests without asking"
+    } else {
+        "with the user's approval"
+    };
+    let handed = handover.map_or_else(String::new, |handover| {
+        let (noun, them) = session_request::branch_noun_and_pronoun(&handover.branches);
+        format!(
+            " It also handed the {noun} {} over to you, with the same approval: you are now the \
+             session responsible for {them}, so carry on the work on {them}.",
+            session_request::named_branches(&handover.branches)
+        )
+    });
+    format!(
+        "You were started at the request of the session `{id}` (\"{title}\"), {approval}. Nobody \
+         owns you but the user: that session is not your owner, and it and you can only share \
+         information with each other.{handed} This is the brief it wrote:\n\n{brief}",
+        id = caller.id,
+        title = sharing::one_line(&caller.title),
+    )
 }
 
 /// The branches `request_session` hands over, from its `branches` argument: local branches of the
@@ -1374,6 +1391,31 @@ pub(super) mod tests {
                 "{task}"
             );
         }
+    }
+
+    /// The opening prompt says the user approved the request, or that Octoboard did under the
+    /// user's setting.
+    #[test]
+    fn the_opening_prompt_words_the_approval_by_who_gave_it() {
+        let caller = project_session("loose", "console-1", None);
+        let asked = request_opening_prompt(&caller, None, false, "the brief");
+        assert!(
+            asked.contains("), with the user's approval. Nobody owns you"),
+            "{asked}"
+        );
+        assert!(
+            asked.ends_with("This is the brief it wrote:\n\nthe brief"),
+            "{asked}"
+        );
+        let waived = request_opening_prompt(&caller, None, true, "the brief");
+        assert!(
+            waived.contains(
+                "), automatically, under the user's setting to approve session requests without \
+                 asking. Nobody owns you"
+            ),
+            "{waived}"
+        );
+        assert!(!waived.contains("with the user's approval"), "{waived}");
     }
 
     /// The refusal of the request `args` as `loose`, which is made before the user is asked: a call
@@ -2730,6 +2772,38 @@ pub(super) mod tests {
         ] {
             let message = refused(&state, "a", "update_console", args).await;
             assert!(message.contains(expected), "{message}");
+        }
+    }
+
+    /// The automatic approval of session requests is the user's alone: an agent can neither read it
+    /// nor change it through the settings tools, whatever it passes.
+    #[tokio::test]
+    async fn the_automatic_approval_of_session_requests_is_out_of_the_agents_reach() {
+        let (state, _dir) = settings_state("app-settings-auto-approve");
+        let listed = call(&state, "a", "get_settings", &arguments(json!({})))
+            .await
+            .unwrap();
+        assert!(listed.get("auto_approve_session_requests").is_none());
+
+        for (stored, passed) in [(false, true), (true, false)] {
+            state
+                .store
+                .set_auto_approve_session_requests(stored)
+                .unwrap();
+            let updated = call(
+                &state,
+                "a",
+                "update_settings",
+                &arguments(json!({
+                    "auto_approve_session_requests": passed,
+                    "default_clone_dir": "/tmp/clones",
+                })),
+            )
+            .await
+            .unwrap();
+            assert!(updated.get("auto_approve_session_requests").is_none());
+            assert_eq!(updated["default_clone_dir"], "/tmp/clones");
+            assert_eq!(state.store.auto_approve_session_requests().unwrap(), stored);
         }
     }
 

@@ -6,7 +6,15 @@
 //! any project, or a console session that dispatches into every project of its console, on the
 //! word of a model, so nothing here acts on a call by itself: the request is broadcast for a
 //! dialog, the call waits, and only an approval starts anything. A rule in a prompt could be
-//! ignored by the model; this cannot.
+//! ignored by the model; this cannot. The one exception is the user's own standing approval, the
+//! setting described next, which only the user's client can change.
+//!
+//! **The user can waive the dialog.** While the application setting `auto_approve_session_requests`
+//! is on, a request that passed every pre-check is approved at once, through the same
+//! [`carry_out`] an approval from the dialog takes: nothing is broadcast, no hand goes up, and the
+//! session is started, the branches handed over and the outcome told exactly as for an approval.
+//! That runs in a task of its own, so a call cancelled meanwhile does not interrupt it. The
+//! setting is read when the call is made, so a request already waiting stays in its dialog.
 //!
 //! **A request lives until it is answered, times out or is withdrawn.** It is held in memory only
 //! ([`SessionRequests`] on `AppState`) and sent again to a client after each `snapshot`, like a
@@ -130,6 +138,9 @@ struct Request {
     agent: Agent,
     /// The branches an approval hands to the session, if the request names any.
     handover: Option<Handover>,
+    /// Whether the approval is Octoboard's own, under the user's setting, rather than the user's
+    /// answer to the dialog. Only the wording of the outcome differs.
+    automatic: bool,
 }
 
 impl Request {
@@ -160,6 +171,31 @@ impl Request {
 }
 
 impl Requests {
+    /// Makes room for a new request of `session`: refused while an approval of its earlier one is
+    /// being carried out, else the request it has waiting is withdrawn and returned, since a
+    /// session asking again has stopped waiting for its earlier call.
+    fn make_room_for(&mut self, session: &str) -> Result<Vec<Waiting>> {
+        if self.approving.contains(session) {
+            bail!(
+                "this session's earlier request has just been approved, and it is being carried \
+                 out; its outcome arrives in this terminal as a message"
+            );
+        }
+        Ok(self.take(
+            |waiting| waiting.session == session,
+            SessionRequestEnding::Withdrawn,
+        ))
+    }
+
+    /// Marks `session` as being approved until the returned guard is dropped.
+    fn start_approving(&mut self, state: &Arc<AppState>, session: &str) -> Approving {
+        self.approving.insert(session.to_string());
+        Approving {
+            state: state.clone(),
+            session: session.to_string(),
+        }
+    }
+
     /// Takes the requests `matches` picks out of the waiting ones, recording how they ended.
     fn take(
         &mut self,
@@ -195,18 +231,23 @@ impl SessionRequests {
     /// Refused while an approval of its session's earlier request is being carried out.
     fn hold(&self, request: Request, answer: oneshot::Sender<Outcome>) -> Result<Vec<Waiting>> {
         let mut requests = self.lock();
-        if requests.approving.contains(&request.session) {
-            bail!(
-                "the user has just approved this session's earlier request, and it is being \
-                 carried out; its outcome arrives in this terminal as a message"
-            );
-        }
-        let replaced = requests.take(
-            |waiting| waiting.session == request.session,
-            SessionRequestEnding::Withdrawn,
-        );
+        let replaced = requests.make_room_for(&request.session)?;
         requests.waiting.push(Waiting { request, answer });
         Ok(replaced)
+    }
+
+    /// Marks a request approved without ever waiting: the session whose request it is takes the
+    /// place of one it already has waiting, which is withdrawn and returned, and is marked as being
+    /// approved until the returned guard is dropped. Refused as [`Self::hold`] refuses.
+    fn approve_directly(
+        &self,
+        state: &Arc<AppState>,
+        request: &Request,
+    ) -> Result<(Vec<Waiting>, Approving)> {
+        let mut requests = self.lock();
+        let replaced = requests.make_room_for(&request.session)?;
+        let approving = requests.start_approving(state, &request.session);
+        Ok((replaced, approving))
     }
 
     fn take(&self, matches: impl Fn(&Request) -> bool, how: SessionRequestEnding) -> Vec<Waiting> {
@@ -225,20 +266,16 @@ impl SessionRequests {
     /// being approved, in the same step, until the returned guard is dropped.
     fn take_answered(
         &self,
+        state: &Arc<AppState>,
         request_id: &str,
         how: SessionRequestEnding,
-    ) -> Option<(Waiting, Option<Approving<'_>>)> {
+    ) -> Option<(Waiting, Option<Approving>)> {
         let mut requests = self.lock();
         let waiting = requests
             .take(|request| request.id == request_id, how)
             .pop()?;
-        let approving = (how == SessionRequestEnding::Approved).then(|| {
-            requests.approving.insert(waiting.request.session.clone());
-            Approving {
-                requests: self,
-                session: waiting.request.session.clone(),
-            }
-        });
+        let approving = (how == SessionRequestEnding::Approved)
+            .then(|| requests.start_approving(state, &waiting.request.session));
         Some((waiting, approving))
     }
 
@@ -253,14 +290,18 @@ impl SessionRequests {
 }
 
 /// A session's approval being carried out, released on drop however carrying it out ends.
-struct Approving<'a> {
-    requests: &'a SessionRequests,
+struct Approving {
+    state: Arc<AppState>,
     session: String,
 }
 
-impl Drop for Approving<'_> {
+impl Drop for Approving {
     fn drop(&mut self) {
-        self.requests.lock().approving.remove(&self.session);
+        self.state
+            .session_requests
+            .lock()
+            .approving
+            .remove(&self.session);
     }
 }
 
@@ -303,6 +344,13 @@ fn announce_closed(state: &Arc<AppState>, closed: &[Waiting], how: SessionReques
     }
 }
 
+/// Closes the dialogs of the requests a new request of their session took the place of, and wakes
+/// the calls they were by dropping their answers.
+fn withdraw_replaced(state: &Arc<AppState>, replaced: Vec<Waiting>) {
+    announce_closed(state, &replaced, SessionRequestEnding::Withdrawn);
+    drop(replaced);
+}
+
 /// Withdraws whatever the session has waiting, because its process has ended: its call has nobody
 /// left to return to. Called wherever a live session is dropped.
 pub fn withdraw_for_session(state: &Arc<AppState>, session_id: &str) {
@@ -338,14 +386,48 @@ impl Drop for WithdrawOnDrop<'_> {
 /// caller binding it is for `new_session`, or for the caller binding itself afterwards. What the
 /// session could never be started for is refused before the user is asked. The `Err` case is what
 /// the model is shown as the reason, so it is written for it. `handover` is moved to the session
-/// on approval and only then.
+/// on approval and only then. `automatic` is whether the user's setting to approve requests
+/// without asking was on when the call was made, which the caller also words the session's
+/// opening prompt by: the request is then approved at once, without asking.
+///
+/// A cancelled `request_session` is withdrawn by dropping this future (see `mcp::stdio`), so it
+/// can stop at any `.await`: work that must finish once started belongs on a task of its own.
 pub async fn ask_for_session(
     state: &Arc<AppState>,
     caller: &Session,
     open: OpenRequest,
     handover: Option<Handover>,
+    automatic: bool,
     limit: Duration,
 ) -> Result<Value> {
+    let opener = state.clone();
+    ask_for_session_with(
+        state,
+        caller,
+        open,
+        handover,
+        automatic,
+        limit,
+        move |request| async move { coordinator::open_session(&opener, request).await },
+    )
+    .await
+}
+
+/// [`ask_for_session`], starting the session through `launch`: `coordinator::open_session`
+/// outside the tests, which cannot launch an agent.
+pub(crate) async fn ask_for_session_with<F, Fut>(
+    state: &Arc<AppState>,
+    caller: &Session,
+    open: OpenRequest,
+    handover: Option<Handover>,
+    automatic: bool,
+    limit: Duration,
+    launch: F,
+) -> Result<Value>
+where
+    F: FnOnce(OpenRequest) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<Session>> + Send + 'static,
+{
     let agent = coordinator::check_open(state, &open).await?;
     let request = Request {
         id: Uuid::new_v4().to_string(),
@@ -354,8 +436,49 @@ pub async fn ask_for_session(
         open,
         agent,
         handover,
+        automatic,
     };
+    if automatic {
+        return approve_automatically(state, request, launch).await;
+    }
     wait_for_answer(state, caller, request, limit).await
+}
+
+/// Carries out `request` without asking, as the approval of a dialog would be. The request takes
+/// the place of one its session has waiting, and blocks a further one until it is carried out.
+///
+/// The carrying out is a task of its own: the call is cancelled by dropping it (see
+/// `mcp::stdio`), and a launch or a handover interrupted halfway would leave a session unsettled
+/// and the caller never told. The call only waits for the task, and dropping it cancels nothing.
+async fn approve_automatically<F, Fut>(
+    state: &Arc<AppState>,
+    request: Request,
+    launch: F,
+) -> Result<Value>
+where
+    F: FnOnce(OpenRequest) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<Session>> + Send + 'static,
+{
+    let (replaced, approving) = state.session_requests.approve_directly(state, &request)?;
+    withdraw_replaced(state, replaced);
+    let state = state.clone();
+    let carrying_out = tokio::spawn(async move {
+        let _approving = approving;
+        let approved = carry_out(&state, &request, launch).await.map_err(|err| {
+            anyhow!(
+                "this request for a session was approved automatically, but it could not be \
+                 carried out: {err:#}"
+            )
+        })?;
+        tell_the_caller(&state, &approved.caller_id, approved.message).await;
+        Ok(approved.result)
+    });
+    carrying_out.await.unwrap_or_else(|err| {
+        Err(anyhow!(
+            "this request for a session was approved automatically, but carrying it out did not \
+             finish: {err}"
+        ))
+    })
 }
 
 /// Holds `request`, has the clients ask the user, and waits up to `limit` for the answer.
@@ -369,9 +492,7 @@ async fn wait_for_answer(
     let event = request.event();
     let (answer, mut answered) = oneshot::channel();
     let replaced = state.session_requests.hold(request, answer)?;
-    announce_closed(state, &replaced, SessionRequestEnding::Withdrawn);
-    // Dropping their answers is what wakes the calls they were.
-    drop(replaced);
+    withdraw_replaced(state, replaced);
     state.broadcast(event);
     let _withdraw = WithdrawOnDrop {
         state,
@@ -449,7 +570,8 @@ where
     } else {
         SessionRequestEnding::Refused
     };
-    let Some((waiting, _approving)) = state.session_requests.take_answered(request_id, how) else {
+    let Some((waiting, _approving)) = state.session_requests.take_answered(state, request_id, how)
+    else {
         return Err(match state.session_requests.ending(request_id) {
             Some((session, SessionRequestEnding::TimedOut | SessionRequestEnding::Withdrawn)) => {
                 not_waiting(&session)
@@ -505,7 +627,7 @@ where
     }
     let started = launch(request.open.clone()).await?;
     let handed = hand_over_branches(state, request, &caller, &started).await;
-    let note = outcome_note(state, &caller, &started, handed.as_ref());
+    let note = outcome_note(state, &caller, &started, handed.as_ref(), request.automatic);
     let message = format!(
         "{OUTCOME_OPENING} `{}` call. {note} If that call already returned this, there is nothing \
          more to do about it.",
@@ -600,6 +722,7 @@ fn outcome_note(
     caller: &Session,
     started: &Session,
     handed: Option<&Handed>,
+    automatic: bool,
 ) -> String {
     let tool = |name: &str| qualified_tool_name(caller.agent, name);
     let has = |name: &str| tool_by_name(caller.role, caller.has_bound_role(), name).is_some();
@@ -623,8 +746,14 @@ fn outcome_note(
         String::new()
     };
     let branches = handed.map(branch_outcome).unwrap_or_default();
+    let approval = if automatic {
+        "Octoboard approved the request automatically, as the user has chosen to have session \
+         requests approved without asking"
+    } else {
+        "The user approved the request"
+    };
     format!(
-        "The user approved the request: Octoboard started the {kind} session `{id}` (\"{title}\", \
+        "{approval}: Octoboard started the {kind} session `{id}` (\"{title}\", \
          {agent}){place}, with your brief as its opening prompt. It has no owner: it reports to \
          the user, not to you. It is not yours to drive — you cannot instruct, archive or reopen \
          it. Follow the user's direction on whether to continue your own work or end after the \

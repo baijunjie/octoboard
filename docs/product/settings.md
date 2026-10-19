@@ -82,8 +82,9 @@ every path is shown in full.
 ## General
 
 Small app-wide settings: an **Appearance** row, a **Language** row, a **Markdown style** row, a **Default clone
-directory** row, then an **Automatically delete archived sessions whose conversation is gone** row, and last, in the
-macOS application only, a **Keep running in the background** row.
+directory** row, then an **Automatically delete archived sessions whose conversation is gone** row, an
+**Automatically approve session requests** row, and last, in the macOS application only, a **Keep running in the
+background** row.
 
 ### Appearance
 
@@ -131,14 +132,23 @@ sessions are kept. The value is kept by the daemon, so every window shows the sa
 runs and what turning the switch off or on changes are in "Deleting archived sessions whose conversation is gone" in
 `docs/product/deleting-sessions.md`.
 
+### Automatically approve session requests
+
+A switch, **off to begin with** — installations from before the switch existed included: whether a session's request
+for a session that is nobody's is approved without asking the user. While the switch is off the row's description says
+what turning it on will do, and while it is on it says what is happening now: a session can start a session that
+reports to the user without asking first, and nobody owns the new session but the user. The value is kept by the
+daemon, so every window shows the same, and this row is the only way to change it. What an automatic approval does,
+what turning the switch on changes, and why neither agents nor a configuration document can change it are in
+"Approving requests automatically" in `docs/product/session-requests.md`.
+
 ### Keep running in the background
 
 A switch, the section's last row, labelled for what turning it on does: keep Octoboard running in the background when
 the window is closed. It is **off to begin with**, so closing the window quits.
 
 **Only the macOS application has this row.** A browser has no native window to close into the background, so the row
-is absent there — the section then ends with the Automatically delete archived sessions whose conversation is gone
-row.
+is absent there — the section then ends with the Automatically approve session requests row.
 
 The row's description says what the choice means and never mentions quitting, which the label already carries: while
 the switch is off it says what turning it on will do, and while it is on it says what is happening now — closing the

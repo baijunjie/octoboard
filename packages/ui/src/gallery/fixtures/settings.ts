@@ -262,7 +262,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Browser General settings",
-    description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The clone-directory explanation describes when the chosen directory is used; the path appears in the input. The archive-cleanup switch sits right below it, on, with the description that says what is deleted and when.",
+    description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The clone-directory explanation describes when the chosen directory is used; the path appears in the input. The archive-cleanup switch sits right below it, on, with the description that says what is deleted and when. The automatic-approval switch for session requests follows it, off, with the description that starts with \"Once this is on\".",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -275,6 +275,17 @@ export const settingsScenarios: Scenario[] = [
     title: "General, archive cleanup switched off",
     description: "The archive-cleanup switch below the clone-directory row is off, and its description now starts with \"Once this is on\" instead of stating the behaviour.",
     state: { ...browserState, settings: { ...browserState.settings!, auto_delete_unresumable_archives: false } },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+    ],
+  },
+  {
+    id: "settings-general-auto-approve-on",
+    group: GROUP,
+    category: "normal",
+    title: "General, session requests approved automatically",
+    description: "The session-request switch below the archive-cleanup row is on, and its description now states the behaviour instead of starting with \"Once this is on\".",
+    state: { ...browserState, settings: { ...browserState.settings!, auto_approve_session_requests: true } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
     ],

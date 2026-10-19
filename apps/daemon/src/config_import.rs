@@ -662,6 +662,7 @@ pub async fn apply(
         let changes = SettingsChanges {
             auto_pull_repositories: Some(settings.auto_pull_repositories),
             auto_delete_unresumable_archives: settings.auto_delete_unresumable_archives,
+            auto_approve_session_requests: None,
             default_clone_dir: None,
         };
         match coordinator::update_settings(state, changes) {
@@ -1710,6 +1711,37 @@ mod tests {
         apply(&target, &full, Vec::new(), true).await.unwrap();
         assert!(target.store.auto_pull_repositories().unwrap());
         assert!(!target.store.auto_delete_unresumable_archives().unwrap());
+    }
+
+    /// The automatic approval of session requests is never exported, and an import that applies a
+    /// document's settings, one that smuggles the key in included, leaves it as the machine has it.
+    #[tokio::test]
+    async fn the_automatic_approval_of_session_requests_is_neither_exported_nor_imported() {
+        let (source, source_dir) = app_state("import-auto-approve-source");
+        source
+            .store
+            .set_auto_approve_session_requests(true)
+            .unwrap();
+        source
+            .store
+            .insert_console(&crate::test_support::console(&source_dir))
+            .unwrap();
+        let full = serde_json::to_value(crate::config_export::build(&source.store, None).unwrap())
+            .unwrap();
+        assert!(!full.to_string().contains("auto_approve_session_requests"));
+
+        let (target, _target_dir) = app_state("import-auto-approve-target");
+        apply(&target, &full, Vec::new(), true).await.unwrap();
+        assert!(!target.store.auto_approve_session_requests().unwrap());
+
+        let mut smuggled = with_settings(document(vec![console("Hub", Vec::new())]), true, true);
+        smuggled["settings"]["auto_approve_session_requests"] = json!(true);
+        let inspection = inspect(&target, &smuggled).await.unwrap();
+        assert!(!serde_json::to_string(&inspection)
+            .unwrap()
+            .contains("auto_approve_session_requests"));
+        apply(&target, &smuggled, Vec::new(), true).await.unwrap();
+        assert!(!target.store.auto_approve_session_requests().unwrap());
     }
 
     /// A document from before the cleanup setting existed leaves it as the importing machine has

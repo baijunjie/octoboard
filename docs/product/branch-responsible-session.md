@@ -47,8 +47,8 @@ A branch has at most one responsible session at a time; a session can be respons
 - **It starts as the session whose own git reported creating the branch**, from the branch's creation on (see "When a
   branch gets a responsible session" below). A branch no session's git reported creating has none, and cannot be handed
   over.
-- **It moves only by an explicit handover** of the branch to another session, in one of two ways: the user's approval
-  of a `request_session` call that names the branch, which makes the session the approval starts its responsible
+- **It moves only by an explicit handover** of the branch to another session, in one of two ways: the approval of a
+  `request_session` call that names the branch, which makes the session the approval starts its responsible
   session (see "Handing branches over" in `docs/product/session-requests.md`); or a handoff of the session to another
   agent, which makes the receiving session responsible for every branch the original was (see
   `docs/product/handing-off-sessions.md`). Nothing else moves it; handing a session to another owner, or a session

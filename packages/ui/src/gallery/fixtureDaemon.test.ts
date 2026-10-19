@@ -407,6 +407,13 @@ describe("the fixture daemon's settings and trusted folders", () => {
     expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts });
     await daemon.request({ type: "update_settings", auto_delete_unresumable_archives: false });
     expect(daemon.store.getState().settings.auto_delete_unresumable_archives).toBe(false);
+    expect(daemon.store.getState().settings.auto_approve_session_requests).toBeUndefined();
+    await daemon.request({ type: "update_settings", auto_approve_session_requests: true });
+    expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(true);
+    await daemon.request({ type: "update_settings", auto_pull_repositories: true });
+    expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(true);
+    await daemon.request({ type: "update_settings", auto_approve_session_requests: false });
+    expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(false);
     await daemon.request({ type: "remove_trusted_directory", path: "~/work/../code" });
     expect(daemon.store.getState().trustedDirectories).toEqual([]);
   });

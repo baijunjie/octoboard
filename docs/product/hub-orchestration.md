@@ -240,7 +240,7 @@ repository's own configuration — for Claude Code, the permission rules and hoo
 A session started with `new_session` is always bound to the session that started it — a console session, or a
 project session that is unbound or a lead session — so it reports to it, and it is that owner's for its whole life:
 the owner instructs it, archives it once it is done and reopens it when it has another task. A session started on a
-`request_session`, once the user approves, is bound to nobody: it reports to the user, and neither the session that
+`request_session`, once approved, is bound to nobody: it reports to the user, and neither the session that
 asked for it nor that session's owner drives it (see `docs/product/session-requests.md`). A session **the user opens by
 hand is not bound**, unless they choose a console session under "Report to" in the session dialog (see "Opening a
 session" in `docs/product/sessions.md`); the choice is none by default and offers console sessions only. A binding

@@ -512,6 +512,10 @@ export interface Settings {
    * dropped its conversation record, so the session could only fail when reopened. Off: that
    * cleanup deletes nothing. Reopening such a session is refused either way. */
   auto_delete_unresumable_archives: boolean;
+  /** Off (the default): a session's `request_session` call waits for the user's answer in a
+   * dialog. On: a request that passes the daemon's checks is approved at once, without asking.
+   * Optional only so that a state built without it reads as off; the daemon always sends it. */
+  auto_approve_session_requests?: boolean;
   /** Where a `git` association clones into when no directory is named: the one the user set, or
    * `~/Projects` expanded while none is. Always an absolute path. */
   default_clone_dir: string;
@@ -1131,7 +1135,7 @@ export type RequestBody =
   /** Each settable field is optional: absent means leave it as it is. Answered with `ack`;
    * broadcasts `settings_updated` only when something actually changed (the trusted-folders
    * pattern). */
-  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; default_clone_dir?: string }
+  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; default_clone_dir?: string }
   /** Answered with `ack` at once; each reading that finishes arrives as `account_quotas_updated`.
    * Re-reads the quotas of the accounts it selects whose last attempt is older than the polling
    * interval, and also those whose last attempt is over 30 seconds old and which hold no windows

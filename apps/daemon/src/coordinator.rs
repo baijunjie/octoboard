@@ -913,6 +913,7 @@ async fn handle_inner(
         RequestBody::UpdateSettings {
             auto_pull_repositories,
             auto_delete_unresumable_archives,
+            auto_approve_session_requests,
             default_clone_dir,
         } => {
             update_settings(
@@ -920,6 +921,7 @@ async fn handle_inner(
                 SettingsChanges {
                     auto_pull_repositories,
                     auto_delete_unresumable_archives,
+                    auto_approve_session_requests,
                     default_clone_dir,
                 },
             )?;
@@ -5009,6 +5011,7 @@ fn normalize_icon(text: Option<&str>) -> Result<Option<String>> {
 pub struct SettingsChanges {
     pub auto_pull_repositories: Option<bool>,
     pub auto_delete_unresumable_archives: Option<bool>,
+    pub auto_approve_session_requests: Option<bool>,
     /// Blank text goes back to the built-in default.
     pub default_clone_dir: Option<String>,
 }
@@ -5019,6 +5022,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     let SettingsChanges {
         auto_pull_repositories,
         auto_delete_unresumable_archives,
+        auto_approve_session_requests,
         default_clone_dir,
     } = changes;
     // Checked before anything is written, so a refused directory leaves the other field unapplied
@@ -5037,6 +5041,9 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     }
     if let Some(value) = auto_delete_unresumable_archives {
         changed |= state.store.set_auto_delete_unresumable_archives(value)?;
+    }
+    if let Some(value) = auto_approve_session_requests {
+        changed |= state.store.set_auto_approve_session_requests(value)?;
     }
     if let Some(value) = default_clone_dir {
         changed |= state.store.set_default_clone_dir(value.as_deref())?;

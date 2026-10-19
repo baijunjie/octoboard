@@ -164,6 +164,11 @@ Two, each under its own key:
   exported before the setting existed does not carry it, and applying that document's settings leaves the importing
   machine's value as it is.
 
+**Automatically approve session requests** (see "Approving requests automatically" in
+`docs/product/session-requests.md`) is never carried, unlike the other application-wide switches, and an import never
+applies it — not even from a document that holds the key `auto_approve_session_requests`, which the inspection does not
+report either — so a shared document cannot turn on the approval of session requests without asking.
+
 A single console's document carries no application settings at all. The settings that belong to one machine or to its
 accounts stay out of every document (see "What is not configuration and never travels" above).
 

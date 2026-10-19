@@ -833,6 +833,9 @@ pub struct Settings {
     /// Whether the daemon's scan deletes the archived sessions whose conversation is proven gone
     /// (see `archive_cleanup.rs`). On unless the user turned it off.
     pub auto_delete_unresumable_archives: bool,
+    /// Whether a session's `request_session` call is approved without asking the user (see
+    /// `session_request`). Off unless the user turned it on; only the user's own client changes it.
+    pub auto_approve_session_requests: bool,
     /// The directory a `git` association clones into when none is named: the one the user set, or
     /// `~/Projects` (expanded) while none is. Always an absolute, lexically normalised path.
     pub default_clone_dir: String,
@@ -859,6 +862,7 @@ impl Default for Settings {
         Self {
             auto_pull_repositories: false,
             auto_delete_unresumable_archives: true,
+            auto_approve_session_requests: false,
             default_clone_dir: String::new(),
             accounts: Vec::new(),
             added_agents: None,
@@ -1855,6 +1859,7 @@ pub enum RequestBody {
     UpdateSettings {
         auto_pull_repositories: Option<bool>,
         auto_delete_unresumable_archives: Option<bool>,
+        auto_approve_session_requests: Option<bool>,
         /// A blank value goes back to the built-in default.
         default_clone_dir: Option<String>,
     },

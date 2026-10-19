@@ -774,7 +774,9 @@ const REQUEST_SESSION: ToolDef = ToolDef {
                   (`share_info`). It can be a project session in any project of any console, or \
                   a console session. A session you want to drive yourself is one `new_session` \
                   starts, where you have it. The user is asked first, and the call waits for \
-                  their answer, for several minutes at most. On approval Octoboard starts it \
+                  their answer, for several minutes at most — unless the user has chosen to \
+                  have such requests approved automatically, in which case the result says so \
+                  and the call does not wait. On approval Octoboard starts it \
                   with your brief as its opening prompt; follow the user's direction on whether \
                   your own work ends after the handover. Use this for a peer to continue your \
                   current work in the next session. If the user only wants handover notes and an \

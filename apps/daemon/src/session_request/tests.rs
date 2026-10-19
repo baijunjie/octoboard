@@ -168,7 +168,9 @@ async fn ask_handing_over(
     let caller = state.session_record(caller).unwrap();
     let task = {
         let state = state.clone();
-        tokio::spawn(async move { ask_for_session(&state, &caller, asked, handover, limit).await })
+        tokio::spawn(async move {
+            ask_for_session(&state, &caller, asked, handover, false, limit).await
+        })
     };
     let deadline = std::time::Instant::now() + PATIENCE;
     loop {
@@ -420,6 +422,7 @@ async fn a_call_made_while_its_approval_is_carried_out_is_refused() {
         &caller,
         asked(CONSOLE, Some("project-1")),
         None,
+        false,
         ANSWER_TIME_LIMIT,
     )
     .await
@@ -635,6 +638,7 @@ async fn a_second_call_takes_the_place_of_the_first() {
                 &caller,
                 asked(CONSOLE, None),
                 None,
+                false,
                 ANSWER_TIME_LIMIT,
             )
             .await
@@ -950,4 +954,216 @@ async fn a_request_that_is_not_approved_moves_nothing() {
             "{ending}"
         );
     }
+}
+
+/// Starts `caller`'s call with the setting on, through the stand-in launcher.
+async fn ask_automatically(
+    launcher: &Arc<Launcher>,
+    caller: &str,
+    asked: OpenRequest,
+    handover: Option<Handover>,
+) -> Result<Value> {
+    let caller = launcher.state.session_record(caller).unwrap();
+    let launcher_for_launch = launcher.clone();
+    let open = move |request| launcher_for_launch.open(request);
+    ask_for_session_with(
+        &launcher.state,
+        &caller,
+        asked,
+        handover,
+        true,
+        ANSWER_TIME_LIMIT,
+        open,
+    )
+    .await
+}
+
+/// With the setting on, a request that passed its checks is approved at once: nothing is
+/// broadcast or held and no hand goes up, the session is started with no owner, and the note and
+/// the message to the caller say Octoboard approved it rather than the user.
+#[tokio::test]
+async fn an_automatic_approval_starts_the_session_without_asking() {
+    let (state, _dir) = fixture("automatic");
+    let asker = running(&state, "asker");
+    let launcher = Launcher::new(&state);
+    let mut events = state.subscribe();
+
+    let result = tokio::time::timeout(
+        PATIENCE,
+        ask_automatically(&launcher, "asker", asked(CONSOLE, Some("project-1")), None),
+    )
+    .await
+    .expect("the call returns without an answer")
+    .unwrap();
+
+    assert_eq!(launcher.launched.load(Ordering::SeqCst), 1);
+    assert_eq!(result["session"], "started-0");
+    let note = result["note"].as_str().unwrap();
+    assert!(
+        note.starts_with("Octoboard approved the request automatically"),
+        "{note}"
+    );
+    assert!(!note.contains("The user approved"), "{note}");
+    assert!(note.contains("reports to the user"), "{note}");
+    assert!(pending_events(&state).is_empty());
+    assert!(!state.session_requests.is_waiting_for("asker"));
+    assert!(state
+        .session_record("started-0")
+        .unwrap()
+        .bound_to
+        .is_none());
+    assert!(!state.session_requests.lock().approving.contains("asker"));
+    let message = output_containing(&asker, "mcp__octoboard__request_session");
+    assert!(
+        message.contains("approved the request automatically"),
+        "{message}"
+    );
+    while let Ok(event) = events.try_recv() {
+        assert!(
+            !matches!(
+                event,
+                Event::SessionRequest { .. } | Event::SessionRequestClosed { .. }
+            ),
+            "no dialog is opened or closed"
+        );
+    }
+    // Nothing is left marking the session as being approved.
+    ask_automatically(&launcher, "asker", asked(CONSOLE, None), None)
+        .await
+        .unwrap();
+}
+
+/// An automatic approval hands the branches over like any approval.
+#[tokio::test]
+async fn an_automatic_approval_hands_the_branches_over() {
+    let (state, _dir) = fixture("automatic-handover");
+    let _asker = running(&state, "asker");
+    let launcher = Launcher::new(&state);
+    let (handover, _repo) = handover_of(&state, &["one"]);
+
+    let result = ask_automatically(
+        &launcher,
+        "asker",
+        asked(CONSOLE, Some("project-1")),
+        Some(handover.clone()),
+    )
+    .await
+    .unwrap();
+
+    let note = result["note"].as_str().unwrap();
+    assert!(note.contains("Handed over to it: `one`"), "{note}");
+    assert_eq!(
+        responsible_for(&state, &handover),
+        vec![("one".to_string(), "started-0".to_string())]
+    );
+}
+
+/// An automatic request takes the place of one its session has waiting in a dialog, which is
+/// closed everywhere, and is refused while an approval of the session's earlier request is being
+/// carried out.
+#[tokio::test]
+async fn an_automatic_approval_replaces_a_waiting_request_and_respects_an_approval_under_way() {
+    let (state, _dir) = fixture("automatic-replaces");
+    let _asker = running(&state, "asker");
+    let launcher = Launcher::new(&state);
+    let (waiting, _id) = ask_here(&state, "asker", ANSWER_TIME_LIMIT).await;
+
+    ask_automatically(&launcher, "asker", asked(CONSOLE, None), None)
+        .await
+        .unwrap();
+    let err = outcome_of(waiting).await.expect_err("withdrawn");
+    assert!(err.to_string().contains("withdrawn"), "{err}");
+    assert!(pending_events(&state).is_empty());
+
+    let (entered, entered_rx) = oneshot::channel();
+    let (release, released) = oneshot::channel::<()>();
+    let caller = state.session_record("asker").unwrap();
+    let held = tokio::spawn({
+        let state = state.clone();
+        let caller = caller.clone();
+        async move {
+            let launch = |_request| async move {
+                let _ = entered.send(());
+                let _ = released.await;
+                Err(anyhow!("not launched"))
+            };
+            ask_for_session_with(
+                &state,
+                &caller,
+                asked(CONSOLE, None),
+                None,
+                true,
+                ANSWER_TIME_LIMIT,
+                launch,
+            )
+            .await
+        }
+    });
+    entered_rx.await.unwrap();
+    let err = ask_automatically(&launcher, "asker", asked(CONSOLE, None), None)
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("being carried out"), "{err}");
+    release.send(()).unwrap();
+    let err = held.await.unwrap().unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("approved automatically, but it could not be carried out"),
+        "{err}"
+    );
+}
+
+/// A call cancelled while its session is launching (the agent cancels, or the connection drops)
+/// does not interrupt the approval: the session is started, the outcome reaches the caller as a
+/// message, and the session is no longer marked as being approved.
+#[tokio::test]
+async fn an_automatic_approval_carries_on_when_the_call_is_dropped() {
+    let (state, _dir) = fixture("automatic-dropped");
+    let asker = running(&state, "asker");
+    let launcher = Launcher::new(&state);
+    let caller = state.session_record("asker").unwrap();
+
+    let (entered, entered_rx) = oneshot::channel();
+    let (release, released) = oneshot::channel::<()>();
+    let launch = {
+        let launcher = launcher.clone();
+        move |request| async move {
+            let _ = entered.send(());
+            let _ = released.await;
+            launcher.open(request).await
+        }
+    };
+    let call = tokio::spawn({
+        let state = state.clone();
+        async move {
+            ask_for_session_with(
+                &state,
+                &caller,
+                asked(CONSOLE, Some("project-1")),
+                None,
+                true,
+                ANSWER_TIME_LIMIT,
+                launch,
+            )
+            .await
+        }
+    });
+    entered_rx.await.unwrap();
+    call.abort();
+    let _ = call.await;
+    release.send(()).unwrap();
+
+    // The task carrying the approval out shares this test's thread, so wait for it by yielding:
+    // it releases its claim on the session once the outcome is written.
+    let deadline = std::time::Instant::now() + PATIENCE;
+    while state.session_requests.lock().approving.contains("asker") {
+        assert!(std::time::Instant::now() < deadline, "the claim was kept");
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    let message = output_containing(&asker, "mcp__octoboard__request_session");
+    assert!(
+        message.contains("approved the request automatically"),
+        "{message}"
+    );
+    assert_eq!(launcher.launched.load(Ordering::SeqCst), 1);
 }
