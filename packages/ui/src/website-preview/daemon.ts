@@ -30,6 +30,10 @@ export function createPreviewDaemon(scenario: Scenario): Daemon {
       createFixtureDaemon({
         ...scenario,
         files: repository.files,
+        // Directory listings ignore the worktree, so a read naming one answers from the same files.
+        worktreeFiles: Object.fromEntries(
+          repository.git.worktrees.map((w) => [w.id, repository.files]),
+        ),
         git: repository.git,
       }),
     ]),
