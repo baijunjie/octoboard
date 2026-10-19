@@ -11,8 +11,10 @@ import { MODAL_OPEN, useRegionCycle } from "../layout/useRegionCycle";
 import { RailQuotaEntry } from "./RailQuotaEntry";
 
 // jsdom has no layout, so a scroller never reports overflow. This one reports the way the library's
-// does, once when it mounts: overflowing when its list holds the marked account.
-const overflowing = vi.hoisted(() => ({ marker: "" }));
+// does, once when it mounts: overflowing when its list holds the marked account. Each scroller's report
+// is also kept in `reports`, for a test to make one again later, as a browser's layout does once the
+// panel has settled.
+const overflowing = vi.hoisted(() => ({ marker: "", reports: [] as Array<(visibility: "bottom" | "none") => void> }));
 vi.mock("../components/scrollFade", async (importOriginal) => {
   const original = await importOriginal<typeof import("../components/scrollFade")>();
   const { useEffect, useRef } = await import("react");
@@ -23,6 +25,7 @@ vi.mock("../components/scrollFade", async (importOriginal) => {
       useEffect(() => {
         const overflows = overflowing.marker !== "" && ref.current!.textContent!.includes(overflowing.marker);
         region?.onVisibilityChange?.(overflows ? "bottom" : "none");
+        if (region?.onVisibilityChange) overflowing.reports.push(region.onVisibilityChange);
       }, []);
       return <div ref={ref} {...region?.props}>{children}</div>;
     },
@@ -44,6 +47,7 @@ beforeEach(() => {
   act(() => setLanguage("en"));
   request.mockClear();
   onOpenSettingsAt.mockClear();
+  overflowing.reports = [];
   // jsdom has no Web Animations, which the popover's exit waits for.
   HTMLElement.prototype.animate = vi.fn(() => ({ cancel: vi.fn(), finished: Promise.resolve(), onfinish: null })) as unknown as typeof HTMLElement.prototype.animate;
 });
@@ -324,6 +328,18 @@ it("makes the list a scroll region only on a tab whose own list overflows", () =
 
   click(tabs()[0]!);
   expect(reachable()).toHaveLength(0);
+});
+
+it("is no tab stop of its own in front of a list that has become a scroll region, so Tab goes from the tabs to the list", () => {
+  withFakeTimers();
+  const { button } = mount();
+  click(button);
+  // The lists find they overflow only after the panel has rendered without a region.
+  expect(document.querySelector('[role="tabpanel"]')!.getAttribute("tabindex")).toBe("0");
+  act(() => overflowing.reports.forEach((report) => report("bottom")));
+  const tabPanel = document.querySelector<HTMLElement>('[role="tabpanel"]')!;
+  expect(tabPanel.querySelector('[role="region"]')?.getAttribute("tabindex")).toBe("0");
+  expect(tabPanel.hasAttribute("tabindex")).toBe(false);
 });
 
 it("says so when no agent is available", () => {

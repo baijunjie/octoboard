@@ -238,22 +238,11 @@ function QuotaPanel({ focusSelectedTab, onOpenAccounts }: { focusSelectedTab: bo
           {/* The panel is anchored by its bottom edge to the rail's button and closes once the pointer
               is off it, so a tab with fewer accounts must not make it shorter: its top edge, and the
               tab strip with it, would drop out from under the pointer that just chose the tab. Every
-              tab's panel is therefore kept mounted in one grid cell, the unselected ones invisible
-              (react-aria also makes them inert, out of the tab order and of assistive technology),
-              so the cell is as tall as the tallest list the scroll limit allows. The panels carry no
-              padding or margin of their own, which would make a panel's height differ from the
-              others': the container carries it. */}
+              tab's panel therefore stands in this one grid cell, which is as tall as the tallest list
+              the scroll limit allows, and the cell carries the padding the panels go without. */}
           <div className="grid grid-cols-1 py-2">
             {available.map(({ agent, accounts: owned }) => (
-              <Tabs.Panel
-                key={agent}
-                id={agent}
-                shouldForceMount
-                // Not the library's exit placement out of the flow, which would drop the cell's height.
-                className="col-start-1 row-start-1 m-0 self-start p-0 data-[exiting=true]:static data-[inert=true]:invisible"
-              >
-                <AgentAccounts agent={agent} owned={owned} />
-              </Tabs.Panel>
+              <AgentPanel key={agent} agent={agent} owned={owned} />
             ))}
           </div>
         </Tabs>
@@ -267,28 +256,47 @@ function QuotaPanel({ focusSelectedTab, onOpenAccounts }: { focusSelectedTab: bo
   );
 }
 
-/** An agent's accounts, the default one first, in a faded scroller that is a region of its own while it
- * overflows. Each panel keeps its own region, since the scroller reports its overflow only when it
- * changes, so one shared by the panels would follow whichever panel last reported, not the selected one. */
-function AgentAccounts({ agent, owned }: { agent: Agent; owned: Account[] }): React.ReactElement {
+/** An agent's tab panel: its accounts, the default one first, in a faded scroller that is a region of
+ * its own while it overflows. Each panel keeps its own region, since the scroller reports its overflow
+ * only when it changes, so one shared by the panels would follow whichever panel last reported, not the
+ * selected one.
+ *
+ * The region is held by the component that renders the panel, not by one inside it. react-aria makes a
+ * panel with nothing tabbable inside it a tab stop of its own, and checks that when the panel renders
+ * or something is added inside it, never when an attribute such as `tabindex` changes: the region's
+ * `tabindex` arriving with the overflow report goes unnoticed unless the panel renders with it. Left a stop in front of the region, the panel takes Tab from the tab strip and then,
+ * rendering on that focus, finds the region and gives up its `tabindex`, which drops focus to the body
+ * in WebKit. */
+function AgentPanel({ agent, owned }: { agent: Agent; owned: Account[] }): React.ReactElement {
   const t = useT();
   const region = useFadeRegion({ label: t("rail.quota.accounts") });
   return (
-    <div className={region.focused ? "ring-2 ring-inset ring-app-focus" : ""}>
-      <FadedScroller region={region} className="max-h-[min(24rem,60vh)]">
-        <div className="flex flex-col px-4">
-          <QuotaAccount agent={agent} account={null} name={t("settings.accounts.defaultName")} />
-          {owned.map((account) => (
-            <QuotaAccount
-              key={account.id}
-              agent={agent}
-              account={account.id}
-              name={<FadeOverflow dir="auto" titleWhenClipped={account.name}>{account.name}</FadeOverflow>}
-            />
-          ))}
-        </div>
-      </FadedScroller>
-    </div>
+    <Tabs.Panel
+      id={agent}
+      // Kept mounted while unselected, in the grid cell every panel shares, and invisible (react-aria
+      // also makes it inert, out of the tab order and of assistive technology), so the cell keeps the
+      // height of the tallest list.
+      shouldForceMount
+      // No padding or margin of its own, which would make this panel's height differ from the others',
+      // and not the library's exit placement out of the flow, which would drop the cell's height.
+      className="col-start-1 row-start-1 m-0 self-start p-0 data-[exiting=true]:static data-[inert=true]:invisible"
+    >
+      <div className={region.focused ? "ring-2 ring-inset ring-app-focus" : ""}>
+        <FadedScroller region={region} className="max-h-[min(24rem,60vh)]">
+          <div className="flex flex-col px-4">
+            <QuotaAccount agent={agent} account={null} name={t("settings.accounts.defaultName")} />
+            {owned.map((account) => (
+              <QuotaAccount
+                key={account.id}
+                agent={agent}
+                account={account.id}
+                name={<FadeOverflow dir="auto" titleWhenClipped={account.name}>{account.name}</FadeOverflow>}
+              />
+            ))}
+          </div>
+        </FadedScroller>
+      </div>
+    </Tabs.Panel>
   );
 }
 

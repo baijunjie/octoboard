@@ -101,10 +101,9 @@ long label otherwise runs under the mark.
 ## A `Tabs` panel is mounted only while its own tab is selected
 
 A tab panel in `packages/ui` exists only while its tab is the selected one: react-aria-components' `TabPanel`
-returns `null` otherwise, and HeroUI's `Tabs.Panel` passes its props straight through to it, so `shouldForceMount`
-is reachable but no `Tabs` here passes it (`SettingsDialog`, `ProjectBrowser`, `GitView`), and none should. A
-panel's state, its refs and the effects hanging off them are thrown away on every tab switch, and a dialog's
-panels again on every close.
+returns `null` otherwise, and HeroUI's `Tabs.Panel` passes its props straight through to it. A panel's state, its
+refs and the effects hanging off them are thrown away on every tab switch, and a dialog's panels again on every
+close.
 
 So state held inside a panel is worth only "for as long as this section is on screen" — a scroll position, a
 half-typed field, an expanded row. Anything the section must not lose is derived afresh instead, from the shell or
@@ -118,6 +117,29 @@ renders the panel from the collection it built when the selection changes. So a 
 and hands a ref to an element inside a panel never sees that element arrive or go from its own effects — they run only
 on the owner's next render, which already carries that render's change. A hook that watches such an element attaches
 and detaches in a ref callback, as `useListMotion` (`packages/ui/src/components/useListMotion.ts`) does.
+
+`shouldForceMount` keeps the unselected panels mounted, but it is not the way to keep a panel's state. Pass it only
+where the hidden panels must go on taking up layout, as the rail's quota panel
+(`packages/ui/src/quota/RailQuotaEntry.tsx`) is the one place that does: it stacks every agent's panel in one grid cell so that, anchored by its bottom edge, it keeps the tallest tab's height
+and its tab strip does not move out from under the pointer. A force-mounted unselected panel is rendered `inert` with
+`data-inert="true"` and without its `role`, `id` or `tabIndex`, but it is still shown, so hide it yourself
+(`data-[inert=true]:invisible`). HeroUI's `.tabs__panel` gives every panel padding and a top margin and takes an
+exiting one out of the flow (`data-[exiting=true]`, `position: absolute`), so where the panels share one box, clear
+those on the panels and put the spacing on the container.
+
+## A `Tabs` panel stays a tab stop until it renders with something tabbable inside
+
+react-aria's `useTabPanel` makes the selected panel itself a tab stop (`tabIndex={0}`) while `useHasTabbableChild`
+finds nothing tabbable inside it. That check runs again when the panel's own component renders and when nodes are
+added or removed inside it, but never when a descendant's `tabindex` attribute changes: its `MutationObserver`
+filters on `tabIndex` in camelCase, which does not match the attribute's name in the DOM.
+
+So state that later makes an existing element inside a panel tabbable — a `useFadeRegion` scroller that becomes a
+focusable region once it reports overflow — is held by the component that renders `Tabs.Panel`, so the change
+re-renders the panel; held in a child of the panel, it leaves the panel a stop in front of the element. In WebKit,
+Tab onto such a panel then drops focus to `<body>`, since the render on that focus finds the element and takes the
+panel's `tabindex` away. A jsdom test catches it by making the late change and asserting the `tabpanel` has no
+`tabindex` afterwards.
 
 ## An icon-only control also gets a tooltip, through `TitledControl`
 

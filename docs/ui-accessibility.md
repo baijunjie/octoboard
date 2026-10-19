@@ -96,6 +96,9 @@ The band is react-aria's `rowheader` inside a `role="row"`, not an `<h1>`-`<h6>`
 is a heading element" does not reach it: it is a row of the change list's treegrid, where that markup is what the
 treegrid pattern asks for, and a heading element inside the collection would be a second structure over the same text.
 
+A tab panel with nothing tabbable inside is a tab stop of its own, as the tabs pattern has it, so Tab from the tab
+list reaches its content; one holding a tabbable control or scroll region is not, and Tab goes straight into it.
+
 ### Buttons
 
 Every button is HeroUI's `Button`. A native `<button>` is allowed only where a custom button is needed that HeroUI's
