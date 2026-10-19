@@ -126,9 +126,9 @@ From top to bottom:
 
    Countdowns and the age of an out-of-date reading are as of the last time the menu was updated, which a change of
    the selected session, current console, sessions, consoles, projects, accounts, agents' availability, quotas or the UI's language causes, not the
-   clock alone, so they can lag behind the clock. Opening the menu asks the daemon to refresh the quotas that are
-   due, as opening the rail's panel or Settings' section does; since the menu never changes while open, what that
-   brings shows from the next time it is opened. The menu does not wait for the reply.
+   clock alone, so they can lag behind the clock. Opening the menu asks the daemon for a fresh reading, as opening
+   the rail's panel or Settings' section does (see "When quotas are read" in `docs/product/account-quotas.md`); since
+   the menu never changes while open, what that brings shows from the next time it is opened. The menu does not wait for the reply.
 3. **Open Octoboard**, which brings a window closed into the background back, as described under "Closing the window"
    in `docs/product/application-lifecycle.md`. A window that is shown, or minimized, is brought to the front, restored
    first if it was minimized.

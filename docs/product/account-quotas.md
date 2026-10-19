@@ -39,15 +39,21 @@ again.
 
 - **In the background**, every account is read about every **5 minutes** while the daemon runs. An account whose
   reading fails is tried again after 10, then 20, then 40 minutes, and every 40 minutes after that, until a reading
-  succeeds and the interval goes back to 5 minutes. An account that is not logged in is not a failure, and stays on
-  the 5-minute interval.
+  succeeds and the interval goes back to 5 minutes. An account that is not logged in, or that the agent says has no
+  quota to report, is not a failure, and stays on the 5-minute interval.
 - **A new account**, or an agent found available after the daemon started, is read within about 15 seconds.
 - **When an account's login ends** (see "Logging an account in" in `docs/product/agent-accounts.md`), its quota is
   read again whatever the interval: at once after a successful login, and within about 15 seconds after any other
   end.
-- **Opening the Agent accounts section** of Settings asks for a fresh reading of the accounts whose last attempt is
-  older than the interval above; accounts read more recently keep their reading, so opening the section repeatedly
-  starts nothing extra. The readings already held are shown at once either way.
+- **Opening the Agent accounts section** of Settings asks for a fresh reading. Such a request reads the accounts whose
+  last attempt is older than the interval above, and also, once their last attempt is more than **30 seconds** old,
+  the accounts that show no windows because the agent says they are not signed in or have no quota to report, so a
+  sign-in done outside Octoboard (in a session of the agent, say) shows up the next time this section, or a menu or
+  panel below, is opened. Every
+  other account keeps its reading until it is due: one whose directory does not exist, one with windows (out-of-date
+  ones included) and one whose reading failed. An account whose reading is already running is not read again, so
+  opening the section repeatedly starts little or nothing extra. The readings already held are shown at once either
+  way.
 - **Opening the menu bar icon's menu**, in the macOS application, asks for the same, each time the menu begins to
   open (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
 - **Opening the rail's account quota panel** asks for the same, each time the panel opens, whether it floats in or
@@ -121,7 +127,9 @@ The reason is one of these, in the UI's language:
 - the CLI could not be run, stopped without replying, wrote too much output, or refused the request — with its exit
   status and the last line it wrote to its error output, or the error it gave;
 - the CLI replied, but not with a quota that could be read;
-- the CLI replied that the account has no quota to report, as for an account without a subscription.
+- the CLI replied that the account has no quota to report, as for an account without a subscription. This one is not
+  tried less often the way a failed reading is (see "When quotas are read" above), but windows read before stay, out
+  of date, as they do after a failed reading.
 
 ## What reading a quota leaves behind
 

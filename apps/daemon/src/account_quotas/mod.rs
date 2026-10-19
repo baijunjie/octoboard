@@ -6,15 +6,20 @@
 //!
 //! Readings are runtime state: held in [`AccountQuotas`], never stored and never exported. A
 //! poller started with the daemon keeps them fresh, and `refresh_account_quotas` runs the same
-//! path on request. Both read only an account whose last attempt is older than [`POLL_INTERVAL`],
-//! stretched for an account that keeps failing, so a client that asks on every open costs
-//! nothing. A reading that fails over one that had windows keeps those windows, with the reason
-//! set beside them.
+//! path on request. Both read an account whose last attempt is older than [`POLL_INTERVAL`],
+//! stretched for an account that keeps failing, so a client that asks on every open costs next
+//! to nothing; a request also reads some accounts sooner, as set out below. A reading that fails
+//! over one that had windows keeps those windows, with the reason set beside them.
 //!
 //! An account whose configuration directory is missing or that is not signed in is a state of the
 //! account, not a failure: it is reported as its own [`QuotaUnavailable`] code, drops the windows
 //! it held, is not backed off, and is read again at once when its login ends
-//! ([`AccountQuotas::make_due`]).
+//! ([`AccountQuotas::make_due`]). An account the CLI has no quota to report for is not backed off
+//! either, though it is not a state: a reading that had windows keeps them. A login done outside
+//! Octoboard leaves no trace to react to, so a request from a client also reads an account
+//! that is not signed in or has no quota to report, and holds no windows, once
+//! [`MIN_REREAD_INTERVAL`] has passed since its last attempt. A missing configuration directory
+//! is not read early: only a login or the ordinary interval brings it back.
 
 mod probe;
 
@@ -36,6 +41,12 @@ use probe::{config_dir_missing, probe, PROBE_TIMEOUT};
 
 /// How old an account's last attempt must be before it is read again.
 const POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);
+
+/// How old the last attempt on an account holding no windows because it is not signed in or has no
+/// quota to report must be for a client's request to read it before it is due. It may have
+/// been signed in outside Octoboard since; this bounds how often a client opening a panel can
+/// start its CLI.
+const MIN_REREAD_INTERVAL: Duration = Duration::from_secs(30);
 
 /// How often the poller looks for accounts that are due. Much shorter than [`POLL_INTERVAL`] so
 /// that an account created, or an agent found available, after the poller's start is read within
@@ -64,7 +75,7 @@ struct Key {
 struct Entry {
     quota: AccountQuota,
     attempted: Instant,
-    /// Consecutive attempts that ended unavailable.
+    /// Consecutive attempts that failed to read the account.
     failures: u32,
     /// Read again at the next refresh whatever the wait: set by [`AccountQuotas::make_due`].
     due: bool,
@@ -170,18 +181,35 @@ impl AccountQuotas {
     /// [`wait_after`] its consecutive failures.
     #[cfg(test)]
     fn claim_due(&self, selected: Vec<Key>, now: Instant) -> Vec<Claim> {
-        self.claim_due_locked(&mut self.lock(), selected, now)
+        self.claim_due_locked(&mut self.lock(), selected, now, Trigger::Poll)
     }
 
-    fn claim_due_locked(&self, inner: &mut Inner, selected: Vec<Key>, now: Instant) -> Vec<Claim> {
+    /// [`AccountQuotas::claim_due`] as a client's request would, which also claims an account
+    /// holding no windows because it is not signed in or has no quota to report once [`MIN_REREAD_INTERVAL`] has passed.
+    #[cfg(test)]
+    fn claim_requested(&self, selected: Vec<Key>, now: Instant) -> Vec<Claim> {
+        self.claim_due_locked(&mut self.lock(), selected, now, Trigger::Request)
+    }
+
+    fn claim_due_locked(
+        &self,
+        inner: &mut Inner,
+        selected: Vec<Key>,
+        now: Instant,
+        trigger: Trigger,
+    ) -> Vec<Claim> {
         let mut claims = Vec::new();
         for key in selected {
             if inner.in_flight.contains_key(&key) {
                 continue;
             }
             let is_due = inner.entries.get(&key).is_none_or(|entry| {
+                let since = now.saturating_duration_since(entry.attempted);
                 entry.due
-                    || now.saturating_duration_since(entry.attempted) >= wait_after(entry.failures)
+                    || since >= wait_after(entry.failures)
+                    || (trigger == Trigger::Request
+                        && since >= MIN_REREAD_INTERVAL
+                        && may_have_signed_in_since(&entry.quota))
             });
             if is_due {
                 claims.push(self.claim_locked(inner, key));
@@ -192,7 +220,8 @@ impl AccountQuotas {
 
     /// Records the outcome of the probe `claim` covered, unless the account was forgotten while
     /// it ran. A failure over a reading that had windows keeps that reading, with the reason set
-    /// beside it, so a client can show it as stale; an account that never read keeps none.
+    /// beside it, so a client can show it as stale; an account that never read keeps none. Only a
+    /// failure counts towards the backoff: that the CLI has no quota to report is not one.
     fn finish(&self, state: &AppState, claim: Claim, mut quota: AccountQuota) {
         self.change(state, |inner| {
             if inner.in_flight.get(&claim.key) != Some(&claim.token) {
@@ -200,16 +229,16 @@ impl AccountQuotas {
             }
             inner.in_flight.remove(&claim.key);
             let previous = inner.entries.get(&claim.key);
-            let failed = quota
+            let keeps_windows = quota
                 .unavailable
                 .as_ref()
                 .filter(|u| !is_account_state(&u.code));
-            let failures = if failed.is_some() {
+            let failures = if keeps_windows.is_some_and(|u| is_failure(&u.code)) {
                 previous.map_or(0, |entry| entry.failures).saturating_add(1)
             } else {
                 0
             };
-            if let (Some(unavailable), Some(previous)) = (failed, previous) {
+            if let (Some(unavailable), Some(previous)) = (keeps_windows, previous) {
                 if !previous.quota.windows.is_empty() {
                     quota = AccountQuota {
                         unavailable: Some(unavailable.clone()),
@@ -277,6 +306,7 @@ impl AccountQuotas {
         state: &AppState,
         scope: &Scope,
         now: Instant,
+        trigger: Trigger,
     ) -> anyhow::Result<Vec<Claim>> {
         let mut inner = self.lock();
         let all = targets(state)?;
@@ -295,7 +325,7 @@ impl AccountQuotas {
                     .is_none_or(|account| key.account.as_ref() == Some(account))
             })
             .collect();
-        Ok(self.claim_due_locked(&mut inner, selected, now))
+        Ok(self.claim_due_locked(&mut inner, selected, now, trigger))
     }
 
     /// Makes the account's reading due and drops any probe running for it, so that the next
@@ -331,6 +361,22 @@ fn is_account_state(code: &str) -> bool {
     code == self::code::CONFIG_DIR_MISSING || code == self::code::NOT_SIGNED_IN
 }
 
+/// Whether `code` is a failure to read the account, which backs it off: neither one of its states
+/// nor the CLI having no quota to report.
+fn is_failure(code: &str) -> bool {
+    !is_account_state(code) && code != self::code::NO_WINDOWS
+}
+
+/// Whether `quota` holds no windows because the account is not signed in or has no quota to
+/// report, which a login done outside Octoboard could have changed.
+fn may_have_signed_in_since(quota: &AccountQuota) -> bool {
+    quota.windows.is_empty()
+        && quota
+            .unavailable
+            .as_ref()
+            .is_some_and(|u| u.code == code::NOT_SIGNED_IN || u.code == code::NO_WINDOWS)
+}
+
 /// Drops every reading, and every probe in flight, whose key is not in `wanted`; true when a
 /// reading went.
 fn retain_locked(inner: &mut Inner, wanted: &[Key]) -> bool {
@@ -343,6 +389,15 @@ fn retain_locked(inner: &mut Inner, wanted: &[Key]) -> bool {
 /// How long after an attempt an account is read again, given how many in a row ended unavailable.
 fn wait_after(failures: u32) -> Duration {
     POLL_INTERVAL * 2u32.pow(failures.min(MAX_BACKOFF_DOUBLINGS))
+}
+
+/// What started a refresh.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Trigger {
+    /// The poller, or a login that ended.
+    Poll,
+    /// A client asked, as it does on opening a panel that shows quotas.
+    Request,
 }
 
 /// Which accounts a refresh covers; the default is all of them.
@@ -398,16 +453,24 @@ type ShellSource = Arc<dyn Fn() -> anyhow::Result<HashMap<String, String>> + Sen
 
 /// Reads the accounts of `scope` that are due and broadcasts after each. See [`refresh_with`].
 pub async fn refresh(state: &Arc<AppState>, scope: &Scope) {
-    refresh_with(state, scope, Arc::new(crate::env_shell::cached_snapshot)).await;
+    let shell = Arc::new(crate::env_shell::cached_snapshot);
+    refresh_with(state, scope, Trigger::Poll, shell).await;
 }
 
-/// Reads the accounts of `scope` that are due, as many at a time as the daemon-wide limit
-/// allows, and broadcasts after each. Also drops the readings of accounts no longer targeted.
-/// Returns when every reading it started is done.
-async fn refresh_with(state: &Arc<AppState>, scope: &Scope, shell: ShellSource) {
+/// [`refresh`] for a client's request: an account holding no windows because it is not signed in
+/// or has no quota to report is read too, if its last attempt is older than [`MIN_REREAD_INTERVAL`].
+pub async fn refresh_requested(state: &Arc<AppState>, scope: &Scope) {
+    let shell = Arc::new(crate::env_shell::cached_snapshot);
+    refresh_with(state, scope, Trigger::Request, shell).await;
+}
+
+/// Reads the accounts of `scope` that are due for `trigger`, as many at a time as the daemon-wide
+/// limit allows, and broadcasts after each. Also drops the readings of accounts no longer
+/// targeted. Returns when every reading it started is done.
+async fn refresh_with(state: &Arc<AppState>, scope: &Scope, trigger: Trigger, shell: ShellSource) {
     let claims = match state
         .account_quotas
-        .claim_scope(state, scope, Instant::now())
+        .claim_scope(state, scope, Instant::now(), trigger)
     {
         Ok(claims) => claims,
         Err(err) => {
@@ -657,6 +720,96 @@ mod tests {
         assert_eq!(state.account_quotas.list()[0], good);
     }
 
+    fn no_windows(key: &Key) -> AccountQuota {
+        AccountQuota {
+            unavailable: Some(QuotaUnavailable::new(
+                code::NO_WINDOWS,
+                "none",
+                &[("agent", "Claude Code")],
+            )),
+            ..quota_of(key, false)
+        }
+    }
+
+    fn with_windows(key: &Key) -> AccountQuota {
+        AccountQuota {
+            fetched_at: 7,
+            windows: vec![QuotaWindow {
+                kind: QuotaWindowKind::Session,
+                label: None,
+                used_percent: 15.0,
+                resets_at: None,
+                window_minutes: None,
+            }],
+            ..quota_of(key, false)
+        }
+    }
+
+    #[test]
+    fn no_quota_to_report_is_not_backed_off_but_still_keeps_the_windows_it_held() {
+        let (state, _dir) = crate::test_support::app_state("quota-no-windows");
+        let quotas = &state.account_quotas;
+        let key = key(Agent::Claude, None);
+        for _ in 0..3 {
+            quotas.recorded(&state, key.clone(), no_windows(&key));
+        }
+        let later = Instant::now() + POLL_INTERVAL + Duration::from_secs(1);
+        assert_eq!(quotas.claim_due(vec![key.clone()], later).len(), 1);
+
+        let good = with_windows(&key);
+        quotas.recorded(&state, key.clone(), good.clone());
+        quotas.recorded(&state, key.clone(), no_windows(&key));
+        let held = &quotas.list()[0];
+        assert_eq!(held.windows, good.windows);
+        assert_eq!(
+            held.unavailable.as_ref().map(|u| u.code.as_str()),
+            Some(code::NO_WINDOWS)
+        );
+    }
+
+    #[test]
+    fn a_request_reads_an_account_that_may_have_signed_in_since_early_but_not_within_the_minimum() {
+        let (state, _dir) = crate::test_support::app_state("quota-request-reread");
+        let quotas = &state.account_quotas;
+        let (signed_out, none, windows, failing, missing) = (
+            key(Agent::Claude, None),
+            key(Agent::Claude, Some("a")),
+            key(Agent::Codex, None),
+            key(Agent::Codex, Some("b")),
+            key(Agent::Grok, None),
+        );
+        let not_signed_in = AccountQuota {
+            unavailable: Some(QuotaUnavailable::new(code::NOT_SIGNED_IN, "no", &[])),
+            ..quota_of(&signed_out, false)
+        };
+        quotas.recorded(&state, signed_out.clone(), not_signed_in);
+        quotas.recorded(&state, none.clone(), no_windows(&none));
+        // Stale windows beside a NO_WINDOWS reason: there is something to show.
+        quotas.recorded(&state, windows.clone(), with_windows(&windows));
+        quotas.recorded(&state, windows.clone(), no_windows(&windows));
+        quotas.recorded(&state, failing.clone(), quota_of(&failing, true));
+        let dir_missing = AccountQuota {
+            unavailable: Some(QuotaUnavailable::new(code::CONFIG_DIR_MISSING, "gone", &[])),
+            ..quota_of(&missing, false)
+        };
+        quotas.recorded(&state, missing.clone(), dir_missing);
+        let all = vec![signed_out.clone(), none.clone(), windows, failing, missing];
+        let keys = |claims: &[Claim]| -> Vec<Key> {
+            claims.iter().map(|claim| claim.key.clone()).collect()
+        };
+
+        let now = Instant::now();
+        // Just attempted: nothing is claimed, for a request either.
+        assert!(quotas.claim_requested(all.clone(), now).is_empty());
+        // Past the minimum but not the interval: only the accounts that may have signed in since, and only on request.
+        let soon = now + MIN_REREAD_INTERVAL + Duration::from_secs(1);
+        assert!(quotas.claim_due(all.clone(), soon).is_empty());
+        let claimed = quotas.claim_requested(all.clone(), soon);
+        assert_eq!(keys(&claimed), [signed_out, none]);
+        // Those are running now, so a second request starts nothing.
+        assert!(quotas.claim_requested(all, soon).is_empty());
+    }
+
     #[test]
     fn every_change_is_broadcast_whole_and_a_forgotten_account_is_dropped() {
         let (state, _dir) = crate::test_support::app_state("quota-broadcast");
@@ -815,7 +968,7 @@ mod tests {
             account: Some("work".to_string()),
         };
 
-        refresh_with(&state, &scope, shell.clone()).await;
+        refresh_with(&state, &scope, Trigger::Poll, shell.clone()).await;
         let held = state.account_quotas.list();
         let unavailable = held[0].unavailable.as_ref().expect("a state");
         assert_eq!(unavailable.code, code::CONFIG_DIR_MISSING);
@@ -828,7 +981,7 @@ mod tests {
 
         std::fs::create_dir(&config_dir).unwrap();
         state.account_quotas.make_due(Agent::Codex, Some("work"));
-        refresh_with(&state, &scope, shell).await;
+        refresh_with(&state, &scope, Trigger::Poll, shell).await;
         assert!(state.account_quotas.list()[0].unavailable.is_none());
         assert!(bin.join("runs").exists());
     }
@@ -922,7 +1075,7 @@ mod tests {
             agent: Some(Agent::Codex),
             account: Some("work".to_string()),
         };
-        refresh_with(&state, &scope, shell.clone()).await;
+        refresh_with(&state, &scope, Trigger::Poll, shell.clone()).await;
         assert_eq!(held(&state), [(Agent::Codex, Some("work".to_string()))]);
         assert_eq!((runs("codex"), runs("grok")), (1, 0));
         let mut announced = Vec::new();
@@ -938,11 +1091,11 @@ mod tests {
             agent: Some(Agent::Grok),
             account: None,
         };
-        refresh_with(&state, &scope, shell.clone()).await;
+        refresh_with(&state, &scope, Trigger::Poll, shell.clone()).await;
         assert_eq!((runs("codex"), runs("grok")), (1, 1));
 
         // Everything: only what was never read is read, and what is not available is left out.
-        refresh_with(&state, &Scope::default(), shell).await;
+        refresh_with(&state, &Scope::default(), Trigger::Poll, shell).await;
         assert_eq!((runs("codex"), runs("grok")), (2, 1));
         assert_eq!(
             held(&state),

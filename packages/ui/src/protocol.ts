@@ -1133,9 +1133,11 @@ export type RequestBody =
   | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; default_clone_dir?: string }
   /** Answered with `ack` at once; each reading that finishes arrives as `account_quotas_updated`.
    * Re-reads the quotas of the accounts it selects whose last attempt is older than the polling
-   * interval: `agent` limits it to one agent's accounts, `account` (an account id) to that one
-   * account, neither covers every account of every available agent. An `account` that does not
-   * exist or belongs to another `agent` is refused with `unknown_account`. */
+   * interval, and also those whose last attempt is over 30 seconds old and which hold no windows
+   * because the account is not signed in or has no quota to report: `agent` limits it to one
+   * agent's accounts, `account` (an account id) to that one account, neither covers every account
+   * of every available agent. An `account` that does not exist or belongs to another `agent` is
+   * refused with `unknown_account`. */
   | { type: "refresh_account_quotas"; agent?: Agent; account?: string }
   /** Signs an account in with its agent's CLI run in the background (`account` omitted or null is the agent's
    * default account). Answered with `ack` once the CLI has started; progress and outcome follow as

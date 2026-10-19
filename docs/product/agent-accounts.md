@@ -130,9 +130,8 @@ The accounts the user owns follow the default account, each with its name, its d
 
 Every account of an available agent, the default account included, also shows its plan quota: the plan beside its
 name, and beneath the account's row, across its whole width, one line and bar per quota window — or, in its place,
-that the quota is still being read, is unavailable, or is out of date. Opening the section asks for a fresh reading of
-every account whose last one is due, those of every agent and not only of the tab in view; the readings already held
-are shown at once. What is read, when, and how each state looks are in `docs/product/account-quotas.md`.
+that the quota is still being read, is unavailable, or is out of date. Opening the section asks for a fresh reading,
+covering the accounts of every agent and not only of the tab in view; the readings already held are shown at once. What is read, when, and how each state looks are in `docs/product/account-quotas.md`.
 
 **Login state.** After the account's name and its plan, a badge says whether the account is logged in, in words and
 with a dot, not in colour alone:

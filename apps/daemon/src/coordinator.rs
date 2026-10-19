@@ -591,7 +591,7 @@ async fn handle_inner(
             };
             // The readings take seconds; each is announced as it lands.
             let state = state.clone();
-            tokio::spawn(async move { account_quotas::refresh(&state, &scope).await });
+            tokio::spawn(async move { account_quotas::refresh_requested(&state, &scope).await });
             Ok(None)
         }
 
