@@ -34,11 +34,13 @@ sessions, its console sessions included, so a raised hand in a console that is n
 | Badge | Shown when |
 |---|---|
 | A waving hand | at least one session is waiting for the user |
-| The *working* glyph | otherwise, at least one session is working |
+| A disc filled with the theme background, with a green rim and a blue centre sending a fading ripple outward | otherwise, at least one session is working |
 | A green speech bubble | otherwise, at least one session is running and awaiting instructions, or still starting |
 | none | no session has a running process or is starting |
 
 A session *running in background* counts as working here (see "Running in background" in `docs/product/sessions.md`).
+The centre and ripple use the same blue as a working session's glyph. The ripple stands still where the system asks
+for reduced motion, leaving the theme background disc, green rim and blue centre.
 
 The name assistive technology announces for an avatar is the console's name together with what its badge means, and
 **the avatar's tooltip is that same text** — the bare console name while nothing is going on. When that tooltip opens,

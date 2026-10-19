@@ -15,6 +15,8 @@ const mobile = projectOf("p-mobile", console_.id, "Mobile app");
 // session waiting at its prompt.
 const staging = consoleOf("c-staging", "Staging");
 const preview = projectOf("p-preview", staging.id, "Preview site");
+const build = consoleOf("c-build", "Build");
+const release = projectOf("p-release", build.id, "Release");
 const watching = { background_tasks: [{ id: "task-watch", type: "shell", description: "pnpm dev" }] };
 
 // One project per activity a collapsed row can show. Website has sessions in all three states and
@@ -32,9 +34,10 @@ const sessions = [
   sessionOf("s-docs-1", console_.id, docs.id, "Old draft", "interrupted"),
   sessionOf("s-archived-1", console_.id, archived.id, "Completed draft", "archived"),
   sessionOf("s-preview-1", staging.id, preview.id, "Serve the preview", "idle", watching),
+  sessionOf("s-release-1", build.id, release.id, "Prepare the release", "working"),
 ];
 
-const state = snapshotState({ consoles: [console_, staging], projects: [archived, empty, website, api, mobile, billing, docs, preview], sessions });
+const state = snapshotState({ consoles: [console_, staging, build], projects: [archived, empty, website, api, mobile, billing, docs, preview, release], sessions });
 
 export const activityScenarios: Scenario[] = [
   {
@@ -50,7 +53,7 @@ export const activityScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Collapsed project rows, by what is going on beneath them",
-    description: "Each collapsed row's marker shows the most pressing activity beneath it: a waving hand for Website (waiting beats working), a pinging dot for Mobile app and Search API, a speech bubble for Billing and none for Docs. Mobile app's only session is idle with a dev server still running, so it shows work and sorts with Search API, ahead of Billing, rather than showing the speech bubble. The rail shows the same for the second console, Staging, whose only session is that kind: a pinging dot on its avatar. Hover a marker to read its tooltip. Docs, whose only session is interrupted, stays undimmed. The pinned Archived only and No sessions yet projects sort after the active ones, dimmed together. Expand from the Projects heading: only the five active projects open, and those two stay folded.",
+    description: "Each collapsed row's marker shows the most pressing activity beneath it: a waving hand for Website (waiting beats working), a pinging blue dot for Mobile app and Search API, a speech bubble for Billing and none for Docs. Mobile app's only session is idle with a dev server still running, so it shows work and sorts with Search API, ahead of Billing. In the rail, Staging (background work only) and Build (a working session) share a green rim around the theme background (light or dark) with a centre and outward ripple in the same blue as the working session dot; Main keeps its waiting hand. Hover a marker to read its tooltip. Docs, whose only session is interrupted, stays undimmed. The pinned Archived only and No sessions yet projects sort after the active ones, dimmed together. Expand from the Projects heading: only the five active projects open, and those two stay folded.",
     state,
     steps: [
       (ui) => ui.press(ui.t("sidebar.collapseAll")),

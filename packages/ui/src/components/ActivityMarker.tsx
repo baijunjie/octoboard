@@ -56,13 +56,13 @@ function activityMarker(activity: Activity): React.ReactElement | null {
   }
 }
 
-/** `ActivityMarker` as a badge on a console's avatar (the rail): a small disc in the activity's own
- * colour with its glyph in that colour's foreground, so the glyph reads against the disc whatever
- * the disc sits on — on the light chrome the warning and success colours are fills, too light to
- * read as glyphs of their own. The waiting hand still waves and the working dot still pings, as
- * they do in the sidebar. Decorative, and with no tooltip of its own, unlike `ActivityMarker`: the
- * avatar it sits on carries the tooltip, which says the activity (the rail's `ConsoleTile`), and
- * the console's accessible name says it too. */
+/** `ActivityMarker` as a badge on a console's avatar (the rail): a small disc carrying the activity's
+ * glyph, so it reads against the disc whatever the disc sits on. Work keeps the session glyph's
+ * blue over the opaque theme background with a green rim, so the window material cannot change
+ * their contrast. The waiting hand still waves and the working dot still pings, as in the sidebar.
+ * Decorative, and with no tooltip of its own, unlike `ActivityMarker`: the avatar carries the
+ * tooltip, which says the activity (the rail's `ConsoleTile`), and the console's accessible name
+ * says it too. */
 export function ActivityBadge({ activity, className = "" }: { activity: Activity; className?: string }): React.ReactElement | null {
   if (!activity) return null;
   const disc = `flex size-3.5 items-center justify-center rounded-full ${className}`;
@@ -75,10 +75,10 @@ export function ActivityBadge({ activity, className = "" }: { activity: Activity
       );
     case "working":
       return (
-        <span aria-hidden="true" className={`${disc} bg-app-accent`}>
+        <span aria-hidden="true" className={`${disc} border-2 border-success bg-background`}>
           <span className="relative flex size-1.5 contain-layout">
-            <span className="absolute inline-flex size-full rounded-full bg-accent-foreground opacity-75 motion-safe:animate-ping" />
-            <span className="relative inline-flex size-1.5 rounded-full bg-accent-foreground" />
+            <span className="absolute inline-flex size-full rounded-full bg-accent-glyph opacity-75 motion-safe:animate-ping" />
+            <span className="relative inline-flex size-1.5 rounded-full bg-accent-glyph" />
           </span>
         </span>
       );
