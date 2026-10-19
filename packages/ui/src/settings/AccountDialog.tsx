@@ -20,16 +20,19 @@ import { isAbsoluteConfigDir, nameCollision } from "./agentAccounts";
  * a directory belongs to one agent's layout, so an existing account never changes it. */
 export function AccountDialog({
   account: editing,
+  agent: initialAgent,
   onClose,
 }: {
   account?: Account;
+  /** The agent a new account starts on. */
+  agent: Agent;
   onClose: () => void;
 }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
-  const [agent, setAgent] = useState<Agent>(editing?.agent ?? "claude");
+  const [agent, setAgent] = useState<Agent>(editing?.agent ?? initialAgent);
   const [name, setName] = useState(editing?.name ?? "");
   const [configDir, setConfigDir] = useState(editing?.config_dir ?? "");
   const [pickingDirectory, setPickingDirectory] = useState(false);

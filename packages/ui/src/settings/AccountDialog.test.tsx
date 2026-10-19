@@ -43,7 +43,7 @@ function render(
   act(() =>
     root.render(
       <DaemonProvider value={daemon}>
-        <AccountDialog account={editing} onClose={() => {}} />
+        <AccountDialog account={editing} agent="claude" onClose={() => {}} />
       </DaemonProvider>,
     ),
   );

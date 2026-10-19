@@ -222,27 +222,27 @@ included, leaves the choice as it was. If the save fails, the error is shown in 
 the choice stays unchanged. Because the user has agreed there, Claude Code's own blocking warning for that mode never
 appears (see "Per-agent specifics a user will notice" in `docs/product/launching-agents.md`).
 
-One **Add account** button, above the agent tabs, serves every agent: its form asks for the agent — every agent is
-listed and can be picked, one that is not installed included and labelled as not installed, since an account may be set
-up before its agent is, unlike the agent pickers elsewhere (see "Agents that are not installed" in
-`docs/product/consoles.md`) — then a name and a directory, which can be typed or picked with the directory browser (see
-"Browsing directories" in `docs/product/projects.md`). Editing an account offers its name and its directory, never its
-agent: a directory belongs to one agent's layout. The directory is checked for being absolute (or starting with `~/`)
-and for not being already used by another account of the same agent, the default account included (the full rules are in
-"Agent config directories" in `docs/product/consoles.md`); one that does not exist yet is accepted, and the form says
-that Octoboard does not require it to exist. A directory already in use is reported, once saving is attempted, under the
-directory field, naming the account that uses it — the default account by its name in the current language; the report
-goes away as soon as the directory is changed, typed or picked, or another agent is picked. For a Grok Build account the
-form adds that the directory has to be a Grok home that Grok has already been run against, which is checked when a
-session launches. Every account is named by the user, and the name is required: it is stored trimmed, and one left blank
-is refused. A name has to be unique within its agent, compared trimmed and ignoring letter case; accounts of different
-agents may share a name. A name already taken by another account of the same agent, or by the default account — its name
-in the current language, and the English word "Default", which is reserved in every language — is reported under the
-name field. Removing an account asks first and says that consoles referring to it go back to the agent's default account
-and that sessions already open are not affected. A project referring to it is put back to inheriting its console's
-reference at the same time (see "The project's account, model and reasoning effort" in `docs/product/projects.md`). What
-an account is and how consoles, projects and sessions use one are in "Agent config directories" in
-`docs/product/consoles.md`.
+One **Add account** button, above the agent tabs, serves every agent: its form asks for the agent, starting on the agent
+of the tab in view — every agent is listed and can be picked, one that is not installed included and labelled as not
+installed, since an account may be set up before its agent is, unlike the agent pickers elsewhere (see "Agents that are
+not installed" in `docs/product/consoles.md`) — then a name and a directory, which can be typed or picked with the
+directory browser (see "Browsing directories" in `docs/product/projects.md`). Editing an account offers its name and its
+directory, never its agent: a directory belongs to one agent's layout. The directory is checked for being absolute (or
+starting with `~/`) and for not being already used by another account of the same agent, the default account included
+(the full rules are in "Agent config directories" in `docs/product/consoles.md`); one that does not exist yet is
+accepted, and the form says that Octoboard does not require it to exist. A directory already in use is reported, once
+saving is attempted, under the directory field, naming the account that uses it — the default account by its name in the
+current language; the report goes away as soon as the directory is changed, typed or picked, or another agent is picked.
+For a Grok Build account the form adds that the directory has to be a Grok home that Grok has already been run against,
+which is checked when a session launches. Every account is named by the user, and the name is required: it is stored
+trimmed, and one left blank is refused. A name has to be unique within its agent, compared trimmed and ignoring letter
+case; accounts of different agents may share a name. A name already taken by another account of the same agent, or by
+the default account — its name in the current language, and the English word "Default", which is reserved in every
+language — is reported under the name field. Removing an account asks first and says that consoles referring to it go
+back to the agent's default account and that sessions already open are not affected. A project referring to it is put
+back to inheriting its console's reference at the same time (see "The project's account, model and reasoning effort" in
+`docs/product/projects.md`). What an account is and how consoles, projects and sessions use one are in "Agent config
+directories" in `docs/product/consoles.md`.
 
 ## Trusted folders
 

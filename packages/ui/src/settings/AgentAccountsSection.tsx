@@ -29,9 +29,10 @@ export const AGENT_STRIP_HEIGHT = 45;
 
 /** Every account, grouped by agent with one tab for each (the first agent's open) and the agent's default account
  * first, each with its plan and quota, and the means to add, edit and remove the ones the user owns (see "Agent
- * accounts" in `docs/product/settings.md`). The default account is not a record: it is the state of pinning nothing,
- * so it is shown from the agent's availability and has no name or directory actions. Opening the section asks the
- * daemon to refresh the quotas that are due, those of every agent and not only of the tab in view. */
+ * accounts" in `docs/product/settings.md`); a new account starts on the agent of the tab in view. The default account
+ * is not a record: it is the state of pinning nothing, so it is shown from the agent's availability and has no name or
+ * directory actions. Opening the section asks the daemon to refresh the quotas that are due, those of every agent and
+ * not only of the tab in view. */
 export function AgentAccountsSection(): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
@@ -39,6 +40,7 @@ export function AgentAccountsSection(): React.ReactElement {
   // `undefined` is closed; `null` is the form for a new account.
   const [editing, setEditing] = useState<Account | null | undefined>();
   const [removing, setRemoving] = useState<Account>();
+  const [selected, setSelected] = useState<Agent>(AGENT_OPTIONS[0].value);
   // Bumped when a removal has gone through: the Remove button that was pressed goes with its
   // account and the confirmation closes with it, so focus has to be sent back to the section's tab.
   // Cancelling removes no control, so it must not.
@@ -64,7 +66,7 @@ export function AgentAccountsSection(): React.ReactElement {
           drawn as a groove like the rows' dividers instead of HeroUI's plain border. The strip pins
           itself to the top of the section's scroller over the rows, opaque on the dialog's own surface and flush
           with the scroller's edge (`--section-padding` is the padding the Settings dialog gives the section). */}
-      <Tabs variant="secondary">
+      <Tabs variant="secondary" selectedKey={selected} onSelectionChange={(key) => setSelected(key as Agent)}>
         <AgentTabList
           {...pinnedFocus}
           agents={AGENT_OPTIONS.map(({ value }) => value)}
@@ -75,7 +77,7 @@ export function AgentAccountsSection(): React.ReactElement {
           <AgentAccountsPanel key={agent} agent={agent} owned={owned} onEdit={setEditing} onRemove={setRemoving} />
         ))}
       </Tabs>
-      {editing !== undefined && <AccountDialog account={editing ?? undefined} onClose={() => setEditing(undefined)} />}
+      {editing !== undefined && <AccountDialog account={editing ?? undefined} agent={selected} onClose={() => setEditing(undefined)} />}
       {removing && (
         <ConfirmDialog
           title={<Message id="settings.accounts.removeTitle" params={{ name: <InlineChip dir="auto" wrap size="inherit">{removing.name}</InlineChip> }} />}

@@ -23,7 +23,10 @@ vi.mock("../store", async (importOriginal) => ({
   useDaemon: () => ({ request, toastError }),
   useDaemonStore: (selector: (s: unknown) => unknown) => selector({ settings, agentAvailability: availability, accountQuotas }),
 }));
-vi.mock("../components/AgentIcon", () => ({ AgentIcon: () => null }));
+vi.mock("../components/AgentIcon", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../components/AgentIcon")>()),
+  AgentIcon: () => null,
+}));
 vi.mock("../components/FadeOverflow", () => ({ FadeOverflow: ({ children }: { children: React.ReactNode }) => children }));
 vi.mock("../components/MarkedPath", () => ({ MarkedPath: ({ path }: { path: string }) => path }));
 vi.mock("./useSectionRefocus", () => ({ useSectionRefocus: () => {} }));
@@ -279,6 +282,13 @@ it("shows one agent at a time, opening on the first and switching by tab", () =>
   selectTab(container, "Grok Build");
   expect(container.textContent).toContain("grok-work");
   expect(container.textContent).not.toContain("claude-work");
+});
+
+it("starts a new account on the agent of the tab in view", () => {
+  const { container } = mount("Codex");
+  const add = [...container.querySelectorAll("button")].find((button) => button.textContent === "Add account")!;
+  act(() => add.click());
+  expect(document.body.querySelector<HTMLSelectElement>('select[aria-label="Agent"]')!.value).toBe("codex");
 });
 
 it("still refreshes the quotas of every agent while only one tab is shown", () => {
