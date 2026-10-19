@@ -17,8 +17,9 @@
 //! Muda gives a menu item's picture no template flag, which is what makes a monochrome one follow
 //! the menu's light or dark look. So once the menu is on the status item (`NSStatusItem::menu`,
 //! reached through `TrayIcon::with_inner_tray_icon`), the pictures flagged template get it set on
-//! their `NSMenuItem`s, line by line (`finish_menu`). The same pass gives the lines of each
-//! submenu their rows (`tray_lines.rs`).
+//! their `NSMenuItem`s, line by line (`finish_menu`). The same pass gives the headings of the
+//! sessions' sections and the lines of each submenu their rows (`tray_lines.rs`), as a line that
+//! cannot be chosen is drawn in a grey that nothing but a view of its own can darken.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -37,7 +38,7 @@ use crate::background::show_main_window;
 use crate::exit::request_quit;
 use crate::menu::APP_NAME;
 #[cfg(target_os = "macos")]
-use crate::tray_lines::dress_submenu;
+use crate::tray_lines::{dress_submenu, heading_row};
 
 const TRAY_ID: &str = "main";
 const OPEN_ITEM_ID: &str = "tray-open";
@@ -339,13 +340,18 @@ fn is_tray_menu(app: &AppHandle, notification: &objc2_foundation::NSNotification
     .unwrap_or(false)
 }
 
-/// Finishes the menu on the tray's status item after muda has built it: sets the template flag on
-/// the pictures of its lines that have it, whose items (separators aside) are the lines
-/// `build_menu` made, in the order `template_order` gives; then dresses each submenu's lines as
-/// the rows they stand for (`dress_submenu`). A replaced menu is never touched by mistake, as this
-/// runs right after it is set.
+/// Finishes the menu on the tray's status item after muda has built it: sets the template flag
+/// on the pictures of its lines that have it, whose items (separators aside) are the lines
+/// `build_menu` made, in the order `finish_order` gives; gives the lines that are a section's
+/// heading their row, with the picture just made a template where it is one; then dresses each
+/// submenu's lines as the rows they stand for (`dress_submenu`). A replaced menu is never
+/// touched by mistake, as this runs right after it is set.
 #[cfg(target_os = "macos")]
-fn finish_menu(tray: &tauri::tray::TrayIcon, templates: Vec<bool>, submenus: Vec<TraySubmenu>) {
+fn finish_menu(
+    tray: &tauri::tray::TrayIcon,
+    finishes: Vec<LineFinish>,
+    submenus: Vec<TraySubmenu>,
+) {
     use objc2::MainThreadMarker;
 
     let _ = tray.with_inner_tray_icon(move |inner| {
@@ -360,9 +366,13 @@ fn finish_menu(tray: &tauri::tray::TrayIcon, templates: Vec<bool>, submenus: Vec
             .iter()
             .filter(|item| !item.isSeparatorItem())
             .collect();
-        for (item, template) in lines.iter().zip(templates) {
-            if let Some(image) = item.image().filter(|_| template) {
+        for (item, finish) in lines.iter().zip(&finishes) {
+            let image = item.image();
+            if let Some(image) = image.as_ref().filter(|_| finish.template) {
                 image.setTemplate(true);
+            }
+            if let Some(heading) = &finish.heading {
+                item.setView(Some(&heading_row(heading, image.as_deref(), mtm)));
             }
         }
         let opened = lines.iter().filter_map(|item| item.submenu());
@@ -388,7 +398,7 @@ fn apply(app: &AppHandle, menu: &TrayMenu) -> Result<(), String> {
     let built = build_menu(app, menu).map_err(|err| err.to_string())?;
     tray.set_menu(Some(built)).map_err(|err| err.to_string())?;
     #[cfg(target_os = "macos")]
-    finish_menu(&tray, template_order(menu), menu.submenus.clone());
+    finish_menu(&tray, finish_order(menu), menu.submenus.clone());
     show_attention(app, &tray, menu.attention)
 }
 
@@ -448,24 +458,38 @@ fn line(
     builder.build(app)
 }
 
-/// For each line of the menu `build_menu` makes, in order, whether its picture is a template
-/// image: the sessions' lines, then each submenu's opening line (which has no picture), then Open
-/// and Quit. Separators are not lines, and a submenu's own lines have no pictures.
+/// What `finish_menu` does to a line of the menu once muda has built it.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn template_order(menu: &TrayMenu) -> Vec<bool> {
-    let mut templates = Vec::new();
+struct LineFinish {
+    /// Whether the line's picture is a template image.
+    template: bool,
+    /// The text of the line when it is a section's heading, which gets a row of its own.
+    heading: Option<String>,
+}
+
+/// For each line of the menu `build_menu` makes, in order: the sessions' lines, then each
+/// submenu's opening line (which has no picture), then Open and Quit. Separators are not lines,
+/// and a submenu's own lines have no pictures.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn finish_order(menu: &TrayMenu) -> Vec<LineFinish> {
+    let plain = || LineFinish {
+        template: false,
+        heading: None,
+    };
+    let mut lines = Vec::new();
     for section in &menu.sections {
-        templates.push(is_template(menu, section.icon.as_deref()));
-        templates.extend(
-            section
-                .items
-                .iter()
-                .map(|item| is_template(menu, item.icon.as_deref())),
-        );
+        lines.push(LineFinish {
+            template: is_template(menu, section.icon.as_deref()),
+            heading: Some(section.heading.clone()),
+        });
+        lines.extend(section.items.iter().map(|item| LineFinish {
+            template: is_template(menu, item.icon.as_deref()),
+            heading: None,
+        }));
     }
-    templates.extend(menu.submenus.iter().map(|_| false));
-    templates.extend([false, false]);
-    templates
+    lines.extend(menu.submenus.iter().map(|_| plain()));
+    lines.extend([plain(), plain()]);
+    lines
 }
 
 /// The menu.
@@ -486,8 +510,8 @@ fn build_menu(app: &AppHandle, menu: &TrayMenu) -> tauri::Result<Menu<Wry>> {
     }
     for submenu in &menu.submenus {
         let mut lines = SubmenuBuilder::new(app, literal(&submenu.title));
-        // Plain disabled items, which `dress_submenu` replaces or gives a view once the menu is
-        // built; they are what a line reads as where that is not done.
+        // Plain disabled items, which `dress_submenu` gives a view once the menu is built; they are
+        // what a line reads as where that is not done.
         for item in &submenu.items {
             lines = match item.text() {
                 Some(text) => lines.item(&line(app, menu, None, text, None)?),
@@ -620,7 +644,7 @@ mod tests {
     fn a_menu_without_submenus_reads_and_has_only_the_open_and_quit_lines_to_mark() {
         let menu = parsed(r#"{"sections": [], "open": "Open", "quit": "Quit"}"#);
         assert!(menu.submenus.is_empty());
-        assert_eq!(template_order(&menu), vec![false, false]);
+        assert_eq!(finish_order(&menu).len(), 2);
     }
 
     #[test]
@@ -644,15 +668,39 @@ mod tests {
     }
 
     #[test]
-    fn template_flags_follow_the_lines_in_menu_order() {
-        // The sessions' heading and two lines, then the two submenus' opening lines, then Open
-        // and Quit; a submenu's own lines are rows without pictures.
+    fn lines_to_finish_follow_the_lines_in_menu_order() {
+        // Two sections (the second an empty state with no session line), then the two submenus'
+        // opening lines, then Open and Quit; a submenu's own lines are rows without pictures.
+        let menu = parsed(
+            r#"{
+                "sections": [
+                    {"heading": "Working (1)", "icon": "status", "items": [
+                        {"label": "Fix it", "icon": "codex", "session": "a"}
+                    ]},
+                    {"heading": "No sessions running", "items": []}
+                ],
+                "submenus": [{"title": "Codex quota", "items": []}],
+                "icons": {
+                    "status": {"png": "", "template": false},
+                    "codex": {"png": "", "template": true}
+                },
+                "open": "Open",
+                "quit": "Quit"
+            }"#,
+        );
+        let finishes: Vec<_> = finish_order(&menu)
+            .into_iter()
+            .map(|line| (line.template, line.heading))
+            .collect();
         assert_eq!(
-            template_order(&parsed(WITH_SUBMENUS)),
+            finishes,
             vec![
-                false, true, false, // heading, session, "1 more…"
-                false, false, // Codex and Grok submenus
-                false, false, // Open, Quit
+                (false, Some("Working (1)".to_string())),
+                (true, None),
+                (false, Some("No sessions running".to_string())),
+                (false, None), // Codex submenu
+                (false, None), // Open
+                (false, None), // Quit
             ]
         );
     }

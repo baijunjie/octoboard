@@ -89,7 +89,7 @@ shell open, Dock badge, window theme, window show and window drag/zoom commands 
 | `src-tauri/src/exit.rs` | The exit-confirmation flow: `ExitState`, the two exit-flow commands, `request_quit` and `request_quit_from_window`, and the `applicationShouldTerminate:` override for Dock Quit and system shutdown |
 | `src-tauri/src/background.rs` | Running in the background: `set_run_in_background`, the close button hiding the window when chosen, and `bring_to_front` |
 | `src-tauri/src/tray.rs` | The menu bar icon: its menu rebuilt from `set_tray_menu`, its switch between the two icon images, and the `tray-session-chosen` and `tray-menu-opened` events |
-| `src-tauri/src/tray_lines.rs` | The rows of the menu bar icon's submenus: section headers, and menu items with views of their own for a quota window's name, detail and bar, so they are neither dimmed nor highlighted |
+| `src-tauri/src/tray_lines.rs` | The rows of the menu bar icon's menus, each a menu item with a view of its own: the sessions' section headings, an account's header, a note, and a quota window's name, detail and bar; none of them dims or highlights |
 | `src-tauri/src/menu.rs` | The native macOS menu bar built from the UI's labels, including the Settings… item |
 | `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated, and keeps `DaemonState` |
 | `src-tauri/src/permissions.rs` | The macOS privacy permission commands and `capture_launch_state()` |

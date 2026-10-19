@@ -31,8 +31,11 @@ From top to bottom:
 
 1. **The running sessions**, one group per status, each group under a heading that cannot be chosen and that names the
    status with the number of sessions in it: **Waiting for you (n)**, then **Working (n)**, then **Awaiting
-   instructions (n)**. A group with no session is left out. Sessions still starting, interrupted and archived sessions
-   are never listed.
+   instructions (n)**. A group with no session is left out. Sessions still starting, interrupted and archived
+   sessions are never listed.
+   - **Headings.** A heading is bold system text at the menu font's size, in the secondary text colour, with its
+     status glyph to the left of the text. It is not dimmed the way a menu line that cannot be chosen is, never
+     highlights under the pointer, and is read by assistive technology as one static text, the heading's words.
    - **Pictures.** Each heading has a still glyph for its status — the accent dot for working, the waving hand for
      waiting for you, the speech bubble for awaiting instructions — and each session line has the mark of its agent
      (Claude Code, Codex, Grok), as the sidebar draws them. The menu cannot animate, so the working dot does not pulse.
@@ -49,18 +52,17 @@ From top to bottom:
      `docs/product/session-titles.md`).
    - A group names at most **10** sessions. Beyond that, a last line that cannot be chosen says how many more there are
      ("N more…"); the heading's number still counts them all.
-   - With no session in any of these groups — none running, or only ones still starting — this part is a single line
-     that cannot be chosen: **No sessions running**.
+   - With no session in any of these groups — none running, or only ones still starting — this part is a single
+     heading, **No sessions running**, styled like the other headings but with no glyph.
 2. **The quota submenus**, one per available agent — **Claude quota**, **Codex quota**, **Grok quota**, in that
    order, the agents' names never translated — each opening to that agent's accounts and showing what Settings and
    the rail's panel show (see "Quota windows" and "How an account's quota is shown" in
    `docs/product/account-quotas.md`). An agent that is not available, or whose availability is not yet determined,
    has none. The submenus are set off from the sessions and from Open Octoboard by separators. Inside a submenu,
    nothing can be chosen:
-   - each account is a section header with its name, **Default** for the agent's default account, and its plan after
-     a dot where the agent names one ("Default · Max"), the default account first and then the accounts the user
-     owns, each set off by a separator. Before macOS 14, which has section headers, it is a plain line in the
-     disabled grey;
+   - each account is a header line, bold in the secondary text colour, with its name, **Default** for the agent's
+     default account, and its plan after a dot where the agent names one ("Default · Max"), the default account first
+     and then the accounts the user owns, each set off by a separator;
    - under the header, each window is one row: its name on the left ("5-hour"), "N% remaining · resets in
      <countdown>" ("82% remaining · resets in 1h 57m", "resets now" once the time has passed, no countdown for a
      window with no reset time) right-aligned in the secondary text colour, and a bar of what remains directly
@@ -69,14 +71,15 @@ From top to bottom:
      Grok Build. A row whose text needs more room than the submenu's usual width widens the submenu rather than
      being cut short. A row is read by assistive technology as one phrase ("5-hour 82% remaining · resets in
      1h 57m");
-   - a row and a note are not dimmed the way a menu line that cannot be chosen is: the window's name is at full
-     strength, and neither ever highlights under the pointer. Their text and the bar's track take the system's
-     colours for the menu they are drawn in, light or dark;
+   - a row, a header and a note are not dimmed the way a menu line that cannot be chosen is: the window's name is at
+     full strength, and none ever highlights under the pointer. Their text and the bar's track take the system's
+     colours for the menu they are drawn in, light or dark. A header and a note are each read by assistive
+     technology as one static text, their words;
    - an account never read shows **Reading quota…** in place of windows, and an account with no windows to show
-     shows **Quota unavailable**, in the secondary text colour and without the reason. That includes an entry that
-     has no windows and no failure to explain, which Settings and the rail show nothing for. One whose latest
-     reading failed after a good one keeps its last windows under a note "Out of date: last read 12 minutes ago",
-     without the reason either.
+     shows **Quota unavailable**, a note in the secondary text colour at regular weight — the weight is what sets a
+     note apart from a header — and without the reason. That includes an entry that has no windows and no failure to
+     explain, which Settings and the rail show nothing for. One whose latest reading failed after a good one keeps
+     its last windows under a note "Out of date: last read 12 minutes ago", without the reason either.
 
    Countdowns and the age of an out-of-date reading are as of the last time the menu was updated, which a change of
    the sessions, consoles, projects, accounts, agents' availability, quotas or the UI's language causes, not the
@@ -114,17 +117,18 @@ confirmation, bringing a window closed into the background back to ask it, and o
 A closed window below means one closed into the background, which is what closing it does only while the user has
 turned that on (see "Closing the window" in `docs/product/application-lifecycle.md`).
 
-**Observed** in the packaged application: the menu's groups, headings and session lines (seen under Simplified
-Chinese); the menu updating within about 1.5 seconds of a session changing while the window was closed; opening and
-dismissing the menu without choosing anything leaving a closed window closed; choosing a session bringing the window
-back with that session selected; and Open Octoboard. What was seen of Quit Octoboard is under "Quitting" in
+**Observed** in the packaged application: the menu's groups and session lines (seen under Simplified Chinese); the
+menu updating within about 1.5 seconds of a session changing while the window was closed; opening and dismissing the
+menu without choosing anything leaving a closed window closed; choosing a session bringing the window back with that
+session selected; and Open Octoboard. What was seen of Quit Octoboard is under "Quitting" in
 `docs/product/application-lifecycle.md`. Also observed, with a quota submenu popped up natively over a light-looking
-desktop (not opened from the icon's own menu): the system's section header over each account, a Codex account's two
-window rows with the name at full strength, the detail right-aligned in grey and a bar whose fill is the remaining
-share (72% over a gray track), a Grok Build row at 0% as a bare rounded track, and a note under an account with no
-quota.
+desktop (not opened from the icon's own menu): a Codex account's two window rows with the name at full strength, the
+detail right-aligned in grey and a bar whose fill is the remaining share (72% over a gray track), a Grok Build row at
+0% as a bare rounded track, and a note under an account with no quota.
 
-**Not yet observed** in the packaged application: the pictures in the menu (the session lines' agent marks and the
+**Not yet observed** in the packaged application: the headings as described above — the sessions' groups' headings,
+**No sessions running**, and the account headers in a submenu — and whether a heading's glyph and text line up with
+the pictures and text of the session lines below it; the pictures in the menu (the session lines' agent marks and the
 headings' status glyphs), in a light and in a dark menu; the quota submenus opened from the icon's own menu; a Claude
 Code account's quota in a submenu; opening the menu asking for a refresh of the quotas; any quota row in a dark menu,
 and a menu changing between light and dark while the app runs; a row never highlighting under the pointer; a row
