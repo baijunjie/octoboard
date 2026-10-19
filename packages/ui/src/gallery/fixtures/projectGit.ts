@@ -639,6 +639,22 @@ const rankingSession = sessionOf("s-ranking", console_.id, web.id, "Tune the ran
 const dependenciesSession = sessions[2];
 const state = snapshotState({ consoles: [console_], projects: [web, SAMPLE.api], sessions: [...sessions, rankingSession] });
 
+/** The task each of the two live responsible sessions is working on, for the scenario that shows
+ * the branch badges' tooltips: the badge names a session as the sidebar does, the task beside the
+ * name. The other Git scenarios leave the sessions without one, which is also a state the badge
+ * has to name (the name alone). */
+export const RANKING_TASK = "Compare the ranking weights";
+const DEPENDENCIES_TASK = "Upgrade the outdated packages";
+const withTasks = new Map([
+  [rankingSession.id, RANKING_TASK],
+  [dependenciesSession.id, DEPENDENCIES_TASK],
+]);
+const stateWithTasks = snapshotState({
+  consoles: [console_],
+  projects: [web, SAMPLE.api],
+  sessions: [...sessions, rankingSession].map((session) => (withTasks.has(session.id) ? { ...session, terminal_title: withTasks.get(session.id) } : session)),
+});
+
 /** The Git mode is where the project's browser opens, optionally with what is committed grouped by
  * commit, as a user's own choice would leave it. */
 const gitMode = (options: { byCommit?: boolean; layout?: "tree" } = {}): Preferences => ({
@@ -970,10 +986,17 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Responsible-session badges on branches",
-    description: "Each branch row's ring names the session working on it: filled in the accent colour for the selected session, plain for another session, and named as no longer existing for a removed one. Hover a ring for its tooltip.",
-    state,
+    description:
+      "Each branch row's ring names the session working on it: filled in the accent colour for the selected session, plain for another session, and named as no longer existing for a removed one. Both live sessions have a task, so hover their rings: the tooltip names each as its sidebar row does, the task beside the session name.",
+    state: stateWithTasks,
     preferences,
-    steps: [...selecting(rankingSession), (ui) => ui.press("feature/ranking-experiments"), (ui) => ui.wait(400)],
+    steps: [
+      // The row is named as the sidebar names a session with a task, which is also what the badge says.
+      (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: RANKING_TASK, name: rankingSession.title }))),
+      (ui) => ui.wait(600),
+      (ui) => ui.press("feature/ranking-experiments"),
+      (ui) => ui.wait(400),
+    ],
   },
   {
     id: "git-compare-deleted",

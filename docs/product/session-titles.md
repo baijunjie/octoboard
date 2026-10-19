@@ -15,7 +15,9 @@ keeps its own reading direction when the names contain different writing systems
 This displayed name is used in sidebar rows, archived-session menus, focus-mode cards, archive rows and switch
 chips, the archive view and the selected session's breadcrumb. Session-owner labels, session action labels,
 the archive, account-switch and delete confirmations, and the confirmation of another session's request to start a
-session (see "The confirmation dialog" in `docs/product/session-requests.md`) identify the session by the same name.
+session (see "The confirmation dialog" in `docs/product/session-requests.md`) identify the session by the same name,
+and so does the responsible-session badge in the Git mode's branch selector while the session it names still exists
+(see "The responsible-session badge" in `docs/product/branch-responsible-session.md`).
 Names in these surfaces' accessible labels and full-name tooltips follow the visible name.
 
 **Rename** edits the created name alone; it does not replace the task title. Its availability is described

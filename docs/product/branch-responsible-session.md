@@ -16,18 +16,19 @@ has a responsible session — the **responsible-session badge** (see "The branch
 `docs/product/project-pane-git-mode.md`).
 
 - The name assistive technology announces for the badge, and its tooltip, are the same words: they say that session
-  is working on the branch and name it by its title. The tooltip sets the title apart as a chip, so that where a long
-  title ends can be seen; the announced name carries it as plain text, kept apart only in its writing direction from
+  is working on the branch and name the session. The tooltip sets the session's name apart as a chip, so that where a
+  long one ends can be seen; the announced name carries it as plain text, kept apart only in its writing direction from
   the words around it. The badge is no tab stop, so the tooltip shows on pointer hover only, and only while the
   pointer is on the ring itself rather than anywhere on the row; it opens after the same wait as every other tooltip
   in the window (see "Tooltips on indicators" and "How a tooltip behaves" in `docs/product/labels-and-tooltips.md`).
-- **A session that still exists is named by the title it carries now** — the one the sidebar shows — so that the
-  session named can be found there. An archived session still exists and is named the same way.
-- **A session that no longer exists** is named instead by the title recorded when it became responsible (see "The
-  responsible session" below), and the wording says that it was working on the branch and no longer exists. Deleting
-  an archived session, or removing a project that shares its repository with another project, takes the session's
-  record while the branch's record stands. Until the window has its first answer from the daemon no session is called
-  gone.
+- **A session that still exists is named by its displayed name as it is now** — the one the sidebar shows, task title
+  and created name together where it has a task title (see "Displayed names" in `docs/product/session-titles.md`) — so
+  that the session named can be found there. An archived session still exists and is named the same way.
+- **A session that no longer exists** is named instead by the created name recorded when it became responsible (see
+  "The responsible session" below), without a task title, and the wording says that it was working on the branch and
+  no longer exists. Deleting an archived session, or removing a project that shares its repository with another
+  project, takes the session's record while the branch's record stands. Until the window has its first answer from the
+  daemon no session is called gone.
 - **A branch the selected session is working on** is marked apart from the rest: its ring is filled and in the accent
   colour where every other badge is a hollow ring in a neutral one, and its wording says the session working on it is
   the selected session as well as naming it. The fill, not the colour, is what tells the two rings apart, so the state
@@ -53,9 +54,10 @@ A branch has at most one responsible session at a time; a session can be respons
   `docs/product/handing-off-sessions.md`). Nothing else moves it; handing a session to another owner, or a session
   binding itself to one, leaves the branches it is responsible for where they are. Who was responsible for a branch
   before is not kept.
-- **The record holds the session's title from when it became responsible**, to name a session that no longer exists:
-  for the session whose git reported the branch, its title when the report was taken; for a session a handover made
-  responsible, the title it was started with. Either is cut to its first 80 characters.
+- **The record holds the session's created name from when it became responsible**, to name a session that no longer
+  exists: for the session whose git reported the branch, its created name when the report was taken; for a session a
+  handover made responsible, the created name it was started with. Either is cut to its first 80 characters. No task
+  title is recorded.
 - **It is part of the branch's record** (see "What the record is" below) and follows it: it moves to the new name with
   a rename, goes when the branch is deleted, is not inherited by a branch deleted and created again under the same
   name, and is cleared with the rest when the repository's records are. It can name a session that no longer exists:
@@ -158,8 +160,8 @@ tree.
   is archived or deleted (see "What is bound to a session" in `docs/product/branch-and-worktree-cleanup.md`).
 - **What a record holds**: the branch's birth — the commit and the second it was created at, which recognise the same
   branch across a rename and tell one deleted and created again under the same name apart — and its responsible
-  session, with the title recorded for that session and when it became responsible. Nothing else about who created
-  the branch is kept.
+  session, with the created name recorded for that session and when it became responsible. Nothing else about who
+  created the branch is kept.
 - **A record lives and dies with its branch.** Deleting the branch — after merging it, say — deletes its record, so
   a merged-and-deleted branch can no longer be traced. A branch deleted and created again under the same name is a new
   branch and does not inherit the old record.
@@ -170,7 +172,7 @@ tree.
 - **Records from an earlier version.** A database from an earlier version of Octoboard keeps only the records that
   came from a session's git report: any other is deleted when the daemon opens it, and its branch is not attributed
   again. A record kept makes the reporting session the branch's responsible session from the branch's creation, named
-  by the title recorded with the report.
+  by the created name recorded with the report.
 - **Removing a project** clears the records of its repository, unless another project still points into that repository
   (see `docs/product/removing-projects.md`). Deleting a console removes every project under it, so it clears theirs the
   same way.

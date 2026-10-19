@@ -9,7 +9,7 @@ import { createUi, type Matcher, type Ui } from "../interact";
 import { changeRowText } from "../../browser/changeRow";
 import { changeItems } from "../../browser/changes";
 import { listedCommits } from "./changeFixtures";
-import { NEVER_PUSHED_GIT, SAMPLE_GIT, UNPUSHED_GIT } from "./projectGit";
+import { NEVER_PUSHED_GIT, RANKING_TASK, SAMPLE_GIT, UNPUSHED_GIT } from "./projectGit";
 import { viewerScenarios } from "./viewer";
 import { DEFAULT_WIDTH, MIN_HEIGHT } from "../scenario";
 
@@ -158,6 +158,12 @@ describe("gallery scenarios", () => {
       t("sidebar.session.ariaLabel", { title: "Fix the summary layout", agent: "Claude Code", status: t("session.status.working") }),
       t("sidebar.session.ariaLabel", { title: "Tune the ranking weights", agent: "Claude Code", status: t("session.status.idle") }),
       t("sidebar.session.ariaLabel", { title: "Update the dependencies", agent: "Claude Code", status: t("session.status.idle") }),
+      // A session with a task is named by both, as the scenario for the branch badges selects it.
+      t("sidebar.session.ariaLabel", {
+        title: t("session.displayTitle", { title: RANKING_TASK, name: "Tune the ranking weights" }),
+        agent: "Claude Code",
+        status: t("session.status.idle"),
+      }),
     ];
     for (const { matcher } of sessionMatchers) {
       expect(typeof matcher === "function" && sessionLabels.some(matcher)).toBe(true);

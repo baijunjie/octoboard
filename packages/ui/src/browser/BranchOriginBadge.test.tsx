@@ -14,6 +14,7 @@ import { mountRows } from "./browserTestSupport";
 const origin = (session: string, title: string) => ({ responsible_session: session, responsible_title: title, responsible_since: 0 });
 const branches: BranchInfo[] = [
   { name: "worked-by-session", commit: "a".repeat(40), origin: origin("s-live", "Fix the layout") },
+  { name: "worked-by-task", commit: "e".repeat(40), origin: origin("s-task", "Fix the header") },
   { name: "worked-by-archived", commit: "c".repeat(40), origin: origin("s-archived", "Old experiment") },
   { name: "worked-by-gone", commit: "d".repeat(40), origin: origin("s-gone", "Tune the weights") },
   { name: "unattributed", commit: "b".repeat(40) },
@@ -26,6 +27,7 @@ const state = snapshotState({
   projects: [project],
   sessions: [
     sessionOf("s-live", console_.id, project.id, "Fix the layout, renamed", "working"),
+    sessionOf("s-task", console_.id, project.id, "Fix the header", "idle", { terminal_title: "Center the header" }),
     sessionOf("s-archived", console_.id, project.id, "Old experiment", "archived"),
   ],
 });
@@ -46,6 +48,12 @@ it("marks only a branch with a responsible session, naming the session by its cu
   // The session was renamed since it became responsible, and the sidebar shows the new title.
   expect(ring.getAttribute("aria-label")).toBe(`Session ${isolate("Fix the layout, renamed")} is working on this branch`);
   expect(optionOf("unattributed").querySelector("[role=img]")).toBeNull();
+});
+
+it("names a session with an agent task by its task beside its name, as the sidebar does", () => {
+  open();
+  const title = `${isolate("Center the header")}｜${isolate("Fix the header")}`;
+  expect(ringOf("worked-by-task").getAttribute("aria-label")).toBe(`Session ${isolate(title)} is working on this branch`);
 });
 
 it("leaves the option's own name to its content, so the ring's name is not duplicated onto it", () => {
